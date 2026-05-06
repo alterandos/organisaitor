@@ -81,9 +81,6 @@ export function TaskPane() {
   const handlePriorityClick = (p: Priority) =>
     updateTask(taskId, { priority: p === task.priority ? 'none' : p });
 
-  const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) =>
-    updateTask(taskId, { collectionId: e.target.value ? e.target.value as never : null });
-
   const handleKindClick = (k: TaskKind) =>
     updateTask(taskId, { kind: k });
 

@@ -90,9 +90,10 @@ export default function App() {
       const tag = (e.target as HTMLElement)?.tagName;
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
         || (e.target as HTMLElement)?.isContentEditable;
+      if (isTyping) return;
 
-      if (e.ctrlKey && e.key === '1') { e.preventDefault(); setActiveView('tasks'); return; }
-      if (e.ctrlKey && e.key === '2') { e.preventDefault(); setActiveView('calendar'); return; }
+      if (e.key === '1' && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('tasks'); return; }
+      if (e.key === '2' && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('calendar'); return; }
 
       if (e.ctrlKey && e.key === 'n') {
         e.preventDefault();
