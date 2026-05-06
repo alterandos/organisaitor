@@ -100,6 +100,15 @@ alter table calendar_events enable row level security;
 create policy "users_own_calendar_events" on calendar_events
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- ── Grants ──────────────────────────────────────────────────────
+-- Raw SQL does not auto-grant table permissions (unlike the Supabase UI).
+-- These are required for authenticated users to read/write their own rows.
+grant select, insert, update, delete on tasks              to authenticated;
+grant select, insert, update, delete on collections        to authenticated;
+grant select, insert, update, delete on tags               to authenticated;
+grant select, insert, update, delete on purposes           to authenticated;
+grant select, insert, update, delete on calendar_events    to authenticated;
+
 -- ── Calendar Reminders ──────────────────────────────────────────
 create table if not exists calendar_reminders (
   id            text primary key,
@@ -117,3 +126,4 @@ create table if not exists calendar_reminders (
 alter table calendar_reminders enable row level security;
 create policy "users_own_calendar_reminders" on calendar_reminders
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+grant select, insert, update, delete on calendar_reminders to authenticated;

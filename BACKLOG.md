@@ -168,3 +168,304 @@ deciding the overall app architecture (single app with multiple views vs.
 micro-apps sharing a common store) before building the note-taking surface.
 
 ---
+
+## Records — Tracking & Personal Logs
+
+### Overview
+
+**Records** is a top-level section of the app (alongside Tasks and Calendar) for
+logging and tracking anything the user wants to measure or remember over time.
+It surfaces in the nav sidebar at the same level as the existing sections.
+
+The guiding principle is "opinionated defaults, open-ended extension": a small
+set of built-in tracker templates covers the most common use cases out of the
+box, while a custom tracker builder allows users to define entirely new schemas
+(e.g. scuba dives, wine tasting notes, race results).
+
+---
+
+### Terminology decisions
+
+| Term | Definition |
+|------|-----------|
+| **Records** | The section name. Chosen over "Tracking" (passive) or "Journal" (diary-specific). |
+| **Tracker** | An individual tracking list with its own field schema. E.g. "Books", "Workouts". |
+| **Entry** | A single logged item inside a tracker. E.g. one book, one workout session. |
+
+---
+
+### Architecture: Tracker as a third CollectionKind
+
+Trackers extend the existing `Collection` type with `kind = 'tracker'`. This
+means:
+
+1. Trackers appear in the Endeavours sidebar (grouped separately from Projects
+   and Lists) so tasks can be linked to them.
+2. All collection-level fields (name, color, icon) apply to trackers.
+3. Entries are a new entity type (`TrackerEntry`) referencing the tracker's
+   `CollectionId`.
+
+**Rationale:** Treating trackers as collections avoids duplicating the
+collection concept. A "Books" tracker and a "Books" list are the same idea —
+one just has rich structured entries instead of tasks.
+
+**Extensibility note:** The `CollectionKind` union is already documented as
+extensible. Adding `'tracker'` requires no breaking changes to existing data.
+
+---
+
+### Data model changes
+
+#### 1. Extend `CollectionKind`
+
+```typescript
+type CollectionKind = 'project' | 'list' | 'tracker'
+```
+
+#### 2. Extend `Collection`
+
+```typescript
+interface Collection {
+  // ... existing fields unchanged ...
+
+  // Only populated when kind === 'tracker'
+  trackerTemplate?: TrackerTemplate   // which built-in template, or 'custom'
+  trackerFields?:   FieldSchema[]     // field definitions (custom trackers)
+  trackerView?:     TrackerViewMode   // default view for this tracker
+}
+
+type TrackerTemplate = 'habit' | 'books' | 'movies' | 'custom'
+type TrackerViewMode = 'list' | 'grid' | 'heatmap' | 'chart'
+```
+
+#### 3. New: `FieldSchema`
+
+Defines a single column in a custom tracker.
+
+```typescript
+type FieldType =
+  | 'text'        // free text
+  | 'number'      // numeric with optional unit
+  | 'date'        // calendar date picker
+  | 'duration'    // HH:MM or minutes
+  | 'rating'      // 1–5 stars (or configurable max)
+  | 'select'      // single choice from options list
+  | 'multiselect' // multiple choices
+  | 'boolean'     // yes/no checkbox
+  | 'url'         // link field
+
+interface FieldSchema {
+  id:        string      // stable nanoid — used as key in entry.data
+  name:      string      // display label
+  type:      FieldType
+  required?: boolean
+  options?:  string[]    // for select / multiselect
+  unit?:     string      // for number fields, e.g. "kg", "m", "kcal"
+  max?:      number      // for rating fields (default 5)
+}
+```
+
+#### 4. New: `TrackerEntry`
+
+```typescript
+type TrackerEntryId = string & { readonly _brand: 'TrackerEntryId' }
+
+interface TrackerEntry {
+  id:          TrackerEntryId
+  trackerId:   CollectionId
+  date:        string                     // YYYY-MM-DD (primary sort key)
+  data:        Record<string, unknown>    // keyed by FieldSchema.id
+  notes:       string | null
+  linkedTaskIds?:  TaskId[]              // future: cross-link to tasks
+  linkedNoteIds?:  NoteId[]             // future: cross-link to notes
+  createdAt:   string
+  updatedAt:   string
+}
+```
+
+`entry.data` is a flexible key-value map. Values are typed by the corresponding
+`FieldSchema.type` (enforced in the UI, not at the type level). This design
+means adding new field types to an existing tracker is non-breaking — old
+entries simply don't have the new key.
+
+#### 5. DB table (Supabase)
+
+```sql
+create table tracker_entries (
+  id           text    primary key,
+  user_id      uuid    not null references auth.users(id) on delete cascade,
+  tracker_id   text    not null,   -- references collections.id
+  date         text    not null,
+  data         jsonb   not null default '{}',
+  notes        text,
+  created_at   text    not null,
+  updated_at   text    not null
+);
+alter table tracker_entries enable row level security;
+create policy "users_own_tracker_entries" on tracker_entries
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+
+---
+
+### Built-in tracker templates
+
+Templates are pre-configured `FieldSchema[]` arrays. When a user creates a
+tracker with a built-in template, the fields are pre-populated and can be
+added to or customised.
+
+#### Habits
+
+The Habit tracker is differentiated by its view: a **heatmap** calendar
+showing daily completion, with streak count displayed prominently.
+
+Pre-configured fields:
+| Field | Type | Notes |
+|-------|------|-------|
+| Completed | `boolean` | Primary field |
+| Quantity | `number` | Optional (e.g. "10 pages", "30 minutes") |
+
+Computed (not stored): current streak, longest streak, completion rate.
+
+#### Books
+
+Status field enables both "read" log and "want to read" watchlist in one tracker.
+
+Pre-configured fields:
+| Field | Type | Notes |
+|-------|------|-------|
+| Title | `text` | Required |
+| Author | `text` | |
+| Status | `select` | Options: `want to read`, `reading`, `read` |
+| Rating | `rating` | 1–5 stars |
+| Date finished | `date` | |
+| Genre | `select` | Options: user-editable |
+
+#### Movies & Shows
+
+Pre-configured fields:
+| Field | Type | Notes |
+|-------|------|-------|
+| Title | `text` | Required |
+| Type | `select` | Options: `movie`, `series`, `documentary` |
+| Platform | `text` | Netflix, etc. |
+| Status | `select` | Options: `want to watch`, `watching`, `watched` |
+| Rating | `rating` | 1–5 stars |
+| Date watched | `date` | |
+
+#### Custom
+
+No pre-configured fields. The user defines their own schema using the field
+builder. Example use case: scuba dives with fields for location, duration,
+max depth, visibility, buddy.
+
+---
+
+### Watchlist / "want to" lists
+
+The `status` select field on Books and Movies handles both retrospective logs
+("read") and forward-looking wishlists ("want to read") in a single tracker.
+In the Records view, tabs or a filter control separate the two states.
+
+A future enhancement: a task can optionally reference a tracker entry
+(e.g. "Finish reading Book X" links to that book's entry), surfacing the
+entry as context in the task pane.
+
+---
+
+### Third-party integrations (future)
+
+- **Strava**: import workouts automatically via OAuth. Each imported activity
+  creates a tracker entry in a linked Workout tracker. Field mapping is
+  configurable. Requires a dedicated Strava integration pane.
+- **Goodreads / OpenLibrary**: book metadata autofill (cover image, author,
+  genre) when a title is typed.
+- **MyFitnessPal**: nutrition data import.
+
+These are deferred. The data model is designed so that imported entries look
+identical to manually created ones — no special fields needed.
+
+---
+
+### UI requirements
+
+#### Records nav item
+- Top-level nav item in NavSidebar, same level as Tasks and Calendar.
+- Icon: a bookmark or ledger symbol (consistent with the nav style).
+
+#### Tracker list view (Records home)
+- Shows all user trackers as cards with name, color, entry count, last updated.
+- "New tracker" button → picker to choose template or start custom.
+- Trackers grouped by template type (Habits / Books / Movies / Custom).
+
+#### Tracker detail view
+- Tabbed or filtered views depending on tracker type:
+  - **Habits**: heatmap calendar + streak stats + list of recent entries.
+  - **Books/Movies**: tab strip for "All / Want to / In progress / Done".
+  - **Custom**: list/grid toggle, sortable by any field.
+- Floating "Add entry" button → opens an entry form matching the tracker's
+  field schema.
+- Click an entry → inline expand or side pane for editing/notes.
+
+#### Entry form
+- Dynamically rendered from the tracker's `FieldSchema[]`.
+- Date defaults to today.
+- Required fields are validated before save.
+
+#### Custom tracker builder
+- Step 1: name + color + icon.
+- Step 2: field editor — add, reorder, configure fields.
+- Field types are selectable from the `FieldType` union.
+- Fields can be deleted only if no entries exist (or with a confirmation
+  that data for that field will be lost).
+
+---
+
+### Sidebar integration
+
+Trackers appear in the Endeavours sidebar under a "Trackers" group (below
+Projects and Lists). Clicking a tracker in the sidebar filters the Tasks
+view to show tasks linked to that tracker (future: via `linkedTaskIds` on
+entries). This mirrors the behaviour of clicking a Project or List.
+
+---
+
+### Notes integration (future)
+
+When the Notes section is built, `TrackerEntry.linkedNoteIds` enables
+attaching notes to entries (e.g. a reading journal entry attached to a
+book in the Books tracker). The foreign key is already reserved in the
+data model to avoid a breaking migration later.
+
+---
+
+### Phase plan
+
+**Phase 1 — Core (MVP)**
+- `kind = 'tracker'` on Collection, `trackerTemplate`, `trackerFields` fields
+- `TrackerEntry` entity + store + Supabase table
+- Records nav section
+- Tracker list view (home)
+- Built-in templates: Habits, Books, Movies/Shows, Custom
+- Tracker detail: list view + add/edit entry form
+- Habit heatmap view + streak calculation
+- "Want to" vs "completed" filter tabs on Books/Movies
+
+**Phase 2 — Enrichment**
+- Custom field builder (full field type support)
+- Chart/stats views (entries over time, completion rate)
+- Grid view for non-habit trackers
+- Tracker search and sort
+
+**Phase 3 — Cross-linking**
+- Link tracker entries to tasks (`linkedTaskIds`)
+- Link tracker entries to notes (`linkedNoteIds`)
+- Sidebar filter: clicking a tracker shows linked tasks
+- Task pane: show linked tracker entry as context
+
+**Phase 4 — Integrations**
+- Strava OAuth import
+- Book metadata autofill
+- Nutrition data import
+
+---

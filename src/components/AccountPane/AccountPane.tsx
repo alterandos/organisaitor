@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { isSupabaseConfigured } from '@/services/supabase';
+import { forceUpload, onSyncStatus, type SyncStatus } from '@/services/sync/syncService';
 import styles from './AccountPane.module.css';
+
+type Mode = 'signin' | 'signup';
 
 function downloadBackup() {
   const { tasks, collections, tags, purposes } = useTaskStore.getState();
@@ -25,23 +28,27 @@ function downloadBackup() {
   URL.revokeObjectURL(url);
 }
 
-type Mode = 'signin' | 'signup';
-
 export function AccountPane() {
   const closeAccount = useUIStore((s) => s.closeAccount);
   const { user, loading, signIn, signUp, signOut } = useAuthStore();
 
-  const [mode,     setMode]     = useState<Mode>('signin');
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [error,    setError]    = useState<string | null>(null);
-  const [success,  setSuccess]  = useState<string | null>(null);
+  const [mode,        setMode]        = useState<Mode>('signin');
+  const [email,       setEmail]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [error,       setError]       = useState<string | null>(null);
+  const [success,     setSuccess]     = useState<string | null>(null);
+  const [syncStatus,  setSyncStatus]  = useState<SyncStatus>('idle');
+  const [syncErr,     setSyncErr]     = useState<string | null>(null);
+  const [restoring,   setRestoring]   = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeAccount(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [closeAccount]);
+
+  useEffect(() => onSyncStatus((s, e) => { setSyncStatus(s); setSyncErr(e); }), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,8 +75,49 @@ export function AccountPane() {
     await signOut();
     setEmail('');
     setPassword('');
-    setSuccess('Signed out.');
   };
+
+  const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRestoring(true);
+    setError(null);
+    try {
+      const text   = await file.text();
+      const backup = JSON.parse(text);
+
+      useTaskStore.setState({
+        tasks:       backup.tasks       ?? {},
+        collections: backup.collections ?? {},
+        tags:        backup.tags        ?? {},
+        purposes:    backup.purposes    ?? {},
+      } as never);
+      useCalendarStore.setState({
+        events:    backup.events    ?? {},
+        reminders: backup.reminders ?? {},
+      } as never);
+
+      if (user) {
+        await forceUpload(user.id);
+        setSuccess('Data restored and uploaded to Supabase.');
+      } else {
+        setSuccess('Data restored locally. Sign in to sync to the cloud.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to restore backup.');
+    } finally {
+      setRestoring(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const syncLabel = syncStatus === 'syncing' ? 'Syncing…'
+    : syncStatus === 'error'   ? 'Sync error'
+    : 'Synced';
+
+  const syncBadgeClass = syncStatus === 'error' ? styles.badgeError
+    : syncStatus === 'syncing' ? styles.badgeSyncing
+    : styles.badge;
 
   return (
     <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) closeAccount(); }}>
@@ -88,13 +136,35 @@ export function AccountPane() {
         {user ? (
           <div className={styles.body}>
             <div className={styles.signedInRow}>
-              <span className={styles.badge}>Synced</span>
+              <span className={syncBadgeClass}>{syncLabel}</span>
               <span className={styles.email}>{user.email}</span>
             </div>
-            <p className={styles.hint}>Your data is syncing to the cloud. Sign in on any device to access it.</p>
+            {syncStatus === 'error' && syncErr && (
+              <p className={styles.errorMsg}>{syncErr}</p>
+            )}
+            <p className={styles.hint}>Your data syncs to the cloud automatically. Sign in on any device to access it.</p>
+
+            {success && <p className={styles.successMsg}>{success}</p>}
+            {error   && <p className={styles.errorMsg}>{error}</p>}
+
             <button className={styles.exportBtn} onClick={downloadBackup} type="button">
               Export backup (JSON)
             </button>
+            <button
+              className={styles.exportBtn}
+              onClick={() => fileRef.current?.click()}
+              disabled={restoring}
+              type="button"
+            >
+              {restoring ? 'Restoring…' : 'Restore from backup (JSON)'}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleRestoreFile}
+            />
             <button className={styles.signOutBtn} onClick={handleSignOut} disabled={loading}>
               Sign out
             </button>
@@ -140,9 +210,21 @@ export function AccountPane() {
               </form>
             )}
 
-            <button className={styles.guestLink} onClick={closeAccount}>
-              Continue without account
-            </button>
+            <div className={styles.guestSection}>
+              <button className={styles.exportBtn} onClick={() => fileRef.current?.click()} type="button">
+                Restore from backup (JSON)
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".json"
+                style={{ display: 'none' }}
+                onChange={handleRestoreFile}
+              />
+              <button className={styles.guestLink} onClick={closeAccount}>
+                Continue without account
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -17,19 +17,30 @@ let unsubscribers: Array<() => void> = [];
 
 // ── Public API ──────────────────────────────────────────────────
 
+export type SyncStatus = 'idle' | 'syncing' | 'error';
+let syncStatus: SyncStatus = 'idle';
+let syncError: string | null = null;
+const statusListeners: Array<(s: SyncStatus, e: string | null) => void> = [];
+
+function setStatus(s: SyncStatus, err: string | null = null) {
+  syncStatus = s;
+  syncError  = err;
+  statusListeners.forEach((fn) => fn(s, err));
+}
+
+export function onSyncStatus(fn: (s: SyncStatus, e: string | null) => void) {
+  statusListeners.push(fn);
+  fn(syncStatus, syncError);
+  return () => { const i = statusListeners.indexOf(fn); if (i >= 0) statusListeners.splice(i, 1); };
+}
+
 export async function initSync(userId: string): Promise<void> {
   stopSync();
   hydrating = true;
+  setStatus('syncing');
 
   try {
-    const [
-      { data: dbTasks },
-      { data: dbCollections },
-      { data: dbTags },
-      { data: dbPurposes },
-      { data: dbEvents },
-      { data: dbReminders },
-    ] = await Promise.all([
+    const results = await Promise.all([
       supabase.from('tasks').select('*').eq('user_id', userId),
       supabase.from('collections').select('*').eq('user_id', userId),
       supabase.from('tags').select('*').eq('user_id', userId),
@@ -38,18 +49,31 @@ export async function initSync(userId: string): Promise<void> {
       supabase.from('calendar_reminders').select('*').eq('user_id', userId),
     ]);
 
+    // Surface any permission/connection errors
+    const firstError = results.find((r) => r.error)?.error;
+    if (firstError) {
+      throw new Error(firstError.message);
+    }
+
+    const [dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders] =
+      results.map((r) => r.data);
+
     const isEmpty =
       (dbTasks?.length ?? 0) === 0 &&
       (dbCollections?.length ?? 0) === 0 &&
       (dbEvents?.length ?? 0) === 0;
 
     if (isEmpty) {
-      await uploadLocalData(userId);
+      await upsertAllToSupabase(userId);
     } else {
       hydrateStores(dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders);
     }
+
+    setStatus('idle');
   } catch (err) {
-    console.error('[sync] init failed:', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[sync] init failed:', msg);
+    setStatus('error', msg);
   } finally {
     hydrating = false;
   }
@@ -60,6 +84,21 @@ export async function initSync(userId: string): Promise<void> {
 export function stopSync(): void {
   unsubscribers.forEach((u) => u());
   unsubscribers = [];
+}
+
+// Force-uploads ALL current store data to Supabase (upsert).
+// Used after restoring from a JSON backup while already signed in.
+export async function forceUpload(userId: string): Promise<void> {
+  setStatus('syncing');
+  try {
+    await upsertAllToSupabase(userId);
+    setStatus('idle');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[sync] force upload failed:', msg);
+    setStatus('error', msg);
+    throw err;
+  }
 }
 
 // ── Hydration ───────────────────────────────────────────────────
@@ -81,10 +120,10 @@ function hydrateStores(...args: Array<any[] | null>) {
   } as Parameters<typeof useCalendarStore.setState>[0]);
 }
 
-// ── Migration ───────────────────────────────────────────────────
-// First sign-in: uploads all existing localStorage data to Supabase.
+// ── Upload ──────────────────────────────────────────────────────
+// Upserts all current store data. Safe to call multiple times.
 
-async function uploadLocalData(userId: string): Promise<void> {
+async function upsertAllToSupabase(userId: string): Promise<void> {
   const { tasks, collections, tags, purposes } = useTaskStore.getState();
   const { events, reminders } = useCalendarStore.getState();
 
@@ -95,18 +134,20 @@ async function uploadLocalData(userId: string): Promise<void> {
   const allEvents      = Object.values(events);
   const allReminders   = Object.values(reminders);
 
-  await Promise.all([
-    allTasks.length       > 0 && supabase.from('tasks').insert(allTasks.map((t) => taskToRow(t, userId))),
-    allCollections.length > 0 && supabase.from('collections').insert(allCollections.map((c) => collectionToRow(c, userId))),
-    allTags.length        > 0 && supabase.from('tags').insert(allTags.map((t) => tagToRow(t, userId))),
-    allPurposes.length    > 0 && supabase.from('purposes').insert(allPurposes.map((p) => purposeToRow(p, userId))),
-    allEvents.length      > 0 && supabase.from('calendar_events').insert(allEvents.map((e) => eventToRow(e, userId))),
-    allReminders.length   > 0 && supabase.from('calendar_reminders').insert(allReminders.map((r) => reminderToRow(r, userId))),
+  const results = await Promise.all([
+    allTasks.length       > 0 ? supabase.from('tasks').upsert(allTasks.map((t) => taskToRow(t, userId)))               : null,
+    allCollections.length > 0 ? supabase.from('collections').upsert(allCollections.map((c) => collectionToRow(c, userId))) : null,
+    allTags.length        > 0 ? supabase.from('tags').upsert(allTags.map((t) => tagToRow(t, userId)))                  : null,
+    allPurposes.length    > 0 ? supabase.from('purposes').upsert(allPurposes.map((p) => purposeToRow(p, userId)))      : null,
+    allEvents.length      > 0 ? supabase.from('calendar_events').upsert(allEvents.map((e) => eventToRow(e, userId)))   : null,
+    allReminders.length   > 0 ? supabase.from('calendar_reminders').upsert(allReminders.map((r) => reminderToRow(r, userId))) : null,
   ]);
+
+  const firstError = results.find((r) => r?.error)?.error;
+  if (firstError) throw new Error(firstError.message);
 }
 
 // ── Subscriptions ───────────────────────────────────────────────
-// Watches Zustand stores for changes and mirrors them to Supabase.
 
 function setupSubscriptions(userId: string): void {
   const unsubTask = useTaskStore.subscribe((state, prev) => {
@@ -158,12 +199,12 @@ function syncDiff(
 
   if (toUpsert.length > 0) {
     supabase.from(table).upsert(toUpsert).then(({ error }) => {
-      if (error) console.error(`[sync] upsert ${table}:`, error.message);
+      if (error) { console.error(`[sync] upsert ${table}:`, error.message); setStatus('error', error.message); }
     });
   }
   if (toDelete.length > 0) {
     supabase.from(table).delete().in('id', toDelete).then(({ error }) => {
-      if (error) console.error(`[sync] delete ${table}:`, error.message);
+      if (error) { console.error(`[sync] delete ${table}:`, error.message); setStatus('error', error.message); }
     });
   }
 }
