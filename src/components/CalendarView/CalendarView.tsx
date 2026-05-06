@@ -104,6 +104,7 @@ export function CalendarView() {
   const [month, setMonth] = useState(today.getMonth());
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [dayPaneDate, setDayPaneDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(toDateStr(today));
 
   const tasks             = useTaskStore((s) => s.tasks);
   const collectionsRecord = useTaskStore((s) => s.collections);
@@ -197,7 +198,33 @@ export function CalendarView() {
     if (month === 11) { setYear((y) => y + 1); setMonth(0); }
     else setMonth((m) => m + 1);
   };
-  const goToday = () => { setYear(today.getFullYear()); setMonth(today.getMonth()); };
+  const goToday = () => {
+    const t = toDateStr(today);
+    setYear(today.getFullYear());
+    setMonth(today.getMonth());
+    setSelectedDate(t);
+  };
+
+  // ── Mobile week navigation ─────────────────────────────────────────────────
+  const weekDays = useMemo(() => {
+    const d = new Date(selectedDate + 'T00:00:00');
+    const sun = new Date(d);
+    sun.setDate(d.getDate() - d.getDay());
+    return Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(sun);
+      day.setDate(sun.getDate() + i);
+      return day;
+    });
+  }, [selectedDate]);
+
+  const shiftWeek = (delta: number) => {
+    const d = new Date(selectedDate + 'T00:00:00');
+    d.setDate(d.getDate() + delta * 7);
+    const str = toDateStr(d);
+    setSelectedDate(str);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+  };
 
   const todayStr = toDateStr(today);
   const numWeeks = days.length / 7;
@@ -260,6 +287,76 @@ export function CalendarView() {
 
   return (
     <div className={styles.wrapper} onMouseLeave={() => setTooltip(null)}>
+
+      {/* ── Mobile: week strip + day list ── */}
+      <div className={styles.mobileView}>
+        <div className={styles.weekHeader}>
+          <button className={styles.navBtn} onClick={() => shiftWeek(-1)} aria-label="Previous week">‹</button>
+          <span className={styles.weekTitle}>
+            {weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {' – '}
+            {weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+          <button className={styles.navBtn} onClick={() => shiftWeek(1)} aria-label="Next week">›</button>
+        </div>
+
+        <div className={styles.weekStrip}>
+          {weekDays.map((d) => {
+            const str      = toDateStr(d);
+            const isToday  = str === todayStr;
+            const isActive = str === selectedDate;
+            const hasDot   = (itemsByDate.get(str) ?? []).length > 0;
+            return (
+              <button
+                key={str}
+                className={`${styles.weekDay} ${isActive ? styles.weekDayActive : ''}`}
+                onClick={() => setSelectedDate(str)}
+              >
+                <span className={styles.weekDayName}>{DAY_NAMES[d.getDay()]}</span>
+                <span className={`${styles.weekDayNum} ${isToday ? styles.weekDayNumToday : ''} ${isActive ? styles.weekDayNumActive : ''}`}>
+                  {d.getDate()}
+                </span>
+                {hasDot && <span className={`${styles.weekDot} ${isActive ? styles.weekDotActive : ''}`} />}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className={styles.dayList}>
+          <div className={styles.dayListHeader}>
+            {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </div>
+          {(itemsByDate.get(selectedDate) ?? []).length === 0 ? (
+            <div className={styles.dayListEmpty}>Nothing scheduled</div>
+          ) : (
+            (itemsByDate.get(selectedDate) ?? []).map((item) => {
+              const past      = item.kind !== 'task' ? isPastItem(selectedDate, item.time) : false;
+              const completed = item.kind === 'task' && item.completed;
+              return (
+                <button
+                  key={`${item.kind}-${item.id}`}
+                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                  style={getPillStyle(item)}
+                  onClick={(e) => handleItemClick(e, item)}
+                >
+                  {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
+                  {item.time && <span className={styles.calItemTime}>{formatTime(item.time)}</span>}
+                  <span className={styles.dayListItemTitle}>{item.title}</span>
+                </button>
+              );
+            })
+          )}
+          <button
+            className={styles.dayListAddBtn}
+            onClick={() => showAddCalendarItem(selectedDate)}
+          >
+            + Add item
+          </button>
+        </div>
+      </div>
+
+      {/* ── Desktop: month grid ── */}
+      <div className={styles.desktopView}>
       {/* ── Unified card: header + grid ── */}
       <div className={styles.calendarBody}>
         {/* Month nav */}
@@ -378,6 +475,8 @@ export function CalendarView() {
           </aside>
         </>
       )}
+
+      </div>{/* end desktopView */}
 
       {/* ── Hover tooltip ── */}
       {tooltip && (

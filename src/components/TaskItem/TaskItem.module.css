@@ -92,6 +92,10 @@
   opacity: 1;
 }
 
+@media (hover: none) {
+  .indicator { opacity: 1; }
+}
+
 /* Milestone diamond — always visible */
 .milestoneIndicator {
   flex-shrink: 0;
@@ -126,6 +130,10 @@
   opacity: 1;
 }
 
+@media (hover: none) {
+  .deadline { opacity: 1; }
+}
+
 .deadlineOverdue {
   color: #ef4444;
   font-weight: 500;
@@ -151,6 +159,15 @@
   margin-top: 0.35rem;
   box-shadow: inset 0 1px 0 var(--color-border);
   pointer-events: auto;
+}
+
+@media (hover: none) {
+  .expandStrip {
+    height: 1.15rem;
+    margin-top: 0.35rem;
+    box-shadow: inset 0 1px 0 var(--color-border);
+    pointer-events: auto;
+  }
 }
 
 .expandStripChevron {

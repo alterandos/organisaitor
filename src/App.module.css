@@ -82,6 +82,14 @@
   padding: 1.5rem 1rem 6rem;
 }
 
+@media (max-width: 600px) {
+  .header { padding: 0 0.75rem; height: 52px; }
+  .heading { font-size: 1rem; }
+  .menuBtn, .settingsBtn { padding: 0.5rem; font-size: 1.1rem; }
+  .main { padding: 1rem 0.75rem 7rem; max-width: 100%; }
+  .toolRow { gap: 0.5rem; }
+}
+
 .toolRow {
   display: flex;
   align-items: center;

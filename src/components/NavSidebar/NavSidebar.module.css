@@ -57,6 +57,27 @@
 
 .spacer { flex: 1; }
 
+@media (max-width: 600px) {
+  .sidebar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    height: 56px;
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 0.25rem 0.5rem;
+    border-right: none;
+    border-top: 1px solid var(--color-border);
+    z-index: 30;
+  }
+  .spacer { display: none; }
+  .navBtnActive::before { display: none; }
+  .navBtn { width: 48px; height: 48px; }
+}
+
 /* Utility buttons (integrations etc.) — highlighted when open, no left-bar indicator */
 .navBtnUtilOpen {
   color: var(--color-primary);

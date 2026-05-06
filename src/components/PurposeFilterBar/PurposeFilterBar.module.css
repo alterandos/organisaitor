@@ -9,6 +9,11 @@
   flex-wrap: wrap;
 }
 
+@media (max-width: 600px) {
+  .bar { flex-wrap: nowrap; padding: 0.5rem 0.75rem; }
+  .pill { padding: 0.3rem 0.85rem; font-size: 0.85rem; }
+}
+
 .bar::-webkit-scrollbar { display: none; }
 
 .pill {

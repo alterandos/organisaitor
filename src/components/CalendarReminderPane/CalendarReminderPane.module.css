@@ -19,6 +19,21 @@
   overflow: hidden;
 }
 
+@media (max-width: 600px) {
+  .pane {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: auto;
+    max-height: 92dvh;
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+}
+
 .header {
   display: flex;
   align-items: center;

@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
@@ -19,14 +20,31 @@ const CAL_OPTIONS: { type: CalDialType; label: string; color: string; icon: stri
 ];
 
 export function AddTaskButton() {
-  const activeView         = useUIStore((s) => s.activeView);
-  const showAddTask        = useUIStore((s) => s.showAddTask);
-  const showAddCollection  = useUIStore((s) => s.showAddCollection);
-  const showAddPurpose     = useUIStore((s) => s.showAddPurpose);
-  const showAddTag         = useUIStore((s) => s.showAddTag);
+  const activeView          = useUIStore((s) => s.activeView);
+  const showAddTask         = useUIStore((s) => s.showAddTask);
+  const showAddCollection   = useUIStore((s) => s.showAddCollection);
+  const showAddPurpose      = useUIStore((s) => s.showAddPurpose);
+  const showAddTag          = useUIStore((s) => s.showAddTag);
   const showAddCalendarItem = useUIStore((s) => s.showAddCalendarItem);
 
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [open]);
+
   const handleTaskOption = (type: TaskDialType) => {
+    setOpen(false);
     if (type === 'collection') showAddCollection();
     else if (type === 'purpose') showAddPurpose();
     else if (type === 'tag') showAddTag();
@@ -34,12 +52,15 @@ export function AddTaskButton() {
   };
 
   const handleCalOption = (type: CalDialType) => {
+    setOpen(false);
     showAddCalendarItem(undefined, type as CalendarItemKind);
   };
 
+  const dialClass = `${styles.speedDial} ${open ? styles.speedDialOpen : ''}`;
+
   if (activeView === 'calendar') {
     return (
-      <div className={styles.speedDial}>
+      <div className={dialClass} ref={ref}>
         <div className={styles.options} role="group" aria-label="Create options">
           {CAL_OPTIONS.map((opt) => (
             <div key={opt.type} className={styles.optionRow}>
@@ -58,8 +79,9 @@ export function AddTaskButton() {
 
         <button
           className={styles.fab}
-          onClick={() => showAddCalendarItem()}
+          onClick={() => setOpen((o) => !o)}
           aria-label="Add calendar item"
+          aria-expanded={open}
         >
           <span className={styles.fabIcon}>+</span>
         </button>
@@ -68,7 +90,7 @@ export function AddTaskButton() {
   }
 
   return (
-    <div className={styles.speedDial}>
+    <div className={dialClass} ref={ref}>
       <div className={styles.options} role="group" aria-label="Create options">
         {TASK_OPTIONS.map((opt) => (
           <div key={opt.type} className={styles.optionRow}>
@@ -87,8 +109,9 @@ export function AddTaskButton() {
 
       <button
         className={styles.fab}
-        onClick={showAddTask}
+        onClick={() => setOpen((o) => !o)}
         aria-label="Add task"
+        aria-expanded={open}
       >
         <span className={styles.fabIcon}>+</span>
       </button>
