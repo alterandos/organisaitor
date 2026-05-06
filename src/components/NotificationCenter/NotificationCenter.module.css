@@ -1,0 +1,232 @@
+/* Bell button */
+.wrapper {
+  position: relative;
+}
+
+.bellBtn {
+  position: relative;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 140ms ease, background 140ms ease;
+}
+.bellBtn:hover { color: var(--color-text); background: var(--color-bg); }
+.bellActive { color: var(--color-primary); }
+
+.badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 1rem;
+  height: 1rem;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.2rem;
+  line-height: 1;
+}
+
+/* Panel */
+.panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  max-height: 480px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.14);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.panelTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+
+.clearBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+  transition: color 120ms ease, background 120ms ease;
+}
+.clearBtn:hover { color: var(--color-text); background: var(--color-bg); }
+
+.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.list {
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* Notification card */
+.card {
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.kindTask     { border-left-color: #f59e0b; }
+.kindEvent    { border-left-color: var(--color-primary); }
+.kindReminder { border-left-color: #10b981; }
+
+.cardMain {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.cardText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.cardTitle {
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardBody {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.dismissBtn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  padding: 0.1rem;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 120ms ease;
+}
+.dismissBtn:hover { opacity: 1; }
+
+/* Action buttons */
+.actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-family: inherit;
+  padding: 0.25rem 0.6rem;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.actionBtn:hover { background: var(--color-surface); border-color: var(--color-primary); color: var(--color-primary); }
+.actionBtn:disabled { opacity: 0.4; cursor: default; }
+
+.doneBtn {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  color: var(--color-primary);
+}
+.doneBtn:hover { background: color-mix(in srgb, var(--color-primary) 20%, transparent); }
+
+.archiveBtn { color: var(--color-muted); }
+.archiveBtn:hover { color: #ef4444; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.06); }
+
+/* Inline mini-forms (snooze / postpone) */
+.miniForm {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.miniLabel {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.miniNum {
+  width: 3.5rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.4rem;
+  outline: none;
+}
+.miniNum:focus { border-color: var(--color-primary); }
+
+.miniSelect,
+.miniDate,
+.miniTime {
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+  outline: none;
+}
+.miniSelect:focus,
+.miniDate:focus,
+.miniTime:focus { border-color: var(--color-primary); }

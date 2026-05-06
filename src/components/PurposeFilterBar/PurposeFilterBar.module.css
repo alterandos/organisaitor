@@ -1,0 +1,28 @@
+.bar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.55rem 1.5rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-wrap: wrap;
+}
+
+.bar::-webkit-scrollbar { display: none; }
+
+.pill {
+  padding: 0.22rem 0.75rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 140ms ease;
+}
+
+.pill:hover { border-color: var(--color-text); color: var(--color-text); }
+.pillActive  { font-weight: 500; }

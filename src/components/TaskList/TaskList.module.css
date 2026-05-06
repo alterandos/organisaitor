@@ -1,0 +1,81 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.empty {
+  text-align: center;
+  color: var(--color-muted);
+  padding: 4rem 0;
+  font-size: 0.95rem;
+}
+
+.sectionToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+  margin: 1.25rem 0 0.25rem;
+  padding: 0 0.25rem;
+  font-family: inherit;
+  transition: color 140ms ease;
+}
+
+.sectionToggle:hover { color: var(--color-text); }
+
+.chevron {
+  display: inline-block;
+  transition: transform 140ms ease;
+}
+
+.chevronOpen { transform: rotate(90deg); }
+
+/* ── Task group (parent + subtasks) ───────────────────── */
+
+.taskGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Subtask section — hover preview + explicit expansion */
+.subtaskReveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 220ms ease, opacity 180ms ease;
+}
+
+.subtaskRevealInner {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.taskGroup:hover .subtaskReveal {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.taskGroup:hover {
+  --subtask-indicator-opacity: 0;
+}
+
+.taskGroup:hover .subtaskRevealInner,
+.subtaskRevealOpen .subtaskRevealInner {
+  padding-top: 0.35rem;
+}
+
+.subtaskRevealOpen {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}

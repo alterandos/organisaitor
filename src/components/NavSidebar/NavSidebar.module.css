@@ -1,0 +1,68 @@
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  width: 52px;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 0;
+  gap: 0.25rem;
+  z-index: 11;
+}
+
+.navBtn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+  position: relative;
+}
+
+.navBtn:hover {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.navBtnActive {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+.navBtnActive::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 20%;
+  height: 60%;
+  width: 3px;
+  background: var(--color-primary);
+  border-radius: 0 2px 2px 0;
+}
+
+.navBtnActive:hover {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.spacer { flex: 1; }
+
+/* Utility buttons (integrations etc.) — highlighted when open, no left-bar indicator */
+.navBtnUtilOpen {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+.navBtnUtilOpen:hover {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
