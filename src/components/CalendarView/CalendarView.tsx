@@ -102,6 +102,7 @@ export function CalendarView() {
   const today = new Date();
   const [year,  setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
+  const [desktopMode, setDesktopMode] = useState<'month' | 'week' | 'day'>('month');
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [dayPaneDate, setDayPaneDate] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(toDateStr(today));
@@ -224,6 +225,37 @@ export function CalendarView() {
     setSelectedDate(str);
     setYear(d.getFullYear());
     setMonth(d.getMonth());
+  };
+
+  const shiftDay = (delta: number) => {
+    const d = new Date(selectedDate + 'T00:00:00');
+    d.setDate(d.getDate() + delta);
+    const str = toDateStr(d);
+    setSelectedDate(str);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+  };
+
+  const desktopNavLabel = (() => {
+    if (desktopMode === 'month') return `${MONTH_NAMES[month]} ${year}`;
+    if (desktopMode === 'week') {
+      const s = weekDays[0]; const e = weekDays[6];
+      const sm = s.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const em = e.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return `${sm} – ${em}`;
+    }
+    return new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  })();
+
+  const desktopPrev = () => {
+    if (desktopMode === 'month') prevMonth();
+    else if (desktopMode === 'week') shiftWeek(-1);
+    else shiftDay(-1);
+  };
+  const desktopNext = () => {
+    if (desktopMode === 'month') nextMonth();
+    else if (desktopMode === 'week') shiftWeek(1);
+    else shiftDay(1);
   };
 
   const todayStr = toDateStr(today);
@@ -355,127 +387,201 @@ export function CalendarView() {
         </div>
       </div>
 
-      {/* ── Desktop: month grid ── */}
+      {/* ── Desktop ── */}
       <div className={styles.desktopView}>
-      {/* ── Unified card: header + grid ── */}
-      <div className={styles.calendarBody}>
-        {/* Month nav */}
-        <div className={styles.header}>
-          <div className={styles.headerLeft}>
-            <button className={styles.navBtn} onClick={prevMonth} aria-label="Previous month">‹</button>
-            <h2 className={styles.monthTitle}>{MONTH_NAMES[month]} {year}</h2>
-            <button className={styles.navBtn} onClick={nextMonth} aria-label="Next month">›</button>
+        <div className={styles.calendarBody}>
+
+          {/* Unified header */}
+          <div className={styles.header}>
+            <div className={styles.headerLeft}>
+              <button className={styles.navBtn} onClick={desktopPrev} aria-label="Previous">‹</button>
+              <h2 className={styles.monthTitle}>{desktopNavLabel}</h2>
+              <button className={styles.navBtn} onClick={desktopNext} aria-label="Next">›</button>
+              <button className={styles.todayBtn} onClick={goToday}>Today</button>
+            </div>
+            <div className={styles.viewToggle}>
+              {(['month', 'week', 'day'] as const).map((m) => (
+                <button
+                  key={m}
+                  className={`${styles.viewToggleBtn} ${desktopMode === m ? styles.viewToggleBtnActive : ''}`}
+                  onClick={() => setDesktopMode(m)}
+                >
+                  {m.charAt(0).toUpperCase() + m.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
-          <button className={styles.todayBtn} onClick={goToday}>Today</button>
-        </div>
 
-        {/* Day name row */}
-        <div className={styles.dayHeaders}>
-          {DAY_NAMES.map((d) => (
-            <div key={d} className={styles.dayHeader}>{d}</div>
-          ))}
-        </div>
+          {/* ── Month view ── */}
+          {desktopMode === 'month' && <>
+            <div className={styles.dayHeaders}>
+              {DAY_NAMES.map((d) => (
+                <div key={d} className={styles.dayHeader}>{d}</div>
+              ))}
+            </div>
+            <div className={styles.grid} style={{ '--num-weeks': numWeeks } as React.CSSProperties}>
+              {days.map(({ date, isCurrentMonth }) => {
+                const dateStr  = toDateStr(date);
+                const isToday  = dateStr === todayStr;
+                const dayItems = itemsByDate.get(dateStr) ?? [];
+                const overflow = dayItems.length - MAX_VISIBLE;
+                return (
+                  <div
+                    key={dateStr}
+                    className={`${styles.dayCell} ${!isCurrentMonth ? styles.dayCellOtherMonth : ''}`}
+                    style={getCellStyle(date, dateStr, isCurrentMonth)}
+                    onClick={() => showAddCalendarItem(dateStr)}
+                  >
+                    <span className={`${styles.dayNum} ${isToday ? styles.dayNumToday : ''}`}>
+                      {date.getDate()}
+                    </span>
+                    {dayItems.slice(0, MAX_VISIBLE).map((item) => {
+                      const past      = item.kind !== 'task' ? isPastItem(dateStr, item.time) : false;
+                      const completed = item.kind === 'task' && item.completed;
+                      return (
+                        <button
+                          key={`${item.kind}-${item.id}`}
+                          className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                          style={getPillStyle(item)}
+                          onClick={(e) => handleItemClick(e, item)}
+                          onMouseEnter={(e) => handleItemMouseEnter(e, item)}
+                          onMouseLeave={() => setTooltip(null)}
+                          title=""
+                        >
+                          {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
+                          {item.time    && <span className={styles.calItemTime}>{formatTime(item.time)}</span>}
+                          <span className={styles.calItemTitle}>{item.title}</span>
+                        </button>
+                      );
+                    })}
+                    {overflow > 0 && (
+                      <button className={styles.overflow} onClick={(e) => { e.stopPropagation(); setDayPaneDate(dateStr); }}>
+                        +{overflow} more
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>}
 
-        {/* Grid */}
-        <div className={styles.grid} style={{ '--num-weeks': numWeeks } as React.CSSProperties}>
-          {days.map(({ date, isCurrentMonth }) => {
-            const dateStr   = toDateStr(date);
-            const isToday   = dateStr === todayStr;
-            const dayItems  = itemsByDate.get(dateStr) ?? [];
-            const overflow  = dayItems.length - MAX_VISIBLE;
-            const cellStyle = getCellStyle(date, dateStr, isCurrentMonth);
+          {/* ── Week view ── */}
+          {desktopMode === 'week' && (
+            <div className={styles.weekViewGrid}>
+              {weekDays.map((d) => {
+                const dateStr  = toDateStr(d);
+                const isToday  = dateStr === todayStr;
+                const dayItems = itemsByDate.get(dateStr) ?? [];
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                return (
+                  <div
+                    key={dateStr}
+                    className={`${styles.weekViewCol} ${isToday ? styles.weekViewColToday : ''} ${isWeekend && shadeWeekends ? styles.weekViewColWeekend : ''}`}
+                  >
+                    <div
+                      className={styles.weekViewColHeader}
+                      onClick={() => showAddCalendarItem(dateStr)}
+                    >
+                      <span className={styles.weekViewDayName}>{DAY_NAMES[d.getDay()]}</span>
+                      <span className={`${styles.weekViewDayNum} ${isToday ? styles.dayNumToday : ''}`}>
+                        {d.getDate()}
+                      </span>
+                    </div>
+                    <div className={styles.weekViewItems}>
+                      {dayItems.map((item) => {
+                        const past      = item.kind !== 'task' ? isPastItem(dateStr, item.time) : false;
+                        const completed = item.kind === 'task' && item.completed;
+                        return (
+                          <button
+                            key={`${item.kind}-${item.id}`}
+                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                            style={getPillStyle(item)}
+                            onClick={(e) => handleItemClick(e, item)}
+                            onMouseEnter={(e) => handleItemMouseEnter(e, item)}
+                            onMouseLeave={() => setTooltip(null)}
+                            title=""
+                          >
+                            {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
+                            {item.time    && <span className={styles.calItemTime}>{formatTime(item.time)}</span>}
+                            <span className={styles.calItemTitle}>{item.title}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-            return (
-              <div
-                key={dateStr}
-                className={`${styles.dayCell} ${!isCurrentMonth ? styles.dayCellOtherMonth : ''}`}
-                style={cellStyle}
-                onClick={() => showAddCalendarItem(dateStr)}
-              >
-                <span className={`${styles.dayNum} ${isToday ? styles.dayNumToday : ''}`}>
-                  {date.getDate()}
-                </span>
-
-                {dayItems.slice(0, MAX_VISIBLE).map((item) => {
-                  const past = item.kind !== 'task'
-                    ? isPastItem(dateStr, item.time)
-                    : false;
+          {/* ── Day view ── */}
+          {desktopMode === 'day' && (
+            <div className={styles.dayViewContainer}>
+              {(itemsByDate.get(selectedDate) ?? []).length === 0 ? (
+                <div className={styles.dayViewEmpty}>Nothing scheduled — click to add an item.</div>
+              ) : (
+                (itemsByDate.get(selectedDate) ?? []).map((item) => {
+                  const past      = item.kind !== 'task' ? isPastItem(selectedDate, item.time) : false;
                   const completed = item.kind === 'task' && item.completed;
-
                   return (
                     <button
                       key={`${item.kind}-${item.id}`}
-                      className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                      className={`${styles.dayViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
                       style={getPillStyle(item)}
                       onClick={(e) => handleItemClick(e, item)}
                       onMouseEnter={(e) => handleItemMouseEnter(e, item)}
                       onMouseLeave={() => setTooltip(null)}
-                      title=""
                     >
-                      {item.typeIcon && (
-                        <span className={styles.calItemIcon}>{item.typeIcon}</span>
-                      )}
-                      {item.time && (
-                        <span className={styles.calItemTime}>{formatTime(item.time)}</span>
-                      )}
-                      <span className={styles.calItemTitle}>{item.title}</span>
+                      {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
+                      {item.time    && <span className={styles.dayViewItemTime}>{formatTime(item.time)}</span>}
+                      <span className={styles.dayViewItemTitle}>{item.title}</span>
                     </button>
                   );
-                })}
-
-                {overflow > 0 && (
-                  <button
-                    className={styles.overflow}
-                    onClick={(e) => { e.stopPropagation(); setDayPaneDate(dateStr); }}
-                  >
-                    +{overflow} more
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Day pane (overflow click) ── */}
-      {dayPaneDate && (
-        <>
-          <div className={styles.dayPaneOverlay} onClick={() => setDayPaneDate(null)} />
-          <aside className={styles.dayPane}>
-            <header className={styles.dayPaneHeader}>
-              <span className={styles.dayPaneTitle}>
-                {new Date(dayPaneDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </span>
-              <button className={styles.dayPaneClose} onClick={() => setDayPaneDate(null)}>×</button>
-            </header>
-            <div className={styles.dayPaneBody}>
-              {(itemsByDate.get(dayPaneDate) ?? []).map((item) => {
-                const past = item.kind !== 'task' ? isPastItem(dayPaneDate, item.time) : false;
-                const completed = item.kind === 'task' && item.completed;
-                return (
-                  <button
-                    key={`${item.kind}-${item.id}`}
-                    className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
-                    style={getPillStyle(item)}
-                    onClick={(e) => { handleItemClick(e, item); setDayPaneDate(null); }}
-                  >
-                    {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
-                    {item.time && <span className={styles.calItemTime}>{formatTime(item.time)}</span>}
-                    <span>{item.title}</span>
-                  </button>
-                );
-              })}
-              <button
-                className={styles.dayPaneAddBtn}
-                onClick={() => { showAddCalendarItem(dayPaneDate); setDayPaneDate(null); }}
-              >
+                })
+              )}
+              <button className={styles.dayPaneAddBtn} onClick={() => showAddCalendarItem(selectedDate)}>
                 + Add item
               </button>
             </div>
-          </aside>
-        </>
-      )}
+          )}
 
+        </div>
+
+        {/* Day pane (month-view overflow) */}
+        {dayPaneDate && desktopMode === 'month' && (
+          <>
+            <div className={styles.dayPaneOverlay} onClick={() => setDayPaneDate(null)} />
+            <aside className={styles.dayPane}>
+              <header className={styles.dayPaneHeader}>
+                <span className={styles.dayPaneTitle}>
+                  {new Date(dayPaneDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                </span>
+                <button className={styles.dayPaneClose} onClick={() => setDayPaneDate(null)}>×</button>
+              </header>
+              <div className={styles.dayPaneBody}>
+                {(itemsByDate.get(dayPaneDate) ?? []).map((item) => {
+                  const past      = item.kind !== 'task' ? isPastItem(dayPaneDate, item.time) : false;
+                  const completed = item.kind === 'task' && item.completed;
+                  return (
+                    <button
+                      key={`${item.kind}-${item.id}`}
+                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                      style={getPillStyle(item)}
+                      onClick={(e) => { handleItemClick(e, item); setDayPaneDate(null); }}
+                    >
+                      {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
+                      {item.time    && <span className={styles.calItemTime}>{formatTime(item.time)}</span>}
+                      <span>{item.title}</span>
+                    </button>
+                  );
+                })}
+                <button className={styles.dayPaneAddBtn} onClick={() => { showAddCalendarItem(dayPaneDate); setDayPaneDate(null); }}>
+                  + Add item
+                </button>
+              </div>
+            </aside>
+          </>
+        )}
       </div>{/* end desktopView */}
 
       {/* ── Hover tooltip ── */}
