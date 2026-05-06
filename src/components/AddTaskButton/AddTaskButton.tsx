@@ -1,4 +1,5 @@
 import { useUIStore } from '@/store/uiStore';
+import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
 import styles from './AddTaskButton.module.css';
 
@@ -33,7 +34,7 @@ export function AddTaskButton() {
   };
 
   const handleCalOption = (type: CalDialType) => {
-    showAddCalendarItem();
+    showAddCalendarItem(undefined, type as CalendarItemKind);
   };
 
   if (activeView === 'calendar') {
@@ -57,7 +58,7 @@ export function AddTaskButton() {
 
         <button
           className={styles.fab}
-          onClick={showAddCalendarItem}
+          onClick={() => showAddCalendarItem()}
           aria-label="Add calendar item"
         >
           <span className={styles.fabIcon}>+</span>
