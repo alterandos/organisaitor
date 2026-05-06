@@ -1,8 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
+import { useTaskStore } from '@/store/taskStore';
+import { useCalendarStore } from '@/store/calendarStore';
 import { isSupabaseConfigured } from '@/services/supabase';
 import styles from './AccountPane.module.css';
+
+function downloadBackup() {
+  const { tasks, collections, tags, purposes } = useTaskStore.getState();
+  const { events, reminders } = useCalendarStore.getState();
+  const backup = {
+    exportedAt: new Date().toISOString(),
+    version: 1,
+    tasks, collections, tags, purposes, events, reminders,
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `organisaitor-backup-${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 type Mode = 'signin' | 'signup';
 
@@ -71,6 +92,9 @@ export function AccountPane() {
               <span className={styles.email}>{user.email}</span>
             </div>
             <p className={styles.hint}>Your data is syncing to the cloud. Sign in on any device to access it.</p>
+            <button className={styles.exportBtn} onClick={downloadBackup} type="button">
+              Export backup (JSON)
+            </button>
             <button className={styles.signOutBtn} onClick={handleSignOut} disabled={loading}>
               Sign out
             </button>

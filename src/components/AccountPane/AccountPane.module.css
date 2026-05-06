@@ -192,6 +192,22 @@
   line-height: 1.5;
 }
 
+.exportBtn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-family: inherit;
+  padding: 0.45rem 1rem;
+  margin-bottom: 0.5rem;
+  transition: background 120ms ease, color 120ms ease;
+}
+.exportBtn:hover { background: var(--color-bg); color: var(--color-text); }
+
 .signOutBtn {
   background: none;
   border: 1px solid var(--color-border);

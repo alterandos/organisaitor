@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
+import { useTaskStore } from '@/store/taskStore';
+import { useCalendarStore } from '@/store/calendarStore';
 
 interface AuthState {
   user:        User | null;
@@ -40,5 +42,11 @@ export const useAuthStore = create<AuthState>()((set) => ({
   signOut: async () => {
     await supabase.auth.signOut();
     set({ user: null, session: null });
+    // Clear in-memory stores and localStorage cache so the app shows empty
+    // when signed out. Data is safely in Supabase and reloads on next sign-in.
+    useTaskStore.setState({ tasks: {}, collections: {}, tags: {}, purposes: {} } as never);
+    useCalendarStore.setState({ events: {}, reminders: {} } as never);
+    localStorage.removeItem('todo-app-storage');
+    localStorage.removeItem('todo-calendar');
   },
 }));
