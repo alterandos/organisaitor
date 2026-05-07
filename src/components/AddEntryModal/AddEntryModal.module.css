@@ -1,0 +1,186 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 520px) {
+  .overlay { align-items: center; padding: 1rem; }
+}
+
+.modal {
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 480px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 1.5rem;
+  box-shadow: 0 -4px 28px rgba(0,0,0,0.14);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media (min-width: 520px) {
+  .modal { border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--color-muted);
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: color 120ms ease;
+}
+.closeBtn:hover { color: var(--color-text); }
+
+.field { margin-bottom: 1rem; }
+
+.fieldLabel {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.45rem;
+}
+
+.required { color: #ef4444; }
+
+.input, .select, .textarea {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition: border-color 150ms ease;
+}
+.input:focus, .select:focus, .textarea:focus { border-color: var(--color-primary); }
+.textarea { resize: vertical; }
+.select { cursor: pointer; }
+
+/* ── Boolean field ─────────────────────────────────────────────── */
+
+.boolRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.boolRow input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+/* ── Duration field ────────────────────────────────────────────── */
+
+.durationRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.durationInput {
+  width: 4.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 150ms ease;
+  text-align: center;
+}
+.durationInput:focus { border-color: var(--color-primary); }
+
+.durationLabel {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+/* ── Rating field ──────────────────────────────────────────────── */
+
+.ratingRow {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.ratingStar {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: var(--color-border);
+  padding: 0;
+  line-height: 1;
+  transition: color 100ms ease, transform 100ms ease;
+}
+.ratingStar:hover { transform: scale(1.15); }
+.ratingStarActive { color: #f59e0b; }
+
+/* ── Actions ─────────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+  margin-top: 1.25rem;
+}
+
+.cancelBtn {
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  transition: background 150ms ease;
+}
+.cancelBtn:hover { background: var(--color-bg); }
+
+.submitBtn {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 150ms ease;
+}
+.submitBtn:hover { background: var(--color-primary-hover); }

@@ -1,0 +1,310 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 520px) {
+  .overlay { align-items: center; padding: 1rem; }
+}
+
+.modal {
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 500px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 1.5rem;
+  box-shadow: 0 -4px 28px rgba(0,0,0,0.14);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media (min-width: 520px) {
+  .modal { border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--color-muted);
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: color 120ms ease;
+}
+.closeBtn:hover { color: var(--color-text); }
+
+.field { margin-bottom: 1rem; }
+
+.fieldLabel {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.45rem;
+}
+
+.required { color: #ef4444; }
+
+.input {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition: border-color 150ms ease;
+}
+.input:focus { border-color: var(--color-primary); }
+
+/* ── Sub-tasks ──────────────────────────────────────────────────── */
+
+.taskList {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.taskRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.taskDrag {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  cursor: grab;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.taskInput {
+  flex: 1;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 150ms ease;
+}
+.taskInput:focus { border-color: var(--color-primary); }
+
+.taskRemoveBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 120ms ease;
+}
+.taskRemoveBtn:hover { color: #ef4444; }
+
+.addTaskRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.addStepBtn {
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  white-space: nowrap;
+  transition: background 150ms ease, color 150ms ease;
+}
+.addStepBtn:hover:not(:disabled) { background: var(--color-bg); color: var(--color-text); }
+.addStepBtn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Repeat ─────────────────────────────────────────────────────── */
+
+.repeatPresets {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.presetBtn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.presetBtn:hover { background: var(--color-bg); color: var(--color-text); }
+.presetBtnActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+.presetBtnActive:hover { background: var(--color-primary-hover); }
+
+.dayPicker {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.dayBtn {
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.dayBtn:hover { background: var(--color-bg); color: var(--color-text); }
+.dayBtnActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.repeatHint {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin: 0;
+}
+
+/* ── Advanced section ────────────────────────────────────────────── */
+
+.advancedToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+  padding: 0;
+  margin-bottom: 0.75rem;
+  font-family: inherit;
+  transition: color 140ms ease;
+}
+.advancedToggle:hover { color: var(--color-text); }
+
+.chevron {
+  display: inline-block;
+  transition: transform 140ms ease;
+  font-size: 0.7rem;
+}
+.chevronOpen { transform: rotate(90deg); }
+
+.advancedSection {
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+/* ── Chips (tags / purposes) ─────────────────────────────────────── */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.chip:hover { background: var(--color-bg); color: var(--color-text); }
+.chipActive {
+  background: var(--chip-color, var(--color-primary));
+  border-color: var(--chip-color, var(--color-primary));
+  color: white;
+}
+
+/* ── Actions ────────────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+  margin-top: 1.25rem;
+}
+
+.cancelBtn {
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  transition: background 150ms ease;
+}
+.cancelBtn:hover { background: var(--color-bg); }
+
+.submitBtn {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 150ms ease;
+}
+.submitBtn:hover:not(:disabled) { background: var(--color-primary-hover); }
+.submitBtn:disabled { opacity: 0.5; cursor: default; }

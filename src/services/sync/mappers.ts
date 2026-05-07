@@ -1,6 +1,6 @@
 import type {
   Task, Collection, Tag, Purpose,
-  CalendarEvent, CalendarReminder,
+  CalendarEvent, CalendarReminder, TrackerEntry,
 } from '@/types';
 
 // ── Task ────────────────────────────────────────────────────────
@@ -63,47 +63,83 @@ export function rowToTask(r: Record<string, any>): Task {
 
 export function collectionToRow(c: Collection, userId: string) {
   return {
-    id:           c.id,
-    user_id:      userId,
-    kind:         c.kind         ?? 'project',
-    name:         c.name,
-    description:  c.description  ?? null,
-    color:        c.color        ?? null,
-    purpose_ids:  c.purposeIds   ?? [],
-    deadline:     c.deadline     ?? null,
-    completed:    c.completed    ?? false,
-    completed_at: c.completedAt  ?? null,
-    created_at:   c.createdAt,
-    updated_at:   c.updatedAt,
+    id:            c.id,
+    user_id:       userId,
+    kind:          c.kind          ?? 'project',
+    name:          c.name,
+    description:   c.description   ?? null,
+    color:         c.color         ?? null,
+    purpose_ids:   c.purposeIds    ?? [],
+    tag_ids:       c.tagIds        ?? [],
+    deadline:      c.deadline      ?? null,
+    completed:     c.completed     ?? false,
+    completed_at:  c.completedAt   ?? null,
+    field_schema:  c.fieldSchema   ?? [],
+    routine_tasks: c.routineTasks  ?? [],
+    repeat_config: c.repeatConfig  ?? null,
+    created_at:    c.createdAt,
+    updated_at:    c.updatedAt,
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToCollection(r: Record<string, any>): Collection {
   return {
-    id:          r.id,
-    kind:        r.kind         ?? 'project',
-    name:        r.name,
-    description: r.description  ?? null,
-    color:       r.color        ?? null,
-    purposeIds:  r.purpose_ids  ?? [],
-    deadline:    r.deadline     ?? null,
-    completed:   r.completed    ?? false,
-    completedAt: r.completed_at ?? null,
-    createdAt:   r.created_at,
-    updatedAt:   r.updated_at,
+    id:           r.id,
+    kind:         r.kind          ?? 'project',
+    name:         r.name,
+    description:  r.description   ?? null,
+    color:        r.color         ?? null,
+    purposeIds:   r.purpose_ids   ?? [],
+    tagIds:       r.tag_ids       ?? [],
+    deadline:     r.deadline      ?? null,
+    completed:    r.completed     ?? false,
+    completedAt:  r.completed_at  ?? null,
+    fieldSchema:  r.field_schema  ?? [],
+    routineTasks: r.routine_tasks ?? [],
+    repeatConfig: r.repeat_config ?? null,
+    createdAt:    r.created_at,
+    updatedAt:    r.updated_at,
+  };
+}
+
+// ── TrackerEntry ────────────────────────────────────────────────
+
+export function entryToRow(e: TrackerEntry, userId: string) {
+  return {
+    id:         e.id,
+    user_id:    userId,
+    tracker_id: e.trackerId,
+    date:       e.date,
+    data:       e.data      ?? {},
+    notes:      e.notes     ?? null,
+    created_at: e.createdAt,
+    updated_at: e.updatedAt,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToEntry(r: Record<string, any>): TrackerEntry {
+  return {
+    id:        r.id,
+    trackerId: r.tracker_id,
+    date:      r.date,
+    data:      r.data       ?? {},
+    notes:     r.notes      ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }
 
 // ── Tag ─────────────────────────────────────────────────────────
 
 export function tagToRow(t: Tag, userId: string) {
-  return { id: t.id, user_id: userId, name: t.name, color: t.color };
+  return { id: t.id, user_id: userId, name: t.name, color: t.color, notes: t.notes ?? null };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToTag(r: Record<string, any>): Tag {
-  return { id: r.id, name: r.name, color: r.color ?? null };
+  return { id: r.id, name: r.name, color: r.color ?? null, notes: r.notes ?? null };
 }
 
 // ── Purpose ─────────────────────────────────────────────────────

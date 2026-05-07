@@ -232,3 +232,25 @@
   color: var(--color-text);
   line-height: 1.4;
 }
+
+.hotkeyColHead {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+  padding-bottom: 0.4rem !important;
+  text-align: left;
+}
+
+.hotkeyGroup {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-muted);
+  padding-top: 0.85rem !important;
+  padding-bottom: 0.15rem !important;
+}
+
+.hotkeys tr:first-child .hotkeyGroup { padding-top: 0.1rem !important; }

@@ -22,9 +22,10 @@ interface Props {
 }
 
 export function TaskItem({ task, collectionColor, isSubtask, expanded = false, onToggleExpand, forceDueDate = false }: Props) {
-  const toggleTask    = useTaskStore((s) => s.toggleTask);
-  const tagsRecord    = useTaskStore((s) => s.tags);
+  const toggleTask        = useTaskStore((s) => s.toggleTask);
+  const tagsRecord        = useTaskStore((s) => s.tags);
   const collectionsRecord = useTaskStore((s) => s.collections);
+  const tasksRecord       = useTaskStore((s) => s.tasks);
   const openTaskPane  = useUIStore((s) => s.openTaskPane);
   const activeCollectionId   = useUIStore((s) => s.activeCollectionId);
   const colorEnabled         = useSettingsStore((s) => s.colorEnabled);
@@ -48,7 +49,10 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
     openTaskPane(task.id);
   };
 
-  const hasSubtasks    = (task.subtaskIds ?? []).length > 0;
+  const subtaskIds     = task.subtaskIds ?? [];
+  const hasSubtasks    = subtaskIds.length > 0;
+  const subtaskTotal   = subtaskIds.length;
+  const subtaskDone    = subtaskIds.filter((id) => tasksRecord[id]?.completed).length;
   const activeTags     = (task.tagIds ?? []).map((id) => tagsRecord[id]).filter(Boolean);
   const collection     = task.collectionId ? collectionsRecord[task.collectionId] : null;
   const showCollection = !activeCollectionId && !!collection;
@@ -95,7 +99,9 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
         )}
 
         {hasSubtasks && !task.completed && (
-          <span className={styles.subtaskIndicator} title="Has sub-tasks">···</span>
+          <span className={styles.subtaskIndicator} title="Sub-tasks">
+            {subtaskDone}/{subtaskTotal}
+          </span>
         )}
 
       </div>

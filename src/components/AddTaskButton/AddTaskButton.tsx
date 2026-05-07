@@ -4,8 +4,9 @@ import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
 import styles from './AddTaskButton.module.css';
 
-type TaskDialType = 'tag' | 'collection' | 'purpose' | 'task';
-type CalDialType  = 'event' | 'reminder';
+type TaskDialType    = 'tag' | 'collection' | 'purpose' | 'task';
+type CalDialType     = 'event' | 'reminder';
+type RecordsDialType = 'tracker' | 'entry' | 'routine';
 
 const TASK_OPTIONS: { type: TaskDialType; label: string; color: string; icon: string }[] = [
   { type: 'tag',        label: 'Tag',              color: '#8b5cf6', icon: '#' },
@@ -19,13 +20,23 @@ const CAL_OPTIONS: { type: CalDialType; label: string; color: string; icon: stri
   { type: 'event',    label: LABELS.calendarItemKind.event,    color: '#5b6ee1', icon: '+' },
 ];
 
+const REC_OPTIONS: { type: RecordsDialType; label: string; color: string; icon: string }[] = [
+  { type: 'routine', label: LABELS.routine,  color: '#f97316', icon: '↺' },
+  { type: 'tracker', label: LABELS.tracker,  color: '#10b981', icon: '▦' },
+  { type: 'entry',   label: 'New entry',     color: '#5b6ee1', icon: '+' },
+];
+
 export function AddTaskButton() {
   const activeView          = useUIStore((s) => s.activeView);
+  const activeTrackerId     = useUIStore((s) => s.activeTrackerId);
   const showAddTask         = useUIStore((s) => s.showAddTask);
   const showAddCollection   = useUIStore((s) => s.showAddCollection);
   const showAddPurpose      = useUIStore((s) => s.showAddPurpose);
   const showAddTag          = useUIStore((s) => s.showAddTag);
   const showAddCalendarItem = useUIStore((s) => s.showAddCalendarItem);
+  const showAddTracker      = useUIStore((s) => s.showAddTracker);
+  const showAddEntry        = useUIStore((s) => s.showAddEntry);
+  const showAddRoutine      = useUIStore((s) => s.showAddRoutine);
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -56,6 +67,14 @@ export function AddTaskButton() {
     showAddCalendarItem(undefined, type as CalendarItemKind);
   };
 
+  const handleRecOption = (type: RecordsDialType) => {
+    setOpen(false);
+    if (type === 'routine') showAddRoutine();
+    else if (type === 'tracker') showAddTracker();
+    else if (activeTrackerId) showAddEntry(activeTrackerId);
+    else showAddTracker();
+  };
+
   const dialClass = `${styles.speedDial} ${open ? styles.speedDialOpen : ''}`;
 
   if (activeView === 'calendar') {
@@ -76,11 +95,45 @@ export function AddTaskButton() {
             </div>
           ))}
         </div>
-
         <button
           className={styles.fab}
           onClick={() => setOpen((o) => !o)}
           aria-label="Add calendar item"
+          aria-expanded={open}
+        >
+          <span className={styles.fabIcon}>+</span>
+        </button>
+      </div>
+    );
+  }
+
+  if (activeView === 'records') {
+    // Hide "entry" if no tracker is selected
+    const recOpts = activeTrackerId
+      ? REC_OPTIONS
+      : REC_OPTIONS.filter((o) => o.type !== 'entry');
+
+    return (
+      <div className={dialClass} ref={ref}>
+        <div className={styles.options} role="group" aria-label="Create options">
+          {recOpts.map((opt) => (
+            <div key={opt.type} className={styles.optionRow}>
+              <span className={styles.optionLabel}>{opt.label}</span>
+              <button
+                className={styles.optionBtn}
+                style={{ background: opt.color }}
+                onClick={() => handleRecOption(opt.type)}
+                aria-label={`Create ${opt.label}`}
+              >
+                {opt.icon}
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          className={styles.fab}
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Add record"
           aria-expanded={open}
         >
           <span className={styles.fabIcon}>+</span>
@@ -106,7 +159,6 @@ export function AddTaskButton() {
           </div>
         ))}
       </div>
-
       <button
         className={styles.fab}
         onClick={() => setOpen((o) => !o)}

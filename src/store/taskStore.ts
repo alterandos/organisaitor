@@ -4,10 +4,12 @@ import type {
   AppData, Task, TaskId, TagId, Tag,
   CollectionId, Collection, Purpose, PurposeId,
   CreateTaskInput, CreateCollectionInput, CreatePurposeInput,
+  FieldSchema, RoutineTask,
 } from '@/types';
 import { newCollectionId, newPurposeId } from '@/utils/id';
 import { createTask } from '@/services/taskService';
 import { now } from '@/utils/date';
+import { useTrackerStore } from '@/store/trackerStore';
 
 const EMPTY: AppData = {
   version:     2,
@@ -27,12 +29,12 @@ export interface TaskActions {
 
   // Tags
   addTag:    (tag: Tag) => void;
-  updateTag: (id: TagId, changes: Partial<Pick<Tag, 'name' | 'color'>>) => void;
+  updateTag: (id: TagId, changes: Partial<Pick<Tag, 'name' | 'color' | 'notes'>>) => void;
   deleteTag: (id: TagId) => void;
 
-  // Collections (projects, lists, …)
+  // Collections (projects, lists, trackers …)
   addCollection:    (input: CreateCollectionInput) => void;
-  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'completed' | 'completedAt'>>) => void;
+  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'completed' | 'completedAt' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig'>>) => void;
   deleteCollection: (id: CollectionId) => void;
 
   // Purposes
@@ -139,7 +141,13 @@ export const useTaskStore = create<TaskStore>()(
               { ...task, tagIds: (task.tagIds ?? []).filter((t) => t !== id) },
             ])
           ) as AppData['tasks'];
-          return { tags, tasks };
+          const collections = Object.fromEntries(
+            Object.entries(state.collections).map(([cid, col]) => [
+              cid,
+              { ...col, tagIds: (col.tagIds ?? []).filter((t) => t !== id) },
+            ])
+          ) as AppData['collections'];
+          return { tags, tasks, collections };
         }),
 
       // ── Collections ────────────────────────────────────────────────────────
@@ -148,17 +156,21 @@ export const useTaskStore = create<TaskStore>()(
         set((state) => {
           const ts = now();
           const collection: Collection = {
-            id:          newCollectionId(),
-            kind:        input.kind,
-            name:        input.name.trim(),
-            description: input.description ?? null,
-            color:       input.color       ?? null,
-            purposeIds:  input.purposeIds  ?? [],
-            deadline:    input.deadline    ?? null,
-            completed:   false,
-            completedAt: null,
-            createdAt:   ts,
-            updatedAt:   ts,
+            id:           newCollectionId(),
+            kind:         input.kind,
+            name:         input.name.trim(),
+            description:  input.description  ?? null,
+            color:        input.color        ?? null,
+            purposeIds:   input.purposeIds   ?? [],
+            tagIds:       input.tagIds       ?? [],
+            deadline:     input.deadline     ?? null,
+            completed:    false,
+            completedAt:  null,
+            fieldSchema:  input.fieldSchema  ?? [],
+            routineTasks: input.routineTasks ?? [],
+            repeatConfig: input.repeatConfig ?? null,
+            createdAt:    ts,
+            updatedAt:    ts,
           };
           return { collections: { ...state.collections, [collection.id]: collection } };
         }),
@@ -175,7 +187,9 @@ export const useTaskStore = create<TaskStore>()(
           };
         }),
 
-      deleteCollection: (id) =>
+      deleteCollection: (id) => {
+        // Delete tracker entries for this collection if it's a tracker
+        useTrackerStore.getState().deleteEntriesForTracker(id as CollectionId);
         set((state) => {
           const collections = { ...state.collections };
           delete collections[id];
@@ -187,7 +201,8 @@ export const useTaskStore = create<TaskStore>()(
             ])
           ) as AppData['tasks'];
           return { collections, tasks };
-        }),
+        });
+      },
 
       // ── Purposes ───────────────────────────────────────────────────────────
 
@@ -222,13 +237,38 @@ export const useTaskStore = create<TaskStore>()(
               { ...task, purposeIds: (task.purposeIds ?? []).filter((p) => p !== id) },
             ])
           ) as AppData['tasks'];
-          return { purposes, tasks };
+          const collections = Object.fromEntries(
+            Object.entries(state.collections).map(([cid, col]) => [
+              cid,
+              { ...col, purposeIds: (col.purposeIds ?? []).filter((p) => p !== id) },
+            ])
+          ) as AppData['collections'];
+          return { purposes, tasks, collections };
         }),
     }),
     {
       name:    'todo-app-storage',
-      version: 2,
-      // No migrate fn = v1 data is discarded, fresh start from EMPTY
+      version: 5,
+      migrate: (persisted, fromVersion) => {
+        const state = persisted as AppData & TaskActions;
+        if (fromVersion < 2) return EMPTY;
+        // Apply all collection patches cumulatively
+        if (fromVersion < 5 && state.collections) {
+          const patched: AppData['collections'] = {} as AppData['collections'];
+          for (const [id, col] of Object.entries(state.collections)) {
+            const c = col as Collection & { fieldSchema?: FieldSchema[]; tagIds?: TagId[]; routineTasks?: RoutineTask[] };
+            patched[id as CollectionId] = {
+              ...c,
+              fieldSchema:  c.fieldSchema  ?? [],
+              tagIds:       c.tagIds       ?? [],
+              routineTasks: c.routineTasks ?? [],
+              repeatConfig: (c as Collection).repeatConfig ?? null,
+            } as Collection;
+          }
+          return { ...state, collections: patched };
+        }
+        return state;
+      },
     }
   )
 );

@@ -7,6 +7,8 @@ export const LABELS = {
   collectionKind: {
     project: 'Project',
     list:    'List',
+    tracker: 'Tracker',
+    routine: 'Routine',
   },
   taskKind: {
     action:    'Action',
@@ -20,8 +22,21 @@ export const LABELS = {
     event:    'Event',
     reminder: 'Reminder',
   },
+
+  // Records / Trackers
+  records: 'Records',
+  tracker: 'Tracker',
+  trackerPlural: 'Trackers',
+  trackerEntry: 'Entry',
+  trackerEntryPlural: 'Entries',
+
+  // Routines
+  routine: 'Routine',
+  routinePlural: 'Routines',
+
   views: {
     tasks:    'Tasks',
     calendar: 'Calendar',
+    records:  'Records',
   },
 } as const;

@@ -38,6 +38,13 @@
 
 .chevronOpen { transform: rotate(90deg); }
 
+.routinesSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
 /* ── Task group (parent + subtasks) ───────────────────── */
 
 .taskGroup {

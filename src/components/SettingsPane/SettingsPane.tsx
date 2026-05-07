@@ -1,7 +1,22 @@
 import { useEffect } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { HOTKEYS, HOTKEY_GROUPS } from '@/config/hotkeys';
 import styles from './SettingsPane.module.css';
+
+function renderKeys(combo: string) {
+  const parts = combo.split('+');
+  return (
+    <>
+      {parts.map((part, i) => (
+        <span key={i}>
+          {i > 0 && '+'}
+          <kbd>{part}</kbd>
+        </span>
+      ))}
+    </>
+  );
+}
 
 function Toggle({
   on, onToggle, label,
@@ -140,11 +155,28 @@ export function SettingsPane() {
           <section className={styles.section}>
             <h3 className={styles.sectionLabel}>Keyboard shortcuts</h3>
             <table className={styles.hotkeys}>
+              <thead>
+                <tr>
+                  <th className={styles.hotkeyColHead}>Primary</th>
+                  <th className={styles.hotkeyColHead}>Secondary</th>
+                  <th className={styles.hotkeyColHead}>Action</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr><td className={styles.hotkeyKey}><kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>Tasks view</td></tr>
-                <tr><td className={styles.hotkeyKey}><kbd>Ctrl</kbd>+<kbd>2</kbd></td><td>Calendar view</td></tr>
-                <tr><td className={styles.hotkeyKey}><kbd>Space</kbd></td><td>New item (when not typing)</td></tr>
-                <tr><td className={styles.hotkeyKey}><kbd>Esc</kbd></td><td>Close panel / modal</td></tr>
+                {HOTKEY_GROUPS.map((group) => (
+                  <>
+                    <tr key={group}>
+                      <th colSpan={3} className={styles.hotkeyGroup}>{group}</th>
+                    </tr>
+                    {HOTKEYS.filter((h) => h.group === group).map((h) => (
+                      <tr key={h.primary}>
+                        <td className={styles.hotkeyKey}>{renderKeys(h.primary)}</td>
+                        <td className={styles.hotkeyKey}>{h.secondary ? renderKeys(h.secondary) : '—'}</td>
+                        <td>{h.action}</td>
+                      </tr>
+                    ))}
+                  </>
+                ))}
               </tbody>
             </table>
           </section>

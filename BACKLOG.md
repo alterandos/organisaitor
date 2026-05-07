@@ -7,6 +7,29 @@ Format: brief description + context/motivation.
 
 ## Notifications & Reminders
 
+### Records — Habit / tracker reminders
+
+Users can create one or more **reminder schedules** attached to the Records section. Each reminder is independent and configurable:
+
+- **Scope**: which trackers (or routines) are included in this reminder
+- **Frequency**: daily, specific days of the week, weekly, etc.
+- **Time**: what time of day the notification fires
+- **Calendar opt-in**: optional toggle to surface the reminder as a calendar event so it appears in the Calendar view. The user can turn this on or off at any time; toggling it off removes the calendar event without affecting the reminder schedule itself.
+
+Multiple reminders can coexist (e.g. a daily morning reminder for habits, a weekly Sunday reminder for a workout log). Each reminder's params are fully editable after creation.
+
+**Key distinctions from calendar reminders:**
+- These live in the Records section, not the Calendar section
+- They are scoped to tracker/routine logging, not general events
+- The calendar appearance is opt-in and derived, not primary
+
+**Architecture notes to consider:**
+- Reminder schedules are a new entity (not a `CalendarReminder`) but can produce `CalendarReminder` entries when the calendar opt-in is enabled
+- Notification delivery will depend on whatever push/system notification mechanism is implemented for waiting-task reminders — share that infrastructure
+- The `repeatConfig` type already exists on routines and calendar items; reminder schedules can reuse it for frequency definition
+
+---
+
 ### Waiting-task follow-up notifications
 When a task has `kind = 'waiting'` and a deadline passes, the user should
 receive a notification prompting them to follow up. The notification should

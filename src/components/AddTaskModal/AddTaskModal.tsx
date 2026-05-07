@@ -39,6 +39,8 @@ export function AddTaskModal() {
   const [showSuggestions,    setShowSuggestions]     = useState(false);
   const [taskKind,           setTaskKind]            = useState<TaskKind>('action');
   const [parentId,           setParentId]            = useState<TaskId | ''>((pendingParentId as TaskId) ?? '');
+  const [links,              setLinks]               = useState<string[]>([]);
+  const [linkInput,          setLinkInput]           = useState('');
 
   const addTask    = useTaskStore((s) => s.addTask);
   const addTag     = useTaskStore((s) => s.addTag);
@@ -97,6 +99,15 @@ export function AddTaskModal() {
   const removeTag = (id: TagId) =>
     setPendingTags((prev) => prev.filter((t) => t.id !== id));
 
+  const addLink = () => {
+    const url = linkInput.trim();
+    if (!url || links.includes(url)) return;
+    setLinks((prev) => [...prev, url]);
+    setLinkInput('');
+  };
+
+  const removeLink = (url: string) => setLinks((prev) => prev.filter((l) => l !== url));
+
   const togglePurpose = (id: PurposeId) =>
     setSelectedPurposeIds((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
@@ -107,12 +118,13 @@ export function AddTaskModal() {
     if (!title.trim()) return;
 
     pendingTags.filter((t) => t.isNew).forEach((t) =>
-      addTag({ id: t.id, name: t.name, color: null })
+      addTag({ id: t.id, name: t.name, color: null, notes: null })
     );
 
     addTask({
       title,
       notes:        notes || null,
+      links:        links.filter(Boolean),
       deadline:     deadline     || null,
       deadlineTime: deadlineTime || null,
       priority,
@@ -317,6 +329,36 @@ export function AddTaskModal() {
                     ))}
                   </ul>
                 )}
+              </div>
+
+              {/* Links */}
+              <div className={styles.field}>
+                <label className={styles.label}>Links</label>
+                {links.length > 0 && (
+                  <ul className={styles.linkList}>
+                    {links.map((url) => {
+                      let label = url;
+                      try { label = new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch {}
+                      return (
+                        <li key={url} className={styles.linkRow}>
+                          <span className={styles.linkLabel}>{label}</span>
+                          <button type="button" className={styles.linkRemove} onClick={() => removeLink(url)} aria-label="Remove link">×</button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <div className={styles.linkInputRow}>
+                  <input
+                    className={styles.input}
+                    type="url"
+                    placeholder="https://"
+                    value={linkInput}
+                    onChange={(e) => setLinkInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
+                  />
+                  <button type="button" className={styles.linkAddBtn} onClick={addLink} disabled={!linkInput.trim()}>Add</button>
+                </div>
               </div>
 
               {/* Parent task */}

@@ -1,0 +1,129 @@
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  background: var(--color-surface);
+  transition: border-color 150ms ease;
+}
+.card:hover { border-color: var(--color-primary); }
+.cardDone {
+  border-color: var(--color-border);
+  opacity: 0.72;
+}
+.cardDone:hover { border-color: var(--color-border); }
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.routineName {
+  font-weight: 600;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+  background: var(--color-bg);
+  color: var(--color-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.progressDone {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.tasks {
+  list-style: none;
+  margin: 0 0 0.7rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.taskRow { display: flex; }
+
+.taskLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.taskLabelDone { cursor: default; }
+
+.checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.taskTitle {
+  line-height: 1.4;
+  color: var(--color-text);
+  transition: color 120ms ease;
+}
+.taskTitleDone {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+.completeBtn {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: background 140ms ease, color 140ms ease;
+}
+.completeBtn:hover:not(:disabled) {
+  background: var(--color-primary);
+  color: white;
+}
+.completeBtn:disabled {
+  border-color: var(--color-border);
+  color: var(--color-muted);
+  cursor: default;
+}
+
+.doneLabel {
+  font-size: 0.82rem;
+  color: #065f46;
+  text-align: center;
+  margin: 0;
+  font-weight: 500;
+}

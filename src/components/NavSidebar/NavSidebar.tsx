@@ -32,6 +32,18 @@ const NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
+  {
+    view: 'records',
+    label: LABELS.views.records,
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+        <rect x="13" y="3" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+        <rect x="3" y="13" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+        <rect x="13" y="13" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+      </svg>
+    ),
+  },
 ];
 
 const IntegrationsIcon = (

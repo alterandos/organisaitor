@@ -1,7 +1,8 @@
 import { supabase } from '@/services/supabase';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
-import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder } from '@/types';
+import { useTrackerStore } from '@/store/trackerStore';
+import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, TrackerEntry } from '@/types';
 import {
   taskToRow,       rowToTask,
   collectionToRow, rowToCollection,
@@ -9,6 +10,7 @@ import {
   purposeToRow,    rowToPurpose,
   eventToRow,      rowToEvent,
   reminderToRow,   rowToReminder,
+  entryToRow,      rowToEntry,
 } from './mappers';
 
 // Suppresses outbound sync while stores are being hydrated from Supabase.
@@ -47,6 +49,7 @@ export async function initSync(userId: string): Promise<void> {
       supabase.from('purposes').select('*').eq('user_id', userId),
       supabase.from('calendar_events').select('*').eq('user_id', userId),
       supabase.from('calendar_reminders').select('*').eq('user_id', userId),
+      supabase.from('tracker_entries').select('*').eq('user_id', userId),
     ]);
 
     // Surface any permission/connection errors
@@ -55,7 +58,7 @@ export async function initSync(userId: string): Promise<void> {
       throw new Error(firstError.message);
     }
 
-    const [dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders] =
+    const [dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries] =
       results.map((r) => r.data);
 
     const isEmpty =
@@ -66,7 +69,7 @@ export async function initSync(userId: string): Promise<void> {
     if (isEmpty) {
       await upsertAllToSupabase(userId);
     } else {
-      hydrateStores(dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders);
+      hydrateStores(dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries);
     }
 
     setStatus('idle');
@@ -105,7 +108,7 @@ export async function forceUpload(userId: string): Promise<void> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function hydrateStores(...args: Array<any[] | null>) {
-  const [dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders] = args;
+  const [dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries] = args;
 
   useTaskStore.setState({
     tasks:       Object.fromEntries((dbTasks       ?? []).map((r) => { const t = rowToTask(r);       return [t.id, t]; })),
@@ -118,6 +121,10 @@ function hydrateStores(...args: Array<any[] | null>) {
     events:    Object.fromEntries((dbEvents    ?? []).map((r) => { const e = rowToEvent(r);    return [e.id, e]; })),
     reminders: Object.fromEntries((dbReminders ?? []).map((r) => { const r2 = rowToReminder(r); return [r2.id, r2]; })),
   } as Parameters<typeof useCalendarStore.setState>[0]);
+
+  useTrackerStore.setState({
+    entries: Object.fromEntries((dbEntries ?? []).map((r) => { const e = rowToEntry(r); return [e.id, e]; })),
+  } as Parameters<typeof useTrackerStore.setState>[0]);
 }
 
 // ── Upload ──────────────────────────────────────────────────────
@@ -126,6 +133,7 @@ function hydrateStores(...args: Array<any[] | null>) {
 async function upsertAllToSupabase(userId: string): Promise<void> {
   const { tasks, collections, tags, purposes } = useTaskStore.getState();
   const { events, reminders } = useCalendarStore.getState();
+  const { entries } = useTrackerStore.getState();
 
   const allTasks       = Object.values(tasks);
   const allCollections = Object.values(collections);
@@ -133,6 +141,7 @@ async function upsertAllToSupabase(userId: string): Promise<void> {
   const allPurposes    = Object.values(purposes);
   const allEvents      = Object.values(events);
   const allReminders   = Object.values(reminders);
+  const allEntries     = Object.values(entries);
 
   const results = await Promise.all([
     allTasks.length       > 0 ? supabase.from('tasks').upsert(allTasks.map((t) => taskToRow(t, userId)))               : null,
@@ -141,6 +150,7 @@ async function upsertAllToSupabase(userId: string): Promise<void> {
     allPurposes.length    > 0 ? supabase.from('purposes').upsert(allPurposes.map((p) => purposeToRow(p, userId)))      : null,
     allEvents.length      > 0 ? supabase.from('calendar_events').upsert(allEvents.map((e) => eventToRow(e, userId)))   : null,
     allReminders.length   > 0 ? supabase.from('calendar_reminders').upsert(allReminders.map((r) => reminderToRow(r, userId))) : null,
+    allEntries.length     > 0 ? supabase.from('tracker_entries').upsert(allEntries.map((e) => entryToRow(e, userId)))  : null,
   ]);
 
   const firstError = results.find((r) => r?.error)?.error;
@@ -176,7 +186,14 @@ function setupSubscriptions(userId: string): void {
       syncDiff('calendar_reminders', prev.reminders, state.reminders, (r) => reminderToRow(r as CalendarReminder, userId));
   });
 
-  unsubscribers = [unsubTask, unsubCal];
+  const unsubTracker = useTrackerStore.subscribe((state, prev) => {
+    if (hydrating) return;
+
+    if (state.entries !== prev.entries)
+      syncDiff('tracker_entries', prev.entries, state.entries, (e) => entryToRow(e as TrackerEntry, userId));
+  });
+
+  unsubscribers = [unsubTask, unsubCal, unsubTracker];
 }
 
 // ── Diff + sync ─────────────────────────────────────────────────

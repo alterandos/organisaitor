@@ -13,6 +13,7 @@ import { PurposeFilterBar } from '@/components/PurposeFilterBar/PurposeFilterBar
 import { Sidebar } from '@/components/Sidebar/Sidebar';
 import { NavSidebar } from '@/components/NavSidebar/NavSidebar';
 import { CalendarView } from '@/components/CalendarView/CalendarView';
+import { RecordsView } from '@/components/RecordsView/RecordsView';
 import { TaskPane } from '@/components/TaskPane/TaskPane';
 import { SettingsPane } from '@/components/SettingsPane/SettingsPane';
 import { CalendarEventPane } from '@/components/CalendarEventPane/CalendarEventPane';
@@ -22,6 +23,10 @@ import { AddCollectionModal } from '@/components/AddCollectionModal/AddCollectio
 import { AddPurposeModal } from '@/components/AddPurposeModal/AddPurposeModal';
 import { AddTagModal } from '@/components/AddTagModal/AddTagModal';
 import { AddCalendarItemModal } from '@/components/AddCalendarItemModal/AddCalendarItemModal';
+import { AddTrackerModal } from '@/components/AddTrackerModal/AddTrackerModal';
+import { AddEntryModal } from '@/components/AddEntryModal/AddEntryModal';
+import { EditTrackerPane } from '@/components/EditTrackerPane/EditTrackerPane';
+import { AddRoutineModal } from '@/components/AddRoutineModal/AddRoutineModal';
 import { IntegrationsPane } from '@/components/IntegrationsPane/IntegrationsPane';
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { useNotificationChecker } from '@/hooks/useNotificationChecker';
@@ -42,10 +47,12 @@ export default function App() {
   const openSidebar                = useUIStore((s) => s.openSidebar);
   const closeSidebar               = useUIStore((s) => s.closeSidebar);
   const openSettings               = useUIStore((s) => s.openSettings);
+  const closeSettings              = useUIStore((s) => s.closeSettings);
   const activeView                 = useUIStore((s) => s.activeView);
   const editingCalendarEventId     = useUIStore((s) => s.editingCalendarEventId);
   const editingCalendarReminderId  = useUIStore((s) => s.editingCalendarReminderId);
   const integrationsOpen           = useUIStore((s) => s.integrationsOpen);
+  const editTrackerOpen            = useUIStore((s) => s.editTrackerOpen);
   const collectionsRecord          = useTaskStore((s) => s.collections);
   const colorEnabled               = useSettingsStore((s) => s.colorEnabled);
 
@@ -92,18 +99,29 @@ export default function App() {
         || (e.target as HTMLElement)?.isContentEditable;
       if (isTyping) return;
 
-      if (e.key === '1' && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('tasks'); return; }
-      if (e.key === '2' && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('calendar'); return; }
+      if ((e.key === '1' || (e.ctrlKey && e.key === '1')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('tasks'); return; }
+      if ((e.key === '2' || (e.ctrlKey && e.key === '2')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('calendar'); return; }
+      if ((e.key === '3' || (e.ctrlKey && e.key === '3')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('records'); return; }
 
-      if (e.ctrlKey && e.key === 'n') {
+      if (e.key === 's' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
-        if (activeView === 'calendar') useUIStore.getState().showAddCalendarItem();
-        else useUIStore.getState().showAddTask();
+        if (settingsOpen) closeSettings(); else openSettings();
+        return;
+      }
+
+      const isNewItem = (e.key === ' ' && !e.ctrlKey && !e.altKey && !e.metaKey)
+                     || (e.ctrlKey && e.key === 'n');
+      if (isNewItem) {
+        e.preventDefault();
+        const { showAddTask, showAddCalendarItem, showAddTracker, showAddEntry, activeTrackerId: tid } = useUIStore.getState();
+        if (activeView === 'calendar') showAddCalendarItem();
+        else if (activeView === 'records') tid ? showAddEntry(tid) : showAddTracker();
+        else showAddTask();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [setActiveView, activeView]);
+  }, [setActiveView, activeView, settingsOpen, openSettings, closeSettings]);
 
   const activeCollection = activeCollectionId
     ? collectionsRecord[activeCollectionId as CollectionId]
@@ -132,7 +150,7 @@ export default function App() {
               aria-label="Open library"
             >☰</button>
             <h1 className={styles.heading}>
-              {activeView === 'calendar' ? 'Calendar' : 'My To Do'}
+              {activeView === 'calendar' ? 'Calendar' : activeView === 'records' ? 'Records' : 'My To Do'}
             </h1>
           </div>
           <div className={styles.headerRight}>
@@ -178,6 +196,7 @@ export default function App() {
         )}
 
         {activeView === 'calendar' && <CalendarView />}
+        {activeView === 'records'  && <RecordsView />}
 
         <AddTaskButton />
 
@@ -194,6 +213,10 @@ export default function App() {
         {openModal === 'add-purpose'         && <AddPurposeModal />}
         {openModal === 'add-tag'             && <AddTagModal />}
         {openModal === 'add-calendar-item'   && <AddCalendarItemModal />}
+        {openModal === 'add-tracker'         && <AddTrackerModal />}
+        {openModal === 'add-entry'           && <AddEntryModal />}
+        {openModal === 'add-routine'         && <AddRoutineModal />}
+        {editTrackerOpen                     && <EditTrackerPane />}
       </div>
     </div>
   );

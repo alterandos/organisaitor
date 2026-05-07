@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode } from '@/types';
 
-export type AppView = 'tasks' | 'calendar';
+export type AppView = 'tasks' | 'calendar' | 'records';
 
 export type ModalType =
   | 'add-task'
@@ -9,6 +9,9 @@ export type ModalType =
   | 'add-purpose'
   | 'add-tag'
   | 'add-calendar-item'
+  | 'add-tracker'
+  | 'add-entry'
+  | 'add-routine'
   | null;
 
 export type SortField = 'createdAt' | 'deadline' | 'collection' | 'priority';
@@ -88,6 +91,25 @@ interface UIState {
   calendarItemDate: string | null;
   calendarItemKind: CalendarItemKind | null;
   showAddCalendarItem: (date?: string, kind?: CalendarItemKind) => void;
+
+  // Records / Trackers
+  activeTrackerId:  string | null;
+  setActiveTracker: (id: string | null) => void;
+  showAddTracker:   () => void;
+  pendingTrackerId: string | null;
+  showAddEntry:     (trackerId: string) => void;
+  editingEntryId:   string | null;
+  openEditEntry:    (id: string) => void;
+  closeEditEntry:   () => void;
+  editTrackerOpen:    boolean;
+  editingTrackerId:   string | null;
+  openEditTracker:    (id: string) => void;
+  closeEditTracker:   () => void;
+
+  // Routines
+  showAddRoutine:         () => void;
+  routinesSectionOpen:    boolean;
+  toggleRoutinesSection:  () => void;
 }
 
 export const useUIStore = create<UIState>()((set) => ({
@@ -117,6 +139,7 @@ export const useUIStore = create<UIState>()((set) => ({
     editingCollection: null,
     calendarItemDate: null,
     calendarItemKind: null,
+    editingEntryId: null,
   }),
 
   setActiveCollection: (id) => set({ activeCollectionId: id }),
@@ -181,4 +204,23 @@ export const useUIStore = create<UIState>()((set) => ({
     calendarItemDate: date ?? null,
     calendarItemKind: kind ?? null,
   }),
+
+  // Records / Trackers
+  activeTrackerId:  null,
+  setActiveTracker: (id) => set({ activeTrackerId: id }),
+  showAddTracker:   () => set({ openModal: 'add-tracker', pendingTrackerId: null }),
+  pendingTrackerId: null,
+  showAddEntry:     (trackerId) => set({ openModal: 'add-entry', pendingTrackerId: trackerId, editingEntryId: null }),
+  editingEntryId:   null,
+  openEditEntry:    (id) => set({ editingEntryId: id, openModal: 'add-entry' }),
+  closeEditEntry:   () => set({ editingEntryId: null, openModal: null }),
+  editTrackerOpen:  false,
+  editingTrackerId: null,
+  openEditTracker:  (id) => set({ editTrackerOpen: true, editingTrackerId: id }),
+  closeEditTracker: () => set({ editTrackerOpen: false, editingTrackerId: null }),
+
+  // Routines
+  showAddRoutine:        () => set({ openModal: 'add-routine' }),
+  routinesSectionOpen:   true,
+  toggleRoutinesSection: () => set((s) => ({ routinesSectionOpen: !s.routinesSectionOpen })),
 }));

@@ -5,19 +5,71 @@ export type CollectionId       = string & { readonly _brand: 'CollectionId'     
 export type PurposeId          = string & { readonly _brand: 'PurposeId'          };
 export type CalendarEventId    = string & { readonly _brand: 'CalendarEventId'    };
 export type CalendarReminderId = string & { readonly _brand: 'CalendarReminderId' };
+export type TrackerEntryId     = string & { readonly _brand: 'TrackerEntryId'     };
 
 // ── Enum-like string unions ─────────────────────────────────────────────────────
 export type Priority       = 'none' | 'low' | 'medium' | 'high';
-export type CollectionKind = 'project' | 'list';   // extensible — add more as needed
+export type CollectionKind = 'project' | 'list' | 'tracker' | 'routine';  // extensible
 export type TaskKind       = 'action'  | 'waiting' | 'milestone'; // extensible — add more as needed
 export type NotifyUnit     = 'minutes' | 'hours'   | 'days';
 export type TimeIntensity  = 'low' | 'medium' | 'high'; // extensible — add more as needed
+
+// ── Routine types ───────────────────────────────────────────────────────────────
+export interface RoutineTask {
+  id:    string;
+  title: string;
+  order: number;
+}
+
+// UI-only — never persisted to Supabase. Keyed by `${routineId}_${date}`.
+export interface RoutineInstance {
+  routineId: CollectionId;
+  date:      string;               // YYYY-MM-DD
+  checked:   string[];             // RoutineTask IDs that have been ticked
+  completed: boolean;
+  entryId:   TrackerEntryId | null;
+}
+
+// ── Tracker types ───────────────────────────────────────────────────────────────
+export type TrackerTemplate = 'habit' | 'books' | 'movies' | 'custom';
+export type TrackerViewMode = 'list' | 'heatmap';
+export type FieldType =
+  | 'text' | 'number' | 'date' | 'rating'
+  | 'select' | 'boolean' | 'url' | 'duration';
+
+export interface FieldSchema {
+  id:       string;
+  name:     string;
+  type:     FieldType;
+  required?: boolean;
+  options?:  string[];  // for select
+  unit?:     string;    // for number
+  max?:      number;    // for rating (default 5)
+}
+
+export interface TrackerEntry {
+  id:        TrackerEntryId;
+  trackerId: CollectionId;
+  date:      string;                     // YYYY-MM-DD
+  data:      Record<string, unknown>;    // keyed by FieldSchema.id
+  notes:     string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTrackerEntryInput {
+  trackerId: CollectionId;
+  date:      string;
+  data?:     Record<string, unknown>;
+  notes?:    string | null;
+}
 
 // ── Tags ───────────────────────────────────────────────────────────────────────
 export interface Tag {
   id:    TagId;
   name:  string;
   color: string | null;
+  notes: string | null;
 }
 
 // ── Purposes ───────────────────────────────────────────────────────────────────
@@ -34,7 +86,7 @@ export interface Purpose {
 // ── Collection ─────────────────────────────────────────────────────────────────
 // Abstract container for tasks. Currently displayed as "Endeavour" in the UI
 // (see src/config/labels.ts). kind='project' = specific/completable;
-// kind='list' = ongoing/never-complete.
+// kind='list' = ongoing/never-complete; kind='tracker' = records tracker.
 export interface Collection {
   id:          CollectionId;
   kind:        CollectionKind;
@@ -42,11 +94,15 @@ export interface Collection {
   description: string | null;
   color:       string | null;
   purposeIds:  PurposeId[];
+  tagIds:      TagId[];
   deadline:    string | null;  // meaningful for kind='project'
   completed:   boolean;        // meaningful for kind='project'
   completedAt: string | null;
-  createdAt:   string;
-  updatedAt:   string;
+  fieldSchema:  FieldSchema[];  // meaningful for kind='tracker'
+  routineTasks: RoutineTask[];  // meaningful for kind='routine'
+  repeatConfig: RepeatConfig | null;  // meaningful for kind='routine'
+  createdAt:    string;
+  updatedAt:    string;
 }
 
 // ── Milestone ──────────────────────────────────────────────────────────────────
@@ -118,7 +174,12 @@ export interface CreateCollectionInput {
   description?: string | null;
   color?:       string | null;
   purposeIds?:  PurposeId[];
+  tagIds?:      TagId[];
   deadline?:    string | null;
+  fieldSchema?:  FieldSchema[];
+  template?:     TrackerTemplate;
+  routineTasks?: RoutineTask[];
+  repeatConfig?: RepeatConfig | null;
 }
 
 export interface CreatePurposeInput {
@@ -134,11 +195,12 @@ export type CalendarEventType = 'default' | 'birthday';
 export type RepeatFreq        = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export interface RepeatConfig {
-  freq:     RepeatFreq;
-  interval: number;                          // every N freq-units
-  endKind:  'forever' | 'count' | 'until';
-  count:    number | null;                   // number of total occurrences
-  until:    string | null;                   // YYYY-MM-DD
+  freq:        RepeatFreq;
+  interval:    number;                          // every N freq-units
+  endKind:     'forever' | 'count' | 'until';
+  count:       number | null;                   // number of total occurrences
+  until:       string | null;                   // YYYY-MM-DD
+  daysOfWeek?: number[];                        // 0=Sun … 6=Sat; used by routines
 }
 
 // A time-bounded appointment (e.g. "Doctor at 2pm–3pm").

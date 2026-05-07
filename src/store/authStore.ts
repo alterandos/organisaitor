@@ -3,6 +3,7 @@ import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
+import { useTrackerStore } from '@/store/trackerStore';
 
 interface AuthState {
   user:        User | null;
@@ -46,7 +47,9 @@ export const useAuthStore = create<AuthState>()((set) => ({
     // when signed out. Data is safely in Supabase and reloads on next sign-in.
     useTaskStore.setState({ tasks: {}, collections: {}, tags: {}, purposes: {} } as never);
     useCalendarStore.setState({ events: {}, reminders: {} } as never);
+    useTrackerStore.setState({ entries: {} } as never);
     localStorage.removeItem('todo-app-storage');
     localStorage.removeItem('todo-calendar');
+    localStorage.removeItem('todo-tracker');
   },
 }));

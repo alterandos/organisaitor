@@ -9,6 +9,7 @@ import styles from './AddTagModal.module.css';
 export function AddTagModal() {
   const [name, setName]   = useState('');
   const [color, setColor] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string>('');
 
   const addTag       = useTaskStore((s) => s.addTag);
   const updateTag    = useTaskStore((s) => s.updateTag);
@@ -19,8 +20,8 @@ export function AddTagModal() {
   const isEdit = editingTag !== null;
 
   useEffect(() => {
-    if (editingTag) { setName(editingTag.name); setColor(editingTag.color); }
-    else            { setName(''); setColor(null); }
+    if (editingTag) { setName(editingTag.name); setColor(editingTag.color); setNotes(editingTag.notes ?? ''); }
+    else            { setName(''); setColor(null); setNotes(''); }
   }, [editingTag?.id]);
 
   const handleClose = () => isEdit ? closeEditTag() : closeModal();
@@ -29,10 +30,10 @@ export function AddTagModal() {
     e.preventDefault();
     if (!name.trim()) return;
     if (isEdit && editingTag) {
-      updateTag(editingTag.id, { name: name.trim(), color });
+      updateTag(editingTag.id, { name: name.trim(), color, notes: notes.trim() || null });
       closeEditTag();
     } else {
-      addTag({ id: newTagId(), name: name.trim(), color });
+      addTag({ id: newTagId(), name: name.trim(), color, notes: notes.trim() || null });
       closeModal();
     }
   };
@@ -63,6 +64,18 @@ export function AddTagModal() {
           <div className={styles.field}>
             <label className={styles.fieldLabel}>Colour</label>
             <ColorPicker value={color} onChange={setColor} palette="light" />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor="tag-notes">Notes</label>
+            <textarea
+              id="tag-notes"
+              className={styles.textarea}
+              placeholder="Optional description"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
           </div>
 
           <div className={styles.actions}>
