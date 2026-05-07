@@ -89,7 +89,7 @@ export function EditTrackerPane() {
 
   function removeField(idx: number) {
     const f = fields[idx].schema;
-    const hasData = entryCount > 0 && Object.values(entries).some(
+    const hasData = entryCount > 0 && tracker != null && Object.values(entries).some(
       (e) => e.trackerId === tracker.id && e.data[f.id] !== undefined && e.data[f.id] !== null && e.data[f.id] !== ''
     );
     if (hasData && !window.confirm(`Remove "${f.name}"? Existing entry data for this field will be hidden (not deleted).`)) return;
@@ -123,7 +123,7 @@ export function EditTrackerPane() {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   function handleSave() {
-    if (!name.trim()) return;
+    if (!name.trim() || !tracker) return;
     updateCollection(tracker.id, {
       name:        name.trim(),
       color,

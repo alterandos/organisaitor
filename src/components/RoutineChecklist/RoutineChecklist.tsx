@@ -30,7 +30,7 @@ export function RoutineChecklist({ routine }: RoutineChecklistProps) {
 
   function handleComplete() {
     if (done) return;
-    const entry = addEntry({
+    addEntry({
       trackerId: routine.id as CollectionId,
       date:      today,
       data:      {},

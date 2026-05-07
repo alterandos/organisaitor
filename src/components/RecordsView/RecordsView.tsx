@@ -1,7 +1,7 @@
 import { useTaskStore } from '@/store/taskStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useUIStore } from '@/store/uiStore';
-import type { Collection, CollectionId, FieldSchema, TrackerEntry } from '@/types';
+import type { Collection, CollectionId, FieldSchema, TrackerEntry, TrackerEntryId } from '@/types';
 import { RoutineChecklist } from '@/components/RoutineChecklist/RoutineChecklist';
 import styles from './RecordsView.module.css';
 
@@ -113,7 +113,7 @@ function TrackerDetail({ tracker }: TrackerDetailProps) {
               entry={entry}
               schema={tracker.fieldSchema}
               onEdit={openEditEntry}
-              onDelete={deleteEntry}
+              onDelete={(id) => deleteEntry(id as TrackerEntryId)}
               hasNotes={hasAnyNotes}
             />
           ))}
