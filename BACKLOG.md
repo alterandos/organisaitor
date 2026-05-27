@@ -5,6 +5,369 @@ Format: brief description + context/motivation.
 
 ---
 
+## Notes App — Central knowledge hub with cross-suite linking
+
+### Vision
+
+**Purpose:** A flexible, intelligent notes system that serves as the single source of truth for detailed notes on everything—courses, research, work, ideas—while seamlessly linking to all other apps in the suite (Tasks, Calendar, Portfolio, Records, future apps). The core differentiator is *effortless organization and discoverability*: users can find anything related to a topic without rigid folder hierarchies.
+
+**Problem solved:** Traditional note apps force rigid structures (folder trees) or chaotic tagging (100+ flat tags). Users spend time organizing instead of thinking. Notes must make it easy to capture ideas quickly, tag them, and retrieve everything related to a concept across different areas of knowledge.
+
+---
+
+### Data Model
+
+#### Core entities
+
+**Note**
+```typescript
+type NoteId = string & { readonly _brand: 'NoteId' };
+
+interface Note {
+  id:                       NoteId;
+  title:                    string;
+  content:                  string;                           // markdown by default
+  contentFormat:            'plaintext' | 'markdown' | 'richtext-json'; // extensible
+  tagIds:                   TagId[];                          // many-to-many tagging
+  
+  // Cross-app links (denormalized for fast loading; source of truth is each app's store)
+  linkedTaskIds:            TaskId[];
+  linkedCalendarEventIds:   CalendarEventId[];
+  linkedTrackerEntryIds:    TrackerEntryId[];
+  linkedWatchlistItemIds:   WatchlistItemId[];
+  linkedNoteIds:            NoteId[];                         // note-to-note references
+  
+  // Metadata
+  createdAt:                string;                           // ISO 8601
+  updatedAt:                string;
+  lastViewedAt:             string | null;
+  archivedAt:               string | null;                    // soft delete
+  color:                    string | null;                    // user-chosen highlight color
+  pinned:                   boolean;                          // quick access from landing page
+  
+  // User
+  userId:                   string;                           // Supabase auth.user_id
+}
+```
+
+**Tag** — hierarchical, scoped, typed labels
+```typescript
+type TagId = string & { readonly _brand: 'TagId' };
+
+interface Tag {
+  id:                       TagId;
+  name:                     string;
+  description:              string | null;
+  
+  // Hierarchy: enables "Area > Subject > Topic" structure
+  // A tag with parentTagId: null is a root-level "area"
+  // Tags can nest arbitrarily deep
+  parentTagId:              TagId | null;
+  
+  // Typing: "definition", "pros", "glossary", "reference", etc.
+  // Allows differentiation of note kinds *within* an area
+  // E.g., "Investment Research > pros" vs "Course Notes > pros" are different tags
+  // but both are type "pros"
+  tagTypeId:                TagTypeId | null;
+  
+  // Display
+  color:                    string | null;
+  icon:                     string | null;                    // emoji or icon name
+  order:                    number;                           // for sorting siblings
+  
+  // Metadata
+  createdAt:                string;
+  updatedAt:                string;
+  userId:                   string;
+}
+```
+
+**TagType** — metadata for tag categories (extensible by user)
+```typescript
+type TagTypeId = string & { readonly _brand: 'TagTypeId' };
+
+interface TagType {
+  id:                       TagTypeId;
+  name:                     string;                           // "definition", "pros", "glossary", "reference", "example", "needs-source", etc.
+  description:              string | null;
+  
+  // Display
+  color:                    string | null;
+  icon:                     string | null;
+  
+  // Metadata
+  isBuiltIn:                boolean;                          // system-provided (e.g., "definition") vs user-created
+  createdAt:                string;
+  userId:                   string;
+}
+```
+
+**Derived type: Area**
+```typescript
+// An "area" is a root-level tag (parentTagId: null) with optional metadata
+interface Area extends Tag {
+  // Computed properties (cached in store)
+  childTagIds:              TagId[];                          // direct children (subjects, topics)
+  noteCount:                number;                           // total notes tagged with this area (including recursive children)
+  lastModifiedAt:           string;
+  isPinned:                 boolean;                          // on landing page
+}
+```
+
+---
+
+### Architecture & Integration
+
+#### Supabase schema
+
+```sql
+-- Notes table
+create table notes (
+  id text primary key,
+  title text not null,
+  content text not null,
+  content_format text default 'markdown' check (content_format in ('plaintext', 'markdown', 'richtext-json')),
+  tag_ids jsonb default '[]',                    -- TagId[]
+  linked_task_ids jsonb default '[]',            -- TaskId[]
+  linked_calendar_event_ids jsonb default '[]',  -- CalendarEventId[]
+  linked_tracker_entry_ids jsonb default '[]',   -- TrackerEntryId[]
+  linked_watchlist_item_ids jsonb default '[]',  -- WatchlistItemId[]
+  linked_note_ids jsonb default '[]',            -- NoteId[]
+  created_at timestamp default now(),
+  updated_at timestamp default now(),
+  last_viewed_at timestamp,
+  archived_at timestamp,
+  color text,
+  pinned boolean default false,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  unique(id, user_id)
+);
+
+-- Tags table (hierarchical)
+create table tags (
+  id text primary key,
+  name text not null,
+  description text,
+  parent_tag_id text references tags(id) on delete restrict,  -- prevent orphaning
+  tag_type_id text references tag_types(id) on delete set null,
+  color text,
+  icon text,
+  "order" int default 0,
+  created_at timestamp default now(),
+  updated_at timestamp default now(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  unique(id, user_id),
+  unique(name, parent_tag_id, user_id)  -- tag name unique within a parent
+);
+
+-- Tag types (extensible)
+create table tag_types (
+  id text primary key,
+  name text not null,
+  description text,
+  color text,
+  icon text,
+  is_built_in boolean default false,
+  created_at timestamp default now(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  unique(id, user_id)
+);
+
+-- RLS policies: all tables filtered by user_id
+```
+
+#### Zustand store (`noteStore.ts`)
+
+```typescript
+interface NotesStoreState {
+  // Entities
+  notes:               Record<NoteId, Note>;
+  tags:                Record<TagId, Tag>;
+  tagTypes:            Record<TagTypeId, TagType>;
+  
+  // UI state
+  selectedTagIds:      TagId[];           // current filter (can be multiple)
+  searchQuery:         string;            // full-text search
+  viewMode:            'list' | 'grid' | 'canvas';  // extensible
+  sortBy:              'updated' | 'created' | 'title' | 'custom';
+  expandedTagIds:      Set<TagId>;        // which tag tree branches are open
+  
+  // Actions
+  createNote:          (title: string, content: string, tagIds?: TagId[]) => NoteId;
+  updateNote:          (id: NoteId, updates: Partial<Note>) => void;
+  deleteNote:          (id: NoteId) => void;
+  archiveNote:         (id: NoteId) => void;
+  
+  createTag:           (name: string, parentTagId?: TagId, tagTypeId?: TagTypeId) => TagId;
+  updateTag:           (id: TagId, updates: Partial<Tag>) => void;
+  deleteTag:           (id: TagId, cascade?: boolean) => void;  // cascade = reassign notes to parent?
+  reorderTags:         (tagIds: TagId[]) => void;
+  
+  createTagType:       (name: string, color?: string, icon?: string) => TagTypeId;
+  updateTagType:       (id: TagTypeId, updates: Partial<TagType>) => void;
+  
+  linkNoteToTask:      (noteId: NoteId, taskId: TaskId) => void;
+  unlinkNoteFromTask:  (noteId: NoteId, taskId: TaskId) => void;
+  // ... similar for calendar, tracker, portfolio
+  
+  toggleTag:           (tagId: TagId) => void;  // add/remove from selectedTagIds
+  setViewMode:         (mode: string) => void;
+  toggleTagExpanded:   (tagId: TagId) => void;
+}
+```
+
+**Persistence:**
+- Persist to localStorage with version + migration support (like taskStore)
+- Sync with Supabase when online
+- Mappers in `services/sync/mappers.ts`: `noteToRow`, `rowToNote`, `tagToRow`, `rowToTag`
+
+#### Cross-app integration
+
+**One-way links from other apps:**
+- `Task` gains `linkedNoteIds: NoteId[]`
+- `CalendarEvent` gains `linkedNoteIds: NoteId[]`
+- `TrackerEntry` gains `linkedNoteIds: NoteId[]`
+- `WatchlistItem` gains `linkedNoteIds: NoteId[]`
+
+**Bidirectional sync via shared event bus:**
+```typescript
+// When a note is linked to a task (from either side)
+eventBus.emit('note:linked-to-task', { noteId, taskId });
+
+// Organizer app listens:
+eventBus.on('note:linked-to-task', ({ noteId, taskId }) => {
+  useTaskStore.getState().updateTask(taskId, { linkedNoteIds: [..., noteId] });
+});
+
+// Notes app listens to reciprocal:
+eventBus.on('task:linked-to-note', ({ taskId, noteId }) => {
+  noteStore.linkNoteToTask(noteId, taskId);  // ensures both sides in sync
+});
+```
+
+#### Package structure
+
+```
+packages/notes/
+  src/
+    store/
+      noteStore.ts           -- all notes/tags/tagTypes state + persistence
+    types/
+      notes.ts               -- all TypeScript interfaces
+    components/
+      NotesLanding/          -- home page: recent, favorites, quick add
+      NotesView/             -- main view: tag sidebar + note list/grid + editor
+      NoteEditor/            -- WYSIWYG/markdown editor
+      TagTree/               -- hierarchical tag browser
+      QuickAddModal/         -- Ctrl+Space modal
+    services/
+      noteSync.ts            -- sync mappers (noteToRow, rowToNote, etc.)
+    integrations/
+      notesEventBus.ts       -- cross-app event handlers
+```
+
+---
+
+### UI / UX
+
+#### Landing page
+- **Left sidebar:** Favorite/pinned areas (root tags), quick navigation
+- **Main area:** 
+  - Grid of recent areas (showing last-modified date, note count, icon)
+  - "Quick add" button (or Ctrl+Space)
+  - Search bar
+  - Recent notes list below
+- **Top bar:** Settings, user menu (no "Create" button — use Ctrl+Space instead)
+
+#### Main notes view (after clicking an area)
+- **Left sidebar:** Tag hierarchy (collapsible tree, showing all subjects/topics under the area)
+- **Center:** Note list or grid (filtered by selected tags)
+  - Click a tag = add to filter (cumulative AND logic)
+  - Cmd+click a tag = replace filter
+- **Note row shows:** Title, tags, last-modified, preview snippet
+- **Right panel:** Note editor (slides out when note selected)
+
+#### Tag management
+- Context menu on tags: edit, move (change parent), delete
+- Drag-and-drop to reorder siblings
+- "Create subtag" / "Create sibling" inline options
+- Tag type assignment via dropdown (built-in or custom types)
+
+#### Quick add modal (Ctrl+Space)
+- Text input for quick note content
+- Tag picker (searchable, multi-select)
+- "Save & close" / "Save & keep open" / "Save & edit" buttons
+- Optional: pre-populate with clipboard content
+
+#### Inline tagging (Phase 2)
+- Ctrl+Space within note editor = open tag menu
+- Select text, Ctrl+Space, tag it (stores selection as linked reference? or just tags the note?)
+- Highlight tagged passages inline
+
+---
+
+### Features — MVP vs future
+
+**Phase 1: MVP**
+- CRUD notes, tags, tag types
+- Hierarchical tag organization
+- Landing page with areas list
+- Main view: tag-filtered note list
+- Simple markdown editor (no WYSIWYG yet)
+- Ctrl+Space quick add
+- Cross-app note linking (denormalized foreign keys)
+- Sync with Supabase
+
+**Phase 2: Polish**
+- WYSIWYG editor (Tiptap or similar)
+- Inline tagging (highlight text → tag it)
+- Tag drag-and-drop reordering
+- View modes: grid, canvas (visual/spatial layout)
+- Search with filters (tag, date range, content type)
+
+**Phase 3: Intelligence**
+- AI-powered note testing (generate Q&A from notes by tag/type)
+- Glossary auto-extraction (collect all "definition" type notes)
+- Auto-linking (suggest related notes based on content/tags)
+- Spaced repetition for definitions/flashcards
+
+**Phase 4: Advanced**
+- Custom note templates (by tag type or area)
+- Nested/folding sections within a note
+- Collaborative notes (shared editing, comments)
+- Export formats (PDF, Markdown, HTML)
+- Mobile app (already PWA-capable via Vercel)
+
+---
+
+### Design consistency across suite
+
+**Shared design system (backlog item: "Suite design system")**
+- All apps use same CSS variables (colors, spacing, typography, radii)
+- Modal/pane patterns: bottom-sheet on mobile, centered card on desktop
+- Tag system: same color/icon vocabulary across Notes, Portfolio, Tasks
+- Hotkey system: Space/Ctrl+Space for "add item", S for settings, Esc to close
+- Sidebar patterns: left nav for categories, right panel for details
+
+**Implementation:**
+- Move shared styles to `src/styles/design-system.css` (root CSS variables)
+- Each app imports from shared layer
+- Components follow same naming/pattern conventions (e.g., `.modal`, `.pane`, `.sidebar`)
+- Icons/emojis sourced from a shared icon set or Noto emoji standard
+
+---
+
+### Future integrations
+
+- **AI automated testing:** Given notes tagged with "definition" or "glossary", generate an exam, track score by area, prompt weak spots
+- **Spaced repetition:** Integration with Records trackers (create a "study" tracker from glossary terms)
+- **Note templates:** By tag type or area (e.g., "Meeting notes" template with date, attendees, action items)
+- **Voice notes:** Capture audio, transcribe, store alongside markdown
+- **Obsidian sync:** One-way import of existing notes; export to maintain offline access
+- **Citation/bibliography:** Auto-generate from "source" links; export BibTeX for papers
+
+---
+
 ## Portfolio
 
 ### Chart view — user-adjustable chart height
