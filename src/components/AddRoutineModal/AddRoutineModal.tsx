@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { nanoid } from 'nanoid';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -20,6 +20,12 @@ export function AddRoutineModal() {
   const tags           = useTaskStore((s) => s.tags);
   const closeModal = useUIStore((s) => s.closeModal);
   const openModal  = useUIStore((s) => s.openModal);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [closeModal]);
 
   const [name,        setName]        = useState('');
   const [tasks,       setTasks]       = useState<RoutineTask[]>([]);

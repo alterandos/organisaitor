@@ -4,9 +4,10 @@ import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
 import styles from './AddTaskButton.module.css';
 
-type TaskDialType    = 'tag' | 'collection' | 'purpose' | 'task';
-type CalDialType     = 'event' | 'reminder';
-type RecordsDialType = 'tracker' | 'entry' | 'routine';
+type TaskDialType      = 'tag' | 'collection' | 'purpose' | 'task';
+type CalDialType       = 'event' | 'reminder';
+type RecordsDialType   = 'tracker' | 'entry' | 'routine';
+type PortfolioDialType = 'watchlist-item' | 'portfolio-tag' | 'investment-purpose' | 'bulk-upload';
 
 const TASK_OPTIONS: { type: TaskDialType; label: string; color: string; icon: string }[] = [
   { type: 'tag',        label: 'Tag',              color: '#8b5cf6', icon: '#' },
@@ -26,17 +27,29 @@ const REC_OPTIONS: { type: RecordsDialType; label: string; color: string; icon: 
   { type: 'entry',   label: 'New entry',     color: '#5b6ee1', icon: '+' },
 ];
 
+const PORTFOLIO_OPTIONS: { type: PortfolioDialType; label: string; color: string; icon: string }[] = [
+  { type: 'investment-purpose', label: LABELS.investmentPurpose, color: '#8b5cf6', icon: '◎' },
+  { type: 'portfolio-tag',      label: LABELS.portfolioTag,      color: '#10b981', icon: '#' },
+  { type: 'bulk-upload',        label: 'Bulk Import',            color: '#64748b', icon: '↑' },
+  { type: 'watchlist-item',     label: LABELS.watchlistItem,     color: '#5b6ee1', icon: '+' },
+];
+
 export function AddTaskButton() {
-  const activeView          = useUIStore((s) => s.activeView);
-  const activeTrackerId     = useUIStore((s) => s.activeTrackerId);
-  const showAddTask         = useUIStore((s) => s.showAddTask);
-  const showAddCollection   = useUIStore((s) => s.showAddCollection);
-  const showAddPurpose      = useUIStore((s) => s.showAddPurpose);
-  const showAddTag          = useUIStore((s) => s.showAddTag);
-  const showAddCalendarItem = useUIStore((s) => s.showAddCalendarItem);
-  const showAddTracker      = useUIStore((s) => s.showAddTracker);
-  const showAddEntry        = useUIStore((s) => s.showAddEntry);
-  const showAddRoutine      = useUIStore((s) => s.showAddRoutine);
+  const activeView           = useUIStore((s) => s.activeView);
+  const activeTrackerId      = useUIStore((s) => s.activeTrackerId);
+  const portfolioChartOpen   = useUIStore((s) => s.portfolioChartOpen);
+  const showAddTask                = useUIStore((s) => s.showAddTask);
+  const showAddCollection          = useUIStore((s) => s.showAddCollection);
+  const showAddPurpose             = useUIStore((s) => s.showAddPurpose);
+  const showAddTag                 = useUIStore((s) => s.showAddTag);
+  const showAddCalendarItem        = useUIStore((s) => s.showAddCalendarItem);
+  const showAddTracker             = useUIStore((s) => s.showAddTracker);
+  const showAddEntry               = useUIStore((s) => s.showAddEntry);
+  const showAddRoutine             = useUIStore((s) => s.showAddRoutine);
+  const showAddWatchlistItem       = useUIStore((s) => s.showAddWatchlistItem);
+  const showAddPortfolioTag        = useUIStore((s) => s.showAddPortfolioTag);
+  const showAddInvestmentPurpose   = useUIStore((s) => s.showAddInvestmentPurpose);
+  const showBulkUploadWatchlist    = useUIStore((s) => s.showBulkUploadWatchlist);
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -75,6 +88,16 @@ export function AddTaskButton() {
     else showAddTracker();
   };
 
+  const handlePortfolioOption = (type: PortfolioDialType) => {
+    setOpen(false);
+    if (type === 'watchlist-item')     showAddWatchlistItem();
+    else if (type === 'portfolio-tag') showAddPortfolioTag();
+    else if (type === 'bulk-upload')   showBulkUploadWatchlist();
+    else                               showAddInvestmentPurpose();
+  };
+
+  if (activeView === 'portfolio' && portfolioChartOpen) return null;
+
   const dialClass = `${styles.speedDial} ${open ? styles.speedDialOpen : ''}`;
 
   if (activeView === 'calendar') {
@@ -99,6 +122,36 @@ export function AddTaskButton() {
           className={styles.fab}
           onClick={() => setOpen((o) => !o)}
           aria-label="Add calendar item"
+          aria-expanded={open}
+        >
+          <span className={styles.fabIcon}>+</span>
+        </button>
+      </div>
+    );
+  }
+
+  if (activeView === 'portfolio') {
+    return (
+      <div className={dialClass} ref={ref}>
+        <div className={styles.options} role="group" aria-label="Create options">
+          {PORTFOLIO_OPTIONS.map((opt) => (
+            <div key={opt.type} className={styles.optionRow}>
+              <span className={styles.optionLabel}>{opt.label}</span>
+              <button
+                className={styles.optionBtn}
+                style={{ background: opt.color }}
+                onClick={() => handlePortfolioOption(opt.type)}
+                aria-label={`Add ${opt.label}`}
+              >
+                {opt.icon}
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          className={styles.fab}
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Add portfolio item"
           aria-expanded={open}
         >
           <span className={styles.fabIcon}>+</span>

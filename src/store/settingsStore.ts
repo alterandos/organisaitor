@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 interface SettingsState {
+  // ── Portfolio — chart view ────────────────────────────────────────────────────
+  chartTickerRowZoom:    number;   // multiplier on the compact row size; 1.0 = default (40% smaller than original)
+  setChartTickerRowZoom: (z: number) => void;
+
   // ── Task view ────────────────────────────────────────────────────────────────
   colorEnabled:            boolean;
   priorityColorEnabled:    boolean;
@@ -24,6 +28,9 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
+      chartTickerRowZoom:    1.0,
+      setChartTickerRowZoom: (z) => set({ chartTickerRowZoom: Math.max(0.5, Math.min(3.0, Math.round(z * 10) / 10)) }),
+
       colorEnabled:            true,
       priorityColorEnabled:    true,
       alwaysShowDueDate:       false,

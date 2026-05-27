@@ -131,12 +131,30 @@ export function CalendarEventPane() {
 
           <div className={styles.field}>
             <span className={styles.label}>Date</span>
-            <input
-              type="date"
-              className={styles.dateInput}
-              value={event.date}
-              onChange={(e) => updateEvent(id, { date: e.target.value })}
-            />
+            <div className={styles.timeRow}>
+              <input
+                type="date"
+                className={styles.dateInput}
+                value={event.date}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  updateEvent(id, { date: v });
+                  if (event.endDate && event.endDate <= v) updateEvent(id, { endDate: null });
+                }}
+              />
+              {(event.eventType ?? 'default') !== 'birthday' && (
+                <>
+                  <span className={styles.timeSep}>→</span>
+                  <input
+                    type="date"
+                    className={styles.dateInput}
+                    value={event.endDate ?? ''}
+                    min={event.date}
+                    onChange={(e) => updateEvent(id, { endDate: e.target.value || null })}
+                  />
+                </>
+              )}
+            </div>
           </div>
 
           {(event.eventType ?? 'default') !== 'birthday' && (

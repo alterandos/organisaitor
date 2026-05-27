@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode } from '@/types';
 
-export type AppView = 'tasks' | 'calendar' | 'records';
+export type AppView = 'tasks' | 'calendar' | 'records' | 'portfolio';
 
 export type ModalType =
   | 'add-task'
@@ -12,6 +12,10 @@ export type ModalType =
   | 'add-tracker'
   | 'add-entry'
   | 'add-routine'
+  | 'add-watchlist-item'
+  | 'add-portfolio-tag'
+  | 'add-investment-purpose'
+  | 'bulk-upload-watchlist'
   | null;
 
 export type SortField = 'createdAt' | 'deadline' | 'collection' | 'priority';
@@ -110,6 +114,22 @@ interface UIState {
   showAddRoutine:         () => void;
   routinesSectionOpen:    boolean;
   toggleRoutinesSection:  () => void;
+  editRoutineOpen:        boolean;
+  editingRoutineId:       string | null;
+  openEditRoutine:        (id: string) => void;
+  closeEditRoutine:       () => void;
+  activeRoutineId:        string | null;
+  setActiveRoutine:       (id: string | null) => void;
+
+  // Portfolio
+  showAddWatchlistItem:      () => void;
+  showAddPortfolioTag:       () => void;
+  showAddInvestmentPurpose:  () => void;
+  showBulkUploadWatchlist:   () => void;
+  editingWatchlistItemId:    string | null;
+  openEditWatchlistItem:     (id: string) => void;
+  portfolioChartOpen:        boolean;
+  setPortfolioChartOpen:     (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()((set) => ({
@@ -140,6 +160,7 @@ export const useUIStore = create<UIState>()((set) => ({
     calendarItemDate: null,
     calendarItemKind: null,
     editingEntryId: null,
+    editingWatchlistItemId: null,
   }),
 
   setActiveCollection: (id) => set({ activeCollectionId: id }),
@@ -185,7 +206,7 @@ export const useUIStore = create<UIState>()((set) => ({
   setSortDir:   (d)      => set({ sortDir: d }),
 
   activeView:    'tasks',
-  setActiveView: (view) => set({ activeView: view }),
+  setActiveView: (view) => set({ activeView: view, portfolioChartOpen: false }),
 
   taskViewMode:    'overview',
   setTaskViewMode: (mode) => set({ taskViewMode: mode }),
@@ -207,7 +228,7 @@ export const useUIStore = create<UIState>()((set) => ({
 
   // Records / Trackers
   activeTrackerId:  null,
-  setActiveTracker: (id) => set({ activeTrackerId: id }),
+  setActiveTracker: (id) => set({ activeTrackerId: id, activeRoutineId: null }),
   showAddTracker:   () => set({ openModal: 'add-tracker', pendingTrackerId: null }),
   pendingTrackerId: null,
   showAddEntry:     (trackerId) => set({ openModal: 'add-entry', pendingTrackerId: trackerId, editingEntryId: null }),
@@ -219,8 +240,24 @@ export const useUIStore = create<UIState>()((set) => ({
   openEditTracker:  (id) => set({ editTrackerOpen: true, editingTrackerId: id }),
   closeEditTracker: () => set({ editTrackerOpen: false, editingTrackerId: null }),
 
+  // Portfolio
+  showAddWatchlistItem:     () => set({ openModal: 'add-watchlist-item', editingWatchlistItemId: null }),
+  showAddPortfolioTag:      () => set({ openModal: 'add-portfolio-tag'     }),
+  showAddInvestmentPurpose: () => set({ openModal: 'add-investment-purpose'}),
+  showBulkUploadWatchlist:  () => set({ openModal: 'bulk-upload-watchlist' }),
+  editingWatchlistItemId:   null,
+  openEditWatchlistItem:    (id) => set({ openModal: 'add-watchlist-item', editingWatchlistItemId: id }),
+  portfolioChartOpen:       false,
+  setPortfolioChartOpen:    (open) => set({ portfolioChartOpen: open }),
+
   // Routines
   showAddRoutine:        () => set({ openModal: 'add-routine' }),
   routinesSectionOpen:   true,
   toggleRoutinesSection: () => set((s) => ({ routinesSectionOpen: !s.routinesSectionOpen })),
+  editRoutineOpen:       false,
+  editingRoutineId:      null,
+  openEditRoutine:       (id) => set({ editRoutineOpen: true, editingRoutineId: id }),
+  closeEditRoutine:      () => set({ editRoutineOpen: false, editingRoutineId: null }),
+  activeRoutineId:       null,
+  setActiveRoutine:      (id) => set({ activeRoutineId: id, activeTrackerId: null }),
 }));

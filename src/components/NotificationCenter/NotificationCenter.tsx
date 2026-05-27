@@ -74,7 +74,7 @@ function NotificationCard({ n }: { n: PendingNotification }) {
     setRemindAt(iso);
   };
 
-  const hasFullActions = n.kind === 'task-timed' || n.kind === 'reminder';
+  const hasFullActions = n.kind === 'task-timed' || n.kind === 'task-untimed' || n.kind === 'reminder';
 
   const kindClass =
     n.kind === 'event'    ? styles.kindEvent :

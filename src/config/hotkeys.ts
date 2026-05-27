@@ -13,15 +13,20 @@ export interface HotkeyDef {
 
 export const HOTKEYS: HotkeyDef[] = [
   // Navigation
-  { group: 'Navigation', primary: '1',     secondary: 'Ctrl+1', action: 'Tasks view'     },
-  { group: 'Navigation', primary: '2',     secondary: 'Ctrl+2', action: 'Calendar view'  },
-  { group: 'Navigation', primary: '3',     secondary: 'Ctrl+3', action: 'Records view'   },
+  { group: 'Navigation', primary: '1',     secondary: 'Ctrl+1', action: 'Tasks section'     },
+  { group: 'Navigation', primary: '2',     secondary: 'Ctrl+2', action: 'Calendar section'  },
+  { group: 'Navigation', primary: '3',     secondary: 'Ctrl+3', action: 'Records section'   },
+  { group: 'Navigation', primary: '4',     secondary: 'Ctrl+4', action: 'Portfolio section' },
 
   // Actions
   { group: 'Actions', primary: 'Space', secondary: 'Ctrl+N', action: 'New item (task / event / entry)' },
   { group: 'Actions', primary: 'S',                          action: 'Toggle settings'                  },
   { group: 'Actions', primary: 'Esc',                        action: 'Close panel / modal'              },
+
+  // Portfolio
+  { group: 'Portfolio', primary: 'Ctrl+−', action: 'Decrease ticker row size (chart view)' },
+  { group: 'Portfolio', primary: 'Ctrl++', action: 'Increase ticker row size (chart view)' },
 ];
 
 // Ordered list of groups for rendering in the correct sequence.
-export const HOTKEY_GROUPS = ['Navigation', 'Actions'] as const;
+export const HOTKEY_GROUPS = ['Navigation', 'Actions', 'Portfolio'] as const;

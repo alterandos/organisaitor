@@ -36,6 +36,7 @@ export const useCalendarStore = create<CalendarState>()(
           id:           newCalendarEventId(),
           title:        input.title.trim(),
           date:         input.date,
+          endDate:           input.endDate            ?? null,
           startTime:    input.startTime    ?? null,
           endTime:      input.endTime      ?? null,
           notes:        input.notes        ?? null,
@@ -92,6 +93,16 @@ export const useCalendarStore = create<CalendarState>()(
         return { reminders: rest as Record<CalendarReminderId, CalendarReminder> };
       }),
     }),
-    { name: 'todo-calendar', version: 1 }
+    {
+      name: 'todo-calendar',
+      version: 2,
+      migrate(state: any, version: number) {
+        if (version < 2) {
+          const events = state.events ?? {};
+          Object.values(events).forEach((ev: any) => { if (ev.endDate === undefined) ev.endDate = null; });
+        }
+        return state as CalendarState;
+      },
+    }
   )
 );

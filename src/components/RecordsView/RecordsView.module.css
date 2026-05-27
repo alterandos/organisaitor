@@ -136,17 +136,6 @@
   margin-top: 0.25rem;
 }
 
-.routinesList {
-  padding: 0.4rem 0.65rem 0.65rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.routineCard {
-  /* wrapper so RoutineChecklist sits flush in the sidebar */
-}
-
 /* ── Main / Detail ───────────────────────────────────────────────── */
 
 .main {
@@ -351,6 +340,27 @@
 }
 .entryBtn:hover { color: var(--color-text); background: var(--color-border); }
 .entryBtnDelete:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+
+/* ── Routine detail ──────────────────────────────────────────────── */
+
+.routineDetailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.sectionHeading {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.statusDone {
+  color: var(--color-primary);
+  font-weight: 500;
+}
 
 /* ── Mobile ──────────────────────────────────────────────────────── */
 

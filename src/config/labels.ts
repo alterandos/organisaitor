@@ -35,8 +35,17 @@ export const LABELS = {
   routinePlural: 'Routines',
 
   views: {
-    tasks:    'Tasks',
-    calendar: 'Calendar',
-    records:  'Records',
+    tasks:     'Tasks',
+    calendar:  'Calendar',
+    records:   'Records',
+    portfolio: 'Portfolio',
   },
+
+  // Portfolio
+  portfolio:           'Portfolio',
+  watchlist:           'Watchlist',
+  watchlistItem:       'Ticker',
+  watchlistItemPlural: 'Tickers',
+  portfolioTag:        'Tag',
+  investmentPurpose:   'Investment Purpose',
 } as const;

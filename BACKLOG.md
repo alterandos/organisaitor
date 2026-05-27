@@ -5,6 +5,120 @@ Format: brief description + context/motivation.
 
 ---
 
+## Portfolio
+
+### Chart view — user-adjustable chart height
+
+In the chart view, the chart occupies all horizontal space to the left of the tickers/info sidebar. The vertical split between the tickers list and the info pane on the right is currently fixed at 75%/25%. Both values should be user-adjustable:
+
+- A drag handle between the chart and the right sidebar to resize the sidebar width
+- A drag handle between the tickers list and the info pane to change the 75/25 split
+- Preferences persist in `settingsStore` (e.g. `chartSidebarWidth: number`, `chartTickersPct: number`)
+
+For now the layout is fixed; add the drag-handle resize interaction when the chart view UI matures.
+
+---
+
+### Named Watchlists
+
+#### Problem with the current approach
+
+The app currently has a single flat list of tracked items. Tags provide ad-hoc grouping but are insufficient as a watchlist substitute:
+
+- Tags have no ordering — you cannot rank items within a group by conviction, review date, or custom priority.
+- Tags carry no list-level metadata — a watchlist might have a description, a benchmark, or a target allocation; a tag has only a name and colour.
+- Tags are cross-cutting — the same tag can mean different things in different contexts. A user may want *different notes per list* for the same item (e.g. "High conviction — buy on dip" in one watchlist, "Hedge position" in another). Tags cannot hold per-membership data.
+- The mental model doesn't match — users expect named watchlists the way a brokerage presents them, not a filter bar.
+
+Tags remain useful *within* watchlists (sector labels, risk tier, theme) but should not replace the list concept.
+
+#### Data model
+
+```typescript
+type WatchlistId = string & { readonly _brand: 'WatchlistId' };
+
+interface Watchlist {
+  id:          WatchlistId;
+  name:        string;
+  description: string | null;
+  color:       string | null;
+  order:       number;           // user-defined display order in sidebar
+  createdAt:   string;
+  updatedAt:   string;
+}
+
+interface WatchlistMembership {
+  watchlistId: WatchlistId;
+  itemId:      WatchlistItemId;
+  order:       number;           // item's position within this specific watchlist
+  notes:       string | null;   // per-membership notes (distinct from item.notes)
+  addedAt:     string;
+}
+```
+
+`WatchlistItem` gains `watchlistIds: WatchlistId[]` as a derived/convenience field but the membership table is the source of truth. An item can belong to zero or more watchlists; items not in any watchlist are still visible from an "All" view.
+
+#### UI
+
+- **Sidebar** — named watchlists replace (or sit alongside) the current flat list. A default "All" entry shows every item regardless of membership.
+- **Watchlist switcher** — clicking a watchlist in the sidebar scopes the main view to that list's items, in that list's order.
+- **Item reordering** — drag-and-drop within a watchlist to change `WatchlistMembership.order`.
+- **Add to watchlist** — when adding or editing an item, a multi-select picks which watchlists it belongs to (same UX as tags/purposes today).
+- **Watchlist management** — create, rename, reorder, delete watchlists. Deleting a watchlist removes memberships but not the underlying items.
+- **Per-membership notes** — accessible from the item's edit pane when viewed within a specific watchlist context.
+
+#### Chart view integration
+
+The right-sidebar tickers list in chart view should respect the active watchlist scope. When "All" is selected, all items appear; when a named watchlist is active, only its members appear (already filtered by the watchlist before any tag/exchange/cap-tier filters are applied).
+
+#### Migration / backwards compatibility
+
+Existing items have no watchlist memberships. On first launch after migration, all items are implicitly in "All" — no data is lost. Users can then create watchlists and assign items manually, or a one-time prompt can offer to convert existing tags into watchlists.
+
+#### What stays as tags
+
+Tags remain the right tool for cross-cutting labels: sector, theme, risk tier, asset class overrides. The filter panel in chart view (and the toolbar in table view) continues to use tags as sub-filters *within* whatever watchlist is active.
+
+---
+
+### Watchlist — manual groups (static named sections)
+
+Users can create named, ordered sections within a watchlist — e.g. "Quantum computing", "ASX small caps", "AI infrastructure". These are distinct from tags: a group is a curated position within a specific watchlist, not a cross-cutting label. An item belongs to at most one group within a given watchlist (unlike tags, which are M:M).
+
+#### Data model
+
+```typescript
+type WatchlistGroupId = string & { readonly _brand: 'WatchlistGroupId' };
+
+interface WatchlistGroup {
+  id:          WatchlistGroupId;
+  watchlistId: WatchlistId;      // which watchlist this group belongs to
+  name:        string;
+  order:       number;           // group order within the watchlist
+}
+```
+
+`WatchlistMembership` gains `groupId: WatchlistGroupId | null`. Items with `groupId: null` appear in an "Ungrouped" section at the bottom.
+
+#### UI
+
+- In the tickers list (chart view sidebar) and full table view, a **"Groups"** option will be added to the existing "Group by" panel once this feature is built — the panel already exists for dynamic groupings (tags, size, exchange, sector).
+- A **"Manage groups"** action in the watchlist options menu lets users create, rename, reorder, and delete groups.
+- **Drag-and-drop** moves items between groups.
+- Groups are collapsible; collapsed state is persisted in `settingsStore` (keyed by `groupId`).
+
+#### Why distinct from tags
+
+Tags are cross-cutting labels shared across all views and watchlists (sector, theme, risk tier). Manual groups are watchlist-specific, manually ordered containers. The same item can be in the "Mega-cap AI" group in one watchlist and the "Long-term holds" group in another.
+
+---
+
+### Watchlist — customisable row density
+
+A setting in the Settings pane to control watchlist row size (e.g. Compact / Normal / Comfortable). Currently fixed at a compact density (~15% smaller than the original default). The setting should adjust row padding and font size globally for the watchlist table.
+
+---
+
 ## Notifications & Reminders
 
 ### Records — Habit / tracker reminders
@@ -83,11 +197,7 @@ layer reads from this data rather than maintaining its own event store.
   `'calendar-event'` origin to support this without schema changes.
 
 **Open decision:**
-- Whether the calendar view becomes a sibling route in this app or a
-  standalone app that shares the same data store via the planned
-  StorageAdapter layer. Recommend revisiting once the calendar feature
-  spec is defined — the StorageAdapter abstraction should keep both paths
-  open until then.
+- Whether the Calendar section stays inside the Organizer app or eventually splits into its own app package. The suite's single-deployment monorepo model keeps both paths open — if split, it becomes a new route in the same build. Recommend revisiting once the feature spec matures.
 
 ### Mini-calendar toggle in the task list view
 A setting (in the Settings pane) to display a condensed calendar alongside
@@ -186,9 +296,45 @@ Tasks and notes have a natural, tight relationship:
   the same research project should share the same Purpose, reinforcing the
   case for a unified or tightly federated app rather than two isolated tools.
 
-**Open decision:** same unified-vs-federated question as calendar. Recommend
-deciding the overall app architecture (single app with multiple views vs.
-micro-apps sharing a common store) before building the note-taking surface.
+**Decision (confirmed):** Notes will be a separate package in the suite, following the same separate-package / shared-platform-layer architecture as the Portfolio app (see below). The shared Purposes entity and cross-app event bus are the integration points — a note and a task about the same research project share the same Purpose; inline task creation in notes posts to the Organizer's task store via the shared layer's event bus.
+
+---
+
+## Records — Routines UX improvements
+
+### Tasks section: tasks / routines / both toggle
+
+Currently routines appear at the top of the task list (collapsible panel). Eventually the user should be able to toggle between three modes:
+- **Tasks only** — routines section hidden entirely
+- **Routines only** — only today's due routines shown
+- **Both** — tasks first, routines below (current behaviour, but moved below tasks rather than above)
+
+The toggle should live in the toolbar area of the Tasks section (alongside the existing Overview / Focused toggle). The active mode is persisted in `settingsStore`.
+
+### Records section: routine success calendar / heatmap
+
+When a routine is selected in the Records section, a calendar-style heatmap view shows how well the user has stuck to the routine over time. Design intent:
+
+- Each day is a cell; cells are coloured by outcome:
+  - Completed → green (intensity could reflect partial vs full completion)
+  - Missed a day or two → yellow / amber
+  - Three or more consecutive misses → orange → red (darkening with streak)
+  - No instance for the day (app not opened / routine not due) → neutral grey
+- A month-at-a-time grid is the default; navigation arrows to step back through months
+- The heatmap sits below (or alongside) the history table already implemented in RoutineDetail
+
+**Architecture note:** all the data needed is already in `routineStore.instances` keyed by `${routineId}_${date}`. The heatmap is a pure read-only rendering component; no new store changes needed.
+
+### Streak functionality for habit trackers
+
+For trackers using the Habit template (`trackerTemplate === 'habit'`), compute and display:
+- **Current streak** — consecutive days where a Habit entry exists and the primary boolean field is `true`
+- **Longest streak** — all-time record
+- **Completion rate** — entries marked complete / total days since first entry
+
+These are computed on the fly from `trackerStore.entries` (no stored state). Display them as stat chips in the TrackerDetail header, similar to fitness app habit trackers.
+
+The streak breaks if: no entry for a day, or entry exists but boolean field is `false`. Days where the tracker has no `repeatConfig` day constraint (i.e. it runs every day) are always counted; days outside the schedule are ignored.
 
 ---
 
@@ -490,5 +636,122 @@ data model to avoid a breaking migration later.
 - Strava OAuth import
 - Book metadata autofill
 - Nutrition data import
+
+---
+
+## Portfolio — Market Data API Integration
+
+### Overview
+
+The Portfolio watchlist currently stores all data manually. The next major phase is connecting live market data so the Price column (and future columns) populate automatically.
+
+### Architecture
+
+- API calls must go through a **server-side proxy** (Supabase Edge Function or Vercel serverless function) to keep API keys off the client.
+- Live price/fundamental data is **never stored in the database** — it is fetched on demand and held in memory (React Query or a lightweight cache). Only user-entered data (ticker, name, market cap tier, investment purpose, tags, date added, notes) persists.
+- The column config system (already implemented) is designed to accept any new field returned by the API — adding a new column requires: (1) extending `WatchlistColumnId` in `src/types/portfolio.ts`, (2) adding a default column entry in `portfolioStore.ts`, (3) adding a `renderCell` case in `WatchlistView.tsx`. No schema migration needed.
+
+### Planned data sources
+
+| Asset class | Provider candidates |
+|-------------|---------------------|
+| Equities / ETFs | Polygon.io, Alpha Vantage, Financial Modeling Prep |
+| Crypto | CoinGecko, CoinMarketCap |
+| FX / Commodities | Same equity providers or dedicated APIs |
+
+**Decision (confirmed):** Use **Financial Modeling Prep (FMP)** free tier initially. Batch quote endpoint (`/quote/AAPL,MSFT,...`) means all watchlist tickers = 1 API call per refresh. Free tier (250 req/day) is sufficient for 60-second intervals with active-window-only refresh. Upgrade to a paid plan if refresh frequency or ticker count grows significantly.
+
+Price refresh pauses automatically when the portfolio section is not visible or the window loses focus (Page Visibility API + window blur/focus events). Default refresh interval: 60 seconds.
+
+### Data fields planned (from API)
+
+First phase — price data:
+- `price` — current price
+- `dailyChange` — absolute change today
+- `dailyChangePct` — % change today
+
+Second phase — fundamentals:
+- `marketCapValue` — actual market cap (to validate / replace user-entered tier)
+- `peRatio`, `eps`, `dividendYield`
+- `week52High`, `week52Low`
+- `avgVolume`
+
+Third phase — extended data:
+- Analyst consensus / price targets
+- News headlines (feeds into the future News view)
+- Earnings dates (cross-app event bus → create calendar event in Organizer)
+
+### Phase plan
+
+| Phase | Scope |
+|-------|-------|
+| **Current** | Manual entry only; price column shows "—" |
+| **Phase 1** | Server-side proxy + on-demand price fetch for visible tickers |
+| **Phase 2** | Background refresh on a configurable timer; daily change column |
+| **Phase 3** | Full fundamentals; column chooser UI |
+| **Phase 4** | Earnings/options dates → cross-app event bus → Organizer calendar |
+
+---
+
+## Architecture: Portfolio App (suite app 2)
+
+### Decision: separate package, single deployment
+
+The portfolio tracker is a purpose-built investment tool — it is **not** embedded in the Organizer app. It is a separate package in the monorepo with hard code boundaries; the suite deploys as a **single Vite build, single Vercel deployment, and single Tauri binary** so users install one app for the whole suite. Route-based navigation handles switching between apps (`/organizer`, `/portfolio`, etc.). Code-splitting ensures portfolio code loads only when needed.
+
+**Rationale for keeping portfolio a separate package:**
+- The domain is fundamentally different (investment decisions vs. task management). Merging them into one package would make both harder to evolve independently.
+- The portfolio app will eventually need specialised dependencies: real-time price feeds, charting libraries, broker API connectors. These have no place in the Organizer package.
+
+**Shared platform layer** (a package imported by all apps):
+- **Supabase auth** — single session; same Supabase project, separate domain tables.
+- **Purposes** — cross-app tagging entity; a Purpose can be associated with tasks, tracker entries, and portfolio watchlist items alike.
+- **Cross-app event bus** — a typed in-process event emitter in the shared package. No network hop needed since all apps run in the same browser context. Portfolio emits typed intents; Organizer (and other apps) subscribe and handle them using their existing store actions. No Supabase table required.
+- **Design system** — shared UI primitives (to be extracted when the second app is built).
+- **Notes** (future) — same pattern; Notes app will also emit and consume via the shared layer.
+
+### Portfolio tracker — planned feature scope
+
+**Watchlists**
+- Organise and layer positions/candidates by user-defined categories (sector, thesis, conviction level, etc.).
+- Each item on a watchlist can have notes (reasons for inclusion, thesis summary) — these will link to the Notes app when it exists.
+
+**Portfolio tracking**
+- Aggregate holdings across multiple investing platforms (manual entry initially; broker API import is a future phase).
+- Track cost basis, current value, unrealised P&L at position and portfolio level.
+
+**Relevant news** (future phase)
+- Highlight news affecting companies in the watchlist or portfolio, plus macro/economy-level events.
+
+### Integration points with the Organizer (cross-app via event bus)
+
+| Trigger in Portfolio app | Result in Organizer |
+|--------------------------|---------------------|
+| User flags a research item | Creates a task: "Read up on developments at company X" |
+| Options expiry date on open position | Creates a calendar event on that date |
+| Earnings release date for portfolio holding | Creates a calendar event on that date |
+| User attaches a note to a watchlist item | Note (Notes app) linked via shared Purposes / cross-app layer |
+
+### What NOT to build in the Organizer package
+
+Do not add any portfolio domain logic, watchlist state, or price data to the Organizer. The only Organizer-side work triggered by portfolio integration is handling inbound cross-app intents (create task, create calendar event) — which use existing store actions and require no new domain concepts here.
+
+---
+
+## Proposed Ideas
+
+Items here are not confirmed requirements — they are sensible ideas raised during design discussions, held here for future consideration.
+
+---
+
+### Portfolio — Preferred Market Setting
+
+When a user types a ticker that exists in multiple markets (e.g. VMM on NASDAQ and LSE), a disambiguation dropdown is shown. A **preferred market** setting would let users declare their home exchange (e.g. LSE / XLON) so that:
+- If only one result matches the preferred market, auto-fill without showing the dropdown.
+- If multiple results exist, the preferred market result floats to the top of the disambiguation list.
+
+**Where it would live:** Portfolio settings pane (to be built), stored in `settingsStore` as `portfolioPreferredMic: string | null` (MIC = Market Identifier Code, e.g. `'XLON'`, `'XNAS'`, `'XNYS'`).
+
+**Why deferred:** Only valuable once a meaningful number of global tickers are in the watchlist and disambiguation is a recurring friction point.
 
 ---

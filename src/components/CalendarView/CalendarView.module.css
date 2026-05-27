@@ -246,22 +246,59 @@
 }
 .dayHeader:last-child { border-right: none; }
 
-/* ── Calendar grid ────────────────────────────────────────────────── */
+/* ── Month grid (week-block layout) ──────────────────────────────── */
 
-.grid {
+.monthGrid {
   flex: 1;
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(var(--num-weeks, 6), 1fr);
+  display: flex;
+  flex-direction: column;
   min-height: 0;
 }
 
-/* ── Day cell ─────────────────────────────────────────────────────── */
-
-.dayCell {
-  border-right: 1px solid var(--color-border);
+.weekBlock {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   border-bottom: 1px solid var(--color-border);
-  padding: 0.3rem 0.35rem 0.2rem;
+  min-height: 0;
+}
+.weekBlock:last-child { border-bottom: none; }
+
+.dateNumRow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  flex-shrink: 0;
+}
+
+.dateNumCell {
+  border-right: 1px solid var(--color-border);
+  padding: 0.3rem 0.35rem 0.1rem;
+  cursor: pointer;
+  transition: filter 100ms ease;
+  background: var(--color-surface);
+}
+.dateNumCell:hover { filter: brightness(0.97); }
+.dateNumCell:nth-child(7n) { border-right: none; }
+
+.spanRow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 20px;
+  flex-shrink: 0;
+  padding: 2px 2px 1px;
+  gap: 2px 0;
+}
+
+.eventsRow {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  min-height: 0;
+}
+
+.eventsCell {
+  border-right: 1px solid var(--color-border);
+  padding: 0.1rem 0.35rem 0.2rem;
   overflow: hidden;
   cursor: pointer;
   display: flex;
@@ -270,11 +307,40 @@
   transition: filter 100ms ease;
   background: var(--color-surface);
 }
+.eventsCell:hover { filter: brightness(0.97); }
+.eventsCell:nth-child(7n) { border-right: none; }
 
-.dayCell:last-child,
-.dayCell:nth-child(7n) { border-right: none; }
+/* ── Span pills ───────────────────────────────────────────────────── */
 
-.dayCell:hover { filter: brightness(0.97); }
+.spanPill {
+  display: flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 0.68rem;
+  font-family: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  border: none;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  color: var(--color-primary);
+  transition: filter 100ms ease;
+  text-align: left;
+}
+.spanPill:hover { filter: brightness(0.88); }
+.spanPillStart { border-radius: 3px 0 0 3px; }
+.spanPillEnd   { border-radius: 0 3px 3px 0; }
+.spanPillStart.spanPillEnd { border-radius: 3px; }
+
+.spanPillTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
 
 /* Other-month cells: day number is dimmed (background handled via inline style) */
 .dayCellOtherMonth .dayNum { opacity: 0.35; }
@@ -544,6 +610,24 @@
 }
 
 /* ── Desktop week view ──────────────────────────────────────── */
+
+.weekViewContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.weekSpanRow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 22px;
+  flex-shrink: 0;
+  padding: 3px 2px;
+  gap: 2px 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
 
 .weekViewGrid {
   flex: 1;

@@ -82,22 +82,62 @@
 .textarea { resize: vertical; }
 .select { cursor: pointer; }
 
-/* ── Boolean field ─────────────────────────────────────────────── */
+/* ── Boolean toggle field ──────────────────────────────────────── */
 
-.boolRow {
+.toggleRow {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  font-size: 0.9rem;
-  color: var(--color-text);
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-family: inherit;
   cursor: pointer;
+  text-align: left;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.toggleRowOn {
+  background: rgba(34, 197, 94, 0.07);
+  border-color: #22c55e;
 }
 
-.boolRow input[type="checkbox"] {
+.toggleTrack {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--color-border);
+  flex-shrink: 0;
+  transition: background 180ms ease;
+}
+.toggleTrackOn { background: #22c55e; }
+
+.toggleThumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
   width: 16px;
   height: 16px;
-  cursor: pointer;
-  accent-color: var(--color-primary);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  transition: transform 180ms ease;
+}
+.toggleThumbOn { transform: translateX(16px); }
+
+.toggleLabel {
+  flex: 1;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.toggleCheck {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #16a34a;
 }
 
 /* ── Duration field ────────────────────────────────────────────── */

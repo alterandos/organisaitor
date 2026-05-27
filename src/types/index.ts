@@ -208,6 +208,7 @@ export interface CalendarEvent {
   id:                 CalendarEventId;
   title:              string;
   date:               string;               // YYYY-MM-DD
+  endDate:            string | null;        // YYYY-MM-DD — last day of a multi-day event
   startTime:          string | null;        // HH:MM (24-hour)
   endTime:            string | null;        // HH:MM (24-hour)
   notes:              string | null;
@@ -241,6 +242,7 @@ export interface CalendarReminder {
 export interface CreateCalendarEventInput {
   title:              string;
   date:               string;
+  endDate?:           string | null;
   startTime?:         string | null;
   endTime?:           string | null;
   notes?:             string | null;

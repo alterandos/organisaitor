@@ -10,7 +10,7 @@ import styles from './EditTrackerPane.module.css';
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'text',     label: 'Text' },
   { value: 'number',   label: 'Number' },
-  { value: 'duration', label: 'Duration (h/m)' },
+  { value: 'duration', label: 'Duration (h/m/s)' },
   { value: 'boolean',  label: 'Checkbox' },
   { value: 'rating',   label: 'Rating' },
   { value: 'select',   label: 'Select' },

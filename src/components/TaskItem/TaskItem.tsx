@@ -55,7 +55,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   const subtaskDone    = subtaskIds.filter((id) => tasksRecord[id]?.completed).length;
   const activeTags     = (task.tagIds ?? []).map((id) => tagsRecord[id]).filter(Boolean);
   const collection     = task.collectionId ? collectionsRecord[task.collectionId] : null;
-  const showCollection = !activeCollectionId && !!collection;
+  const showCollection = !isSubtask && !activeCollectionId && !!collection;
   const activeLinks    = task.links ?? [];
   const hasDetails     = !task.completed && (!!task.notes || activeTags.length > 0 || showCollection || activeLinks.length > 0);
   const canExpand      = (hasDetails || hasSubtasks) && !!onToggleExpand;

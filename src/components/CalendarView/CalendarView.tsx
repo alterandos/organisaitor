@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import type { TaskId, CalendarEventId, CalendarReminderId, CollectionId, RepeatConfig } from '@/types';
+import type { TaskId, CalendarEventId, CalendarReminderId, CollectionId, RepeatConfig, CalendarEvent } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore } from '@/store/uiStore';
@@ -13,6 +13,17 @@ type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
   | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string }
   | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string };
+
+interface SpanSlot {
+  eventId:      CalendarEventId;
+  title:        string;
+  startCol:     number;   // 1-indexed column in 7-col week grid
+  colSpan:      number;
+  row:          number;   // 0-indexed stacking row within spanRow
+  isStart:      boolean;  // event starts in this week
+  isEnd:        boolean;  // event ends in this week
+  collectionId: CollectionId | null;
+}
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +61,49 @@ function sortItems(items: CalDisplayItem[]): CalDisplayItem[] {
   });
 }
 
+function getWeekSpanSlots(weekDateStrs: string[], spanEvents: CalendarEvent[]): SpanSlot[] {
+  const weekStart   = weekDateStrs[0];
+  const weekEnd     = weekDateStrs[6];
+  const slots: SpanSlot[] = [];
+  const rowGrid: boolean[][] = [];
+  const weekStartMs = new Date(weekStart + 'T00:00:00').getTime();
+
+  for (const ev of spanEvents) {
+    const evEnd = ev.endDate!;
+    if (ev.date > weekEnd || evEnd < weekStart) continue;
+
+    const clampedStart = ev.date < weekStart ? weekStart : ev.date;
+    const clampedEnd   = evEnd   > weekEnd   ? weekEnd   : evEnd;
+
+    const startIdx = Math.round((new Date(clampedStart + 'T00:00:00').getTime() - weekStartMs) / 86400000);
+    const endIdx   = Math.round((new Date(clampedEnd   + 'T00:00:00').getTime() - weekStartMs) / 86400000);
+
+    if (startIdx < 0 || endIdx > 6 || startIdx > endIdx) continue;
+
+    let row = 0;
+    while (true) {
+      if (!rowGrid[row]) rowGrid[row] = new Array(7).fill(false);
+      if (!rowGrid[row].slice(startIdx, endIdx + 1).some(Boolean)) break;
+      row++;
+    }
+    if (!rowGrid[row]) rowGrid[row] = new Array(7).fill(false);
+    for (let i = startIdx; i <= endIdx; i++) rowGrid[row][i] = true;
+
+    slots.push({
+      eventId:      ev.id,
+      title:        ev.title,
+      startCol:     startIdx + 1,
+      colSpan:      endIdx - startIdx + 1,
+      row,
+      isStart:      ev.date >= weekStart,
+      isEnd:        evEnd <= weekEnd,
+      collectionId: ev.collectionId,
+    });
+  }
+
+  return slots;
+}
+
 function expandRepeat(baseDateStr: string, repeat: RepeatConfig, rangeStart: string, rangeEnd: string): string[] {
   const dates: string[] = [];
   const base = new Date(baseDateStr + 'T00:00:00');
@@ -71,7 +125,7 @@ function expandRepeat(baseDateStr: string, repeat: RepeatConfig, rangeStart: str
     else if (repeat.freq === 'weekly')  next.setDate(next.getDate() + n * 7);
     else if (repeat.freq === 'monthly') next.setMonth(next.getMonth() + n);
     else                                next.setFullYear(next.getFullYear() + n);
-    if (toDateStr(next) === str) break; // safety
+    if (toDateStr(next) === str) break;
     cur = next;
   }
   return dates;
@@ -100,10 +154,10 @@ interface TooltipState {
 
 export function CalendarView() {
   const today = new Date();
-  const [year,  setYear]  = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
+  const [year,        setYear]        = useState(today.getFullYear());
+  const [month,       setMonth]       = useState(today.getMonth());
   const [desktopMode, setDesktopMode] = useState<'month' | 'week' | 'day'>('month');
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [tooltip,     setTooltip]     = useState<TooltipState | null>(null);
   const [dayPaneDate, setDayPaneDate] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(toDateStr(today));
 
@@ -118,12 +172,28 @@ export function CalendarView() {
   const showAddCalendarItem      = useUIStore((s) => s.showAddCalendarItem);
   const activeCollectionId       = useUIStore((s) => s.activeCollectionId) as CollectionId | null;
 
-  const shadePastDays           = useSettingsStore((s) => s.shadePastDays);
-  const shadeWeekends           = useSettingsStore((s) => s.shadeWeekends);
-  const weekendShadeColor       = useSettingsStore((s) => s.weekendShadeColor);
-  const strikethroughPastDays   = useSettingsStore((s) => s.strikethroughPastDays);
+  const shadePastDays         = useSettingsStore((s) => s.shadePastDays);
+  const shadeWeekends         = useSettingsStore((s) => s.shadeWeekends);
+  const weekendShadeColor     = useSettingsStore((s) => s.weekendShadeColor);
+  const strikethroughPastDays = useSettingsStore((s) => s.strikethroughPastDays);
 
   const days = useMemo(() => buildCalendarDays(year, month), [year, month]);
+
+  const spanEventsArray = useMemo(
+    () => Object.values(events).filter(ev => ev.endDate != null && ev.endDate > ev.date),
+    [events]
+  );
+
+  const spanEventIds = useMemo(
+    () => new Set(spanEventsArray.map(ev => ev.id)),
+    [spanEventsArray]
+  );
+
+  const weekBlocks = useMemo(() => {
+    const blocks: typeof days[] = [];
+    for (let i = 0; i < days.length; i += 7) blocks.push(days.slice(i, i + 7));
+    return blocks;
+  }, [days]);
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalDisplayItem[]>();
@@ -164,9 +234,21 @@ export function CalendarView() {
         notes: ev.notes,
         typeIcon: (ev.eventType ?? 'default') === 'birthday' ? '🎉' : '',
       };
-      push(ev.date, item);
-      if (ev.repeat) {
-        for (const d of expandRepeat(ev.date, ev.repeat, rangeStart, rangeEnd)) push(d, item);
+
+      if (ev.endDate && ev.endDate > ev.date) {
+        // Multi-day event: push to all covered dates within view range
+        let cur = ev.date;
+        while (cur <= ev.endDate) {
+          if (cur >= rangeStart && cur <= rangeEnd) push(cur, item);
+          const d = new Date(cur + 'T00:00:00');
+          d.setDate(d.getDate() + 1);
+          cur = toDateStr(d);
+        }
+      } else {
+        push(ev.date, item);
+        if (ev.repeat) {
+          for (const d of expandRepeat(ev.date, ev.repeat, rangeStart, rangeEnd)) push(d, item);
+        }
       }
     });
 
@@ -191,6 +273,26 @@ export function CalendarView() {
     return map;
   }, [tasks, events, reminders, activeCollectionId, days]);
 
+  // ── Mobile week strip & desktop week view ─────────────────────────────────
+  const weekDays = useMemo(() => {
+    const d = new Date(selectedDate + 'T00:00:00');
+    const sun = new Date(d);
+    sun.setDate(d.getDate() - d.getDay());
+    return Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(sun);
+      day.setDate(sun.getDate() + i);
+      return day;
+    });
+  }, [selectedDate]);
+
+  const weekViewDateStrs = useMemo(() => weekDays.map(toDateStr), [weekDays]);
+
+  const weekViewSpanSlots = useMemo(
+    () => getWeekSpanSlots(weekViewDateStrs, spanEventsArray),
+    [weekViewDateStrs, spanEventsArray]
+  );
+
+  // ── Navigation ────────────────────────────────────────────────────────────
   const prevMonth = () => {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }
     else setMonth((m) => m - 1);
@@ -205,18 +307,6 @@ export function CalendarView() {
     setMonth(today.getMonth());
     setSelectedDate(t);
   };
-
-  // ── Mobile week navigation ─────────────────────────────────────────────────
-  const weekDays = useMemo(() => {
-    const d = new Date(selectedDate + 'T00:00:00');
-    const sun = new Date(d);
-    sun.setDate(d.getDate() - d.getDay());
-    return Array.from({ length: 7 }, (_, i) => {
-      const day = new Date(sun);
-      day.setDate(sun.getDate() + i);
-      return day;
-    });
-  }, [selectedDate]);
 
   const shiftWeek = (delta: number) => {
     const d = new Date(selectedDate + 'T00:00:00');
@@ -259,8 +349,8 @@ export function CalendarView() {
   };
 
   const todayStr = toDateStr(today);
-  const numWeeks = days.length / 7;
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleItemClick = (e: React.MouseEvent, item: CalDisplayItem) => {
     e.stopPropagation();
     if (item.kind === 'task')     openTaskPane(item.id);
@@ -283,6 +373,7 @@ export function CalendarView() {
     });
   };
 
+  // ── Style helpers ─────────────────────────────────────────────────────────
   const getCellStyle = (date: Date, dateStr: string, isCurrentMonth: boolean): React.CSSProperties => {
     const isPast    = dateStr < todayStr;
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -305,6 +396,14 @@ export function CalendarView() {
     const col = collectionsRecord[item.collectionId];
     if (!col?.color) return {};
     return { borderLeft: `3px solid ${col.color}` };
+  };
+
+  const getSpanPillStyle = (slot: SpanSlot): React.CSSProperties => {
+    if (slot.collectionId) {
+      const col = collectionsRecord[slot.collectionId];
+      if (col?.color) return { background: col.color, color: '#fff' };
+    }
+    return {};
   };
 
   const isPastItem = (dateStr: string, time: string | null): boolean => {
@@ -419,46 +518,97 @@ export function CalendarView() {
                 <div key={d} className={styles.dayHeader}>{d}</div>
               ))}
             </div>
-            <div className={styles.grid} style={{ '--num-weeks': numWeeks } as React.CSSProperties}>
-              {days.map(({ date, isCurrentMonth }) => {
-                const dateStr  = toDateStr(date);
-                const isToday  = dateStr === todayStr;
-                const dayItems = itemsByDate.get(dateStr) ?? [];
-                const overflow = dayItems.length - MAX_VISIBLE;
+            <div className={styles.monthGrid}>
+              {weekBlocks.map((week, wi) => {
+                const weekDateStrs = week.map(({ date }) => toDateStr(date));
+                const slots = getWeekSpanSlots(weekDateStrs, spanEventsArray);
+                const maxRow = slots.length > 0 ? Math.max(...slots.map(s => s.row)) + 1 : 0;
                 return (
-                  <div
-                    key={dateStr}
-                    className={`${styles.dayCell} ${!isCurrentMonth ? styles.dayCellOtherMonth : ''}`}
-                    style={getCellStyle(date, dateStr, isCurrentMonth)}
-                    onClick={() => showAddCalendarItem(dateStr)}
-                  >
-                    <span className={`${styles.dayNum} ${isToday ? styles.dayNumToday : ''}`}>
-                      {date.getDate()}
-                    </span>
-                    {dayItems.slice(0, MAX_VISIBLE).map((item) => {
-                      const past      = item.kind !== 'task' ? isPastItem(dateStr, item.time) : false;
-                      const completed = item.kind === 'task' && item.completed;
-                      return (
-                        <button
-                          key={`${item.kind}-${item.id}`}
-                          className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
-                          style={getPillStyle(item)}
-                          onClick={(e) => handleItemClick(e, item)}
-                          onMouseEnter={(e) => handleItemMouseEnter(e, item)}
-                          onMouseLeave={() => setTooltip(null)}
-                          title=""
-                        >
-                          {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
-                          {item.time    && <span className={styles.calItemTime}>{formatTime(item.time)}</span>}
-                          <span className={styles.calItemTitle}>{item.title}</span>
-                        </button>
-                      );
-                    })}
-                    {overflow > 0 && (
-                      <button className={styles.overflow} onClick={(e) => { e.stopPropagation(); setDayPaneDate(dateStr); }}>
-                        +{overflow} more
-                      </button>
+                  <div key={wi} className={styles.weekBlock}>
+                    {/* Date numbers — always visible at top of each week row */}
+                    <div className={styles.dateNumRow}>
+                      {week.map(({ date, isCurrentMonth }) => {
+                        const dateStr = toDateStr(date);
+                        const isToday = dateStr === todayStr;
+                        return (
+                          <div
+                            key={dateStr}
+                            className={`${styles.dateNumCell} ${!isCurrentMonth ? styles.dayCellOtherMonth : ''}`}
+                            style={getCellStyle(date, dateStr, isCurrentMonth)}
+                            onClick={() => showAddCalendarItem(dateStr)}
+                          >
+                            <span className={`${styles.dayNum} ${isToday ? styles.dayNumToday : ''}`}>
+                              {date.getDate()}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Spanning event pills — below date numbers */}
+                    {maxRow > 0 && (
+                      <div
+                        className={styles.spanRow}
+                        style={{ '--span-rows': maxRow } as React.CSSProperties}
+                      >
+                        {slots.map(slot => (
+                          <button
+                            key={slot.eventId}
+                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''}`}
+                            style={{
+                              gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
+                              gridRow: slot.row + 1,
+                              ...getSpanPillStyle(slot),
+                            }}
+                            onClick={(e) => { e.stopPropagation(); openCalendarEventPane(slot.eventId); }}
+                          >
+                            {slot.isStart && <span className={styles.spanPillTitle}>{slot.title}</span>}
+                          </button>
+                        ))}
+                      </div>
                     )}
+                    {/* Per-day events */}
+                    <div className={styles.eventsRow}>
+                      {week.map(({ date, isCurrentMonth }) => {
+                        const dateStr  = toDateStr(date);
+                        const dayItems = (itemsByDate.get(dateStr) ?? []).filter(
+                          item => item.kind !== 'event' || !spanEventIds.has(item.id as CalendarEventId)
+                        );
+                        const overflow = dayItems.length - MAX_VISIBLE;
+                        return (
+                          <div
+                            key={dateStr}
+                            className={`${styles.eventsCell} ${!isCurrentMonth ? styles.dayCellOtherMonth : ''}`}
+                            style={getCellStyle(date, dateStr, isCurrentMonth)}
+                            onClick={() => showAddCalendarItem(dateStr)}
+                          >
+                            {dayItems.slice(0, MAX_VISIBLE).map((item) => {
+                              const past      = item.kind !== 'task' ? isPastItem(dateStr, item.time) : false;
+                              const completed = item.kind === 'task' && item.completed;
+                              return (
+                                <button
+                                  key={`${item.kind}-${item.id}`}
+                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                                  style={getPillStyle(item)}
+                                  onClick={(e) => handleItemClick(e, item)}
+                                  onMouseEnter={(e) => handleItemMouseEnter(e, item)}
+                                  onMouseLeave={() => setTooltip(null)}
+                                  title=""
+                                >
+                                  {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
+                                  {item.time    && <span className={styles.calItemTime}>{formatTime(item.time)}</span>}
+                                  <span className={styles.calItemTitle}>{item.title}</span>
+                                </button>
+                              );
+                            })}
+                            {overflow > 0 && (
+                              <button className={styles.overflow} onClick={(e) => { e.stopPropagation(); setDayPaneDate(dateStr); }}>
+                                +{overflow} more
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
@@ -467,50 +617,72 @@ export function CalendarView() {
 
           {/* ── Week view ── */}
           {desktopMode === 'week' && (
-            <div className={styles.weekViewGrid}>
-              {weekDays.map((d) => {
-                const dateStr  = toDateStr(d);
-                const isToday  = dateStr === todayStr;
-                const dayItems = itemsByDate.get(dateStr) ?? [];
-                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                return (
-                  <div
-                    key={dateStr}
-                    className={`${styles.weekViewCol} ${isToday ? styles.weekViewColToday : ''} ${isWeekend && shadeWeekends ? styles.weekViewColWeekend : ''}`}
-                  >
-                    <div
-                      className={styles.weekViewColHeader}
-                      onClick={() => showAddCalendarItem(dateStr)}
+            <div className={styles.weekViewContainer}>
+              {weekViewSpanSlots.length > 0 && (
+                <div className={styles.weekSpanRow}>
+                  {weekViewSpanSlots.map(slot => (
+                    <button
+                      key={slot.eventId}
+                      className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''}`}
+                      style={{
+                        gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
+                        gridRow: slot.row + 1,
+                        ...getSpanPillStyle(slot),
+                      }}
+                      onClick={() => openCalendarEventPane(slot.eventId)}
                     >
-                      <span className={styles.weekViewDayName}>{DAY_NAMES[d.getDay()]}</span>
-                      <span className={`${styles.weekViewDayNum} ${isToday ? styles.dayNumToday : ''}`}>
-                        {d.getDate()}
-                      </span>
+                      {slot.isStart && <span className={styles.spanPillTitle}>{slot.title}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className={styles.weekViewGrid}>
+                {weekDays.map((d) => {
+                  const dateStr  = toDateStr(d);
+                  const isToday  = dateStr === todayStr;
+                  const dayItems = (itemsByDate.get(dateStr) ?? []).filter(
+                    item => item.kind !== 'event' || !spanEventIds.has(item.id as CalendarEventId)
+                  );
+                  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                  return (
+                    <div
+                      key={dateStr}
+                      className={`${styles.weekViewCol} ${isToday ? styles.weekViewColToday : ''} ${isWeekend && shadeWeekends ? styles.weekViewColWeekend : ''}`}
+                    >
+                      <div
+                        className={styles.weekViewColHeader}
+                        onClick={() => showAddCalendarItem(dateStr)}
+                      >
+                        <span className={styles.weekViewDayName}>{DAY_NAMES[d.getDay()]}</span>
+                        <span className={`${styles.weekViewDayNum} ${isToday ? styles.dayNumToday : ''}`}>
+                          {d.getDate()}
+                        </span>
+                      </div>
+                      <div className={styles.weekViewItems}>
+                        {dayItems.map((item) => {
+                          const past      = item.kind !== 'task' ? isPastItem(dateStr, item.time) : false;
+                          const completed = item.kind === 'task' && item.completed;
+                          return (
+                            <button
+                              key={`${item.kind}-${item.id}`}
+                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                              style={getPillStyle(item)}
+                              onClick={(e) => handleItemClick(e, item)}
+                              onMouseEnter={(e) => handleItemMouseEnter(e, item)}
+                              onMouseLeave={() => setTooltip(null)}
+                              title=""
+                            >
+                              {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
+                              {item.time    && <span className={styles.calItemTime}>{formatTime(item.time)}</span>}
+                              <span className={styles.calItemTitle}>{item.title}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className={styles.weekViewItems}>
-                      {dayItems.map((item) => {
-                        const past      = item.kind !== 'task' ? isPastItem(dateStr, item.time) : false;
-                        const completed = item.kind === 'task' && item.completed;
-                        return (
-                          <button
-                            key={`${item.kind}-${item.id}`}
-                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
-                            style={getPillStyle(item)}
-                            onClick={(e) => handleItemClick(e, item)}
-                            onMouseEnter={(e) => handleItemMouseEnter(e, item)}
-                            onMouseLeave={() => setTooltip(null)}
-                            title=""
-                          >
-                            {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
-                            {item.time    && <span className={styles.calItemTime}>{formatTime(item.time)}</span>}
-                            <span className={styles.calItemTitle}>{item.title}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
 

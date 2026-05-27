@@ -3,7 +3,7 @@ import type { AppView } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import styles from './NavSidebar.module.css';
 
-const NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNode }[] = [
+const CORE_NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNode }[] = [
   {
     view: 'tasks',
     label: LABELS.views.tasks,
@@ -46,6 +46,14 @@ const NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
+const PortfolioIcon = (
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+    <rect x="3"  y="12" width="4" height="7"  rx="1" stroke="currentColor" strokeWidth="1.6"/>
+    <rect x="9"  y="7"  width="4" height="12" rx="1" stroke="currentColor" strokeWidth="1.6"/>
+    <rect x="15" y="3"  width="4" height="16" rx="1" stroke="currentColor" strokeWidth="1.6"/>
+  </svg>
+);
+
 const IntegrationsIcon = (
   <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
     <path d="M11 3v6M8 6l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
@@ -61,7 +69,7 @@ export function NavSidebar() {
 
   return (
     <nav className={styles.sidebar} aria-label="App navigation">
-      {NAV_ITEMS.map((item) => (
+      {CORE_NAV_ITEMS.map((item) => (
         <button
           key={item.view}
           className={`${styles.navBtn} ${activeView === item.view ? styles.navBtnActive : ''}`}
@@ -73,6 +81,18 @@ export function NavSidebar() {
           {item.icon}
         </button>
       ))}
+
+      <hr className={styles.sectionDivider} aria-hidden="true" />
+
+      <button
+        className={`${styles.navBtn} ${activeView === 'portfolio' ? styles.navBtnActive : ''}`}
+        onClick={() => setActiveView('portfolio')}
+        title={LABELS.views.portfolio}
+        aria-label={LABELS.views.portfolio}
+        aria-current={activeView === 'portfolio' ? 'page' : undefined}
+      >
+        {PortfolioIcon}
+      </button>
 
       <div className={styles.spacer} />
 

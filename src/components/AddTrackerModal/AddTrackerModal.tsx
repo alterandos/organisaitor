@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
@@ -23,6 +23,12 @@ export function AddTrackerModal() {
 
   const purposeList = Object.values(purposes);
   const tagList     = Object.values(tags);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [closeModal]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

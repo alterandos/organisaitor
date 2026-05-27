@@ -16,17 +16,24 @@ interface FieldInputProps {
 
 function FieldInput({ field, value, onChange }: FieldInputProps) {
   switch (field.type) {
-    case 'boolean':
+    case 'boolean': {
+      const isOn = Boolean(value);
       return (
-        <label className={styles.boolRow}>
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={(e) => onChange(e.target.checked)}
-          />
-          <span>{field.name}</span>
-        </label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isOn}
+          className={`${styles.toggleRow} ${isOn ? styles.toggleRowOn : ''}`}
+          onClick={() => onChange(!isOn)}
+        >
+          <div className={`${styles.toggleTrack} ${isOn ? styles.toggleTrackOn : ''}`}>
+            <div className={`${styles.toggleThumb} ${isOn ? styles.toggleThumbOn : ''}`} />
+          </div>
+          <span className={styles.toggleLabel}>{field.name}</span>
+          {isOn && <span className={styles.toggleCheck}>✓</span>}
+        </button>
       );
+    }
 
     case 'rating': {
       const max = field.max ?? 5;
@@ -83,20 +90,21 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
       );
 
     case 'duration': {
-      const totalMins = Number(value) || 0;
-      const h = Math.floor(totalMins / 60);
-      const m = totalMins % 60;
+      const totalSecs = Number(value) || 0;
+      const h = Math.floor(totalSecs / 3600);
+      const m = Math.floor((totalSecs % 3600) / 60);
+      const s = totalSecs % 60;
       return (
         <div className={styles.durationRow}>
           <input
             className={styles.durationInput}
             type="number"
             min={0}
-            value={h === 0 && totalMins === 0 ? '' : h}
+            value={totalSecs === 0 && h === 0 ? '' : h}
             placeholder="0"
             onChange={(e) => {
               const newH = Math.max(0, Number(e.target.value) || 0);
-              onChange(newH * 60 + m);
+              onChange(newH * 3600 + m * 60 + s);
             }}
           />
           <span className={styles.durationLabel}>h</span>
@@ -105,14 +113,27 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
             type="number"
             min={0}
             max={59}
-            value={m === 0 && totalMins === 0 ? '' : m}
+            value={totalSecs === 0 && m === 0 ? '' : m}
             placeholder="0"
             onChange={(e) => {
               const newM = Math.min(59, Math.max(0, Number(e.target.value) || 0));
-              onChange(h * 60 + newM);
+              onChange(h * 3600 + newM * 60 + s);
             }}
           />
-          <span className={styles.durationLabel}>min</span>
+          <span className={styles.durationLabel}>m</span>
+          <input
+            className={styles.durationInput}
+            type="number"
+            min={0}
+            max={59}
+            value={totalSecs === 0 && s === 0 ? '' : s}
+            placeholder="0"
+            onChange={(e) => {
+              const newS = Math.min(59, Math.max(0, Number(e.target.value) || 0));
+              onChange(h * 3600 + m * 60 + newS);
+            }}
+          />
+          <span className={styles.durationLabel}>s</span>
         </div>
       );
     }
@@ -159,6 +180,13 @@ export function AddEntryModal() {
 
   const isVisible = openModal === 'add-entry';
 
+  useEffect(() => {
+    if (!isVisible) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isVisible, closeModal]);
+
   const tracker = pendingTrackerId
     ? (collections[pendingTrackerId as CollectionId] ?? null)
     : null;
@@ -190,7 +218,7 @@ export function AddEntryModal() {
     setData((prev) => ({ ...prev, [id]: val }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!resolvedTracker) return;
 

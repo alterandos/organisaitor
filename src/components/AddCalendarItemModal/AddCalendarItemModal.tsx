@@ -31,6 +31,7 @@ export function AddCalendarItemModal() {
   const [kind,              setKind]              = useState<CalendarItemKind>(prefillKind ?? 'event');
   const [title,             setTitle]             = useState('');
   const [date,              setDate]              = useState(prefillDate ?? todayStr());
+  const [endDate,           setEndDate]           = useState('');
   const [startTime,         setStartTime]         = useState('');
   const [endTime,           setEndTime]           = useState('');
   const [time,              setTime]              = useState('');
@@ -104,6 +105,7 @@ export function AddCalendarItemModal() {
       addEvent({
         title,
         date,
+        endDate:           (endDate && endDate > date) ? endDate : null,
         startTime:         startTime    || null,
         endTime:           endTime      || null,
         notes:             notes        || null,
@@ -172,33 +174,32 @@ export function AddCalendarItemModal() {
 
           <div className={styles.field}>
             <label className={styles.label}>Date</label>
-            <input
-              type="date"
-              className={styles.dateInput}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-            />
-          </div>
-
-          {kind === 'event' && (
-            <div className={styles.field}>
-              <label className={styles.label}>Event type</label>
-              <div className={styles.typeRow}>
-                {EVENT_TYPES.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    className={`${styles.typeBtn} ${eventType === t.value ? styles.typeBtnActive : ''}`}
-                    onClick={() => handleEventTypeChange(t.value)}
-                  >
-                    {t.icon && <span>{t.icon}</span>}
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+            <div className={styles.timeRow}>
+              <input
+                type="date"
+                className={styles.dateInput}
+                value={date}
+                onChange={(e) => {
+                  setDate(e.target.value);
+                  if (endDate && endDate <= e.target.value) setEndDate('');
+                }}
+                required
+              />
+              {kind === 'event' && !isBirthday && (
+                <>
+                  <span className={styles.timeSep}>→</span>
+                  <input
+                    type="date"
+                    className={styles.dateInput}
+                    value={endDate}
+                    min={date}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    placeholder="End date"
+                  />
+                </>
+              )}
             </div>
-          )}
+          </div>
 
           {kind === 'event' && !isBirthday && (
             <div className={styles.field}>
@@ -219,6 +220,25 @@ export function AddCalendarItemModal() {
                   onChange={(e) => handleEndTimeChange(e.target.value)}
                   placeholder="End"
                 />
+              </div>
+            </div>
+          )}
+
+          {kind === 'event' && (
+            <div className={styles.field}>
+              <label className={styles.label}>Event type</label>
+              <div className={styles.typeRow}>
+                {EVENT_TYPES.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    className={`${styles.typeBtn} ${eventType === t.value ? styles.typeBtnActive : ''}`}
+                    onClick={() => handleEventTypeChange(t.value)}
+                  >
+                    {t.icon && <span>{t.icon}</span>}
+                    {t.label}
+                  </button>
+                ))}
               </div>
             </div>
           )}

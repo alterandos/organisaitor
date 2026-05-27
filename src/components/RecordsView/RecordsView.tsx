@@ -1,6 +1,8 @@
 import { useTaskStore } from '@/store/taskStore';
 import { useTrackerStore } from '@/store/trackerStore';
+import { useRoutineStore } from '@/store/routineStore';
 import { useUIStore } from '@/store/uiStore';
+import { todayIso } from '@/utils/date';
 import type { Collection, CollectionId, FieldSchema, TrackerEntry, TrackerEntryId } from '@/types';
 import { RoutineChecklist } from '@/components/RoutineChecklist/RoutineChecklist';
 import styles from './RecordsView.module.css';
@@ -17,11 +19,14 @@ function formatFieldValue(schema: FieldSchema, value: unknown): string {
     case 'duration': {
       const total = Number(value);
       if (!total) return '—';
-      const h = Math.floor(total / 60);
-      const m = total % 60;
-      if (h === 0) return `${m}m`;
-      if (m === 0) return `${h}h`;
-      return `${h}h ${m}m`;
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      const parts = [];
+      if (h) parts.push(`${h}h`);
+      if (m) parts.push(`${m}m`);
+      if (s || parts.length === 0) parts.push(`${s}s`);
+      return parts.join(' ');
     }
     default: return String(value);
   }
@@ -123,25 +128,114 @@ function TrackerDetail({ tracker }: TrackerDetailProps) {
   );
 }
 
+interface RoutineDetailProps {
+  routine: Collection;
+}
+
+function RoutineDetail({ routine }: RoutineDetailProps) {
+  const instances = useRoutineStore((s) => s.instances);
+  const today     = todayIso();
+  const total     = (routine.routineTasks ?? []).length;
+
+  const history = Object.values(instances)
+    .filter((inst) => inst.routineId === routine.id && inst.date !== today)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <div className={styles.detail}>
+      <div className={styles.detailHeader}>
+        <div className={styles.detailTitleRow}>
+          {routine.color && (
+            <span className={styles.detailDot} style={{ background: routine.color }} />
+          )}
+          <h2 className={styles.detailTitle}>{routine.name}</h2>
+        </div>
+      </div>
+
+      <div className={styles.routineDetailSection}>
+        <span className={styles.sectionHeading}>Today</span>
+        <RoutineChecklist routine={routine} />
+      </div>
+
+      {history.length > 0 && (
+        <div className={styles.routineDetailSection}>
+          <span className={styles.sectionHeading}>History</span>
+          <div className={styles.entriesTable}>
+            <div className={styles.tableHead}>
+              <span className={styles.headDate}>Date</span>
+              <span className={styles.headCell}>Steps</span>
+              <span className={styles.headCell}>Status</span>
+            </div>
+            {history.map((inst) => {
+              const checked = inst.checked.length;
+              const status  = inst.completed
+                ? '✓ Completed'
+                : checked > 0
+                ? 'Partial'
+                : 'Skipped';
+              return (
+                <div key={inst.date} className={styles.entryRow}>
+                  <span className={styles.entryDate}>{inst.date}</span>
+                  <div className={styles.entryFields}>
+                    <span className={styles.entryCell}>
+                      <span className={styles.entryCellValue}>
+                        {total > 0 ? `${checked}/${total}` : checked > 0 ? `${checked}` : '—'}
+                      </span>
+                    </span>
+                    <span className={styles.entryCell}>
+                      <span className={`${styles.entryCellValue} ${inst.completed ? styles.statusDone : ''}`}>
+                        {status}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {history.length === 0 && (
+        <p className={styles.emptyHint}>No history yet — complete this routine to start tracking.</p>
+      )}
+    </div>
+  );
+}
+
 export function RecordsView() {
-  const collections      = useTaskStore((s) => s.collections);
-  const deleteCollection = useTaskStore((s) => s.deleteCollection);
-  const activeTrackerId  = useUIStore((s) => s.activeTrackerId);
-  const setActiveTracker = useUIStore((s) => s.setActiveTracker);
-  const showAddTracker   = useUIStore((s) => s.showAddTracker);
-  const showAddRoutine   = useUIStore((s) => s.showAddRoutine);
-  const openEditTracker  = useUIStore((s) => s.openEditTracker);
+  const collections        = useTaskStore((s) => s.collections);
+  const deleteCollection   = useTaskStore((s) => s.deleteCollection);
+  const deleteInstances    = useRoutineStore((s) => s.deleteInstancesForRoutine);
+  const activeTrackerId    = useUIStore((s) => s.activeTrackerId);
+  const setActiveTracker   = useUIStore((s) => s.setActiveTracker);
+  const activeRoutineId    = useUIStore((s) => s.activeRoutineId);
+  const setActiveRoutine   = useUIStore((s) => s.setActiveRoutine);
+  const showAddTracker     = useUIStore((s) => s.showAddTracker);
+  const showAddRoutine     = useUIStore((s) => s.showAddRoutine);
+  const openEditTracker    = useUIStore((s) => s.openEditTracker);
+  const openEditRoutine    = useUIStore((s) => s.openEditRoutine);
 
   const trackers = Object.values(collections).filter((c) => c.kind === 'tracker');
   const routines = Object.values(collections).filter((c) => c.kind === 'routine');
   const activeTracker = activeTrackerId
     ? (collections[activeTrackerId as CollectionId] ?? null)
     : null;
+  const activeRoutine = activeRoutineId
+    ? (collections[activeRoutineId as CollectionId] ?? null)
+    : null;
 
   function handleDeleteTracker(id: string, name: string) {
     if (window.confirm(`Delete tracker "${name}"? All entries will also be deleted.`)) {
       deleteCollection(id as CollectionId);
       if (activeTrackerId === id) setActiveTracker(null);
+    }
+  }
+
+  function handleDeleteRoutine(id: string, name: string) {
+    if (window.confirm(`Delete routine "${name}"? History will also be deleted.`)) {
+      deleteInstances(id as CollectionId);
+      deleteCollection(id as CollectionId);
+      if (activeRoutineId === id) setActiveRoutine(null);
     }
   }
 
@@ -196,13 +290,33 @@ export function RecordsView() {
         {routines.length === 0 ? (
           <p className={styles.sidebarEmpty}>No routines yet.</p>
         ) : (
-          <div className={styles.routinesList}>
+          <ul className={styles.trackerList}>
             {routines.map((r) => (
-              <div key={r.id} className={styles.routineCard}>
-                <RoutineChecklist routine={r} />
-              </div>
+              <li key={r.id}>
+                <div className={`${styles.trackerItem} ${activeRoutineId === r.id ? styles.trackerItemActive : ''}`}>
+                  <button
+                    className={styles.trackerSelectBtn}
+                    onClick={() => setActiveRoutine(r.id)}
+                  >
+                    {r.color && <span className={styles.trackerDot} style={{ background: r.color }} />}
+                    <span className={styles.trackerName}>{r.name}</span>
+                  </button>
+                  <div className={styles.trackerRowActions}>
+                    <button
+                      className={styles.trackerActionBtn}
+                      onClick={(e) => { e.stopPropagation(); openEditRoutine(r.id); }}
+                      title="Edit routine"
+                    >✎</button>
+                    <button
+                      className={`${styles.trackerActionBtn} ${styles.trackerActionBtnDelete}`}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteRoutine(r.id, r.name); }}
+                      title="Delete routine"
+                    >✕</button>
+                  </div>
+                </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </aside>
 
@@ -210,12 +324,14 @@ export function RecordsView() {
       <main className={styles.main}>
         {activeTracker ? (
           <TrackerDetail tracker={activeTracker} />
+        ) : activeRoutine ? (
+          <RoutineDetail routine={activeRoutine} />
         ) : (
           <div className={styles.emptyState}>
             <p className={styles.emptyStateText}>
-              {trackers.length === 0
-                ? 'Create a tracker to start logging records.'
-                : 'Select a tracker from the sidebar.'}
+              {trackers.length === 0 && routines.length === 0
+                ? 'Create a tracker or routine to get started.'
+                : 'Select a tracker or routine from the sidebar.'}
             </p>
             <button className={styles.emptyStateBtn} onClick={showAddTracker}>
               New tracker

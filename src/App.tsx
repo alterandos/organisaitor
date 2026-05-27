@@ -14,6 +14,11 @@ import { Sidebar } from '@/components/Sidebar/Sidebar';
 import { NavSidebar } from '@/components/NavSidebar/NavSidebar';
 import { CalendarView } from '@/components/CalendarView/CalendarView';
 import { RecordsView } from '@/components/RecordsView/RecordsView';
+import { PortfolioSection } from '@/components/PortfolioSection/PortfolioSection';
+import { AddWatchlistItemModal } from '@/components/AddWatchlistItemModal/AddWatchlistItemModal';
+import { BulkUploadWatchlistModal } from '@/components/BulkUploadWatchlistModal/BulkUploadWatchlistModal';
+import { AddPortfolioTagModal } from '@/components/AddPortfolioTagModal/AddPortfolioTagModal';
+import { AddInvestmentPurposeModal } from '@/components/AddInvestmentPurposeModal/AddInvestmentPurposeModal';
 import { TaskPane } from '@/components/TaskPane/TaskPane';
 import { SettingsPane } from '@/components/SettingsPane/SettingsPane';
 import { CalendarEventPane } from '@/components/CalendarEventPane/CalendarEventPane';
@@ -26,6 +31,7 @@ import { AddCalendarItemModal } from '@/components/AddCalendarItemModal/AddCalen
 import { AddTrackerModal } from '@/components/AddTrackerModal/AddTrackerModal';
 import { AddEntryModal } from '@/components/AddEntryModal/AddEntryModal';
 import { EditTrackerPane } from '@/components/EditTrackerPane/EditTrackerPane';
+import { EditRoutinePane } from '@/components/EditRoutinePane/EditRoutinePane';
 import { AddRoutineModal } from '@/components/AddRoutineModal/AddRoutineModal';
 import { IntegrationsPane } from '@/components/IntegrationsPane/IntegrationsPane';
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
@@ -53,8 +59,13 @@ export default function App() {
   const editingCalendarReminderId  = useUIStore((s) => s.editingCalendarReminderId);
   const integrationsOpen           = useUIStore((s) => s.integrationsOpen);
   const editTrackerOpen            = useUIStore((s) => s.editTrackerOpen);
+  const editRoutineOpen            = useUIStore((s) => s.editRoutineOpen);
+  const editingWatchlistItemId     = useUIStore((s) => s.editingWatchlistItemId);
+  const portfolioChartOpen         = useUIStore((s) => s.portfolioChartOpen);
   const collectionsRecord          = useTaskStore((s) => s.collections);
   const colorEnabled               = useSettingsStore((s) => s.colorEnabled);
+  const setChartTickerRowZoom      = useSettingsStore((s) => s.setChartTickerRowZoom);
+  const chartTickerRowZoom         = useSettingsStore((s) => s.chartTickerRowZoom);
 
   useNotificationChecker();
 
@@ -102,6 +113,7 @@ export default function App() {
       if ((e.key === '1' || (e.ctrlKey && e.key === '1')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('tasks'); return; }
       if ((e.key === '2' || (e.ctrlKey && e.key === '2')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('calendar'); return; }
       if ((e.key === '3' || (e.ctrlKey && e.key === '3')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('records'); return; }
+      if ((e.key === '4' || (e.ctrlKey && e.key === '4')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('portfolio'); return; }
 
       if (e.key === 's' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
@@ -109,24 +121,34 @@ export default function App() {
         return;
       }
 
+      if (portfolioChartOpen && e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (e.key === '-') { e.preventDefault(); setChartTickerRowZoom(chartTickerRowZoom - 0.1); return; }
+        if (e.key === '=' || e.key === '+') { e.preventDefault(); setChartTickerRowZoom(chartTickerRowZoom + 0.1); return; }
+      }
+
       const isNewItem = (e.key === ' ' && !e.ctrlKey && !e.altKey && !e.metaKey)
                      || (e.ctrlKey && e.key === 'n');
       if (isNewItem) {
         e.preventDefault();
-        const { showAddTask, showAddCalendarItem, showAddTracker, showAddEntry, activeTrackerId: tid } = useUIStore.getState();
+        const { showAddTask, showAddCalendarItem, showAddTracker, showAddEntry, showAddWatchlistItem, activeTrackerId: tid, activeRoutineId: rid } = useUIStore.getState();
         if (activeView === 'calendar') showAddCalendarItem();
-        else if (activeView === 'records') tid ? showAddEntry(tid) : showAddTracker();
-        else showAddTask();
+        else if (activeView === 'portfolio') showAddWatchlistItem();
+        else if (activeView === 'records') {
+          if (tid) showAddEntry(tid);
+          else if (rid) showAddEntry(rid);
+          else showAddTracker();
+        } else showAddTask();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [setActiveView, activeView, settingsOpen, openSettings, closeSettings]);
+  }, [setActiveView, activeView, settingsOpen, openSettings, closeSettings, portfolioChartOpen, chartTickerRowZoom, setChartTickerRowZoom]);
 
   const activeCollection = activeCollectionId
     ? collectionsRecord[activeCollectionId as CollectionId]
     : null;
   const headerStyle: React.CSSProperties = (() => {
+    if (activeView === 'portfolio') return {};
     if (!activeCollection?.color) return {};
     const c = activeCollection.color;
     const style: React.CSSProperties = {
@@ -150,11 +172,14 @@ export default function App() {
               aria-label="Open library"
             >☰</button>
             <h1 className={styles.heading}>
-              {activeView === 'calendar' ? 'Calendar' : activeView === 'records' ? 'Records' : 'My To Do'}
+              {activeView === 'calendar'  ? 'Calendar'
+               : activeView === 'records'   ? 'Records'
+               : activeView === 'portfolio' ? 'Portfolio'
+               : 'My To Do'}
             </h1>
           </div>
           <div className={styles.headerRight}>
-            <CollectionFilterPicker />
+            {activeView !== 'portfolio' && <CollectionFilterPicker />}
             <NotificationCenter />
             <button
               className={styles.settingsBtn}
@@ -195,8 +220,9 @@ export default function App() {
           </>
         )}
 
-        {activeView === 'calendar' && <CalendarView />}
-        {activeView === 'records'  && <RecordsView />}
+        {activeView === 'calendar'  && <CalendarView />}
+        {activeView === 'records'   && <RecordsView />}
+        {activeView === 'portfolio' && <PortfolioSection />}
 
         <AddTaskButton />
 
@@ -213,10 +239,15 @@ export default function App() {
         {openModal === 'add-purpose'         && <AddPurposeModal />}
         {openModal === 'add-tag'             && <AddTagModal />}
         {openModal === 'add-calendar-item'   && <AddCalendarItemModal />}
-        {openModal === 'add-tracker'         && <AddTrackerModal />}
-        {openModal === 'add-entry'           && <AddEntryModal />}
-        {openModal === 'add-routine'         && <AddRoutineModal />}
+        {openModal === 'add-tracker'            && <AddTrackerModal />}
+        {openModal === 'add-entry'             && <AddEntryModal />}
+        {openModal === 'add-routine'           && <AddRoutineModal />}
+        {openModal === 'add-watchlist-item'      && <AddWatchlistItemModal key={editingWatchlistItemId ?? 'new'} />}
+        {openModal === 'add-portfolio-tag'       && <AddPortfolioTagModal />}
+        {openModal === 'add-investment-purpose'  && <AddInvestmentPurposeModal />}
+        {openModal === 'bulk-upload-watchlist'   && <BulkUploadWatchlistModal />}
         {editTrackerOpen                     && <EditTrackerPane />}
+        {editRoutineOpen                     && <EditRoutinePane />}
       </div>
     </div>
   );

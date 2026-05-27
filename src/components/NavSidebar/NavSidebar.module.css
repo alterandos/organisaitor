@@ -57,6 +57,23 @@
 
 .spacer { flex: 1; }
 
+.sectionDivider {
+  width: 60%;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 0.375rem 0;
+}
+
+@media (max-width: 600px) {
+  .sectionDivider {
+    width: 1px;
+    height: 60%;
+    border-top: none;
+    border-left: 1px solid var(--color-border);
+    margin: 0 0.375rem;
+  }
+}
+
 @media (max-width: 600px) {
   .sidebar {
     position: fixed;

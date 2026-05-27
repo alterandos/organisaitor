@@ -110,21 +110,23 @@ export async function forceUpload(userId: string): Promise<void> {
 function hydrateStores(...args: Array<any[] | null>) {
   const [dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries] = args;
 
-  useTaskStore.setState({
-    tasks:       Object.fromEntries((dbTasks       ?? []).map((r) => { const t = rowToTask(r);       return [t.id, t]; })),
-    collections: Object.fromEntries((dbCollections ?? []).map((r) => { const c = rowToCollection(r); return [c.id, c]; })),
-    tags:        Object.fromEntries((dbTags        ?? []).map((r) => { const t = rowToTag(r);        return [t.id, t]; })),
-    purposes:    Object.fromEntries((dbPurposes    ?? []).map((r) => { const p = rowToPurpose(r);    return [p.id, p]; })),
-  } as Parameters<typeof useTaskStore.setState>[0]);
+  // Merge strategy: local-first, remote wins on ID conflict.
+  // This prevents a failed sync push from wiping local-only data on the next load.
+  useTaskStore.setState((local) => ({
+    tasks:       { ...local.tasks,       ...Object.fromEntries((dbTasks       ?? []).map((r) => { const t = rowToTask(r);       return [t.id, t]; })) },
+    collections: { ...local.collections, ...Object.fromEntries((dbCollections ?? []).map((r) => { const c = rowToCollection(r); return [c.id, c]; })) },
+    tags:        { ...local.tags,        ...Object.fromEntries((dbTags        ?? []).map((r) => { const t = rowToTag(r);        return [t.id, t]; })) },
+    purposes:    { ...local.purposes,    ...Object.fromEntries((dbPurposes    ?? []).map((r) => { const p = rowToPurpose(r);    return [p.id, p]; })) },
+  }) as Parameters<typeof useTaskStore.setState>[0]);
 
-  useCalendarStore.setState({
-    events:    Object.fromEntries((dbEvents    ?? []).map((r) => { const e = rowToEvent(r);    return [e.id, e]; })),
-    reminders: Object.fromEntries((dbReminders ?? []).map((r) => { const r2 = rowToReminder(r); return [r2.id, r2]; })),
-  } as Parameters<typeof useCalendarStore.setState>[0]);
+  useCalendarStore.setState((local) => ({
+    events:    { ...local.events,    ...Object.fromEntries((dbEvents    ?? []).map((r) => { const e = rowToEvent(r);    return [e.id, e]; })) },
+    reminders: { ...local.reminders, ...Object.fromEntries((dbReminders ?? []).map((r) => { const r2 = rowToReminder(r); return [r2.id, r2]; })) },
+  }) as Parameters<typeof useCalendarStore.setState>[0]);
 
-  useTrackerStore.setState({
-    entries: Object.fromEntries((dbEntries ?? []).map((r) => { const e = rowToEntry(r); return [e.id, e]; })),
-  } as Parameters<typeof useTrackerStore.setState>[0]);
+  useTrackerStore.setState((local) => ({
+    entries: { ...local.entries, ...Object.fromEntries((dbEntries ?? []).map((r) => { const e = rowToEntry(r); return [e.id, e]; })) },
+  }) as Parameters<typeof useTrackerStore.setState>[0]);
 }
 
 // ── Upload ──────────────────────────────────────────────────────
