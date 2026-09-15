@@ -3,6 +3,9 @@ import { useNotificationStore, type PendingNotification } from '@/store/notifica
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import type { TaskId, CalendarEventId, CalendarReminderId } from '@/types';
+import { TimeInput } from '@/components/TimeInput/TimeInput';
+import { useSettingsStore } from '@/store/settingsStore';
+import { zonedTimeToUtc, resolveTimezone } from '@/utils/timezone';
 import styles from './NotificationCenter.module.css';
 
 // ── Bell icon ─────────────────────────────────────────────────────────────────
@@ -23,6 +26,7 @@ function NotificationCard({ n }: { n: PendingNotification }) {
   const toggleTask      = useTaskStore((s) => s.toggleTask);
   const updateEvent     = useCalendarStore((s) => s.updateEvent);
   const updateReminder  = useCalendarStore((s) => s.updateReminder);
+  const timezone        = useSettingsStore((s) => s.timezone);
 
   const [mode, setMode]               = useState<'idle' | 'snooze' | 'postpone'>('idle');
   const [snoozeValue, setSnoozeValue] = useState(1);
@@ -68,9 +72,10 @@ function NotificationCard({ n }: { n: PendingNotification }) {
 
   const handlePostpone = () => {
     if (!postponeDate) return;
+    const zone = resolveTimezone(timezone);
     const iso = postponeTime
-      ? new Date(`${postponeDate}T${postponeTime}`).toISOString()
-      : new Date(`${postponeDate}T09:00`).toISOString();
+      ? zonedTimeToUtc(postponeDate, postponeTime, zone).toISOString()
+      : zonedTimeToUtc(postponeDate, '09:00', zone).toISOString();
     setRemindAt(iso);
   };
 
@@ -138,11 +143,10 @@ function NotificationCard({ n }: { n: PendingNotification }) {
             value={postponeDate}
             onChange={(e) => setPostponeDate(e.target.value)}
           />
-          <input
-            type="time"
+          <TimeInput
             className={styles.miniTime}
             value={postponeTime}
-            onChange={(e) => setPostponeTime(e.target.value)}
+            onChange={setPostponeTime}
           />
           <button
             className={`${styles.actionBtn} ${styles.doneBtn}`}

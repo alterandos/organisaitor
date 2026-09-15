@@ -29,6 +29,49 @@
   padding: 0.75rem 0 2rem;
 }
 
+/* ── Manage button ────────────────────────────────────── */
+
+.manageBtn {
+  width: calc(100% - 0.8rem);
+  margin: 0 0.4rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--color-text);
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.manageBtn:hover {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary-border);
+}
+
+.manageIcon {
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+
+.manageKbd {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: inherit;
+  font-size: 0.7rem;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.1rem 0.4rem;
+}
+
 /* ── Section ──────────────────────────────────────────── */
 
 .section {
@@ -152,4 +195,4 @@ div.rowMain { cursor: default; }
 
 .row:hover .iconBtn         { opacity: 1; }
 .iconBtn:hover              { background: var(--color-border); color: var(--color-text); }
-.deleteIconBtn:hover        { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+.deleteIconBtn:hover        { background: var(--color-danger-muted); color: var(--color-danger); }

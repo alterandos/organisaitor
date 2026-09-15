@@ -118,7 +118,7 @@
 
 .errorMsg {
   font-size: 0.8rem;
-  color: #e85555;
+  color: var(--color-danger);
   margin: 0 0 0.65rem;
 }
 
@@ -192,12 +192,12 @@
   color: var(--color-primary);
 }
 .badgeSyncing {
-  background: color-mix(in srgb, #f59e0b 15%, transparent);
-  color: #b45309;
+  background: var(--color-warning-muted);
+  color: var(--color-warning);
 }
 .badgeError {
-  background: color-mix(in srgb, #e85555 15%, transparent);
-  color: #c0392b;
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
 }
 
 .email {
@@ -242,3 +242,13 @@
 }
 .signOutBtn:hover { background: var(--color-bg); color: var(--color-text); }
 .signOutBtn:disabled { opacity: 0.45; cursor: default; }
+
+/* Android: always full-screen, not a bottom sheet — matches every other slide-in pane. */
+:global(.platform-android) .overlay { align-items: stretch; }
+:global(.platform-android) .pane {
+  max-width: none;
+  height: 100%;
+  max-height: 100dvh;
+  border-radius: 0;
+  overflow-y: auto;
+}

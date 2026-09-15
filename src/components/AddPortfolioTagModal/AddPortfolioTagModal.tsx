@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, MouseEvent } from 'react';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useUIStore } from '@/store/uiStore';
@@ -8,12 +8,16 @@ import styles from './AddPortfolioTagModal.module.css';
 export function AddPortfolioTagModal() {
   const [name,  setName]  = useState('');
   const [color, setColor] = useState<string | null>(null);
+  const formRef           = useRef<HTMLFormElement>(null);
 
   const addPortfolioTag = usePortfolioStore((s) => s.addPortfolioTag);
   const closeModal      = useUIStore((s) => s.closeModal);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeModal(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [closeModal]);
@@ -37,7 +41,7 @@ export function AddPortfolioTagModal() {
           <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           <div className={styles.field}>
             <input
               className={styles.input}

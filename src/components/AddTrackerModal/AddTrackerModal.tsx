@@ -1,31 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTaskStore } from '@/store/taskStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TRACKER_TEMPLATES } from '@/config/trackerTemplates';
-import type { TrackerTemplate, PurposeId, TagId } from '@/types';
+import { LABELS } from '@/config/labels';
+import type { TrackerTemplate, PurposeId, TagId, CollectionId } from '@/types';
 import styles from './AddTrackerModal.module.css';
 
 const TEMPLATES: TrackerTemplate[] = ['habit', 'books', 'movies', 'custom'];
 
 export function AddTrackerModal() {
-  const addCollection    = useTaskStore((s) => s.addCollection);
-  const purposes         = useTaskStore((s) => s.purposes);
-  const tags             = useTaskStore((s) => s.tags);
-  const setActiveTracker = useUIStore((s) => s.setActiveTracker);
-  const closeModal       = useUIStore((s) => s.closeModal);
+  const addCollection      = useTaskStore((s) => s.addCollection);
+  const purposes           = useTaskStore((s) => s.purposes);
+  const tags               = useTaskStore((s) => s.tags);
+  const collectionsRecord  = useTaskStore((s) => s.collections);
+  const setActiveTracker   = useUIStore((s) => s.setActiveTracker);
+  const closeModal         = useUIStore((s) => s.closeModal);
+  const activeCollectionId = useUIStore(selectActiveCollectionId);
 
   const [name,        setName]       = useState('');
   const [template,    setTemplate]   = useState<TrackerTemplate>('habit');
   const [color,       setColor]      = useState<string | null>(null);
   const [purposeIds,  setPurposeIds] = useState<PurposeId[]>([]);
   const [tagIds,      setTagIds]     = useState<TagId[]>([]);
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(activeCollectionId as CollectionId | null);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const purposeList = Object.values(purposes);
-  const tagList     = Object.values(tags);
+  const purposeList   = Object.values(purposes).filter((p) => !p.archivedAt);
+  const tagList       = Object.values(tags);
+  const allCollections = Object.values(collectionsRecord);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeModal(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [closeModal]);
@@ -43,6 +53,7 @@ export function AddTrackerModal() {
       tagIds,
       fieldSchema: TRACKER_TEMPLATES[template].fields,
       template,
+      collectionId,
     });
 
     // Select newly created tracker
@@ -68,7 +79,7 @@ export function AddTrackerModal() {
           <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           {/* Name */}
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor="atm-name">Name</label>
@@ -122,6 +133,19 @@ export function AddTrackerModal() {
             <span className={styles.fieldLabel}>Color</span>
             <ColorPicker palette="standard" value={color} onChange={setColor} />
           </div>
+
+          {/* Endeavour */}
+          {allCollections.length > 0 && (
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>{LABELS.collection}</span>
+              <CollectionPicker
+                collections={allCollections}
+                value={collectionId}
+                onChange={setCollectionId}
+                noneLabel={`No ${LABELS.collection}`}
+              />
+            </div>
+          )}
 
           {/* Purposes */}
           {purposeList.length > 0 && (

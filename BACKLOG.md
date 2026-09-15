@@ -5,6 +5,51 @@ Format: brief description + context/motivation.
 
 ---
 
+## uiStore persistence (deferred, not pre-built)
+
+`uiStore` (active section, Endeavour/Purpose filters, sort, view modes, expanded/selected IDs, etc.) is currently memory-only — it resets on every page reload. Persistence across reloads/sessions is wanted eventually, but not yet.
+
+**Decision: defer, don't build ahead of time.** Reasoning: every field currently in `uiStore` is already plain JSON-serializable (strings, string arrays, booleans, `Partial<Record<AppView, string | null>>` for `activeCollectionIdByView`) — there's no Set/Map/function-in-state to rework first, and nothing is persisted today, so there's no migration debt accumulating while this waits. Adding persistence later is a self-contained change (wrap with zustand's `persist` middleware + a `partialize` to choose which fields survive a reload — e.g. filters/sort/view-mode yes, transient things like `openModal`/`endeavourPickerOpen`/`manageOpen` no), so doing prep work now would be speculative. The two open questions that *do* need a decision when this is picked up:
+- **Scope**: per-device only (`localStorage`, like `settingsStore`) vs cross-device (needs a Supabase table + sync mapper, like `taskStore`). These are different-shaped features — don't build one assuming the other.
+- **Which fields**: probably filters/sort/view-mode/expanded-tree-state; probably not modal-open booleans or one-off "currently editing X" pointers (those should always start closed on load).
+
+---
+
+## Endeavour filter — carry selection across sections/apps
+
+Currently `activeCollectionIdByView` (`uiStore`) deliberately remembers a **separate** focused Endeavour per section — Tasks, Calendar, Records, and Notes each keep their own independent value, so switching sections and back restores whatever that section had (see "Endeavour focus is per-section" in CLAUDE.md's Implemented features). The user wants the opposite in practice: pick an Endeavour in Tasks, switch to Calendar, and have Calendar already be focused on that same Endeavour.
+
+**This directly reverses a previous deliberate design decision** — implementing it means deciding what replaces per-section memory, not just adding a new field. Options to weigh when this is designed:
+- A single shared `activeCollectionId` (drop the per-view map entirely) — simplest, but loses the "each section remembers its own last filter" behavior some users may rely on.
+- "Sticky until explicitly overridden": switching sections carries the current Endeavour forward, but picking a different one in the new section only changes that section (needs a way to distinguish "inherited" from "explicitly set" per section).
+- Keep per-section memory but seed a newly-visited section's *first-ever* value from whatever was last active elsewhere, then let it diverge independently after that.
+
+**Architecture note (answering a question raised alongside this request):** Tasks/Calendar/Records/Lists are Sections of the same Organizer app, not separate Apps (see CLAUDE.md's terminology hierarchy) — they already share the one `uiStore` in this single-package codebase (there is no `packages/` split yet; the "shared platform layer" in CLAUDE.md's suite architecture is the target end-state, not the current reality). So carrying the filter across Tasks/Calendar/Records is just a `uiStore` change, not new cross-app plumbing. It only becomes a genuine cross-*app* concern if the same behavior should also reach Notes/Portfolio/Fitness (separate Apps) — at that point, once those are actually split into their own packages, shared cross-cutting UI state like this is exactly what belongs in the shared platform layer rather than inside any one app's package, the same way `Purpose` is meant to.
+
+---
+
+## Lists section — cross-suite linking (Phase 2+)
+
+Associate List items with entities in other apps:
+- Link a List item to a Note (e.g., "my notes on Inception" → the Lists entry for Inception)
+- Link a List item to a Task (e.g., "watch this weekend" creates a task from a list item)
+- Link a List item to a Calendar event (e.g., "cinema trip" event linked to the movie list item)
+- Cross-app query: from Notes app, create/attach a list related to a Chronicle (e.g., "environmental research reading list")
+- Implementation: use `cross_app_links` table pattern (same as Notes cross-app linking); event bus for in-process linking
+
+Other Lists Phase 2+ items:
+- Supabase sync for lists and list items
+- Drag-to-reorder items within a list
+- Bulk import items (CSV)
+- Sharing / export list as JSON or markdown
+- List templates: user-defined templates saved from customised lists
+- Custom list types (user-defined, not just the built-in 7)
+- Per-list view settings (card grid vs compact list)
+- Item archiving (soft-delete, with restore)
+- Full-text search within list items
+
+---
+
 ## Notes App — Central knowledge hub with cross-suite linking
 
 ### Vision
@@ -319,11 +364,15 @@ packages/notes/
 - Sync with Supabase
 
 **Phase 2: Polish**
-- WYSIWYG editor (Tiptap or similar)
-- Inline tagging (highlight text → tag it)
+- WYSIWYG editor (Tiptap or similar) — **done (Tiptap v3)**
+- Inline tagging (highlight text → tag it) — **done (NoteTagMark + FloatingToolbar)**
+- **Cross-app built-in tag types** — two built-in tag types are deferred until the relevant app integrations exist: (a) "Follow up on later" → creates a Reminder in the Calendar app via the cross-app event bus; (b) "To do" → creates a Task in the Organizer app via the event bus. When implemented, these should appear in the FloatingToolbar's built-in tag list (currently has Important, Concept, Definition, Question) and fire the appropriate event bus event when applied. The tag mark itself stores `typeKey: 'followup'` or `typeKey: 'todo'`; the event handler listens for mark application and creates the linked entity.
+- **Image tagging** — images pasted into the editor are not yet taggable (NoteTag marks apply to text/inline content; images are block nodes). To tag an image: either (a) wrap it in a custom node that accepts a tag attribute, or (b) apply a tag to the surrounding paragraph. Decision deferred. When implemented, clicking an image and pressing Ctrl+Space should open the tag picker and apply the tag to the image node.
 - Tag drag-and-drop reordering
 - View modes: grid, canvas (visual/spatial layout)
 - Search with filters (tag, date range, content type)
+- **Notes view layouts** — the current default layout is: left tree panel (expandable notebook hierarchy) + right notes list + NoteEditorPane slide-in. Future layouts to add: (a) full-width "immersive" that navigates into a notebook on click (breadcrumb-style, like the old ChronicleView), (b) grid/card layout for landing, (c) canvas/spatial layout. Layout switcher UI TBD. Only the default layout exists today.
+- **Multiple chronicles** — a Chronicle is the root-level container for a set of notebooks. Currently only one exists (implicit). Future: users can create, rename, delete, and switch between multiple chronicles (e.g. "Work", "Personal", "University"). Each Chronicle is a top-level grouping; notes belong to exactly one chronicle but can be tagged across notebooks within it. Supabase: add a `chronicles` table; `note_tags.chronicle_id` FK. UI: chronicle switcher in the Notes section header or left nav.
 
 **Phase 3: Intelligence**
 - AI-powered note testing (generate Q&A from notes by tag/type)
@@ -332,7 +381,7 @@ packages/notes/
 - Spaced repetition for definitions/flashcards
 
 **Phase 4: Advanced**
-- Custom note templates (by tag type or area)
+- Auto-selected note templates by tag type or area (manual template picker in AddNoteModal already implemented — see CLAUDE.md "Note templates"); user-defined custom templates (beyond the built-in six)
 - Nested/folding sections within a note
 - Collaborative notes (shared editing, comments)
 - Export formats (PDF, Markdown, HTML)
@@ -361,7 +410,7 @@ packages/notes/
 
 - **AI automated testing:** Given notes tagged with "definition" or "glossary", generate an exam, track score by area, prompt weak spots
 - **Spaced repetition:** Integration with Records trackers (create a "study" tracker from glossary terms)
-- **Note templates:** By tag type or area (e.g., "Meeting notes" template with date, attendees, action items)
+- **Note templates:** Manual picker implemented (Blank, Meeting Minutes, Daily Journal, Book/Article Notes, Project Brief, Cornell Notes); still open — auto-suggesting a template by tag type or area
 - **Voice notes:** Capture audio, transcribe, store alongside markdown
 - **Obsidian sync:** One-way import of existing notes; export to maintain offline access
 - **Citation/bibliography:** Auto-generate from "source" links; export BibTeX for papers
@@ -665,14 +714,16 @@ Tasks and notes have a natural, tight relationship:
 
 ## Records — Routines UX improvements
 
-### Tasks section: tasks / routines / both toggle
+### Tasks section: surfacing routines again (deliberately, not by accident)
 
-Currently routines appear at the top of the task list (collapsible panel). Eventually the user should be able to toggle between three modes:
-- **Tasks only** — routines section hidden entirely
-- **Routines only** — only today's due routines shown
-- **Both** — tasks first, routines below (current behaviour, but moved below tasks rather than above)
+Routines used to appear in a collapsible panel pinned above the task list (today's due routines only). That was unintended — removed from `TaskList.tsx` — and routines now live only in the Records section. Several candidate designs for bringing routines back into the Tasks section on purpose, presented to the user for a decision (not yet chosen):
 
-The toggle should live in the toolbar area of the Tasks section (alongside the existing Overview / Focused toggle). The active mode is persisted in `settingsStore`.
+- **Tab system**: Tasks and Routines as two tabs within the Tasks section, sharing the header/toolbar area; switching tabs swaps the list content below. Keeps both fully separate lists (no interleaving), cheap to build on top of the existing section-switching pattern already used at the app level.
+- **Three-way toggle** (original proposal): Tasks only / Routines only / Both, living in the toolbar next to the existing Overview/Focused toggle; "Both" shows tasks first, routines in their own section below. Mode persisted in `settingsStore`.
+- **Inline interleaving**: routines rendered as a distinct-but-adjacent row style within the same scroll (e.g. a "Today" cluster combining due routines + due-today tasks), rather than a separate section — closer to how a daily planner would present them.
+- **Routines as a filter, not a section**: add "Routine" as a filterable kind alongside existing Endeavour/Purpose/Tag filters, so users who want routines visible opt in via the filter bar rather than a dedicated toggle.
+
+Whichever direction is chosen should be logged here as a confirmed requirement before implementation.
 
 ### Records section: routine success calendar / heatmap
 
@@ -907,9 +958,7 @@ entry as context in the task pane.
 
 ### Third-party integrations (future)
 
-- **Strava**: import workouts automatically via OAuth. Each imported activity
-  creates a tracker entry in a linked Workout tracker. Field mapping is
-  configurable. Requires a dedicated Strava integration pane.
+- **Strava**: superseded by the dedicated **Fitness App** spec (see "Fitness App — Physical Exercise Tracking" below) — Strava import now lands as `Activity` records in that separate app, not as Records tracker entries. The two are meant to be cross-linked (`cross_app_links`) rather than merged, so a workout can show up in both a Records habit tracker and the Fitness app without duplicating data. Kept here only as a pointer so this doesn't contradict the newer spec.
 - **Goodreads / OpenLibrary**: book metadata autofill (cover image, author,
   genre) when a title is typed.
 - **MyFitnessPal**: nutrition data import.
@@ -996,7 +1045,7 @@ data model to avoid a breaking migration later.
 - Task pane: show linked tracker entry as context
 
 **Phase 4 — Integrations**
-- Strava OAuth import
+- Strava OAuth import — moved to the **Fitness App** spec (separate app, not a Records tracker; see below)
 - Book metadata autofill
 - Nutrition data import
 
@@ -1101,6 +1150,157 @@ Do not add any portfolio domain logic, watchlist state, or price data to the Org
 
 ---
 
+## Fitness App — Physical Exercise Tracking
+
+**Status: Phase 1 built and extended** — manual entry, a customisable activity-type registry (8 built-in types, user-editable name/icon/color/custom fields, delete-guarded for built-ins), and add-on-app architecture (code-split + gated) are all live. See CLAUDE.md "Fitness App" for the full implementation writeup — this section stays as the spec/history record, CLAUDE.md is authoritative for current behaviour. **Strava import (the "Strava integration architecture" section below) is not built** — blocked on registering a Strava API application, a manual/external prerequisite; see the setup guide at the end of this section. Raised as a new suite app, analogous to Portfolio and Notes — lives in the "extras" nav group below the `<hr>` divider, not inside the Organizer, and is the first app built against the add-on tier (see "Add-on app architecture" below). Name "Fitness" shipped as-is (not just a placeholder anymore, but still just one line in `src/config/labels.ts` to rename).
+
+### Vision
+
+A place to track physical activity (runs, hikes, and beyond), either logged manually or imported automatically from Strava. Started deliberately narrow — two activity types (Run, Hike), three visible fields (distance, moving time, average speed) — then extended once real usage showed the narrowness needed an escape hatch: activity types are now a user-customisable registry (8 built-ins, add/edit/delete custom types, per-type custom fields), not a closed union. Everything Strava provides beyond the three visible stats (elevation, heart rate, splits, GPS route, kudos...) is still captured and stored from day one so surfacing it later is a UI change, not a re-sync.
+
+### Terminology
+
+Fits the existing Suite → App → Section → View → Tool → Entity hierarchy (see main CLAUDE.md):
+- **App**: Fitness
+- **Entity**: `Activity` — one logged workout (a run, a hike). Deliberately named to match Strava's own vocabulary, minimizing translation friction in the sync code.
+
+### Data model (Phase 1)
+
+**As built:** not an actual separate npm package (the suite isn't a literal monorepo yet — that part of the architecture doc is aspirational; Notes/Lists/Portfolio aren't separate packages either). Followed the real established pattern instead: own type file (`src/types/fitness.ts`, not re-exported through `src/types/index.ts` — same as Lists/Portfolio), own store (`src/store/fitnessStore.ts`, localStorage via `persist`, no Supabase table yet — same "start local" choice already made for Notes/Lists), own branded `ActivityId`. Nothing here required a change to `taskStore`, `trackerStore`, or any Organizer type. Supabase tables are Phase 2, arriving alongside the Strava sync work below (which needs one for OAuth tokens regardless).
+
+```typescript
+type ActivityId = string & { readonly _brand: 'ActivityId' };
+type ActivityTypeId = string & { readonly _brand: 'ActivityTypeId' };
+
+// Extensible — new sources (Garmin, Apple Health, Google Fit, CSV import...) just add
+// a union member and a new sync function; the Activity shape itself doesn't change.
+type ActivitySource = 'manual' | 'strava';
+
+// User-customisable registry, not a closed union — built (see "as extended" below).
+// Built-ins use fixed ids ('run', 'hike', ...) so Strava's sport_type maps directly;
+// custom types get a random id.
+interface ActivityType {
+  id: ActivityTypeId; name: string; icon: string; color: string | null;
+  tracksDistance: boolean;             // Distance field shown/hidden per type (fixed a
+                                        // real bug — Yoga/Strength don't have a distance)
+  fieldSchema: ActivityFieldSchema[];  // Fitness-local field schema, same shape family
+                                        // as Records' FieldSchema but not shared with it
+  isBuiltIn: boolean; archivedAt: string | null; createdAt: string; updatedAt: string;
+}
+
+interface Activity {
+  id:                ActivityId;
+  type:              ActivityTypeId;          // references ActivityType above
+  title:             string;                  // defaults to the Strava activity name, editable
+  startedAt:         string;                  // ISO 8601 timestamp
+  timezone:          string | null;
+
+  // Canonical units are SI (meters, seconds, m/s) regardless of display preference —
+  // conversion to km/mi or min/km etc. happens at render time only.
+  distanceMeters:    number | null;
+  movingTimeSeconds: number | null;
+  elapsedTimeSeconds: number | null;           // stored now, not shown in UI until Phase 2
+  averageSpeedMps:   number | null;
+
+  // Keyed by ActivityFieldSchema.id — now genuinely populated by the selected
+  // ActivityType's custom fields (as extended, below), plus still the extensibility
+  // valve for Phase 2+ Strava-only fields (elevation gain, heart rate, splits...).
+  data:              Record<string, unknown>;
+
+  notes:             string | null;
+  purposeIds:        PurposeId[];              // cross-app Purpose tagging (shared platform layer)
+
+  // Import tracking
+  source:            ActivitySource;
+  sourceId:          string | null;            // e.g. Strava activity id; null for manual entries
+  sourceRaw:         Record<string, unknown> | null; // full raw payload from the source, verbatim —
+                                                 // lets Phase 2 surface new fields without re-syncing
+
+  archivedAt:        string | null;             // same sunset pattern as Collection/Purpose, not delete
+  createdAt:         string;
+  updatedAt:         string;
+  userId:            string;
+}
+```
+
+`(source, sourceId)` needs a uniqueness constraint (app-side and DB-side) so re-running a sync never creates duplicates — re-syncing an already-imported activity should update it in place, not insert a second row.
+
+### Cross-linking to Records (futureproofing, not built in Phase 1)
+
+The explicit ask: manual Fitness entries and Records trackers should be linkable later, without redesigning either. This uses the **same `cross_app_links` mechanism already specified for the Notes app** — a normalized table (`source_type`, `source_id`, `target_type`, `target_id`, `link_type`), not denormalized ID arrays on either entity. Concretely: a Records "Gym" tracker entry and a Fitness `Activity` could be linked via a `cross_app_links` row with no schema change to either app — the only requirement is that `Activity` has a stable typed ID today, which it does. Nothing else needs to be built now; this section exists so Phase 1 doesn't accidentally close off the option (e.g. by embedding activity data as a blob inside a tracker entry, which the old Records backlog spec used to suggest before this app existed — corrected above).
+
+### UI scope — Phase 1 only
+
+- [x] New top-level nav item, "extras" group (below the divider, with Portfolio) — hotkey `7` / `Ctrl+7`.
+- [x] Activity list (all activities, newest first) showing: type icon, title, date, **distance, moving time, average speed** — nothing else, even though more is stored.
+- [x] Manual "Add activity" form: type, title, date, distance, moving time. Built as auto-computed-only (not separately editable) — average speed shows as a live "Average speed: X km/h" preview derived from distance/time, no override field. Simpler than the original "editable" wording here; revisit if a real need for manual override shows up (e.g. importing a GPS-corrected speed that doesn't match distance/time exactly).
+- [x] Editing/deleting an activity works the same regardless of `source` — a synced activity can be edited or deleted locally like a manual one (edits are **not** pushed back to Strava; this is one-way import only). Not yet exercised with real Strava data since import isn't built, but the modal already branches on `editingActivity.source === 'strava'` to show a badge.
+- [x] **Extended beyond original Phase 1 scope**: activity type is now a customisable registry, not just Run/Hike. 8 built-in types (Run, Hike, Walk, Ride, Swim, Strength, Yoga, Other); the create/edit form shows the top-3-by-usage as pills plus a "More…" dropdown of everything; a Customise (⚙) button opens per-type editing (name/icon/color/custom fields), mirroring `EditTrackerPane`'s field editor. See CLAUDE.md for the full writeup.
+- [x] **Bug fix — per-type `tracksDistance`**: the first cut of the customisable-types work still showed Distance on every type, including Yoga and Strength, which don't have one. Added `ActivityType.tracksDistance: boolean` (seed defaults: `false` for Strength/Yoga, `true` for everything else), user-editable via a checkbox in `EditActivityTypeModal`; the Distance field is now conditionally rendered in `AddActivityModal`, not just optional. Moving time stays universal. `fitnessStore` bumped to v3 for the backfill.
+- [x] **`N` (no modifier) now also triggers the section-aware new-item hotkey**, alongside the existing `Space` and `Ctrl+N` — app-wide, not Fitness-specific, but requested alongside this app's other changes. See CLAUDE.md hotkeys table.
+- [x] A "Connect Strava" action and a manual "Sync now" button, in `FitnessSection`'s `StravaConnect` subcomponent. Built — see "Strava integration architecture" below for what shipped and what's still outstanding.
+
+### Strava integration architecture (built)
+
+Followed the planned shape: the Portfolio app's ticker data proxy through Vercel Edge Functions (`api/ticker-quote.ts` etc.) was the existing pattern, extended with a token **exchange** step (authorization code → access + refresh token) that has to happen server-side since it needs the app's client secret.
+
+**Vercel Edge Functions** (`api/*.ts`, `export const config = { runtime: 'edge' }`):
+- `api/_lib/strava.ts` — `exchangeStravaCode`/`refreshStravaToken` (POST to Strava's token endpoint with `STRAVA_CLIENT_SECRET` — a plain, non-`VITE_`-prefixed Vercel env var, so it never reaches the client; `VITE_FMP_API_KEY` remains the cautionary example of what not to do) and `mapSportType()` (Strava `sport_type` → our built-in `ActivityTypeId`s, unrecognised → `'other'`).
+- `api/_lib/supabaseEdge.ts` — `getUserClient(accessToken)` / `bearerToken(req)` helpers shared by the three endpoints below.
+- `api/strava-oauth-callback.ts` — receives the `code` Strava redirects back with, identifies the user via the access token carried in the OAuth `state` param (see below), exchanges the code for tokens, upserts `fitness_strava_connection`, redirects to `/?strava=connected` or `/?strava=error&reason=…`.
+- `api/strava-status.ts` — Bearer-authenticated GET, returns connection metadata only (never tokens).
+- `api/strava-sync.ts` — Bearer-authenticated POST, called by "Sync now". Refreshes the token if near-expired, fetches the 200 most recent activities from Strava, maps and returns them — does not touch Supabase or localStorage itself; the client does the upsert.
+- The "Connect Strava" button is a plain link to Strava's authorize URL (built client-side in `src/services/strava.ts`), no server code needed for that half.
+
+**The redirect-identity problem, solved:** Strava's callback is a full browser navigation, so there's no way to attach a Supabase `Authorization` header to it. Fixed by passing the user's current Supabase access token through the OAuth **`state`** parameter — `api/strava-oauth-callback.ts` reads it back out, calls `supabase.auth.getUser()` to identify the user, and writes as that user, so RLS applies normally. No service-role key anywhere in this codebase.
+
+**Supabase table — built, not yet run:**
+- `fitness_strava_connection` (`supabase/migrations/012_fitness_strava.sql`) — one row per user: `user_id`, `athlete_id`, `access_token`, `refresh_token`, `expires_at`, `scope`, timestamps. RLS scoped to the owning user. **This migration has been written but not yet executed against the live Supabase project** — that's the one remaining step before Connect will work end-to-end.
+
+**Deviation from the original plan — no `fitness_activities` Supabase table (yet):** the original spec called for a second table mirroring `Activity` server-side. What actually got built keeps activities exactly where they already lived — `fitnessStore`, localStorage-only — and `syncStrava()` just upserts synced activities into that same local store via the pre-existing `upsertBySource()`. Simpler for Phase 1 (matches "start local, Supabase sync is a later phase" already true of `noteStore`/`listStore`), but it means synced activities don't survive a `localStorage.clear()` or show up on a second device without a re-sync. Revisit alongside whenever Fitness gets real Supabase sync (see "Not yet done" below).
+
+**Verification status:** everything client-side (button rendering, signed-out guard, `?strava=connected`/`?strava=error` query-param handling, auto-navigation to the Fitness section on redirect) was build-verified and Playwright-tested against the local dev server. The edge functions themselves only execute on an actual Vercel deployment — the real OAuth round-trip and token exchange have **not** been tested end-to-end yet.
+
+**Not yet done:**
+- Run `012_fitness_strava.sql` against the live Supabase project (blocks Connect from working at all right now)
+- Real end-to-end OAuth test against the Vercel deployment
+- Supabase sync for `Activity`/`ActivityType` records themselves (see deviation note above)
+
+**Phase 2+ (not now):** Strava webhook subscription (push instead of manual sync — needs a validation handshake endpoint and a public receiver, `api/strava-webhook.ts`), automatic throttled sync on app load, mapping additional Strava `sport_type` values onto the activity-type registry beyond what's covered today, promoting `ActivityFieldSchema` into the shared platform layer if Records ever wants the same shape (not needed yet — Lists' `ListFieldSchema` has stayed independent too, so there's no pressure to do this preemptively), exercise plans (structure likely mirrors `RoutineTask[]` + `RepeatConfig` from Routines — a plan is an ordered template, not a log entry), imports from other sources (Garmin, Apple Health, Google Fit, manual CSV).
+
+### Add-on app architecture (built)
+
+Fitness is the first app built against the suite's future "core bundle (nav items 1–5) + optional/paid add-ons (Portfolio, Fitness, below the nav divider)" model. `src/config/apps.ts` defines `APP_TIERS` and `isAppEnabled(view)` — the single gating point NavSidebar, App.tsx's routing, and the `6`/`7` hotkeys all check. `isAppEnabled` always returns `true` today (no entitlement backend exists), but every caller already treats it as something that can say no, so wiring a real purchase/entitlement check later is a one-function change. `PortfolioSection` and `FitnessSection` are also now `React.lazy()`-loaded (confirmed via build output: separate chunks, ~200KB off the main bundle) instead of statically bundled — the "code-splitting ensures each app's bundle only loads when needed" line in the suite architecture doc was aspirational until this; it's now real for the two add-on apps. See CLAUDE.md "Add-on app architecture" for the full writeup.
+
+### Strava API setup guide (for the user — external prerequisite)
+
+Needed before any of the Strava integration architecture above can be built or tested:
+
+1. Go to https://www.strava.com/settings/api (requires a Strava account, log in first).
+2. Fill in the "My API Application" form:
+   - **Application Name**: anything recognizable, e.g. "Organisaitor Fitness" (shown on Strava's consent screen when connecting).
+   - **Category**: pick whatever fits closest (e.g. "Training").
+   - **Club**: leave blank.
+   - **Website**: the deployed app URL (Vercel production URL).
+   - **Authorization Callback Domain**: the bare domain only, no `https://` and no path (e.g. `my-todo.vercel.app`, not `https://my-todo.vercel.app/api/strava-oauth-callback`) — Strava enforces this format.
+3. Submit. Strava issues a **Client ID** (safe to share, not secret) and a **Client Secret** (treat like a password).
+4. Client ID: fine to paste in chat when ready to build the OAuth pieces. Client Secret: do **not** paste it in chat — add it directly as a Vercel environment variable (Project Settings → Environment Variables) once told the exact variable name to use; it must **not** have a `VITE_` prefix, or it ships to the browser.
+5. ✅ Done — Client ID `270097` registered, `VITE_STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` set in Vercel and deployed. This unblocked the OAuth build above.
+
+### Decisions (resolved)
+
+1. **OAuth scope**: start with `activity:read` (public activities only). `activity:read_all` (private activities included) is an explicit future expansion, not a Phase 1 blocker — re-running the OAuth connect flow with a wider scope is a small change when wanted.
+2. **Display units**: metric (km, km/h) by default. Stored data is SI (meters, m/s) regardless, so an imperial toggle later is a render-layer-only change.
+3. **Sync trigger for Phase 1**: manual "Sync now" button only. No automatic/throttled background sync in Phase 1.
+
+### Remaining prerequisites (not decisions — actions needed before/while building)
+
+4. ~~**Strava API app registration**~~ — done (client id `270097`, env vars set in Vercel).
+5. **Run `012_fitness_strava.sql` against the live Supabase project** — the table doesn't exist yet, so "Connect Strava" will fail at the token-upsert step until this runs.
+6. **Tauri desktop OAuth**: the callback endpoint is a Vercel URL, which works naturally for the web/PWA build. Since tokens live in Supabase (not local device storage), the intended answer is "connect once via the web app, and the desktop build picks up the same connection through the synced `fitness_strava_connection` row" — flagged here so it's a deliberate decision, not an oversight, when this gets built.
+
+---
+
 ## Proposed Ideas
 
 Items here are not confirmed requirements — they are sensible ideas raised during design discussions, held here for future consideration.
@@ -1116,5 +1316,878 @@ When a user types a ticker that exists in multiple markets (e.g. VMM on NASDAQ a
 **Where it would live:** Portfolio settings pane (to be built), stored in `settingsStore` as `portfolioPreferredMic: string | null` (MIC = Market Identifier Code, e.g. `'XLON'`, `'XNAS'`, `'XNYS'`).
 
 **Why deferred:** Only valuable once a meaningful number of global tickers are in the watchlist and disambiguation is a recurring friction point.
+
+---
+
+### Suite-wide "Quick Access" pane (recently/frequently/pinned)
+
+A hotkey-triggered pane, available from anywhere in the suite, that surfaces the user's most relevant destinations so they can jump straight there instead of navigating through a section's hierarchy each time. Examples of a "destination": a specific List (e.g. a watchlist buried a few levels into Lists), a specific Endeavour-filtered Task view, a specific Note or notebook, a specific Tracker.
+
+**Candidate content, to be decided when this is designed:**
+- Recently viewed items (cross-app — Tasks, Lists, Notes, Records, Portfolio, Fitness)
+- Pinned items (user explicitly marks a destination as fast-access)
+- Popularly/frequently viewed items (usage-ranked, similar in spirit to `getTopActivityTypes`'s usage-ranking approach already used in Fitness)
+
+**Open design questions for later:**
+- Hotkey binding (not yet chosen — must not collide with existing suite hotkeys, see `src/config/hotkeys.ts`)
+- Whether pinned and frequent/recent are separate lists, a merged ranked list, or user-toggleable sections
+- How a "destination" is represented generically across apps that don't share a data model (a List, a Task filtered by Endeavour, a Note, a Tracker) — likely needs a small cross-app "navigable target" abstraction, probably living in the shared platform layer per the suite architecture in CLAUDE.md
+- How "recently/frequently viewed" is tracked per entity type (some already have partial groundwork, e.g. `Note.lastViewedAt`/`touchNote`; others have nothing yet)
+- Display/prioritization UX (pinned-first vs. blended, list vs. grid, how many items to show)
+
+**Motivating example from the user:** they have a specific List they want faster access to than going through Lists → navigating the list hierarchy each time.
+
+**Why deferred:** Needs UX and data-model design decisions (above) before implementation; raised as a confirmed want, not yet scoped.
+
+---
+
+## Dark Mode — Suite-wide
+
+### Vision
+
+Full dark mode for the entire suite implemented via CSS custom properties (design tokens). No individual component needs conditional logic — the theme is applied as a `data-theme` attribute on `<html>` and all CSS modules reference token variables. Theme choice stored in `settingsStore`. **On Android, dark mode is the default.** On desktop/web, defaults to `'system'` (follows OS preference).
+
+---
+
+### 1. Design Tokens
+
+**New file: `src/styles/tokens.css`**
+
+Import once in `src/main.tsx` before any component styles:
+```typescript
+import './styles/tokens.css';
+```
+
+Full token set — every hardcoded color in every CSS module must be replaced with one of these:
+
+```css
+:root {
+  /* ── Backgrounds ── */
+  --bg-primary:           #ffffff;
+  --bg-secondary:         #f8f8f8;
+  --bg-tertiary:          #f0f0f0;
+  --bg-overlay:           rgba(0, 0, 0, 0.40);
+
+  /* ── Surfaces (cards, modals, panes, sidebars) ── */
+  --surface-0:            #ffffff;   /* modal / topmost layer */
+  --surface-1:            #f8f8f8;   /* pane / sidebar */
+  --surface-2:            #f0f0f0;   /* card / list item */
+  --surface-hover:        #ebebeb;
+  --surface-active:       #e0e0e0;
+
+  /* ── Borders ── */
+  --border-subtle:        rgba(0, 0, 0, 0.06);
+  --border-default:       rgba(0, 0, 0, 0.12);
+  --border-strong:        rgba(0, 0, 0, 0.24);
+
+  /* ── Text ── */
+  --text-primary:         #111111;
+  --text-secondary:       #555555;
+  --text-tertiary:        #999999;
+  --text-placeholder:     #bbbbbb;
+  --text-disabled:        #cccccc;
+  --text-on-accent:       #ffffff;
+
+  /* ── Accent / brand ── */
+  --accent:               #4f46e5;
+  --accent-hover:         #4338ca;
+  --accent-muted:         #ede9fe;
+  --accent-subtle-border: #c4b5fd;
+
+  /* ── Semantic ── */
+  --color-danger:         #ef4444;
+  --color-danger-muted:   #fee2e2;
+  --color-success:        #22c55e;
+  --color-success-muted:  #dcfce7;
+  --color-warning:        #f59e0b;
+  --color-warning-muted:  #fef3c7;
+  --color-info:           #3b82f6;
+  --color-info-muted:     #dbeafe;
+
+  /* ── Navigation (left sidebar + mobile bottom bar) ── */
+  --nav-bg:               #f4f4f4;
+  --nav-border:           rgba(0, 0, 0, 0.08);
+  --nav-item-text:        #444444;
+  --nav-item-hover:       #e8e8e8;
+  --nav-item-active-bg:   #e0e0e0;
+  --nav-item-active-text: #111111;
+
+  /* ── Input ── */
+  --input-bg:             #ffffff;
+  --input-border:         rgba(0, 0, 0, 0.15);
+  --input-border-focus:   #4f46e5;
+  --input-placeholder:    #aaaaaa;
+
+  /* ── Scrollbar ── */
+  --scrollbar-thumb:      rgba(0, 0, 0, 0.20);
+  --scrollbar-track:      transparent;
+
+  /* ── Shadow ── */
+  --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md:            0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lg:            0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="dark"] {
+  /* ── Backgrounds ── */
+  --bg-primary:           #0f0f0f;
+  --bg-secondary:         #161616;
+  --bg-tertiary:          #1f1f1f;
+  --bg-overlay:           rgba(0, 0, 0, 0.60);
+
+  /* ── Surfaces ── */
+  --surface-0:            #1e1e1e;
+  --surface-1:            #161616;
+  --surface-2:            #242424;
+  --surface-hover:        #2a2a2a;
+  --surface-active:       #333333;
+
+  /* ── Borders ── */
+  --border-subtle:        rgba(255, 255, 255, 0.05);
+  --border-default:       rgba(255, 255, 255, 0.10);
+  --border-strong:        rgba(255, 255, 255, 0.20);
+
+  /* ── Text ── */
+  --text-primary:         #eeeeee;
+  --text-secondary:       #aaaaaa;
+  --text-tertiary:        #666666;
+  --text-placeholder:     #555555;
+  --text-disabled:        #444444;
+  --text-on-accent:       #ffffff;
+
+  /* ── Accent ── */
+  --accent:               #6366f1;
+  --accent-hover:         #818cf8;
+  --accent-muted:         #1e1b4b;
+  --accent-subtle-border: #3730a3;
+
+  /* ── Semantic ── */
+  --color-danger:         #f87171;
+  --color-danger-muted:   #3b0a0a;
+  --color-success:        #4ade80;
+  --color-success-muted:  #052e16;
+  --color-warning:        #fbbf24;
+  --color-warning-muted:  #3a1a00;
+  --color-info:           #60a5fa;
+  --color-info-muted:     #172554;
+
+  /* ── Navigation ── */
+  --nav-bg:               #111111;
+  --nav-border:           rgba(255, 255, 255, 0.06);
+  --nav-item-text:        #999999;
+  --nav-item-hover:       #1f1f1f;
+  --nav-item-active-bg:   #2a2a2a;
+  --nav-item-active-text: #eeeeee;
+
+  /* ── Input ── */
+  --input-bg:             #1e1e1e;
+  --input-border:         rgba(255, 255, 255, 0.12);
+  --input-border-focus:   #6366f1;
+  --input-placeholder:    #555555;
+
+  /* ── Scrollbar ── */
+  --scrollbar-thumb:      rgba(255, 255, 255, 0.15);
+  --scrollbar-track:      transparent;
+
+  /* ── Shadow ── */
+  --shadow-sm:            0 1px 3px rgba(0, 0, 0, 0.30);
+  --shadow-md:            0 4px 12px rgba(0, 0, 0, 0.40);
+  --shadow-lg:            0 8px 24px rgba(0, 0, 0, 0.50);
+}
+```
+
+---
+
+### 2. settingsStore changes
+
+Add to settingsStore shape:
+```typescript
+theme: 'light' | 'dark' | 'system';
+```
+
+**Default logic in initial state:**
+```typescript
+import { Capacitor } from '@capacitor/core';
+const defaultTheme = Capacitor.getPlatform() === 'android' ? 'dark' : 'system';
+```
+
+Bump settingsStore version and add migration that backfills `theme: 'system'` for existing web users (existing Android users don't have a prior save, so the initial state default handles them).
+
+---
+
+### 3. Theme application (App.tsx)
+
+Add a theme effect that runs on every `theme` value change:
+
+```typescript
+const theme = useSettingsStore(s => s.theme);
+
+useEffect(() => {
+  const applyTheme = (isDark: boolean) => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    // StatusBar sync handled here too — see Android section
+  };
+
+  if (theme === 'system') {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    applyTheme(mq.matches);
+    const handler = (e: MediaQueryListEvent) => applyTheme(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  } else {
+    applyTheme(theme === 'dark');
+  }
+}, [theme]);
+```
+
+**Prevent flash of wrong theme (FOUC):** Add an inline script to `index.html` `<head>` that reads `settingsStore` from localStorage and sets `data-theme` synchronously before React hydrates:
+
+```html
+<script>
+  (function() {
+    try {
+      var s = JSON.parse(localStorage.getItem('todo-settings') || '{}');
+      var t = (s && s.state && s.state.theme) || 'system';
+      var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+    } catch(e) {}
+  })();
+</script>
+```
+
+---
+
+### 4. CSS Modules migration
+
+Every `.module.css` file in `src/` must have its hardcoded color values replaced with design tokens. Run this grep to find all instances before starting:
+
+```
+grep -rn "#[0-9a-fA-F]\{3,6\}\|rgb[a]\?(" src/ --include="*.css"
+```
+
+**Common replacements:**
+| Hardcoded value | Token |
+|-----------------|-------|
+| `#fff`, `#ffffff`, `white` | `var(--surface-0)` or `var(--bg-primary)` (context-dependent) |
+| `#f8f8f8`, `#f5f5f5`, `#f0f0f0` | `var(--bg-secondary)` or `var(--surface-1)` |
+| `#111`, `#222`, `#333` (as text) | `var(--text-primary)` or `var(--text-secondary)` |
+| `#999`, `#aaa` (as text) | `var(--text-tertiary)` |
+| `rgba(0,0,0,0.4)` overlays | `var(--bg-overlay)` |
+| `rgba(0,0,0,0.1)` borders | `var(--border-default)` |
+| `rgba(0,0,0,0.06)` subtle borders | `var(--border-subtle)` |
+| `box-shadow: 0 1px...` | `var(--shadow-sm)` |
+| Any hardcoded blue/purple (accent) | `var(--accent)` |
+
+**Do not change:** Dynamic colors passed via `style={{ background: color }}` (user-chosen entity colors). These are intentionally inline and correct as-is.
+
+---
+
+### 5. Desktop Settings UI
+
+In SettingsPane, add an "Appearance" section at the top:
+- Label: "Theme"
+- Control: three-option segmented control or radio group — **Light / Dark / System**
+- Maps directly to `settingsStore.theme`
+- Changing immediately applies — no reload needed
+- "System" is selected by default on web
+
+---
+
+## Android App — Capacitor
+
+> **Superseded for architecture decisions** by `docs/android/00-architecture.md` — that document
+> is now the source of truth for the Android build (vehicle, entry points, monetization,
+> entitlements) and reconciles this section with the Fitness app, Schedule feature, and the
+> add-on-tier system, none of which existed when this section was first written. The
+> notifications spec below (§6) is still materially correct and is being carried forward into
+> `docs/android/05-notifications.md`; read it here until that file exists. Sections 1–5 and 7–8
+> below (setup commands, file manifest, mobile layout, native polish, build/release) remain
+> useful reference detail, just no longer the top-level architecture record.
+
+### Vision
+
+The existing Vite/React codebase compiles to both the Vercel PWA and a native Android app via Capacitor. A single Google Play Store listing ships the full Organisaitor suite with a mobile-optimised layout and native capabilities: local notifications, haptic feedback, status bar control, and Play Store distribution. All business logic, Zustand stores, Supabase sync, and entity types are shared without modification. The desktop will always ship more advanced configuration UX; mobile is optimised for consumption, quick-capture, and daily logging.
+
+**Scope for Android MVP:** Full suite available (Tasks, Calendar, Records, Lists, Notes, Portfolio). Complex setup flows (building tracker field schemas, complex routine creation, Portfolio chart deep-dive) are accessible but not layout-optimised — that's acceptable. Notification system is the primary Android-native capability.
+
+**Android-only indefinitely** — iOS is not in scope.
+
+---
+
+### 1. Prerequisites & One-time Setup
+
+**System requirements:**
+- Java 17+
+- Android Studio (for SDK, emulator, release signing)
+- Android SDK API level 23 minimum target; API 34+ as target SDK (Play Store requirement)
+
+**Install Capacitor packages:**
+```
+npm install @capacitor/core @capacitor/cli @capacitor/android
+npm install @capacitor/local-notifications
+npm install @capacitor/app
+npm install @capacitor/status-bar
+npm install @capacitor/splash-screen
+npm install @capacitor/haptics
+npm install @capacitor/keyboard
+```
+
+**Initialise Capacitor (one-time, run from project root):**
+```
+npx cap init "Organisaitor" "com.organisaitor.app" --web-dir dist
+npx cap add android
+```
+
+The `android/` directory is committed to git. Add only build artifacts to `.gitignore`:
+```
+android/.gradle/
+android/app/build/
+android/build/
+android/.idea/
+```
+
+**`capacitor.config.ts` (project root):**
+```typescript
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.organisaitor.app',
+  appName: 'Organisaitor',
+  webDir: 'dist',
+  server: {
+    androidScheme: 'https',
+  },
+  plugins: {
+    LocalNotifications: {
+      smallIcon: 'ic_launcher_foreground',
+      iconColor: '#6366f1',
+    },
+    SplashScreen: {
+      launchShowDuration: 800,
+      backgroundColor: '#0f0f0f',
+      showSpinner: false,
+    },
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#0f0f0f',
+    },
+    Keyboard: {
+      resize: 'body',
+      resizeOnFullScreen: true,
+    },
+  },
+};
+
+export default config;
+```
+
+**`package.json` scripts to add:**
+```json
+"build:android": "npm run build && npx cap sync android",
+"open:android": "npx cap open android",
+"sync:android": "npx cap sync android"
+```
+
+---
+
+### 2. New Files & Modified Files
+
+**New files:**
+```
+capacitor.config.ts
+android/                                    — generated Android project (git-tracked)
+src/
+  hooks/
+    usePlatform.ts                          — platform detection
+    useNotificationSync.ts                  — store-aware notification scheduler
+  services/
+    notifications/
+      notificationService.ts               — schedule / cancel / sync logic
+      notificationHelpers.ts               — ID hashing, payload builders
+  utils/
+    haptics.ts                             — guarded haptic wrappers
+  styles/
+    tokens.css                             — design tokens (see Dark Mode section)
+  components/
+    MobileNav/
+      MobileNav.tsx                        — bottom tab bar
+      MobileNav.module.css
+    MobileMoreSheet/
+      MobileMoreSheet.tsx                  — "More" bottom sheet (Lists, Portfolio, Settings)
+      MobileMoreSheet.module.css
+```
+
+**Modified files:**
+```
+src/App.tsx                                — platform branch for nav/layout, theme effect, deep link listener
+src/main.tsx                               — import tokens.css
+index.html                                 — FOUC prevention script
+src/store/settingsStore.ts                 — add theme, notification preferences
+src/store/taskStore.ts                     — add reminderTime to Collection; bump to v6
+src/components/NavSidebar/NavSidebar.tsx   — hide on Android
+src/components/TaskPane/                   — full-screen on mobile
+src/components/NoteEditorPane/             — full-screen on mobile
+src/components/EditTrackerPane/            — full-screen on mobile
+src/components/CalendarEventPane/          — full-screen on mobile
+src/components/CalendarReminderPane/       — full-screen on mobile
+src/components/SettingsPane/               — add Appearance section + Notifications section (Android-gated)
+src/components/EditRoutinePane/ (if exists) or AddRoutineModal — add reminderTime field (Android-gated)
++ every *.module.css file                  — replace hardcoded colors with token variables
+```
+
+---
+
+### 3. Platform Detection
+
+**`src/hooks/usePlatform.ts`:**
+```typescript
+import { Capacitor } from '@capacitor/core';
+
+export function usePlatform() {
+  const platform = Capacitor.getPlatform();
+  return {
+    isAndroid: platform === 'android',
+    isNative: Capacitor.isNativePlatform(),
+    isWeb: platform === 'web',
+  };
+}
+```
+
+**Body class in App.tsx (applied once on mount):**
+```typescript
+useEffect(() => {
+  if (Capacitor.getPlatform() === 'android') {
+    document.body.classList.add('platform-android');
+  }
+}, []);
+```
+
+CSS modules can use `:global(.platform-android) .myClass { }` for Android-specific overrides in addition to `@media (max-width: 768px)` responsive breakpoints.
+
+---
+
+### 4. Mobile Layout System
+
+#### 4a. App.tsx layout restructure
+
+```tsx
+const { isAndroid } = usePlatform();
+
+return (
+  <div className={cx(styles.app, isAndroid && styles.appMobile)}>
+    {!isAndroid && <NavSidebar />}
+    <main className={cx(styles.main, isAndroid && styles.mainMobile)}>
+      {/* section content unchanged */}
+    </main>
+    {!isAndroid && <Sidebar />}       {/* right filter sidebar — hidden on mobile */}
+    {isAndroid && <MobileNav />}
+    {/* all modals and panes unchanged */}
+  </div>
+);
+```
+
+`.appMobile` / `.mainMobile`: removes left margin (no sidebar), adds `padding-bottom: calc(56px + env(safe-area-inset-bottom))` so content clears the bottom tab bar.
+
+#### 4b. Bottom Tab Bar (MobileNav)
+
+`position: fixed; bottom: 0; width: 100%; height: 56px`. Background: `var(--nav-bg)`. Top border: `1px solid var(--nav-border)`. Bottom padding: `env(safe-area-inset-bottom)` for Android gesture navigation.
+
+Five tabs:
+
+| Index | Label | Section key | Notes |
+|-------|-------|-------------|-------|
+| 0 | Tasks | `'tasks'` | |
+| 1 | Calendar | `'calendar'` | |
+| 2 | Records | `'records'` | |
+| 3 | Notes | `'notes'` | |
+| 4 | More | — | Opens MobileMoreSheet |
+
+Active tab: icon + label in `var(--accent)`. Inactive: icon only (no label) in `var(--text-tertiary)`. Tapping the active tab scrolls current view to top (`window.scrollTo({ top: 0, behavior: 'smooth' })`).
+
+Uses `useSettingsStore` / `uiStore.setActiveView` to switch sections — same action as NavSidebar.
+
+#### 4c. MobileMoreSheet
+
+Bottom sheet that slides up over a backdrop when "More" is tapped. Pattern: same overlay + sheet structure as existing modals (bottom-sheet on mobile). Contains:
+
+- **Lists** — calls `setActiveView('lists')`, closes sheet
+- **Portfolio** — calls `setActiveView('portfolio')`, closes sheet
+- **Settings** — calls `openSettings()`, closes sheet
+- **Account** — calls `openAccount()`, closes sheet
+
+Backdrop tap and swipe-down dismiss the sheet. Escape key closes it (for stylus/keyboard users).
+
+#### 4d. Slide-in panes → full-screen on mobile
+
+All panes (TaskPane, NoteEditorPane, EditTrackerPane, CalendarEventPane, CalendarReminderPane, EditRoutinePane, SettingsPane, AccountPane) must become full-screen on Android.
+
+In each pane's CSS module, add:
+```css
+@media (max-width: 768px) {
+  .pane {
+    width: 100% !important;
+    height: 100%;
+    top: 0;
+    border-radius: 0;
+  }
+}
+```
+
+Or apply via `:global(.platform-android) .pane { }` if media query conflicts with existing fixed widths.
+
+The × close button stays top-right. Back-button behaviour on Android: hook `@capacitor/app`'s `backButton` event to call the active pane's close action before defaulting to system back:
+
+```typescript
+App.addListener('backButton', () => {
+  // check for open modals/panes in uiStore; close the topmost one
+  // if nothing is open, allow default back (minimize app)
+});
+```
+
+#### 4e. Section-specific layout notes
+
+**Tasks:**
+The right Sidebar (collection/purpose/tag filters) is hidden. Access via a filter icon (funnel) in the Tasks section header → opens a bottom sheet with the same filter controls. SortBar stays visible. Routines collapsible panel stays as-is.
+
+**Calendar:**
+- Month view: works at mobile widths; verify day cell tap targets ≥ 44px.
+- Week view: show 3 columns (days) on phone (< 480px wide), 7 on tablet. Horizontal swipe to advance days. The 7-column layout can use `overflow-x: auto` with snap scrolling as a simpler alternative.
+- Day view: single-column timeline; no layout changes needed.
+- View toggle (Month/Week/Day) moves into the section header on mobile.
+
+**Records:**
+Left tracker/routine sidebar is replaced by a header-level picker: a dropdown or horizontally scrollable chip list showing the user's trackers and routines. Selecting one sets `activeTrackerId`. Tracker detail fills full width. RoutineChecklist cards stack vertically (already card-based; no change needed). AddEntry FAB stays.
+
+**Notes:**
+ChronicleView tag tree becomes drill-down navigation: tapping an area shows its children full-screen (back button to go up). Breadcrumb stays in the header. NoteEditorPane is full-screen — stylus input works natively in the WebView textarea with no additional code.
+
+**Lists:**
+Left sidebar → header picker (same approach as Records). Card grid → 1 column on phone (`grid-template-columns: 1fr`).
+
+**Portfolio:**
+WatchlistView table → `overflow-x: auto` (horizontal scroll). Reduce default visible columns on phone to: Name, Price, Daily Change %. Column picker button remains accessible. Chart view → chart fills full width; right sidebar (tickers list) hidden behind a toggle button tap. This section is read-heavy on mobile; complex configuration stays functional but is not layout-optimised.
+
+---
+
+### 5. Native Polish
+
+#### StatusBar
+
+Sync with active theme in the theme effect (App.tsx):
+```typescript
+import { StatusBar, Style } from '@capacitor/status-bar';
+
+if (isAndroid) {
+  const isDark = /* resolved theme === 'dark' */;
+  await StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
+  await StatusBar.setBackgroundColor({ color: isDark ? '#0f0f0f' : '#ffffff' });
+}
+```
+
+#### SplashScreen
+
+Hide after app finishes initial data hydration:
+```typescript
+import { SplashScreen } from '@capacitor/splash-screen';
+// In App.tsx, after stores are hydrated from localStorage:
+if (isAndroid) await SplashScreen.hide();
+```
+
+#### Haptics (`src/utils/haptics.ts`)
+
+```typescript
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { Capacitor } from '@capacitor/core';
+
+const native = () => Capacitor.isNativePlatform();
+
+export const hapticLight   = () => native() && Haptics.impact({ style: ImpactStyle.Light });
+export const hapticMedium  = () => native() && Haptics.impact({ style: ImpactStyle.Medium });
+export const hapticSuccess = () => native() && Haptics.notification({ type: NotificationType.Success });
+export const hapticWarning = () => native() && Haptics.notification({ type: NotificationType.Warning });
+```
+
+Wire `hapticLight()` to: task completion toggle, routine step toggle, list item status toggle, any checkbox-style interaction. Wire `hapticMedium()` to destructive confirmations (delete task, delete tracker entry). Wire `hapticSuccess()` to completing a full routine.
+
+#### Keyboard
+
+Config in `capacitor.config.ts` (`resize: 'body'`) handles most cases automatically. For NoteEditorPane (full-screen editor), optionally listen for `keyboardDidShow` to add bottom padding equal to `info.keyboardHeight` so the editor content clears the keyboard.
+
+#### App icon
+
+Generate using Android Studio's Image Asset Studio (right-click `res/` → New → Image Asset). Source: a single 1024×1024 PNG of the Organisaitor icon. This auto-generates all required `mipmap-*` density directories. The launcher icon must be a `.png` placed at `android/app/src/main/res/mipmap-*/ic_launcher.png`.
+
+---
+
+### 6. Notifications
+
+#### 6a. Permissions
+
+Request on first meaningful interaction (not cold open). Show an explainer first, then:
+
+```typescript
+import { LocalNotifications } from '@capacitor/local-notifications';
+
+export async function requestNotificationPermission(): Promise<boolean> {
+  const { display } = await LocalNotifications.requestPermissions();
+  return display === 'granted';
+}
+```
+
+Store result in `settingsStore.notificationsEnabled`. If denied: show a nudge in the Notifications settings section — "Open Android Settings to enable notifications." with a button that calls `NativeSettings.open()` (or `@capacitor/app`'s `openUrl` with the settings intent).
+
+All `LocalNotifications` calls must be wrapped in `if (!Capacitor.isNativePlatform()) return` — the plugin is a no-op on web but may log warnings if called unguarded.
+
+#### 6b. settingsStore additions
+
+```typescript
+notificationsEnabled: boolean;             // master switch; default false until granted
+notifTaskDeadlines: boolean;              // default true
+notifCalendarEvents: boolean;             // default true
+notifCalendarEventMinutesBefore: number;  // 15 | 30 | 60 | 1440; default 30
+notifRoutineReminders: boolean;           // default true
+notifRoutineDefaultTime: string;          // HH:MM; default '20:00'
+notifWaitingTaskOverdue: boolean;         // default true
+```
+
+**Per-routine reminder time:** add `reminderTime: string | null` (HH:MM) to the `Collection` interface (in `src/types/index.ts`). `null` means use `settingsStore.notifRoutineDefaultTime`. This requires a **taskStore migration to v6**: backfill `reminderTime: null` on all existing collections.
+
+#### 6c. Notification ID strategy
+
+Capacitor local notification IDs are 32-bit positive integers. Derive a stable ID from entity ID + notification kind using a djb2-variant hash:
+
+```typescript
+// src/services/notifications/notificationHelpers.ts
+export type NotifKind =
+  | 'task-deadline'
+  | 'calendar-event'
+  | 'calendar-reminder'
+  | 'routine-logging'
+  | 'waiting-task-overdue';
+
+export function notifId(entityId: string, kind: NotifKind, suffix = 0): number {
+  let hash = 5381;
+  const str = `${kind}:${entityId}:${suffix}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = (((hash << 5) + hash) ^ str.charCodeAt(i)) >>> 0;
+  }
+  return (hash % 2_000_000_000) + 1;
+}
+```
+
+For routine logging notifications (one per scheduled day-of-week), call `notifId(routineId, 'routine-logging', dayOfWeek)` for `suffix` values 0–6. Reserve 7 IDs per routine.
+
+#### 6d. Notification triggers per entity type
+
+**Task deadlines (`notifTaskDeadlines`):**
+- Condition: task has `deadline` set AND `completedAt === null`
+- Schedule: 09:00 on the deadline date (one-shot)
+- Title: `"Task due today"` / Body: `task.title`
+- Cancel on: task completed, deadline removed, task deleted
+- Skip if deadline is in the past
+
+**Calendar events (`notifCalendarEvents`):**
+- Condition: CalendarEvent with a date/time
+- Schedule: `notifCalendarEventMinutesBefore` minutes before event start
+- Title: `"Upcoming event"` / Body: `event.title`
+- Recurring events: schedule the next 12 occurrences only (re-schedule on each app open)
+- Cancel and reschedule on edit; cancel on delete
+
+**Calendar reminders (`notifCalendarEvents`):**
+- CalendarReminder entities already have a specific time — schedule at that time
+- Title: reminder title / Body: blank or notes if present
+- Same 12-occurrence limit for recurring reminders
+
+**Routine logging reminders (`notifRoutineReminders`):**
+- Per routine with `kind === 'routine'`
+- Days: `repeatConfig.daysOfWeek` (or every day if empty/undefined)
+- Time: `routine.reminderTime ?? settings.notifRoutineDefaultTime`
+- Scheduling approach: on each app open, for each active routine, schedule the next 4 occurrences of each due day-of-week. Cancel all existing routine notifs for that routine first, then reschedule. This keeps notifications fresh without requiring always-on background processes.
+- Title: `"Routine reminder"` / Body: `"Time to log ${routine.name}"`
+- Cancel all (7 possible IDs) on routine deleted
+
+**Waiting task overdue (`notifWaitingTaskOverdue`):**
+- Condition: task with `kind === 'waiting'` AND `deadline` set
+- Schedule: 09:00 on the deadline date
+- Title: `"Waiting task overdue"` / Body: `"Follow up: ${task.title}"`
+- Cancel on: task completed, deadline changed (reschedule), task deleted
+
+#### 6e. Notification service (`src/services/notifications/notificationService.ts`)
+
+Exports the following functions (all guarded with `if (!Capacitor.isNativePlatform()) return`):
+
+```typescript
+scheduleTaskDeadlineNotif(task: Task, settings: SettingsState): Promise<void>
+cancelTaskDeadlineNotif(taskId: TaskId): Promise<void>
+
+scheduleCalendarEventNotif(event: CalendarEvent, settings: SettingsState): Promise<void>
+cancelCalendarEventNotif(eventId: CalendarEventId): Promise<void>
+
+scheduleCalendarReminderNotif(reminder: CalendarReminder): Promise<void>
+cancelCalendarReminderNotif(reminderId: CalendarReminderId): Promise<void>
+
+scheduleRoutineNotifs(routine: Collection, settings: SettingsState): Promise<void>
+cancelRoutineNotifs(routineId: CollectionId): Promise<void>
+
+// Full sync — called on app start. Diffs pending notifs against store state.
+syncAllNotifications(
+  tasks: Task[],
+  calEvents: CalendarEvent[],
+  calReminders: CalendarReminder[],
+  routines: Collection[],
+  settings: SettingsState
+): Promise<void>
+```
+
+`syncAllNotifications` implementation:
+1. Call `LocalNotifications.getPending()` to get currently scheduled IDs.
+2. Compute the full set of IDs that *should* be scheduled given current store state.
+3. Cancel IDs that are scheduled but should not be (stale from deleted/completed entities).
+4. Schedule IDs that should be but are not yet scheduled.
+This ensures correctness after Supabase sync brings in changes made on desktop.
+
+Notification payloads include `extra: { url: string }` for deep linking (see section 6g).
+
+#### 6f. useNotificationSync hook (`src/hooks/useNotificationSync.ts`)
+
+Mounted once in App.tsx, Android-only. Runs a full sync on mount (after stores hydrate from localStorage), then handles incremental updates by calling individual schedule/cancel functions when specific entities change.
+
+```typescript
+export function useNotificationSync() {
+  const { isAndroid } = usePlatform();
+  const settings = useSettingsStore();
+
+  useEffect(() => {
+    if (!isAndroid || !settings.notificationsEnabled) return;
+    const tasks = Object.values(useTaskStore.getState().tasks);
+    const events = useTaskStore.getState().calendarEvents;
+    const reminders = useTaskStore.getState().calendarReminders;
+    const routines = Object.values(useTaskStore.getState().collections)
+      .filter(c => c.kind === 'routine');
+    syncAllNotifications(tasks, events, reminders, routines, settings);
+  }, []); // full sync on mount only
+}
+```
+
+For incremental updates, existing store actions (completeTask, deleteTask, updateCollection, etc.) call the appropriate schedule/cancel function after mutating state. Keep these calls in App.tsx or a thin wrapper around the store actions — do not import the notification service inside the Zustand store itself (keep stores platform-agnostic).
+
+#### 6g. Deep linking from notification tap
+
+When a notification is tapped and the app opens, navigate to the relevant entity. Notification `extra` field carries a URL:
+
+- Task: `organisaitor://tasks/{taskId}`
+- Calendar event: `organisaitor://calendar/{eventId}`
+- Calendar reminder: `organisaitor://calendar/{reminderId}`
+- Routine: `organisaitor://records/{routineId}`
+
+URL scheme `organisaitor://` must be registered in `android/app/src/main/AndroidManifest.xml` via an `<intent-filter>` — Capacitor's `@capacitor/app` plugin handles the boilerplate when correctly configured. Refer to Capacitor `appUrlOpen` docs for the exact manifest entry.
+
+In App.tsx:
+```typescript
+import { App as CapApp } from '@capacitor/app';
+
+useEffect(() => {
+  if (!isAndroid) return;
+  const handle = CapApp.addListener('appUrlOpen', ({ url }) => {
+    try {
+      const u = new URL(url);
+      const [, section, id] = u.pathname.split('/');
+      if (section === 'tasks' && id) {
+        setActiveView('tasks');
+        openTaskPane(id as TaskId);
+      } else if (section === 'calendar' && id) {
+        setActiveView('calendar');
+        openCalendarEventPane(id as CalendarEventId);
+      } else if (section === 'records' && id) {
+        setActiveView('records');
+        setActiveTracker(id);
+      }
+    } catch {}
+  });
+  return () => { handle.then(l => l.remove()); };
+}, []);
+```
+
+#### 6h. Notifications section in SettingsPane
+
+Visible only on Android (`isAndroid`). Controls:
+
+- **Master toggle** — "Enable notifications". On toggle-on, calls `requestNotificationPermission()`. If granted, sets `notificationsEnabled: true`. If denied, shows inline message directing user to Android Settings.
+- **Task deadlines** — toggle `notifTaskDeadlines`
+- **Calendar events** — toggle `notifCalendarEvents` + inline picker for minutes before (options: 15 min, 30 min, 1 hour, Day before)
+- **Routine reminders** — toggle `notifRoutineReminders` + time picker for `notifRoutineDefaultTime` (HH:MM)
+- **Waiting task follow-up** — toggle `notifWaitingTaskOverdue`
+
+**Per-routine reminder time:** In EditRoutinePane (or wherever routines are edited), add a "Custom reminder time" field (`reminderTime` on Collection) visible only on Android. Shows a time picker; "Default" option sets it back to `null`.
+
+---
+
+### 7. Build & Release
+
+#### Development workflow
+
+```bash
+npm run build:android    # Vite build + cap sync
+npx cap open android     # open Android Studio
+```
+
+For live-reload during dev, temporarily add to `capacitor.config.ts` (do NOT commit):
+```typescript
+server: { url: 'http://YOUR_LOCAL_IP:5173', cleartext: true }
+```
+
+#### Release build
+
+1. In Android Studio: Build → Generate Signed Bundle/APK → **Android App Bundle (.aab)** (required for Play Store).
+2. Create a signing keystore one-time:
+   ```
+   keytool -genkey -v -keystore organisaitor.jks -alias organisaitor -keyalg RSA -keysize 2048 -validity 10000
+   ```
+3. Store the `.jks` file and its passwords **outside the git repo** (e.g. a password manager or secrets manager).
+4. Configure signing in `android/app/build.gradle` using environment variables for CI safety.
+
+#### Play Store setup
+
+- Google Play Console account ($25 one-time fee).
+- Upload `.aab` to **Internal Testing** track first; promote to Production after verification.
+- Required assets: app icon (512×512 PNG), feature graphic (1024×500 PNG), ≥2 screenshots per form factor.
+- App ID `com.organisaitor.app` is permanent — cannot be changed after first publish.
+- Target SDK: API 34+ (Play Store requirement as of 2024).
+- Privacy policy required (Supabase auth collects email address; host a simple policy page and link it in the Play Console listing).
+
+---
+
+### 8. Implementation order (for agent)
+
+Complete dark mode first (steps 1–6) — it benefits desktop immediately and is a prerequisite for the Android StatusBar integration.
+
+1. Create `src/styles/tokens.css` with full token set.
+2. Import `tokens.css` in `src/main.tsx`.
+3. Add `theme` to `settingsStore` + migration; set Android default to `'dark'`.
+4. Add theme effect + StatusBar sync to `App.tsx`; add FOUC script to `index.html`.
+5. Add Appearance section to `SettingsPane` (desktop immediately usable).
+6. Audit and migrate all `*.module.css` files — replace every hardcoded color with tokens. Run the grep command in section 4 of Dark Mode to find them all.
+7. Install Capacitor packages; run `cap init` + `cap add android`.
+8. Create `capacitor.config.ts`.
+9. Create `src/hooks/usePlatform.ts`; add body class in `App.tsx`.
+10. Create `MobileNav` component (bottom tab bar).
+11. Create `MobileMoreSheet`.
+12. Modify `App.tsx` for platform layout branching (hide NavSidebar/Sidebar, show MobileNav).
+13. Make all slide-in panes full-screen on mobile (CSS).
+14. Wire Android back button via `@capacitor/app` `backButton` listener.
+15. Section-specific layout passes: Tasks filter sheet, Records/Lists header picker, Calendar week view responsive, Portfolio horizontal scroll.
+16. Create `src/utils/haptics.ts`; wire haptic calls to task/routine/list completion actions.
+17. StatusBar + SplashScreen integration (already configured, add hide() call).
+18. Add `reminderTime: string | null` to `Collection` type in `src/types/index.ts`; bump taskStore to v6 with migration.
+19. Add notification preference fields to `settingsStore`.
+20. Build `notificationHelpers.ts` (ID hashing, payload builders).
+21. Build `notificationService.ts` (schedule/cancel/sync functions).
+22. Build `useNotificationSync.ts`; mount in `App.tsx` (Android-gated).
+23. Wire incremental schedule/cancel calls at task/calendar/routine action sites.
+24. Wire deep linking: `appUrlOpen` listener in `App.tsx`; add `extra.url` to notification payloads.
+25. Add Notifications section to `SettingsPane` (Android-gated); add per-routine reminder time to EditRoutinePane (Android-gated).
+26. Generate app icon via Android Studio Image Asset Studio.
+27. Test end-to-end on Android emulator API 34: all notification types fire correctly, deep links navigate correctly, theme switching works, all sections accessible and usable.
+28. Create signing keystore; build release `.aab`; upload to Play Store Internal Testing.
 
 ---

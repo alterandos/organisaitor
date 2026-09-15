@@ -1,3 +1,7 @@
+import { resolveTimezone, zonedTimeToUtc, SYSTEM_TIMEZONE } from './timezone';
+
+export type ClockFormat = 'system' | '12h' | '24h';
+
 export const now = (): string => new Date().toISOString();
 
 export const todayIso = (): string => {
@@ -12,18 +16,19 @@ export const formatDate = (iso: string): string =>
     year: 'numeric',
   });
 
-export const formatTime = (time: string): string => {
+export const formatTime = (time: string, clockFormat: ClockFormat = 'system'): string => {
   const [h, m] = time.split(':').map(Number);
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const hour12 = clockFormat === 'system' ? undefined : clockFormat === '12h';
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12 });
 };
 
-export const formatDeadline = (date: string, time: string | null): string =>
-  time ? `${formatDate(date)} ${formatTime(time)}` : formatDate(date);
+export const formatDeadline = (date: string, time: string | null, clockFormat: ClockFormat = 'system'): string =>
+  time ? `${formatDate(date)} ${formatTime(time, clockFormat)}` : formatDate(date);
 
-export const isOverdue = (date: string, time: string | null = null): boolean => {
-  const target = time ? new Date(`${date}T${time}`) : new Date(date);
+export const isOverdue = (date: string, time: string | null = null, timezone: string = SYSTEM_TIMEZONE): boolean => {
+  const target = zonedTimeToUtc(date, time ?? '00:00', resolveTimezone(timezone));
   return target < new Date();
 };
 

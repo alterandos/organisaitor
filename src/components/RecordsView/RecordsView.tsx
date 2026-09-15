@@ -1,7 +1,7 @@
 import { useTaskStore } from '@/store/taskStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useRoutineStore } from '@/store/routineStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { todayIso } from '@/utils/date';
 import type { Collection, CollectionId, FieldSchema, TrackerEntry, TrackerEntryId } from '@/types';
 import { RoutineChecklist } from '@/components/RoutineChecklist/RoutineChecklist';
@@ -214,9 +214,12 @@ export function RecordsView() {
   const showAddRoutine     = useUIStore((s) => s.showAddRoutine);
   const openEditTracker    = useUIStore((s) => s.openEditTracker);
   const openEditRoutine    = useUIStore((s) => s.openEditRoutine);
+  const activeCollectionId = useUIStore(selectActiveCollectionId);
 
-  const trackers = Object.values(collections).filter((c) => c.kind === 'tracker');
-  const routines = Object.values(collections).filter((c) => c.kind === 'routine');
+  const allTrackers = Object.values(collections).filter((c) => c.kind === 'tracker');
+  const allRoutines = Object.values(collections).filter((c) => c.kind === 'routine');
+  const trackers = activeCollectionId ? allTrackers.filter((c) => c.collectionId === activeCollectionId) : allTrackers;
+  const routines = activeCollectionId ? allRoutines.filter((c) => c.collectionId === activeCollectionId) : allRoutines;
   const activeTracker = activeTrackerId
     ? (collections[activeTrackerId as CollectionId] ?? null)
     : null;
@@ -250,7 +253,7 @@ export function RecordsView() {
         </div>
 
         {trackers.length === 0 ? (
-          <p className={styles.sidebarEmpty}>No trackers yet.</p>
+          <p className={styles.sidebarEmpty}>{activeCollectionId ? 'No trackers in this Endeavour.' : 'No trackers yet.'}</p>
         ) : (
           <ul className={styles.trackerList}>
             {trackers.map((t) => (
@@ -288,7 +291,7 @@ export function RecordsView() {
         </div>
 
         {routines.length === 0 ? (
-          <p className={styles.sidebarEmpty}>No routines yet.</p>
+          <p className={styles.sidebarEmpty}>{activeCollectionId ? 'No routines in this Endeavour.' : 'No routines yet.'}</p>
         ) : (
           <ul className={styles.trackerList}>
             {routines.map((r) => (
@@ -329,8 +332,10 @@ export function RecordsView() {
         ) : (
           <div className={styles.emptyState}>
             <p className={styles.emptyStateText}>
-              {trackers.length === 0 && routines.length === 0
+              {allTrackers.length === 0 && allRoutines.length === 0
                 ? 'Create a tracker or routine to get started.'
+                : trackers.length === 0 && routines.length === 0
+                ? 'No trackers or routines in this Endeavour.'
                 : 'Select a tracker or routine from the sidebar.'}
             </p>
             <button className={styles.emptyStateBtn} onClick={showAddTracker}>

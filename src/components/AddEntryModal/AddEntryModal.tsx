@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useUIStore } from '@/store/uiStore';
@@ -174,6 +174,7 @@ export function AddEntryModal() {
   const editingEntryId   = useUIStore((s) => s.editingEntryId);
   const closeModal       = useUIStore((s) => s.closeModal);
 
+  const formRef = useRef<HTMLFormElement>(null);
   const [date,  setDate]  = useState<string>(todayIso());
   const [data,  setData]  = useState<Record<string, unknown>>({});
   const [notes, setNotes] = useState('');
@@ -182,7 +183,10 @@ export function AddEntryModal() {
 
   useEffect(() => {
     if (!isVisible) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeModal(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [isVisible, closeModal]);
@@ -254,7 +258,7 @@ export function AddEntryModal() {
           <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           {/* Date */}
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor="aem-date">Date</label>

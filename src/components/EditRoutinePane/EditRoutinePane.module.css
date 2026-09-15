@@ -203,7 +203,7 @@
 }
 .fieldActionBtn:hover { color: var(--color-text); background: var(--color-border); }
 .fieldActionBtn:disabled { opacity: 0.3; cursor: not-allowed; }
-.fieldActionBtnDelete:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+.fieldActionBtnDelete:hover { color: var(--color-danger); background: var(--color-danger-muted); }
 
 /* ── Add step row ──────────────────────────────────────── */
 
@@ -315,8 +315,8 @@
 .deleteBtn {
   padding: 0.65rem 1rem;
   background: transparent;
-  color: #ef4444;
-  border: 1px solid rgba(239,68,68,0.35);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-muted);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   font-weight: 500;
@@ -325,7 +325,7 @@
   transition: background 140ms ease, border-color 140ms ease;
   white-space: nowrap;
 }
-.deleteBtn:hover { background: rgba(239,68,68,0.08); border-color: #ef4444; }
+.deleteBtn:hover { background: var(--color-danger-muted); border-color: var(--color-danger); }
 
 .saveBtn {
   flex: 1;
@@ -342,3 +342,18 @@
 }
 .saveBtn:hover:not(:disabled) { background: var(--color-primary-hover); }
 .saveBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Android: always full-screen, regardless of viewport width — overrides the narrow-browser
+   bottom-sheet fallback above (higher specificity wins over the bare .pane inside @media). */
+:global(.platform-android) .pane {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  border: none;
+  border-radius: 0;
+  animation: none;
+}

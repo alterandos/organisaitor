@@ -5,6 +5,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { TimeInput } from '@/components/TimeInput/TimeInput';
 import styles from './CalendarReminderPane.module.css';
 
 export function CalendarReminderPane() {
@@ -113,11 +114,10 @@ export function CalendarReminderPane() {
 
           <div className={styles.field}>
             <span className={styles.label}>Time</span>
-            <input
-              type="time"
+            <TimeInput
               className={styles.timeInput}
               value={reminder.time ?? ''}
-              onChange={(e) => updateReminder(id, { time: e.target.value || null })}
+              onChange={(v) => updateReminder(id, { time: v || null })}
             />
           </div>
 

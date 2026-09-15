@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { usePriceStore } from '@/store/priceStore';
 import { getBatchQuotes } from './tickerService';
@@ -8,7 +8,6 @@ const REFRESH_INTERVAL_MS = 60_000;
 export function usePriceRefresh() {
   const watchlistItems = usePortfolioStore((s) => s.watchlistItems);
   const setPrices      = usePriceStore((s) => s.setPrices);
-  const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
     const tickers = Object.values(watchlistItems)

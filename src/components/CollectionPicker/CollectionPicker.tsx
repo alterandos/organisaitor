@@ -24,8 +24,11 @@ export function CollectionPicker({ collections, value, onChange, noneLabel = 'No
 
   const selected = value ? collections.find((c) => c.id === value) ?? null : null;
 
-  const projects = collections.filter((c) => c.kind === 'project');
-  const lists    = collections.filter((c) => c.kind === 'list');
+  // Archived Endeavours are sunset — don't offer them for new selections, but keep
+  // showing the current value even if it was archived after being picked.
+  const selectable = collections.filter((c) => !c.archivedAt || c.id === value);
+  const projects = selectable.filter((c) => c.kind === 'project');
+  const lists    = selectable.filter((c) => c.kind === 'list');
 
   const select = (id: CollectionId | null) => { onChange(id); setOpen(false); };
 

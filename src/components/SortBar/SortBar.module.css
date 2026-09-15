@@ -59,3 +59,16 @@
 }
 .arrow:hover { color: var(--color-text); background: var(--color-bg); }
 .arrowActive { color: var(--color-primary); font-weight: 700; }
+
+/* Android: horizontal-scroll chip row instead of wrapping to a second line — the header
+   already competes for vertical space with the view-mode toggle next to it. */
+:global(.platform-android) .bar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.15rem;
+}
+:global(.platform-android) .option,
+:global(.platform-android) .label {
+  flex-shrink: 0;
+}

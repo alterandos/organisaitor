@@ -1,0 +1,57 @@
+.wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  /* Callers pass a `className` sized for a single native time input (e.g. a fixed 7.5rem
+     width) — that's too narrow once an AM/PM toggle is added, so override rather than inherit. */
+  width: fit-content !important;
+  max-width: none !important;
+}
+.wrapper:focus-within {
+  border-color: var(--color-primary);
+}
+
+.segment {
+  width: 1.6rem;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: inherit;
+  font-family: inherit;
+  text-align: center;
+  padding: 0;
+  -moz-appearance: textfield;
+}
+.segment::-webkit-inner-spin-button,
+.segment::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.sep {
+  color: var(--color-muted);
+}
+
+.meridiemToggle {
+  display: flex;
+  gap: 0.15rem;
+  margin-left: 0.3rem;
+}
+
+.meridiemBtn {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  font-size: 0.65rem;
+  font-family: inherit;
+  font-weight: 500;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-muted);
+}
+.meridiemBtnActive {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}

@@ -1,26 +1,44 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, lazy, Suspense } from 'react';
 import type React from 'react';
+import { App as CapApp } from '@capacitor/app';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase, isSupabaseConfigured } from '@/services/supabase';
+import { openExternalLink } from '@/utils/links';
+import { usePlatform } from '@/hooks/usePlatform';
 import { useAuthStore } from '@/store/authStore';
 import { initSync, stopSync } from '@/services/sync/syncService';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { AccountPane } from '@/components/AccountPane/AccountPane';
 import { TaskList } from '@/components/TaskList/TaskList';
 import { QuickAddInput } from '@/components/QuickAddInput/QuickAddInput';
+import { MobileQuickAddBar } from '@/components/MobileQuickAddBar/MobileQuickAddBar';
+import { MobileCalendarQuickAdd } from '@/components/MobileCalendarQuickAdd/MobileCalendarQuickAdd';
 import { AddTaskButton } from '@/components/AddTaskButton/AddTaskButton';
 import { CollectionFilterPicker } from '@/components/CollectionPicker/CollectionFilterPicker';
 import { SortBar } from '@/components/SortBar/SortBar';
-import { PurposeFilterBar } from '@/components/PurposeFilterBar/PurposeFilterBar';
+import { PurposeFilterPicker } from '@/components/PurposeFilterPicker/PurposeFilterPicker';
 import { Sidebar } from '@/components/Sidebar/Sidebar';
 import { NavSidebar } from '@/components/NavSidebar/NavSidebar';
+import { MobileNav } from '@/components/MobileNav/MobileNav';
+import { MobileMoreSheet } from '@/components/MobileMoreSheet/MobileMoreSheet';
 import { CalendarView } from '@/components/CalendarView/CalendarView';
 import { RecordsView } from '@/components/RecordsView/RecordsView';
-import { PortfolioSection } from '@/components/PortfolioSection/PortfolioSection';
+import { NotesSection } from '@/components/NotesSection/NotesSection';
+import { ListsSection } from '@/components/ListsSection/ListsSection';
+import { AddActivityModal } from '@/components/AddActivityModal/AddActivityModal';
+import { EditActivityTypeModal } from '@/components/EditActivityTypeModal/EditActivityTypeModal';
+import { AddScheduleModal } from '@/components/AddScheduleModal/AddScheduleModal';
+import { ManageSchedulesPane } from '@/components/ManageSchedulesPane/ManageSchedulesPane';
+import { AddListModal } from '@/components/AddListModal/AddListModal';
+import { AddListItemModal } from '@/components/AddListItemModal/AddListItemModal';
 import { AddWatchlistItemModal } from '@/components/AddWatchlistItemModal/AddWatchlistItemModal';
 import { BulkUploadWatchlistModal } from '@/components/BulkUploadWatchlistModal/BulkUploadWatchlistModal';
 import { AddPortfolioTagModal } from '@/components/AddPortfolioTagModal/AddPortfolioTagModal';
 import { AddInvestmentPurposeModal } from '@/components/AddInvestmentPurposeModal/AddInvestmentPurposeModal';
 import { TaskPane } from '@/components/TaskPane/TaskPane';
 import { SettingsPane } from '@/components/SettingsPane/SettingsPane';
+import { ManagePane } from '@/components/ManagePane/ManagePane';
 import { CalendarEventPane } from '@/components/CalendarEventPane/CalendarEventPane';
 import { CalendarReminderPane } from '@/components/CalendarReminderPane/CalendarReminderPane';
 import { AddTaskModal } from '@/components/AddTaskModal/AddTaskModal';
@@ -35,20 +53,49 @@ import { EditRoutinePane } from '@/components/EditRoutinePane/EditRoutinePane';
 import { AddRoutineModal } from '@/components/AddRoutineModal/AddRoutineModal';
 import { IntegrationsPane } from '@/components/IntegrationsPane/IntegrationsPane';
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
+import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
+import { AddNoteModal } from '@/components/AddNoteModal/AddNoteModal';
+import { AddNoteTagModal } from '@/components/AddNoteTagModal/AddNoteTagModal';
+import { NoteTagPresetModal } from '@/components/NoteTagPresetModal/NoteTagPresetModal';
+import { EditNoteMetaModal } from '@/components/EditNoteMetaModal/EditNoteMetaModal';
+import { NoteEditorPane } from '@/components/NoteEditorPane/NoteEditorPane';
 import { useNotificationChecker } from '@/hooks/useNotificationChecker';
 import { useTaskStore } from '@/store/taskStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId, closeTopmostMobileOverlay } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { hexToRgba } from '@/utils/color';
+import { getOrderedEndeavours } from '@/utils/collections';
+import { isAppEnabled } from '@/config/apps';
 import type { CollectionId } from '@/types';
 import styles from './App.module.css';
 
+// Add-on apps (Portfolio, Fitness) are code-split from the core bundle — their code
+// only downloads when a user actually navigates to them. Core sections (Tasks,
+// Calendar, Records, Lists, Notes) stay eagerly bundled since every user has them.
+const PortfolioSection = lazy(() =>
+  import('@/components/PortfolioSection/PortfolioSection').then((m) => ({ default: m.PortfolioSection }))
+);
+const FitnessSection = lazy(() =>
+  import('@/components/FitnessSection/FitnessSection').then((m) => ({ default: m.FitnessSection }))
+);
+
+function AppSectionFallback() {
+  return <div className={styles.sectionLoading}>Loading…</div>;
+}
+
 export default function App() {
+  const { isAndroid } = usePlatform();
   const openAccount                = useUIStore((s) => s.openAccount);
   const accountOpen                = useUIStore((s) => s.accountOpen);
   const openModal                  = useUIStore((s) => s.openModal);
   const editingTaskId              = useUIStore((s) => s.editingTaskId);
-  const activeCollectionId         = useUIStore((s) => s.activeCollectionId);
+  const activeCollectionId         = useUIStore(selectActiveCollectionId);
+  const endeavourPickerOpen        = useUIStore((s) => s.endeavourPickerOpen);
+  const toggleEndeavourPicker      = useUIStore((s) => s.toggleEndeavourPicker);
+  const closeEndeavourPicker       = useUIStore((s) => s.closeEndeavourPicker);
+  const setActiveCollection        = useUIStore((s) => s.setActiveCollection);
+  const togglePurposePicker        = useUIStore((s) => s.togglePurposePicker);
+  const toggleManage               = useUIStore((s) => s.toggleManage);
   const settingsOpen               = useUIStore((s) => s.settingsOpen);
   const openSidebar                = useUIStore((s) => s.openSidebar);
   const closeSidebar               = useUIStore((s) => s.closeSidebar);
@@ -62,14 +109,89 @@ export default function App() {
   const editRoutineOpen            = useUIStore((s) => s.editRoutineOpen);
   const editingWatchlistItemId     = useUIStore((s) => s.editingWatchlistItemId);
   const portfolioChartOpen         = useUIStore((s) => s.portfolioChartOpen);
+  const editingNoteId              = useUIStore((s) => s.editingNoteId);
   const collectionsRecord          = useTaskStore((s) => s.collections);
   const colorEnabled               = useSettingsStore((s) => s.colorEnabled);
   const setChartTickerRowZoom      = useSettingsStore((s) => s.setChartTickerRowZoom);
   const chartTickerRowZoom         = useSettingsStore((s) => s.chartTickerRowZoom);
+  const theme                      = useSettingsStore((s) => s.theme);
+  const nudgeNoteEditorZoom        = useSettingsStore((s) => s.nudgeNoteEditorZoom);
+
+  useEffect(() => {
+    const apply = (dark: boolean) => {
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      if (isAndroid) {
+        void StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
+        void StatusBar.setBackgroundColor({ color: dark ? '#0f0f0f' : '#ffffff' });
+      }
+    };
+
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      apply(mq.matches);
+      const handler = (e: MediaQueryListEvent) => apply(e.matches);
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    } else {
+      apply(theme === 'dark');
+    }
+  }, [theme, isAndroid]);
+
+  useEffect(() => {
+    if (!isAndroid) return;
+    document.body.classList.add('platform-android');
+    // Stores hydrate synchronously from localStorage on module load, so by the time this
+    // effect runs (after first paint) there's nothing further to wait on.
+    void SplashScreen.hide();
+  }, [isAndroid]);
+
+  useEffect(() => {
+    if (!isAndroid) return;
+    const handle = CapApp.addListener('backButton', () => {
+      if (closeTopmostMobileOverlay()) return;
+      const { mobileBackConsumer } = useUIStore.getState();
+      if (mobileBackConsumer?.()) return;
+      void CapApp.minimizeApp();
+    });
+    return () => { void handle.then((l) => l.remove()); };
+  }, [isAndroid]);
+
+  useEffect(() => {
+    // Tauri's webview doesn't act on <a target="_blank">/window.open() for external URLs —
+    // there's no OS browser tab to hand off to without the opener plugin, so links across
+    // the whole app (task link pills, list items, calendar events, etc.) silently did
+    // nothing when running as the desktop app. Android's WebView has the same problem for
+    // the same reason. One capture-phase listener here covers every existing/future
+    // `target="_blank"` link instead of patching each render site.
+    // Excludes the Notes editor (`.ProseMirror`, Tiptap's own stable root class): it
+    // already opens its links itself (needed anyway to distinguish plain click from
+    // Ctrl+click-to-select), and clicks on an anchor inside contenteditable don't
+    // trigger the browser's native navigation — so without this exclusion, a click
+    // there would be handled twice (once by the editor, once by this listener).
+    if (!isAndroid && !('__TAURI_INTERNALS__' in window)) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a[target="_blank"]') as HTMLAnchorElement | null;
+      if (!anchor?.href || anchor.closest('.ProseMirror')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openExternalLink(anchor.href);
+    };
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  }, [isAndroid]);
 
   useNotificationChecker();
 
   const setSession = useAuthStore((s) => s.setSession);
+  const authUserId = useAuthStore((s) => s.user?.id ?? null);
+
+  const handlePullRefresh = () => {
+    if (!isSupabaseConfigured || !authUserId) return;
+    return initSync(authUserId);
+  };
+  const { ref: taskScrollRef, distance: pullDistance, refreshing: pullRefreshing } =
+    usePullToRefresh<HTMLElement>(handlePullRefresh, isAndroid);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -103,17 +225,56 @@ export default function App() {
   const setTaskViewMode  = useUIStore((s) => s.setTaskViewMode);
 
   useEffect(() => {
+    // Strava's OAuth redirect lands on bare "/" (no section context survives a full page
+    // navigation) — jump straight to Fitness so the connected/error message is visible
+    // without the user having to know to go find it.
+    if (new URLSearchParams(window.location.search).has('strava') && isAppEnabled('fitness')) {
+      setActiveView('fitness');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Notes editor zoom — must fire before isTyping guard (editor is contentEditable)
+      // !e.shiftKey prevents Ctrl+Shift+= (superscript) and Ctrl+Shift+- (subscript) from also zooming
+      if (activeView === 'notes' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+        if (e.key === '-') { e.preventDefault(); nudgeNoteEditorZoom(-0.1); return; }
+        if (e.key === '=') { e.preventDefault(); nudgeNoteEditorZoom(0.1); return; }
+      }
+
       // Don't fire when typing in inputs
       const tag = (e.target as HTMLElement)?.tagName;
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
         || (e.target as HTMLElement)?.isContentEditable;
       if (isTyping) return;
 
+      // Endeavour filter: while expanded, 0-9 select (0 = All) and Escape closes.
+      // Takes over the keyboard entirely until closed, so this must run before the
+      // digit-based section-switch hotkeys below.
+      if (endeavourPickerOpen) {
+        if (e.key === 'Escape') { e.preventDefault(); closeEndeavourPicker(); return; }
+        if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          e.preventDefault();
+          if (e.key === '0') {
+            setActiveCollection(null);
+          } else {
+            const ordered = getOrderedEndeavours(collectionsRecord);
+            const chosen  = ordered[Number(e.key) - 1];
+            if (chosen) setActiveCollection(chosen.id);
+          }
+          closeEndeavourPicker();
+        }
+        return;
+      }
+
       if ((e.key === '1' || (e.ctrlKey && e.key === '1')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('tasks'); return; }
       if ((e.key === '2' || (e.ctrlKey && e.key === '2')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('calendar'); return; }
       if ((e.key === '3' || (e.ctrlKey && e.key === '3')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('records'); return; }
-      if ((e.key === '4' || (e.ctrlKey && e.key === '4')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('portfolio'); return; }
+      if ((e.key === '4' || (e.ctrlKey && e.key === '4')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('lists'); return; }
+      if ((e.key === '5' || (e.ctrlKey && e.key === '5')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('notes'); return; }
+      if ((e.key === '6' || (e.ctrlKey && e.key === '6')) && !e.altKey && !e.metaKey) { if (isAppEnabled('portfolio')) { e.preventDefault(); setActiveView('portfolio'); } return; }
+      if ((e.key === '7' || (e.ctrlKey && e.key === '7')) && !e.altKey && !e.metaKey) { if (isAppEnabled('fitness')) { e.preventDefault(); setActiveView('fitness'); } return; }
 
       if (e.key === 's' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
@@ -121,18 +282,38 @@ export default function App() {
         return;
       }
 
+      if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.metaKey) {
+        if (activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness') { e.preventDefault(); toggleEndeavourPicker(); }
+        return;
+      }
+
+      if ((e.key === 'p' || e.key === 'P') && !e.altKey && !e.metaKey) {
+        if (activeView === 'tasks') { e.preventDefault(); togglePurposePicker(); }
+        return;
+      }
+
+      if ((e.key === 'm' || e.key === 'M') && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        toggleManage();
+        return;
+      }
+
+
       if (portfolioChartOpen && e.ctrlKey && !e.altKey && !e.metaKey) {
         if (e.key === '-') { e.preventDefault(); setChartTickerRowZoom(chartTickerRowZoom - 0.1); return; }
         if (e.key === '=' || e.key === '+') { e.preventDefault(); setChartTickerRowZoom(chartTickerRowZoom + 0.1); return; }
       }
 
       const isNewItem = (e.key === ' ' && !e.ctrlKey && !e.altKey && !e.metaKey)
-                     || (e.ctrlKey && e.key === 'n');
+                     || ((e.key === 'n' || e.key === 'N') && !e.altKey && !e.metaKey);
       if (isNewItem) {
         e.preventDefault();
-        const { showAddTask, showAddCalendarItem, showAddTracker, showAddEntry, showAddWatchlistItem, activeTrackerId: tid, activeRoutineId: rid } = useUIStore.getState();
+        const { showAddTask, showAddCalendarItem, showAddTracker, showAddEntry, showAddWatchlistItem, showAddList, showAddListItem, showAddNote, showAddActivity, activeTrackerId: tid, activeRoutineId: rid, activeListId: lid } = useUIStore.getState();
         if (activeView === 'calendar') showAddCalendarItem();
         else if (activeView === 'portfolio') showAddWatchlistItem();
+        else if (activeView === 'lists') { if (lid) showAddListItem(lid); else showAddList(); }
+        else if (activeView === 'notes') showAddNote();
+        else if (activeView === 'fitness') showAddActivity();
         else if (activeView === 'records') {
           if (tid) showAddEntry(tid);
           else if (rid) showAddEntry(rid);
@@ -142,7 +323,12 @@ export default function App() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [setActiveView, activeView, settingsOpen, openSettings, closeSettings, portfolioChartOpen, chartTickerRowZoom, setChartTickerRowZoom]);
+  }, [
+    setActiveView, activeView, settingsOpen, openSettings, closeSettings,
+    portfolioChartOpen, chartTickerRowZoom, setChartTickerRowZoom, openModal, nudgeNoteEditorZoom,
+    endeavourPickerOpen, toggleEndeavourPicker, closeEndeavourPicker, setActiveCollection, collectionsRecord,
+    togglePurposePicker, toggleManage,
+  ]);
 
   const activeCollection = activeCollectionId
     ? collectionsRecord[activeCollectionId as CollectionId]
@@ -160,26 +346,34 @@ export default function App() {
 
   return (
     <div className={styles.shell}>
-      <NavSidebar />
+      {!isAndroid && <NavSidebar />}
 
-      <div className={styles.app}>
+      <div className={`${styles.app} ${isAndroid ? styles.appMobile : ''}`}>
         <header className={styles.header} style={headerStyle}>
           <div className={styles.headerLeft}>
-            <button
-              className={styles.menuBtn}
-              onMouseEnter={handleHoverOpen}
-              onMouseLeave={handleHoverClose}
-              aria-label="Open library"
-            >☰</button>
+            {!isAndroid && (
+              <button
+                className={styles.menuBtn}
+                onMouseEnter={handleHoverOpen}
+                onMouseLeave={handleHoverClose}
+                aria-label="Open library"
+              >☰</button>
+            )}
             <h1 className={styles.heading}>
               {activeView === 'calendar'  ? 'Calendar'
                : activeView === 'records'   ? 'Records'
+               : activeView === 'lists'     ? 'Lists'
                : activeView === 'portfolio' ? 'Portfolio'
+               : activeView === 'notes'     ? 'Notes'
+               : activeView === 'fitness'   ? 'Fitness'
                : 'My To Do'}
             </h1>
           </div>
           <div className={styles.headerRight}>
-            {activeView !== 'portfolio' && <CollectionFilterPicker />}
+            {activeView === 'tasks' && <PurposeFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />}
+            {activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness' && (
+              <CollectionFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />
+            )}
             <NotificationCenter />
             <button
               className={styles.settingsBtn}
@@ -197,9 +391,16 @@ export default function App() {
 
         {activeView === 'tasks' && (
           <>
-            <PurposeFilterBar />
-            <main className={styles.main}>
-              <QuickAddInput />
+            <main
+              ref={taskScrollRef}
+              className={`${styles.main} ${isAndroid ? styles.mainMobile : ''}`}
+            >
+              {isAndroid && (pullDistance > 0 || pullRefreshing) && (
+                <div className={styles.pullIndicator} style={{ height: pullRefreshing ? 40 : pullDistance }}>
+                  {pullRefreshing ? 'Refreshing…' : pullDistance > 50 ? 'Release to refresh' : 'Pull to refresh'}
+                </div>
+              )}
+              {!isAndroid && <QuickAddInput />}
               <div className={styles.toolRow}>
                 <SortBar />
                 <div className={styles.viewModeToggle}>
@@ -217,18 +418,27 @@ export default function App() {
               </div>
               <TaskList />
             </main>
+            {isAndroid && <MobileQuickAddBar />}
           </>
         )}
 
         {activeView === 'calendar'  && <CalendarView />}
         {activeView === 'records'   && <RecordsView />}
-        {activeView === 'portfolio' && <PortfolioSection />}
+        {activeView === 'lists'     && <ListsSection />}
+        {activeView === 'notes'     && <NotesSection />}
+        {activeView === 'portfolio' && isAppEnabled('portfolio') && (
+          <Suspense fallback={<AppSectionFallback />}><PortfolioSection /></Suspense>
+        )}
+        {activeView === 'fitness' && isAppEnabled('fitness') && (
+          <Suspense fallback={<AppSectionFallback />}><FitnessSection /></Suspense>
+        )}
 
         <AddTaskButton />
 
-        <Sidebar onHoverEnter={handleHoverOpen} onHoverLeave={handleHoverClose} />
+        {!isAndroid && <Sidebar onHoverEnter={handleHoverOpen} onHoverLeave={handleHoverClose} />}
         {editingTaskId             && <TaskPane />}
         {settingsOpen              && <SettingsPane />}
+        <ManagePane />
         {accountOpen               && <AccountPane />}
         {integrationsOpen          && <IntegrationsPane />}
         {editingCalendarEventId    && <CalendarEventPane />}
@@ -246,8 +456,24 @@ export default function App() {
         {openModal === 'add-portfolio-tag'       && <AddPortfolioTagModal />}
         {openModal === 'add-investment-purpose'  && <AddInvestmentPurposeModal />}
         {openModal === 'bulk-upload-watchlist'   && <BulkUploadWatchlistModal />}
+        {openModal === 'add-list'               && <AddListModal />}
+        {openModal === 'add-list-item'          && <AddListItemModal />}
+        {openModal === 'add-note'               && <AddNoteModal />}
+        {openModal === 'add-note-tag'           && <AddNoteTagModal />}
+        {openModal === 'note-tag-presets'       && <NoteTagPresetModal />}
+        {openModal === 'edit-note-meta'         && <EditNoteMetaModal />}
+        {openModal === 'add-activity'           && <AddActivityModal />}
+        <EditActivityTypeModal />
+        {openModal === 'add-schedule'           && <AddScheduleModal />}
+        <ManageSchedulesPane />
         {editTrackerOpen                     && <EditTrackerPane />}
         {editRoutineOpen                     && <EditRoutinePane />}
+        {editingNoteId && activeView !== 'notes' && <NoteEditorPane />}
+
+        <LinkHoverPreview />
+        {isAndroid && <MobileNav />}
+        {isAndroid && <MobileMoreSheet />}
+        {isAndroid && <MobileCalendarQuickAdd />}
       </div>
     </div>
   );

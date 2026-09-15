@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Organisaitor</string>
+    <string name="title_activity_main">Organisaitor</string>
+    <string name="package_name">com.organisaitor.app</string>
+    <string name="custom_url_scheme">com.organisaitor.app</string>
+</resources>

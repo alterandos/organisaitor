@@ -64,7 +64,7 @@
   margin-bottom: 0.45rem;
 }
 
-.required { color: #ef4444; }
+.required { color: var(--color-danger); }
 
 .input {
   width: 100%;
@@ -131,7 +131,7 @@
   flex-shrink: 0;
   transition: color 120ms ease;
 }
-.taskRemoveBtn:hover { color: #ef4444; }
+.taskRemoveBtn:hover { color: var(--color-danger); }
 
 .addTaskRow {
   display: flex;

@@ -1,7 +1,11 @@
 import { create } from 'zustand';
-import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode } from '@/types';
+import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority } from '@/types';
+import type { Activity } from '@/types/fitness';
 
-export type AppView = 'tasks' | 'calendar' | 'records' | 'portfolio';
+export type AppView = 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
+
+// Manage view (library administration) — left-nav tabs, extensible for future sections.
+export type ManageSection = 'endeavours' | 'purposes' | 'tags';
 
 export type ModalType =
   | 'add-task'
@@ -16,6 +20,14 @@ export type ModalType =
   | 'add-portfolio-tag'
   | 'add-investment-purpose'
   | 'bulk-upload-watchlist'
+  | 'add-list'
+  | 'add-list-item'
+  | 'add-note'
+  | 'add-note-tag'
+  | 'note-tag-presets'
+  | 'edit-note-meta'
+  | 'add-activity'
+  | 'add-schedule'
   | null;
 
 export type SortField = 'createdAt' | 'deadline' | 'collection' | 'priority';
@@ -30,7 +42,13 @@ const DEFAULT_SORT_DIR: Record<SortField, SortDir> = {
 
 interface UIState {
   openModal:          ModalType;
-  activeCollectionId: string | null;
+  // Keyed by section (AppView) so each section (Tasks/Calendar/Records/Notes) remembers
+  // its own focused Endeavour independently — switching sections and back preserves it.
+  activeCollectionIdByView: Partial<Record<AppView, string | null>>;
+  endeavourPickerOpen:      boolean;
+  purposePickerOpen:        boolean;
+  manageOpen:               boolean;
+  manageSection:            ManageSection;
   editingTaskId:      string | null;
   sidebarOpen:        boolean;
   activePurposeIds:   string[];
@@ -38,17 +56,51 @@ interface UIState {
   editingTag:         Tag        | null;
   editingPurpose:     Purpose    | null;
   editingCollection:  Collection | null;
+  editingActivity:    Activity   | null;
+  editingSchedule:    ScheduleTemplate | null;
 
   showAddTask:       () => void;
   showAddSubtask:    (parentId?: string) => void;
+  // MobileQuickAddBar's "More options…" escape hatch (docs/android/01-tasks-app.md §3.2) —
+  // opens the full AddTaskModal pre-filled with whatever the quick-add bar had entered so far.
+  quickAddPrefill:        { title: string; priority: Priority; collectionId: string | null; deadline: string | null } | null;
+  showAddTaskWithPrefill: (prefill: { title: string; priority: Priority; collectionId: string | null; deadline: string | null }) => void;
   showAddCollection: () => void;
   taskModalAdvanced: boolean;
   pendingParentId:   string | null;
   showAddPurpose:    () => void;
   showAddTag:        () => void;
+  showAddActivity:   () => void;
+  openEditActivity:  (activity: Activity) => void;
+  closeEditActivity: () => void;
   closeModal:        () => void;
 
-  setActiveCollection:  (id: string | null) => void;
+  // Activity type customisation (slide-in pane, mirrors EditTrackerPane)
+  editActivityTypeOpen:   boolean;
+  editingActivityTypeId:  string | null;   // null = create mode
+  showAddActivityType:    () => void;
+  openEditActivityType:   (id: string) => void;
+  closeEditActivityType:  () => void;
+
+  // Schedules (recurring weekly timetables, e.g. a uni/gym schedule) — manager pane + create/edit modal
+  schedulesOpen:     boolean;
+  openSchedules:     () => void;
+  closeSchedules:    () => void;
+  showAddSchedule:   () => void;
+  openEditSchedule:  (schedule: ScheduleTemplate) => void;
+  closeEditSchedule: () => void;
+
+  setActiveCollection:    (id: string | null) => void;
+  openEndeavourPicker:    () => void;
+  closeEndeavourPicker:   () => void;
+  toggleEndeavourPicker:  () => void;
+  openPurposePicker:      () => void;
+  closePurposePicker:     () => void;
+  togglePurposePicker:    () => void;
+  openManage:             (section?: ManageSection) => void;
+  closeManage:            () => void;
+  toggleManage:           () => void;
+  setManageSection:       (section: ManageSection) => void;
   openTaskPane:         (id: string) => void;
   closeTaskPane:        () => void;
   openSidebar:          () => void;
@@ -92,9 +144,20 @@ interface UIState {
   openCalendarReminderPane:  (id: string) => void;
   closeCalendarReminderPane: () => void;
 
-  calendarItemDate: string | null;
-  calendarItemKind: CalendarItemKind | null;
-  showAddCalendarItem: (date?: string, kind?: CalendarItemKind) => void;
+  calendarItemDate:  string | null;
+  calendarItemKind:  CalendarItemKind | null;
+  calendarItemTime:  string | null;
+  calendarItemTitle: string | null;
+  showAddCalendarItem: (date?: string, kind?: CalendarItemKind, time?: string, title?: string) => void;
+
+  // Android quick-add sheet for calendar events/reminders (docs/android/02-calendar-app.md §3) —
+  // a separate, faster component from AddCalendarItemModal, not just that modal pre-filled.
+  calendarQuickAddOpen: boolean;
+  calendarQuickAddDate: string | null;
+  calendarQuickAddTime: string | null;
+  calendarQuickAddKind: CalendarItemKind;
+  showCalendarQuickAdd:  (date: string, time?: string | null, kind?: CalendarItemKind) => void;
+  closeCalendarQuickAdd: () => void;
 
   // Records / Trackers
   activeTrackerId:  string | null;
@@ -112,14 +175,24 @@ interface UIState {
 
   // Routines
   showAddRoutine:         () => void;
-  routinesSectionOpen:    boolean;
-  toggleRoutinesSection:  () => void;
   editRoutineOpen:        boolean;
   editingRoutineId:       string | null;
   openEditRoutine:        (id: string) => void;
   closeEditRoutine:       () => void;
   activeRoutineId:        string | null;
   setActiveRoutine:       (id: string | null) => void;
+
+  // Lists
+  showAddList:           () => void;
+  openEditList:          (id: string) => void;
+  editingListId:         string | null;
+  showAddListItem:       (listId: string, tabId?: string | null) => void;
+  openEditListItem:      (id: string) => void;
+  editingListItemId:     string | null;
+  pendingListItemListId: string | null;
+  pendingListItemTabId:  string | null;
+  activeListId:          string | null;
+  setActiveListId:       (id: string | null) => void;
 
   // Portfolio
   showAddWatchlistItem:      () => void;
@@ -130,11 +203,65 @@ interface UIState {
   openEditWatchlistItem:     (id: string) => void;
   portfolioChartOpen:        boolean;
   setPortfolioChartOpen:     (open: boolean) => void;
+
+  // Notes
+  selectedNoteTagId:       NoteTagId | null;
+  setSelectedNoteTag:      (id: NoteTagId | null) => void;
+  expandedNoteTagIds:      NoteTagId[];
+  toggleNoteTagExpanded:   (id: NoteTagId) => void;
+  pendingNoteTagParentId:  NoteTagId | null;
+  pendingNoteTagKind:      'area' | 'tag';
+  editingNoteId:           string | null;
+  openNote:                (id: string) => void;
+  closeNote:               () => void;
+  // Remembers which note (if any) was open in the Notes section so switching away and
+  // back restores it — separate from editingNoteId, which also drives NoteEditorPane's
+  // cross-app quick-view in other sections and must still clear on section switch.
+  notesLastEditingNoteId:  string | null;
+  showAddNote:             () => void;
+  showAddNoteTag:          (parentId?: NoteTagId | null, kind?: 'area' | 'tag') => void;
+  showTagPresets:          () => void;
+  editingNoteMetaId:       string | null;
+  showEditNoteMeta:        (noteId: string) => void;
+
+  // Notes — edit notebook
+  editNoteTagOpen:   boolean;
+  editingNoteTagId:  string | null;
+  openEditNoteTag:   (id: string) => void;
+  closeEditNoteTag:  () => void;
+
+  // Notes — tag view
+  noteTagViewActive:       boolean;
+  noteTagViewTagIds:       string[];
+  openNoteTagView:         (tagIds: string[]) => void;
+  closeNoteTagView:        () => void;
+  toggleNoteTagViewTagId:  (id: string) => void;
+  noteTagViewReturn:       string[] | null;  // tag IDs to restore when clicking "back"
+  setNoteTagViewReturn:    (ids: string[] | null) => void;
+
+  // Android back-button handling (docs/android/00-architecture.md §5d). A screen with its
+  // own back-relevant navigation (a master-detail detail view, e.g. Records/Lists) registers
+  // itself as the sole consumer on mount and clears it on unmount. The global back-button
+  // listener checks, in order: (1) is a modal/pane open per existing uiStore state — close it;
+  // (2) is mobileBackConsumer set — call it, handled if it returns true; (3) neither — fall
+  // through to system back/minimize. Only one master-detail screen is ever visible at a time,
+  // so a single slot (not a stack) is sufficient.
+  mobileBackConsumer:         (() => boolean) | null;
+  registerMobileBackConsumer: (fn: (() => boolean) | null) => void;
+
+  // MobileMoreSheet (Android bottom-nav overflow — Notes/Portfolio/Fitness/Manage/Settings/Account)
+  mobileMoreSheetOpen:  boolean;
+  openMobileMoreSheet:  () => void;
+  closeMobileMoreSheet: () => void;
 }
 
 export const useUIStore = create<UIState>()((set) => ({
-  openModal:          null,
-  activeCollectionId: null,
+  openModal:                null,
+  activeCollectionIdByView: {},
+  endeavourPickerOpen:      false,
+  purposePickerOpen:        false,
+  manageOpen:               false,
+  manageSection:            'endeavours',
   editingTaskId:      null,
   sidebarOpen:        false,
   activePurposeIds:   [],
@@ -142,28 +269,70 @@ export const useUIStore = create<UIState>()((set) => ({
   editingTag:         null,
   editingPurpose:     null,
   editingCollection:  null,
+  editingActivity:    null,
+  editingSchedule:    null,
   taskModalAdvanced:  false,
   pendingParentId:    null,
 
-  showAddTask:       () => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null }),
-  showAddSubtask:    (parentId) => set({ openModal: 'add-task', taskModalAdvanced: true, pendingParentId: parentId ?? null }),
+  showAddTask:       () => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, quickAddPrefill: null }),
+  showAddSubtask:    (parentId) => set({ openModal: 'add-task', taskModalAdvanced: true, pendingParentId: parentId ?? null, quickAddPrefill: null }),
+  quickAddPrefill:        null,
+  showAddTaskWithPrefill: (prefill) => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, quickAddPrefill: prefill }),
   showAddCollection: () => set({ openModal: 'add-collection' }),
   showAddPurpose:    () => set({ openModal: 'add-purpose'    }),
   showAddTag:        () => set({ openModal: 'add-tag'        }),
+  showAddActivity:   () => set({ openModal: 'add-activity', editingActivity: null }),
+  openEditActivity:  (activity) => set({ openModal: 'add-activity', editingActivity: activity }),
+  closeEditActivity: ()         => set({ openModal: null,           editingActivity: null      }),
+
+  editActivityTypeOpen:  false,
+  editingActivityTypeId: null,
+  showAddActivityType:   () => set({ editActivityTypeOpen: true, editingActivityTypeId: null }),
+  openEditActivityType:  (id) => set({ editActivityTypeOpen: true, editingActivityTypeId: id }),
+  closeEditActivityType: () => set({ editActivityTypeOpen: false, editingActivityTypeId: null }),
+
+  schedulesOpen:     false,
+  openSchedules:     () => set({ schedulesOpen: true  }),
+  closeSchedules:    () => set({ schedulesOpen: false }),
+  showAddSchedule:   () => set({ openModal: 'add-schedule', editingSchedule: null }),
+  openEditSchedule:  (schedule) => set({ openModal: 'add-schedule', editingSchedule: schedule }),
+  closeEditSchedule: ()         => set({ openModal: null,           editingSchedule: null      }),
+
   closeModal:        () => set({
     openModal: null,
     taskModalAdvanced: false,
     pendingParentId: null,
+    quickAddPrefill: null,
     editingTag: null,
     editingPurpose: null,
     editingCollection: null,
+    editingActivity: null,
+    editingSchedule: null,
     calendarItemDate: null,
     calendarItemKind: null,
+    calendarItemTitle: null,
     editingEntryId: null,
     editingWatchlistItemId: null,
+    editingListId: null,
+    editingListItemId: null,
+    pendingListItemListId: null,
+    pendingListItemTabId: null,
+    editingNoteMetaId: null,
   }),
 
-  setActiveCollection: (id) => set({ activeCollectionId: id }),
+  setActiveCollection: (id) => set((s) => ({
+    activeCollectionIdByView: { ...s.activeCollectionIdByView, [s.activeView]: id },
+  })),
+  openEndeavourPicker:   () => set({ endeavourPickerOpen: true }),
+  closeEndeavourPicker:  () => set({ endeavourPickerOpen: false }),
+  toggleEndeavourPicker: () => set((s) => ({ endeavourPickerOpen: !s.endeavourPickerOpen })),
+  openPurposePicker:     () => set({ purposePickerOpen: true }),
+  closePurposePicker:    () => set({ purposePickerOpen: false }),
+  togglePurposePicker:   () => set((s) => ({ purposePickerOpen: !s.purposePickerOpen })),
+  openManage:            (section) => set({ manageOpen: true, manageSection: section ?? 'endeavours' }),
+  closeManage:           () => set({ manageOpen: false }),
+  toggleManage:          () => set((s) => ({ manageOpen: !s.manageOpen })),
+  setManageSection:      (section) => set({ manageSection: section }),
   openTaskPane:        (id) => set({ editingTaskId: id }),
   closeTaskPane:       ()   => set({ editingTaskId: null }),
   openSidebar:         ()   => set({ sidebarOpen: true }),
@@ -206,7 +375,23 @@ export const useUIStore = create<UIState>()((set) => ({
   setSortDir:   (d)      => set({ sortDir: d }),
 
   activeView:    'tasks',
-  setActiveView: (view) => set({ activeView: view, portfolioChartOpen: false }),
+  setActiveView: (view) => set((s) => ({
+    activeView:          view,
+    portfolioChartOpen:  false,
+    // Close inline note editor and tag view when leaving the notes section (editingNoteId
+    // also drives NoteEditorPane's cross-app quick-view elsewhere, so it can't just be left
+    // set) — but remember which note it was in notesLastEditingNoteId, and restore it when
+    // coming back to Notes, so switching apps and back doesn't dump you at the root.
+    editingNoteId:       view === 'notes'
+      ? (s.activeView === 'notes' ? s.editingNoteId : s.notesLastEditingNoteId)
+      : null,
+    notesLastEditingNoteId: s.activeView === 'notes' ? s.editingNoteId : s.notesLastEditingNoteId,
+    noteTagViewReturn:   view === 'notes' ? s.noteTagViewReturn : null,
+    // Endeavour/Purpose filter dropdowns are section-scoped UI, not section-scoped
+    // state — close them on any section switch so they don't reopen stale later.
+    endeavourPickerOpen: false,
+    purposePickerOpen:   false,
+  })),
 
   taskViewMode:    'overview',
   setTaskViewMode: (mode) => set({ taskViewMode: mode }),
@@ -218,13 +403,29 @@ export const useUIStore = create<UIState>()((set) => ({
   openCalendarReminderPane:  (id) => set({ editingCalendarReminderId: id }),
   closeCalendarReminderPane: ()   => set({ editingCalendarReminderId: null }),
 
-  calendarItemDate: null,
-  calendarItemKind: null,
-  showAddCalendarItem: (date, kind) => set({
+  calendarItemDate:  null,
+  calendarItemKind:  null,
+  calendarItemTime:  null,
+  calendarItemTitle: null,
+  showAddCalendarItem: (date, kind, time, title) => set({
     openModal: 'add-calendar-item',
     calendarItemDate: date ?? null,
     calendarItemKind: kind ?? null,
+    calendarItemTime: time ?? null,
+    calendarItemTitle: title ?? null,
   }),
+
+  calendarQuickAddOpen: false,
+  calendarQuickAddDate: null,
+  calendarQuickAddTime: null,
+  calendarQuickAddKind: 'event',
+  showCalendarQuickAdd: (date, time, kind) => set({
+    calendarQuickAddOpen: true,
+    calendarQuickAddDate: date,
+    calendarQuickAddTime: time ?? null,
+    calendarQuickAddKind: kind ?? 'event',
+  }),
+  closeCalendarQuickAdd: () => set({ calendarQuickAddOpen: false }),
 
   // Records / Trackers
   activeTrackerId:  null,
@@ -240,6 +441,18 @@ export const useUIStore = create<UIState>()((set) => ({
   openEditTracker:  (id) => set({ editTrackerOpen: true, editingTrackerId: id }),
   closeEditTracker: () => set({ editTrackerOpen: false, editingTrackerId: null }),
 
+  // Lists
+  showAddList:           () => set({ openModal: 'add-list',      editingListId: null }),
+  openEditList:          (id) => set({ openModal: 'add-list',    editingListId: id   }),
+  editingListId:         null,
+  showAddListItem:       (listId, tabId) => set({ openModal: 'add-list-item', pendingListItemListId: listId, pendingListItemTabId: tabId ?? null, editingListItemId: null }),
+  openEditListItem:      (id) => set({ openModal: 'add-list-item', editingListItemId: id }),
+  editingListItemId:     null,
+  pendingListItemListId: null,
+  pendingListItemTabId:  null,
+  activeListId:          null,
+  setActiveListId:       (id) => set({ activeListId: id }),
+
   // Portfolio
   showAddWatchlistItem:     () => set({ openModal: 'add-watchlist-item', editingWatchlistItemId: null }),
   showAddPortfolioTag:      () => set({ openModal: 'add-portfolio-tag'     }),
@@ -250,14 +463,89 @@ export const useUIStore = create<UIState>()((set) => ({
   portfolioChartOpen:       false,
   setPortfolioChartOpen:    (open) => set({ portfolioChartOpen: open }),
 
+  // Notes
+  selectedNoteTagId:      null,
+  setSelectedNoteTag:     (id) => set({ selectedNoteTagId: id }),
+  expandedNoteTagIds:     [],
+  toggleNoteTagExpanded:  (id) => set((s) => ({
+    expandedNoteTagIds: s.expandedNoteTagIds.includes(id)
+      ? s.expandedNoteTagIds.filter((x) => x !== id)
+      : [...s.expandedNoteTagIds, id],
+  })),
+  pendingNoteTagParentId: null,
+  pendingNoteTagKind:     'area',
+  editingNoteId:          null,
+  openNote:               (id) => set({ editingNoteId: id }),
+  closeNote:              ()   => set({ editingNoteId: null }),
+  notesLastEditingNoteId: null,
+  showAddNote:            ()   => set({ openModal: 'add-note' }),
+  showAddNoteTag:         (parentId, kind = 'area') => set({ openModal: 'add-note-tag', pendingNoteTagParentId: parentId ?? null, pendingNoteTagKind: kind }),
+  showTagPresets:         () => set({ openModal: 'note-tag-presets' }),
+  editingNoteMetaId:      null,
+  showEditNoteMeta:       (noteId) => set({ openModal: 'edit-note-meta', editingNoteMetaId: noteId }),
+
+  editNoteTagOpen:  false,
+  editingNoteTagId: null,
+  openEditNoteTag:  (id) => set({ editNoteTagOpen: true, editingNoteTagId: id }),
+  closeEditNoteTag: () => set({ editNoteTagOpen: false, editingNoteTagId: null }),
+
+  noteTagViewActive:      false,
+  noteTagViewTagIds:      [],
+  openNoteTagView:        (tagIds) => set({ noteTagViewActive: true, noteTagViewTagIds: tagIds }),
+  closeNoteTagView:       () => set({ noteTagViewActive: false, noteTagViewTagIds: [] }),
+  toggleNoteTagViewTagId: (id) => set((s) => ({
+    noteTagViewTagIds: s.noteTagViewTagIds.includes(id)
+      ? s.noteTagViewTagIds.filter((x) => x !== id)
+      : [...s.noteTagViewTagIds, id],
+  })),
+  noteTagViewReturn:    null,
+  setNoteTagViewReturn: (ids) => set({ noteTagViewReturn: ids }),
+
   // Routines
   showAddRoutine:        () => set({ openModal: 'add-routine' }),
-  routinesSectionOpen:   true,
-  toggleRoutinesSection: () => set((s) => ({ routinesSectionOpen: !s.routinesSectionOpen })),
   editRoutineOpen:       false,
   editingRoutineId:      null,
   openEditRoutine:       (id) => set({ editRoutineOpen: true, editingRoutineId: id }),
   closeEditRoutine:      () => set({ editRoutineOpen: false, editingRoutineId: null }),
   activeRoutineId:       null,
   setActiveRoutine:      (id) => set({ activeRoutineId: id, activeTrackerId: null }),
+
+  mobileBackConsumer:         null,
+  registerMobileBackConsumer: (fn) => set({ mobileBackConsumer: fn }),
+
+  mobileMoreSheetOpen:  false,
+  openMobileMoreSheet:  () => set({ mobileMoreSheetOpen: true }),
+  closeMobileMoreSheet: () => set({ mobileMoreSheetOpen: false }),
 }));
+
+// Android back-button priority list (docs/android/00-architecture.md §5d step 1: "is a
+// modal/pane open per existing uiStore state — close it"). Checked most-commonly-nested-on-
+// top first — this is a fixed priority order, not a real stack, which the architecture doc
+// treats as acceptable since only one of these is ever meaningfully "on top" in practice.
+// Returns true if something was closed (caller should treat the back press as handled).
+export function closeTopmostMobileOverlay(): boolean {
+  const s = useUIStore.getState();
+  if (s.openModal !== null)                                { s.closeModal();             return true; }
+  if (s.calendarQuickAddOpen)                               { s.closeCalendarQuickAdd();  return true; }
+  if (s.editingTaskId !== null)                             { s.closeTaskPane();          return true; }
+  if (s.editingCalendarEventId !== null)                    { s.closeCalendarEventPane(); return true; }
+  if (s.editingCalendarReminderId !== null)                 { s.closeCalendarReminderPane(); return true; }
+  if (s.editTrackerOpen)                                    { s.closeEditTracker();       return true; }
+  if (s.editRoutineOpen)                                    { s.closeEditRoutine();       return true; }
+  if (s.editActivityTypeOpen)                               { s.closeEditActivityType();  return true; }
+  if (s.editNoteTagOpen)                                    { s.closeEditNoteTag();       return true; }
+  if (s.noteTagViewActive)                                  { s.closeNoteTagView();       return true; }
+  if (s.schedulesOpen)                                      { s.closeSchedules();         return true; }
+  if (s.manageOpen)                                         { s.closeManage();            return true; }
+  if (s.integrationsOpen)                                   { s.closeIntegrations();      return true; }
+  if (s.accountOpen)                                        { s.closeAccount();           return true; }
+  if (s.settingsOpen)                                       { s.closeSettings();          return true; }
+  if (s.editingNoteId !== null && s.activeView !== 'notes') { s.closeNote();              return true; }
+  if (s.mobileMoreSheetOpen)                                { s.closeMobileMoreSheet();   return true; }
+  return false;
+}
+
+// The focused Endeavour for whichever section is currently active. Sections that don't
+// show the Endeavour picker (Lists, Portfolio) simply never populate their entry.
+export const selectActiveCollectionId = (s: UIState): string | null =>
+  s.activeCollectionIdByView[s.activeView] ?? null;

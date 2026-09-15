@@ -21,7 +21,7 @@ const EMPTY: AppData = {
 
 export interface TaskActions {
   // Tasks
-  addTask:     (input: CreateTaskInput) => void;
+  addTask:     (input: CreateTaskInput) => TaskId;
   updateTask:  (id: TaskId, changes: Partial<Omit<Task, 'id' | 'createdAt'>>) => void;
   toggleTask:  (id: TaskId) => void;
   deleteTask:  (id: TaskId) => void;
@@ -34,12 +34,12 @@ export interface TaskActions {
 
   // Collections (projects, lists, trackers …)
   addCollection:    (input: CreateCollectionInput) => void;
-  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'completed' | 'completedAt' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig'>>) => void;
+  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'completed' | 'completedAt' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt'>>) => void;
   deleteCollection: (id: CollectionId) => void;
 
   // Purposes
   addPurpose:    (input: CreatePurposeInput) => void;
-  updatePurpose: (id: PurposeId, changes: Partial<Pick<Purpose, 'name' | 'color'>>) => void;
+  updatePurpose: (id: PurposeId, changes: Partial<Pick<Purpose, 'name' | 'color' | 'description' | 'archivedAt'>>) => void;
   deletePurpose: (id: PurposeId) => void;
 }
 
@@ -52,10 +52,11 @@ export const useTaskStore = create<TaskStore>()(
 
       // ── Tasks ──────────────────────────────────────────────────────────────
 
-      addTask: (input) =>
+      addTask: (input) => {
+        const task = createTask(input, 0);
         set((state) => {
-          const task = createTask(input, Object.keys(state.tasks).length);
-          const tasks: AppData['tasks'] = { ...state.tasks, [task.id]: task };
+          const updatedTask = { ...task, sortOrder: Object.keys(state.tasks).length };
+          const tasks: AppData['tasks'] = { ...state.tasks, [task.id]: updatedTask };
 
           // If this is a sub-task, register it on the parent
           if (task.parentId && state.tasks[task.parentId]) {
@@ -67,7 +68,9 @@ export const useTaskStore = create<TaskStore>()(
             };
           }
           return { tasks };
-        }),
+        });
+        return task.id;
+      },
 
       updateTask: (id, changes) =>
         set((state) => {
@@ -169,6 +172,8 @@ export const useTaskStore = create<TaskStore>()(
             fieldSchema:  input.fieldSchema  ?? [],
             routineTasks: input.routineTasks ?? [],
             repeatConfig: input.repeatConfig ?? null,
+            collectionId: input.collectionId ?? null,
+            archivedAt:   null,
             createdAt:    ts,
             updatedAt:    ts,
           };
@@ -214,6 +219,7 @@ export const useTaskStore = create<TaskStore>()(
             name:        input.name.trim(),
             description: input.description ?? null,
             color:       input.color       ?? null,
+            archivedAt:  null,
             createdAt:   ts,
             updatedAt:   ts,
           };
@@ -248,7 +254,7 @@ export const useTaskStore = create<TaskStore>()(
     }),
     {
       name:    'todo-app-storage',
-      version: 5,
+      version: 8,
       migrate: (persisted, fromVersion) => {
         const state = persisted as AppData & TaskActions;
         if (fromVersion < 2) return EMPTY;
@@ -266,6 +272,40 @@ export const useTaskStore = create<TaskStore>()(
             } as Collection;
           }
           return { ...state, collections: patched };
+        }
+        if (fromVersion < 6 && state.tasks) {
+          const patched: AppData['tasks'] = {} as AppData['tasks'];
+          for (const [id, task] of Object.entries(state.tasks)) {
+            const t = task as Task & { scheduledAt?: string | null; scheduledTime?: string | null; calendarEventId?: unknown };
+            patched[id as TaskId] = {
+              ...t,
+              scheduledAt:     t.scheduledAt     ?? null,
+              scheduledTime:   t.scheduledTime   ?? null,
+              calendarEventId: (t.calendarEventId ?? null) as Task['calendarEventId'],
+            } as Task;
+          }
+          return { ...state, tasks: patched };
+        }
+        if (fromVersion < 7 && state.collections) {
+          const patched: AppData['collections'] = {} as AppData['collections'];
+          for (const [id, col] of Object.entries(state.collections)) {
+            const c = col as Collection & { collectionId?: CollectionId | null };
+            patched[id as CollectionId] = { ...c, collectionId: c.collectionId ?? null } as Collection;
+          }
+          return { ...state, collections: patched };
+        }
+        if (fromVersion < 8) {
+          const collections: AppData['collections'] = {} as AppData['collections'];
+          for (const [id, col] of Object.entries(state.collections ?? {})) {
+            const c = col as Collection & { archivedAt?: string | null };
+            collections[id as CollectionId] = { ...c, archivedAt: c.archivedAt ?? null } as Collection;
+          }
+          const purposes: AppData['purposes'] = {} as AppData['purposes'];
+          for (const [id, purpose] of Object.entries(state.purposes ?? {})) {
+            const p = purpose as Purpose & { archivedAt?: string | null };
+            purposes[id as PurposeId] = { ...p, archivedAt: p.archivedAt ?? null } as Purpose;
+          }
+          return { ...state, collections, purposes };
         }
         return state;
       },

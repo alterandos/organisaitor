@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { useTaskStore } from '@/store/taskStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import styles from './QuickAddInput.module.css';
 
 export function QuickAddInput() {
   const [value, setValue] = useState('');
   const addTask            = useTaskStore((s) => s.addTask);
   const showAddTask        = useUIStore((s) => s.showAddTask);
-  const activeCollectionId = useUIStore((s) => s.activeCollectionId);
+  const activeCollectionId = useUIStore(selectActiveCollectionId);
 
   const submit = () => {
     if (!value.trim()) return;

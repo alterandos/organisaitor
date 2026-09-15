@@ -4,6 +4,18 @@ export interface ICSEvent {
   startTime: string | null; // HH:MM (24h) or null for all-day
   endTime:   string | null;
   notes:     string | null;
+  location:  string | null;
+  // 'UTC' if DTSTART carried a trailing Z, an IANA name if it carried TZID=..., or null for a
+  // "floating" time (RFC 5545's term for a wall-clock time with no zone attached at all) or an
+  // all-day value — floating/all-day need no re-projection, they mean whatever the app's zone says.
+  tzid:      string | null;
+}
+
+// Recognizes the common Google/Outlook/Apple "Contacts" birthday export shape (e.g.
+// "Jane Doe's Birthday", "Birthday: Jane Doe") so the import review step can default these
+// to the app's dedicated birthday event type instead of a plain event.
+export function looksLikeBirthday(title: string): boolean {
+  return /\bbirthday\b/i.test(title);
 }
 
 // RFC 5545: folded lines (CRLF + SPACE/TAB) are joined
@@ -15,18 +27,24 @@ function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function parseDateValue(value: string, params: string): { date: string; time: string | null } {
+// `params` must be the ORIGINAL-CASE parameter string — IANA zone names in TZID are
+// case-sensitive (e.g. "America/New_York"), so this must never be run against an uppercased copy.
+function parseDateValue(value: string, params: string): { date: string; time: string | null; tzid: string | null } {
   const dateMatch = value.match(/^(\d{4})(\d{2})(\d{2})/);
-  if (!dateMatch) return { date: '', time: null };
+  if (!dateMatch) return { date: '', time: null, tzid: null };
 
-  const date      = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
-  const isDateOnly = params.includes('VALUE=DATE') || !value.includes('T');
-  if (isDateOnly) return { date, time: null };
+  const date       = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+  const isDateOnly = params.toUpperCase().includes('VALUE=DATE') || !value.includes('T');
+  if (isDateOnly) return { date, time: null, tzid: null };
 
   const timeMatch = value.match(/T(\d{2})(\d{2})/);
-  if (!timeMatch) return { date, time: null };
+  if (!timeMatch) return { date, time: null, tzid: null };
+  const time = `${timeMatch[1]}:${timeMatch[2]}`;
 
-  return { date, time: `${timeMatch[1]}:${timeMatch[2]}` };
+  if (value.endsWith('Z')) return { date, time, tzid: 'UTC' };
+
+  const tzidMatch = params.match(/TZID=([^;]+)/i);
+  return { date, time, tzid: tzidMatch ? tzidMatch[1] : null };
 }
 
 function unescape(s: string): string {
@@ -79,9 +97,12 @@ function advanceDate(dateStr: string, freq: ParsedRRule['freq'], interval: numbe
   return toDateStr(d);
 }
 
-// Returns all occurrence dates from baseDate up to horizonDate (or COUNT/UNTIL limit).
-function expandRecurrences(baseDate: string, rrule: ParsedRRule, horizonDate: string): string[] {
-  const result: string[] = [baseDate];
+// Returns all occurrence dates from baseDate up to horizonDate (or COUNT/UNTIL limit),
+// skipping any date present in `exdates` (RFC 5545 EXDATE — a recurrence exception, e.g.
+// "skip just this one occurrence").
+function expandRecurrences(baseDate: string, rrule: ParsedRRule, horizonDate: string, exdates: Set<string>): string[] {
+  const result: string[] = [];
+  if (!exdates.has(baseDate)) result.push(baseDate);
   let current = baseDate;
   const cap = rrule.count ?? 1000;
 
@@ -89,7 +110,7 @@ function expandRecurrences(baseDate: string, rrule: ParsedRRule, horizonDate: st
     current = advanceDate(current, rrule.freq, rrule.interval);
     if (rrule.until && current > rrule.until) break;
     if (current > horizonDate) break;
-    result.push(current);
+    if (!exdates.has(current)) result.push(current);
   }
 
   return result;
@@ -105,30 +126,30 @@ export function parseICS(raw: string): ICSEvent[] {
   const horizonStr = toDateStr(horizon);
 
   let inEvent = false;
-  let ev: Partial<ICSEvent> & { rrule?: ParsedRRule | null } = {};
+  let ev: Partial<ICSEvent> & { rrule?: ParsedRRule | null; exdates?: Set<string> } = {};
+
+  const pushEvent = (date: string) => {
+    events.push({
+      title:     ev.title!,
+      date,
+      startTime: ev.startTime ?? null,
+      endTime:   ev.endTime   ?? null,
+      notes:     ev.notes     ?? null,
+      location:  ev.location  ?? null,
+      tzid:      ev.tzid      ?? null,
+    });
+  };
 
   for (const line of lines) {
-    if (line.trim() === 'BEGIN:VEVENT') { inEvent = true; ev = {}; continue; }
+    if (line.trim() === 'BEGIN:VEVENT') { inEvent = true; ev = { exdates: new Set() }; continue; }
     if (line.trim() === 'END:VEVENT') {
       if (inEvent && ev.title && ev.date) {
         if (ev.rrule) {
-          for (const date of expandRecurrences(ev.date, ev.rrule, horizonStr)) {
-            events.push({
-              title:     ev.title,
-              date,
-              startTime: ev.startTime ?? null,
-              endTime:   ev.endTime   ?? null,
-              notes:     ev.notes     ?? null,
-            });
+          for (const date of expandRecurrences(ev.date, ev.rrule, horizonStr, ev.exdates ?? new Set())) {
+            pushEvent(date);
           }
         } else {
-          events.push({
-            title:     ev.title,
-            date:      ev.date,
-            startTime: ev.startTime ?? null,
-            endTime:   ev.endTime   ?? null,
-            notes:     ev.notes     ?? null,
-          });
+          pushEvent(ev.date);
         }
       }
       inEvent = false;
@@ -143,21 +164,32 @@ export function parseICS(raw: string): ICSEvent[] {
     const val     = line.slice(colonIdx + 1);
     const semiIdx = keyPart.indexOf(';');
     const key     = (semiIdx === -1 ? keyPart : keyPart.slice(0, semiIdx)).toUpperCase().trim();
-    const params  = semiIdx === -1 ? '' : keyPart.slice(semiIdx + 1).toUpperCase();
+    const params  = semiIdx === -1 ? '' : keyPart.slice(semiIdx + 1);
 
     switch (key) {
       case 'SUMMARY':
         ev.title = unescape(val.trim());
         break;
+      case 'LOCATION':
+        ev.location = unescape(val.trim()) || null;
+        break;
       case 'DTSTART': {
         const p = parseDateValue(val.trim(), params);
         ev.date      = p.date;
         ev.startTime = p.time;
+        ev.tzid      = p.tzid;
         break;
       }
       case 'DTEND': {
         const p = parseDateValue(val.trim(), params);
         ev.endTime = p.time;
+        break;
+      }
+      case 'EXDATE': {
+        for (const part of val.split(',')) {
+          const p = parseDateValue(part.trim(), params);
+          if (p.date) ev.exdates?.add(p.date);
+        }
         break;
       }
       case 'DESCRIPTION':

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, MouseEvent } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -25,6 +25,16 @@ export function AddTagModal() {
   }, [editingTag?.id]);
 
   const handleClose = () => isEdit ? closeEditTag() : closeModal();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isEdit, closeEditTag, closeModal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -50,7 +60,7 @@ export function AddTagModal() {
           <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           <div className={styles.field}>
             <input
               className={styles.input}

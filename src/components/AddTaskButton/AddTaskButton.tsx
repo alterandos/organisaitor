@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '@/store/uiStore';
+import { usePlatform } from '@/hooks/usePlatform';
+import { todayIso } from '@/utils/date';
 import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
 import styles from './AddTaskButton.module.css';
@@ -34,6 +36,25 @@ const PORTFOLIO_OPTIONS: { type: PortfolioDialType; label: string; color: string
   { type: 'watchlist-item',     label: LABELS.watchlistItem,     color: '#5b6ee1', icon: '+' },
 ];
 
+type ListsDialType = 'list' | 'list-item';
+const LISTS_OPTIONS: { type: ListsDialType; label: string; color: string; icon: string }[] = [
+  { type: 'list',      label: 'New list',  color: '#10b981', icon: '▤' },
+  { type: 'list-item', label: 'Add item',  color: '#5b6ee1', icon: '+' },
+];
+
+type NotesDialType = 'note' | 'notebook' | 'custom-tag' | 'tag-preset';
+const NOTES_OPTIONS: { type: NotesDialType; label: string; color: string; icon: string }[] = [
+  { type: 'notebook',   label: 'Notebook',   color: '#8b5cf6', icon: '📓' },
+  { type: 'custom-tag', label: 'Custom tag', color: '#10b981', icon: '#' },
+  { type: 'tag-preset', label: 'Tag presets', color: '#64748b', icon: '✦' },
+  { type: 'note',       label: 'Note',       color: '#5b6ee1', icon: '+' },
+];
+
+type FitnessDialType = 'activity';
+const FITNESS_OPTIONS: { type: FitnessDialType; label: string; color: string; icon: string }[] = [
+  { type: 'activity', label: LABELS.activity, color: '#5b6ee1', icon: '+' },
+];
+
 export function AddTaskButton() {
   const activeView           = useUIStore((s) => s.activeView);
   const activeTrackerId      = useUIStore((s) => s.activeTrackerId);
@@ -43,6 +64,8 @@ export function AddTaskButton() {
   const showAddPurpose             = useUIStore((s) => s.showAddPurpose);
   const showAddTag                 = useUIStore((s) => s.showAddTag);
   const showAddCalendarItem        = useUIStore((s) => s.showAddCalendarItem);
+  const showCalendarQuickAdd       = useUIStore((s) => s.showCalendarQuickAdd);
+  const { isAndroid } = usePlatform();
   const showAddTracker             = useUIStore((s) => s.showAddTracker);
   const showAddEntry               = useUIStore((s) => s.showAddEntry);
   const showAddRoutine             = useUIStore((s) => s.showAddRoutine);
@@ -50,6 +73,13 @@ export function AddTaskButton() {
   const showAddPortfolioTag        = useUIStore((s) => s.showAddPortfolioTag);
   const showAddInvestmentPurpose   = useUIStore((s) => s.showAddInvestmentPurpose);
   const showBulkUploadWatchlist    = useUIStore((s) => s.showBulkUploadWatchlist);
+  const showAddList                = useUIStore((s) => s.showAddList);
+  const showAddListItem            = useUIStore((s) => s.showAddListItem);
+  const activeListId               = useUIStore((s) => s.activeListId);
+  const showAddNote                = useUIStore((s) => s.showAddNote);
+  const showAddNoteTag             = useUIStore((s) => s.showAddNoteTag);
+  const showTagPresets             = useUIStore((s) => s.showTagPresets);
+  const showAddActivity            = useUIStore((s) => s.showAddActivity);
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -77,7 +107,8 @@ export function AddTaskButton() {
 
   const handleCalOption = (type: CalDialType) => {
     setOpen(false);
-    showAddCalendarItem(undefined, type as CalendarItemKind);
+    if (isAndroid) showCalendarQuickAdd(todayIso(), null, type as CalendarItemKind);
+    else showAddCalendarItem(undefined, type as CalendarItemKind);
   };
 
   const handleRecOption = (type: RecordsDialType) => {
@@ -96,9 +127,59 @@ export function AddTaskButton() {
     else                               showAddInvestmentPurpose();
   };
 
+  const handleListsOption = (type: ListsDialType) => {
+    setOpen(false);
+    if (type === 'list') showAddList();
+    else if (type === 'list-item' && activeListId) showAddListItem(activeListId);
+  };
+
+  const handleNotesOption = (type: NotesDialType) => {
+    setOpen(false);
+    if (type === 'note') showAddNote();
+    else if (type === 'notebook') showAddNoteTag(null, 'area');
+    else if (type === 'tag-preset') showTagPresets();
+    else showAddNoteTag(null, 'tag');
+  };
+
+  const handleFitnessOption = (_type: FitnessDialType) => {
+    setOpen(false);
+    showAddActivity();
+  };
+
   if (activeView === 'portfolio' && portfolioChartOpen) return null;
 
   const dialClass = `${styles.speedDial} ${open ? styles.speedDialOpen : ''}`;
+
+  if (activeView === 'lists') {
+    const listsOpts = activeListId ? LISTS_OPTIONS : LISTS_OPTIONS.filter((o) => o.type !== 'list-item');
+    return (
+      <div className={dialClass} ref={ref}>
+        <div className={styles.options} role="group" aria-label="Create options">
+          {listsOpts.map((opt) => (
+            <div key={opt.type} className={styles.optionRow}>
+              <span className={styles.optionLabel}>{opt.label}</span>
+              <button
+                className={styles.optionBtn}
+                style={{ background: opt.color }}
+                onClick={() => handleListsOption(opt.type)}
+                aria-label={opt.label}
+              >
+                {opt.icon}
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          className={styles.fab}
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Add to lists"
+          aria-expanded={open}
+        >
+          <span className={styles.fabIcon}>+</span>
+        </button>
+      </div>
+    );
+  }
 
   if (activeView === 'calendar') {
     return (
@@ -187,6 +268,66 @@ export function AddTaskButton() {
           className={styles.fab}
           onClick={() => setOpen((o) => !o)}
           aria-label="Add record"
+          aria-expanded={open}
+        >
+          <span className={styles.fabIcon}>+</span>
+        </button>
+      </div>
+    );
+  }
+
+  if (activeView === 'notes') {
+    return (
+      <div className={dialClass} ref={ref}>
+        <div className={styles.options} role="group" aria-label="Create options">
+          {NOTES_OPTIONS.map((opt) => (
+            <div key={opt.type} className={styles.optionRow}>
+              <span className={styles.optionLabel}>{opt.label}</span>
+              <button
+                className={styles.optionBtn}
+                style={{ background: opt.color }}
+                onClick={() => handleNotesOption(opt.type)}
+                aria-label={`Create ${opt.label}`}
+              >
+                {opt.icon}
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          className={styles.fab}
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Add note"
+          aria-expanded={open}
+        >
+          <span className={styles.fabIcon}>+</span>
+        </button>
+      </div>
+    );
+  }
+
+  if (activeView === 'fitness') {
+    return (
+      <div className={dialClass} ref={ref}>
+        <div className={styles.options} role="group" aria-label="Create options">
+          {FITNESS_OPTIONS.map((opt) => (
+            <div key={opt.type} className={styles.optionRow}>
+              <span className={styles.optionLabel}>{opt.label}</span>
+              <button
+                className={styles.optionBtn}
+                style={{ background: opt.color }}
+                onClick={() => handleFitnessOption(opt.type)}
+                aria-label={`Create ${opt.label}`}
+              >
+                {opt.icon}
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          className={styles.fab}
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Add activity"
           aria-expanded={open}
         >
           <span className={styles.fabIcon}>+</span>

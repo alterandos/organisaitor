@@ -77,10 +77,17 @@ export function BulkUploadWatchlistModal() {
     setSelectedTagIds((prev) => prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeModal(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && phase === 'input') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeModal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closeModal, phase, rawText, bulkStatus, bulkHeldAt, selectedTagIds]);
 
   const existingTickers = new Set(
     Object.values(watchlistItems).map((i) => i.ticker?.toUpperCase()).filter(Boolean) as string[],

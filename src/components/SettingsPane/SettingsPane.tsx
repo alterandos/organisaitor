@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { HOTKEYS, HOTKEY_GROUPS } from '@/config/hotkeys';
+import { listTimezones, resolveTimezone, SYSTEM_TIMEZONE } from '@/utils/timezone';
+import { rezoneAllCalendarData } from '@/services/timezoneMigration';
 import styles from './SettingsPane.module.css';
 
 function renderKeys(combo: string) {
@@ -58,6 +60,31 @@ export function SettingsPane() {
     return () => document.removeEventListener('keydown', handler);
   }, [closeSettings]);
 
+  const theme                   = useSettingsStore((s) => s.theme);
+  const setTheme                = useSettingsStore((s) => s.setTheme);
+
+  const clockFormat             = useSettingsStore((s) => s.clockFormat);
+  const setClockFormat          = useSettingsStore((s) => s.setClockFormat);
+
+  const timezone                = useSettingsStore((s) => s.timezone);
+  const setTimezone             = useSettingsStore((s) => s.setTimezone);
+
+  const handleTimezoneChange = (nextTz: string) => {
+    const fromZone = resolveTimezone(timezone);
+    const toZone   = resolveTimezone(nextTz);
+    if (fromZone !== toZone) {
+      const ok = window.confirm(
+        `Change timezone from ${fromZone} to ${toZone}?\n\n` +
+        'Every task deadline, scheduled time, calendar event, and reminder that has a time of day ' +
+        'will be shifted so it still points at the same real-world moment (e.g. a 2:00 PM event may ' +
+        'become 11:00 AM). All-day items (like birthdays) are not affected.'
+      );
+      if (!ok) return;
+      rezoneAllCalendarData(fromZone, toZone);
+    }
+    setTimezone(nextTz);
+  };
+
   const colorEnabled            = useSettingsStore((s) => s.colorEnabled);
   const priorityColorEnabled    = useSettingsStore((s) => s.priorityColorEnabled);
   const alwaysShowDueDate       = useSettingsStore((s) => s.alwaysShowDueDate);
@@ -84,6 +111,66 @@ export function SettingsPane() {
         </header>
 
         <div className={styles.body}>
+
+          <section className={styles.section}>
+            <h3 className={styles.sectionLabel}>Appearance</h3>
+            <div className={styles.setting}>
+              <div className={styles.settingInfo}>
+                <span className={styles.settingName}>Theme</span>
+                <span className={styles.settingDesc}>Light, dark, system</span>
+              </div>
+              <div className={styles.themeToggle}>
+                {(['light', 'system', 'dark'] as const).map((t) => (
+                  <button
+                    key={t}
+                    className={`${styles.themeBtn} ${theme === t ? styles.themeBtnActive : ''}`}
+                    onClick={() => setTheme(t)}
+                  >
+                    {t === 'light' ? 'Light' : t === 'dark' ? 'Dark' : 'System'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.setting}>
+              <div className={styles.settingInfo}>
+                <span className={styles.settingName}>Clock format</span>
+                <span className={styles.settingDesc}></span>
+              </div>
+              <div className={styles.themeToggle}>
+                {(['24h', '12h', 'system'] as const).map((f) => (
+                  <button
+                    key={f}
+                    className={`${styles.themeBtn} ${clockFormat === f ? styles.themeBtnActive : ''}`}
+                    onClick={() => setClockFormat(f)}
+                  >
+                    {f === '24h' ? '24-hour' : f === '12h' ? 'AM/PM' : 'System'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.setting}>
+              <div className={styles.settingInfo}>
+                <span className={styles.settingName}>Timezone</span>
+                <span className={styles.settingDesc}>
+                  {timezone === SYSTEM_TIMEZONE
+                    ? `Automatic — currently ${resolveTimezone(SYSTEM_TIMEZONE)}`
+                    : 'Fixed — overrides the host machine\'s clock'}
+                </span>
+              </div>
+              <select
+                className={styles.timezoneSelect}
+                value={timezone}
+                onChange={(e) => handleTimezoneChange(e.target.value)}
+              >
+                <option value={SYSTEM_TIMEZONE}>System (auto-detect)</option>
+                {listTimezones().map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+            </div>
+          </section>
 
           {activeView === 'tasks' && (
             <section className={styles.section}>

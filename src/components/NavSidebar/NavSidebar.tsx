@@ -1,9 +1,10 @@
 import { useUIStore } from '@/store/uiStore';
 import type { AppView } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
+import { isAppEnabled } from '@/config/apps';
 import styles from './NavSidebar.module.css';
 
-const CORE_NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNode }[] = [
+export const CORE_NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNode }[] = [
   {
     view: 'tasks',
     label: LABELS.views.tasks,
@@ -44,6 +45,27 @@ const CORE_NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNode }[] 
       </svg>
     ),
   },
+  {
+    view: 'lists',
+    label: 'Lists',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <rect x="3" y="4" width="16" height="3" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+        <rect x="3" y="9.5" width="16" height="3" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+        <rect x="3" y="15" width="10" height="3" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+      </svg>
+    ),
+  },
+  {
+    view: 'notes',
+    label: 'Notes',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <rect x="4" y="3" width="14" height="16" rx="2" stroke="currentColor" strokeWidth="1.6"/>
+        <path d="M7 7h8M7 11h8M7 15h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
 ];
 
 const PortfolioIcon = (
@@ -51,6 +73,13 @@ const PortfolioIcon = (
     <rect x="3"  y="12" width="4" height="7"  rx="1" stroke="currentColor" strokeWidth="1.6"/>
     <rect x="9"  y="7"  width="4" height="12" rx="1" stroke="currentColor" strokeWidth="1.6"/>
     <rect x="15" y="3"  width="4" height="16" rx="1" stroke="currentColor" strokeWidth="1.6"/>
+  </svg>
+);
+
+const FitnessIcon = (
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+    <path d="M3 15l4-4 3 3 5-7 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="18" cy="6" r="2" stroke="currentColor" strokeWidth="1.6"/>
   </svg>
 );
 
@@ -82,17 +111,33 @@ export function NavSidebar() {
         </button>
       ))}
 
-      <hr className={styles.sectionDivider} aria-hidden="true" />
+      {(isAppEnabled('portfolio') || isAppEnabled('fitness')) && (
+        <hr className={styles.sectionDivider} aria-hidden="true" />
+      )}
 
-      <button
-        className={`${styles.navBtn} ${activeView === 'portfolio' ? styles.navBtnActive : ''}`}
-        onClick={() => setActiveView('portfolio')}
-        title={LABELS.views.portfolio}
-        aria-label={LABELS.views.portfolio}
-        aria-current={activeView === 'portfolio' ? 'page' : undefined}
-      >
-        {PortfolioIcon}
-      </button>
+      {isAppEnabled('portfolio') && (
+        <button
+          className={`${styles.navBtn} ${activeView === 'portfolio' ? styles.navBtnActive : ''}`}
+          onClick={() => setActiveView('portfolio')}
+          title={LABELS.views.portfolio}
+          aria-label={LABELS.views.portfolio}
+          aria-current={activeView === 'portfolio' ? 'page' : undefined}
+        >
+          {PortfolioIcon}
+        </button>
+      )}
+
+      {isAppEnabled('fitness') && (
+        <button
+          className={`${styles.navBtn} ${activeView === 'fitness' ? styles.navBtnActive : ''}`}
+          onClick={() => setActiveView('fitness')}
+          title={LABELS.views.fitness}
+          aria-label={LABELS.views.fitness}
+          aria-current={activeView === 'fitness' ? 'page' : undefined}
+        >
+          {FitnessIcon}
+        </button>
+      )}
 
       <div className={styles.spacer} />
 

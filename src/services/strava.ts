@@ -1,0 +1,92 @@
+import { supabase } from '@/services/supabase';
+import { useFitnessStore } from '@/store/fitnessStore';
+import type { ActivityTypeId } from '@/types/fitness';
+
+export interface StravaStatus {
+  connected:   boolean;
+  athleteId?:  number;
+  connectedAt?: string;
+}
+
+interface SyncedActivity {
+  type:               string;
+  title:              string;
+  startedAt:          string;
+  distanceMeters:     number | null;
+  movingTimeSeconds:  number | null;
+  elapsedTimeSeconds: number | null;
+  averageSpeedMps:    number | null;
+  sourceId:           string;
+  sourceRaw:          Record<string, unknown>;
+}
+
+async function accessToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+// Strava's redirect-back is a full page navigation, so there's no way to send an
+// Authorization header — the access token rides along in the OAuth `state` param instead
+// and api/strava-oauth-callback.ts uses it to identify + authenticate the user server-side.
+export async function getStravaConnectUrl(): Promise<string | null> {
+  const token = await accessToken();
+  if (!token) return null;
+
+  const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID as string | undefined;
+  if (!clientId) return null;
+
+  const redirectUri = `${window.location.origin}/api/strava-oauth-callback`;
+  const params = new URLSearchParams({
+    client_id:        clientId,
+    redirect_uri:      redirectUri,
+    response_type:     'code',
+    approval_prompt:   'auto',
+    scope:              'activity:read',
+    state:              token,
+  });
+  return `https://www.strava.com/oauth/authorize?${params.toString()}`;
+}
+
+export async function checkStravaStatus(): Promise<StravaStatus> {
+  const token = await accessToken();
+  if (!token) return { connected: false };
+
+  const res = await fetch('/api/strava-status', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return { connected: false };
+  return res.json();
+}
+
+// Fetches recent activities from Strava (server-side, via api/strava-sync.ts) and
+// upserts each into fitnessStore by source+sourceId, so repeat syncs update existing
+// rows instead of duplicating them. Returns the number of activities synced.
+export async function syncStrava(): Promise<number> {
+  const token = await accessToken();
+  if (!token) throw new Error('Not signed in');
+
+  const res = await fetch('/api/strava-sync', {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Sync failed: ${res.status}`);
+  }
+
+  const { activities }: { activities: SyncedActivity[] } = await res.json();
+  const upsertBySource = useFitnessStore.getState().upsertBySource;
+  for (const a of activities) {
+    upsertBySource('strava', a.sourceId, {
+      type:               a.type as ActivityTypeId,
+      title:              a.title,
+      startedAt:          a.startedAt,
+      distanceMeters:     a.distanceMeters,
+      movingTimeSeconds:  a.movingTimeSeconds,
+      elapsedTimeSeconds: a.elapsedTimeSeconds,
+      averageSpeedMps:    a.averageSpeedMps,
+      sourceRaw:          a.sourceRaw,
+    });
+  }
+  return activities.length;
+}

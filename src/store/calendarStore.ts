@@ -15,7 +15,7 @@ interface CalendarState {
   events:    Record<CalendarEventId,    CalendarEvent>;
   reminders: Record<CalendarReminderId, CalendarReminder>;
 
-  addEvent:    (input: CreateCalendarEventInput)    => void;
+  addEvent:    (input: CreateCalendarEventInput)    => CalendarEventId;
   updateEvent: (id: CalendarEventId, changes: Partial<Omit<CalendarEvent,    'id' | 'createdAt'>>) => void;
   deleteEvent: (id: CalendarEventId)                => void;
 
@@ -30,29 +30,31 @@ export const useCalendarStore = create<CalendarState>()(
       events:    {},
       reminders: {},
 
-      addEvent: (input) => set((s) => {
-        const ts = now();
+      addEvent: (input) => {
+        const id  = newCalendarEventId();
+        const ts  = now();
         const event: CalendarEvent = {
-          id:           newCalendarEventId(),
-          title:        input.title.trim(),
-          date:         input.date,
+          id,
+          title:             input.title.trim(),
+          date:              input.date,
           endDate:           input.endDate            ?? null,
-          startTime:    input.startTime    ?? null,
-          endTime:      input.endTime      ?? null,
-          notes:        input.notes        ?? null,
-          location:     input.location     ?? null,
-          eventType:    input.eventType    ?? 'default',
-          collectionId:      input.collectionId ?? null,
+          startTime:         input.startTime          ?? null,
+          endTime:           input.endTime            ?? null,
+          notes:             input.notes              ?? null,
+          location:          input.location           ?? null,
+          eventType:         input.eventType          ?? 'default',
+          collectionId:      input.collectionId       ?? null,
           createdAt:         ts,
           updatedAt:         ts,
-          notifyBeforeValue: input.notifyBeforeValue ?? 1,
-          notifyBeforeUnit:  input.notifyBeforeUnit  ?? 'hours',
+          notifyBeforeValue: input.notifyBeforeValue  ?? 1,
+          notifyBeforeUnit:  input.notifyBeforeUnit   ?? 'hours',
           remindAt:          null,
-          notifyAtTime:      input.notifyAtTime      ?? null,
-          repeat:            input.repeat            ?? null,
+          notifyAtTime:      input.notifyAtTime       ?? null,
+          repeat:            input.repeat             ?? null,
         };
-        return { events: { ...s.events, [event.id]: event } };
-      }),
+        set((s) => ({ events: { ...s.events, [id]: event } }));
+        return id;
+      },
 
       updateEvent: (id, changes) => set((s) => {
         const event = s.events[id];

@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { nanoid } from 'nanoid';
 import { useTaskStore } from '@/store/taskStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
-import type { RoutineTask, RepeatConfig, PurposeId, TagId } from '@/types';
+import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { LABELS } from '@/config/labels';
+import type { RoutineTask, RepeatConfig, PurposeId, TagId, CollectionId } from '@/types';
 import styles from './AddRoutineModal.module.css';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -15,14 +17,19 @@ function buildRepeatConfig(daysOfWeek: number[]): RepeatConfig | null {
 }
 
 export function AddRoutineModal() {
-  const addCollection  = useTaskStore((s) => s.addCollection);
-  const purposes       = useTaskStore((s) => s.purposes);
-  const tags           = useTaskStore((s) => s.tags);
+  const addCollection      = useTaskStore((s) => s.addCollection);
+  const purposes           = useTaskStore((s) => s.purposes);
+  const tags               = useTaskStore((s) => s.tags);
+  const collectionsRecord  = useTaskStore((s) => s.collections);
   const closeModal = useUIStore((s) => s.closeModal);
   const openModal  = useUIStore((s) => s.openModal);
+  const activeCollectionId = useUIStore(selectActiveCollectionId);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeModal(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [closeModal]);
@@ -34,8 +41,10 @@ export function AddRoutineModal() {
   const [color,       setColor]       = useState<string | null>(null);
   const [purposeIds,  setPurposeIds]  = useState<PurposeId[]>([]);
   const [tagIds,      setTagIds]      = useState<TagId[]>([]);
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(activeCollectionId as CollectionId | null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const newTaskRef = useRef<HTMLInputElement>(null);
+  const formRef    = useRef<HTMLFormElement>(null);
 
   const isVisible = openModal === 'add-routine';
   if (!isVisible) return null;
@@ -79,14 +88,16 @@ export function AddRoutineModal() {
       color,
       purposeIds,
       tagIds,
+      collectionId,
       routineTasks: tasks,
       repeatConfig: buildRepeatConfig(daysOfWeek),
     });
     closeModal();
   }
 
-  const purposeList = Object.values(purposes);
-  const tagList     = Object.values(tags);
+  const purposeList   = Object.values(purposes).filter((p) => !p.archivedAt);
+  const tagList       = Object.values(tags);
+  const allCollections = Object.values(collectionsRecord);
 
   const everyDay = daysOfWeek.length === 0;
   const isWeekdays = daysOfWeek.length === 5 && WEEKDAYS.every((d) => daysOfWeek.includes(d));
@@ -105,7 +116,7 @@ export function AddRoutineModal() {
           <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           {/* Name */}
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor="ar-name">
@@ -212,6 +223,19 @@ export function AddRoutineModal() {
                 <span className={styles.fieldLabel}>Color</span>
                 <ColorPicker palette="standard" value={color} onChange={setColor} />
               </div>
+
+              {/* Endeavour */}
+              {allCollections.length > 0 && (
+                <div className={styles.field}>
+                  <span className={styles.fieldLabel}>{LABELS.collection}</span>
+                  <CollectionPicker
+                    collections={allCollections}
+                    value={collectionId}
+                    onChange={setCollectionId}
+                    noneLabel={`No ${LABELS.collection}`}
+                  />
+                </div>
+              )}
 
               {/* Purposes */}
               {purposeList.length > 0 && (

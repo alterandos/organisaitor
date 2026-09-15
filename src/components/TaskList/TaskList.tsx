@@ -1,23 +1,10 @@
 import { useState, useEffect } from 'react';
 import type { PurposeId, TagId, Task, Collection } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import type { SortField, SortDir } from '@/store/uiStore';
 import { TaskItem } from '@/components/TaskItem/TaskItem';
-import { RoutineChecklist } from '@/components/RoutineChecklist/RoutineChecklist';
-import { todayIso } from '@/utils/date';
 import styles from './TaskList.module.css';
-
-function isRoutineDueToday(routine: Collection): boolean {
-  const cfg = routine.repeatConfig;
-  if (!cfg) return true; // no config = every day
-  const { daysOfWeek } = cfg;
-  if (daysOfWeek && daysOfWeek.length > 0) {
-    const day = new Date(todayIso() + 'T12:00:00').getDay();
-    return daysOfWeek.includes(day);
-  }
-  return true;
-}
 
 function deadlineMs(t: Task): number {
   return t.deadline ? new Date(t.deadline).getTime() : Infinity;
@@ -59,14 +46,8 @@ export function TaskList() {
 
   const tasksRecord         = useTaskStore((s) => s.tasks);
   const collectionsRecord   = useTaskStore((s) => s.collections);
-  const routinesSectionOpen = useUIStore((s) => s.routinesSectionOpen);
-  const toggleRoutinesSection = useUIStore((s) => s.toggleRoutinesSection);
 
-  const todayRoutines = Object.values(collectionsRecord).filter(
-    (c) => c.kind === 'routine' && isRoutineDueToday(c)
-  );
-
-  const activeCollectionId = useUIStore((s) => s.activeCollectionId);
+  const activeCollectionId = useUIStore(selectActiveCollectionId);
   const activePurposeIds   = useUIStore((s) => s.activePurposeIds);
   const activeTagIds       = useUIStore((s) => s.activeTagIds);
   const sortField          = useUIStore((s) => s.sortField);
@@ -166,21 +147,6 @@ export function TaskList() {
 
   return (
     <div className={styles.list}>
-      {todayRoutines.length > 0 && (
-        <>
-          <button className={styles.sectionToggle} onClick={toggleRoutinesSection}>
-            <span className={`${styles.chevron} ${routinesSectionOpen ? styles.chevronOpen : ''}`}>▸</span>
-            Routines ({todayRoutines.length})
-          </button>
-          {routinesSectionOpen && (
-            <div className={styles.routinesSection}>
-              {todayRoutines.map((r) => (
-                <RoutineChecklist key={r.id} routine={r} />
-              ))}
-            </div>
-          )}
-        </>
-      )}
       {active.map((task) => renderTaskGroup(task))}
       {completed.length > 0 && (
         <>

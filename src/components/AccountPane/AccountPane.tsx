@@ -3,20 +3,20 @@ import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
+import { useTrackerStore } from '@/store/trackerStore';
 import { isSupabaseConfigured } from '@/services/supabase';
 import { forceUpload, onSyncStatus, type SyncStatus } from '@/services/sync/syncService';
+import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
 import styles from './AccountPane.module.css';
 
 type Mode = 'signin' | 'signup';
 
 function downloadBackup() {
-  const { tasks, collections, tags, purposes } = useTaskStore.getState();
-  const { events, reminders } = useCalendarStore.getState();
-  const backup = {
-    exportedAt: new Date().toISOString(),
-    version: 1,
-    tasks, collections, tags, purposes, events, reminders,
-  };
+  const backup: Record<string, unknown> = { exportedAt: new Date().toISOString(), version: 2 };
+  for (const key of PERSISTED_STORAGE_KEYS) {
+    const val = localStorage.getItem(key);
+    if (val !== null) backup[key] = JSON.parse(val);
+  }
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -86,23 +86,31 @@ export function AccountPane() {
       const text   = await file.text();
       const backup = JSON.parse(text);
 
-      useTaskStore.setState({
-        tasks:       backup.tasks       ?? {},
-        collections: backup.collections ?? {},
-        tags:        backup.tags        ?? {},
-        purposes:    backup.purposes    ?? {},
-      } as never);
-      useCalendarStore.setState({
-        events:    backup.events    ?? {},
-        reminders: backup.reminders ?? {},
-      } as never);
+      let restored = 0;
+      for (const key of PERSISTED_STORAGE_KEYS) {
+        if (key in backup) {
+          localStorage.setItem(key, JSON.stringify(backup[key]));
+          restored++;
+        }
+      }
+      if (restored === 0) throw new Error('No recognisable data found in this file.');
+
+      // Bring the Supabase-synced stores' in-memory state up to date with what was
+      // just written to localStorage, so forceUpload() (which reads live state, not
+      // localStorage) pushes the restored data instead of what was there before.
+      await Promise.all([
+        useTaskStore.persist.rehydrate(),
+        useCalendarStore.persist.rehydrate(),
+        useTrackerStore.persist.rehydrate(),
+      ]);
 
       if (user) {
         await forceUpload(user.id);
-        setSuccess('Data restored and uploaded to Supabase.');
+        setSuccess('Data restored and uploaded to Supabase. Reloading…');
       } else {
-        setSuccess('Data restored locally. Sign in to sync to the cloud.');
+        setSuccess('Data restored locally. Reloading…');
       }
+      setTimeout(() => window.location.reload(), 1200);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to restore backup.');
     } finally {

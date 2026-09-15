@@ -1,0 +1,184 @@
+.shell {
+  padding: 1.25rem 1.5rem 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.heading {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.addBtn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: white;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 150ms ease;
+}
+
+.addBtn:hover { background: var(--color-primary-hover); }
+
+.stravaBar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.stravaConnected {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fc4c02;
+}
+
+.stravaBtn {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: inherit;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.stravaBtn:hover:not(:disabled) { border-color: #fc4c02; background: rgba(252, 76, 2, 0.08); }
+.stravaBtn:disabled { opacity: 0.6; cursor: default; }
+
+.stravaMessage {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.row:hover { border-color: var(--color-primary-border); background: var(--color-primary-subtle); }
+
+.typeIcon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  width: 1.8rem;
+  text-align: center;
+}
+
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date {
+  font-size: 0.76rem;
+  color: var(--color-muted);
+}
+
+.stat {
+  flex-shrink: 0;
+  width: 5.5rem;
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.sourceBadge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #fc4c02;
+  background: rgba(252, 76, 2, 0.12);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+
+.rowActions {
+  display: flex;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+
+.actionBtn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.3rem 0.45rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.actionBtn:hover { background: var(--color-border); color: var(--color-text); }
+.actionBtnDelete:hover { color: var(--color-danger); }
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.emptyStateText { color: var(--color-muted); font-size: 0.9rem; }
+
+.emptyStateBtn {
+  padding: 0.55rem 1.1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: white;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: inherit;
+}
+
+@media (max-width: 640px) {
+  .stat { display: none; }
+  .row { gap: 0.6rem; }
+}

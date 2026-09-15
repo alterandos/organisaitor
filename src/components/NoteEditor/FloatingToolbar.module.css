@@ -1,0 +1,239 @@
+.toolbar {
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #1e293b;
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  pointer-events: all;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.on {
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+}
+
+.tagBtn {
+  color: #93c5fd;
+  font-size: 0.8rem;
+}
+
+.tagBtn:hover {
+  color: #bfdbfe;
+}
+
+.div {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* ── Tag picker ──────────────────────────────────────────────────────────── */
+
+.tagPicker {
+  display: flex;
+  flex-direction: column;
+  width: 210px;
+}
+
+.tagSearch {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  padding: 5px 8px;
+  color: white;
+  font-size: 0.83rem;
+  outline: none;
+  width: 100%;
+  font-family: inherit;
+}
+
+.tagSearch::placeholder { color: #64748b; }
+
+.tagList {
+  display: flex;
+  flex-direction: column;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.tagOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  border-radius: 3px;
+  color: #e2e8f0;
+  font-size: 0.83rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+  font-family: inherit;
+}
+
+.tagOption:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tagEmpty {
+  padding: 6px 8px;
+  color: #475569;
+  font-size: 0.8rem;
+}
+
+.tagSeparator {
+  padding: 4px 8px 2px;
+  font-size: 0.7rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 2px;
+}
+
+.tagOptionBuiltin {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tagShortcut {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: #475569;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tagBack {
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #64748b;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.12s;
+  font-family: inherit;
+}
+
+.tagBack:hover { color: #e2e8f0; }
+
+/* ── Link picker ─────────────────────────────────────────────────────────── */
+
+.linkPicker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 220px;
+}
+
+.linkInputField {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  padding: 5px 8px;
+  color: white;
+  font-size: 0.83rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.linkInputField::placeholder { color: #64748b; }
+
+.linkApplyBtn,
+.linkRemoveBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: #93c5fd;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.linkApplyBtn:hover,
+.linkRemoveBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.linkRemoveBtn { color: #f87171; }
+
+/* ── Color picker (basic colors) ─────────────────────────────────────────── */
+
+.colorBtnIcon {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.8rem;
+  border-bottom: 3px solid;
+  line-height: 1.1;
+}
+
+.colorPicker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.colorSwatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.colorSwatchDefault {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: none;
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}

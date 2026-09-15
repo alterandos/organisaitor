@@ -32,7 +32,19 @@
   margin-bottom: 0.75rem;
 }
 
-.title { font-size: 1rem; font-weight: 600; }
+.title { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+
+.archivedBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+}
 
 .closeBtn {
   background: none;
@@ -89,6 +101,22 @@
   gap: 0.625rem;
   margin-top: 1.25rem;
 }
+
+.actionsSpacer { flex: 1; }
+
+.archiveBtn {
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.archiveBtn:hover { color: var(--color-danger); border-color: var(--color-danger); }
 
 .cancelBtn {
   padding: 0.6rem 1.2rem;

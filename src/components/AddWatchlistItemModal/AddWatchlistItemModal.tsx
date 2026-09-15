@@ -38,9 +38,13 @@ export function AddWatchlistItemModal() {
 
   const { status: lookupStatus, candidates, autoFill, onTickerBlur, selectCandidate, clearLookup } = useTickerLookup();
   const nameAutoFilledRef = useRef(false);
+  const formRef           = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') { closeModal(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [closeModal]);
@@ -134,7 +138,7 @@ export function AddWatchlistItemModal() {
           <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           <div className={styles.row}>
             <div className={styles.field} style={{ flex: '0 0 110px', position: 'relative' }}>
               <label className={styles.fieldLabel} htmlFor="wl-ticker">Ticker</label>

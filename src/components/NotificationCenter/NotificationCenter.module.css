@@ -26,7 +26,7 @@
   right: 1px;
   min-width: 1rem;
   height: 1rem;
-  background: #ef4444;
+  background: var(--color-danger);
   color: #fff;
   font-size: 0.6rem;
   font-weight: 700;
@@ -111,9 +111,9 @@
   gap: 0.5rem;
 }
 
-.kindTask     { border-left-color: #f59e0b; }
+.kindTask     { border-left-color: var(--color-warning); }
 .kindEvent    { border-left-color: var(--color-primary); }
-.kindReminder { border-left-color: #10b981; }
+.kindReminder { border-left-color: var(--color-success); }
 
 .cardMain {
   display: flex;
@@ -186,7 +186,7 @@
 .doneBtn:hover { background: color-mix(in srgb, var(--color-primary) 20%, transparent); }
 
 .archiveBtn { color: var(--color-muted); }
-.archiveBtn:hover { color: #ef4444; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.06); }
+.archiveBtn:hover { color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 40%, transparent); background: var(--color-danger-muted); }
 
 /* Inline mini-forms (snooze / postpone) */
 .miniForm {

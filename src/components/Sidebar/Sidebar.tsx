@@ -22,6 +22,7 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
   const openEditTag         = useUIStore((s) => s.openEditTag);
   const openEditPurpose     = useUIStore((s) => s.openEditPurpose);
   const openEditCollection  = useUIStore((s) => s.openEditCollection);
+  const openManage          = useUIStore((s) => s.openManage);
 
   const tagsRecord        = useTaskStore((s) => s.tags);
   const purposesRecord    = useTaskStore((s) => s.purposes);
@@ -31,8 +32,8 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
   const deleteCollection  = useTaskStore((s) => s.deleteCollection);
 
   const tags     = Object.values(tagsRecord);
-  const purposes = Object.values(purposesRecord);
-  const allCollections = Object.values(collectionsRecord);
+  const purposes = Object.values(purposesRecord).filter((p) => !p.archivedAt);
+  const allCollections = Object.values(collectionsRecord).filter((c) => !c.archivedAt);
   const projects = allCollections.filter((c) => c.kind === 'project');
   const lists    = allCollections.filter((c) => c.kind === 'list');
 
@@ -106,6 +107,13 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
       onMouseLeave={onHoverLeave}
     >
       <div className={styles.body}>
+
+        {/* ── Manage ── */}
+        <button className={styles.manageBtn} onClick={() => openManage()}>
+          <span className={styles.manageIcon}>⚙</span>
+          Manage Library
+          <kbd className={styles.manageKbd}>M</kbd>
+        </button>
 
         {/* ── Tags ── */}
         <div className={styles.section}>

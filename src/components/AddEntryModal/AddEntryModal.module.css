@@ -64,7 +64,7 @@
   margin-bottom: 0.45rem;
 }
 
-.required { color: #ef4444; }
+.required { color: var(--color-danger); }
 
 .input, .select, .textarea {
   width: 100%;
@@ -99,8 +99,8 @@
   transition: background 180ms ease, border-color 180ms ease;
 }
 .toggleRowOn {
-  background: rgba(34, 197, 94, 0.07);
-  border-color: #22c55e;
+  background: var(--color-success-muted);
+  border-color: var(--color-success);
 }
 
 .toggleTrack {
@@ -112,7 +112,7 @@
   flex-shrink: 0;
   transition: background 180ms ease;
 }
-.toggleTrackOn { background: #22c55e; }
+.toggleTrackOn { background: var(--color-success); }
 
 .toggleThumb {
   position: absolute;
@@ -121,7 +121,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow: 0 1px 3px rgba(0,0,0,0.25);
   transition: transform 180ms ease;
 }
@@ -137,7 +137,7 @@
 .toggleCheck {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #16a34a;
+  color: var(--color-success);
 }
 
 /* ── Duration field ────────────────────────────────────────────── */
@@ -187,7 +187,7 @@
   transition: color 100ms ease, transform 100ms ease;
 }
 .ratingStar:hover { transform: scale(1.15); }
-.ratingStarActive { color: #f59e0b; }
+.ratingStarActive { color: var(--color-warning); }
 
 /* ── Actions ─────────────────────────────────────────────────── */
 

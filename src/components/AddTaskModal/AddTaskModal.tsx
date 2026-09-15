@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { useTaskStore } from '@/store/taskStore';
-import { useUIStore } from '@/store/uiStore';
+import { useCalendarStore } from '@/store/calendarStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { newTagId } from '@/utils/id';
 import { LABELS } from '@/config/labels';
 import type { Priority, TagId, PurposeId, CollectionId, TaskKind, TaskId } from '@/types';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { TimeInput } from '@/components/TimeInput/TimeInput';
 import styles from './AddTaskModal.module.css';
 
 type PendingTag = { id: TagId; name: string; isNew: boolean };
@@ -19,20 +21,27 @@ const PRIORITIES: { value: Priority; label: string }[] = [
 
 export function AddTaskModal() {
   const taskModalAdvanced  = useUIStore((s) => s.taskModalAdvanced);
-  const activeCollectionId = useUIStore((s) => s.activeCollectionId);
+  const activeCollectionId = useUIStore(selectActiveCollectionId);
   const pendingParentId    = useUIStore((s) => s.pendingParentId);
+  const quickAddPrefill    = useUIStore((s) => s.quickAddPrefill);
   const closeModal         = useUIStore((s) => s.closeModal);
 
   const [advanced, setAdvanced] = useState(taskModalAdvanced || !!pendingParentId);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const [title,       setTitle]       = useState('');
-  const [notes,       setNotes]       = useState('');
-  const [deadline,     setDeadline]     = useState('');
-  const [deadlineTime, setDeadlineTime] = useState('');
-  const [priority,    setPriority]    = useState<Priority>('none');
+  const [title,         setTitle]         = useState(quickAddPrefill?.title ?? '');
+  const [notes,         setNotes]         = useState('');
+  const [deadline,      setDeadline]      = useState(quickAddPrefill?.deadline ?? '');
+  const [deadlineTime,  setDeadlineTime]  = useState('');
+  const [scheduledAt,   setScheduledAt]   = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [priority,      setPriority]      = useState<Priority>(quickAddPrefill?.priority ?? 'none');
 
-  // Advanced fields — pre-fill collection from active filter
-  const [collectionId,       setCollectionId]       = useState<CollectionId | ''>((activeCollectionId ?? '') as CollectionId | '');
+  // Advanced fields — pre-fill collection from active filter, or from MobileQuickAddBar's
+  // "More options…" handoff (docs/android/01-tasks-app.md §3.2) when that took place instead
+  const [collectionId,       setCollectionId]       = useState<CollectionId | ''>(
+    (quickAddPrefill?.collectionId ?? activeCollectionId ?? '') as CollectionId | ''
+  );
   const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>([]);
   const [pendingTags,        setPendingTags]         = useState<PendingTag[]>([]);
   const [tagInput,           setTagInput]            = useState('');
@@ -42,22 +51,26 @@ export function AddTaskModal() {
   const [links,              setLinks]               = useState<string[]>([]);
   const [linkInput,          setLinkInput]           = useState('');
 
-  const addTask    = useTaskStore((s) => s.addTask);
-  const addTag     = useTaskStore((s) => s.addTag);
+  const addTask = useTaskStore((s) => s.addTask);
+  const addTag  = useTaskStore((s) => s.addTag);
+  const addEvent   = useCalendarStore((s) => s.addEvent);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const purposes   = useTaskStore((s) => s.purposes);
   const tags       = useTaskStore((s) => s.tags);
   const tasksRecord = useTaskStore((s) => s.tasks);
 
   const collectionList = Object.values(collectionsRecord);
-  const purposeList    = Object.values(purposes);
+  const purposeList    = Object.values(purposes).filter((p) => !p.archivedAt);
   const existingTags   = Object.values(tags);
   const topLevelTasks  = Object.values(tasksRecord).filter((t) => !t.parentId && !t.completed);
 
   useEffect(() => { setAdvanced(taskModalAdvanced); }, [taskModalAdvanced]);
 
   useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') { closeModal(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [closeModal]);
@@ -121,12 +134,25 @@ export function AddTaskModal() {
       addTag({ id: t.id, name: t.name, color: null, notes: null })
     );
 
+    // Pre-create the calendar event if a scheduled date is set
+    let calendarEventId: import('@/types').CalendarEventId | null = null;
+    if (scheduledAt) {
+      calendarEventId = addEvent({
+        title,
+        date:      scheduledAt,
+        startTime: scheduledTime || null,
+      });
+    }
+
     addTask({
       title,
-      notes:        notes || null,
-      links:        links.filter(Boolean),
-      deadline:     deadline     || null,
-      deadlineTime: deadlineTime || null,
+      notes:           notes || null,
+      links:           links.filter(Boolean),
+      deadline:        deadline     || null,
+      deadlineTime:    deadlineTime || null,
+      scheduledAt:     scheduledAt  || null,
+      scheduledTime:   scheduledTime || null,
+      calendarEventId: calendarEventId,
       priority,
       collectionId: collectionId ? collectionId as CollectionId : null,
       tagIds:       pendingTags.map((t) => t.id),
@@ -145,7 +171,7 @@ export function AddTaskModal() {
           <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           {/* ── Basic fields ── */}
           <input
             className={styles.titleInput}
@@ -182,11 +208,10 @@ export function AddTaskModal() {
                   required={taskKind === 'milestone'}
                 />
                 {(deadline || taskKind === 'milestone') && (
-                  <input
-                    type="time"
+                  <TimeInput
                     className={styles.timeInput}
                     value={deadlineTime}
-                    onChange={(e) => setDeadlineTime(e.target.value)}
+                    onChange={setDeadlineTime}
                     placeholder="Time"
                   />
                 )}
@@ -206,6 +231,34 @@ export function AddTaskModal() {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+
+          <div className={styles.row}>
+            <div className={styles.field}>
+              <label className={styles.label}>{LABELS.scheduledFor}</label>
+              <div className={styles.dateTimeRow}>
+                <input
+                  type="date"
+                  className={styles.dateInput}
+                  value={scheduledAt}
+                  onChange={(e) => {
+                    setScheduledAt(e.target.value);
+                    if (!e.target.value) setScheduledTime('');
+                  }}
+                />
+                {scheduledAt && (
+                  <TimeInput
+                    className={styles.timeInput}
+                    value={scheduledTime}
+                    onChange={setScheduledTime}
+                    placeholder="Time"
+                  />
+                )}
+              </div>
+              {scheduledAt && (
+                <span className={styles.scheduledHint}>Added to calendar automatically</span>
+              )}
             </div>
           </div>
 
@@ -356,6 +409,7 @@ export function AddTaskModal() {
                     value={linkInput}
                     onChange={(e) => setLinkInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
+                    onBlur={addLink}
                   />
                   <button type="button" className={styles.linkAddBtn} onClick={addLink} disabled={!linkInput.trim()}>Add</button>
                 </div>

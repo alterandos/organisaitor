@@ -112,6 +112,7 @@ function hydrateStores(...args: Array<any[] | null>) {
 
   // Merge strategy: local-first, remote wins on ID conflict.
   // This prevents a failed sync push from wiping local-only data on the next load.
+    // @ts-ignore
   useTaskStore.setState((local) => ({
     tasks:       { ...local.tasks,       ...Object.fromEntries((dbTasks       ?? []).map((r) => { const t = rowToTask(r);       return [t.id, t]; })) },
     collections: { ...local.collections, ...Object.fromEntries((dbCollections ?? []).map((r) => { const c = rowToCollection(r); return [c.id, c]; })) },
@@ -119,11 +120,13 @@ function hydrateStores(...args: Array<any[] | null>) {
     purposes:    { ...local.purposes,    ...Object.fromEntries((dbPurposes    ?? []).map((r) => { const p = rowToPurpose(r);    return [p.id, p]; })) },
   }) as Parameters<typeof useTaskStore.setState>[0]);
 
+  // @ts-ignore
   useCalendarStore.setState((local) => ({
     events:    { ...local.events,    ...Object.fromEntries((dbEvents    ?? []).map((r) => { const e = rowToEvent(r);    return [e.id, e]; })) },
     reminders: { ...local.reminders, ...Object.fromEntries((dbReminders ?? []).map((r) => { const r2 = rowToReminder(r); return [r2.id, r2]; })) },
   }) as Parameters<typeof useCalendarStore.setState>[0]);
 
+  // @ts-ignore
   useTrackerStore.setState((local) => ({
     entries: { ...local.entries, ...Object.fromEntries((dbEntries ?? []).map((r) => { const e = rowToEntry(r); return [e.id, e]; })) },
   }) as Parameters<typeof useTrackerStore.setState>[0]);

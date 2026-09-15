@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { TaskId, TagId, CollectionId, PurposeId, CalendarEventId, CalendarReminderId, TrackerEntryId } from '@/types';
+import type { TaskId, TagId, CollectionId, PurposeId, CalendarEventId, CalendarReminderId, TrackerEntryId, NoteId, NoteTagId, ScheduleId } from '@/types';
 
 export const newTaskId             = (): TaskId             => nanoid() as TaskId;
 export const newTagId              = (): TagId              => nanoid() as TagId;
@@ -8,3 +8,6 @@ export const newPurposeId          = (): PurposeId          => nanoid() as Purpo
 export const newCalendarEventId    = (): CalendarEventId    => nanoid() as CalendarEventId;
 export const newCalendarReminderId = (): CalendarReminderId => nanoid() as CalendarReminderId;
 export const newTrackerEntryId     = (): TrackerEntryId     => nanoid() as TrackerEntryId;
+export const newNoteId             = (): NoteId             => nanoid() as NoteId;
+export const newNoteTagId          = (): NoteTagId          => nanoid() as NoteTagId;
+export const newScheduleId         = (): ScheduleId          => nanoid() as ScheduleId;

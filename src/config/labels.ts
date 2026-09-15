@@ -16,6 +16,7 @@ export const LABELS = {
     milestone: 'Milestone',
   },
   milestoneDate: 'Milestone date',
+  scheduledFor:  'Scheduled',
 
   // Calendar
   calendarItemKind: {
@@ -34,11 +35,21 @@ export const LABELS = {
   routine: 'Routine',
   routinePlural: 'Routines',
 
+  // Lists
+  list:          'List',
+  listPlural:    'Lists',
+  listItem:      'Item',
+  listItemPlural:'Items',
+  listType:      'List Type',
+
   views: {
     tasks:     'Tasks',
     calendar:  'Calendar',
     records:   'Records',
+    lists:     'Lists',
     portfolio: 'Portfolio',
+    notes:     'Notes',
+    fitness:   'Fitness',
   },
 
   // Portfolio
@@ -48,4 +59,9 @@ export const LABELS = {
   watchlistItemPlural: 'Tickers',
   portfolioTag:        'Tag',
   investmentPurpose:   'Investment Purpose',
+
+  // Fitness
+  fitness:         'Fitness',
+  activity:        'Activity',
+  activityPlural:  'Activities',
 } as const;

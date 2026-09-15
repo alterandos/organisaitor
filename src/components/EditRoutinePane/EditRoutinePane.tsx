@@ -4,6 +4,8 @@ import { useTaskStore } from '@/store/taskStore';
 import { useRoutineStore } from '@/store/routineStore';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { LABELS } from '@/config/labels';
 import type { RoutineTask, RepeatConfig, CollectionId, PurposeId, TagId } from '@/types';
 import styles from './EditRoutinePane.module.css';
 
@@ -37,6 +39,7 @@ export function EditRoutinePane() {
   const [color,      setColor]      = useState<string | null>(null);
   const [purposeIds, setPurposeIds] = useState<PurposeId[]>([]);
   const [tagIds,     setTagIds]     = useState<TagId[]>([]);
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
   const [tasks,      setTasks]      = useState<RoutineTask[]>([]);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
   const [newTitle,   setNewTitle]   = useState('');
@@ -47,10 +50,18 @@ export function EditRoutinePane() {
       setColor(routine.color ?? null);
       setPurposeIds((routine.purposeIds ?? []) as PurposeId[]);
       setTagIds((routine.tagIds ?? []) as TagId[]);
+      setCollectionId(routine.collectionId);
       setTasks(routine.routineTasks ?? []);
       setDaysOfWeek(routine.repeatConfig?.daysOfWeek ?? []);
     }
   }, [routine?.id]);
+
+  useEffect(() => {
+    if (!editRoutineOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeEditRoutine(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [editRoutineOpen, closeEditRoutine]);
 
   if (!editRoutineOpen || !routine) return null;
 
@@ -92,6 +103,7 @@ export function EditRoutinePane() {
       color,
       purposeIds,
       tagIds,
+      collectionId,
       routineTasks: tasks,
       repeatConfig: buildRepeatConfig(daysOfWeek),
     });
@@ -109,8 +121,9 @@ export function EditRoutinePane() {
 
   const everyDay  = daysOfWeek.length === 0;
   const isWeekdays = daysOfWeek.length === 5 && WEEKDAYS.every((d) => daysOfWeek.includes(d));
-  const purposeList = Object.values(purposes);
-  const tagList     = Object.values(tags);
+  const purposeList   = Object.values(purposes).filter((p) => !p.archivedAt);
+  const tagList       = Object.values(tags);
+  const allCollections = Object.values(collections);
 
   return (
     <>
@@ -139,6 +152,19 @@ export function EditRoutinePane() {
             <span className={styles.label}>Color</span>
             <ColorPicker palette="standard" value={color} onChange={setColor} />
           </div>
+
+          {/* Endeavour */}
+          {allCollections.length > 0 && (
+            <div className={styles.field}>
+              <span className={styles.label}>{LABELS.collection}</span>
+              <CollectionPicker
+                collections={allCollections}
+                value={collectionId}
+                onChange={setCollectionId}
+                noneLabel={`No ${LABELS.collection}`}
+              />
+            </div>
+          )}
 
           {/* Purposes */}
           {purposeList.length > 0 && (

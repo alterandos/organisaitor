@@ -191,9 +191,12 @@ export function WatchlistView() {
   const columnConfig        = usePortfolioStore((s) => s.columnConfig);
   const deleteWatchlistItem   = usePortfolioStore((s) => s.deleteWatchlistItem);
   const setColumnConfig       = usePortfolioStore((s) => s.setColumnConfig);
+  const updateWatchlistItem   = usePortfolioStore((s) => s.updateWatchlistItem);
   const prices                = usePriceStore((s) => s.prices);
   const openEditWatchlistItem   = useUIStore((s) => s.openEditWatchlistItem);
   const setPortfolioChartOpen   = useUIStore((s) => s.setPortfolioChartOpen);
+  const showAddPortfolioTag     = useUIStore((s) => s.showAddPortfolioTag);
+  const showAddWatchlistItem    = useUIStore((s) => s.showAddWatchlistItem);
   const zoom                    = useSettingsStore((s) => s.chartTickerRowZoom);
 
   usePriceRefresh();
@@ -227,6 +230,9 @@ export function WatchlistView() {
   const [tableGroupPanelOpen,     setTableGroupPanelOpen]     = useState(false);
   const [tableGroupPanelPos,      setTableGroupPanelPos]      = useState({ top: 0, right: 0 });
   const [tableCollapsedGroups,    setTableCollapsedGroups]    = useState<Set<string>>(new Set());
+  const [tagEditItemId,           setTagEditItemId]           = useState<WatchlistItemId | null>(null);
+  const [tagPopoverPos,           setTagPopoverPos]           = useState({ top: 0, left: 0 });
+  const [tableAtBottom,           setTableAtBottom]           = useState(false);
 
   const colSelectorRef       = useRef<HTMLDivElement>(null);
   const colBtnRef            = useRef<HTMLButtonElement>(null);
@@ -239,10 +245,13 @@ export function WatchlistView() {
   const tableGroupBtnRef     = useRef<HTMLButtonElement>(null);
   const tableGroupPanelRef   = useRef<HTMLDivElement>(null);
   const dragColRef           = useRef<WatchlistColumnId | null>(null);
+  const tagPopoverRef        = useRef<HTMLDivElement>(null);
+  const tableContainerRef    = useRef<HTMLDivElement>(null);
 
   const selectItem = (id: WatchlistItemId | null) => {
     setSelectedItemId(id);
     setPortfolioChartOpen(id !== null);
+    setTagEditItemId(null);
   };
 
   useEffect(() => {
@@ -301,6 +310,29 @@ export function WatchlistView() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [tableGroupPanelOpen]);
+
+  useEffect(() => {
+    if (!tagEditItemId) return;
+    const handleMouse = (e: MouseEvent) => {
+      if (!tagPopoverRef.current?.contains(e.target as Node)) setTagEditItemId(null);
+    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setTagEditItemId(null); };
+    document.addEventListener('mousedown', handleMouse);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleMouse);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [tagEditItemId]);
+
+  const checkTableBottom = () => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    setTableAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80 || el.scrollHeight <= el.clientHeight);
+  };
+
+  const displayItemCount = Object.values(watchlistItems).length;
+  useEffect(() => { checkTableBottom(); }, [displayItemCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openColSelector = () => {
     if (!colSelectorOpen && colBtnRef.current) {
@@ -519,25 +551,45 @@ export function WatchlistView() {
             </div>
           </td>
         );
-      case 'tags':
+      case 'tags': {
+        const isTagOpen = tagEditItemId === item.id;
         return (
-          <td key="tags" className={styles.td}>
-            <div className={styles.pillGroup}>
-              {item.tagIds.length === 0
-                ? <span className={styles.muted}>—</span>
-                : item.tagIds.map((tid) => {
-                    const tag = portfolioTags[tid];
-                    if (!tag) return null;
-                    return (
-                      <span key={tid} className={styles.pill}
-                        style={tag.color ? { background: tag.color + '22', color: tag.color } : undefined}>
-                        {tag.name}
-                      </span>
-                    );
-                  })}
+          <td
+            key="tags"
+            className={`${styles.td} ${styles.tdTagsEdit}${isTagOpen ? ` ${styles.tdTagsEditOpen}` : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isTagOpen) { setTagEditItemId(null); return; }
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              const left = Math.min(rect.left, window.innerWidth - 268);
+              const POPOVER_HEIGHT = 180;
+              const top = window.innerHeight - rect.bottom >= POPOVER_HEIGHT
+                ? rect.bottom + 4
+                : Math.max(8, rect.top - POPOVER_HEIGHT - 4);
+              setTagPopoverPos({ top, left });
+              setTagEditItemId(item.id as WatchlistItemId);
+            }}
+          >
+            <div className={styles.tagCellContent}>
+              <div className={styles.pillGroup}>
+                {item.tagIds.length === 0
+                  ? <span className={styles.muted}>—</span>
+                  : item.tagIds.map((tid) => {
+                      const tag = portfolioTags[tid];
+                      if (!tag) return null;
+                      return (
+                        <span key={tid} className={styles.pill}
+                          style={tag.color ? { background: tag.color + '22', color: tag.color } : undefined}>
+                          {tag.name}
+                        </span>
+                      );
+                    })}
+              </div>
+              <span className={styles.tagEditHint} aria-hidden="true">✎</span>
             </div>
           </td>
         );
+      }
       case 'links':
         return (
           <td key="links" className={styles.td}>
@@ -905,7 +957,7 @@ export function WatchlistView() {
         </button>
       </div>
 
-      <div className={styles.tableContainer}>
+      <div className={styles.tableContainer} ref={tableContainerRef} onScroll={checkTableBottom}>
         {allItems.length === 0 ? (
           <div className={styles.empty}>
             <span className={styles.emptyIcon}>📈</span>
@@ -978,6 +1030,18 @@ export function WatchlistView() {
                 </React.Fragment>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={visibleColumns.length + 1} className={styles.tableAddRowCell}>
+                  <div className={`${styles.tableAddRowInner} ${tableAtBottom ? styles.tableAddRowInnerExpanded : ''}`}>
+                    <button className={styles.tableAddBtn} onClick={showAddWatchlistItem}>
+                      <span className={styles.tableAddBtnPlus}>+</span>
+                      Add Watchlist Item
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tfoot>
           </table>
         )}
       </div>
@@ -1030,6 +1094,61 @@ export function WatchlistView() {
           ))}
         </div>
       )}
+
+      {tagEditItemId && watchlistItems[tagEditItemId] && (() => {
+        const item = watchlistItems[tagEditItemId];
+        const allPortfolioTags = Object.values(portfolioTags);
+        return (
+          <div
+            ref={tagPopoverRef}
+            className={styles.tagPopover}
+            style={{ top: tagPopoverPos.top, left: tagPopoverPos.left }}
+          >
+            <div className={styles.tagPopoverHeader}>
+              <span className={styles.tagPopoverTitle}>Tags</span>
+              <span className={styles.tagPopoverSubtitle}>{item.ticker ?? item.name}</span>
+            </div>
+            <div className={styles.tagPopoverChips}>
+              {allPortfolioTags.length === 0 ? (
+                <span className={styles.tagPopoverEmpty}>No tags yet — create one below</span>
+              ) : (
+                allPortfolioTags.map((tag) => {
+                  const active = item.tagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      className={`${styles.tagPopoverChip} ${active ? styles.tagPopoverChipActive : ''}`}
+                      onClick={() => {
+                        const nextTagIds = active
+                          ? item.tagIds.filter((t) => t !== tag.id)
+                          : [...item.tagIds, tag.id];
+                        updateWatchlistItem(tagEditItemId, { tagIds: nextTagIds });
+                      }}
+                      style={
+                        active && tag.color
+                          ? { background: tag.color, borderColor: tag.color, color: '#fff' }
+                          : tag.color
+                          ? { borderColor: tag.color + '88', color: tag.color }
+                          : undefined
+                      }
+                    >
+                      {active && <span className={styles.tagCheckMark}>✓</span>}
+                      {tag.name}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            <div className={styles.tagPopoverDivider} />
+            <button
+              className={styles.tagPopoverNewBtn}
+              onClick={() => { setTagEditItemId(null); showAddPortfolioTag(); }}
+            >
+              + New tag
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

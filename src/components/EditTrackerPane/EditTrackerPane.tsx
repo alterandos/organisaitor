@@ -4,6 +4,8 @@ import { useTaskStore } from '@/store/taskStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { LABELS } from '@/config/labels';
 import type { FieldSchema, FieldType, CollectionId, PurposeId, TagId } from '@/types';
 import styles from './EditTrackerPane.module.css';
 
@@ -52,6 +54,7 @@ export function EditTrackerPane() {
   const [color,       setColor]       = useState<string | null>(null);
   const [purposeIds,  setPurposeIds]  = useState<PurposeId[]>([]);
   const [tagIds,      setTagIds]      = useState<TagId[]>([]);
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
   const [fields,      setFields]      = useState<FieldRow[]>([]);
 
   // New-field form
@@ -69,9 +72,17 @@ export function EditTrackerPane() {
       setColor(tracker.color ?? null);
       setPurposeIds((tracker.purposeIds ?? []) as PurposeId[]);
       setTagIds((tracker.tagIds ?? []) as TagId[]);
+      setCollectionId(tracker.collectionId);
       setFields((tracker.fieldSchema ?? []).map(fieldToRow));
     }
   }, [tracker?.id]);
+
+  useEffect(() => {
+    if (!editTrackerOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeEditTracker(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [editTrackerOpen, closeEditTracker]);
 
   if (!editTrackerOpen || !tracker) return null;
 
@@ -129,13 +140,15 @@ export function EditTrackerPane() {
       color,
       purposeIds,
       tagIds,
+      collectionId,
       fieldSchema: fields.map((r) => r.schema),
     });
     closeEditTracker();
   }
 
-  const purposeList = Object.values(purposes);
-  const tagList     = Object.values(tags);
+  const purposeList   = Object.values(purposes).filter((p) => !p.archivedAt);
+  const tagList       = Object.values(tags);
+  const allCollections = Object.values(collections);
 
   return (
     <>
@@ -164,6 +177,19 @@ export function EditTrackerPane() {
             <span className={styles.label}>Color</span>
             <ColorPicker palette="standard" value={color} onChange={setColor} />
           </div>
+
+          {/* Endeavour */}
+          {allCollections.length > 0 && (
+            <div className={styles.field}>
+              <span className={styles.label}>{LABELS.collection}</span>
+              <CollectionPicker
+                collections={allCollections}
+                value={collectionId}
+                onChange={setCollectionId}
+                noneLabel={`No ${LABELS.collection}`}
+              />
+            </div>
+          )}
 
           {/* Purposes */}
           {purposeList.length > 0 && (

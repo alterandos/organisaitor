@@ -6,6 +6,7 @@ export type PurposeId          = string & { readonly _brand: 'PurposeId'        
 export type CalendarEventId    = string & { readonly _brand: 'CalendarEventId'    };
 export type CalendarReminderId = string & { readonly _brand: 'CalendarReminderId' };
 export type TrackerEntryId     = string & { readonly _brand: 'TrackerEntryId'     };
+export type ScheduleId         = string & { readonly _brand: 'ScheduleId'         };
 
 // ── Enum-like string unions ─────────────────────────────────────────────────────
 export type Priority       = 'none' | 'low' | 'medium' | 'high';
@@ -79,6 +80,7 @@ export interface Purpose {
   name:        string;
   description: string | null;
   color:       string | null;
+  archivedAt:  string | null;  // sunset, not deleted — hidden from pickers/filters, restorable
   createdAt:   string;
   updatedAt:   string;
 }
@@ -101,6 +103,8 @@ export interface Collection {
   fieldSchema:  FieldSchema[];  // meaningful for kind='tracker'
   routineTasks: RoutineTask[];  // meaningful for kind='routine'
   repeatConfig: RepeatConfig | null;  // meaningful for kind='routine'
+  collectionId: CollectionId | null;  // Endeavour this belongs to — meaningful for kind='tracker'|'routine' (trackers/routines can be filed under a project/list Endeavour, same as Task.collectionId)
+  archivedAt:   string | null;  // sunset, not deleted — hidden from pickers/filters, restorable
   createdAt:    string;
   updatedAt:    string;
 }
@@ -132,9 +136,12 @@ export interface Task {
   tagIds:       TagId[];
   purposeIds:   PurposeId[];
   priority:     Priority;
-  deadline:     string | null;        // ISO date 'YYYY-MM-DD'
-  deadlineTime: string | null;        // 'HH:MM' (24-hour), null if no time set
-  remindAt:     string | null;
+  deadline:      string | null;        // ISO date 'YYYY-MM-DD'
+  deadlineTime:  string | null;        // 'HH:MM' (24-hour), null if no time set
+  scheduledAt:   string | null;        // ISO date 'YYYY-MM-DD' — day user plans to do the task
+  scheduledTime: string | null;        // 'HH:MM' (24-hour), optional companion to scheduledAt
+  calendarEventId: CalendarEventId | null; // auto-created event when scheduledAt is set
+  remindAt:      string | null;
   archived:     boolean;
   kind:          TaskKind;             // 'action' | 'waiting' | 'milestone' (default: 'action')
   timeIntensity: TimeIntensity | null; // effort estimate — null means unset
@@ -154,18 +161,21 @@ export interface AppData {
 
 // ── Input types ────────────────────────────────────────────────────────────────
 export interface CreateTaskInput {
-  title:        string;
-  notes?:       string | null;
-  links?:       string[];
-  deadline?:     string | null;
-  deadlineTime?: string | null;
-  collectionId?: CollectionId | null;
-  tagIds?:      TagId[];
-  purposeIds?:  PurposeId[];
-  priority?:      Priority;
-  kind?:          TaskKind;
-  timeIntensity?: TimeIntensity | null;
-  parentId?:      TaskId | null;
+  title:           string;
+  notes?:          string | null;
+  links?:          string[];
+  deadline?:        string | null;
+  deadlineTime?:    string | null;
+  scheduledAt?:     string | null;
+  scheduledTime?:   string | null;
+  calendarEventId?: CalendarEventId | null;
+  collectionId?:   CollectionId | null;
+  tagIds?:         TagId[];
+  purposeIds?:     PurposeId[];
+  priority?:        Priority;
+  kind?:            TaskKind;
+  timeIntensity?:   TimeIntensity | null;
+  parentId?:        TaskId | null;
 }
 
 export interface CreateCollectionInput {
@@ -180,6 +190,7 @@ export interface CreateCollectionInput {
   template?:     TrackerTemplate;
   routineTasks?: RoutineTask[];
   repeatConfig?: RepeatConfig | null;
+  collectionId?: CollectionId | null;
 }
 
 export interface CreatePurposeInput {
@@ -264,6 +275,56 @@ export interface CreateCalendarReminderInput {
   repeat?:       RepeatConfig | null;
 }
 
+// ── Schedule (recurring weekly timetable, e.g. a university/gym schedule) ───────
+// A named, colour-coded, independently toggle-able LAYER of recurring weekly blocks —
+// modelled on Google Calendar's "multiple calendars" concept, not on this app's existing
+// Collection kind='routine' (a daily habit checklist — a completely different thing despite
+// the similar-sounding name). See CLAUDE.md's "Schedule" section for the full design writeup.
+export interface ScheduleBlock {
+  id:             string;        // nanoid(8)
+  title:          string;
+  daysOfWeek:     number[];      // 0=Sun … 6=Sat; multiple days share one block (e.g. Mon/Wed/Fri)
+  startTime:      string;        // HH:MM
+  endTime:        string;        // HH:MM
+  location:       string | null;
+  interval:       number;        // weeks between occurrences; 1 = every week, 2 = every second week
+  intervalAnchor: string;        // YYYY-MM-DD — the week containing this date is "week 0" for interval > 1
+  exceptions:     string[];      // YYYY-MM-DD dates to skip — a single cancelled occurrence
+  notes:          string | null;
+}
+
+export interface ScheduleTemplate {
+  id:           ScheduleId;
+  name:         string;
+  color:        string | null;
+  startDate:    string | null;   // null = no lower bound
+  endDate:      string | null;   // null = no upper bound
+  active:       boolean;         // shown on the real calendar, or hidden (kept, not deleted)
+  collectionId: CollectionId | null;
+  blocks:       ScheduleBlock[];
+  createdAt:    string;
+  updatedAt:    string;
+}
+
+export interface CreateScheduleInput {
+  name:          string;
+  color?:        string | null;
+  startDate?:    string | null;
+  endDate?:      string | null;
+  collectionId?: CollectionId | null;
+}
+
+export interface CreateScheduleBlockInput {
+  title:          string;
+  daysOfWeek:     number[];
+  startTime:      string;
+  endTime:        string;
+  location?:      string | null;
+  interval?:      number;
+  intervalAnchor?: string;
+  notes?:         string | null;
+}
+
 // ── UI-only types (never persisted) ───────────────────────────────────────────
 export type TaskViewMode  = 'focused' | 'overview';
 export type FilterStatus  = 'all' | 'active' | 'completed';
@@ -279,3 +340,15 @@ export interface FilterState {
   sortDir:      SortDirection;
   query:        string;
 }
+
+// ── Note types (from notes.ts) ──────────────────────────────────────────────────
+export type { NoteId, NoteTagId, Note, NoteTab, NoteTag, CreateNoteInput, CreateNoteTagInput, NoteTagFieldDef, NoteTagFieldType } from './notes';
+
+// ── List types (from lists.ts) ───────────────────────────────────────────────
+export type {
+  ListId, ListItemId, ListTypeId,
+  ListItemStatus, ListFieldType, ListFieldSchema,
+  ListType, List, ListItem,
+  CreateListInput, CreateListItemInput,
+} from './lists';
+export { LIST_ITEM_STATUS_META } from './lists';

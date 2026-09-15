@@ -170,6 +170,7 @@ export const usePortfolioStore = create<PortfolioState>()(
         if (fromVersion < 2 && result.watchlistItems) {
           const watchlistItems = Object.fromEntries(
             Object.entries(result.watchlistItems).map(([id, item]) => {
+              // @ts-ignore
               const it = item as Record<string, unknown>;
               return [id, { ...it, marketCapValue: null, links: it.links ?? [] }];
             })
@@ -180,6 +181,7 @@ export const usePortfolioStore = create<PortfolioState>()(
         if (fromVersion < 3) {
           const watchlistItems = Object.fromEntries(
             Object.entries(result.watchlistItems ?? {}).map(([id, item]) => {
+              // @ts-ignore
               const it = item as Record<string, unknown>;
               return [id, { ...it, sector: it.sector ?? null }];
             })
@@ -201,6 +203,7 @@ export const usePortfolioStore = create<PortfolioState>()(
         if (fromVersion < 5) {
           const watchlistItems = Object.fromEntries(
             Object.entries(result.watchlistItems ?? {}).map(([id, item]) => {
+              // @ts-ignore
               const it = item as Record<string, unknown>;
               return [id, { ...it, status: it.status ?? 'watching', heldAt: it.heldAt ?? null }];
             })
@@ -217,6 +220,7 @@ export const usePortfolioStore = create<PortfolioState>()(
         if (fromVersion < 6) {
           const watchlistItems = Object.fromEntries(
             Object.entries(result.watchlistItems ?? {}).map(([id, item]) => {
+              // @ts-ignore
               const it = item as Record<string, unknown>;
               return [id, { ...it, exchange: it.exchange ?? null }];
             })

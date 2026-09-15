@@ -1,10 +1,13 @@
 import { useRef, useState, useEffect } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useCalendarStore } from '@/store/calendarStore';
-import { parseICS } from '@/utils/icsParser';
+import { useSettingsStore } from '@/store/settingsStore';
+import { parseICS, looksLikeBirthday, type ICSEvent } from '@/utils/icsParser';
+import { resolveTimezone, rezoneWallClock } from '@/utils/timezone';
+import { CalendarImportReviewModal, type ReviewRow } from '@/components/CalendarImportReviewModal/CalendarImportReviewModal';
+import type { CollectionId } from '@/types';
+import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
 import styles from './IntegrationsPane.module.css';
-
-const BACKUP_KEYS = ['todo-app-storage', 'todo-calendar', 'todo-settings', 'todo-notifications'];
 
 type ImportStatus = 'idle' | 'success' | 'error';
 
@@ -14,11 +17,15 @@ function CalendarImportCard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const events       = useCalendarStore((s) => s.events);
   const addEvent     = useCalendarStore((s) => s.addEvent);
+  const timezone     = useSettingsStore((s) => s.timezone);
 
   const [status,   setStatus]   = useState<ImportStatus>('idle');
   const [imported, setImported] = useState(0);
   const [skipped,  setSkipped]  = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const [pendingEvents, setPendingEvents] = useState<Map<string, ICSEvent> | null>(null);
+  const [reviewRows,    setReviewRows]    = useState<ReviewRow[] | null>(null);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -31,29 +38,28 @@ function CalendarImportCard() {
         const parsed = parseICS(raw);
 
         const existingKeys = new Set(
-          Object.values(events).map((ev) => `${ev.title}|${ev.date}|${ev.startTime ?? ''}`)
+          Object.values(events).map((e) => `${e.title}|${e.date}|${e.startTime ?? ''}`)
         );
 
-        let importedCount = 0;
-        let skippedCount  = 0;
+        const eventMap = new Map<string, ICSEvent>();
+        const rows: ReviewRow[] = parsed.map((item, i) => {
+          const key = `${item.title}|${item.date}|${item.startTime ?? ''}|${i}`;
+          eventMap.set(key, item);
+          const dedupKey = `${item.title}|${item.date}|${item.startTime ?? ''}`;
+          return {
+            key,
+            title:       item.title,
+            date:        item.date,
+            startTime:   item.startTime,
+            endTime:     item.endTime,
+            location:    item.location,
+            eventType:   looksLikeBirthday(item.title) ? 'birthday' : 'default',
+            isDuplicate: existingKeys.has(dedupKey),
+          };
+        });
 
-        for (const item of parsed) {
-          const key = `${item.title}|${item.date}|${item.startTime ?? ''}`;
-          if (existingKeys.has(key)) { skippedCount++; continue; }
-          addEvent({
-            title:     item.title,
-            date:      item.date,
-            startTime: item.startTime,
-            endTime:   item.endTime,
-            notes:     item.notes,
-          });
-          existingKeys.add(key);
-          importedCount++;
-        }
-
-        setImported(importedCount);
-        setSkipped(skippedCount);
-        setStatus('success');
+        setPendingEvents(eventMap);
+        setReviewRows(rows);
       } catch {
         setErrorMsg('Could not read the file. Make sure it\'s a valid .ics calendar file.');
         setStatus('error');
@@ -66,6 +72,46 @@ function CalendarImportCard() {
       e.target.value = '';
     };
     reader.readAsText(file);
+  };
+
+  const handleReviewConfirm = (selected: ReviewRow[], collectionId: CollectionId | null) => {
+    if (!pendingEvents) return;
+    const zone = resolveTimezone(timezone);
+
+    for (const row of selected) {
+      const item = pendingEvents.get(row.key);
+      if (!item) continue;
+
+      let date      = item.date;
+      let startTime = item.startTime;
+      let endTime   = item.endTime;
+
+      // Re-project into the app's zone if the source carried an explicit zone that differs —
+      // floating times (tzid === null) already mean "whatever zone reads this", so leave as-is.
+      if (item.tzid && item.tzid !== zone && startTime) {
+        const r = rezoneWallClock(item.date, startTime, item.tzid, zone);
+        date      = r.date;
+        startTime = r.time;
+        if (endTime) endTime = rezoneWallClock(item.date, endTime, item.tzid, zone).time;
+      }
+
+      addEvent({
+        title:      item.title,
+        date,
+        startTime,
+        endTime,
+        notes:      item.notes,
+        location:   item.location,
+        eventType:  row.eventType,
+        collectionId,
+      });
+    }
+
+    setImported(selected.length);
+    setSkipped((reviewRows?.length ?? 0) - selected.length);
+    setStatus('success');
+    setReviewRows(null);
+    setPendingEvents(null);
   };
 
   const reset = () => setStatus('idle');
@@ -86,13 +132,14 @@ function CalendarImportCard() {
         <span className={styles.cardName}>Calendar (.ics)</span>
         <span className={styles.cardDesc}>
           Import from Google Calendar, Outlook, Apple Calendar, or any app that exports .ics files.
-          Recurring events are expanded up to 3 years ahead.
+          Recurring events are expanded up to 3 years ahead. You'll get a chance to review, deselect,
+          and adjust each event's type (e.g. Birthday) and Endeavour before anything is added.
         </span>
         {status === 'success' && (
           <div className={`${styles.statusMsg} ${styles.statusSuccess}`}>
             {imported > 0
-              ? `${imported} event${imported !== 1 ? 's' : ''} imported${skipped > 0 ? `, ${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped` : ''}`
-              : `No new events — ${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped`}
+              ? `${imported} event${imported !== 1 ? 's' : ''} imported${skipped > 0 ? `, ${skipped} left out` : ''}`
+              : 'No events imported'}
             <button className={styles.statusDismiss} onClick={reset}>✕</button>
           </div>
         )}
@@ -118,6 +165,14 @@ function CalendarImportCard() {
           Import file
         </button>
       </div>
+
+      {reviewRows && (
+        <CalendarImportReviewModal
+          rows={reviewRows}
+          onConfirm={handleReviewConfirm}
+          onCancel={() => { setReviewRows(null); setPendingEvents(null); }}
+        />
+      )}
     </div>
   );
 }
@@ -131,7 +186,7 @@ function ExportCard() {
   const handleExport = () => {
     try {
       const backup: Record<string, unknown> = {};
-      for (const key of BACKUP_KEYS) {
+      for (const key of PERSISTED_STORAGE_KEYS) {
         const val = localStorage.getItem(key);
         if (val !== null) backup[key] = JSON.parse(val);
       }
@@ -163,7 +218,7 @@ function ExportCard() {
       <div className={styles.cardBody}>
         <span className={styles.cardName}>Export backup</span>
         <span className={styles.cardDesc}>
-          Download all your tasks, events, and settings as a JSON file.
+          Download everything — Tasks, Calendar, Records, Lists, Notes, Portfolio, Fitness, and settings — as a JSON file.
         </span>
         {status === 'success' && (
           <div className={`${styles.statusMsg} ${styles.statusSuccess}`}>
@@ -203,7 +258,7 @@ function RestoreCard() {
       try {
         const backup = JSON.parse(ev.target?.result as string) as Record<string, unknown>;
         let restored = 0;
-        for (const key of BACKUP_KEYS) {
+        for (const key of PERSISTED_STORAGE_KEYS) {
           if (key in backup) {
             localStorage.setItem(key, JSON.stringify(backup[key]));
             restored++;

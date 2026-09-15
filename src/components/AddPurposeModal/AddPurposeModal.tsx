@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, MouseEvent } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { now } from '@/utils/date';
 import styles from './AddPurposeModal.module.css';
 
 export function AddPurposeModal() {
@@ -29,17 +30,33 @@ export function AddPurposeModal() {
   }, [editingPurpose?.id]);
 
   const handleClose = () => isEdit ? closeEditPurpose() : closeModal();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isEdit, closeEditPurpose, closeModal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     if (isEdit && editingPurpose) {
-      updatePurpose(editingPurpose.id, { name: name.trim(), color });
+      updatePurpose(editingPurpose.id, { name: name.trim(), description: description.trim() || null, color });
       closeEditPurpose();
     } else {
       addPurpose({ name, description: description || null, color });
       closeModal();
     }
+  };
+
+  const handleToggleArchive = () => {
+    if (!editingPurpose) return;
+    updatePurpose(editingPurpose.id, { archivedAt: editingPurpose.archivedAt ? null : now() });
+    closeEditPurpose();
   };
 
   const handleOverlay = (e: MouseEvent<HTMLDivElement>) => {
@@ -50,7 +67,12 @@ export function AddPurposeModal() {
     <div className={styles.overlay} onClick={handleOverlay}>
       <div className={styles.modal}>
         <div className={styles.header}>
-          <span className={styles.title}>{isEdit ? 'Edit Purpose' : 'New Purpose / Area'}</span>
+          <span className={styles.title}>
+            {isEdit ? 'Edit Purpose' : 'New Purpose / Area'}
+            {isEdit && editingPurpose.archivedAt && (
+              <span className={styles.archivedBadge}>Archived</span>
+            )}
+          </span>
           <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">✕</button>
         </div>
 
@@ -61,7 +83,7 @@ export function AddPurposeModal() {
           </p>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           <div className={styles.field}>
             <input
               className={styles.input}
@@ -88,6 +110,12 @@ export function AddPurposeModal() {
           </div>
 
           <div className={styles.actions}>
+            {isEdit && (
+              <button type="button" className={styles.archiveBtn} onClick={handleToggleArchive}>
+                {editingPurpose.archivedAt ? 'Restore' : 'Archive'}
+              </button>
+            )}
+            <span className={styles.actionsSpacer} />
             <button type="button" className={styles.cancelBtn} onClick={handleClose}>Cancel</button>
             <button type="submit" className={styles.submitBtn} disabled={!name.trim()}>
               {isEdit ? 'Save Purpose' : 'Create Purpose'}

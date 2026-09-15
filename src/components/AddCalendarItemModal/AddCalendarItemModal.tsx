@@ -1,17 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { CalendarItemKind, CalendarEventType, NotifyUnit, RepeatFreq, RepeatConfig } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { LABELS } from '@/config/labels';
 import { timeAddMinutes } from '@/utils/date';
+import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { TimeInput } from '@/components/TimeInput/TimeInput';
 import type { CollectionId } from '@/types';
 import styles from './AddCalendarItemModal.module.css';
 
 function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return todayIsoInZone(resolveTimezone(useSettingsStore.getState().timezone));
 }
 
 const EVENT_TYPES: { value: CalendarEventType; label: string; icon: string }[] = [
@@ -23,18 +25,20 @@ export function AddCalendarItemModal() {
   const closeModal         = useUIStore((s) => s.closeModal);
   const prefillDate        = useUIStore((s) => s.calendarItemDate);
   const prefillKind        = useUIStore((s) => s.calendarItemKind);
-  const activeCollectionId = useUIStore((s) => s.activeCollectionId);
+  const prefillTime        = useUIStore((s) => s.calendarItemTime);
+  const prefillTitle       = useUIStore((s) => s.calendarItemTitle);
+  const activeCollectionId = useUIStore(selectActiveCollectionId);
   const addEvent           = useCalendarStore((s) => s.addEvent);
   const addReminder        = useCalendarStore((s) => s.addReminder);
   const collectionsRecord  = useTaskStore((s) => s.collections);
 
   const [kind,              setKind]              = useState<CalendarItemKind>(prefillKind ?? 'event');
-  const [title,             setTitle]             = useState('');
+  const [title,             setTitle]             = useState(prefillTitle ?? '');
   const [date,              setDate]              = useState(prefillDate ?? todayStr());
   const [endDate,           setEndDate]           = useState('');
-  const [startTime,         setStartTime]         = useState('');
-  const [endTime,           setEndTime]           = useState('');
-  const [time,              setTime]              = useState('');
+  const [startTime,         setStartTime]         = useState(prefillTime ?? '');
+  const [endTime,           setEndTime]           = useState(prefillTime ? timeAddMinutes(prefillTime, 30) : '');
+  const [time,              setTime]              = useState(prefillTime ?? '');
   const [notes,             setNotes]             = useState('');
   const [location,          setLocation]          = useState('');
   const [eventType,         setEventType]         = useState<CalendarEventType>('default');
@@ -51,6 +55,7 @@ export function AddCalendarItemModal() {
   const [repeatCount,       setRepeatCount]       = useState(10);
   const [repeatUntil,       setRepeatUntil]       = useState('');
   const [formExpanded,      setFormExpanded]      = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const allCollections = Object.values(collectionsRecord);
 
@@ -66,7 +71,10 @@ export function AddCalendarItemModal() {
   }
 
   useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') { closeModal(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [closeModal]);
@@ -155,7 +163,7 @@ export function AddCalendarItemModal() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           <input
             className={styles.titleInput}
             placeholder={kind === 'event' ? 'Event title' : 'Reminder title'}
@@ -205,19 +213,17 @@ export function AddCalendarItemModal() {
             <div className={styles.field}>
               <label className={styles.label}>Time</label>
               <div className={styles.timeRow}>
-                <input
-                  type="time"
+                <TimeInput
                   className={styles.timeInput}
                   value={startTime}
-                  onChange={(e) => handleStartTimeChange(e.target.value)}
+                  onChange={handleStartTimeChange}
                   placeholder="Start"
                 />
                 <span className={styles.timeSep}>→</span>
-                <input
-                  type="time"
+                <TimeInput
                   className={styles.timeInput}
                   value={endTime}
-                  onChange={(e) => handleEndTimeChange(e.target.value)}
+                  onChange={handleEndTimeChange}
                   placeholder="End"
                 />
               </div>
@@ -246,11 +252,10 @@ export function AddCalendarItemModal() {
           {isBirthday && (
             <div className={styles.field}>
               <label className={styles.label}>Notify at</label>
-              <input
-                type="time"
+              <TimeInput
                 className={styles.timeInput}
                 value={notifyAtTime}
-                onChange={(e) => setNotifyAtTime(e.target.value)}
+                onChange={setNotifyAtTime}
               />
             </div>
           )}
@@ -258,11 +263,10 @@ export function AddCalendarItemModal() {
           {kind === 'reminder' && (
             <div className={styles.field}>
               <label className={styles.label}>Time (optional)</label>
-              <input
-                type="time"
+              <TimeInput
                 className={styles.timeInput}
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
+                onChange={setTime}
               />
             </div>
           )}

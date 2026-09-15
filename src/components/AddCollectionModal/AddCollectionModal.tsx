@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { LABELS } from '@/config/labels';
 import { computeMilestones } from '@/utils/milestones';
-import { formatDate } from '@/utils/date';
+import { formatDate, now } from '@/utils/date';
 import type { CollectionId, CollectionKind, PurposeId } from '@/types';
 import styles from './AddCollectionModal.module.css';
 
@@ -47,6 +47,18 @@ export function AddCollectionModal() {
     }
   }, [editingCollection]);
 
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { if (isEditMode) closeEditCollection(); else closeModal(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isVisible, isEditMode, closeEditCollection, closeModal]);
+
   if (!isVisible) return null;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -59,6 +71,14 @@ export function AddCollectionModal() {
     setSelectedPurposeIds((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
     );
+  }
+
+  function handleToggleArchive() {
+    if (!editingCollection) return;
+    updateCollection(editingCollection.id, {
+      archivedAt: editingCollection.archivedAt ? null : now(),
+    });
+    closeEditCollection();
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -87,7 +107,7 @@ export function AddCollectionModal() {
     }
   }
 
-  const purposeList = Object.values(purposes);
+  const purposeList = Object.values(purposes).filter((p) => !p.archivedAt);
   const title = isEditMode ? `Edit ${LABELS.collection}` : `New ${LABELS.collection}`;
 
   // Show current kind — for edit mode use the stored kind
@@ -109,7 +129,12 @@ export function AddCollectionModal() {
       >
         {/* Header */}
         <div className={styles.header}>
-          <span className={styles.title}>{title}</span>
+          <span className={styles.title}>
+            {title}
+            {isEditMode && editingCollection.archivedAt && (
+              <span className={styles.archivedBadge}>Archived</span>
+            )}
+          </span>
           <button
             type="button"
             className={styles.closeBtn}
@@ -120,7 +145,7 @@ export function AddCollectionModal() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           {/* Kind selector — create mode only */}
           {!isEditMode && (
             <div className={styles.field}>
@@ -238,6 +263,12 @@ export function AddCollectionModal() {
 
           {/* Actions */}
           <div className={styles.actions}>
+            {isEditMode && (
+              <button type="button" className={styles.archiveBtn} onClick={handleToggleArchive}>
+                {editingCollection.archivedAt ? 'Restore' : 'Archive'}
+              </button>
+            )}
+            <span className={styles.actionsSpacer} />
             <button type="button" className={styles.cancelBtn} onClick={handleClose}>
               Cancel
             </button>

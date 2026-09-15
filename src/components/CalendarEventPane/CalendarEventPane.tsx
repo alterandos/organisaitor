@@ -6,6 +6,7 @@ import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { timeAddMinutes } from '@/utils/date';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { TimeInput } from '@/components/TimeInput/TimeInput';
 import styles from './CalendarEventPane.module.css';
 
 const EVENT_TYPES: { value: CalendarEventType; label: string; icon: string }[] = [
@@ -16,10 +17,12 @@ const EVENT_TYPES: { value: CalendarEventType; label: string; icon: string }[] =
 export function CalendarEventPane() {
   const editingId         = useUIStore((s) => s.editingCalendarEventId);
   const closePane         = useUIStore((s) => s.closeCalendarEventPane);
+  const openTaskPane      = useUIStore((s) => s.openTaskPane);
   const eventsRecord      = useCalendarStore((s) => s.events);
   const updateEvent       = useCalendarStore((s) => s.updateEvent);
   const deleteEvent       = useCalendarStore((s) => s.deleteEvent);
   const collectionsRecord = useTaskStore((s) => s.collections);
+  const tasksRecord       = useTaskStore((s) => s.tasks);
 
   const event = editingId ? eventsRecord[editingId as CalendarEventId] : null;
 
@@ -60,6 +63,16 @@ export function CalendarEventPane() {
 
   const id = event.id;
   const allCollections = Object.values(collectionsRecord);
+  // scheduledAt auto-creates this exact event (see Task.calendarEventId) — the event is the
+  // correct primary entity (it's genuinely blocking calendar time), but the pane still surfaces
+  // the link so the user isn't left guessing why an "event" they didn't create exists.
+  const linkedTask = Object.values(tasksRecord).find((t) => t.calendarEventId === id) ?? null;
+
+  const openLinkedTask = () => {
+    if (!linkedTask) return;
+    closePane();
+    openTaskPane(linkedTask.id);
+  };
 
   const saveTitle = () => {
     const v = title.trim();
@@ -94,6 +107,11 @@ export function CalendarEventPane() {
   const isLocationUrl = (loc: string) =>
     /^https?:\/\//i.test(loc) || /^maps\.google\./i.test(loc);
 
+  // A plain address gets wrapped into a Google Maps search — no API key or integration needed,
+  // this is just a URL. A location that's already a link (isLocationUrl) is used as-is.
+  const locationMapsUrl = (loc: string) =>
+    isLocationUrl(loc) ? loc : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}`;
+
   const saveRepeat = (on: boolean, freq: RepeatFreq, interval: number, endKind: RepeatConfig['endKind'], count: number, until: string) => {
     const r: RepeatConfig | null = on
       ? { freq, interval, endKind, count: endKind === 'count' ? count : null, until: endKind === 'until' ? until || null : null }
@@ -111,6 +129,12 @@ export function CalendarEventPane() {
         </header>
 
         <div className={styles.body}>
+          {linkedTask && (
+            <button type="button" className={styles.linkedTaskChip} onClick={openLinkedTask}>
+              🕐 Linked task: {linkedTask.title}
+            </button>
+          )}
+
           <input
             className={styles.titleInput}
             value={title}
@@ -161,19 +185,17 @@ export function CalendarEventPane() {
             <div className={styles.field}>
               <span className={styles.label}>Time</span>
               <div className={styles.timeRow}>
-                <input
-                  type="time"
+                <TimeInput
                   className={styles.timeInput}
                   value={event.startTime ?? ''}
-                  onChange={(e) => handleStartTimeChange(e.target.value)}
+                  onChange={handleStartTimeChange}
                   placeholder="Start"
                 />
                 <span className={styles.timeSep}>→</span>
-                <input
-                  type="time"
+                <TimeInput
                   className={styles.timeInput}
                   value={event.endTime ?? ''}
-                  onChange={(e) => handleEndTimeChange(e.target.value)}
+                  onChange={handleEndTimeChange}
                   placeholder="End"
                 />
               </div>
@@ -182,26 +204,7 @@ export function CalendarEventPane() {
 
           <div className={styles.field}>
             <span className={styles.label}>Location</span>
-            {event.location && isLocationUrl(event.location) ? (
-              <div className={styles.locationRow}>
-                <input
-                  type="text"
-                  className={styles.textInput}
-                  value={event.location ?? ''}
-                  onChange={(e) => updateEvent(id, { location: e.target.value || null })}
-                  placeholder="Address or link"
-                />
-                <a
-                  href={event.location}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.locationLink}
-                  title="Open link"
-                >
-                  ↗
-                </a>
-              </div>
-            ) : (
+            <div className={styles.locationRow}>
               <input
                 type="text"
                 className={styles.textInput}
@@ -209,7 +212,18 @@ export function CalendarEventPane() {
                 onChange={(e) => updateEvent(id, { location: e.target.value || null })}
                 placeholder="Address or link"
               />
-            )}
+              {event.location && (
+                <a
+                  href={locationMapsUrl(event.location)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.locationLink}
+                  title={isLocationUrl(event.location) ? 'Open link' : 'Open in Google Maps'}
+                >
+                  {isLocationUrl(event.location) ? '↗' : '🗺'}
+                </a>
+              )}
+            </div>
           </div>
 
           <div className={styles.field}>
@@ -232,13 +246,12 @@ export function CalendarEventPane() {
           {(event.eventType ?? 'default') === 'birthday' ? (
             <div className={styles.field}>
               <span className={styles.label}>Notify at</span>
-              <input
-                type="time"
+              <TimeInput
                 className={styles.timeInput}
                 value={notifyAtTime}
-                onChange={(e) => {
-                  setNotifyAtTime(e.target.value);
-                  updateEvent(id, { notifyAtTime: e.target.value || null });
+                onChange={(v) => {
+                  setNotifyAtTime(v);
+                  updateEvent(id, { notifyAtTime: v || null });
                 }}
               />
             </div>

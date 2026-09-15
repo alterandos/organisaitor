@@ -124,7 +124,7 @@
   transition: color 120ms ease, background 120ms ease;
 }
 .trackerActionBtn:hover { color: var(--color-text); background: var(--color-border); }
-.trackerActionBtnDelete:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+.trackerActionBtnDelete:hover { color: var(--color-danger); background: var(--color-danger-muted); }
 
 /* Always show on touch devices */
 @media (hover: none) {
@@ -339,7 +339,7 @@
   transition: color 120ms ease, background 120ms ease;
 }
 .entryBtn:hover { color: var(--color-text); background: var(--color-border); }
-.entryBtnDelete:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+.entryBtnDelete:hover { color: var(--color-danger); background: var(--color-danger-muted); }
 
 /* ── Routine detail ──────────────────────────────────────────────── */
 

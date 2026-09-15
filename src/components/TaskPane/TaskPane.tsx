@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Priority, TagId, PurposeId, TaskKind, TaskId, TimeIntensity } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
+import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { TimeInput } from '@/components/TimeInput/TimeInput';
 import styles from './TaskPane.module.css';
 
 const PRIORITY_OPTIONS: { value: Priority; label: string; color: string }[] = [
@@ -26,6 +28,10 @@ export function TaskPane() {
   const deleteTask        = useTaskStore((s) => s.deleteTask);
   const addTask           = useTaskStore((s) => s.addTask);
 
+  const addEvent    = useCalendarStore((s) => s.addEvent);
+  const updateEvent = useCalendarStore((s) => s.updateEvent);
+  const deleteEvent = useCalendarStore((s) => s.deleteEvent);
+
   const task = editingTaskId ? tasksRecord[editingTaskId as TaskId] : null;
 
   const [title,          setTitle]          = useState('');
@@ -36,7 +42,8 @@ export function TaskPane() {
   const [linkInput,      setLinkInput]      = useState('');
   const [editingLinkIdx, setEditingLinkIdx] = useState<number | null>(null);
   const [editingLinkVal, setEditingLinkVal] = useState('');
-  const tagInputRef = useRef<HTMLInputElement>(null);
+  const tagInputRef  = useRef<HTMLInputElement>(null);
+  const notesRef     = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (task) {
@@ -44,6 +51,25 @@ export function TaskPane() {
       setNotes(task.notes ?? '');
     }
   }, [task?.id]);
+
+  // Notes field grows with content up to 40% of the window height, then scrolls.
+  useEffect(() => {
+    const el = notesRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.4)}px`;
+  }, [notes]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const el = notesRef.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.4)}px`;
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeTaskPane(); };
@@ -75,8 +101,32 @@ export function TaskPane() {
     updateTask(taskId, { deadline: val, ...(val === null ? { deadlineTime: null } : {}) });
   };
 
-  const handleDeadlineTimeChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    updateTask(taskId, { deadlineTime: e.target.value || null });
+  const handleDeadlineTimeChange = (v: string) =>
+    updateTask(taskId, { deadlineTime: v || null });
+
+  const handleScheduledAtChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value || null;
+    if (!val) {
+      if (task.calendarEventId) {
+        deleteEvent(task.calendarEventId);
+        updateTask(taskId, { scheduledAt: null, scheduledTime: null, calendarEventId: null });
+      } else {
+        updateTask(taskId, { scheduledAt: null, scheduledTime: null });
+      }
+    } else if (task.calendarEventId) {
+      updateEvent(task.calendarEventId, { date: val, title: task.title });
+      updateTask(taskId, { scheduledAt: val });
+    } else {
+      const evId = addEvent({ title: task.title, date: val, startTime: task.scheduledTime ?? null });
+      updateTask(taskId, { scheduledAt: val, calendarEventId: evId });
+    }
+  };
+
+  const handleScheduledTimeChange = (v: string) => {
+    const val = v || null;
+    if (task.calendarEventId) updateEvent(task.calendarEventId, { startTime: val });
+    updateTask(taskId, { scheduledTime: val });
+  };
 
   const handlePriorityClick = (p: Priority) =>
     updateTask(taskId, { priority: p === task.priority ? 'none' : p });
@@ -111,7 +161,11 @@ export function TaskPane() {
     setSubtaskInput('');
   };
 
-  const handleDelete = () => { deleteTask(taskId); closeTaskPane(); };
+  const handleDelete = () => {
+    if (task.calendarEventId) deleteEvent(task.calendarEventId);
+    deleteTask(taskId);
+    closeTaskPane();
+  };
 
   const currentLinks = task.links ?? [];
 
@@ -164,6 +218,7 @@ export function TaskPane() {
           />
 
           <textarea
+            ref={notesRef}
             className={styles.notesInput}
             placeholder="Add notes..."
             value={notes}
@@ -185,8 +240,7 @@ export function TaskPane() {
                 required={task.kind === 'milestone'}
               />
               {(task.deadline || task.kind === 'milestone') && (
-                <input
-                  type="time"
+                <TimeInput
                   className={styles.timeInput}
                   value={task.deadlineTime ?? ''}
                   onChange={handleDeadlineTimeChange}
@@ -194,6 +248,31 @@ export function TaskPane() {
                 />
               )}
             </div>
+          </div>
+
+          <div className={styles.field}>
+            <span className={styles.label}>{LABELS.scheduledFor}</span>
+            <div className={styles.dateTimeRow}>
+              <input
+                type="date"
+                className={styles.dateInput}
+                value={task.scheduledAt ?? ''}
+                onChange={handleScheduledAtChange}
+              />
+              {task.scheduledAt && (
+                <TimeInput
+                  className={styles.timeInput}
+                  value={task.scheduledTime ?? ''}
+                  onChange={handleScheduledTimeChange}
+                  placeholder="Time"
+                />
+              )}
+            </div>
+            {task.scheduledAt && (
+              <span className={styles.scheduledHint}>
+                {task.calendarEventId ? 'Synced to calendar' : 'Added to calendar'}
+              </span>
+            )}
           </div>
 
           <div className={styles.field}>
@@ -396,6 +475,7 @@ export function TaskPane() {
                 value={linkInput}
                 onChange={(e) => setLinkInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
+                onBlur={addLink}
               />
               <button
                 type="button"

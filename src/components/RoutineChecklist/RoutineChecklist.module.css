@@ -53,8 +53,8 @@
   flex-shrink: 0;
 }
 .progressDone {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--color-success-muted);
+  color: var(--color-success-text);
 }
 
 .tasks {
@@ -122,7 +122,7 @@
 
 .doneLabel {
   font-size: 0.82rem;
-  color: #065f46;
+  color: var(--color-success-text);
   text-align: center;
   margin: 0;
   font-weight: 500;

@@ -17,6 +17,15 @@
   .mobileView  { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 }
 
+/* Android gets the real month/week/day views (touch-adapted, see below), never the old flat
+   single-day agenda fallback above — that fallback predates Android-specific work and was
+   only ever meant for a narrow browser window, not a purpose-built native calendar screen.
+   docs/android/02-calendar-app.md's whole screen inventory assumes month/week/day are what's
+   showing on Android; without this override the plain @media breakpoint above would silently
+   swap to .mobileView on every phone-width Android device instead. */
+:global(.platform-android) .desktopView { display: flex !important; }
+:global(.platform-android) .mobileView  { display: none !important; }
+
 /* ── Mobile week header ─────────────────────────────────────── */
 .weekHeader {
   display: flex;
@@ -224,6 +233,36 @@
 }
 .todayBtn:hover { background: var(--color-bg); color: var(--color-text); }
 
+.schedulesBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.3rem 0.8rem;
+  margin-left: 0.6rem;
+  transition: background 120ms ease, color 120ms ease;
+}
+.schedulesBtn:hover { background: var(--color-bg); color: var(--color-text); }
+
+/* Android: the header's three control groups (prev/title/next/today, view toggle, Schedules)
+   don't all fit one row at phone width — wrap instead of clipping/overflowing. Not a full
+   redesign, just "doesn't break" (matches Schedule's own "accessible but not optimised" carve-
+   out, docs/android/00-architecture.md §5b). */
+:global(.platform-android) .header {
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
+}
+:global(.platform-android) .monthTitle {
+  min-width: 0;
+  font-size: 0.95rem;
+}
+:global(.platform-android) .schedulesBtn {
+  margin-left: 0;
+}
+
 /* ── Day name row ─────────────────────────────────────────────────── */
 
 .dayHeaders {
@@ -279,6 +318,12 @@
 }
 .dateNumCell:hover { filter: brightness(0.97); }
 .dateNumCell:nth-child(7n) { border-right: none; }
+
+/* Android touch-target audit (docs/android/02-calendar-app.md §4): the date-number sub-row
+   is naturally shorter than 44dp on its own (its height is just padding + one line of text) —
+   bump it so tapping a day to quick-add is comfortably reachable, without changing anything
+   about the (already-tall-enough) full-day .eventsCell below it. */
+:global(.platform-android) .dateNumCell { min-height: 44px; display: flex; align-items: flex-start; }
 
 .spanRow {
   display: grid;
@@ -412,6 +457,11 @@
   color: #047857;
 }
 
+.calItem_schedule {
+  background: rgba(168, 85, 247, 0.12);
+  color: #7e22ce;
+}
+
 .calItemCompleted { text-decoration: line-through; opacity: 0.5; }
 .calItemPast      { text-decoration: line-through; opacity: 0.55; }
 
@@ -434,6 +484,14 @@
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+}
+
+/* Week/day view has room to spare (and the row is already expanded for anything scheduled), so
+   its untimed-item pills wrap instead of truncating — month view keeps ellipsis, it's cramped. */
+.weekViewItem .calItemTitle {
+  white-space: normal;
+  text-overflow: clip;
+  word-break: break-word;
 }
 
 .overflow {
@@ -509,6 +567,14 @@
   display: flex;
   flex-direction: column;
   animation: slideIn 180ms ease;
+}
+
+/* Android: full-screen instead of a fixed-width side panel — a floating side panel makes no
+   sense at phone width (docs/android/02-calendar-app.md §2). */
+:global(.platform-android) .dayPane {
+  left: 0;
+  width: 100%;
+  border-left: none;
 }
 
 .dayPaneHeader {
@@ -618,77 +684,58 @@
   min-height: 0;
 }
 
-.weekSpanRow {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  grid-auto-rows: 22px;
+/* Both all-day-ish rows (multi-day spans, untimed items) are wrapped with a leading 52px gutter
+   spacer matching .weekTimeGutterHeader below — without it their 7 columns started at x:0 while
+   the header/hourly-grid's day columns start after the 52px time gutter, silently misaligning
+   every column by that offset whenever either row had content (a real bug, not cosmetic). */
+.weekSpanRowWrap {
+  display: flex;
   flex-shrink: 0;
-  padding: 3px 2px;
-  gap: 2px 0;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
+.weekSpanGutter { flex: 0 0 52px; }
 
-.weekViewGrid {
+.weekSpanRow {
   flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  min-height: 0;
-  overflow-y: auto;
+  grid-auto-rows: 22px;
+  padding: 3px 2px;
+  gap: 2px 0;
 }
-
-.weekViewCol {
-  border-right: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.weekViewCol:last-child { border-right: none; }
 
 .weekViewColToday { background: color-mix(in srgb, var(--color-primary) 4%, transparent); }
 .weekViewColWeekend { background: var(--color-bg); }
 
-.weekViewColHeader {
-  padding: 0.55rem 0.5rem 0.45rem;
-  border-bottom: 1px solid var(--color-border);
+/* Row of untimed items (tasks/reminders with no time-of-day, incl. deadlines) — shares the 7-col
+   layout but sits with the other all-day-ish content, the same way most calendar apps show
+   "all-day" items on top of the hourly grid. */
+.weekUntimedRowWrap {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  cursor: pointer;
   flex-shrink: 0;
-  transition: background 100ms ease;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
-.weekViewColHeader:hover { background: var(--color-bg); }
+.weekUntimedGutter { flex: 0 0 52px; }
 
-.weekViewDayName {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--color-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.weekViewDayNum {
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--color-text);
-  width: 1.8rem;
-  height: 1.8rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-}
-
-.weekViewItems {
+.weekUntimedRow {
   flex: 1;
-  overflow-y: auto;
-  padding: 0.3rem;
+  min-width: 0;
+  display: flex;
+}
+
+.weekUntimedCol {
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
+  border-right: 1px solid var(--color-border);
 }
+.weekUntimedCol:last-child { border-right: none; }
 
 .weekViewItem {
   display: flex;
@@ -713,9 +760,194 @@
 }
 .weekViewItem:hover { filter: brightness(0.92); }
 
+/* Day-name/date header row, fixed above the scrollable hour grid so it never scrolls away */
+.weekTimeHeaderRow {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.weekTimeGutterHeader { flex: 0 0 52px; }
+
+.weekViewColHeader {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.5rem 0.45rem;
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+.weekViewColHeader:last-child { border-right: none; }
+.weekViewColHeader:hover { background: var(--color-bg); }
+
+.weekViewDayName {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.weekViewDayNum {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text);
+  width: 1.8rem;
+  height: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+/* ── Hourly time grid ── */
+/* Hours with nothing scheduled anywhere in the visible week collapse to a thin row (see
+   HOUR_HEIGHT_EMPTY in CalendarView.tsx); hours with content get full height. The gutter and
+   day columns are laid out with matching flex-basis so their rows line up pixel-for-pixel. */
+
+.weekTimeScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.weekTimeGridInner {
+  display: flex;
+  position: relative;
+}
+
+.weekTimeGutter {
+  flex: 0 0 52px;
+  position: relative;
+}
+
+.weekTimeGutterLabel {
+  position: absolute;
+  left: 0;
+  right: 6px;
+  transform: translateY(-50%);
+  text-align: right;
+  font-size: 0.68rem;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: font-size 100ms ease, color 100ms ease, font-weight 100ms ease;
+}
+
+/* An hour with content: bump the label up in size/weight and align its TOP edge with the
+   hour line (instead of centring on it) so it reads as "the line marking the start of this
+   time", which matters more once there's something to relate it to. */
+.weekTimeGutterLabelActive {
+  transform: translateY(0);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.weekTimeGutterLabelHovered {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* Invisible hover target spanning one hour's full row, in the gutter and in every day column.
+   All of them share one `hoveredHour` state, so hovering any single cell highlights the whole
+   row across the gutter + every visible day — the Google Calendar "row" affordance. Sits below
+   the hour-line/item DOM so items keep their own hover styling and lines stay drawn on top. */
+.weekTimeRowHit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+}
+.weekTimeRowHitActive {
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+
+.weekTimeDays {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+.weekTimeDayCol {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  border-right: 1px solid var(--color-border);
+  cursor: pointer;
+}
+.weekTimeDayCol:last-child { border-right: none; }
+
+.weekTimeHourLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--color-border);
+  pointer-events: none;
+}
+
+.weekTimeNowLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px solid var(--color-danger);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.weekTimeNowDot {
+  position: absolute;
+  left: -3px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-danger);
+}
+
+.weekTimeBlock {
+  position: absolute;
+  border: none;
+  border-radius: 4px;
+  padding: 0.15rem 0.3rem;
+  font-size: 0.72rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: filter 100ms ease;
+  line-height: 1.25;
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-left-color: transparent;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+.weekTimeBlock:hover { filter: brightness(0.92); z-index: 3; }
+
+.weekTimeBlockTitle {
+  overflow: hidden;
+  white-space: normal;
+  word-break: break-word;
+}
+
 /* ── Desktop day view ───────────────────────────────────────── */
 
 .dayViewContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Reproduces the original .dayViewContainer look verbatim — scoped to only the empty state,
+   so it stays pixel-for-pixel unchanged now that the populated state needs full-bleed width. */
+.dayViewEmptyWrap {
   flex: 1;
   overflow-y: auto;
   padding: 1rem 1.5rem;
@@ -734,36 +966,44 @@
   text-align: center;
 }
 
-.dayViewItem {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  border: 1px solid transparent;
-  border-left-width: 3px;
-  border-radius: var(--radius-md);
-  padding: 0.65rem 0.9rem;
-  font-size: 0.92rem;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: filter 100ms ease;
-}
-.dayViewItem:hover { filter: brightness(0.93); }
+/* ── Day view time grid (populated state) — same hourly grid as week view, one column ── */
 
-.dayViewItemTime {
-  flex-shrink: 0;
-  font-size: 0.82rem;
-  font-weight: 600;
-  opacity: 0.8;
-  font-variant-numeric: tabular-nums;
-  min-width: 3.5rem;
-}
-
-.dayViewItemTitle {
+.dayTimeGridContainer {
   flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
+
+.dayUntimedRow {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.dayTimeScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.dayPaneAddBtnGrid {
+  flex-shrink: 0;
+  margin: 0.5rem 1rem;
+  background: none;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  padding: 0.5rem;
+  text-align: center;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.dayPaneAddBtnGrid:hover { border-color: var(--color-primary); color: var(--color-primary); }
+

@@ -1,0 +1,136 @@
+.pane {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(440px, 100vw);
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+  z-index: 29;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideInRight 220ms ease;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 600px) {
+  .pane {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: auto;
+    max-height: 92dvh;
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    border-radius: 12px 12px 0 0;
+    animation: slideUp 220ms ease;
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  height: auto;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  gap: 0.75rem;
+}
+
+.titleInput {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 1.2rem;
+  font-weight: 600;
+  outline: none;
+  color: var(--color-text);
+}
+
+.titleInput::placeholder {
+  color: var(--color-muted);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  color: var(--color-text);
+}
+
+.editor {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 1.25rem;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.6;
+  resize: none;
+  color: var(--color-text);
+  background: var(--color-surface);
+  overflow-y: auto;
+}
+
+.editor::placeholder {
+  color: var(--color-muted);
+}
+
+.footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  flex-shrink: 0;
+}
+
+.info {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+/* Android: always full-screen, regardless of viewport width — overrides the narrow-browser
+   bottom-sheet fallback above (higher specificity wins over the bare .pane inside @media). */
+:global(.platform-android) .pane {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  border: none;
+  border-radius: 0;
+  animation: none;
+}

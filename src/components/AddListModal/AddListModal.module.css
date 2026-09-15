@@ -1,0 +1,517 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.modal {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.22);
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalLarge { max-width: 560px; }
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.closeBtn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 100ms, color 100ms;
+}
+.closeBtn:hover { background: var(--color-bg); color: var(--color-text); }
+
+/* ── Type picker ─────────────────────────────────────────────────────────────── */
+.typeSectionLabel {
+  padding: 0.6rem 1rem 0.25rem;
+  font-size: 0.63rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-muted);
+  border-top: 1px solid var(--color-border);
+}
+.typeSectionLabel:first-of-type { border-top: none; }
+
+.typeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.6rem;
+  padding: 1rem;
+}
+
+.typeCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.9rem 0.5rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  cursor: pointer;
+  transition: border-color 150ms, background 150ms, transform 120ms;
+  font-family: inherit;
+}
+.typeCard:hover {
+  border-color: var(--type-color, var(--color-primary));
+  background: color-mix(in srgb, var(--type-color, var(--color-primary)) 6%, transparent);
+  transform: translateY(-1px);
+}
+
+.typeCardIcon { font-size: 1.6rem; }
+.typeCardName { font-size: 0.75rem; font-weight: 600; color: var(--color-text); }
+
+.typeSkip {
+  padding: 0 1rem 1rem;
+  text-align: center;
+}
+
+.skipBtn {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+}
+.skipBtn:hover { text-decoration: underline; color: var(--color-text); }
+
+/* ── Form ────────────────────────────────────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.75rem 1rem;
+}
+
+.nameRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.iconPickerWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.iconPreview {
+  font-size: 1.5rem;
+  line-height: 1;
+  display: block;
+  width: 36px;
+  text-align: center;
+}
+
+.emojiGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+}
+
+.emojiBtn {
+  font-size: 0.85rem;
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 80ms, border-color 80ms;
+  padding: 0;
+}
+.emojiBtn:hover { background: var(--color-bg); border-color: var(--color-border); }
+.emojiBtnActive { background: color-mix(in srgb, var(--color-primary) 12%, transparent); border-color: var(--color-primary) !important; }
+
+.nameInput {
+  flex: 1;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.88rem;
+  font-family: inherit;
+  font-weight: 600;
+  outline: none;
+  transition: border-color 120ms;
+}
+.nameInput:focus { border-color: var(--color-primary); }
+
+.field { margin-bottom: 0.6rem; }
+
+.fieldLabel {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+  margin-bottom: 0.3rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 120ms;
+}
+.input:focus { border-color: var(--color-primary); }
+
+/* ── Field schema editor ─────────────────────────────────────────────────────── */
+.schemaSection {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+
+.schemaSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.65rem;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.schemaSectionTitle {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+
+.addFieldBtn {
+  font-size: 0.72rem;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  font-weight: 500;
+}
+.addFieldBtn:hover { text-decoration: underline; }
+
+.schemaEmpty {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  padding: 0.6rem 0.65rem;
+  margin: 0;
+  font-style: italic;
+}
+
+.fieldList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.fieldRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.fieldRow:last-child { border-bottom: none; }
+
+.fieldNameInput {
+  flex: 1;
+  min-width: 100px;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 120ms;
+}
+.fieldNameInput:focus { border-color: var(--color-primary); }
+
+.fieldTypeSelect,
+.fieldMaxSelect {
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+.requiredLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  color: var(--color-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.requiredLabel input { accent-color: var(--color-primary); cursor: pointer; }
+
+.removeFieldBtn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 100ms, color 100ms;
+  flex-shrink: 0;
+}
+.removeFieldBtn:hover { background: var(--color-danger-muted); color: var(--color-danger); }
+
+/* Select options sub-editor */
+.selectOptions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.25rem;
+}
+
+.selectOptionsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.selectOptionTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 99px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: 0.7rem;
+  color: var(--color-text);
+}
+
+.removeOptionBtn {
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.6rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.removeOptionBtn:hover { color: var(--color-danger); }
+
+.addOptionRow {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.addOptionInput {
+  flex: 1;
+  padding: 0.22rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.72rem;
+  font-family: inherit;
+  outline: none;
+}
+.addOptionInput:focus { border-color: var(--color-primary); }
+
+.addOptionBtn {
+  padding: 0.22rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text);
+  font-size: 0.72rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.addOptionBtn:hover { background: var(--color-bg); }
+
+/* ── Tab editor ──────────────────────────────────────────────────────────────── */
+.tabList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.5rem 0.65rem;
+}
+
+.tabRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tabColorInput {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1px;
+  cursor: pointer;
+  background: none;
+  flex-shrink: 0;
+}
+
+.tabNameInput {
+  flex: 1;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 120ms;
+}
+.tabNameInput:focus { border-color: var(--color-primary); }
+
+.tabExpandBtn {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 120ms, border-color 120ms;
+  flex-shrink: 0;
+}
+.tabExpandBtn:hover { color: var(--color-text); border-color: var(--color-primary); }
+
+.tabGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.tabFieldEditor {
+  margin-left: 1.25rem;
+  margin-top: 0.4rem;
+  margin-bottom: 0.25rem;
+  border-left: 2px solid var(--color-border);
+  padding-left: 0.65rem;
+}
+
+.tabFieldHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.tabFieldHint {
+  font-size: 0.74rem;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+/* ── Form actions ────────────────────────────────────────────────────────────── */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+.cancelBtn {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.cancelBtn:hover { background: var(--color-bg); }
+
+.submitBtn {
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, filter 120ms;
+}
+.submitBtn:hover { filter: brightness(1.1); }
+.submitBtn:disabled { opacity: 0.5; cursor: not-allowed; }

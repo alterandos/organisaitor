@@ -15,6 +15,39 @@
   background: var(--color-bg);
 }
 
+/* Android: reserves space at the bottom for MobileNav's fixed bottom tab bar so section
+   content (whatever it renders — TaskList, CalendarView, etc.) isn't hidden behind it. */
+.appMobile {
+  padding-bottom: calc(56px + env(safe-area-inset-bottom));
+}
+
+/* Tasks section only: MobileQuickAddBar sits fixed between the content and MobileNav,
+   so the list needs extra clearance beyond .appMobile's own reservation. Generous enough
+   to also cover the bar's chip row when it's expanded (title non-empty). */
+.mainMobile {
+  padding-bottom: 9rem;
+}
+
+.pullIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  transition: height 160ms ease;
+}
+
+/* ── Add-on app lazy-load fallback ────────────────────────────── */
+.sectionLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
 /* ── Header ───────────────────────────────────────────────────── */
 .header {
   position: sticky;

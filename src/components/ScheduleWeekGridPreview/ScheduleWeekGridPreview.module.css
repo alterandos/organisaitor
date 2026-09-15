@@ -1,0 +1,54 @@
+.wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.grid {
+  display: flex;
+  min-width: 480px;
+}
+
+.dayCol {
+  flex: 1;
+  min-width: 0;
+  border-right: 1px solid var(--color-border);
+}
+.dayCol:last-child { border-right: none; }
+
+.dayHeader {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-align: center;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.dayBody {
+  position: relative;
+}
+
+.dayBodyClickable { cursor: crosshair; }
+
+.hourLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--color-border);
+  pointer-events: none;
+}
+
+.block {
+  position: absolute;
+  border-left: 3px solid var(--color-primary);
+  border-radius: 3px;
+  font-size: 0.62rem;
+  padding: 0.1rem 0.25rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-text);
+  cursor: default;
+}
