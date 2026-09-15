@@ -357,10 +357,33 @@ change if you actually observe a problem; don't add complexity pre-emptively.
 
 ---
 
-## When you're done
+## When you're done — this is not optional
 
-Update `CLAUDE.md`'s "Android build — implementation status" section with what was actually
-built (file manifest, what was verified on-device vs. not) — follow the same documentation
-pattern already used for Phase 1/Phase 2 in that same section. Update this doc's tasks to
-`[x]` or add a short "what actually happened" note under any task whose fix ended up
-differing from the plan above (e.g. if Task 4 turned up a real bug and what fixed it).
+This repo's `CLAUDE.md` has a standing "Documentation Protocol" that applies to every
+feature change made in this codebase, this one included: **the work is not done until
+`CLAUDE.md` is updated to reflect it.** Do not leave this doc's tasks marked as a plan while
+the actual status lives only in code or in your own head.
+
+Concretely, before you consider this finished:
+
+1. Update `CLAUDE.md`'s **"Android build — implementation status"** section (near the end
+   of the file) with what was actually built — follow the exact pattern already used there
+   for Phase 1 ("Tasks") and Phase 2 ("Calendar"): a short prose summary of what's covered,
+   then a file manifest (new files + modified files), then what was verified on-device via
+   the AVD+CDP method vs. anything left unverified.
+2. Remove or rewrite the bullet in `CLAUDE.md`'s **"Not built yet"** list (under that same
+   Android section) that currently points at this doc — once the gaps below are closed,
+   that line describing them as outstanding is no longer accurate and must not be left
+   stale.
+3. In **this doc**, mark each task's heading `[x] Task N — ...` once done, and add a short
+   "what actually happened" note under any task whose real fix ended up differing from the
+   plan below (e.g. if Task 4's visual pass turned up a real bug — say what it was and how
+   it was fixed, not just "fixed").
+4. If you discover along the way that this doc's premise was wrong about something (a file
+   path that's moved, a component that behaves differently than described), fix the
+   inaccuracy in this doc too, not just in your own understanding — the next reader needs
+   the corrected version.
+
+If you finish some tasks but not all of them (e.g. you get through Tasks 1–2 but not 3–4),
+still update `CLAUDE.md` to reflect the partial state accurately — "partially done, here's
+exactly what's left" is the correct status to leave behind, not silence.
