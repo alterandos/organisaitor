@@ -304,6 +304,66 @@
 
 .hotkeys tr:first-child .hotkeyGroup { padding-top: 0.1rem !important; }
 
+.hotkeysHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.hotkeysResetAllBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  transition: background 120ms ease, color 120ms ease;
+}
+.hotkeysResetAllBtn:hover { background: var(--color-bg); color: var(--color-text); }
+
+.hotkeysHint {
+  font-size: 0.76rem;
+  color: var(--color-muted);
+  margin: 0.2rem 0 0.6rem;
+  line-height: 1.4;
+}
+
+.hotkeyCellBtn {
+  background: none;
+  border: 1px dashed transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  margin: -0.1rem -0.3rem;
+  font-family: inherit;
+  color: inherit;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.hotkeyCellBtn:hover { border-color: var(--color-border); background: var(--color-bg); }
+
+.hotkeyCellListening {
+  border-color: var(--color-primary) !important;
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-size: 0.78rem;
+}
+
+.hotkeyResetBtn {
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  margin-left: 0.5rem;
+  padding: 0;
+  line-height: 1;
+  vertical-align: middle;
+  transition: color 120ms ease;
+}
+.hotkeyResetBtn:hover { color: var(--color-primary); }
+
 /* Android: always full-screen, regardless of viewport width — overrides the narrow-browser
    bottom-sheet fallback above (higher specificity wins over the bare .pane inside @media). */
 :global(.platform-android) .pane {

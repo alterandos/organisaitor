@@ -53,7 +53,8 @@ export function AddTaskModal() {
 
   const addTask = useTaskStore((s) => s.addTask);
   const addTag  = useTaskStore((s) => s.addTag);
-  const addEvent   = useCalendarStore((s) => s.addEvent);
+  const addEvent    = useCalendarStore((s) => s.addEvent);
+  const addReminder = useCalendarStore((s) => s.addReminder);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const purposes   = useTaskStore((s) => s.purposes);
   const tags       = useTaskStore((s) => s.tags);
@@ -141,6 +142,19 @@ export function AddTaskModal() {
         title,
         date:      scheduledAt,
         startTime: scheduledTime || null,
+        eventType: 'task',
+      });
+    }
+
+    // Pre-create the shadow reminder if a deadline is set — same pattern as scheduledAt
+    // above, just producing a CalendarReminder instead of a CalendarEvent.
+    let calendarReminderId: import('@/types').CalendarReminderId | null = null;
+    if (deadline) {
+      calendarReminderId = addReminder({
+        title,
+        date:         deadline,
+        time:         deadlineTime || null,
+        reminderType: 'task',
       });
     }
 
@@ -153,6 +167,7 @@ export function AddTaskModal() {
       scheduledAt:     scheduledAt  || null,
       scheduledTime:   scheduledTime || null,
       calendarEventId: calendarEventId,
+      calendarReminderId: calendarReminderId,
       priority,
       collectionId: collectionId ? collectionId as CollectionId : null,
       tagIds:       pendingTags.map((t) => t.id),

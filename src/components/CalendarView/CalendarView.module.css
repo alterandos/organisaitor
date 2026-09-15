@@ -484,6 +484,7 @@
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+  font-weight: 600;
 }
 
 /* Week/day view has room to spare (and the row is already expanded for anything scheduled), so
@@ -934,6 +935,22 @@
   overflow: hidden;
   white-space: normal;
   word-break: break-word;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+/* Notes preview, shown inline in day/week's timed grid blocks below the title (previously
+   only visible via the hover tooltip) — unbolded and a touch smaller than the title so the
+   two are easy to tell apart at a glance. The parent .weekTimeBlock already clips overflow
+   and has a fixed pixel height (from the block's start/end time), so this never grows the
+   row — long notes are simply clipped, same as the title would be. */
+.weekTimeBlockNotes {
+  overflow: hidden;
+  white-space: normal;
+  word-break: break-word;
+  font-weight: 400;
+  font-size: 0.68rem;
+  opacity: 0.8;
 }
 
 /* ── Desktop day view ───────────────────────────────────────── */

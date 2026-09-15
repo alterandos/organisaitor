@@ -254,7 +254,7 @@ export const useTaskStore = create<TaskStore>()(
     }),
     {
       name:    'todo-app-storage',
-      version: 8,
+      version: 9,
       migrate: (persisted, fromVersion) => {
         const state = persisted as AppData & TaskActions;
         if (fromVersion < 2) return EMPTY;
@@ -306,6 +306,17 @@ export const useTaskStore = create<TaskStore>()(
             purposes[id as PurposeId] = { ...p, archivedAt: p.archivedAt ?? null } as Purpose;
           }
           return { ...state, collections, purposes };
+        }
+        if (fromVersion < 9 && state.tasks) {
+          const patched: AppData['tasks'] = {} as AppData['tasks'];
+          for (const [id, task] of Object.entries(state.tasks)) {
+            const t = task as Task & { calendarReminderId?: unknown };
+            patched[id as TaskId] = {
+              ...t,
+              calendarReminderId: (t.calendarReminderId ?? null) as Task['calendarReminderId'],
+            } as Task;
+          }
+          return { ...state, tasks: patched };
         }
         return state;
       },

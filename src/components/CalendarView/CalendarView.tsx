@@ -17,6 +17,7 @@ import {
   type HourLayout,
 } from '@/utils/timeGrid';
 import { ScheduleOccurrencePopover } from '@/components/ScheduleOccurrencePopover/ScheduleOccurrencePopover';
+import { CalendarLayersPicker } from '@/components/CalendarLayersPicker/CalendarLayersPicker';
 import styles from './CalendarView.module.css';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -177,7 +178,10 @@ export function CalendarView() {
 
   const [year,        setYear]        = useState(todayYear);
   const [month,       setMonth]       = useState(todayMonth - 1);
-  const [desktopMode, setDesktopMode] = useState<'month' | 'week' | 'day'>('month');
+  // Lifted into uiStore (calendarViewMode) rather than local state so it survives
+  // switching to another app and back — CalendarView unmounts on section switch.
+  const desktopMode    = useUIStore((s) => s.calendarViewMode);
+  const setDesktopMode = useUIStore((s) => s.setCalendarViewMode);
   const [tooltip,     setTooltip]     = useState<TooltipState | null>(null);
   const [hoveredHour, setHoveredHour] = useState<number | null>(null);
   const [dayPaneDate, setDayPaneDate] = useState<string | null>(null);
@@ -208,6 +212,7 @@ export function CalendarView() {
   const weekendShadeColor     = useSettingsStore((s) => s.weekendShadeColor);
   const strikethroughPastDays = useSettingsStore((s) => s.strikethroughPastDays);
   const clockFormat           = useSettingsStore((s) => s.clockFormat);
+  const layerVisibility       = useSettingsStore((s) => s.calendarLayerVisibility);
 
   const days = useMemo(() => buildCalendarDays(year, month), [year, month]);
 
@@ -240,6 +245,7 @@ export function CalendarView() {
 
     Object.values(tasks).forEach((task) => {
       if (task.deadline) {
+        if (!layerVisibility.taskDeadlines) return;
         if (activeCollectionId && task.collectionId !== activeCollectionId) return;
         push(task.deadline, {
           kind: 'task',
@@ -261,6 +267,8 @@ export function CalendarView() {
     );
 
     Object.values(events).forEach((ev) => {
+      const isTaskEvent = (ev.eventType ?? 'default') === 'task';
+      if (isTaskEvent ? !layerVisibility.taskScheduled : !layerVisibility.events) return;
       if (activeCollectionId && ev.collectionId !== activeCollectionId) return;
       const item: CalDisplayItem = {
         kind: 'event',
@@ -293,6 +301,13 @@ export function CalendarView() {
     });
 
     Object.values(reminders).forEach((rem) => {
+      // Task-deadline-derived reminders (reminderType: 'task') are excluded here — the
+      // deadline already rendered above as its own dedicated kind:'task' pill (synthesized
+      // directly from the Task, so it gets live completion styling and opens TaskPane in
+      // one click). This row exists only for sync + notification purposes; rendering it
+      // here too would duplicate the pill.
+      if (rem.reminderType === 'task') return;
+      if (!layerVisibility.reminders) return;
       if (activeCollectionId && rem.collectionId !== activeCollectionId) return;
       const item: CalDisplayItem = {
         kind: 'reminder',
@@ -334,7 +349,7 @@ export function CalendarView() {
 
     map.forEach((list, date) => map.set(date, sortItems(list)));
     return map;
-  }, [tasks, events, reminders, schedules, activeCollectionId, days]);
+  }, [tasks, events, reminders, schedules, activeCollectionId, days, layerVisibility]);
 
   // ── Mobile week strip & desktop week view ─────────────────────────────────
   const weekDays = useMemo(() => {
@@ -595,9 +610,13 @@ export function CalendarView() {
       if (isTyping) return;
       if (openModal || editingTaskId || editingCalendarEventId || editingCalendarReminderId || dayPaneDate) return;
 
-      if (e.key === 'Tab' && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+      if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
-        setDesktopMode((m) => (m === 'month' ? 'week' : m === 'week' ? 'day' : 'month'));
+        setDesktopMode(
+          e.shiftKey
+            ? (desktopMode === 'month' ? 'day'  : desktopMode === 'week' ? 'month' : 'week')
+            : (desktopMode === 'month' ? 'week' : desktopMode === 'week' ? 'day'   : 'month')
+        );
         return;
       }
       if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
@@ -810,6 +829,7 @@ export function CalendarView() {
             <button className={styles.schedulesBtn} onClick={openSchedules} title="Schedules — recurring weekly timetables">
               🗓 Schedules
             </button>
+            <CalendarLayersPicker />
           </div>
 
           {/* ── Month view ── */}
@@ -1064,6 +1084,7 @@ export function CalendarView() {
                                 title=""
                               >
                                 <span className={styles.weekTimeBlockTitle}>{item.title}</span>
+                                {item.notes && <span className={styles.weekTimeBlockNotes}>{item.notes}</span>}
                               </button>
                             );
                           })}
@@ -1172,6 +1193,7 @@ export function CalendarView() {
                               onMouseLeave={() => setTooltip(null)}
                             >
                               <span className={styles.weekTimeBlockTitle}>{item.title}</span>
+                              {item.notes && <span className={styles.weekTimeBlockNotes}>{item.notes}</span>}
                             </button>
                           );
                         })}

@@ -258,10 +258,18 @@ export function ListsSection() {
   const showAddListItem   = useUIStore((s) => s.showAddListItem);
   const openEditListItem  = useUIStore((s) => s.openEditListItem);
   const setActiveListId   = useUIStore((s) => s.setActiveListId);
+  const setListsLastActive = useUIStore((s) => s.setListsLastActive);
 
-  const [selectedListId, setSelectedListId] = useState<ListId | null>(null);
+  // Seeded once from the last-active list/tab (uiStore.listsLastActiveListId/TabId) so
+  // switching to another app and back restores the same list+tab — the effect below
+  // already falls back to the first list if the remembered id no longer exists.
+  const [selectedListId, setSelectedListId] = useState<ListId | null>(
+    () => (useUIStore.getState().listsLastActiveListId as ListId | null) ?? null
+  );
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>('all');
-  const [selectedTabId,  setSelectedTabId]  = useState<string | 'all'>('all');
+  const [selectedTabId,  setSelectedTabId]  = useState<string | 'all'>(
+    () => useUIStore.getState().listsLastActiveTabId ?? 'all'
+  );
   const [addingTab,      setAddingTab]      = useState(false);
   const [newTabName,     setNewTabName]     = useState('');
   const [editingCell,    setEditingCell]    = useState<{ itemId: string; field: string } | null>(null);
@@ -285,6 +293,21 @@ export function ListsSection() {
     setActiveListId(selectedListId);
     return () => setActiveListId(null);
   }, [selectedListId, setActiveListId]);
+
+  // A restored tab id (or one whose tab was since deleted) that no longer exists on the
+  // current list falls back to "All", same as removeListTab's own tabId reassignment.
+  useEffect(() => {
+    if (selectedTabId !== 'all' && !selectedList?.tabs?.some((t) => t.id === selectedTabId)) {
+      setSelectedTabId('all');
+    }
+  }, [selectedList, selectedTabId]);
+
+  // Mirrors the current list+tab into uiStore on every change (and therefore on unmount
+  // too, via the cleanup's closure) so switching apps and back restores this same view —
+  // kept separate from the activeListId effect above, which must keep clearing to null.
+  useEffect(() => {
+    return () => setListsLastActive(selectedListId, selectedTabId === 'all' ? null : selectedTabId);
+  }, [selectedListId, selectedTabId, setListsLastActive]);
 
   useEffect(() => {
     if (addingTab) tabInputRef.current?.focus();
@@ -310,22 +333,33 @@ export function ListsSection() {
 
   // Ctrl+PgUp/PgDn cycles through this list's tabs (All + each named tab), matching the same
   // hotkey already used to cycle Note tabs (NoteEditor.tsx) — one convention for "tabs" app-wide.
+  // Ctrl+T starts adding a new tab (same convention as NoteEditor's Ctrl+T) — unlike cycling,
+  // this doesn't require hasTabs: it's exactly what the header's own "+" button does, and is
+  // the only runtime way to add a list's very first tab.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!hasTabs || !selectedList) return;
+      if (!selectedList) return;
       const tag = (e.target as HTMLElement)?.tagName;
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
         || (e.target as HTMLElement)?.isContentEditable;
       if (isTyping) return;
       if (!e.ctrlKey || e.shiftKey || e.altKey) return;
-      if (e.key !== 'PageUp' && e.key !== 'PageDown') return;
 
-      e.preventDefault();
-      const order: (string | 'all')[] = ['all', ...(selectedList.tabs ?? []).map((t) => t.id)];
-      const curIdx = order.indexOf(selectedTabId);
-      const dir = e.key === 'PageDown' ? 1 : -1;
-      const nextIdx = (curIdx + dir + order.length) % order.length;
-      setSelectedTabId(order[nextIdx]);
+      if (hasTabs && (e.key === 'PageUp' || e.key === 'PageDown')) {
+        e.preventDefault();
+        const order: (string | 'all')[] = ['all', ...(selectedList.tabs ?? []).map((t) => t.id)];
+        const curIdx = order.indexOf(selectedTabId);
+        const dir = e.key === 'PageDown' ? 1 : -1;
+        const nextIdx = (curIdx + dir + order.length) % order.length;
+        setSelectedTabId(order[nextIdx]);
+        return;
+      }
+
+      if (e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        setAddingTab(true);
+        setNewTabName('');
+      }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);

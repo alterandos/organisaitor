@@ -141,6 +141,7 @@ export interface Task {
   scheduledAt:   string | null;        // ISO date 'YYYY-MM-DD' — day user plans to do the task
   scheduledTime: string | null;        // 'HH:MM' (24-hour), optional companion to scheduledAt
   calendarEventId: CalendarEventId | null; // auto-created event when scheduledAt is set
+  calendarReminderId: CalendarReminderId | null; // auto-created reminder when deadline is set
   remindAt:      string | null;
   archived:     boolean;
   kind:          TaskKind;             // 'action' | 'waiting' | 'milestone' (default: 'action')
@@ -169,6 +170,7 @@ export interface CreateTaskInput {
   scheduledAt?:     string | null;
   scheduledTime?:   string | null;
   calendarEventId?: CalendarEventId | null;
+  calendarReminderId?: CalendarReminderId | null;
   collectionId?:   CollectionId | null;
   tagIds?:         TagId[];
   purposeIds?:     PurposeId[];
@@ -202,7 +204,16 @@ export interface CreatePurposeInput {
 // ── Calendar ───────────────────────────────────────────────────────────────────
 // CalendarItemKind is kept as a string union for easy label overrides in labels.ts.
 export type CalendarItemKind  = 'event' | 'reminder';
-export type CalendarEventType = 'default' | 'birthday';
+export type CalendarEventType = 'default' | 'birthday' | 'task';
+// 'task' = auto-created shadow event for a scheduled task (Task.scheduledAt/calendarEventId) —
+// drives the calendar layer toggle's "Task scheduled" layer, alongside the 🕐-icon overlay
+// (taskLinkedEventIds in CalendarView.tsx) that already marks these visually.
+export type CalendarReminderType = 'default' | 'task';
+// 'task' = auto-created shadow reminder for a task deadline (Task.deadline/calendarReminderId)
+// — drives the calendar layer toggle's "Task deadlines" layer. Always excluded from the
+// reminders-derived kind:'reminder' render pass in CalendarView.tsx (the deadline still renders
+// as its own kind:'task' pill, synthesized directly from the Task, unchanged) — this row exists
+// for sync/layer-filtering/notification purposes, not to be shown a second time.
 export type RepeatFreq        = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export interface RepeatConfig {
@@ -244,6 +255,7 @@ export interface CalendarReminder {
   time:         string | null;        // HH:MM (24-hour)
   notes:        string | null;
   collectionId: CollectionId | null;
+  reminderType: CalendarReminderType; // 'default' | 'task' — see CalendarReminderType
   createdAt:    string;
   updatedAt:    string;
   remindAt:     string | null;
@@ -272,6 +284,7 @@ export interface CreateCalendarReminderInput {
   time?:        string | null;
   notes?:       string | null;
   collectionId?: CollectionId | null;
+  reminderType?: CalendarReminderType;
   repeat?:       RepeatConfig | null;
 }
 

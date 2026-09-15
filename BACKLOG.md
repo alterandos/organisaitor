@@ -28,6 +28,64 @@ Currently `activeCollectionIdByView` (`uiStore`) deliberately remembers a **sepa
 
 ---
 
+## Automatic local backup rotation (background, no cloud dependency)
+
+Confirmed requirement (2026-09-15), motivated by a real incident: months of desktop-only work went un-synced because the user wasn't signed in, and it turned out the existing sync-on-login logic only auto-uploads local data when the Supabase account is completely empty (see `initSync` in `src/services/sync/syncService.ts`) — otherwise it only pulls cloud data down, silently never pushing local-only work up. A local, cloud-independent safety net would have caught this regardless of whether sync itself was working. The existing Export/Restore backup (`AccountPane`/`IntegrationsPane`, `PERSISTED_STORAGE_KEYS` in `src/config/backup.ts`) already produces a complete point-in-time JSON snapshot of every persisted store — this feature automates taking that same snapshot in the background on a schedule, keeps a small rotating history of them stored locally (never touched except by the rotation's own cleanup), and needs no account/cloud connection at all.
+
+### Triggers — time OR change-volume, whichever comes first
+
+Two independent conditions, either one fires a snapshot:
+- **Time-based**: a snapshot is due once more than `settingsStore.autoBackupIntervalHours` (default TBD, e.g. 24h) has elapsed since the last automatic snapshot AND at least one store has changed since then (no point snapshotting unchanged data).
+- **Change-volume-based**: a running "change score" accumulates as the user edits data, resetting to 0 each time a snapshot fires; once it crosses `settingsStore.autoBackupChangeThreshold` (default TBD), a snapshot fires immediately regardless of the time-based timer.
+
+**Feasibility: straightforward, not a hard feature.** Every persisted store already funnels every mutation through Zustand's `persist` middleware, and `syncService.ts`'s `syncDiff` already has working before/after diff logic to model this on (compares `prev`/`next` record objects key-by-key). A new module (e.g. `src/services/autoBackup.ts`) would `subscribe()` to each of the 8 persisted stores (`taskStore`, `calendarStore`, `trackerStore`, `routineStore`, `noteStore`, `listStore`, `fitnessStore`, `scheduleStore`) the same way `syncService.ts` does, and on each change add to the running score via a small per-store weight:
+- Record-shaped stores (tasks, collections, tags, purposes, events, reminders, tracker entries, list items, activities, schedule blocks): +1 point per item created/updated/deleted — the same shallow `Object.keys` diff `syncDiff` already does.
+- Free-text content (`Note.content`, a stringified Tiptap JSON): weight by **character-length delta** of the serialized string rather than a real text diff (cheap, avoids parsing rich-text JSON) — maps directly to the user's own "200 characters changed" example.
+
+One unified change score (not per-entity-type thresholds) is simpler to reason about and to expose as a single setting, with per-store weights as internal constants — worth confirming as v1 scope when this is built, since exposing 8 separate thresholds in Settings is more configurability than anyone likely wants.
+
+### What a snapshot contains
+
+Reuses `PERSISTED_STORAGE_KEYS` exactly — the same list `AccountPane`'s manual Export already uses — so this is one code path away from already-working logic, not a new backup format. Each snapshot is the same `{ exportedAt, version, ...oneKeyPerStore }` JSON shape as a manual export.
+
+### Where snapshots are stored — the one genuinely new piece, needs a platform-aware backend
+
+"Saved locally, never touched except by cleanup" rules out `localStorage` itself (already used *by* the stores being backed up, and far too small a quota — typically 5–10MB shared across everything — to also hold several full-app snapshots). Three targets depending on platform, each already-precedented elsewhere in this codebase:
+- **Desktop (Tauri)**: real filesystem via `@tauri-apps/plugin-fs` (not yet a dependency — same pattern as `plugin-opener`/`plugin-notification`, added for exactly this kind of native-capability gap). Snapshots as individual timestamped files under the app's data dir (`appDataDir()` + `/backups/*.json`).
+- **Web/PWA and Android (Capacitor webview)**: no real arbitrary filesystem without permission friction (File System Access API is Chromium-only and needs a user gesture per session — not viable for a silent background process). **IndexedDB** is the practical cross-platform answer — much larger quota than localStorage, works identically in the Vercel PWA and the Android webview. A genuinely new storage layer for this codebase (nothing uses IndexedDB today) but a standard one.
+- Implies a small storage-adapter seam (`saveSnapshot`/`listSnapshots`/`deleteSnapshot`) with a Tauri-fs implementation and an IndexedDB implementation, selected the same way `usePlatform` already detects environment elsewhere. Not user-facing — an internal implementation detail, same spirit as the `StorageAdapter` swappability CLAUDE.md's suite architecture already calls for.
+
+### Retention / rotation — tiered "grandfather" thinning
+
+Confirmed requirement: keep a small, customizable number of snapshots (default 4) spaced at increasing intervals into the past rather than evenly — the user's own numbers: ~yesterday, ~1 week, ~2 weeks, ~1 month. This is a well-known pattern (the same idea behind Time Machine's hourly→daily→weekly thinning, or tools like `rsnapshot`) and is **algorithmically simple, not a hard problem**:
+
+1. Define N target ages in days for N desired slots. For the default N=4: `[1, 7, 14, 30]` (the user's own numbers). For a different N, interpolate (e.g. geometrically between 1 day and a configurable max age) rather than hardcoding — needs a decision at build time on the exact interpolation formula, but any reasonable one satisfies "spaced increasingly further apart."
+2. After every new snapshot is taken, run a pure `selectSnapshotsToKeep(allSnapshots: {id, createdAt}[], targetAgesDays: number[]): Set<id>`: for each target age (closest-first, so two targets can't fight over the same snapshot), assign the not-yet-claimed snapshot whose actual age is nearest that target.
+3. Always force-keep the single most recent snapshot regardless of bucket math (naturally the best fit for the smallest target age anyway, but pinning it explicitly avoids an edge case where the newest snapshot is younger than every target and could otherwise lose a tie-break).
+4. Delete every snapshot not selected in steps 2–3.
+
+A pure, easily-unit-testable function — worth a standalone round-trip test before wiring it up, matching the "verify the algorithm in isolation first" approach already used successfully for `expandScheduleBlock`/timezone conversion elsewhere in this codebase, since off-by-one bucket assignment is the realistic failure mode, not the concept itself.
+
+### Settings (user-facing, per the request)
+
+New `settingsStore` fields (needs a version bump + cumulative migration, per the standing Zustand migration rule):
+- `autoBackupEnabled: boolean` (default TBD — likely `true`, since this is a safety feature, not an opt-in power feature)
+- `autoBackupIntervalHours: number` (default TBD)
+- `autoBackupChangeThreshold: number` (default TBD)
+- `autoBackupMaxCount: number` (default 4)
+- `autoBackupTargetAgesDays: number[]` (default `[1, 7, 14, 30]`; needs a UI decision — auto-regenerate this array when the count changes, vs. let advanced users edit it directly)
+
+UI location: likely a new subsection in `SettingsPane`, or folded into `AccountPane` alongside the existing manual Export/Restore — not decided yet.
+
+### Explicitly not decided yet
+
+- Exact default values for interval/threshold/weights (placeholders above — needs real-world tuning, or just a reasonable starting guess).
+- Whether automatic snapshots are ever surfaced for manual restore-from-list in the UI ("Restore from an automatic backup" picker), or stay a silent insurance policy only reached by digging into app storage.
+- Per-store weighting constants (the "+1 per item, +1 per N characters" scheme above is a reasonable starting guess, not a confirmed spec).
+- This is a safety net for data loss, not a fix for sync itself silently failing to push (the actual root cause of the incident that motivated this feature) — worth keeping those as two separate backlog concerns rather than conflating them.
+
+---
+
 ## Lists section — cross-suite linking (Phase 2+)
 
 Associate List items with entities in other apps:
@@ -624,6 +682,90 @@ upcoming deadlines in context while managing tasks.
 Ability to switch between monthly (current), weekly, and daily views in the
 calendar. Monthly is the default; weekly and daily show finer time-slot
 detail useful for scheduling events.
+
+### External calendar sync — Google / Microsoft / other (viability analysis, 2026-09-16)
+
+Asked: how viable is syncing in Google Calendar, Microsoft/Outlook, or other external
+calendars, and how would it be architected? Short answer: **viable, and this codebase
+already has a working template for exactly this shape of integration** — the Strava
+integration (see "Strava integration — built" in CLAUDE.md) is architecturally almost
+identical to what a Google/Microsoft calendar sync would need. The honest cost estimate
+is "about as much work as Strava was, plus recurrence-rule translation, plus — only if
+two-way sync is wanted — webhook subscriptions." None of it is built yet; this is
+analysis only, per the request.
+
+**Feasibility.** Both Google Calendar API and Microsoft Graph (Outlook/Microsoft 365)
+are mature, well-documented REST APIs with OAuth2 Authorization Code flows, and both
+support reading events, writing events, and near-real-time push notifications of
+changes. CalDAV is a vendor-neutral third option (iCloud and most self-hosted calendar
+servers speak it) but is a lower-level, more awkward protocol than either vendor's own
+REST API — worth supporting eventually for "other," but Google/Microsoft's native APIs
+should come first since they cover the large majority of real users.
+
+**Architecture — directly reusing the Strava pattern already in this repo:**
+- OAuth2 per provider: public client id inlined via `VITE_GOOGLE_CLIENT_ID` /
+  `VITE_MICROSOFT_CLIENT_ID`; the client secret stays server-only in Vercel env vars
+  (never `VITE_`-prefixed), same reasoning as `STRAVA_CLIENT_SECRET`.
+- Token storage: a new Supabase table per provider (`calendar_google_connection`,
+  `calendar_microsoft_connection`), same shape as `fitness_strava_connection` —
+  `user_id` (PK), `access_token`, `refresh_token`, `expires_at`, `scope`, RLS on
+  `user_id`, never read client-side directly.
+- The same "redirect-identity problem" Strava solved applies identically: the OAuth
+  callback is a full browser navigation with no way to attach a Supabase auth header,
+  so the same fix (pass the Supabase access token through the OAuth `state` param,
+  verify server-side in the callback) carries over unchanged.
+- Edge functions mirroring `api/strava-oauth-callback.ts` / `strava-status.ts` /
+  `strava-sync.ts`: `api/google-calendar-oauth-callback.ts` / `-status.ts` / `-sync.ts`,
+  same three-endpoint shape, same "secrets never reach the client" boundary.
+
+**Where it's genuinely harder than Strava, not just "more of the same":**
+- **Read-only ingest vs. two-way sync is the real fork.** Strava is read-only by nature
+  (activities are logged externally, pulled in). A calendar integration could stay
+  read-only too (pull Google/Outlook events into the calendar view as a new
+  non-editable layer, "open in Google Calendar" instead of an edit pane) — this is the
+  cheap, low-risk option and should be Phase 1. Full two-way sync (app-created events
+  pushed out, edits reconciled both directions) is a much bigger undertaking: it needs
+  conflict resolution (same class of problem `mergeRecords()`/soft-delete tombstones
+  solve for cross-device sync in this app, but now against a third party's own
+  optimistic-concurrency model instead of Supabase), and near-real-time updates need
+  push subscriptions (Google Calendar "watch" channels, Microsoft Graph
+  subscriptions) — both expire and need periodic renewal, which is genuinely new
+  machinery this app doesn't have anywhere yet (Strava is manual "Sync now" only, no
+  webhook).
+- **`CalendarEvent` needs the same extensibility fields `Activity` already has for
+  exactly this reason.** `Activity.source`/`sourceId`/`sourceRaw` (added ahead of the
+  Strava sync actually being built) is precisely the shape a synced `CalendarEvent`
+  would need too — `source: 'default' | 'google' | 'microsoft'`, `sourceId` (the
+  provider's event id, for upsert-by-source so re-syncing never duplicates), and
+  `sourceRaw` (the full provider payload, so surfacing more fields later isn't a
+  re-sync). None of this exists on `CalendarEvent` today; adding it is a small, safe,
+  additive migration (same category as `009_task_scheduled.sql`), best done right
+  before this feature actually starts, not speculatively now.
+- **Recurrence model mismatch.** Google/Microsoft both use full RFC 5545 `RRULE`
+  recurrence, which is considerably more expressive than this app's `RepeatConfig`
+  (`freq`/`interval`/`endKind`/`count`/`until`/`daysOfWeek` — deliberately scoped down,
+  see the Schedule feature's own note on cribbing a subset of RFC 5545 for the same
+  reason). A read-only Phase 1 can sidestep this by having the provider expand
+  recurring events into concrete instances server-side (both APIs support this) rather
+  than importing the rule itself. Two-way sync can't avoid it — translating between the
+  two recurrence models losslessly in both directions is real, non-trivial work.
+- **Free/busy-only vs. full event detail** is a product decision, not just a technical
+  one — a privacy-friendlier "just show blocked time" overlay is easy with either API's
+  free/busy endpoint and avoids pulling full titles/notes/attendees at all.
+
+**Recommended incremental path**, mirroring how Strava itself was scoped:
+1. **Phase 1 — Google Calendar, read-only, manual sync.** OAuth connect + a "Sync now"
+   button pulling upcoming events in as a new synthetic, non-persisted display layer —
+   same idea as how Schedule blocks render on the calendar today (expanded at render
+   time, not materialized as real rows) or, if persisted, marked clearly read-only with
+   edits redirected to "open in Google Calendar."
+2. **Phase 2 — Microsoft/Outlook via Graph API**, same shape as Phase 1.
+3. **Phase 3 (much bigger, only if Phase 1/2 usage justifies it) — two-way sync**:
+   `CalendarEvent.source`/`sourceId` fields, push subscriptions + renewal, conflict
+   resolution, RRULE translation.
+
+Not started. Flagged here as a scoped, staged plan rather than a single feature, since
+Phase 1 alone is a genuinely useful, comparatively low-risk slice.
 
 ---
 

@@ -1,7 +1,9 @@
 import type {
   Task, Collection, Tag, Purpose,
   CalendarEvent, CalendarReminder, TrackerEntry,
+  ScheduleTemplate,
 } from '@/types';
+import type { List, ListItem, ListType } from '@/types/lists';
 
 // ── Task ────────────────────────────────────────────────────────
 
@@ -23,6 +25,7 @@ export function taskToRow(t: Task, userId: string) {
     scheduled_at:      t.scheduledAt       ?? null,
     scheduled_time:    t.scheduledTime     ?? null,
     calendar_event_id: t.calendarEventId   ?? null,
+    calendar_reminder_id: t.calendarReminderId ?? null,
     remind_at:         t.remindAt          ?? null,
     archived:       t.archived       ?? false,
     kind:           t.kind           ?? 'action',
@@ -53,6 +56,7 @@ export function rowToTask(r: Record<string, any>): Task {
     scheduledAt:     r.scheduled_at       ?? null,
     scheduledTime:   r.scheduled_time     ?? null,
     calendarEventId: r.calendar_event_id  ?? null,
+    calendarReminderId: r.calendar_reminder_id ?? null,
     remindAt:        r.remind_at          ?? null,
     archived:      r.archived      ?? false,
     kind:          r.kind          ?? 'action',
@@ -239,6 +243,7 @@ export function reminderToRow(r: CalendarReminder, userId: string) {
     time:          r.time,
     notes:         r.notes,
     collection_id: r.collectionId,
+    reminder_type: r.reminderType ?? 'default',
     remind_at:     r.remindAt,
     repeat:        r.repeat,
     created_at:    r.createdAt,
@@ -255,9 +260,143 @@ export function rowToReminder(r: Record<string, any>): CalendarReminder {
     time:         r.time          ?? null,
     notes:        r.notes         ?? null,
     collectionId: r.collection_id ?? null,
+    reminderType: r.reminder_type ?? 'default',
     remindAt:     r.remind_at     ?? null,
     repeat:       r.repeat        ?? null,
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
+  };
+}
+
+// ── Schedule ────────────────────────────────────────────────────
+
+export function scheduleToRow(s: ScheduleTemplate, userId: string) {
+  return {
+    id:            s.id,
+    user_id:       userId,
+    name:          s.name,
+    color:         s.color        ?? null,
+    start_date:    s.startDate    ?? null,
+    end_date:      s.endDate      ?? null,
+    active:        s.active       ?? true,
+    collection_id: s.collectionId ?? null,
+    blocks:        s.blocks       ?? [],
+    created_at:    s.createdAt,
+    updated_at:    s.updatedAt,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToSchedule(r: Record<string, any>): ScheduleTemplate {
+  return {
+    id:           r.id,
+    name:         r.name,
+    color:        r.color         ?? null,
+    startDate:    r.start_date    ?? null,
+    endDate:      r.end_date      ?? null,
+    active:       r.active        ?? true,
+    collectionId: r.collection_id ?? null,
+    blocks:       r.blocks        ?? [],
+    createdAt:    r.created_at,
+    updatedAt:    r.updated_at,
+  };
+}
+
+// ── List ────────────────────────────────────────────────────────
+
+export function listToRow(l: List, userId: string) {
+  return {
+    id:           l.id,
+    user_id:      userId,
+    name:         l.name,
+    description:  l.description ?? null,
+    type_id:      l.typeId      ?? null,
+    kind:         l.kind,
+    color:        l.color       ?? null,
+    icon:         l.icon        ?? null,
+    field_schema: l.fieldSchema ?? [],
+    tabs:         l.tabs        ?? [],
+    created_at:   l.createdAt,
+    updated_at:   l.updatedAt,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToList(r: Record<string, any>): List {
+  return {
+    id:          r.id,
+    name:        r.name,
+    description: r.description  ?? null,
+    typeId:      r.type_id      ?? null,
+    kind:        r.kind         ?? 'reference',
+    color:       r.color        ?? null,
+    icon:        r.icon         ?? null,
+    fieldSchema: r.field_schema ?? [],
+    tabs:        r.tabs         ?? [],
+    createdAt:   r.created_at,
+    updatedAt:   r.updated_at,
+  };
+}
+
+// ── ListItem ────────────────────────────────────────────────────
+
+export function listItemToRow(i: ListItem, userId: string) {
+  return {
+    id:         i.id,
+    user_id:    userId,
+    list_id:    i.listId,
+    title:      i.title,
+    status:     i.status ?? 'want',
+    tab_id:     i.tabId  ?? null,
+    data:       i.data   ?? {},
+    notes:      i.notes  ?? null,
+    links:      i.links  ?? [],
+    sort_order: i.order  ?? 0,
+    created_at: i.createdAt,
+    updated_at: i.updatedAt,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToListItem(r: Record<string, any>): ListItem {
+  return {
+    id:        r.id,
+    listId:    r.list_id,
+    title:     r.title,
+    status:    r.status  ?? 'want',
+    tabId:     r.tab_id  ?? null,
+    data:      r.data    ?? {},
+    notes:     r.notes   ?? null,
+    links:     r.links   ?? [],
+    order:     r.sort_order ?? 0,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+// ── ListType (custom only — built-ins never sync, see 014 migration) ──────────
+
+export function listTypeToRow(t: ListType, userId: string) {
+  return {
+    id:             t.id,
+    user_id:        userId,
+    name:           t.name,
+    icon:           t.icon,
+    color:          t.color ?? null,
+    kind:           t.kind,
+    default_fields: t.defaultFields ?? [],
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToListType(r: Record<string, any>): ListType {
+  return {
+    id:            r.id,
+    name:          r.name,
+    icon:          r.icon,
+    color:         r.color ?? null,
+    kind:          r.kind,
+    defaultFields: r.default_fields ?? [],
+    isBuiltIn:     false,
   };
 }

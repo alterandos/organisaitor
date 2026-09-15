@@ -21,12 +21,22 @@ const BellIcon = () => (
 
 function NotificationCard({ n }: { n: PendingNotification }) {
   const removePending   = useNotificationStore((s) => s.removePending);
+  const tasksRecord     = useTaskStore((s) => s.tasks);
   const updateTask      = useTaskStore((s) => s.updateTask);
   const archiveTask     = useTaskStore((s) => s.archiveTask);
   const toggleTask      = useTaskStore((s) => s.toggleTask);
   const updateEvent     = useCalendarStore((s) => s.updateEvent);
   const updateReminder  = useCalendarStore((s) => s.updateReminder);
   const timezone        = useSettingsStore((s) => s.timezone);
+
+  // A reminder notification whose reminder is a task-deadline shadow (reminderType:
+  // 'task') gets the same Done/Archive actions a task-kind notification always had —
+  // acting on the linked task, not the reminder itself. See useNotificationChecker.ts:
+  // deadline tasks no longer produce their own 'task-timed'/'task-untimed' notifications
+  // at all, so this is now the only path to those two actions for a deadline reminder.
+  const linkedTask = n.kind === 'reminder'
+    ? Object.values(tasksRecord).find((t) => t.calendarReminderId === n.itemId) ?? null
+    : null;
 
   const [mode, setMode]               = useState<'idle' | 'snooze' | 'postpone'>('idle');
   const [snoozeValue, setSnoozeValue] = useState(1);
@@ -50,14 +60,18 @@ function NotificationCard({ n }: { n: PendingNotification }) {
   const handleDone = () => {
     if (n.kind === 'task-timed' || n.kind === 'task-untimed') {
       toggleTask(n.itemId as TaskId);
+    } else if (linkedTask) {
+      toggleTask(linkedTask.id);
     }
-    // Events/reminders don't have a "complete" state — just dismiss
+    // Events/plain reminders don't have a "complete" state — just dismiss
     dismiss();
   };
 
   const handleArchive = () => {
     if (n.kind === 'task-timed' || n.kind === 'task-untimed') {
       archiveTask(n.itemId as TaskId);
+    } else if (linkedTask) {
+      archiveTask(linkedTask.id);
     }
     dismiss();
   };

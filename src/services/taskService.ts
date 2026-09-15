@@ -22,6 +22,7 @@ export function createTask(input: CreateTaskInput, sortOrder: number): Task {
     scheduledAt:     input.scheduledAt     ?? null,
     scheduledTime:   input.scheduledTime   ?? null,
     calendarEventId: input.calendarEventId ?? null,
+    calendarReminderId: input.calendarReminderId ?? null,
     remindAt:        null,
     archived:     false,
     kind:          input.kind          ?? 'action',

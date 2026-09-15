@@ -40,6 +40,7 @@ export function AccountPane() {
   const [syncStatus,  setSyncStatus]  = useState<SyncStatus>('idle');
   const [syncErr,     setSyncErr]     = useState<string | null>(null);
   const [restoring,   setRestoring]   = useState(false);
+  const [uploading,   setUploading]   = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -75,6 +76,27 @@ export function AccountPane() {
     await signOut();
     setEmail('');
     setPassword('');
+  };
+
+  const handleForceUpload = async () => {
+    if (!user) return;
+    setUploading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const counts = await forceUpload(user.id);
+      setSuccess(
+        `Uploaded to Supabase: ${counts.tasks} tasks, ${counts.collections} endeavours, ` +
+        `${counts.tags} tags, ${counts.purposes} purposes, ${counts.events} events, ` +
+        `${counts.reminders} reminders, ${counts.entries} tracker entries, ` +
+        `${counts.schedules} schedules, ${counts.lists} lists, ${counts.listItems} list items, ` +
+        `${counts.listTypes} custom list types.`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Force upload failed.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,6 +177,15 @@ export function AccountPane() {
             {success && <p className={styles.successMsg}>{success}</p>}
             {error   && <p className={styles.errorMsg}>{error}</p>}
 
+            <button
+              className={styles.exportBtn}
+              onClick={handleForceUpload}
+              disabled={uploading}
+              type="button"
+              title="Pushes everything currently on this device to Supabase, reading live app state directly — no reload, no file round-trip."
+            >
+              {uploading ? 'Uploading…' : 'Force upload this device’s data to cloud'}
+            </button>
             <button className={styles.exportBtn} onClick={downloadBackup} type="button">
               Export backup (JSON)
             </button>

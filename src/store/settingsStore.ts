@@ -10,6 +10,15 @@ import type { ClockFormat } from '@/utils/date';
 const DEFAULT_THEME: 'light' | 'dark' | 'system' =
   Capacitor.getPlatform() === 'android' ? 'dark' : 'system';
 
+// 'events'/'reminders' = user-created CalendarEvent/CalendarReminder rows (eventType/
+// reminderType 'default', and 'events' also covers 'birthday'); 'taskScheduled'/
+// 'taskDeadlines' = the shadow rows auto-created from Task.scheduledAt/deadline
+// (eventType/reminderType 'task'). Deliberately not the same thing as a Schedule
+// template's own per-schedule `active` toggle (ManageSchedulesPane) — these four are the
+// ones named in the request; Schedules keep their existing, separate toggle mechanism.
+export type CalendarLayerKey = 'events' | 'reminders' | 'taskScheduled' | 'taskDeadlines';
+export type CalendarLayerVisibility = Record<CalendarLayerKey, boolean>;
+
 interface SettingsState {
   // ── Appearance ───────────────────────────────────────────────────────────────
   theme:    'light' | 'dark' | 'system';
@@ -57,6 +66,12 @@ interface SettingsState {
   toggleShadeWeekends:       () => void;
   setWeekendShadeColor:      (color: string) => void;
   toggleStrikethroughPastDays: () => void;
+
+  // Calendar layer toggle — which categories of item render on the calendar. Location/style
+  // of the panel that edits this is deliberately kept flexible (see CalendarLayersPicker);
+  // this is just the underlying filter state, persisted so a hidden layer stays hidden.
+  calendarLayerVisibility: CalendarLayerVisibility;
+  toggleCalendarLayer:     (layer: CalendarLayerKey) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -102,6 +117,11 @@ export const useSettingsStore = create<SettingsState>()(
       toggleShadeWeekends:       () => set((s) => ({ shadeWeekends:          !s.shadeWeekends          })),
       setWeekendShadeColor:      (color) => set({ weekendShadeColor: color }),
       toggleStrikethroughPastDays: () => set((s) => ({ strikethroughPastDays: !s.strikethroughPastDays })),
+
+      calendarLayerVisibility: { events: true, reminders: true, taskScheduled: true, taskDeadlines: true },
+      toggleCalendarLayer: (layer) => set((s) => ({
+        calendarLayerVisibility: { ...s.calendarLayerVisibility, [layer]: !s.calendarLayerVisibility[layer] },
+      })),
     }),
     {
       name: 'todo-settings',

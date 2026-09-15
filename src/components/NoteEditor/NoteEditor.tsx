@@ -206,6 +206,7 @@ interface NoteEditorProps {
 export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const editingNoteId       = useUIStore((s) => s.editingNoteId);
   const closeNote           = useUIStore((s) => s.closeNote);
+  const setNotesLastActiveTab = useUIStore((s) => s.setNotesLastActiveTab);
   const noteTagViewReturn   = useUIStore((s) => s.noteTagViewReturn);
   const setNoteTagViewReturn = useUIStore((s) => s.setNoteTagViewReturn);
   const openNoteTagView     = useUIStore((s) => s.openNoteTagView);
@@ -232,6 +233,14 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const [abstractCollapsed, setAbstractCollapsed] = useState(false);
   const [noteMenuOpen, setNoteMenuOpen] = useState(false);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  // Captured once at mount: which note+tab uiStore remembers as last-active, so the load
+  // effect below can restore that tab the first time it loads that same note (and only
+  // that first time — later note switches within this same mount reset to Main normally).
+  const [initialTabRestore] = useState(() => ({
+    noteId: useUIStore.getState().notesLastEditingNoteId,
+    tabId:  useUIStore.getState().notesLastActiveTabId,
+  }));
+  const hasRestoredTabRef = useRef(false);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -552,9 +561,21 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // Load content when the open note changes
   useEffect(() => {
     if (!editor) return;
-    // Reset to main tab when switching notes
-    setActiveTabId(null);
-    activeTabIdRef.current = null;
+    // Reset to Main when switching notes — except right after mount, when we restore
+    // whatever tab was open in notesLastEditingNoteId (uiStore), so coming back to Notes
+    // from another app lands on the same tab, not just the same note.
+    let nextTabId: string | null = null;
+    if (!hasRestoredTabRef.current) {
+      hasRestoredTabRef.current = true;
+      if (
+        note && note.id === initialTabRestore.noteId && initialTabRestore.tabId &&
+        note.tabs?.some((t) => t.id === initialTabRestore.tabId)
+      ) {
+        nextTabId = initialTabRestore.tabId;
+      }
+    }
+    setActiveTabId(nextTabId);
+    activeTabIdRef.current = nextTabId;
     setRenamingTabId(null);
     if (!note) {
       currentNoteIdRef.current = null;
@@ -583,6 +604,12 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     editor?.commands.focus('end');
   }, [focusSignal, editor]);
 
+  // Mirrors the current tab into uiStore on every change, so it's already correct by the
+  // time notesLastEditingNoteId is snapshotted on leaving the Notes section.
+  useEffect(() => {
+    setNotesLastActiveTab(activeTabId);
+  }, [activeTabId, setNotesLastActiveTab]);
+
   // Capture-phase shortcuts that must intercept before Tiptap handles the same keys
   useEffect(() => {
     if (!editor) return;
@@ -596,6 +623,24 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         e.stopPropagation();
         editor.commands.blur();
         onNavReturnRef.current?.();
+        return;
+      }
+
+      // Ctrl+T → new tab, prompting for a name immediately (reuses the same "click an
+      // already-active tab to rename" input, pre-filled with the default name and
+      // auto-selected on focus — Enter or clicking outside accepts it, Escape cancels).
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = currentNoteIdRef.current;
+        if (!id) return;
+        const currentNote = useNoteStore.getState().notes[id as NoteId];
+        if (!currentNote) return;
+        const defaultName = `Tab ${currentNote.tabs.length + 1}`;
+        const newTabId = addNoteTab(id as NoteId, defaultName);
+        switchTab(newTabId);
+        setRenamingTabId(newTabId);
+        setRenameValue(defaultName);
         return;
       }
 
@@ -766,8 +811,11 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     const id = currentNoteIdRef.current;
     if (!id) return;
     const tabCount = (note?.tabs.length ?? 0) + 1;
-    const newTabId = addNoteTab(id as NoteId, `Tab ${tabCount}`);
+    const defaultName = `Tab ${tabCount}`;
+    const newTabId = addNoteTab(id as NoteId, defaultName);
     switchTab(newTabId);
+    setRenamingTabId(newTabId);
+    setRenameValue(defaultName);
   };
 
   const handleRemoveTab = (e: React.MouseEvent, tabId: string) => {

@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { HOTKEYS, HOTKEY_GROUPS } from '@/config/hotkeys';
+import { useHotkeyOverridesStore, findConflicts } from '@/store/hotkeyOverridesStore';
+import { captureBindingFromEvent } from '@/utils/hotkeyBinding';
 import { listTimezones, resolveTimezone, SYSTEM_TIMEZONE } from '@/utils/timezone';
 import { rezoneAllCalendarData } from '@/services/timezoneMigration';
 import styles from './SettingsPane.module.css';
@@ -17,6 +19,25 @@ function renderKeys(combo: string) {
         </span>
       ))}
     </>
+  );
+}
+
+// One customizable Primary/Secondary cell — click to capture a new binding (or Escape to
+// cancel), matching the requested "click a hotkey to update it" interaction. Non-
+// customizable and protected hotkeys never render this — see renderKeys usage below.
+function HotkeyCell({
+  binding, listening, onStartListening,
+}: { binding: string | null; listening: boolean; onStartListening: () => void }) {
+  return (
+    <td className={styles.hotkeyKey}>
+      <button
+        type="button"
+        className={`${styles.hotkeyCellBtn} ${listening ? styles.hotkeyCellListening : ''}`}
+        onClick={onStartListening}
+      >
+        {listening ? 'Press a key…' : (binding ? renderKeys(binding) : '—')}
+      </button>
+    </td>
   );
 }
 
@@ -54,11 +75,68 @@ export function SettingsPane() {
   const closeSettings = useUIStore((s) => s.closeSettings);
   const activeView    = useUIStore((s) => s.activeView);
 
+  // Hotkey-rebind capture state — a separate Escape handler below cancels capture rather
+  // than closing the whole pane; this one must not also fire in that case (same class of
+  // bug as AddScheduleModal/ManageSchedulesPane's Escape collision — see CLAUDE.md).
+  const [listening, setListening] = useState<{ id: string; slot: 'primary' | 'secondary' } | null>(null);
+  const overrides           = useHotkeyOverridesStore((s) => s.overrides);
+  const setHotkeyOverride   = useHotkeyOverridesStore((s) => s.setOverride);
+  const resetHotkeyOverride = useHotkeyOverridesStore((s) => s.resetHotkey);
+  const resetAllHotkeys     = useHotkeyOverridesStore((s) => s.resetAll);
+
+  const effectiveBinding = (h: (typeof HOTKEYS)[number], slot: 'primary' | 'secondary'): string | null => {
+    const o = overrides[h.id];
+    if (o && slot in o) return o[slot] ?? null;
+    return slot === 'primary' ? h.primary : (h.secondary ?? null);
+  };
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeSettings(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !listening) closeSettings(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeSettings]);
+  }, [closeSettings, listening]);
+
+  // Captures the next keypress while `listening` is set. Registered in the capture phase
+  // so it runs before the effect above (and before anything else) — Escape here cancels
+  // capture only, it must not also propagate into closing the pane.
+  useEffect(() => {
+    if (!listening) return;
+    // listening.id is only ever set from a real HOTKEYS entry (see onStartListening below).
+    const def = HOTKEYS.find((h) => h.id === listening.id)!;
+
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') { setListening(null); return; }
+
+      const binding = captureBindingFromEvent(e);
+      if (!binding) return; // bare modifier press — keep listening for a real key
+
+      if (binding === effectiveBinding(def, listening.slot)) { setListening(null); return; }
+
+      const conflicts = findConflicts(binding, listening.id);
+      if (conflicts.length > 0) {
+        const names = conflicts.map((c) => c.action).join(', ');
+        const proceed = window.confirm(
+          `"${binding}" is already used by: ${names}.\n\nReassign it to "${def.action}" instead? ` +
+          'The other action will lose this binding (its other slot, if any, is unaffected).'
+        );
+        if (!proceed) { setListening(null); return; }
+        conflicts.forEach((c) => {
+          const cDef = HOTKEYS.find((h) => h.id === c.id);
+          if (!cDef) return;
+          if (effectiveBinding(cDef, 'primary')   === binding) setHotkeyOverride(c.id, 'primary',   null);
+          if (effectiveBinding(cDef, 'secondary') === binding) setHotkeyOverride(c.id, 'secondary', null);
+        });
+      }
+
+      setHotkeyOverride(listening.id, listening.slot, binding);
+      setListening(null);
+    };
+    document.addEventListener('keydown', handler, true);
+    return () => document.removeEventListener('keydown', handler, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening, overrides]);
 
   const theme                   = useSettingsStore((s) => s.theme);
   const setTheme                = useSettingsStore((s) => s.setTheme);
@@ -240,7 +318,23 @@ export function SettingsPane() {
           )}
 
           <section className={styles.section}>
-            <h3 className={styles.sectionLabel}>Keyboard shortcuts</h3>
+            <div className={styles.hotkeysHeader}>
+              <h3 className={styles.sectionLabel}>Keyboard shortcuts</h3>
+              {Object.keys(overrides).length > 0 && (
+                <button
+                  type="button"
+                  className={styles.hotkeysResetAllBtn}
+                  onClick={() => { if (window.confirm('Reset every customized hotkey back to its default?')) resetAllHotkeys(); }}
+                >
+                  Reset all to defaults
+                </button>
+              )}
+            </div>
+            <p className={styles.hotkeysHint}>
+              Click a Primary or Secondary shortcut to change it, then press the new key combination
+              (Escape cancels). Rows without a click affordance are not yet customizable —
+              see CLAUDE.md for which hotkeys are wired through this.
+            </p>
             <table className={styles.hotkeys}>
               <thead>
                 <tr>
@@ -256,10 +350,37 @@ export function SettingsPane() {
                       <th colSpan={3} className={styles.hotkeyGroup}>{group}</th>
                     </tr>
                     {HOTKEYS.filter((h) => h.group === group).map((h) => (
-                      <tr key={h.primary}>
-                        <td className={styles.hotkeyKey}>{renderKeys(h.primary)}</td>
-                        <td className={styles.hotkeyKey}>{h.secondary ? renderKeys(h.secondary) : '—'}</td>
-                        <td>{h.action}</td>
+                      <tr key={h.id}>
+                        {h.customizable ? (
+                          <>
+                            <HotkeyCell
+                              binding={effectiveBinding(h, 'primary')}
+                              listening={listening?.id === h.id && listening.slot === 'primary'}
+                              onStartListening={() => setListening({ id: h.id, slot: 'primary' })}
+                            />
+                            <HotkeyCell
+                              binding={effectiveBinding(h, 'secondary')}
+                              listening={listening?.id === h.id && listening.slot === 'secondary'}
+                              onStartListening={() => setListening({ id: h.id, slot: 'secondary' })}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <td className={styles.hotkeyKey}>{renderKeys(h.primary)}</td>
+                            <td className={styles.hotkeyKey}>{h.secondary ? renderKeys(h.secondary) : '—'}</td>
+                          </>
+                        )}
+                        <td>
+                          {h.action}
+                          {h.id in overrides && (
+                            <button
+                              type="button"
+                              className={styles.hotkeyResetBtn}
+                              onClick={() => resetHotkeyOverride(h.id)}
+                              title="Reset this hotkey to its default"
+                            >↺</button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </>

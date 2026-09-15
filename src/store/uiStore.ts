@@ -4,6 +4,16 @@ import type { Activity } from '@/types/fitness';
 
 export type AppView = 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
 
+export type CalendarViewMode = 'month' | 'week' | 'day';
+
+// Backspace-to-go-back history. An object shape (not a bare AppView[]) so a future entry
+// can carry more than "which section" — e.g. which note/list was open — without a
+// breaking change to the stack's element type. Scoped to app-switching only for now, per
+// the request ("if we leave it at app switching for now that'll be enough, but keep in
+// mind flexibility to expand"). MAX_SECTION_HISTORY is the one place to change the depth.
+export interface SectionHistoryEntry { view: AppView }
+export const MAX_SECTION_HISTORY = 6;
+
 // Manage view (library administration) — left-nav tabs, extensible for future sections.
 export type ManageSection = 'endeavours' | 'purposes' | 'tags';
 
@@ -132,7 +142,15 @@ interface UIState {
   setSortDir:   (d: SortDir) => void;
 
   activeView:    AppView;
-  setActiveView: (view: AppView) => void;
+  setActiveView: (view: AppView, opts?: { skipHistory?: boolean }) => void;
+
+  // Backspace-to-go-back: sectionHistory is most-recent-first, capped at
+  // MAX_SECTION_HISTORY. navigateBack() pops the top entry and switches to it via
+  // setActiveView(..., { skipHistory: true }) — skipping the history push is what stops
+  // "going back" itself from being recorded as a new forward move, so repeated Backspace
+  // presses walk further back through the stack instead of bouncing between two entries.
+  sectionHistory: SectionHistoryEntry[];
+  navigateBack:   () => void;
 
   taskViewMode:    TaskViewMode;
   setTaskViewMode: (mode: TaskViewMode) => void;
@@ -143,6 +161,18 @@ interface UIState {
   closeCalendarEventPane:    () => void;
   openCalendarReminderPane:  (id: string) => void;
   closeCalendarReminderPane: () => void;
+
+  // Which of Month/Week/Day CalendarView is showing — lifted out of CalendarView's own
+  // local state so it survives switching to another app and back (CalendarView unmounts
+  // on section switch, same reason notesLastEditingNoteId exists for Notes).
+  calendarViewMode:    CalendarViewMode;
+  setCalendarViewMode: (mode: CalendarViewMode) => void;
+
+  // Calendar layer-visibility dropdown (checkboxes; the underlying filter values live in
+  // settingsStore, persisted — this is only the panel's transient open/closed state).
+  calendarLayersOpen:   boolean;
+  toggleCalendarLayers: () => void;
+  closeCalendarLayers:  () => void;
 
   calendarItemDate:  string | null;
   calendarItemKind:  CalendarItemKind | null;
@@ -193,6 +223,13 @@ interface UIState {
   pendingListItemTabId:  string | null;
   activeListId:          string | null;
   setActiveListId:       (id: string | null) => void;
+  // Remembers the last-selected list + tab within it so switching apps and back restores
+  // the same view — same "last" pattern as notesLastEditingNoteId, kept separate from
+  // activeListId because that field must still clear to null on unmount (AddTaskButton
+  // and the N/Space hotkey read it live to decide whether "Add item" is offered).
+  listsLastActiveListId: string | null;
+  listsLastActiveTabId:  string | null;
+  setListsLastActive:    (listId: string | null, tabId: string | null) => void;
 
   // Portfolio
   showAddWatchlistItem:      () => void;
@@ -218,6 +255,11 @@ interface UIState {
   // back restores it — separate from editingNoteId, which also drives NoteEditorPane's
   // cross-app quick-view in other sections and must still clear on section switch.
   notesLastEditingNoteId:  string | null;
+  // Which tab (null = Main) was open within notesLastEditingNoteId — restored by
+  // NoteEditor alongside the note itself so returning to Notes lands on the same tab,
+  // not just the same note.
+  notesLastActiveTabId:    string | null;
+  setNotesLastActiveTab:   (tabId: string | null) => void;
   showAddNote:             () => void;
   showAddNoteTag:          (parentId?: NoteTagId | null, kind?: 'area' | 'tag') => void;
   showTagPresets:          () => void;
@@ -255,7 +297,7 @@ interface UIState {
   closeMobileMoreSheet: () => void;
 }
 
-export const useUIStore = create<UIState>()((set) => ({
+export const useUIStore = create<UIState>()((set, get) => ({
   openModal:                null,
   activeCollectionIdByView: {},
   endeavourPickerOpen:      false,
@@ -375,23 +417,37 @@ export const useUIStore = create<UIState>()((set) => ({
   setSortDir:   (d)      => set({ sortDir: d }),
 
   activeView:    'tasks',
-  setActiveView: (view) => set((s) => ({
-    activeView:          view,
-    portfolioChartOpen:  false,
-    // Close inline note editor and tag view when leaving the notes section (editingNoteId
-    // also drives NoteEditorPane's cross-app quick-view elsewhere, so it can't just be left
-    // set) — but remember which note it was in notesLastEditingNoteId, and restore it when
-    // coming back to Notes, so switching apps and back doesn't dump you at the root.
-    editingNoteId:       view === 'notes'
-      ? (s.activeView === 'notes' ? s.editingNoteId : s.notesLastEditingNoteId)
-      : null,
-    notesLastEditingNoteId: s.activeView === 'notes' ? s.editingNoteId : s.notesLastEditingNoteId,
-    noteTagViewReturn:   view === 'notes' ? s.noteTagViewReturn : null,
-    // Endeavour/Purpose filter dropdowns are section-scoped UI, not section-scoped
-    // state — close them on any section switch so they don't reopen stale later.
-    endeavourPickerOpen: false,
-    purposePickerOpen:   false,
-  })),
+  setActiveView: (view, opts) => set((s) => {
+    if (view === s.activeView) return {};
+    return {
+      activeView:          view,
+      sectionHistory: opts?.skipHistory
+        ? s.sectionHistory
+        : [{ view: s.activeView }, ...s.sectionHistory].slice(0, MAX_SECTION_HISTORY),
+      portfolioChartOpen:  false,
+      // Close inline note editor and tag view when leaving the notes section (editingNoteId
+      // also drives NoteEditorPane's cross-app quick-view elsewhere, so it can't just be left
+      // set) — but remember which note it was in notesLastEditingNoteId, and restore it when
+      // coming back to Notes, so switching apps and back doesn't dump you at the root.
+      editingNoteId:       view === 'notes'
+        ? (s.activeView === 'notes' ? s.editingNoteId : s.notesLastEditingNoteId)
+        : null,
+      notesLastEditingNoteId: s.activeView === 'notes' ? s.editingNoteId : s.notesLastEditingNoteId,
+      noteTagViewReturn:   view === 'notes' ? s.noteTagViewReturn : null,
+      // Endeavour/Purpose filter dropdowns are section-scoped UI, not section-scoped
+      // state — close them on any section switch so they don't reopen stale later.
+      endeavourPickerOpen: false,
+      purposePickerOpen:   false,
+    };
+  }),
+
+  sectionHistory: [],
+  navigateBack: () => {
+    const [prev, ...rest] = get().sectionHistory;
+    if (!prev) return;
+    set({ sectionHistory: rest });
+    get().setActiveView(prev.view, { skipHistory: true });
+  },
 
   taskViewMode:    'overview',
   setTaskViewMode: (mode) => set({ taskViewMode: mode }),
@@ -402,6 +458,13 @@ export const useUIStore = create<UIState>()((set) => ({
   closeCalendarEventPane:    ()   => set({ editingCalendarEventId: null }),
   openCalendarReminderPane:  (id) => set({ editingCalendarReminderId: id }),
   closeCalendarReminderPane: ()   => set({ editingCalendarReminderId: null }),
+
+  calendarViewMode:    'month',
+  setCalendarViewMode: (mode) => set({ calendarViewMode: mode }),
+
+  calendarLayersOpen:   false,
+  toggleCalendarLayers: () => set((s) => ({ calendarLayersOpen: !s.calendarLayersOpen })),
+  closeCalendarLayers:  () => set({ calendarLayersOpen: false }),
 
   calendarItemDate:  null,
   calendarItemKind:  null,
@@ -452,6 +515,9 @@ export const useUIStore = create<UIState>()((set) => ({
   pendingListItemTabId:  null,
   activeListId:          null,
   setActiveListId:       (id) => set({ activeListId: id }),
+  listsLastActiveListId: null,
+  listsLastActiveTabId:  null,
+  setListsLastActive:    (listId, tabId) => set({ listsLastActiveListId: listId, listsLastActiveTabId: tabId }),
 
   // Portfolio
   showAddWatchlistItem:     () => set({ openModal: 'add-watchlist-item', editingWatchlistItemId: null }),
@@ -478,6 +544,8 @@ export const useUIStore = create<UIState>()((set) => ({
   openNote:               (id) => set({ editingNoteId: id }),
   closeNote:              ()   => set({ editingNoteId: null }),
   notesLastEditingNoteId: null,
+  notesLastActiveTabId:   null,
+  setNotesLastActiveTab:  (tabId) => set({ notesLastActiveTabId: tabId }),
   showAddNote:            ()   => set({ openModal: 'add-note' }),
   showAddNoteTag:         (parentId, kind = 'area') => set({ openModal: 'add-note-tag', pendingNoteTagParentId: parentId ?? null, pendingNoteTagKind: kind }),
   showTagPresets:         () => set({ openModal: 'note-tag-presets' }),

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { Task, CalendarEvent, CalendarReminder } from '@/types';
+import type { CalendarEvent, CalendarReminder } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useNotificationStore } from '@/store/notificationStore';
@@ -12,14 +12,6 @@ function toMinutes(value: number, unit: 'minutes' | 'hours' | 'days'): number {
   if (unit === 'hours') return value * 60;
   if (unit === 'days') return value * 1440;
   return value;
-}
-
-function taskTrigger(task: Task, zone: string): Date | null {
-  if (task.completed || task.archived) return null;
-  if (task.remindAt) return new Date(task.remindAt);
-  if (!task.deadline) return null;
-  if (task.deadlineTime) return zonedTimeToUtc(task.deadline, task.deadlineTime, zone);
-  return zonedTimeToUtc(task.deadline, '09:00', zone);
 }
 
 function eventTrigger(event: CalendarEvent, zone: string): Date | null {
@@ -63,23 +55,18 @@ export function useNotificationChecker() {
 
       const isAlreadyPending = (itemId: string) => pending.some((n) => n.itemId === itemId);
 
-      // ── Tasks ──
-      Object.values(tasks).forEach((task) => {
-        if (isAlreadyPending(task.id)) return;
-        const trigger = taskTrigger(task, zone);
-        if (!trigger) return;
-        const triggerISO = trigger.toISOString();
-        const last = lastNotified(task.id);
-        if (trigger <= now && (!last || last < triggerISO)) {
-          const hasTimed = !!task.deadlineTime || !!task.remindAt;
-          const body = hasTimed && task.deadlineTime
-            ? `Due at ${formatTime(task.deadlineTime, clockFormat)}`
-            : 'Due today';
-          addPending({ itemId: task.id, kind: hasTimed ? 'task-timed' : 'task-untimed', title: task.title, body, triggeredAt: now.toISOString() });
-          markNotified(task.id, triggerISO);
-          fireOSNotification(task.title, body);
-        }
-      });
+      // Task deadlines no longer trigger notifications directly off the Task — every
+      // deadline task now has a real shadow CalendarReminder (reminderType: 'task',
+      // Task.calendarReminderId; see AddTaskModal/TaskPane), so the Reminders loop below
+      // is the single source of deadline notifications too. Kept the linked task's
+      // completed/archived state as a guard there (a shadow reminder is never deleted on
+      // completion, matching how the deadline pill itself stays visible with completed
+      // styling — only its notification needs to stop).
+      const taskByDeadlineReminderId = new Map(
+        Object.values(tasks)
+          .filter((t) => t.calendarReminderId)
+          .map((t) => [t.calendarReminderId as string, t] as const)
+      );
 
       // ── Events ──
       Object.values(events).forEach((ev) => {
@@ -96,15 +83,24 @@ export function useNotificationChecker() {
         }
       });
 
-      // ── Reminders ──
+      // ── Reminders (includes task-deadline shadow reminders) ──
       Object.values(reminders).forEach((rem) => {
         if (isAlreadyPending(rem.id)) return;
+        const isTaskDeadline = rem.reminderType === 'task';
+        if (isTaskDeadline) {
+          const linkedTask = taskByDeadlineReminderId.get(rem.id);
+          if (!linkedTask || linkedTask.completed || linkedTask.archived) return;
+        }
         const trigger = reminderTrigger(rem, zone);
         if (!trigger) return;
         const triggerISO = trigger.toISOString();
         const last = lastNotified(rem.id);
         if (trigger <= now && (!last || last < triggerISO)) {
-          const body = rem.time ? `Reminder at ${formatTime(rem.time, clockFormat)}` : 'Reminder today';
+          // Task-deadline shadow reminders keep the original "Due at/today" wording
+          // (matching TaskItem's own deadline pill) rather than the generic "Reminder…".
+          const body = rem.time
+            ? `${isTaskDeadline ? 'Due' : 'Reminder'} at ${formatTime(rem.time, clockFormat)}`
+            : (isTaskDeadline ? 'Due today' : 'Reminder today');
           addPending({ itemId: rem.id, kind: 'reminder', title: rem.title, body, triggeredAt: now.toISOString() });
           markNotified(rem.id, triggerISO);
           fireOSNotification(rem.title, body);

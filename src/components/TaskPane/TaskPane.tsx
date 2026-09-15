@@ -31,6 +31,9 @@ export function TaskPane() {
   const addEvent    = useCalendarStore((s) => s.addEvent);
   const updateEvent = useCalendarStore((s) => s.updateEvent);
   const deleteEvent = useCalendarStore((s) => s.deleteEvent);
+  const addReminder    = useCalendarStore((s) => s.addReminder);
+  const updateReminder = useCalendarStore((s) => s.updateReminder);
+  const deleteReminder = useCalendarStore((s) => s.deleteReminder);
 
   const task = editingTaskId ? tasksRecord[editingTaskId as TaskId] : null;
 
@@ -96,13 +99,32 @@ export function TaskPane() {
     if (val !== task.notes) updateTask(taskId, { notes: val });
   };
 
+  // Mirrors handleScheduledAtChange/handleScheduledTimeChange below exactly — same
+  // create/update/delete-shadow-entity pattern, just producing a CalendarReminder
+  // (reminderType: 'task') instead of a CalendarEvent.
   const handleDeadlineChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value || null;
-    updateTask(taskId, { deadline: val, ...(val === null ? { deadlineTime: null } : {}) });
+    if (!val) {
+      if (task.calendarReminderId) {
+        deleteReminder(task.calendarReminderId);
+        updateTask(taskId, { deadline: null, deadlineTime: null, calendarReminderId: null });
+      } else {
+        updateTask(taskId, { deadline: null, deadlineTime: null });
+      }
+    } else if (task.calendarReminderId) {
+      updateReminder(task.calendarReminderId, { date: val, title: task.title });
+      updateTask(taskId, { deadline: val });
+    } else {
+      const remId = addReminder({ title: task.title, date: val, time: task.deadlineTime ?? null, reminderType: 'task' });
+      updateTask(taskId, { deadline: val, calendarReminderId: remId });
+    }
   };
 
-  const handleDeadlineTimeChange = (v: string) =>
-    updateTask(taskId, { deadlineTime: v || null });
+  const handleDeadlineTimeChange = (v: string) => {
+    const val = v || null;
+    if (task.calendarReminderId) updateReminder(task.calendarReminderId, { time: val });
+    updateTask(taskId, { deadlineTime: val });
+  };
 
   const handleScheduledAtChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value || null;
@@ -117,7 +139,7 @@ export function TaskPane() {
       updateEvent(task.calendarEventId, { date: val, title: task.title });
       updateTask(taskId, { scheduledAt: val });
     } else {
-      const evId = addEvent({ title: task.title, date: val, startTime: task.scheduledTime ?? null });
+      const evId = addEvent({ title: task.title, date: val, startTime: task.scheduledTime ?? null, eventType: 'task' });
       updateTask(taskId, { scheduledAt: val, calendarEventId: evId });
     }
   };
@@ -163,6 +185,7 @@ export function TaskPane() {
 
   const handleDelete = () => {
     if (task.calendarEventId) deleteEvent(task.calendarEventId);
+    if (task.calendarReminderId) deleteReminder(task.calendarReminderId);
     deleteTask(taskId);
     closeTaskPane();
   };

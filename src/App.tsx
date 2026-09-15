@@ -8,6 +8,8 @@ import { openExternalLink } from '@/utils/links';
 import { usePlatform } from '@/hooks/usePlatform';
 import { useAuthStore } from '@/store/authStore';
 import { initSync, stopSync } from '@/services/sync/syncService';
+import { backfillTaskCalendarLinks } from '@/services/taskCalendarBackfill';
+import { matchesHotkeyId } from '@/store/hotkeyOverridesStore';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { AccountPane } from '@/components/AccountPane/AccountPane';
 import { TaskList } from '@/components/TaskList/TaskList';
@@ -117,6 +119,14 @@ export default function App() {
   const theme                      = useSettingsStore((s) => s.theme);
   const nudgeNoteEditorZoom        = useSettingsStore((s) => s.nudgeNoteEditorZoom);
 
+  // Idempotent catch-up pass for pre-existing deadline/scheduled tasks — see
+  // taskCalendarBackfill.ts. Stores rehydrate synchronously from localStorage on module
+  // load (see the SplashScreen effect below for the same observation), so this is safe
+  // to run unconditionally on mount, every mount.
+  useEffect(() => {
+    backfillTaskCalendarLinks();
+  }, []);
+
   useEffect(() => {
     const apply = (dark: boolean) => {
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -221,6 +231,7 @@ export default function App() {
   };
 
   const setActiveView    = useUIStore((s) => s.setActiveView);
+  const navigateBack     = useUIStore((s) => s.navigateBack);
   const taskViewMode     = useUIStore((s) => s.taskViewMode);
   const setTaskViewMode  = useUIStore((s) => s.setTaskViewMode);
 
@@ -268,31 +279,42 @@ export default function App() {
         return;
       }
 
-      if ((e.key === '1' || (e.ctrlKey && e.key === '1')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('tasks'); return; }
-      if ((e.key === '2' || (e.ctrlKey && e.key === '2')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('calendar'); return; }
-      if ((e.key === '3' || (e.ctrlKey && e.key === '3')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('records'); return; }
-      if ((e.key === '4' || (e.ctrlKey && e.key === '4')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('lists'); return; }
-      if ((e.key === '5' || (e.ctrlKey && e.key === '5')) && !e.altKey && !e.metaKey) { e.preventDefault(); setActiveView('notes'); return; }
-      if ((e.key === '6' || (e.ctrlKey && e.key === '6')) && !e.altKey && !e.metaKey) { if (isAppEnabled('portfolio')) { e.preventDefault(); setActiveView('portfolio'); } return; }
-      if ((e.key === '7' || (e.ctrlKey && e.key === '7')) && !e.altKey && !e.metaKey) { if (isAppEnabled('fitness')) { e.preventDefault(); setActiveView('fitness'); } return; }
+      // Section-switch, and most global Actions, hotkeys are user-customizable (see
+      // SettingsPane's "Keyboard shortcuts" section, hotkeyOverridesStore) — matchesHotkeyId
+      // resolves each id's effective binding (an override if set, else the hotkeys.ts
+      // default) and checks it against this event. Everything below behaves identically to
+      // before customization existed as long as nothing has actually been rebound.
+      if (matchesHotkeyId(e, 'action-back')) {
+        e.preventDefault();
+        navigateBack();
+        return;
+      }
 
-      if (e.key === 's' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (matchesHotkeyId(e, 'nav-tasks'))     { e.preventDefault(); setActiveView('tasks');     return; }
+      if (matchesHotkeyId(e, 'nav-calendar'))  { e.preventDefault(); setActiveView('calendar');  return; }
+      if (matchesHotkeyId(e, 'nav-records'))   { e.preventDefault(); setActiveView('records');   return; }
+      if (matchesHotkeyId(e, 'nav-lists'))     { e.preventDefault(); setActiveView('lists');     return; }
+      if (matchesHotkeyId(e, 'nav-notes'))     { e.preventDefault(); setActiveView('notes');     return; }
+      if (matchesHotkeyId(e, 'nav-portfolio')) { if (isAppEnabled('portfolio')) { e.preventDefault(); setActiveView('portfolio'); } return; }
+      if (matchesHotkeyId(e, 'nav-fitness'))   { if (isAppEnabled('fitness'))   { e.preventDefault(); setActiveView('fitness');   } return; }
+
+      if (matchesHotkeyId(e, 'action-settings')) {
         e.preventDefault();
         if (settingsOpen) closeSettings(); else openSettings();
         return;
       }
 
-      if ((e.key === 'e' || e.key === 'E') && !e.altKey && !e.metaKey) {
+      if (matchesHotkeyId(e, 'action-endeavour')) {
         if (activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness') { e.preventDefault(); toggleEndeavourPicker(); }
         return;
       }
 
-      if ((e.key === 'p' || e.key === 'P') && !e.altKey && !e.metaKey) {
+      if (matchesHotkeyId(e, 'action-purpose')) {
         if (activeView === 'tasks') { e.preventDefault(); togglePurposePicker(); }
         return;
       }
 
-      if ((e.key === 'm' || e.key === 'M') && !e.altKey && !e.metaKey) {
+      if (matchesHotkeyId(e, 'action-manage')) {
         e.preventDefault();
         toggleManage();
         return;
@@ -304,8 +326,11 @@ export default function App() {
         if (e.key === '=' || e.key === '+') { e.preventDefault(); setChartTickerRowZoom(chartTickerRowZoom + 0.1); return; }
       }
 
-      const isNewItem = (e.key === ' ' && !e.ctrlKey && !e.altKey && !e.metaKey)
-                     || ((e.key === 'n' || e.key === 'N') && !e.altKey && !e.metaKey);
+      // Ctrl+N is a permanent bonus alias for "New item" — not itself a customizable slot,
+      // since hotkeys.ts has only ever documented it as "N / Space — Ctrl+N also works"
+      // rather than a real third binding.
+      const isNewItem = matchesHotkeyId(e, 'action-new-item')
+                     || (e.key.toUpperCase() === 'N' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey);
       if (isNewItem) {
         e.preventDefault();
         const { showAddTask, showAddCalendarItem, showAddTracker, showAddEntry, showAddWatchlistItem, showAddList, showAddListItem, showAddNote, showAddActivity, activeTrackerId: tid, activeRoutineId: rid, activeListId: lid } = useUIStore.getState();
@@ -327,7 +352,7 @@ export default function App() {
     setActiveView, activeView, settingsOpen, openSettings, closeSettings,
     portfolioChartOpen, chartTickerRowZoom, setChartTickerRowZoom, openModal, nudgeNoteEditorZoom,
     endeavourPickerOpen, toggleEndeavourPicker, closeEndeavourPicker, setActiveCollection, collectionsRecord,
-    togglePurposePicker, toggleManage,
+    togglePurposePicker, toggleManage, navigateBack,
   ]);
 
   const activeCollection = activeCollectionId

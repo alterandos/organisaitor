@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Priority, Task } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
+import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { usePlatform } from '@/hooks/usePlatform';
@@ -31,6 +32,8 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   const { isAndroid }     = usePlatform();
   const toggleTask        = useTaskStore((s) => s.toggleTask);
   const deleteTask        = useTaskStore((s) => s.deleteTask);
+  const deleteEvent       = useCalendarStore((s) => s.deleteEvent);
+  const deleteReminder    = useCalendarStore((s) => s.deleteReminder);
   const tagsRecord        = useTaskStore((s) => s.tags);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const tasksRecord       = useTaskStore((s) => s.tasks);
@@ -277,7 +280,12 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
       <button
         className={styles.swipeDeleteAction}
         style={{ opacity: deleteRevealed ? 1 : 0, pointerEvents: deleteRevealed ? 'auto' : 'none' }}
-        onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (task.calendarEventId) deleteEvent(task.calendarEventId);
+          if (task.calendarReminderId) deleteReminder(task.calendarReminderId);
+          deleteTask(task.id);
+        }}
         aria-label="Delete task"
       >
         Delete
