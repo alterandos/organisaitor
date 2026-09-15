@@ -39,6 +39,24 @@ export function getNoteEffectiveCollectionId(
   return note.collectionId ?? resolveNoteInheritedCollectionId(note.tagIds, noteTags);
 }
 
+// Notebook tree icon: an explicit user-chosen icon always wins; otherwise the icon reflects
+// what the notebook actually contains, so folders read differently at a glance — empty,
+// sub-notebooks only, notes only, or both.
+export function getNotebookIcon(
+  tag: NoteTag,
+  noteTags: Record<string, NoteTag>,
+  notes: Record<string, { tagIds: readonly string[]; archivedAt: string | null }>,
+): string {
+  if (tag.icon) return tag.icon;
+  if (tag.kind === 'tag') return '🏷️';
+  const hasChildren = Object.values(noteTags).some((t) => t.parentTagId === tag.id && t.kind === 'area');
+  const hasNotes = Object.values(notes).some((n) => n.tagIds.includes(tag.id) && !n.archivedAt);
+  if (hasChildren && hasNotes) return '📚';
+  if (hasChildren) return '🗂️';
+  if (hasNotes) return '📓';
+  return '📁';
+}
+
 // Notebook IDs that should stay visible when focused on a given Endeavour: notebooks whose
 // effective Endeavour matches, plus their ancestors (so the tree stays navigable to reach them).
 export function getVisibleNoteTagIds(

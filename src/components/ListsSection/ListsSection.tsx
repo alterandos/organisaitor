@@ -275,6 +275,27 @@ export function ListsSection() {
   const [editingCell,    setEditingCell]    = useState<{ itemId: string; field: string } | null>(null);
   const tabInputRef = useRef<HTMLInputElement>(null);
 
+  // Tab drag-and-drop reordering — same left/right-side-drop convention as NoteEditor's
+  // tab bar (NoteEditor.tsx). "All" is a pinned pseudo-tab (not a real ListTab), so it's
+  // never draggable and never a drop target; only entries in selectedList.tabs reorder.
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
+  const [tabDragOverInfo, setTabDragOverInfo] = useState<{ tabId: string; side: 'left' | 'right' } | null>(null);
+  const draggingTabIdRef = useRef<string | null>(null);
+  const tabDragOverIdRef = useRef<string | null>(null);
+  const tabDragOverSideRef = useRef<'left' | 'right'>('right');
+  const startTabDrag = (tabId: string) => { draggingTabIdRef.current = tabId; setDraggingTabId(tabId); };
+  const updateTabDragOver = (tabId: string, side: 'left' | 'right') => {
+    tabDragOverIdRef.current = tabId;
+    tabDragOverSideRef.current = side;
+    setTabDragOverInfo((prev) => prev?.tabId === tabId && prev.side === side ? prev : { tabId, side });
+  };
+  const clearTabDrag = () => {
+    draggingTabIdRef.current = null;
+    tabDragOverIdRef.current = null;
+    setDraggingTabId(null);
+    setTabDragOverInfo(null);
+  };
+
   const allLists = Object.values(lists).sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
@@ -388,6 +409,23 @@ export function ListsSection() {
     updateList(selectedListId, { tabs: [...(selectedList.tabs ?? []), tab] });
     setNewTabName('');
     setAddingTab(false);
+  };
+
+  const handleTabDrop = () => {
+    const dragging = draggingTabIdRef.current;
+    const overTabId = tabDragOverIdRef.current;
+    const overSide = tabDragOverSideRef.current;
+    clearTabDrag();
+    if (!dragging || !overTabId || dragging === overTabId || !selectedListId || !selectedList) return;
+    const tabs = selectedList.tabs ?? [];
+    const draggedTab = tabs.find((t) => t.id === dragging);
+    if (!draggedTab) return;
+    const rest = tabs.filter((t) => t.id !== dragging);
+    const insertIdx = rest.findIndex((t) => t.id === overTabId);
+    if (insertIdx === -1) return;
+    const newTabs = [...rest];
+    newTabs.splice(overSide === 'left' ? insertIdx : insertIdx + 1, 0, draggedTab);
+    updateList(selectedListId, { tabs: newTabs });
   };
 
   const handleSelectList = (id: ListId) => {
@@ -529,8 +567,35 @@ export function ListsSection() {
                       return (
                         <button
                           key={tab.id}
-                          className={`${styles.listTab} ${isActive ? styles.listTabActive : ''}`}
+                          className={[
+                            styles.listTab,
+                            isActive ? styles.listTabActive : '',
+                            draggingTabId === tab.id ? styles.listTabDragging : '',
+                            tabDragOverInfo?.tabId === tab.id && tabDragOverInfo.side === 'left' ? styles.listTabDragBefore : '',
+                            tabDragOverInfo?.tabId === tab.id && tabDragOverInfo.side === 'right' ? styles.listTabDragAfter : '',
+                          ].filter(Boolean).join(' ')}
                           style={isActive && tab.color ? { color: tab.color, borderBottomColor: tab.color } : undefined}
+                          draggable
+                          onDragStart={(e) => {
+                            startTabDrag(tab.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', tab.id);
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            if (draggingTabIdRef.current === tab.id) return;
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            const side: 'left' | 'right' = e.clientX < rect.left + rect.width / 2 ? 'left' : 'right';
+                            updateTabDragOver(tab.id, side);
+                          }}
+                          onDragLeave={(e) => {
+                            if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) return;
+                            setTabDragOverInfo(null);
+                            tabDragOverIdRef.current = null;
+                          }}
+                          onDrop={(e) => { e.preventDefault(); handleTabDrop(); }}
+                          onDragEnd={clearTabDrag}
                           onClick={() => setSelectedTabId(tab.id)}
                         >
                           {tab.name}

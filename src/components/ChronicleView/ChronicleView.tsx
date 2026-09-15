@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import type { RefObject } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { getVisibleNoteTagIds, getNoteEffectiveCollectionId } from '@/utils/notes';
+import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon } from '@/utils/notes';
 import type { NoteTagId, CollectionId } from '@/types';
 import type { NoteTag } from '@/types/notes';
 import { NoteList } from './NoteList';
@@ -61,18 +62,100 @@ function getTopLevelNotes(
 
 // ── Tree node (recursive) ─────────────────────────────────────────────────
 
+// Is `candidateId` somewhere in `ancestorId`'s subtree? Used to refuse a drop that would
+// nest a notebook inside its own descendant (which would create a cycle).
+function isDescendantOf(
+  noteTags: Record<string, NoteTag>,
+  candidateId: string,
+  ancestorId: string,
+): boolean {
+  let current: NoteTag | undefined = noteTags[candidateId];
+  while (current?.parentTagId) {
+    if (current.parentTagId === ancestorId) return true;
+    current = noteTags[current.parentTagId];
+  }
+  return false;
+}
+
+// Explorer/VS-Code-sidebar-style three-zone drop: the top/bottom quarter of a row means
+// "reorder as a sibling before/after this one" (possibly under a different parent — whatever
+// parent the target belongs to), the middle half means "nest inside this one".
+type DropZone = 'before' | 'inside' | 'after';
+
+function zoneForOffset(offsetY: number, height: number): DropZone {
+  if (offsetY < height * 0.25) return 'before';
+  if (offsetY > height * 0.75) return 'after';
+  return 'inside';
+}
+
+// New parent a drop would assign, depending on zone: 'inside' nests under the target itself,
+// 'before'/'after' place the dragged item as a sibling of the target (under target's own parent).
+function newParentForZone(target: NoteTag, zone: DropZone): NoteTagId | null {
+  return zone === 'inside' ? (target.id as NoteTagId) : target.parentTagId;
+}
+
+function canAcceptZone(
+  noteTags: Record<string, NoteTag>,
+  draggedId: string,
+  target: NoteTag,
+  zone: DropZone,
+): boolean {
+  if (draggedId === target.id) return false;
+  const newParent = newParentForZone(target, zone);
+  if (newParent === draggedId) return false;
+  if (newParent && isDescendantOf(noteTags, newParent, draggedId)) return false;
+  return true;
+}
+
+// Order value that places the dragged item immediately before/after `target` among target's
+// siblings (its current parent's children) — a midpoint between the two neighbouring `order`
+// values, the same "don't renumber everyone" convention indentNoteTag/outdentNoteTag already use.
+function computeInsertOrder(
+  noteTags: Record<string, NoteTag>,
+  target: NoteTag,
+  zone: 'before' | 'after',
+  draggedId: string,
+): number {
+  const siblings = Object.values(noteTags)
+    .filter((t) => t.parentTagId === target.parentTagId && t.kind === 'area' && t.id !== draggedId)
+    .sort((a, b) => a.order - b.order);
+  const idx = siblings.findIndex((t) => t.id === target.id);
+  if (zone === 'before') {
+    const prev = siblings[idx - 1];
+    return prev ? (prev.order + target.order) / 2 : target.order - 1;
+  }
+  const next = siblings[idx + 1];
+  return next ? (target.order + next.order) / 2 : target.order + 1;
+}
+
+interface DragOverInfo { tagId: string; zone: DropZone }
+
 interface TreeNodeProps {
   tag: NoteTag;
   depth: number;
   kbFocused: boolean;
   visibleTagIds: Set<string> | null;
+  draggingTagId: string | null;
+  dragOverInfo: DragOverInfo | null;
+  draggingTagIdRef: RefObject<string | null>;
+  dragOverZoneRef: RefObject<DropZone | null>;
+  onDragStartTag: (id: NoteTagId) => void;
+  onDragOverTag: (id: NoteTagId, zone: DropZone) => void;
+  onDragLeaveTag: (id: NoteTagId) => void;
+  onDragEndTag: () => void;
 }
 
-function NoteTagTreeNode({ tag, depth, kbFocused, visibleTagIds }: TreeNodeProps) {
+function NoteTagTreeNode({
+  tag, depth, kbFocused, visibleTagIds,
+  draggingTagId, dragOverInfo, draggingTagIdRef, dragOverZoneRef,
+  onDragStartTag, onDragOverTag, onDragLeaveTag, onDragEndTag,
+}: TreeNodeProps) {
   const noteTags          = useNoteStore((s) => s.noteTags);
+  const notes             = useNoteStore((s) => s.notes);
   const deleteNoteTag     = useNoteStore((s) => s.deleteNoteTag);
   const indentNoteTag     = useNoteStore((s) => s.indentNoteTag);
   const outdentNoteTag    = useNoteStore((s) => s.outdentNoteTag);
+  const updateNoteTag     = useNoteStore((s) => s.updateNoteTag);
   const selectedNoteTagId = useUIStore((s) => s.selectedNoteTagId);
   const expandedIds       = useUIStore((s) => s.expandedNoteTagIds);
   const toggleExpanded    = useUIStore((s) => s.toggleNoteTagExpanded);
@@ -116,6 +199,15 @@ function NoteTagTreeNode({ tag, depth, kbFocused, visibleTagIds }: TreeNodeProps
     if (isSelected) setSelected(null);
   };
 
+  // Explorer/VS-Code-sidebar-style drag-and-drop: drop near the top/bottom edge of a row to
+  // reorder as a sibling before/after it (possibly reparenting to wherever the target lives);
+  // drop in the middle to nest inside it. Refused (no highlight, dropEffect 'none') when it's
+  // a no-op or would create a cycle.
+  const isDragging = draggingTagId === tag.id;
+  const isDropBefore = dragOverInfo?.tagId === tag.id && dragOverInfo.zone === 'before';
+  const isDropInside = dragOverInfo?.tagId === tag.id && dragOverInfo.zone === 'inside';
+  const isDropAfter  = dragOverInfo?.tagId === tag.id && dragOverInfo.zone === 'after';
+
   return (
     <div
       className={styles.treeNodeGroup}
@@ -123,8 +215,56 @@ function NoteTagTreeNode({ tag, depth, kbFocused, visibleTagIds }: TreeNodeProps
       onMouseLeave={handleMouseLeave}
     >
       <div
-        className={`${styles.treeNode} ${isSelected ? styles.treeNodeSelected : ''} ${kbFocused ? styles.treeNodeKbFocused : ''}`}
+        className={[
+          styles.treeNode,
+          isSelected ? styles.treeNodeSelected : '',
+          kbFocused ? styles.treeNodeKbFocused : '',
+          isDragging ? styles.treeNodeDragging : '',
+          isDropInside ? styles.treeNodeDropTarget : '',
+          isDropBefore ? styles.treeNodeDropBefore : '',
+          isDropAfter ? styles.treeNodeDropAfter : '',
+        ].filter(Boolean).join(' ')}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
+        draggable
+        onDragStart={(e) => {
+          onDragStartTag(tag.id as NoteTagId);
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', tag.id);
+        }}
+        onDragOver={(e) => {
+          const draggedId = draggingTagIdRef.current;
+          if (!draggedId) return;
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          const zone = zoneForOffset(e.clientY - rect.top, rect.height);
+          if (!canAcceptZone(noteTags, draggedId, tag, zone)) {
+            e.dataTransfer.dropEffect = 'none';
+            if (dragOverInfo?.tagId === tag.id) onDragLeaveTag(tag.id as NoteTagId);
+            return;
+          }
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          onDragOverTag(tag.id as NoteTagId, zone);
+        }}
+        onDragLeave={(e) => {
+          if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) return;
+          if (dragOverInfo?.tagId === tag.id) onDragLeaveTag(tag.id as NoteTagId);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const draggedId = draggingTagIdRef.current;
+          const zone = dragOverZoneRef.current;
+          onDragEndTag();
+          if (!draggedId || !zone || !canAcceptZone(noteTags, draggedId, tag, zone)) return;
+          const newParentId = newParentForZone(tag, zone);
+          if (zone === 'inside') {
+            updateNoteTag(draggedId as NoteTagId, { parentTagId: newParentId, order: 999 });
+            if (!expandedIds.includes(tag.id as NoteTagId)) toggleExpanded(tag.id as NoteTagId);
+          } else {
+            const order = computeInsertOrder(noteTags, tag, zone, draggedId);
+            updateNoteTag(draggedId as NoteTagId, { parentTagId: newParentId, order });
+          }
+        }}
+        onDragEnd={onDragEndTag}
       >
         <button
           className={styles.toggleBtn}
@@ -143,7 +283,7 @@ function NoteTagTreeNode({ tag, depth, kbFocused, visibleTagIds }: TreeNodeProps
             if (hasChildren && !isPermanentlyExpanded) toggleExpanded(tag.id as NoteTagId);
           }}
         >
-          <span className={styles.nodeIcon}>{tag.icon || (tag.kind === 'tag' ? '🏷️' : '📁')}</span>
+          <span className={styles.nodeIcon}>{getNotebookIcon(tag, noteTags, notes)}</span>
           <span
             className={styles.nodeName}
             style={tag.color ? { color: isSelected ? tag.color : undefined } : undefined}
@@ -188,7 +328,21 @@ function NoteTagTreeNode({ tag, depth, kbFocused, visibleTagIds }: TreeNodeProps
       {isExpanded && hasChildren && (
         <div>
           {children.map((child) => (
-            <NoteTagTreeNode key={child.id} tag={child} depth={depth + 1} kbFocused={false} visibleTagIds={visibleTagIds} />
+            <NoteTagTreeNode
+              key={child.id}
+              tag={child}
+              depth={depth + 1}
+              kbFocused={false}
+              visibleTagIds={visibleTagIds}
+              draggingTagId={draggingTagId}
+              dragOverInfo={dragOverInfo}
+              draggingTagIdRef={draggingTagIdRef}
+              dragOverZoneRef={dragOverZoneRef}
+              onDragStartTag={onDragStartTag}
+              onDragOverTag={onDragOverTag}
+              onDragLeaveTag={onDragLeaveTag}
+              onDragEndTag={onDragEndTag}
+            />
           ))}
         </div>
       )}
@@ -201,6 +355,30 @@ function NoteTagTreeNode({ tag, depth, kbFocused, visibleTagIds }: TreeNodeProps
 export function ChronicleView() {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [listCollapsed, setListCollapsed] = useState(false);
+
+  // Chronicle tree drag-and-drop (nest inside, or reorder before/after — Explorer-style).
+  // The dragging id and drop zone are each mirrored into a ref so drop handlers always read
+  // the live value (same pattern used for the note-tab drag-and-drop below), since a drop can
+  // land on a node in a completely different branch than where the drag started.
+  const [draggingTagId, setDraggingTagId] = useState<string | null>(null);
+  const [dragOverInfo, setDragOverInfo] = useState<DragOverInfo | null>(null);
+  const draggingTagIdRef = useRef<string | null>(null);
+  const dragOverZoneRef  = useRef<DropZone | null>(null);
+  const onDragStartTag = (id: NoteTagId) => { draggingTagIdRef.current = id; setDraggingTagId(id); };
+  const onDragOverTag = (id: NoteTagId, zone: DropZone) => {
+    dragOverZoneRef.current = zone;
+    setDragOverInfo((prev) => prev?.tagId === id && prev.zone === zone ? prev : { tagId: id, zone });
+  };
+  const onDragLeaveTag = (id: NoteTagId) => {
+    setDragOverInfo((prev) => prev?.tagId === id ? null : prev);
+    if (dragOverZoneRef.current !== null) dragOverZoneRef.current = null;
+  };
+  const onDragEndTag = () => {
+    draggingTagIdRef.current = null;
+    dragOverZoneRef.current = null;
+    setDraggingTagId(null);
+    setDragOverInfo(null);
+  };
 
   // Panel resize — persisted width per panel, with a live drag override while dragging
   const chronicleTreeWidth    = useSettingsStore((s) => s.chronicleTreeWidth);
@@ -424,6 +602,14 @@ export function ChronicleView() {
                   depth={0}
                   kbFocused={false}
                   visibleTagIds={visibleTagIds}
+                  draggingTagId={draggingTagId}
+                  dragOverInfo={dragOverInfo}
+                  draggingTagIdRef={draggingTagIdRef}
+                  dragOverZoneRef={dragOverZoneRef}
+                  onDragStartTag={onDragStartTag}
+                  onDragOverTag={onDragOverTag}
+                  onDragLeaveTag={onDragLeaveTag}
+                  onDragEndTag={onDragEndTag}
                 />
               ))}
             </div>

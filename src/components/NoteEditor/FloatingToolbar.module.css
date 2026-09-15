@@ -203,10 +203,12 @@
 
 .colorBtnIcon {
   display: inline-block;
-  font-weight: 700;
-  font-size: 0.8rem;
-  border-bottom: 3px solid;
-  line-height: 1.1;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  background: conic-gradient(from 180deg, #ef4444, #f59e0b, #eab308, #84cc16, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #ef4444);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
 }
 
 .colorPicker {

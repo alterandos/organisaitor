@@ -107,14 +107,23 @@
   padding-right: 2px;
 }
 
-/* Hover action buttons */
+/* Hover action buttons — collapsed to zero width by default so the title takes the
+   full row width; expanding on hover is what narrows the title back down. */
 .noteActions {
   display: flex;
   align-items: center;
   gap: 1px;
+  max-width: 0;
   opacity: 0;
-  transition: opacity 0.15s;
+  overflow: hidden;
+  transition: max-width 0.15s ease, opacity 0.15s ease;
   flex-shrink: 0;
+  padding-right: 0;
+}
+
+.noteItem:hover .noteActions {
+  max-width: 120px;
+  opacity: 1;
   padding-right: 4px;
 }
 

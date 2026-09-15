@@ -288,6 +288,10 @@
 .listTab:hover { color: var(--color-text); }
 .listTabActive { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
 
+.listTabDragging { opacity: 0.35; }
+.listTabDragBefore { box-shadow: -2px 0 0 var(--color-primary); }
+.listTabDragAfter { box-shadow: 2px 0 0 var(--color-primary); }
+
 .listTabCount {
   display: inline-flex;
   align-items: center;

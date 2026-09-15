@@ -184,6 +184,27 @@
   border-radius: 4px;
 }
 
+/* Drag-and-drop: drag one notebook onto another (middle of the row) to nest it as a
+   sub-folder, or near the top/bottom edge to reorder it as a sibling before/after */
+.treeNodeDragging {
+  opacity: 0.4;
+}
+
+.treeNodeDropTarget {
+  background: var(--color-primary-subtle);
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.treeNodeDropBefore {
+  box-shadow: 0 -2px 0 var(--color-primary);
+}
+
+.treeNodeDropAfter {
+  box-shadow: 0 2px 0 var(--color-primary);
+}
+
 .toggleBtn {
   width: 20px;
   flex-shrink: 0;
@@ -240,19 +261,24 @@
   white-space: nowrap;
 }
 
-/* Node action buttons (appear on hover) */
+/* Node action buttons (appear on hover) — collapsed to zero width by default so the
+   name takes the full row width; expanding on hover is what narrows the name back down. */
 .nodeActions {
   display: flex;
   align-items: center;
   gap: 1px;
+  max-width: 0;
   opacity: 0;
-  transition: opacity 0.15s;
+  overflow: hidden;
+  transition: max-width 0.15s ease, opacity 0.15s ease;
   flex-shrink: 0;
-  margin-right: 3px;
+  margin-right: 0;
 }
 
 .treeNode:hover .nodeActions {
+  max-width: 130px;
   opacity: 1;
+  margin-right: 3px;
 }
 
 .nodeActionBtn {

@@ -220,7 +220,7 @@ export function FloatingToolbar({ editor }: Props) {
           <button className={`${styles.btn} ${editor.isActive('strike')    ? styles.on : ''}`} onClick={() => fmt(() => editor.chain().toggleStrike().run())}    title="Strike"><s>S</s></button>
           <button className={`${styles.btn} ${hasLink ? styles.on : ''}`} onClick={openLinkInput} title="Link">🔗</button>
           <button className={styles.btn} onClick={() => setShowColorPicker(true)} title="Text color">
-            <span className={styles.colorBtnIcon} style={{ borderBottomColor: (editor.getAttributes('textStyle').color as string) || '#e2e8f0' }}>A</span>
+            <span className={styles.colorBtnIcon} />
           </button>
           <div className={styles.div} />
           {hasTagMark ? (
