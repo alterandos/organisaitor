@@ -8,6 +8,7 @@ import type { NoteTagId, CollectionId } from '@/types';
 import type { NoteTag } from '@/types/notes';
 import { NoteList } from './NoteList';
 import { NoteEditor } from '../NoteEditor/NoteEditor';
+import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import styles from './ChronicleView.module.css';
 
 // ── Column order — extend here to add new panels in future ────────────────
@@ -284,12 +285,11 @@ function NoteTagTreeNode({
           }}
         >
           <span className={styles.nodeIcon}>{getNotebookIcon(tag, noteTags, notes)}</span>
-          <span
+          <TruncatedText
+            text={tag.name}
             className={styles.nodeName}
             style={tag.color ? { color: isSelected ? tag.color : undefined } : undefined}
-          >
-            {tag.name}
-          </span>
+          />
         </button>
 
         <div className={styles.nodeActions}>
@@ -471,8 +471,9 @@ export function ChronicleView() {
       const activeCollection = selectActiveCollectionId(uiState) as CollectionId | null;
       const visible = activeCollection ? getVisibleNoteTagIds(noteState.noteTags, activeCollection) : null;
 
-      // ── Ctrl+Tab: hand keyboard focus to the editor column ──────────────
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'Tab') {
+      // ── Ctrl+`: hand keyboard focus to the editor column (previously Ctrl+Tab — moved so
+      // Ctrl+Tab/Ctrl+Shift+Tab could become NoteEditor's tab-cycle shortcut instead) ──────
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === '`') {
         e.preventDefault();
         if (col !== 'editor') {
           lastNavColRef.current = col as Exclude<ColId, 'editor'>;

@@ -17,6 +17,15 @@
   background: var(--color-surface);
 }
 
+/* Keyboard-nav focus indicator (Ctrl+` toggles between this area and .main) — mirrors
+   ChronicleView's .panelFocused treatment: a subtle accent on the header, not a heavy border. */
+.navAreaFocused .sidebarHeader {
+  border-bottom-color: var(--color-primary);
+}
+.navAreaFocused .sidebarTitle {
+  color: var(--color-primary);
+}
+
 .sidebarHeader {
   display: flex;
   align-items: center;

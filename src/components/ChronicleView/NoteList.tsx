@@ -3,6 +3,7 @@ import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { formatDate } from '@/utils/date';
 import { NOTE_TEMPLATES } from '@/config/noteTemplates';
 import { getNoteEffectiveCollectionId } from '@/utils/notes';
+import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import type { NoteTagId, NoteId, CollectionId } from '@/types';
 import type { Note } from '@/types/notes';
 import styles from './NoteList.module.css';
@@ -56,7 +57,7 @@ function NoteRow({ note, indent, siblings, allNotes }: NoteRowProps) {
         style={{ borderLeftColor: note.color ?? '#e5e7eb', paddingLeft: `${4 + indent * 20}px` }}
       >
         <button className={styles.noteMain} onClick={() => openNote(note.id)}>
-          <div className={styles.noteTitle}>{note.title || '(Untitled)'}</div>
+          <TruncatedText text={note.title || '(Untitled)'} className={styles.noteTitle} />
           <div className={styles.noteTime}>{formatDate(note.updatedAt)}</div>
         </button>
         {template && (

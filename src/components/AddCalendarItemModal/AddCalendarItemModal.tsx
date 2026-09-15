@@ -5,7 +5,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { LABELS } from '@/config/labels';
-import { timeAddMinutes } from '@/utils/date';
+import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date';
 import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
@@ -56,6 +56,12 @@ export function AddCalendarItemModal() {
   const [repeatUntil,       setRepeatUntil]       = useState('');
   const [formExpanded,      setFormExpanded]      = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  // Tracks whether `endTime` is still just our own auto-linked guess vs. something the user
+  // actually typed into the End field — without this, typing a start time digit-by-digit (hour
+  // commits before minute) would cascade: the hour-only commit auto-links an end time, then the
+  // minute commit sees that already-set end and "preserves its minutes" instead of re-deriving
+  // fresh, producing a stuck/wrong result. See CLAUDE.md's Timepicker section for the full story.
+  const endAutoRef = useRef(true);
 
   const allCollections = Object.values(collectionsRecord);
 
@@ -81,12 +87,16 @@ export function AddCalendarItemModal() {
 
   const handleStartTimeChange = (val: string) => {
     setStartTime(val);
-    if (val && (!endTime || endTime <= val)) {
-      setEndTime(timeAddMinutes(val, 30));
+    if (val) {
+      const { time, dayOffset } = computeLinkedEndTime(val, endAutoRef.current ? '' : endTime);
+      setEndTime(time);
+      endAutoRef.current = true;
+      if (dayOffset > 0 && !endDate) setEndDate(addDaysToIso(date, dayOffset));
     }
   };
 
   const handleEndTimeChange = (val: string) => {
+    endAutoRef.current = false;
     setEndTime(val);
     if (val && startTime && val < startTime) {
       setStartTime(timeAddMinutes(val, -30));

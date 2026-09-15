@@ -15,7 +15,13 @@ const LAYERS: { key: CalendarLayerKey; label: string }[] = [
   { key: 'taskDeadlines', label: 'Task deadlines' },
 ];
 
-export function CalendarLayersPicker() {
+interface Props {
+  // See CollectionFilterPicker/PurposeFilterPicker's identical prop for the rationale — same
+  // treatment applied here (docs/android/06-web-session-catchup.md, Task 3).
+  variant?: 'dropdown' | 'sheet';
+}
+
+export function CalendarLayersPicker({ variant = 'dropdown' }: Props) {
   const open   = useUIStore((s) => s.calendarLayersOpen);
   const toggle = useUIStore((s) => s.toggleCalendarLayers);
   const close  = useUIStore((s) => s.closeCalendarLayers);
@@ -40,6 +46,49 @@ export function CalendarLayersPicker() {
 
   const hiddenCount = LAYERS.filter((l) => !visibility[l.key]).length;
 
+  const listContent = LAYERS.map(({ key, label }) => {
+    const active = visibility[key];
+    return (
+      <button
+        key={key}
+        type="button"
+        className={`${styles.item} ${active ? styles.itemActive : ''}`}
+        onClick={() => toggleLayer(key)}
+        role="option"
+        aria-selected={active}
+      >
+        <span className={`${styles.checkbox} ${active ? styles.checkboxChecked : ''}`}>
+          {active && '✓'}
+        </span>
+        {label}
+      </button>
+    );
+  });
+
+  if (variant === 'sheet') {
+    return (
+      <>
+        <button
+          type="button"
+          className={`${styles.sheetTrigger} ${hiddenCount > 0 ? styles.sheetTriggerActive : ''}`}
+          onClick={toggle}
+          aria-expanded={open}
+          aria-label="Calendar layers"
+        >
+          👁
+        </button>
+        {open && (
+          <div className={styles.sheetOverlay} onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+            <div className={styles.sheetPanel} ref={ref}>
+              <div className={styles.sheetHeader}>Calendar layers</div>
+              <div className={styles.sheetList} role="listbox" aria-multiselectable="true">{listContent}</div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className={`${styles.wrapper} ${open ? styles.open : ''}`} ref={ref}>
       <button
@@ -54,26 +103,7 @@ export function CalendarLayersPicker() {
       </button>
 
       {open && (
-        <div className={styles.dropdown} role="listbox" aria-multiselectable="true">
-          {LAYERS.map(({ key, label }) => {
-            const active = visibility[key];
-            return (
-              <button
-                key={key}
-                type="button"
-                className={`${styles.item} ${active ? styles.itemActive : ''}`}
-                onClick={() => toggleLayer(key)}
-                role="option"
-                aria-selected={active}
-              >
-                <span className={`${styles.checkbox} ${active ? styles.checkboxChecked : ''}`}>
-                  {active && '✓'}
-                </span>
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <div className={styles.dropdown} role="listbox" aria-multiselectable="true">{listContent}</div>
       )}
     </div>
   );

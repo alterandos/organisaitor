@@ -159,8 +159,9 @@ export default function App() {
     if (!isAndroid) return;
     const handle = CapApp.addListener('backButton', () => {
       if (closeTopmostMobileOverlay()) return;
-      const { mobileBackConsumer } = useUIStore.getState();
+      const { mobileBackConsumer, sectionHistory, navigateBack } = useUIStore.getState();
       if (mobileBackConsumer?.()) return;
+      if (sectionHistory.length > 0) { navigateBack(); return; }
       void CapApp.minimizeApp();
     });
     return () => { void handle.then((l) => l.remove()); };

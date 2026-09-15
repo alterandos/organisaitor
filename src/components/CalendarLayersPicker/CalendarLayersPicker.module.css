@@ -65,3 +65,53 @@
   transition: background 100ms ease, border-color 100ms ease;
 }
 .checkboxChecked { background: var(--color-primary); border-color: var(--color-primary); }
+
+/* ── Android sheet variant (docs/android/06-web-session-catchup.md, Task 3) ──────────── */
+
+.sheetTrigger {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.sheetTriggerActive { color: var(--color-primary); }
+
+.sheetOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 31;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheetPanel {
+  background: var(--color-surface);
+  width: 100%;
+  max-height: 70vh;
+  overflow-y: auto;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 -4px 28px rgba(0, 0, 0, 0.14);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.sheetHeader {
+  padding: 1rem 1rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+}
+
+.sheetList {
+  padding: 0 0.5rem 0.5rem;
+}
+.sheetList .item { min-height: 44px; font-size: 0.95rem; }

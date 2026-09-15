@@ -931,12 +931,31 @@
 }
 .weekTimeBlock:hover { filter: brightness(0.92); z-index: 3; }
 
+.weekTimeBlockTime {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  font-size: 0.66rem;
+  opacity: 0.85;
+}
+
 .weekTimeBlockTitle {
   overflow: hidden;
   white-space: normal;
   word-break: break-word;
   font-weight: 600;
   font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
+.weekTimeBlockLocation {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 400;
+  font-size: 0.68rem;
+  opacity: 0.85;
 }
 
 /* Notes preview, shown inline in day/week's timed grid blocks below the title (previously

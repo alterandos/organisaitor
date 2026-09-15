@@ -1,4 +1,5 @@
 .wrapper {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.15rem;
@@ -21,12 +22,15 @@
   font-family: inherit;
   text-align: center;
   padding: 0;
-  -moz-appearance: textfield;
+  border-radius: 4px;
 }
-.segment::-webkit-inner-spin-button,
-.segment::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+
+@keyframes timeInputErrorFlash {
+  0%   { background: color-mix(in srgb, var(--color-danger) 35%, transparent); }
+  100% { background: transparent; }
+}
+.segmentError {
+  animation: timeInputErrorFlash 420ms ease-out;
 }
 
 .sep {
@@ -54,4 +58,64 @@
   background: var(--color-primary);
   color: white;
   border-color: var(--color-primary);
+}
+
+.dropdownToggle {
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.65rem;
+  padding: 0 0.15rem;
+  margin-left: 0.15rem;
+  line-height: 1;
+}
+.dropdownToggle:hover {
+  color: var(--color-text);
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 6.5rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 20;
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dropdownItem {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  color: var(--color-text);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dropdownItem:hover {
+  background: var(--color-bg);
+}
+.dropdownItemActive {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.dropdownClear {
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  margin-bottom: 0.2rem;
+  padding-bottom: 0.4rem;
 }

@@ -58,9 +58,9 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'notes-expand',        group: 'Notes', primary: '→',             action: 'Expand selected notebook'          },
   { id: 'notes-collapse',      group: 'Notes', primary: '←',             action: 'Collapse selected notebook'         },
   { id: 'notes-nav',           group: 'Notes', primary: 'PgUp/PgDn',     action: 'Navigate tree/list column (same as ↑/↓)' },
-  { id: 'notes-cycle-tabs',    group: 'Notes', primary: 'Ctrl+PgUp/PgDn', action: 'Cycle between this note\'s tabs (editor focused)' },
+  { id: 'notes-cycle-tabs',    group: 'Notes', primary: 'Ctrl+Tab / Ctrl+PgDn', secondary: 'Ctrl+Shift+Tab / Ctrl+PgUp', action: 'Cycle between this note\'s tabs, reverse with Shift (editor focused)' },
   { id: 'notes-new-tab',       group: 'Notes', primary: 'Ctrl+T',         action: 'New tab — prompts for a name (editor focused)' },
-  { id: 'notes-focus-toggle',  group: 'Notes', primary: 'Ctrl+Tab',      action: 'Move focus between navigation columns and editor' },
+  { id: 'notes-focus-toggle',  group: 'Notes', primary: 'Ctrl+`',        action: 'Move focus between navigation columns and editor' },
   { id: 'notes-link',          group: 'Notes', primary: 'Ctrl+L',        action: 'Turn selection into a link, or open "New link" pane if nothing selected' },
   { id: 'notes-link-select',   group: 'Notes', primary: 'Ctrl+click',    action: 'Select a link\'s text instead of opening it (editor focused)' },
   { id: 'notes-zoom-out',      group: 'Notes', primary: 'Ctrl+−',        action: 'Decrease editor font size'          },
@@ -70,8 +70,10 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'notes-superscript',   group: 'Notes', primary: 'Ctrl+Shift+=',  action: 'Toggle superscript (editor focused)'},
 
   // Lists
-  { id: 'lists-cycle-tabs', group: 'Lists', primary: 'Ctrl+PgUp/PgDn', action: 'Cycle between the current list\'s tabs' },
-  { id: 'lists-new-tab',    group: 'Lists', primary: 'Ctrl+T',         action: 'New tab — prompts for a name' },
+  { id: 'lists-nav',          group: 'Lists', primary: '↑/↓',    action: 'Navigate between lists (sidebar focused)' },
+  { id: 'lists-focus-toggle', group: 'Lists', primary: 'Ctrl+`', action: 'Move focus between the lists sidebar and the list\'s content area' },
+  { id: 'lists-cycle-tabs',   group: 'Lists', primary: 'Ctrl+Tab / Ctrl+PgDn', secondary: 'Ctrl+Shift+Tab / Ctrl+PgUp', action: 'Cycle between the current list\'s tabs, reverse with Shift' },
+  { id: 'lists-new-tab',      group: 'Lists', primary: 'Ctrl+T',         action: 'New tab — prompts for a name' },
 
   // Portfolio
   { id: 'portfolio-zoom-out', group: 'Portfolio', primary: 'Ctrl+−', action: 'Decrease ticker row size (chart view)' },

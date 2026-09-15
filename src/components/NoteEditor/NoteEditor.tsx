@@ -616,9 +616,12 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     const handler = (e: KeyboardEvent) => {
       if (!editor.isFocused) return;
 
-      // Ctrl+Tab → return focus to navigation columns (Ctrl+Left/Right are left alone
-      // here so they keep their normal word-jump behaviour inside the editor)
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'Tab') {
+      // Ctrl+` → return focus to navigation columns (Ctrl+Left/Right are left alone here
+      // so they keep their normal word-jump behaviour inside the editor). Previously
+      // Ctrl+Tab; freed up so Ctrl+Tab/Ctrl+Shift+Tab could become the tab-cycle shortcut
+      // below, matching how Ctrl+Tab is used for cycling almost everywhere else (browsers,
+      // IDEs) rather than for pane-switching.
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === '`') {
         e.preventDefault();
         e.stopPropagation();
         editor.commands.blur();
@@ -644,8 +647,11 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         return;
       }
 
-      // Ctrl+PageUp/Down → cycle through tabs
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'PageUp' || e.key === 'PageDown')) {
+      // Ctrl+PageUp/Down *and* Ctrl+Tab/Ctrl+Shift+Tab → cycle through tabs (two bindings for
+      // the same action; Ctrl+Tab was freed up for this once its old job — see above — moved
+      // to Ctrl+`).
+      const isTabCycleKey = e.key === 'Tab' ? true : !e.shiftKey && (e.key === 'PageUp' || e.key === 'PageDown');
+      if (e.ctrlKey && !e.altKey && isTabCycleKey) {
         e.preventDefault();
         e.stopPropagation();
         const id = currentNoteIdRef.current;
@@ -655,7 +661,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         const display = buildDisplayOrder(currentNote);
         const allTabIds = display.map(({ id: tid, isMain }) => isMain ? null : tid);
         const curIdx = allTabIds.indexOf(activeTabIdRef.current);
-        const dir = e.key === 'PageDown' ? 1 : -1;
+        const dir = (e.key === 'PageUp' || (e.key === 'Tab' && e.shiftKey)) ? -1 : 1;
         const nextIdx = (curIdx + dir + allTabIds.length) % allTabIds.length;
         switchTab(allTabIds[nextIdx]);
         return;

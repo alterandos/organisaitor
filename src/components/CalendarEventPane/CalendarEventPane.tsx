@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { CalendarEventId, CalendarEventType, NotifyUnit, RepeatFreq, RepeatConfig } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
-import { timeAddMinutes } from '@/utils/date';
+import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import styles from './CalendarEventPane.module.css';
@@ -35,6 +35,11 @@ export function CalendarEventPane() {
   const [repeatEndKind,  setRepeatEndKind]  = useState<RepeatConfig['endKind']>('forever');
   const [repeatCount,    setRepeatCount]    = useState(10);
   const [repeatUntil,    setRepeatUntil]    = useState('');
+  // See AddCalendarItemModal's identical ref for why this exists — prevents the linked-end-time
+  // cascade from getting "stuck" on its own previous guess while a start time is typed digit by
+  // digit. Reset whenever a different event is opened, since a pre-existing endTime here counts
+  // as genuinely user-set (it was saved), not one of our own in-progress auto-guesses.
+  const endAutoRef = useRef(true);
 
   useEffect(() => {
     if (event) {
@@ -50,6 +55,7 @@ export function CalendarEventPane() {
         setRepeatCount(r.count ?? 10);
         setRepeatUntil(r.until ?? '');
       }
+      endAutoRef.current = false;
     }
   }, [event?.id]);
 
@@ -90,13 +96,17 @@ export function CalendarEventPane() {
   const handleStartTimeChange = (val: string) => {
     const newStart = val || null;
     const changes: Record<string, string | null> = { startTime: newStart };
-    if (val && (!event.endTime || event.endTime <= val)) {
-      changes.endTime = timeAddMinutes(val, 30);
+    if (val) {
+      const { time, dayOffset } = computeLinkedEndTime(val, endAutoRef.current ? '' : (event.endTime ?? ''));
+      changes.endTime = time;
+      endAutoRef.current = true;
+      if (dayOffset > 0 && !event.endDate) changes.endDate = addDaysToIso(event.date, dayOffset);
     }
     updateEvent(id, changes as Parameters<typeof updateEvent>[1]);
   };
 
   const handleEndTimeChange = (val: string) => {
+    endAutoRef.current = false;
     const changes: Record<string, string | null> = { endTime: val || null };
     if (val && event.startTime && val < event.startTime) {
       changes.startTime = timeAddMinutes(val, -30);

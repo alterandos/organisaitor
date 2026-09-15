@@ -7,7 +7,7 @@ import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { ScheduleWeekGridPreview, type PreviewEntry } from '@/components/ScheduleWeekGridPreview/ScheduleWeekGridPreview';
-import { todayIso, formatDate } from '@/utils/date';
+import { todayIso, formatDate, computeLinkedEndTime } from '@/utils/date';
 import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
 import type { CollectionId, ScheduleBlock } from '@/types';
 import styles from './AddScheduleModal.module.css';
@@ -308,7 +308,11 @@ export function AddScheduleModal() {
                         </div>
                       </div>
                       <div className={styles.timeRow}>
-                        <TimeInput className={styles.miniTimeInput} value={row.startTime} onChange={(v) => updateBlockRow(idx, { startTime: v })} />
+                        <TimeInput
+                          className={styles.miniTimeInput}
+                          value={row.startTime}
+                          onChange={(v) => updateBlockRow(idx, { startTime: v, endTime: computeLinkedEndTime(v, row.endTime).time })}
+                        />
                         <span className={styles.timeSep}>→</span>
                         <TimeInput className={styles.miniTimeInput} value={row.endTime} onChange={(v) => updateBlockRow(idx, { endTime: v })} />
                       </div>
@@ -406,7 +410,11 @@ export function AddScheduleModal() {
                     </div>
                   </div>
                   <div className={styles.timeRow}>
-                    <TimeInput className={styles.miniTimeInput} value={newStart} onChange={setNewStart} />
+                    <TimeInput
+                      className={styles.miniTimeInput}
+                      value={newStart}
+                      onChange={(v) => { setNewStart(v); setNewEnd(computeLinkedEndTime(v, newEnd).time); }}
+                    />
                     <span className={styles.timeSep}>→</span>
                     <TimeInput className={styles.miniTimeInput} value={newEnd} onChange={setNewEnd} />
                   </div>

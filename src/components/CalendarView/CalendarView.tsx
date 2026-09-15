@@ -370,6 +370,37 @@ export function CalendarView() {
     [weekViewDateStrs, spanEventsArray]
   );
 
+  // Shared by both the week and day time grids (and their block renderers below) so a real
+  // end time is computed exactly once per item kind — this is the single source of truth for
+  // "how long does this block visually span." Previously week and day view each duplicated
+  // this logic, and the day-view copy was missing the 'schedule' branch entirely, so every
+  // Schedule occurrence (a recurring class/timetable block) silently fell back to the generic
+  // 30-minute default in day view regardless of its real length, while week view sized it
+  // correctly — a real bug, not a display-only quirk, since both views read from this value.
+  const getItemEndMinutes = (item: CalDisplayItem, startMin: number): number => {
+    if (item.kind === 'event') {
+      const full = events[item.id];
+      const explicitEnd = full?.endTime ? timeToMinutes(full.endTime) : null;
+      return explicitEnd !== null && explicitEnd > startMin ? explicitEnd : startMin + DEFAULT_EVENT_DURATION_MIN;
+    }
+    if (item.kind === 'schedule') {
+      const explicitEnd = timeToMinutes(item.endTime);
+      return explicitEnd > startMin ? explicitEnd : startMin + DEFAULT_EVENT_DURATION_MIN;
+    }
+    return startMin + DEFAULT_POINT_DURATION_MIN;
+  };
+
+  const minutesToTimeStr = (min: number): string => {
+    const clamped = ((min % (24 * 60)) + 24 * 60) % (24 * 60);
+    return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
+  };
+
+  const getItemLocation = (item: CalDisplayItem): string | null => {
+    if (item.kind === 'event') return events[item.id]?.location || null;
+    if (item.kind === 'schedule') return item.location;
+    return null;
+  };
+
   const weekTimeGrid = useMemo(() => {
     const perDayEntries: TimeGridEntry[][] = [];
     const perDayUntimed: CalDisplayItem[][] = [];
@@ -385,15 +416,7 @@ export function CalendarView() {
       for (const item of dayItems) {
         if (!item.time) { untimed.push(item); continue; }
         const startMin = timeToMinutes(item.time);
-        let endMin = startMin + DEFAULT_POINT_DURATION_MIN;
-        if (item.kind === 'event') {
-          const full = events[item.id];
-          const explicitEnd = full?.endTime ? timeToMinutes(full.endTime) : null;
-          endMin = explicitEnd !== null && explicitEnd > startMin ? explicitEnd : startMin + DEFAULT_EVENT_DURATION_MIN;
-        } else if (item.kind === 'schedule') {
-          const explicitEnd = timeToMinutes(item.endTime);
-          endMin = explicitEnd > startMin ? explicitEnd : startMin + DEFAULT_EVENT_DURATION_MIN;
-        }
+        const endMin = getItemEndMinutes(item, startMin);
         timedEntries.push({ item, startMin, endMin });
 
         const startH = Math.floor(startMin / 60);
@@ -409,6 +432,7 @@ export function CalendarView() {
     const perDayLayout = perDayEntries.map((entries) => layoutDayTimeGrid(entries, layout));
 
     return { layout, perDayLayout, perDayUntimed };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekViewDateStrs, itemsByDate, spanEventIds, events]);
 
   const weekScrollRef = useRef<HTMLDivElement>(null);
@@ -448,12 +472,7 @@ export function CalendarView() {
     for (const item of dayItems) {
       if (!item.time) { untimed.push(item); continue; }
       const startMin = timeToMinutes(item.time);
-      let endMin = startMin + DEFAULT_POINT_DURATION_MIN;
-      if (item.kind === 'event') {
-        const full = events[item.id];
-        const explicitEnd = full?.endTime ? timeToMinutes(full.endTime) : null;
-        endMin = explicitEnd !== null && explicitEnd > startMin ? explicitEnd : startMin + DEFAULT_EVENT_DURATION_MIN;
-      }
+      const endMin = getItemEndMinutes(item, startMin);
       timedEntries.push({ item, startMin, endMin });
 
       const startH = Math.floor(startMin / 60);
@@ -464,6 +483,7 @@ export function CalendarView() {
     const layout = buildHourLayout(activeHours);
     const timedLayout = layoutDayTimeGrid(timedEntries, layout);
     return { layout, timedLayout, untimed, hasAny: dayItems.length > 0 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, itemsByDate, events]);
 
   const dayScrollRef = useRef<HTMLDivElement>(null);
@@ -829,7 +849,7 @@ export function CalendarView() {
             <button className={styles.schedulesBtn} onClick={openSchedules} title="Schedules — recurring weekly timetables">
               🗓 Schedules
             </button>
-            <CalendarLayersPicker />
+            <CalendarLayersPicker variant={isAndroid ? 'sheet' : 'dropdown'} />
           </div>
 
           {/* ── Month view ── */}
@@ -1068,6 +1088,8 @@ export function CalendarView() {
                             const past      = item.kind !== 'task' ? isPastItem(dateStr, item.time) : false;
                             const completed = item.kind === 'task' && item.completed;
                             const widthPct  = 100 / totalCols;
+                            const startMin  = timeToMinutes(item.time!);
+                            const endMin    = getItemEndMinutes(item, startMin);
                             return (
                               <button
                                 key={`${item.kind}-${item.id}`}
@@ -1083,7 +1105,13 @@ export function CalendarView() {
                                 onMouseLeave={() => setTooltip(null)}
                                 title=""
                               >
+                                <span className={styles.weekTimeBlockTime}>
+                                  {formatTime(item.time!, clockFormat)}–{formatTime(minutesToTimeStr(endMin), clockFormat)}
+                                </span>
                                 <span className={styles.weekTimeBlockTitle}>{item.title}</span>
+                                {getItemLocation(item) && (
+                                  <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
+                                )}
                                 {item.notes && <span className={styles.weekTimeBlockNotes}>{item.notes}</span>}
                               </button>
                             );
@@ -1178,6 +1206,8 @@ export function CalendarView() {
                           const past      = item.kind !== 'task' ? isPastItem(selectedDate, item.time) : false;
                           const completed = item.kind === 'task' && item.completed;
                           const widthPct  = 100 / totalCols;
+                          const startMin  = timeToMinutes(item.time!);
+                          const endMin    = getItemEndMinutes(item, startMin);
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
@@ -1192,7 +1222,13 @@ export function CalendarView() {
                               onMouseEnter={(e) => handleItemMouseEnter(e, item)}
                               onMouseLeave={() => setTooltip(null)}
                             >
+                              <span className={styles.weekTimeBlockTime}>
+                                {formatTime(item.time!, clockFormat)}–{formatTime(minutesToTimeStr(endMin), clockFormat)}
+                              </span>
                               <span className={styles.weekTimeBlockTitle}>{item.title}</span>
+                              {getItemLocation(item) && (
+                                <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
+                              )}
                               {item.notes && <span className={styles.weekTimeBlockNotes}>{item.notes}</span>}
                             </button>
                           );

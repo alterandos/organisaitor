@@ -275,6 +275,12 @@ export function ListsSection() {
   const [editingCell,    setEditingCell]    = useState<{ itemId: string; field: string } | null>(null);
   const tabInputRef = useRef<HTMLInputElement>(null);
 
+  // Two-area keyboard navigation, the same idea as Chronicle's tree/list/editor columns
+  // (ChronicleView.tsx) but simplified to just "the sidebar list of lists" vs "everything else"
+  // — Lists has no equivalent of Chronicle's multi-column drill-down, so up/down between lists
+  // is all the nav area needs for now. Ctrl+` swaps focus between the two areas.
+  const [focusedArea, setFocusedArea] = useState<'nav' | 'content'>('nav');
+
   // Tab drag-and-drop reordering — same left/right-side-drop convention as NoteEditor's
   // tab bar (NoteEditor.tsx). "All" is a pinned pseudo-tab (not a real ListTab), so it's
   // never draggable and never a drop target; only entries in selectedList.tabs reorder.
@@ -300,6 +306,14 @@ export function ListsSection() {
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
   const selectedList = selectedListId ? lists[selectedListId] : null;
+
+  // Visual sidebar order (watchlists group, then reference group) — used both by the sidebar
+  // render below and by the arrow-key nav-area handler, so pressing ↓ always lands on whatever
+  // list actually appears next on screen.
+  const navOrder = [
+    ...allLists.filter((l) => l.kind === 'watchlist'),
+    ...allLists.filter((l) => l.kind !== 'watchlist'),
+  ];
 
   useEffect(() => {
     if (selectedListId && !lists[selectedListId]) {
@@ -352,31 +366,50 @@ export function ListsSection() {
   })();
   const showTabBar  = hasTabs || addingTab;
 
-  // Ctrl+PgUp/PgDn cycles through this list's tabs (All + each named tab), matching the same
-  // hotkey already used to cycle Note tabs (NoteEditor.tsx) — one convention for "tabs" app-wide.
-  // Ctrl+T starts adding a new tab (same convention as NoteEditor's Ctrl+T) — unlike cycling,
-  // this doesn't require hasTabs: it's exactly what the header's own "+" button does, and is
-  // the only runtime way to add a list's very first tab.
+  // Ctrl+PgUp/PgDn *and* Ctrl+Tab/Ctrl+Shift+Tab both cycle through this list's tabs (All + each
+  // named tab) — two bindings for the same action, matching the convention NoteEditor.tsx uses
+  // for note tabs (Ctrl+Tab there was freed up for this once its old job — nav/editor toggle —
+  // moved to Ctrl+`, so Lists follows the same split for consistency). Ctrl+T starts adding a
+  // new tab (same convention as NoteEditor's Ctrl+T) — unlike cycling, this doesn't require
+  // hasTabs: it's exactly what the header's own "+" button does, and is the only runtime way to
+  // add a list's very first tab. Ctrl+` toggles which area (sidebar list-of-lists vs. the list's
+  // own content/tabs) responds to plain ↑/↓, mirroring Chronicle's tree/list/editor column focus.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!selectedList) return;
       const tag = (e.target as HTMLElement)?.tagName;
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
         || (e.target as HTMLElement)?.isContentEditable;
       if (isTyping) return;
-      if (!e.ctrlKey || e.shiftKey || e.altKey) return;
 
-      if (hasTabs && (e.key === 'PageUp' || e.key === 'PageDown')) {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === '`') {
         e.preventDefault();
-        const order: (string | 'all')[] = ['all', ...(selectedList.tabs ?? []).map((t) => t.id)];
-        const curIdx = order.indexOf(selectedTabId);
-        const dir = e.key === 'PageDown' ? 1 : -1;
-        const nextIdx = (curIdx + dir + order.length) % order.length;
-        setSelectedTabId(order[nextIdx]);
+        setFocusedArea((a) => (a === 'nav' ? 'content' : 'nav'));
         return;
       }
 
-      if (e.key.toLowerCase() === 't') {
+      if (!e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && focusedArea === 'nav' && navOrder.length > 0) {
+        e.preventDefault();
+        const curIdx = navOrder.findIndex((l) => l.id === selectedListId);
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        const nextIdx = curIdx === -1 ? 0 : (curIdx + dir + navOrder.length) % navOrder.length;
+        handleSelectList(navOrder[nextIdx].id as ListId);
+        return;
+      }
+
+      if (!selectedList) return;
+      if (e.ctrlKey && !e.altKey && (e.key === 'Tab' || e.key === 'PageUp' || e.key === 'PageDown')) {
+        if (hasTabs) {
+          e.preventDefault();
+          const order: (string | 'all')[] = ['all', ...(selectedList.tabs ?? []).map((t) => t.id)];
+          const curIdx = order.indexOf(selectedTabId);
+          const dir = (e.key === 'PageUp' || (e.key === 'Tab' && e.shiftKey)) ? -1 : 1;
+          const nextIdx = (curIdx + dir + order.length) % order.length;
+          setSelectedTabId(order[nextIdx]);
+        }
+        return;
+      }
+
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         setAddingTab(true);
         setNewTabName('');
@@ -384,7 +417,11 @@ export function ListsSection() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [hasTabs, selectedList, selectedTabId]);
+    // navOrder/handleSelectList are recomputed fresh every render from `lists`/`allLists` (not
+    // memoized), so depending on `lists` itself keeps this effect from re-subscribing on every
+    // render while still capturing an up-to-date navOrder/handleSelectList whenever it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasTabs, selectedList, selectedTabId, focusedArea, selectedListId, lists]);
 
   const displayedItems = allItemsInList
     .filter((i) => !hasTabs || selectedTabId === 'all' || i.tabId === selectedTabId)
@@ -476,7 +513,7 @@ export function ListsSection() {
   return (
     <div className={styles.container}>
       {/* ── Sidebar ── */}
-      <aside className={styles.sidebar}>
+      <aside className={`${styles.sidebar} ${focusedArea === 'nav' ? styles.navAreaFocused : ''}`}>
         <div className={styles.sidebarHeader}>
           <span className={styles.sidebarTitle}>My Lists</span>
           <button className={styles.sidebarNewBtn} onClick={showAddList} title="New list">+</button>

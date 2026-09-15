@@ -103,7 +103,7 @@ actually checked before this doc was written vs. assumed:
 
 ---
 
-## Task 1 — MobileQuickAddBar: wire deadline → shadow CalendarReminder
+## [x] Task 1 — MobileQuickAddBar: wire deadline → shadow CalendarReminder
 
 **File**: `src/components/MobileQuickAddBar/MobileQuickAddBar.tsx`
 
@@ -186,7 +186,7 @@ with a "Due: Today" chip set. Confirm, *without reloading the app*:
 
 ---
 
-## Task 2 — Android back button: integrate app-section history
+## [x] Task 2 — Android back button: integrate app-section history
 
 **File**: `src/App.tsx` (the `CapApp.addListener('backButton', ...)` handler)
 
@@ -243,7 +243,7 @@ first, unchanged).
 
 ---
 
-## Task 3 — CalendarLayersPicker: Android touch-sheet variant
+## [x] Task 3 — CalendarLayersPicker: Android touch-sheet variant
 
 **Files**: `src/components/CalendarLayersPicker/CalendarLayersPicker.tsx` and
 `.module.css`; one call-site change in `src/components/CalendarView/CalendarView.tsx`.
@@ -313,7 +313,11 @@ immediately filters the calendar and the sheet stays open, and the setting persi
 
 ---
 
-## Task 4 — Visual verification pass (fix only if actually broken)
+## [x] Task 4 — Visual verification pass (fix only if actually broken)
+
+**What actually happened**: item 1 (the notes preview) was genuinely broken, not just a
+theoretical risk — see below. Items 2 and 3 were checked and found fine as-is; no change
+was made to either.
 
 Do this last, after Tasks 1–3, using the same AVD+CDP method. These are **not** presumed to
 be broken — they're flagged because they're plausible risk areas this session's changes
@@ -327,6 +331,21 @@ change if you actually observe a problem; don't add complexity pre-emptively.
    `CalendarView.module.css` only (e.g. a `:global(.platform-android)`-scoped smaller
    `font-size` or a stricter line-clamp on `.weekTimeBlockNotes`) — no JS/logic change
    should be needed either way.
+
+   **Found broken, and fixed.** `.weekTimeBlock` is `display:flex; flex-direction:column;
+   overflow:hidden`, and neither `.weekTimeBlockTitle` nor `.weekTimeBlockNotes` set
+   `flex-shrink`, so both defaulted to the flexbox default of `1`. For a short block (a
+   30-minute test event) with a long notes string, the browser squeezed the *title* down to
+   6.97px against its natural 15.6px line-height — the title text was visibly clipped top
+   and bottom, not just the notes. The fix ended up being general CSS, not
+   Android-scoped: `flex-shrink: 0` added to `.weekTimeBlockTitle` so it always renders at
+   full height, leaving the notes span (which already clips via its own `overflow:hidden`)
+   to absorb any remaining shrink pressure. This is a general flexbox bug in the notes-
+   preview feature the CSS already had — a short enough event on desktop would trigger the
+   same squeeze — just caught here because this task required actually looking at a
+   compressed hour row on a real viewport. Verified on-device before/after via
+   `getBoundingClientRect()` (title height 6.97px → 15.6px) and a screenshot showing a
+   crisp, fully-legible title with the notes preview clipping cleanly mid-word beneath it.
 2. **SettingsPane "Keyboard shortcuts" table** — open Settings on the AVD, scroll to
    Keyboard shortcuts. Confirm the table (now with clickable rebind buttons and a per-row
    ↺ reset icon added this session) doesn't overflow the screen width or clip the reset
@@ -334,6 +353,12 @@ change if you actually observe a problem; don't add complexity pre-emptively.
    `overflow-x: auto` container — this project's own convention (see CLAUDE.md's
    Responsive guidance) is that a wide table scrolls inside its own container rather than
    the page scrolling horizontally.
+
+   **Checked, found fine — no change made.** `document.documentElement.scrollWidth ===
+   window.innerWidth` (411px, no horizontal overflow); seeded a fake override in
+   `todo-hotkey-overrides` localStorage to force a ↺ reset icon to render (none exist on a
+   fresh install, since it's conditional on `h.id in overrides`) and measured it at
+   x:334–348 in a 411px viewport — comfortably clear of the edge, not clipped.
 3. **NotificationCenter's Done/Archive on a task-linked reminder** — trigger a task
    deadline notification (or fast-forward by editing `notifiedLog`/system clock if that's
    easier in the AVD), open the bell icon panel, and confirm the Done/Archive buttons on a
@@ -341,6 +366,15 @@ change if you actually observe a problem; don't add complexity pre-emptively.
    `linkedTask` lookup in `NotificationCenter.tsx`) and that the panel itself is usable at
    phone width (this is pre-existing UI, not changed this session, but worth a glance since
    its *behavior* did change).
+
+   **Checked, found fine — no change made.** Seeded a `PendingNotification`
+   (`kind:'reminder'`, `itemId` = an existing task-linked reminder's id) directly into
+   `todo-notifications` localStorage to trigger the card without waiting on real-time
+   notification checking. Clicking Done set the underlying task's `completed: true`;
+   clicking Archive (on a second seeded notification) set `archived: true` — both verified
+   by reading the task back out of `todo-app-storage` afterward, confirming the
+   `linkedTask` lookup (`calendarReminderId` match) resolves correctly. Panel rendered
+   cleanly at 411px width in a screenshot, no clipping.
 
 ---
 
