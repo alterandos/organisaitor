@@ -3,6 +3,7 @@ import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { formatDate } from '@/utils/date';
 import { NOTE_TEMPLATES } from '@/config/noteTemplates';
 import { getNoteEffectiveCollectionId } from '@/utils/notes';
+import { deleteNoteWithCleanup } from '@/services/crossAppLinkCleanup';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import type { NoteTagId, NoteId, CollectionId } from '@/types';
 import type { Note } from '@/types/notes';
@@ -27,7 +28,6 @@ function NoteRow({ note, indent, siblings, allNotes }: NoteRowProps) {
   const openNote         = useUIStore((s) => s.openNote);
   const showEditNoteMeta = useUIStore((s) => s.showEditNoteMeta);
   const editingNoteId    = useUIStore((s) => s.editingNoteId);
-  const deleteNote       = useNoteStore((s) => s.deleteNote);
   const indentNote       = useNoteStore((s) => s.indentNote);
   const outdentNote      = useNoteStore((s) => s.outdentNote);
 
@@ -47,7 +47,7 @@ function NoteRow({ note, indent, siblings, allNotes }: NoteRowProps) {
     e.stopPropagation();
     if (!window.confirm(`Delete "${note.title || 'Untitled'}"?`)) return;
     if (editingNoteId === note.id) useUIStore.getState().closeNote();
-    deleteNote(note.id);
+    deleteNoteWithCleanup(note.id);
   };
 
   return (

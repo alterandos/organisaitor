@@ -49,6 +49,15 @@
   color: #bfdbfe;
 }
 
+.createBtn {
+  color: #86efac;
+  font-size: 0.8rem;
+}
+
+.createBtn:hover {
+  color: #bbf7d0;
+}
+
 .div {
   width: 1px;
   height: 18px;
@@ -238,4 +247,51 @@
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
+}
+
+/* ── Create menu (Ctrl+Q / "+ Create") ───────────────────────────────────── */
+
+.createMenu {
+  display: flex;
+  flex-direction: column;
+  width: 190px;
+}
+
+.createMenuOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: #e2e8f0;
+  font-size: 0.83rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+  font-family: inherit;
+}
+
+.createMenuOption:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.createMenuOptionStub {
+  color: #94a3b8;
+}
+
+.createMenuSoon {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stubMessage {
+  padding: 6px 8px;
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }

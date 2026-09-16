@@ -30,5 +30,6 @@ export function createTask(input: CreateTaskInput, sortOrder: number): Task {
     parentId:      input.parentId      ?? null,
     subtaskIds:   [],
     sortOrder,
+    crossAppRefs: input.crossAppRefs ?? [],
   };
 }

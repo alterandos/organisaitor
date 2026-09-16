@@ -19,11 +19,13 @@ import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { NoteId, Note } from '@/types';
 import { NoteTagMark } from './extensions/NoteTagMark';
+import { ArtifactLinkMark } from './extensions/ArtifactLinkMark';
 import { FloatingToolbar } from './FloatingToolbar';
 import { NoteTOC } from './NoteTOC';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { openExternalLink, normalizeLinkUrl } from '@/utils/links';
 import { BUILTIN_TAGS } from './builtinTags';
+import { useTaskStore } from '@/store/taskStore';
 import styles from './NoteEditor.module.css';
 
 // The document schema requires content to be `section+` (see extensions/Section.ts).
@@ -435,6 +437,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       Column,
       Placeholder.configure({ placeholder: 'Start writing…' }),
       NoteTagMark,
+      ArtifactLinkMark,
       ResizableImage.configure({ allowBase64: true, inline: false }),
       Superscript,
       Subscript,
@@ -491,6 +494,28 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       },
       handleClick(view, pos, event) {
         const target = event.target as HTMLElement;
+
+        const artifactEl = target.closest('mark[data-artifact-id]') as HTMLElement | null;
+        if (artifactEl) {
+          const targetType = artifactEl.getAttribute('data-artifact-type');
+          const targetId = artifactEl.getAttribute('data-artifact-id');
+          // Ctrl/Cmd+click selects the mark's text (so it can be unlinked via the
+          // toolbar), same convention as the plain `link` mark above and noteTag below.
+          if (event.ctrlKey || event.metaKey) {
+            const $pos = view.state.doc.resolve(pos);
+            const markType = view.state.schema.marks.artifactLink;
+            const range = markType ? getMarkRange($pos, markType) : null;
+            if (range) {
+              view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, range.from, range.to)));
+            }
+            return true;
+          }
+          if (targetType === 'task' && targetId && useTaskStore.getState().tasks[targetId as import('@/types').TaskId]) {
+            useUIStore.getState().setActiveView('tasks');
+            useUIStore.getState().openTaskPane(targetId);
+          }
+          return true;
+        }
 
         if (!target.closest('mark[data-tag-id]')) return false;
         const $pos = view.state.doc.resolve(pos);
@@ -795,6 +820,26 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     }
     isLoadingRef.current = false;
   };
+
+  // Notes "Create ▸ Task" flow (FloatingToolbar): a selection was turned into a request to
+  // create some other entity, and AddTaskModal has now reported the new id back via
+  // uiStore.pendingArtifactLink.resolvedTargetId. Apply the forward ArtifactLinkMark at the
+  // originally-captured selection, flush immediately (same reasoning as the tab-switch flush
+  // above — don't wait on the debounce, in case the user switches away right after), then
+  // clear the pending request so it can't be picked up again.
+  const pendingArtifactLink = useUIStore((s) => s.pendingArtifactLink);
+  useEffect(() => {
+    if (!editor) return;
+    if (!pendingArtifactLink?.resolvedTargetId) return;
+    if (pendingArtifactLink.noteId !== note?.id) return;
+    editor.chain()
+      .setTextSelection({ from: pendingArtifactLink.from, to: pendingArtifactLink.to })
+      .setMark('artifactLink', { targetType: pendingArtifactLink.targetType, targetId: pendingArtifactLink.resolvedTargetId })
+      .run();
+    flushCurrentTab();
+    useUIStore.getState().clearPendingArtifactLink();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingArtifactLink, editor, note?.id]);
 
   // ── Drag helpers: update ref + state together so both drop handlers and CSS are correct ──
   const startDrag = (tabId: string) => {
@@ -1370,7 +1415,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           onMouseOver={handleEditorMouseOver}
           onMouseLeave={() => { scheduleHoverClear(); scheduleSectionHoverClear(); }}
         >
-          {editor && <FloatingToolbar editor={editor} />}
+          {editor && <FloatingToolbar editor={editor} noteId={note.id} />}
           <EditorContent editor={editor} className={styles.editor} />
         </div>
 

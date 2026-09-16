@@ -13,6 +13,21 @@ export type Priority       = 'none' | 'low' | 'medium' | 'high';
 export type CollectionKind = 'project' | 'list' | 'tracker' | 'routine';  // extensible
 export type TaskKind       = 'action'  | 'waiting' | 'milestone'; // extensible — add more as needed
 export type NotifyUnit     = 'minutes' | 'hours'   | 'days';
+
+// ── Cross-app links ──────────────────────────────────────────────────────────────
+// Generic backlink shape shared by every entity that can be created FROM a Notes
+// selection (Task today; event/listItem/trackerEntry are the planned next targets —
+// see CLAUDE.md "Cross-app linking"). `type` doubles as the render/navigate discriminator
+// (which icon, which section to switch to) — no denormalized title/label is stored here,
+// display data is always looked up live from the referenced entity's own store so it can
+// never go stale. The *forward* half of the link (Note → Task) lives embedded in the
+// note's own rich-text content as an ArtifactLinkMark, not here — this field only carries
+// the reverse direction, so a Task/Event/etc. can show what note(s) it was linked from.
+export type CrossAppRefType = 'note' | 'task' | 'event' | 'reminder' | 'listItem' | 'trackerEntry';
+export interface CrossAppRef {
+  type: CrossAppRefType;
+  id:   string;
+}
 export type TimeIntensity  = 'low' | 'medium' | 'high'; // extensible — add more as needed
 
 // ── Routine types ───────────────────────────────────────────────────────────────
@@ -149,6 +164,7 @@ export interface Task {
   parentId:      TaskId | null;        // set → this task is a sub-task
   subtaskIds:    TaskId[];
   sortOrder:     number;
+  crossAppRefs:  CrossAppRef[];        // reverse cross-app links (e.g. the note(s) this task was created from)
 }
 
 // ── Persisted application data ─────────────────────────────────────────────────
@@ -178,6 +194,7 @@ export interface CreateTaskInput {
   kind?:            TaskKind;
   timeIntensity?:   TimeIntensity | null;
   parentId?:        TaskId | null;
+  crossAppRefs?:    CrossAppRef[];
 }
 
 export interface CreateCollectionInput {

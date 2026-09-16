@@ -62,6 +62,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'notes-new-tab',       group: 'Notes', primary: 'Ctrl+T',         action: 'New tab — prompts for a name (editor focused)' },
   { id: 'notes-focus-toggle',  group: 'Notes', primary: 'Ctrl+`',        action: 'Move focus between navigation columns and editor' },
   { id: 'notes-link',          group: 'Notes', primary: 'Ctrl+L',        action: 'Turn selection into a link, or open "New link" pane if nothing selected' },
+  { id: 'notes-create-menu',   group: 'Notes', primary: 'Ctrl+Q',        action: 'Open "Create ▸" menu for the selection (Task/Calendar/List/Tracker) — 1-4 picks, Esc cancels' },
   { id: 'notes-link-select',   group: 'Notes', primary: 'Ctrl+click',    action: 'Select a link\'s text instead of opening it (editor focused)' },
   { id: 'notes-zoom-out',      group: 'Notes', primary: 'Ctrl+−',        action: 'Decrease editor font size'          },
   { id: 'notes-zoom-in',       group: 'Notes', primary: 'Ctrl+=',        action: 'Increase editor font size'          },

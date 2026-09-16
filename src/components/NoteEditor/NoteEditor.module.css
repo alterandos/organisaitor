@@ -731,6 +731,27 @@
 .editorContent mark[data-tag-type="reference"]::before   { content: "📚"; }
 .editorContent mark[data-tag-type="learn-later"]::before { content: "🔖"; }
 
+/* Cross-app artifact links — dashed underline + trailing type icon, deliberately
+   distinct from both .link (solid underline) and mark[data-tag-id] (solid border-bottom
+   in the tag's own color) so a linked-elsewhere span reads differently from either. */
+.editorContent mark[data-artifact-id] {
+  background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
+  border-bottom: 2px dashed var(--color-success);
+  border-radius: 2px;
+  padding-bottom: 1px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.editorContent mark[data-artifact-type]::after {
+  margin-left: 0.2em;
+  font-style: normal;
+  font-size: 0.85em;
+  vertical-align: super;
+}
+
+.editorContent mark[data-artifact-type="task"]::after { content: "📋"; }
+
 /* ── Tables ──────────────────────────────────────────────────────────────── */
 
 .editorContent table {

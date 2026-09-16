@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority } from '@/types';
+import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType } from '@/types';
 import type { Activity } from '@/types/fitness';
 
 export type AppView = 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
@@ -71,10 +71,29 @@ interface UIState {
 
   showAddTask:       () => void;
   showAddSubtask:    (parentId?: string) => void;
-  // MobileQuickAddBar's "More options…" escape hatch (docs/android/01-tasks-app.md §3.2) —
-  // opens the full AddTaskModal pre-filled with whatever the quick-add bar had entered so far.
-  quickAddPrefill:        { title: string; priority: Priority; collectionId: string | null; deadline: string | null } | null;
-  showAddTaskWithPrefill: (prefill: { title: string; priority: Priority; collectionId: string | null; deadline: string | null }) => void;
+  // MobileQuickAddBar's "More options…" escape hatch (docs/android/01-tasks-app.md §3.2), and
+  // the Notes "Create ▸ Task" flow (FloatingToolbar) — both open the full AddTaskModal
+  // pre-filled rather than duplicating its fields in a bespoke form.
+  quickAddPrefill: {
+    title: string; priority: Priority; collectionId: string | null;
+    deadline: string | null; deadlineTime?: string | null; links?: string[];
+  } | null;
+  showAddTaskWithPrefill: (prefill: {
+    title: string; priority: Priority; collectionId: string | null;
+    deadline: string | null; deadlineTime?: string | null; links?: string[];
+  }) => void;
+
+  // Notes "Create ▸ ..." flow (FloatingToolbar's Ctrl+Q / "+" menu): a selection was turned
+  // into a request to create some other entity (Task today), and the mark that should point
+  // at it can't be applied until that entity actually exists. `noteId`/`from`/`to` are
+  // captured at the moment of creation-request; `resolvedTargetId` is filled in by the
+  // creating modal (e.g. AddTaskModal) once the new entity's id is known, which NoteEditor
+  // watches for to apply the ArtifactLinkMark and then clears this field itself. Only one
+  // pending link at a time — matches there only ever being one create modal open at once.
+  pendingArtifactLink: { noteId: string; from: number; to: number; targetType: CrossAppRefType; resolvedTargetId?: string } | null;
+  setPendingArtifactLink:   (link: { noteId: string; from: number; to: number; targetType: CrossAppRefType }) => void;
+  resolveArtifactLink:      (targetId: string) => void;
+  clearPendingArtifactLink: () => void;
   showAddCollection: () => void;
   taskModalAdvanced: boolean;
   pendingParentId:   string | null;
@@ -320,6 +339,13 @@ export const useUIStore = create<UIState>()((set, get) => ({
   showAddSubtask:    (parentId) => set({ openModal: 'add-task', taskModalAdvanced: true, pendingParentId: parentId ?? null, quickAddPrefill: null }),
   quickAddPrefill:        null,
   showAddTaskWithPrefill: (prefill) => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, quickAddPrefill: prefill }),
+
+  pendingArtifactLink:      null,
+  setPendingArtifactLink:   (link) => set({ pendingArtifactLink: link }),
+  resolveArtifactLink:      (targetId) => set((s) =>
+    s.pendingArtifactLink ? { pendingArtifactLink: { ...s.pendingArtifactLink, resolvedTargetId: targetId } } : {}
+  ),
+  clearPendingArtifactLink: () => set({ pendingArtifactLink: null }),
   showAddCollection: () => set({ openModal: 'add-collection' }),
   showAddPurpose:    () => set({ openModal: 'add-purpose'    }),
   showAddTag:        () => set({ openModal: 'add-tag'        }),
@@ -438,6 +464,13 @@ export const useUIStore = create<UIState>()((set, get) => ({
       // state — close them on any section switch so they don't reopen stale later.
       endeavourPickerOpen: false,
       purposePickerOpen:   false,
+      // TaskPane can be opened while jumping sections (e.g. clicking an ArtifactLinkMark in
+      // Notes) — every *pre-existing* way to open it from another section (CalendarEventPane's
+      // "Linked task" chip, etc.) explicitly closes its own pane first and never itself calls
+      // setActiveView, so TaskPane never had to survive a real section switch before. Without
+      // this, Backspace back out of Tasks left a stale TaskPane floating over whatever section
+      // you returned to — caught via a live round-trip, not by inspection.
+      editingTaskId: null,
     };
   }),
 

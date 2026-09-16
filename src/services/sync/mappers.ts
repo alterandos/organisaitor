@@ -33,6 +33,7 @@ export function taskToRow(t: Task, userId: string) {
     parent_id:      t.parentId       ?? null,
     subtask_ids:    t.subtaskIds     ?? [],
     sort_order:     t.sortOrder      ?? 0,
+    cross_app_refs: t.crossAppRefs   ?? [],
     created_at:     t.createdAt,
     updated_at:     t.updatedAt,
   };
@@ -64,6 +65,7 @@ export function rowToTask(r: Record<string, any>): Task {
     parentId:      r.parent_id     ?? null,
     subtaskIds:    r.subtask_ids   ?? [],
     sortOrder:     r.sort_order    ?? 0,
+    crossAppRefs:  r.cross_app_refs ?? [],
     createdAt:     r.created_at,
     updatedAt:     r.updated_at,
   };

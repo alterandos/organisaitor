@@ -26,13 +26,24 @@ export function AddTaskModal() {
   const quickAddPrefill    = useUIStore((s) => s.quickAddPrefill);
   const closeModal         = useUIStore((s) => s.closeModal);
 
+  // Abandoning the modal (Escape/backdrop/Cancel) without submitting must drop any pending
+  // Notes "Create ▸ Task" link request — otherwise a later, unrelated task creation could
+  // pick it up. Reads uiStore imperatively (not a subscribed value) since this is an
+  // event-time check, not something the component needs to re-render on. The success path
+  // (handleSubmit) does NOT use this: it resolves the link first and lets NoteEditor clear
+  // it itself once the mark is applied (see uiStore).
+  const handleClose = () => {
+    if (useUIStore.getState().pendingArtifactLink) useUIStore.getState().clearPendingArtifactLink();
+    closeModal();
+  };
+
   const [advanced, setAdvanced] = useState(taskModalAdvanced || !!pendingParentId);
   const formRef = useRef<HTMLFormElement>(null);
 
   const [title,         setTitle]         = useState(quickAddPrefill?.title ?? '');
   const [notes,         setNotes]         = useState('');
   const [deadline,      setDeadline]      = useState(quickAddPrefill?.deadline ?? '');
-  const [deadlineTime,  setDeadlineTime]  = useState('');
+  const [deadlineTime,  setDeadlineTime]  = useState(quickAddPrefill?.deadlineTime ?? '');
   const [scheduledAt,   setScheduledAt]   = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [priority,      setPriority]      = useState<Priority>(quickAddPrefill?.priority ?? 'none');
@@ -48,7 +59,7 @@ export function AddTaskModal() {
   const [showSuggestions,    setShowSuggestions]     = useState(false);
   const [taskKind,           setTaskKind]            = useState<TaskKind>('action');
   const [parentId,           setParentId]            = useState<TaskId | ''>((pendingParentId as TaskId) ?? '');
-  const [links,              setLinks]               = useState<string[]>([]);
+  const [links,              setLinks]               = useState<string[]>(quickAddPrefill?.links ?? []);
   const [linkInput,          setLinkInput]           = useState('');
 
   const addTask = useTaskStore((s) => s.addTask);
@@ -69,7 +80,7 @@ export function AddTaskModal() {
 
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
+      if (e.key === 'Escape') { handleClose(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);
@@ -158,7 +169,16 @@ export function AddTaskModal() {
       });
     }
 
-    addTask({
+    // If this creation originated from a Notes selection (FloatingToolbar's "+ Create"
+    // menu), record the reverse link now and report the new id back so NoteEditor can
+    // apply the forward ArtifactLinkMark and clear the pending request itself. The ref's
+    // `type` is the *source* of the link (always 'note' today) — not
+    // pendingArtifactLink.targetType, which instead describes the forward mark's target
+    // (i.e. 'task', what's being created) and would be backwards here.
+    const pendingArtifactLink = useUIStore.getState().pendingArtifactLink;
+    const crossAppRefs = pendingArtifactLink ? [{ type: 'note' as const, id: pendingArtifactLink.noteId }] : [];
+
+    const taskId = addTask({
       title,
       notes:           notes || null,
       links:           links.filter(Boolean),
@@ -174,16 +194,19 @@ export function AddTaskModal() {
       purposeIds:   selectedPurposeIds,
       kind:         taskKind,
       parentId:     parentId ? parentId as TaskId : null,
+      crossAppRefs,
     });
+
+    if (pendingArtifactLink) useUIStore.getState().resolveArtifactLink(taskId);
     closeModal();
   };
 
   return (
-    <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
+    <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
       <div className={styles.modal}>
         <div className={styles.header}>
           <span className={styles.title}>New Task</span>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">✕</button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>
@@ -194,7 +217,7 @@ export function AddTaskModal() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
-            onKeyDown={(e) => e.key === 'Escape' && closeModal()}
+            onKeyDown={(e) => e.key === 'Escape' && handleClose()}
           />
 
           <textarea
@@ -450,7 +473,7 @@ export function AddTaskModal() {
           )}
 
           <div className={styles.actions}>
-            <button type="button" className={styles.cancelBtn} onClick={closeModal}>Cancel</button>
+            <button type="button" className={styles.cancelBtn} onClick={handleClose}>Cancel</button>
             <button
               type="submit"
               className={styles.submitBtn}
