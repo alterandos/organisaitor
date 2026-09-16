@@ -195,29 +195,46 @@ export function FloatingToolbar({ editor, noteId }: Props) {
       links:        inferred.links,
     });
     setShowCreateMenu(false);
+    // Collapse the selection so this whole floating toolbar hides once AddTaskModal opens —
+    // without this it kept floating on top of the modal, since the selection (and therefore
+    // `pos`) was otherwise untouched by opening it. Caught live, not by inspection.
+    editor.commands.setTextSelection(to);
   };
 
-  // Digit (1-4) / Escape handling while the create menu is open. A document-level listener
-  // rather than a React onKeyDown on the menu — deliberately, since nothing in the menu ever
-  // takes DOM focus (no autoFocus anywhere in it): an early version used autoFocus on the
-  // first option, which stole focus from the ProseMirror editor the moment the menu opened,
-  // silently breaking editor.isFocused for every OTHER editor-focused hotkey (Ctrl+Q itself
-  // included) until the user clicked back into the note. Caught via a live round-trip test
-  // (pressing Ctrl+Q a second time did nothing), not by inspection.
+  // Escape (whenever the toolbar is visible, in any mode) and digit-select (while the create
+  // menu specifically is open) — a document-level listener rather than React onKeyDown,
+  // deliberately, since nothing in the menu ever takes DOM focus (no autoFocus anywhere in
+  // it): an early version used autoFocus on the first option, which stole focus from the
+  // ProseMirror editor the moment the menu opened, silently breaking editor.isFocused for
+  // every OTHER editor-focused hotkey (Ctrl+Q itself included) until the user clicked back
+  // into the note. Caught via a live round-trip test (pressing Ctrl+Q a second time did
+  // nothing), not by inspection. Consolidated here (rather than a handler per sub-panel) so
+  // Escape has one obvious priority order: back out of whichever sub-panel is open, or — from
+  // the normal button row — collapse the selection and hide the whole toolbar.
   useEffect(() => {
-    if (!showCreateMenu) return;
+    if (!pos) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); setShowCreateMenu(false); setStubMessage(null); return; }
-      const num = parseInt(e.key);
-      if (!isNaN(num) && num >= 1 && num <= CREATE_MENU_OPTIONS.length) {
+      if (e.key === 'Escape') {
         e.preventDefault();
-        selectCreateOption(CREATE_MENU_OPTIONS[num - 1]);
+        if (showCreateMenu) { setShowCreateMenu(false); setStubMessage(null); return; }
+        if (showTags) { setShowTags(false); setSearch(''); return; }
+        if (showLinkInput) { setShowLinkInput(false); setLinkUrl(''); return; }
+        if (showColorPicker) { setShowColorPicker(false); return; }
+        editor.commands.setTextSelection(editor.state.selection.to);
+        return;
+      }
+      if (showCreateMenu) {
+        const num = parseInt(e.key);
+        if (!isNaN(num) && num >= 1 && num <= CREATE_MENU_OPTIONS.length) {
+          e.preventDefault();
+          selectCreateOption(CREATE_MENU_OPTIONS[num - 1]);
+        }
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showCreateMenu]);
+  }, [pos, showCreateMenu, showTags, showLinkInput, showColorPicker]);
 
   if (!pos) return null;
 
@@ -373,9 +390,9 @@ export function FloatingToolbar({ editor, noteId }: Props) {
           )}
           <div className={styles.div} />
           {hasArtifactMark ? (
-            <button className={`${styles.btn} ${styles.createBtn} ${styles.on}`} onClick={removeArtifactLink} title="Remove link">🔗 ✕</button>
+            <button className={`${styles.btn} ${styles.createBtn} ${styles.on}`} onClick={removeArtifactLink} title="Remove link">🧩 ✕</button>
           ) : (
-            <button className={`${styles.btn} ${styles.createBtn}`} onClick={() => { setStubMessage(null); setShowCreateMenu(true); }} title="Create linked item from selection (Ctrl+Q)">+ Create</button>
+            <button className={`${styles.btn} ${styles.createBtn}`} onClick={() => { setStubMessage(null); setShowCreateMenu(true); }} title="Create linked item from selection (Ctrl+Q)">🧩</button>
           )}
         </>
       ) : (

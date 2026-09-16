@@ -725,14 +725,19 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         return; // any other key cancels silently
       }
 
-      // Ctrl+1–4 → apply built-in tag to selection (or select block first)
+      // Ctrl+1–7 → apply built-in tag to selection (or select block first); pressing the
+      // same digit again on text already carrying that exact tag removes it instead.
       if (e.ctrlKey && !e.shiftKey && !e.altKey) {
         const digit = parseInt(e.key);
         if (digit >= 1 && digit <= BUILTIN_TAGS.length) {
           const tag = BUILTIN_TAGS[digit - 1];
           e.preventDefault();
           const applyTag = () => {
-            editor.chain().focus().setMark('noteTag', { tagId: tag.id, color: tag.color, typeKey: tag.typeKey }).run();
+            if (editor.isActive('noteTag', { tagId: tag.id })) {
+              editor.chain().focus().unsetMark('noteTag').run();
+            } else {
+              editor.chain().focus().setMark('noteTag', { tagId: tag.id, color: tag.color, typeKey: tag.typeKey }).run();
+            }
           };
           if (editor.state.selection.empty) {
             const { $from } = editor.state.selection;
