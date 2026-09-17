@@ -11,7 +11,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { stripArtifactLinksFromContent } from '@/utils/noteContent';
-import type { TaskId, NoteId, CrossAppRefType } from '@/types';
+import type { TaskId, NoteId, CrossAppRef, CrossAppRefType } from '@/types';
 
 function stripArtifactLinksFromNote(noteId: NoteId, targetType: string, targetId: string) {
   const note = useNoteStore.getState().notes[noteId];
@@ -45,7 +45,9 @@ export function deleteTaskWithCleanup(taskId: TaskId) {
 
 // Deletes a note and strips any dangling reverse reference to it (e.g. a Task's
 // crossAppRefs entry pointing at this note). The note's own outgoing ArtifactLinkMarks
-// disappear along with its content — nothing to clean up on that side.
+// disappear along with its content — nothing to clean up on that side. Any StructuredTagEntry
+// (Acronym, etc. — see structuredTagTypes.ts) created from this note is deleted too, since
+// its anchoring mark is about to disappear along with the note's content.
 export function deleteNoteWithCleanup(noteId: NoteId) {
   const tasks = useTaskStore.getState().tasks;
   for (const task of Object.values(tasks)) {
@@ -54,6 +56,10 @@ export function deleteNoteWithCleanup(noteId: NoteId) {
         crossAppRefs: task.crossAppRefs.filter((r) => !(r.type === 'note' && r.id === noteId)),
       });
     }
+  }
+  const { structuredTagEntries, deleteStructuredTagEntry } = useNoteStore.getState();
+  for (const entry of Object.values(structuredTagEntries)) {
+    if (entry.noteId === noteId) deleteStructuredTagEntry(entry.id);
   }
   useNoteStore.getState().deleteNote(noteId);
 }
@@ -68,4 +74,16 @@ export function removeCrossAppRefFromTarget(targetType: CrossAppRefType, targetI
   useTaskStore.getState().updateTask(task.id, {
     crossAppRefs: (task.crossAppRefs ?? []).filter((r) => !(r.type === ref.type && r.id === ref.id)),
   });
+}
+
+// Called from the *target's* own edit UI (e.g. TaskPane's CrossAppRefPicker "×" button) when
+// the user removes a link they can see but doesn't have the source note open to unlink from
+// directly. Strips `ref` from `targetType`/`targetId`'s own crossAppRefs (same as above) and,
+// when `ref` points at a note, also strips the matching ArtifactLinkMark from that note's
+// content — so a link severed from either side (here, or the note's own "Remove link" button)
+// never leaves the other side dangling. Note-independent of whether that note happens to be
+// open right now, same as deleteTaskWithCleanup.
+export function unlinkCrossAppRef(targetType: CrossAppRefType, targetId: string, ref: CrossAppRef) {
+  removeCrossAppRefFromTarget(targetType, targetId, ref);
+  if (ref.type === 'note') stripArtifactLinksFromNote(ref.id as NoteId, targetType, targetId);
 }

@@ -1,0 +1,435 @@
+/* Desktop default: a real flex child within CalendarView's .desktopView (a flex row), sized
+   but NOT position:fixed — it occupies genuine layout space to the left of the calendar
+   grid rather than overlaying anything (so it never covers the app's own NavSidebar). No
+   z-index needed for this mode; it isn't competing for stacking, just normal flow.
+   Styled as its own rounded card (border/radius/shadow matching CalendarView's own
+   .calendarBody) rather than a flush rectangular strip, so it reads as a sibling panel next
+   to the calendar's card, not a mismatched extension of it — the gap between the two is
+   CalendarView.module.css's .desktopView `gap`, not anything in here. */
+.pane {
+  width: 300px;
+  flex-shrink: 0;
+  height: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Android only: a full-screen sheet, same pattern as every other pane in this app — see the
+   component's own header comment for why inline doesn't work at phone width. The component
+   only renders .overlay (the dimming backdrop) when isAndroid, so there's nothing to hide
+   here for desktop beyond the position/sizing override. A full-screen sheet has no business
+   looking like a floating rounded card, so this resets the border/radius/shadow the desktop
+   rule above adds, back to a plain edge-to-edge sheet with just a directional shadow. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 100;
+}
+
+:global(.platform-android) .pane {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 101;
+  border: none;
+  border-radius: 0;
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.25rem;
+  height: 52px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.heading {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-muted);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.3rem;
+  color: var(--color-muted);
+  line-height: 1;
+  padding: 0.2rem;
+}
+.closeBtn:hover { color: var(--color-text); }
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.section + .section {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.25rem;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-muted);
+}
+
+.intro {
+  font-size: 0.82rem;
+  color: var(--color-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.empty {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+/* ── Go to date (MiniDatePicker) ── */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pickerYearRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.pickerStepBtn {
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.pickerStepBtn:hover { background: var(--color-bg); color: var(--color-text); }
+
+.pickerYearInput {
+  width: 4rem;
+  padding: 0.3rem 0.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: center;
+  background: var(--color-surface);
+  color: var(--color-text);
+  /* Hide the native spinner arrows — the «/‹/›/» buttons already cover stepping, and the
+     spinner's tiny hit target invited mis-clicks right next to them. */
+  -moz-appearance: textfield;
+}
+.pickerYearInput::-webkit-outer-spin-button,
+.pickerYearInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.pickerMonthSelect {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.pickerDayLabels {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+}
+.pickerDayLabels span {
+  font-size: 0.62rem;
+  color: var(--color-muted);
+}
+
+.pickerGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.pickerDay {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-size: 0.74rem;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+.pickerDay:hover { background: var(--color-bg); }
+
+.pickerDayOther { color: var(--color-muted); opacity: 0.5; }
+.pickerDayToday { border-color: var(--color-primary); }
+.pickerDaySelected { background: var(--color-primary); color: white; }
+.pickerDaySelected:hover { background: var(--color-primary); }
+
+/* ── Layers ── */
+
+.layerList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.layerItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.4rem;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: var(--color-text);
+  text-align: left;
+  transition: background 100ms ease;
+}
+.layerItem:hover { background: var(--color-bg); }
+.layerItemActive { color: var(--color-primary); font-weight: 500; }
+
+.checkbox {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.25rem;
+  border: 1.5px solid var(--color-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  color: white;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+.checkboxChecked { background: var(--color-primary); border-color: var(--color-primary); }
+
+/* ── Schedule list ── */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.activeToggle input { accent-color: var(--color-primary); width: 1.05rem; height: 1.05rem; cursor: pointer; }
+
+.swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.rowName {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  font-size: 0.74rem;
+  color: var(--color-muted);
+}
+
+.conflictBadge { color: var(--color-warning); }
+
+.previewToggle {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.4rem;
+  opacity: 0.5;
+  transition: opacity 120ms ease, border-color 120ms ease;
+}
+.previewToggle:hover { opacity: 0.8; }
+.previewToggleActive { opacity: 1; border-color: var(--color-primary); }
+
+.rowActionBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease;
+}
+.rowActionBtn:hover { background: var(--color-bg); }
+.rowActionBtnDelete:hover { background: var(--color-danger-muted); }
+
+.addBtn {
+  align-self: flex-start;
+  background: none;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.addBtn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* ── Imported calendars ── */
+
+.connectionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.connectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.calendarRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+  font-size: 0.82rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.calendarRow input { accent-color: var(--color-primary); cursor: pointer; }
+
+.calendarName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connectRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.syncNowBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.syncNowBtn:hover:not(:disabled) { background: var(--color-bg); }
+.syncNowBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Preview grid ── */
+
+.previewSection {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.previewHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.schemaMeta {
+  font-size: 0.76rem;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint {
+  font-size: 0.74rem;
+  color: var(--color-muted);
+  margin: 0;
+}
+
+/* Full-screen on Android — same pattern as every other slide-in pane in this app
+   (TaskPane, SettingsPane, etc. — see CLAUDE.md's Android section). */
+:global(.platform-android) .pane {
+  width: 100vw;
+}

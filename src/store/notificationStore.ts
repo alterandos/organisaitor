@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
 
-export type NotificationKind = 'task-timed' | 'task-untimed' | 'event' | 'reminder';
+export type NotificationKind = 'task-timed' | 'task-untimed' | 'event' | 'reminder' | 'schedule';
 
 export interface PendingNotification {
   id: string;

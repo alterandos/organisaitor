@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import type { TaskId, CalendarEventId, CalendarReminderId, CollectionId, RepeatConfig, CalendarEvent, ScheduleId } from '@/types';
+import type { TaskId, CalendarEventId, CalendarReminderId, CollectionId, RepeatConfig, CalendarEvent, ScheduleId, EventStatus } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
@@ -17,16 +17,16 @@ import {
   type HourLayout,
 } from '@/utils/timeGrid';
 import { ScheduleOccurrencePopover } from '@/components/ScheduleOccurrencePopover/ScheduleOccurrencePopover';
-import { CalendarLayersPicker } from '@/components/CalendarLayersPicker/CalendarLayersPicker';
+import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane';
 import styles from './CalendarView.module.css';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
-  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string }
+  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; status: EventStatus }
   | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string }
-  | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string };
+  | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean };
 
 interface SpanSlot {
   eventId:      CalendarEventId;
@@ -37,6 +37,7 @@ interface SpanSlot {
   isStart:      boolean;  // event starts in this week
   isEnd:        boolean;  // event ends in this week
   collectionId: CollectionId | null;
+  status:       EventStatus;
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -112,6 +113,7 @@ function getWeekSpanSlots(weekDateStrs: string[], spanEvents: CalendarEvent[]): 
       isStart:      ev.date >= weekStart,
       isEnd:        evEnd <= weekEnd,
       collectionId: ev.collectionId,
+      status:       ev.status ?? 'confirmed',
     });
   }
 
@@ -201,6 +203,7 @@ export function CalendarView() {
   const showAddCalendarItem      = useUIStore((s) => s.showAddCalendarItem);
   const showCalendarQuickAdd     = useUIStore((s) => s.showCalendarQuickAdd);
   const openSchedules            = useUIStore((s) => s.openSchedules);
+  const toggleSchedules          = useUIStore((s) => s.toggleSchedules);
   const activeCollectionId       = useUIStore(selectActiveCollectionId) as CollectionId | null;
   const openModal                = useUIStore((s) => s.openModal);
   const editingTaskId            = useUIStore((s) => s.editingTaskId);
@@ -269,6 +272,9 @@ export function CalendarView() {
     Object.values(events).forEach((ev) => {
       const isTaskEvent = (ev.eventType ?? 'default') === 'task';
       if (isTaskEvent ? !layerVisibility.taskScheduled : !layerVisibility.events) return;
+      // Tentative is a filter on top of the 'events' layer, not a separate one — a task-linked
+      // shadow event is never user-marked tentative, so this only ever applies to plain events.
+      if (!isTaskEvent && (ev.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
       if (activeCollectionId && ev.collectionId !== activeCollectionId) return;
       const item: CalDisplayItem = {
         kind: 'event',
@@ -281,6 +287,7 @@ export function CalendarView() {
         // event auto-created from a task's scheduledAt (see Task.calendarEventId) so the calendar
         // reads as task-linked without changing the event's click/edit behaviour.
         typeIcon: (ev.eventType ?? 'default') === 'birthday' ? '🎉' : taskLinkedEventIds.has(ev.id) ? '🕐' : '',
+        status: ev.status ?? 'confirmed',
       };
 
       if (ev.endDate && ev.endDate > ev.date) {
@@ -328,6 +335,13 @@ export function CalendarView() {
       if (!schedule.active) return;
       if (activeCollectionId && schedule.collectionId !== activeCollectionId) return;
       for (const block of schedule.blocks) {
+        // Commitment mode (see ScheduleBlock.requiresCommitment, CLAUDE.md "Schedule
+        // commitment mode"): a block that doesn't require commitment renders exactly as
+        // before (always "committed"); one that does only counts as committed on dates the
+        // user has explicitly committed to — everything else renders muted (isTentativeItem-
+        // style hatch, applied at each render site below) as a heads-up to help decide.
+        const requiresCommitment = block.requiresCommitment ?? false;
+        const committedSet = new Set(block.committedDates ?? []);
         for (const date of expandScheduleBlock(block, schedule, rangeStart, rangeEnd)) {
           push(date, {
             kind: 'schedule',
@@ -341,7 +355,10 @@ export function CalendarView() {
             location: block.location,
             collectionId: schedule.collectionId,
             notes: block.notes,
-            typeIcon: '🗓',
+            // A committed occurrence in commitment mode gets a distinct ✅ icon — not just the
+            // hatch removal — so the state reads clearly even without relying on color/pattern.
+            typeIcon: requiresCommitment && committedSet.has(date) ? '✅' : '🗓',
+            committed: !requiresCommitment || committedSet.has(date),
           });
         }
       }
@@ -526,6 +543,17 @@ export function CalendarView() {
     setSelectedDate(t);
   };
 
+  // "Go to date" (CalendarSidePane) — jumps year/month AND selectedDate together, the same
+  // pair every other navigation action here already keeps in sync (see goToday/shiftWeek/
+  // shiftDay below), so whichever of month/week/day view is active lands on the right
+  // place: month reads year/month, week/day read selectedDate.
+  const jumpToDate = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+    setSelectedDate(dateStr);
+  };
+
   const shiftWeek = (delta: number) => {
     const d = new Date(selectedDate + 'T00:00:00');
     d.setDate(d.getDate() + delta * 7);
@@ -616,12 +644,13 @@ export function CalendarView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAndroid, desktopMode, year, month, selectedDate]);
 
-  // ← / → / PgUp / PgDn navigate to the previous/next period for the current view (month/week/
-  // day); Tab cycles Month → Week → Day → Month. Scoped to this component (not App.tsx's central
-  // handler) since it only makes sense while the Calendar section is mounted — same precedent as
-  // ChronicleView's own arrow-key handling in the Notes section. Suppressed while typing (the
-  // usual isTyping guard) or while any modal/pane that can be open over the calendar is open, so
-  // e.g. Tab still moves focus normally inside AddCalendarItemModal's form instead of switching views.
+  // O toggles CalendarSidePane; ← / → / PgUp / PgDn navigate to the previous/next period for
+  // the current view (month/week/day); Tab cycles Month → Week → Day → Month. Scoped to this
+  // component (not App.tsx's central handler) since it only makes sense while the Calendar
+  // section is mounted — same precedent as ChronicleView's own arrow-key handling in the Notes
+  // section. Suppressed while typing (the usual isTyping guard) or while any modal/pane that can
+  // be open over the calendar is open, so e.g. Tab still moves focus normally inside
+  // AddCalendarItemModal's form instead of switching views.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
@@ -629,6 +658,12 @@ export function CalendarView() {
         || (e.target as HTMLElement)?.isContentEditable;
       if (isTyping) return;
       if (openModal || editingTaskId || editingCalendarEventId || editingCalendarReminderId || dayPaneDate) return;
+
+      if (e.key.toLowerCase() === 'o' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        toggleSchedules();
+        return;
+      }
 
       if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
@@ -652,7 +687,7 @@ export function CalendarView() {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desktopMode, year, month, selectedDate, openModal, editingTaskId, editingCalendarEventId, editingCalendarReminderId, dayPaneDate]);
+  }, [desktopMode, year, month, selectedDate, openModal, editingTaskId, editingCalendarEventId, editingCalendarReminderId, dayPaneDate, toggleSchedules]);
 
   const todayStr = todayIsoStr;
 
@@ -720,6 +755,15 @@ export function CalendarView() {
 
     return style;
   };
+
+  // Diagonal-hatch/muted rendering for anything not yet settled: a self-created event marked
+  // "tentative — not confirmed yet" (AddCalendarItemModal/CalendarEventPane's checkbox,
+  // matching Outlook's own convention for tentative time), or a Schedule occurrence in
+  // commitment mode that hasn't been committed to yet (ScheduleBlock.requiresCommitment —
+  // see CLAUDE.md "Schedule commitment mode"). Both reuse the same visual language on
+  // purpose — both mean "this is a possibility on your calendar, not yet a sure thing."
+  const isTentativeItem = (item: CalDisplayItem): boolean =>
+    (item.kind === 'event' && item.status === 'tentative') || (item.kind === 'schedule' && !item.committed);
 
   const getPillStyle = (item: CalDisplayItem): React.CSSProperties => {
     // A Schedule's own colour takes priority — it's the whole point of the "layer" model that
@@ -803,7 +847,7 @@ export function CalendarView() {
               return (
                 <button
                   key={`${item.kind}-${item.id}`}
-                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
                   style={getPillStyle(item)}
                   onClick={(e) => handleItemClick(e, item)}
                 >
@@ -825,6 +869,11 @@ export function CalendarView() {
 
       {/* ── Desktop ── */}
       <div className={styles.desktopView}>
+        <CalendarSidePane
+          viewMode={desktopMode}
+          anchorDate={desktopMode === 'month' ? `${year}-${String(month + 1).padStart(2, '0')}-01` : selectedDate}
+          onJumpToDate={jumpToDate}
+        />
         <div className={styles.calendarBody} ref={calendarBodyRef}>
 
           {/* Unified header */}
@@ -846,10 +895,16 @@ export function CalendarView() {
                 </button>
               ))}
             </div>
-            <button className={styles.schedulesBtn} onClick={openSchedules} title="Schedules — recurring weekly timetables">
-              🗓 Schedules
-            </button>
-            <CalendarLayersPicker variant={isAndroid ? 'sheet' : 'dropdown'} />
+            {isAndroid && (
+              // Desktop's trigger for this is the app-wide header hamburger (App.tsx),
+              // repurposed for Calendar — but that button is hidden entirely on Android, so
+              // Calendar needs its own visible trigger there. Opens the exact same
+              // CalendarSidePane, which renders itself as a full-screen sheet on Android
+              // rather than the desktop inline panel — see the component itself.
+              <button className={styles.schedulesBtn} onClick={openSchedules} title="Layers & Schedules" aria-label="Layers & Schedules">
+                ☰
+              </button>
+            )}
           </div>
 
           {/* ── Month view ── */}
@@ -894,7 +949,7 @@ export function CalendarView() {
                         {slots.map(slot => (
                           <button
                             key={slot.eventId}
-                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''}`}
+                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''}`}
                             style={{
                               gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                               gridRow: slot.row + 1,
@@ -928,7 +983,7 @@ export function CalendarView() {
                               return (
                                 <button
                                   key={`${item.kind}-${item.id}`}
-                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
                                   style={getPillStyle(item)}
                                   onClick={(e) => handleItemClick(e, item)}
                                   onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -990,7 +1045,7 @@ export function CalendarView() {
                     {weekViewSpanSlots.map(slot => (
                       <button
                         key={slot.eventId}
-                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''}`}
+                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''}`}
                         style={{
                           gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                           gridRow: slot.row + 1,
@@ -1015,7 +1070,7 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''}`}
+                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
                               style={getPillStyle(item)}
                               onClick={(e) => handleItemClick(e, item)}
                               onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1093,7 +1148,7 @@ export function CalendarView() {
                             return (
                               <button
                                 key={`${item.kind}-${item.id}`}
-                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
                                 style={{
                                   top, height,
                                   left:  `${col * widthPct}%`,
@@ -1144,7 +1199,7 @@ export function CalendarView() {
                         return (
                           <button
                             key={`${item.kind}-${item.id}`}
-                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''}`}
+                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
                             style={getPillStyle(item)}
                             onClick={(e) => handleItemClick(e, item)}
                             onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1211,7 +1266,7 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
                               style={{
                                 top, height,
                                 left:  `${col * widthPct}%`,
@@ -1264,7 +1319,7 @@ export function CalendarView() {
                   return (
                     <button
                       key={`${item.kind}-${item.id}`}
-                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''}`}
+                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
                       style={getPillStyle(item)}
                       onClick={(e) => { handleItemClick(e, item); setDayPaneDate(null); }}
                     >

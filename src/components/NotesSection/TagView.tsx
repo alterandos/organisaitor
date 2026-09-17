@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { BUILTIN_TAGS, type BuiltinTag } from '../NoteEditor/builtinTags';
-import type { Note, NoteTag } from '@/types/notes';
+import { getStructuredTagType } from '@/config/structuredTagTypes';
+import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { NoteTagId } from '@/types';
 import styles from './TagView.module.css';
 
@@ -58,6 +59,7 @@ interface NoteEntry {
   title:    string;
   segments: string[];  // actual tagged text snippets
   preview:  string;    // content preview for org tags
+  structuredEntries?: StructuredTagEntry[];  // structured tag types (Acronym, etc.) only
 }
 
 interface LocationGroup {
@@ -86,6 +88,7 @@ export function TagView() {
   const setNoteTagViewReturn = useUIStore((s) => s.setNoteTagViewReturn);
   const notesRecord         = useNoteStore((s) => s.notes);
   const noteTagsRecord      = useNoteStore((s) => s.noteTags);
+  const structuredTagEntries = useNoteStore((s) => s.structuredTagEntries);
 
   const [sort, setSort]           = useState<SortMode>('type');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -97,6 +100,39 @@ export function TagView() {
     const builtin = BUILTIN_TAGS.find((t: BuiltinTag) => t.id === tagId);
 
     if (builtin) {
+      const structuredType = getStructuredTagType(builtin.typeKey);
+
+      // Structured tag type (Acronym, etc.): browse the separate entries directly rather
+      // than raw marked text — each entry carries its own fields (e.g. "stands for"),
+      // which a plain text snippet can't show.
+      if (structuredType) {
+        const entries = Object.values(structuredTagEntries).filter((e) => e.tagId === tagId);
+        const noteMap = new Map<string, NoteEntry>();
+        entries.forEach((entry) => {
+          const note = notesRecord[entry.noteId as import('@/types').NoteId];
+          const existing = noteMap.get(entry.noteId);
+          if (existing) { existing.structuredEntries!.push(entry); return; }
+          noteMap.set(entry.noteId, {
+            noteId: entry.noteId, title: note?.title || '(Untitled)',
+            segments: [], preview: '', structuredEntries: [entry],
+          });
+        });
+
+        const byLocation = new Map<string, LocationGroup>();
+        noteMap.forEach((entry, noteId) => {
+          const note = notesRecord[noteId as import('@/types').NoteId];
+          if (!note) return;
+          const path = getNotebookPath(note, noteTagsRecord);
+          const key = path.join(' > ');
+          if (!byLocation.has(key)) byLocation.set(key, { pathKey: key, path, entries: [] });
+          byLocation.get(key)!.entries.push(entry);
+        });
+
+        const locations = [...byLocation.values()].sort((a, b) => a.pathKey.localeCompare(b.pathKey));
+        const total = locations.reduce((sum, l) => sum + l.entries.length, 0);
+        return { id: tagId, name: builtin.name, icon: builtin.icon, color: builtin.color, isBuiltin: true, locations, total };
+      }
+
       // Semantic tag: find notes with this mark + extract text
       const noteMap = new Map<string, NoteEntry>();
       notes.forEach((note) => {
@@ -223,6 +259,18 @@ export function TagView() {
                               <button className={styles.noteTitle} onClick={() => handleNoteClick(entry.noteId)}>
                                 {entry.title}
                               </button>
+
+                              {/* Structured tag type (Acronym, etc.): show term + fields */}
+                              {entry.structuredEntries?.map((se) => (
+                                <div key={se.id} className={styles.segment} onClick={() => handleNoteClick(entry.noteId)}>
+                                  <span className={styles.segmentQuote}>{se.term}</span>
+                                  {Object.entries(se.fields)
+                                    .filter(([, v]) => v)
+                                    .map(([fieldId, value]) => (
+                                      <span key={fieldId}> — {String(value)}</span>
+                                    ))}
+                                </div>
+                              ))}
 
                               {/* Semantic: show actual tagged text snippets */}
                               {entry.segments.map((seg, si) => (

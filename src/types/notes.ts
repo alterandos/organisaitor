@@ -86,3 +86,27 @@ export interface CreateNoteTagInput {
   presetKey?: string;
   collectionId?: CollectionId | null;
 }
+
+// ── Structured tag entries ──────────────────────────────────────────────────────
+// A "structured tag type" (see src/config/structuredTagTypes.ts) pairs one BuiltinTag's
+// typeKey (e.g. 'acronym') with its own field schema and, optionally, an inference
+// function. Applying that tag to a selection creates one of these alongside the usual
+// noteTag mark — the mark carries `structuredEntryId` (extensions/NoteTagMark.ts) so the
+// tagged passage and the entry can find each other in both directions: click/hover the
+// mark to edit the entry, or jump from a browsable list of entries (Notes' TagView) back
+// to the note. This is deliberately generic — Acronym is the first StructuredTagTypeDef,
+// not the only one the shape supports; a future Definition/Question type plugs in by
+// registering another StructuredTagTypeDef, with no change needed here.
+export type StructuredTagEntryId = string & { readonly _brand: 'StructuredTagEntryId' };
+
+export interface StructuredTagEntry {
+  id:           StructuredTagEntryId;
+  typeKey:      string;                   // StructuredTagTypeDef.key, e.g. 'acronym'
+  tagId:        string;                   // BuiltinTag.id actually applied
+  term:         string;                   // the highlighted text itself, e.g. "ASX"
+  fields:       Record<string, unknown>;  // keyed by that type's own field schema ids
+  noteId:       NoteId;                   // which note this instance was created in
+  collectionId: CollectionId | null;      // Endeavour
+  createdAt:    string;
+  updatedAt:    string;
+}

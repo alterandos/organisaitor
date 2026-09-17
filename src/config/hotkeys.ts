@@ -48,13 +48,17 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'action-endeavour-select', group: 'Actions', primary: '0-9', action: 'Select Endeavour by number (while filter is expanded; 0 = All)' },
   { id: 'action-purpose',   group: 'Actions', primary: 'P', secondary: 'Ctrl+P', action: 'Expand Purpose filter (Tasks section)', customizable: true },
   { id: 'action-manage',    group: 'Actions', primary: 'M', secondary: 'Ctrl+M', action: 'Open Manage view (Endeavours / Purposes / Tags)', customizable: true },
-  { id: 'action-back',      group: 'Actions', primary: 'Backspace', action: 'Go back to the previous app section (up to 6 deep)', customizable: true },
+  { id: 'action-back',      group: 'Actions', primary: 'Alt+Left',  secondary: 'Backspace', action: 'Go back to the previous app section (up to 6 deep)', customizable: true },
+  { id: 'action-forward',   group: 'Actions', primary: 'Alt+Right', action: 'Go forward to the next app section (after going back)', customizable: true },
+  { id: 'action-quick-access', group: 'Actions', primary: 'Ctrl+G', action: 'Open Quick Access — jump to a note, notebook, task, list, tracker, routine, or Endeavour', customizable: true },
 
   // Calendar
+  { id: 'calendar-toggle-side-pane', group: 'Calendar', primary: 'O', action: 'Toggle the Calendar side pane (Go to date / Layers / Schedules / Imported calendars)' },
   { id: 'calendar-period',  group: 'Calendar', primary: '←/→', secondary: 'PgUp/PgDn', action: 'Previous/next period (month, week, or day — matches current view)' },
   { id: 'calendar-view',    group: 'Calendar', primary: 'Tab', secondary: 'Shift+Tab', action: 'Cycle Month → Week → Day view (Shift+Tab cycles in reverse)' },
 
   // Notes
+  { id: 'notes-apply-tag',     group: 'Notes', primary: 'Ctrl+1 .. Ctrl+8', action: 'Apply/remove a built-in annotation tag on the selection (editor focused) — a structured type like Acronym opens a create popover instead' },
   { id: 'notes-expand',        group: 'Notes', primary: '→',             action: 'Expand selected notebook'          },
   { id: 'notes-collapse',      group: 'Notes', primary: '←',             action: 'Collapse selected notebook'         },
   { id: 'notes-nav',           group: 'Notes', primary: 'PgUp/PgDn',     action: 'Navigate tree/list column (same as ↑/↓)' },

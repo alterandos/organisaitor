@@ -51,11 +51,19 @@ export async function checkStravaStatus(): Promise<StravaStatus> {
   const token = await accessToken();
   if (!token) return { connected: false };
 
-  const res = await fetch('/api/strava-status', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return { connected: false };
-  return res.json();
+  try {
+    const res = await fetch('/api/strava-status', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { connected: false };
+    // Local `vite dev` has no /api/* routing (only Vercel/`vercel dev` do), so this fetch can
+    // come back 200 OK with the edge function's own source text instead of real JSON — `.ok`
+    // alone doesn't guarantee a parseable body. Fail soft rather than throwing an uncaught
+    // SyntaxError out of this function.
+    return await res.json();
+  } catch {
+    return { connected: false };
+  }
 }
 
 // Fetches recent activities from Strava (server-side, via api/strava-sync.ts) and

@@ -77,7 +77,7 @@ export function SettingsPane() {
 
   // Hotkey-rebind capture state — a separate Escape handler below cancels capture rather
   // than closing the whole pane; this one must not also fire in that case (same class of
-  // bug as AddScheduleModal/ManageSchedulesPane's Escape collision — see CLAUDE.md).
+  // bug as AddScheduleModal/CalendarSidePane's Escape collision — see CLAUDE.md).
   const [listening, setListening] = useState<{ id: string; slot: 'primary' | 'secondary' } | null>(null);
   const overrides           = useHotkeyOverridesStore((s) => s.overrides);
   const setHotkeyOverride   = useHotkeyOverridesStore((s) => s.setOverride);

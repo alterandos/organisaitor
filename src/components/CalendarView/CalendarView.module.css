@@ -8,7 +8,11 @@
 }
 
 /* ── Desktop/mobile visibility ─────────────────────────────── */
-.desktopView { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* row, not column: CalendarSidePane (desktop mode) renders as the first child, occupying
+   real layout space to the left of .calendarBody rather than overlaying it — see
+   CalendarSidePane's own header comment for why. Its Android mode uses position:fixed
+   internally, which is unaffected by the parent's flex-direction either way. */
+.desktopView { display: flex; flex-direction: row; gap: 1rem; flex: 1; min-height: 0; }
 .mobileView  { display: none; }
 
 @media (max-width: 600px) {
@@ -171,6 +175,7 @@
 
 .calendarBody {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -464,6 +469,24 @@
 
 .calItemCompleted { text-decoration: line-through; opacity: 0.5; }
 .calItemPast      { text-decoration: line-through; opacity: 0.55; }
+
+/* Tentative event — "not confirmed yet" (AddCalendarItemModal/CalendarEventPane's checkbox).
+   Diagonal hatch, matching Outlook's own convention for tentative time (see CLAUDE.md). The
+   !important on background-image is deliberate: some render sites (spanPill, month pills
+   with an Endeavour color) set an inline `background` shorthand via getPillStyle/
+   getSpanPillStyle, which would otherwise silently clobber this class's background-image —
+   an inline style normally wins over a stylesheet rule regardless of specificity, and
+   !important is the one documented way to still override it. background-blend-mode isn't
+   part of the `background` shorthand, so it applies normally against whatever
+   background-color ends up set (the class's own, or an inline one). */
+.calItemTentative {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.55) 0 6px,
+    rgba(0, 0, 0, 0.08) 6px 12px
+  ) !important;
+  background-blend-mode: overlay;
+}
 
 .calItemIcon {
   flex-shrink: 0;

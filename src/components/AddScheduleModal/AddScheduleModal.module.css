@@ -1,5 +1,5 @@
 /* z-index 102 (not the everyday-modal tier 30): this modal can open from inside
-   ManageSchedulesPane, which is already open at the 100/101 tier — same reasoning as
+   CalendarSidePane, which is already open at the 100/101 tier — same reasoning as
    EditActivityTypeModal opening from inside AddActivityModal (see CLAUDE.md). */
 .overlay {
   position: fixed;
@@ -218,6 +218,15 @@
   font-size: 0.72rem;
   color: var(--color-muted);
   line-height: 1.4;
+}
+
+.miniLabelCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--color-text);
+  cursor: pointer;
 }
 
 .occurrenceList {

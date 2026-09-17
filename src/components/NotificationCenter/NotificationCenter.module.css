@@ -114,6 +114,7 @@
 .kindTask     { border-left-color: var(--color-warning); }
 .kindEvent    { border-left-color: var(--color-primary); }
 .kindReminder { border-left-color: var(--color-success); }
+.kindSchedule { border-left-color: #a855f7; }
 
 .cardMain {
   display: flex;

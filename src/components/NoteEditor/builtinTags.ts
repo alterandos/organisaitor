@@ -32,4 +32,9 @@ export const BUILTIN_TAGS: BuiltinTag[] = [
     typeKey: 'learn-later',
     actions: [{ type: 'create-task' }],
   },
+  // Structured tag type (see src/config/structuredTagTypes.ts) — applying this one opens a
+  // small create/preview popover instead of tagging immediately, and creates a separate
+  // StructuredTagEntry alongside the mark. Kept last so Ctrl+1-7 (the existing built-ins)
+  // stay on the same keys; this becomes Ctrl+8.
+  { id: 'builtin-acronym', name: 'Acronym', icon: '🔤', color: '#0d9488', typeKey: 'acronym' },
 ];

@@ -5,13 +5,13 @@ Format: brief description + context/motivation.
 
 ---
 
-## uiStore persistence (deferred, not pre-built)
+## uiStore persistence — navigation/session memory built; broader scope still deferred
 
-`uiStore` (active section, Endeavour/Purpose filters, sort, view modes, expanded/selected IDs, etc.) is currently memory-only — it resets on every page reload. Persistence across reloads/sessions is wanted eventually, but not yet.
+**Built**: `uiStore` is now persisted to localStorage (`todo-ui-session`, per-device only — no cross-device sync) via zustand's `persist` middleware with a `partialize`, scoped deliberately to **navigation/session memory**: `activeView`, back/forward history (`sectionHistory`/`sectionForwardHistory`), `activeCollectionIdByView`, `activePurposeIds`, `notesLastEditingNoteId`/`notesLastActiveTabId`, `selectedNoteTagId`, `listsLastActiveListId`/`listsLastActiveTabId`, `activeTrackerId`/`activeRoutineId`, `calendarViewMode`. See CLAUDE.md's uiStore entry for the full field list and reasoning.
 
-**Decision: defer, don't build ahead of time.** Reasoning: every field currently in `uiStore` is already plain JSON-serializable (strings, string arrays, booleans, `Partial<Record<AppView, string | null>>` for `activeCollectionIdByView`) — there's no Set/Map/function-in-state to rework first, and nothing is persisted today, so there's no migration debt accumulating while this waits. Adding persistence later is a self-contained change (wrap with zustand's `persist` middleware + a `partialize` to choose which fields survive a reload — e.g. filters/sort/view-mode yes, transient things like `openModal`/`endeavourPickerOpen`/`manageOpen` no), so doing prep work now would be speculative. The two open questions that *do* need a decision when this is picked up:
-- **Scope**: per-device only (`localStorage`, like `settingsStore`) vs cross-device (needs a Supabase table + sync mapper, like `taskStore`). These are different-shaped features — don't build one assuming the other.
-- **Which fields**: probably filters/sort/view-mode/expanded-tree-state; probably not modal-open booleans or one-off "currently editing X" pointers (those should always start closed on load).
+**Deliberately still excluded** (matches the original "which fields" question below, now answered for this pass): every modal/pane/dropdown open-state (`openModal`, `endeavourPickerOpen`, `manageOpen`, `settingsOpen`, etc.) and one-off "currently editing X" pointers stay memory-only, so a reload never reopens a modal pointing at a possibly-deleted item. `sortField`/`sortDir` and `expandedNoteTagIds` were also left out of this pass (not asked for) — revisit if a future request wants those to survive a reload too.
+
+**Cross-device sync remains a separate, undecided future feature** — this pass only answered "per-device only," matching `settingsStore`'s existing shape. A synced version would need a Supabase table + sync mapper, same as `taskStore`, and is a materially different feature, not an extension of this one.
 
 ---
 
@@ -428,13 +428,14 @@ packages/notes/
   - **Calendar item as a create-menu target** — wire the "Calendar item" stub: infer whether the selection reads more like an event (has a time range / location cues) or a reminder (just a date), or offer both as sub-choices; hand off to `AddCalendarItemModal` pre-filled the same way Task hands off to `AddTaskModal` (extend `pendingArtifactLink`'s `targetType` union usage — the field already accepts any `CrossAppRefType`, only the create-menu's `enabled: false` flag and the modal hand-off need building). Add `event`/`reminder` to wherever `CrossAppRef`'s `type` is rendered (a "Linked notes"-style chip on `CalendarEventPane`/`CalendarReminderPane`) and to `crossAppLinkCleanup.ts`'s target-aware functions (currently only handle `'task'`).
   - **List item as a create-menu target** — same shape again: hand off to `AddListItemModal` pre-filled from the selection (which list to add to is the open question — probably needs a list picker in the pre-fill step, unlike Task/Calendar which have no equivalent "which container" ambiguity beyond Endeavour), a "Linked notes" chip on the list item's detail UI, and `crossAppLinkCleanup.ts` support for `'listItem'`.
   - **Tracker entry as a create-menu target** — same shape; the extra wrinkle is a Tracker's `fieldSchema` is user-defined per-tracker, so pre-fill can realistically only ever cover the couple of universal-ish fields (date, notes) rather than anything schema-specific.
+  - **Reuse the existing link-inference for all three of the above, not just Task**: `FloatingToolbar.tsx`'s `extractHyperlinkUrls()` (real hyperlinks, via the selection's `link` marks) and `textToTask.ts`'s plain-URL regex are both already generic over "a selection's text/marks," not Task-specific — any target with a links-like field (List items already have one; Calendar events/reminders currently don't) should merge both sources the same way Task's prefill does, rather than only picking up plain-text URLs.
   - **The inheritance rules already built for Task must hold for all three of the above, not just Task**: (a) **Endeavour** — the created item's `collectionId` (or equivalent) defaults to the source note's own `collectionId`, falling back to the Notes section's currently-focused Endeavour; (b) **Tags** — deliberately *not* built even for Task in this pass, since Notes' `NoteTag` and the shared `Tag` entity are separate ID spaces with no mapping yet (see CLAUDE.md) — whatever tag-inheritance design gets picked (skip / match-by-name-and-create / something else) should apply uniformly once decided, not be re-litigated per target type.
   - **"Follow up on later" → Calendar Reminder** specifically (the other half of the original tag-based ask) — covered by the Calendar item item above once built; no separate mechanism needed.
-  - **Manual Task → Note linking UI** (confirmed as a real, clearly-specified future requirement, explicitly out of scope for this pass): today a Task only gains a "Linked notes" chip automatically, as a side effect of being *created from* a note selection — there's no way for a user to go the other way and manually attach an existing note to an already-existing task (or add a second/third note link after the fact). This needs a **note-picker UI** reachable from `TaskPane` (an "+ Link a note" affordance next to the existing "Linked notes" chip row), with:
-    - A **searchable list of every note**, since notes have no natural small enumeration the way, say, Endeavours do.
-    - Granularity **down to the tab level** — a note with multiple tabs (see `Note.tabs`) should let the user pick a specific tab, not just the note as a whole, since a tab can hold an entirely different topic. Heading-level or individual-word-level granularity was raised as a stretch idea but explicitly flagged by the user as likely too tedious for a manual picker to be worth it — worth reconsidering only if a real use case shows up, not built speculatively.
-    - Because browsing *every* note by scrolling a flat list would be unusable once a user has more than a handful, the picker needs real filtering, at minimum: **recently opened/viewed notes** (already tracked — `Note.lastViewedAt`, updated by `touchNote()`) as a default/quick-access list; filter by **Endeavour** (`Note.collectionId`, same `CollectionPicker` component used elsewhere); filter by **tag/notebook** (`Note.tagIds`); a plain text **search** over note titles (and ideally content, once/if full-text search — already a separate open Notes backlog item — exists).
-    - Once a note (and optionally tab) is picked, the mechanism is the same `CrossAppRef`/`ArtifactLinkMark` pair already built — the only new piece is *where in the note's content* the mark should be placed, since there's no "selection" to anchor it to when linking from the Task side. Simplest option: don't place an inline mark at all for a Task-initiated link — just record `{ type: 'note', id }` in the task's `crossAppRefs` and skip the forward mark entirely for that direction (asymmetric, but note-side marks only ever mattered for "this exact phrase spawned that item," which doesn't apply to a manually-added link) — needs a decision when this is built, not assumed here.
+  - **Manual Task ↔ Note linking UI — v1 done (`CrossAppRefPicker`), fuller spec still open.** A Task can now be manually linked to an existing note (or unlinked) from both `AddTaskModal` (while creating) and `TaskPane` (after the fact) via a shared, reusable `src/components/CrossAppRefPicker/CrossAppRefPicker.tsx` — chips for current links + a "+ Link" popover with a searchable, recent-first note list. See CLAUDE.md "Cross-app linking" → "Manual linking, both directions" for the full write-up, including two real bugs the popover-in-a-scrollable-form pattern surfaced (an Escape-listener conflict, and a scroll-clamping click-miss bug) — worth reading before building the next popover anywhere near a scrollable modal in this codebase. Deliberately scoped smaller than the original ask here, per the confirmed "nice UI element" request rather than the fuller spec below:
+    - **Not yet built — tab-level granularity**: a note with multiple tabs (see `Note.tabs`) should let the user pick a specific tab, not just the note as a whole, since a tab can hold an entirely different topic. Heading-level or individual-word-level granularity was raised as a stretch idea but explicitly flagged as likely too tedious for a manual picker to be worth it — worth reconsidering only if a real use case shows up, not built speculatively.
+    - **Not yet built — richer filtering beyond recent-first + title search**: filter by **Endeavour** (`Note.collectionId`, same `CollectionPicker` component used elsewhere); filter by **tag/notebook** (`Note.tagIds`); search over note *content*, not just titles (once/if full-text search — already a separate open Notes backlog item — exists).
+    - **Confirmed asymmetry, not a gap**: linking from the Task side never creates a forward `ArtifactLinkMark` on the note (there's no text selection to anchor it to) — only the reverse `CrossAppRef` is recorded. A note-initiated link still gets both. This was a real decision point flagged before building, not an oversight.
+    - **When Calendar/List/Tracker create-menu targets ship (below), extend `CrossAppRefPicker` itself** (its type row already shows all four, three as stubs) rather than building separate pickers per entity — it's already a generic `{ value; onChange; onNavigate? }` component, not Task-specific in its own implementation.
   - **The user's stated AI stretch goal** — background AI that proposes/creates these links automatically instead of requiring an explicit selection + Ctrl+Q/click. Still fully open; the regex/`Intl`-based inference in `textToTask.ts` is the deliberate non-AI first step this was scoped against.
 - **Image tagging** — images pasted into the editor are not yet taggable (NoteTag marks apply to text/inline content; images are block nodes). To tag an image: either (a) wrap it in a custom node that accepts a tag attribute, or (b) apply a tag to the surrounding paragraph. Decision deferred. When implemented, clicking an image and pressing Ctrl+Space should open the tag picker and apply the tag to the image node.
 - Tag drag-and-drop reordering
@@ -445,7 +446,7 @@ packages/notes/
 
 **Phase 3: Intelligence**
 - AI-powered note testing (generate Q&A from notes by tag/type)
-- Glossary auto-extraction (collect all "definition" type notes)
+- Glossary auto-extraction (collect all "definition" type notes) — **the Acronym structured tag type below is a first, narrower realization of this idea** (a browsable, per-instance glossary), not the general "any tag type" version this line originally meant
 - Auto-linking (suggest related notes based on content/tags)
 - Spaced repetition for definitions/flashcards
 
@@ -455,6 +456,27 @@ packages/notes/
 - Collaborative notes (shared editing, comments)
 - Export formats (PDF, Markdown, HTML)
 - Mobile app (already PWA-capable via Vercel)
+
+---
+
+### Structured tag entries — Acronym built; a generic framework for future tag types
+
+**Built**: a "structured tag type" is a built-in annotation tag (see `NoteEditor/builtinTags.ts`'s `typeKey`) that, instead of just marking a passage of text, also creates a separate, browsable `StructuredTagEntry` record with its own fields — Acronym is the first one. Applying the Acronym tag (Ctrl+8, the `#Tag` picker, or the ✎ hover-edit on an existing one) opens a small popover: term + "Stands for" compact by default (Enter accepts as-is), with a "More options…" expansion showing Explanation, Endeavour, and (when editing) the entry's location/created/updated. See CLAUDE.md's "Structured tag entries" for the full write-up (files, data model, mark attribute, cleanup-on-delete).
+
+**This was built as a genuine framework, not an Acronym-specific feature**, per the explicit request to keep future tag types in mind — adding a second type (Definition, Question, etc.) is:
+1. One more entry in `STRUCTURED_TAG_TYPES` (`src/config/structuredTagTypes.ts`) — `key` (matching a `BuiltinTag.typeKey`), `label`, its own `fields` schema, and an optional `infer()` function.
+2. One more `BuiltinTag` in `builtinTags.ts` with that `typeKey`.
+
+Nothing else needs touching — the create popover, the hover-edit affordance, the mark's `structuredEntryId` attribute, the store actions, and the Notes `TagView` browsable-list rendering are all written generically against the registry, not against Acronym by name.
+
+**Inference — pattern/regex-based now, LLM is the stated stretch goal.** `src/utils/acronymInference.ts` implements the non-AI heuristics requested: parenthetical patterns in either order ("X (ACRONYM)" / "ACRONYM (X)"), colon/dash patterns ("ACRONYM: X", "ACRONYM - X"), and an initials-match check (an all-caps token at the very start or end of the highlighted phrase whose letters exactly match the initials of the remaining words — treated as a *confident* match per the user's own stated rule, not just a fallback heuristic). Consistent with the rest of this app's non-AI inference (`textToTask.ts`). **Not built**: an LLM-backed fallback for cases the patterns miss (e.g. an acronym used with no expansion anywhere nearby in the note, or general-knowledge inference from just the acronym text) — flagged explicitly as the next step if the pattern-based version proves insufficient, requiring a new server-side API integration (in the vein of the Strava edge functions) rather than a client-side call, plus a real per-call cost.
+
+**Deliberately deferred / not built in this pass:**
+- **Cross-note deduplication.** Each application of the Acronym tag creates its own independent `StructuredTagEntry`, even if the exact same acronym text already has an entry elsewhere. Tagging "ASX" in three different notes today produces three separate entries, each with its own fields and note context — there's no "canonical ASX" merging, matching, or reuse-existing-entry prompt. This is a real design fork (a global glossary of unique terms vs. a per-occurrence log), not an oversight; revisit if users want a single ASX entry instead of one per tagging.
+- **Editing directly from the Notes `TagView` browsable list.** Clicking a structured entry there navigates to its source note (same as every other tag-view row) rather than opening the edit popover inline — the ✎ hover-edit only exists on the note's own marked text today. A future pass could add an edit affordance directly in `TagView` if browsing-then-navigating proves too many clicks.
+- **Tab-level note context.** `StructuredTagEntry.noteId` doesn't record which tab (see `Note.tabs`) the acronym was tagged in, only the note — the breadcrumb/location shown in the popover is the note's notebook path, not a tab name. Same granularity this app already accepted for the Task↔Note `CrossAppRefPicker` (see "Cross-app built-in tag types" above).
+- **Deleting an entry whose note isn't currently open** strips the `StructuredTagEntry` but can't reach into that other note's stored content to unset the mark (no live editor instance to dispatch a transaction against) — the mark is left in place, pointing at a now-deleted entry, until that note is next opened and re-saved. A future pass could walk every note's raw JSON content directly (like `stripArtifactLinksFromContent` already does for `ArtifactLinkMark`) instead of requiring a live editor.
+- **A dedicated "Manage" surface for structured entries** (browse/search/bulk-edit across all notes at once, independent of the tag-view grouping) — today's browsing is entirely through `TagView`, scoped by clicking the Acronym tag specifically.
 
 ---
 
@@ -680,6 +702,15 @@ layer reads from this data rather than maintaining its own event store.
 **Open decision:**
 - Whether the Calendar section stays inside the Organizer app or eventually splits into its own app package. The suite's single-deployment monorepo model keeps both paths open — if split, it becomes a new route in the same build. Recommend revisiting once the feature spec matures.
 
+### Tentative events — built (Events only); a few related ideas not pursued
+
+**Built**: `CalendarEvent.status: 'confirmed' | 'tentative'` — see CLAUDE.md "Tentative events" for the full write-up (data model, rendering, layer filter). Scoped to Events only, per the confirmed decision — Reminders and Schedule blocks don't have this field.
+
+**Considered but not built, worth revisiting only if a real need shows up:**
+- **ICS import doesn't read the source file's own `STATUS:TENTATIVE`** — `icsParser.ts`/`CalendarImportReviewModal` import every event as `status: 'confirmed'` regardless of what the source calendar had. Wiring this up would mean parsing `STATUS` in `icsParser.ts` and mapping it onto the new field — small, but not done since it wasn't asked for.
+- **A "is this still happening?" follow-up notification for a tentative event whose date has arrived or passed** — the same shape as the separate "Waiting-task follow-up notifications" item above, but for tentative events instead of `kind: 'waiting'` tasks. Not built; flagged here since the two ideas are conceptually the same pattern (something left in an unresolved state past its due point) and could plausibly share a notification mechanism if both get built.
+- **Reminders/Schedule blocks gaining their own tentative concept later** — deliberately not built now since neither has an obvious "not confirmed yet" meaning today (see CLAUDE.md), but if that changes, the `EventStatus` type was kept as its own named alias specifically so extending or renaming it stays a small change.
+
 ### Mini-calendar toggle in the task list view
 A setting (in the Settings pane) to display a condensed calendar alongside
 the to-do list — the two panels sit side by side. Useful for seeing
@@ -765,18 +796,31 @@ should come first since they cover the large majority of real users.
   free/busy endpoint and avoids pulling full titles/notes/attendees at all.
 
 **Recommended incremental path**, mirroring how Strava itself was scoped:
-1. **Phase 1 — Google Calendar, read-only, manual sync.** OAuth connect + a "Sync now"
-   button pulling upcoming events in as a new synthetic, non-persisted display layer —
-   same idea as how Schedule blocks render on the calendar today (expanded at render
-   time, not materialized as real rows) or, if persisted, marked clearly read-only with
-   edits redirected to "open in Google Calendar."
-2. **Phase 2 — Microsoft/Outlook via Graph API**, same shape as Phase 1.
-3. **Phase 3 (much bigger, only if Phase 1/2 usage justifies it) — two-way sync**:
-   `CalendarEvent.source`/`sourceId` fields, push subscriptions + renewal, conflict
-   resolution, RRULE translation.
-
-Not started. Flagged here as a scoped, staged plan rather than a single feature, since
-Phase 1 alone is a genuinely useful, comparatively low-risk slice.
+1. ~~Phase 1 — Google Calendar, read-only, manual sync.~~ **Built — see CLAUDE.md
+   "External calendar sync."** Ended up slightly different from this original sketch in
+   two ways, both confirmed with the user before building: synced events are **fully
+   editable real `CalendarEvent` rows** (this app becomes the source of truth once one is
+   imported), not a read-only overlay layer — and sync runs **automatically while the app
+   is open** (on load + every 15 minutes), not only on a manual "Sync now" click, though
+   the manual button still exists as a fallback/reassurance. `CalendarEvent.source`/
+   `sourceId` became four fields (`source`/`sourceConnectionId`/`sourceCalendarId`/
+   `sourceEventId`) rather than two, specifically to support multiple connections of the
+   same provider (two Google accounts), a real requirement that wasn't anticipated in this
+   original analysis.
+2. **Phase 2 — Microsoft/Outlook via Graph API**, same shape as Phase 1. Not started.
+3. **Phase 2.5 — a real server-side cron for "syncs even when the app is fully closed."**
+   Deliberately not built alongside Phase 1 — it needs a Supabase **service-role**
+   credential, a category of secret this app has never needed anywhere else (every
+   existing edge function, Strava included, authenticates as the signed-in user via RLS).
+   Worth it only if the 15-minutes-while-open cadence proves too laggy in practice.
+4. **Phase 3 (much bigger, only if Phase 1/2 usage justifies it) — two-way sync**:
+   push subscriptions + renewal, conflict resolution (this app *not* being the source of
+   truth anymore, unlike Phase 1's model), RRULE translation (Phase 1 sidesteps this by
+   asking Google to expand recurring events server-side instead).
+5. **Not built, no phase assigned yet**: CalDAV support for "other" providers (self-hosted
+   calendar servers, iCloud); a "mark as attended" / attendance concept (this is sync
+   provenance, not Schedule commitment mode — the two are unrelated); per-connection
+   configurable sync window (currently a fixed 1-month-back/6-months-forward constant).
 
 ---
 
@@ -1472,21 +1516,16 @@ When a user types a ticker that exists in multiple markets (e.g. VMM on NASDAQ a
 
 ---
 
-### Suite-wide "Quick Access" pane (recently/frequently/pinned)
+### Suite-wide "Quick Access" pane (recently/frequently/pinned) — v1 built
 
-A hotkey-triggered pane, available from anywhere in the suite, that surfaces the user's most relevant destinations so they can jump straight there instead of navigating through a section's hierarchy each time. Examples of a "destination": a specific List (e.g. a watchlist buried a few levels into Lists), a specific Endeavour-filtered Task view, a specific Note or notebook, a specific Tracker.
+**Built.** `Ctrl+G` opens a search-and-jump overlay (`src/components/QuickAccessPane/`) from anywhere in the suite — search by title across Notes, Notebooks, Tasks, Lists, Endeavours, Trackers, and Routines, or (empty query) browse Recent/Frequent visit history with a user-adjustable "Show N" count (`settingsStore.quickAccessRecentCount`, 3–20, default 8). Full design/architecture is documented in CLAUDE.md's Implemented Features list under "Suite-wide Quick Access pane" — see there for the provider-registry shape (`src/utils/quickAccess.ts`), the visit-tracking store (`src/store/recentItemsStore.ts`), and exactly which app actions record a visit.
 
-**Candidate content, to be decided when this is designed:**
-- Recently viewed items (cross-app — Tasks, Lists, Notes, Records, Portfolio, Fitness)
-- Pinned items (user explicitly marks a destination as fast-access)
-- Popularly/frequently viewed items (usage-ranked, similar in spirit to `getTopActivityTypes`'s usage-ranking approach already used in Fitness)
-
-**Open design questions for later:**
-- Hotkey binding (not yet chosen — must not collide with existing suite hotkeys, see `src/config/hotkeys.ts`)
-- Whether pinned and frequent/recent are separate lists, a merged ranked list, or user-toggleable sections
-- How a "destination" is represented generically across apps that don't share a data model (a List, a Task filtered by Endeavour, a Note, a Tracker) — likely needs a small cross-app "navigable target" abstraction, probably living in the shared platform layer per the suite architecture in CLAUDE.md
-- How "recently/frequently viewed" is tracked per entity type (some already have partial groundwork, e.g. `Note.lastViewedAt`/`touchNote`; others have nothing yet)
-- Display/prioritization UX (pinned-first vs. blended, list vs. grid, how many items to show)
+**Deliberately not built in v1 (genuine future work, not oversights):**
+- **Pinning.** The original ask's third leg ("pinned items") isn't built — only recent + frequent. `Note.pinned` already exists as a field (unused by this feature); Tasks/Lists/Endeavours/Trackers/Routines have no pin concept at all yet. Adding it means: a pin flag per entity type (or a separate lightweight `pinnedItemsStore` mirroring `recentItemsStore`'s shape, which would generalize better across types that don't already have a `pinned` field), a pinned section in `QuickAccessPane` above Recent/Frequent, and a way to pin from *outside* the pane too (e.g. a pin icon on task/list/note rows), not just from within it.
+- **Granular in-entity targets.** Today a "destination" is a whole Note/Task/List/etc., not a specific Calendar event, Portfolio ticker, Fitness activity, a specific Tracker entry, or a specific List item/Records entry. Extending this is additive, not a redesign: one new `QuickAccessProvider` + one new `QuickAccessTargetType` union member per type (see the provider registry in `src/utils/quickAccess.ts`) — this extensibility was a deliberate design goal of v1, not left for a rewrite.
+- **Portfolio/Fitness coverage** — no provider for tickers or activities yet, same "add a provider" extension path as above.
+- **Android/touch entry point.** `Ctrl+G` isn't reachable on Android (no physical Ctrl key); `closeTopmostMobileOverlay()` already knows how to close the pane (for the hardware back button), but nothing opens it from touch UI yet — needs a button somewhere in `MobileNav`/`MobileMoreSheet`.
+- **Fuzzy matching.** Search today is a plain case-insensitive substring match on title, per type, capped at 6 results per type. No ranking by match quality/recency, no matching on subtitle/notes/content.
 
 **Motivating example from the user:** they have a specific List they want faster access to than going through Lists → navigating the list hierarchy each time.
 

@@ -5,9 +5,10 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { newTagId } from '@/utils/id';
 import { LABELS } from '@/config/labels';
-import type { Priority, TagId, PurposeId, CollectionId, TaskKind, TaskId } from '@/types';
+import type { Priority, TagId, PurposeId, CollectionId, TaskKind, TaskId, CrossAppRef } from '@/types';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
+import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import styles from './AddTaskModal.module.css';
 
 type PendingTag = { id: TagId; name: string; isNew: boolean };
@@ -61,6 +62,10 @@ export function AddTaskModal() {
   const [parentId,           setParentId]            = useState<TaskId | ''>((pendingParentId as TaskId) ?? '');
   const [links,              setLinks]               = useState<string[]>(quickAddPrefill?.links ?? []);
   const [linkInput,          setLinkInput]           = useState('');
+  // Manually-picked links only — the automatic "created from this note" backlink (see
+  // pendingArtifactLink below) is kept separate and merged in at submit time, so removing a
+  // manual pick here can never be mistaken for undoing the automatic one.
+  const [manualCrossAppRefs, setManualCrossAppRefs]  = useState<CrossAppRef[]>([]);
 
   const addTask = useTaskStore((s) => s.addTask);
   const addTag  = useTaskStore((s) => s.addTag);
@@ -174,9 +179,14 @@ export function AddTaskModal() {
     // apply the forward ArtifactLinkMark and clear the pending request itself. The ref's
     // `type` is the *source* of the link (always 'note' today) — not
     // pendingArtifactLink.targetType, which instead describes the forward mark's target
-    // (i.e. 'task', what's being created) and would be backwards here.
+    // (i.e. 'task', what's being created) and would be backwards here. Merged with whatever
+    // was manually picked via the "Linked items" field, deduped in case the same note was
+    // both the creation source and manually re-added.
     const pendingArtifactLink = useUIStore.getState().pendingArtifactLink;
-    const crossAppRefs = pendingArtifactLink ? [{ type: 'note' as const, id: pendingArtifactLink.noteId }] : [];
+    const autoRef = pendingArtifactLink ? [{ type: 'note' as const, id: pendingArtifactLink.noteId }] : [];
+    const crossAppRefs = [...autoRef, ...manualCrossAppRefs].filter(
+      (ref, i, all) => all.findIndex((r) => r.type === ref.type && r.id === ref.id) === i
+    );
 
     const taskId = addTask({
       title,
@@ -451,6 +461,13 @@ export function AddTaskModal() {
                   />
                   <button type="button" className={styles.linkAddBtn} onClick={addLink} disabled={!linkInput.trim()}>Add</button>
                 </div>
+              </div>
+
+              {/* Linked items (Notes today; Calendar/List/Tracker are stubs in the picker
+                  itself — see CLAUDE.md "Cross-app linking") */}
+              <div className={styles.field}>
+                <label className={styles.label}>Linked items</label>
+                <CrossAppRefPicker value={manualCrossAppRefs} onChange={setManualCrossAppRefs} />
               </div>
 
               {/* Parent task */}

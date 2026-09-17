@@ -6,14 +6,20 @@ import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
 import { normalizeLinkUrl } from '@/utils/links';
 import { inferTaskFromSelection } from '@/utils/textToTask';
-import type { NoteId } from '@/types/notes';
+import type { NoteId, StructuredTagEntryId } from '@/types/notes';
 import type { CrossAppRefType } from '@/types';
 import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
+import { getStructuredTagType } from '@/config/structuredTagTypes';
 import styles from './FloatingToolbar.module.css';
 
 interface Props {
   editor: Editor;
   noteId: string;
+  // Applying a structured-type tag (Acronym today — see structuredTagTypes.ts) opens a
+  // create/preview popover instead of tagging immediately; NoteEditor owns that popover's
+  // state since it also needs to apply the resulting mark, so this hands the request up
+  // rather than duplicating the popover here.
+  onStructuredTag: (tag: BuiltinTag, from: number, to: number) => void;
 }
 
 interface ToolbarPos {
@@ -54,7 +60,7 @@ const CREATE_MENU_OPTIONS: CreateMenuOption[] = [
   { type: 'trackerEntry',label: 'Tracker entry',    icon: '📊', enabled: false },
 ];
 
-export function FloatingToolbar({ editor, noteId }: Props) {
+export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
   const [pos, setPos]           = useState<ToolbarPos | null>(null);
   const [showTags, setShowTags] = useState(false);
   const [search, setSearch]     = useState('');
@@ -175,6 +181,23 @@ export function FloatingToolbar({ editor, noteId }: Props) {
   // Defined above the `!pos` early return (rather than down with the other handlers) so the
   // digit/Escape effect below — which must itself live above that return, to satisfy the
   // Rules of Hooks — can safely close over it in every render.
+  // Real hyperlinks (a `link` mark applied to some run of the selection) carry their URL
+  // only as a mark attribute — `editor.state.doc.textBetween()` (what inferTaskFromSelection
+  // scans) only ever sees the visible text, so a link like "the spec" -> https://example.com
+  // was previously invisible to the plain-text URL regex entirely. Walking the doc's nodes
+  // directly catches these too; merged with the regex-found ones below (deduped) so both a
+  // pasted plain URL and a "nice text" hyperlink in the same selection are picked up, and
+  // more than one of either kind all come through — `links` is already a list field.
+  const extractHyperlinkUrls = (from: number, to: number): string[] => {
+    const urls: string[] = [];
+    editor.state.doc.nodesBetween(from, to, (node) => {
+      if (!node.isText) return;
+      const href = node.marks.find((m) => m.type.name === 'link')?.attrs.href;
+      if (typeof href === 'string' && href) urls.push(href);
+    });
+    return urls;
+  };
+
   const selectCreateOption = (option: CreateMenuOption) => {
     if (!option.enabled) {
       setStubMessage(`${option.label} linking is coming soon — see BACKLOG.md.`);
@@ -184,6 +207,7 @@ export function FloatingToolbar({ editor, noteId }: Props) {
     const { from, to } = editor.state.selection;
     const text = editor.state.doc.textBetween(from, to, ' ');
     const inferred = inferTaskFromSelection(text);
+    const links = [...new Set([...inferred.links, ...extractHyperlinkUrls(from, to)])];
 
     useUIStore.getState().setPendingArtifactLink({ noteId, from, to, targetType: 'task' });
     useUIStore.getState().showAddTaskWithPrefill({
@@ -192,7 +216,7 @@ export function FloatingToolbar({ editor, noteId }: Props) {
       collectionId: noteCollectionId ?? activeCollectionId ?? null,
       deadline:     inferred.deadline,
       deadlineTime: inferred.deadlineTime,
-      links:        inferred.links,
+      links,
     });
     setShowCreateMenu(false);
     // Collapse the selection so this whole floating toolbar hides once AddTaskModal opens —
@@ -249,17 +273,28 @@ export function FloatingToolbar({ editor, noteId }: Props) {
   const grip = (e: React.MouseEvent) => e.preventDefault();
 
   const applyTagItem = (item: TagItem) => {
+    setShowTags(false);
+    setSearch('');
+    if (getStructuredTagType(item.typeKey)) {
+      const { from, to } = editor.state.selection;
+      const builtinTag = BUILTIN_TAGS.find((t) => t.id === item.id);
+      if (builtinTag) onStructuredTag(builtinTag, from, to);
+      // Collapse the selection so this toolbar hides once the create popover opens on top
+      // of it — same reason selectCreateOption does this for the Task create-menu.
+      editor.commands.setTextSelection(to);
+      return;
+    }
     editor.chain().focus().setMark('noteTag', {
       tagId: item.id,
       color: item.color,
       typeKey: item.typeKey ?? null,
     }).run();
-    setShowTags(false);
-    setSearch('');
   };
 
   const removeTag = () => {
+    const entryId = editor.getAttributes('noteTag').structuredEntryId as string | null;
     editor.chain().focus().unsetMark('noteTag').run();
+    if (entryId) useNoteStore.getState().deleteStructuredTagEntry(entryId as StructuredTagEntryId);
   };
 
   const removeArtifactLink = () => {

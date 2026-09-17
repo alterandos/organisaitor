@@ -222,6 +222,14 @@ export interface CreatePurposeInput {
 // CalendarItemKind is kept as a string union for easy label overrides in labels.ts.
 export type CalendarItemKind  = 'event' | 'reminder';
 export type CalendarEventType = 'default' | 'birthday' | 'task';
+// A self-created event's confirmation state — 'tentative' is a placeholder the user put on
+// the calendar to be aware something might happen, not yet committed to (see CLAUDE.md
+// "Tentative events"). Named after (and worth keeping compatible with) the iCalendar spec's
+// STATUS property (TENTATIVE/CONFIRMED/CANCELLED) — CANCELLED isn't modeled here since
+// deleting the event already covers that. Kept as its own type alias (not inlined) so
+// renaming/extending the concept later — the user's own stated wish going into this — only
+// touches this one line, not every call site.
+export type EventStatus = 'confirmed' | 'tentative';
 // 'task' = auto-created shadow event for a scheduled task (Task.scheduledAt/calendarEventId) —
 // drives the calendar layer toggle's "Task scheduled" layer, alongside the 🕐-icon overlay
 // (taskLinkedEventIds in CalendarView.tsx) that already marks these visually.
@@ -261,6 +269,16 @@ export interface CalendarEvent {
   remindAt:           string | null;
   notifyAtTime:       string | null;
   repeat:             RepeatConfig | null;
+  status:             EventStatus;      // 'confirmed' (default) | 'tentative' — see EventStatus
+  // External calendar sync provenance (see CLAUDE.md "External calendar sync — built (Google,
+  // Phase 1)"). All null for a native, in-app-created event. Once synced in, this app is the
+  // source of truth — these fields are provenance/dedup only, never used to re-sync or
+  // overwrite the event again.
+  source:             string | null;              // 'google' (future: 'microsoft'); null = native
+  sourceConnectionId: string | null;              // which connected ACCOUNT (CalendarConnection.id) — supports multiple accounts of the same provider
+  sourceCalendarId:   string | null;              // which calendar within that account (a Google account can have several)
+  sourceEventId:      string | null;              // the provider's own event id — (sourceConnectionId, sourceCalendarId, sourceEventId) together are the dedup key
+  sourceRaw:          Record<string, unknown> | null; // full provider payload, so surfacing more fields later isn't a re-sync
 }
 
 // A point-in-time reminder (not duration-based). Also the type used to
@@ -293,6 +311,31 @@ export interface CreateCalendarEventInput {
   notifyBeforeUnit?:  NotifyUnit;
   notifyAtTime?:      string | null;
   repeat?:            RepeatConfig | null;
+  status?:            EventStatus;
+  source?:             string | null;
+  sourceConnectionId?: string | null;
+  sourceCalendarId?:   string | null;
+  sourceEventId?:      string | null;
+  sourceRaw?:          Record<string, unknown> | null;
+}
+
+// One connected external calendar account (see CLAUDE.md "External calendar sync").
+// Client-side representation only — never carries tokens (those stay server-side; see
+// api/google-calendar-status.ts). Multiple connections of the same provider are supported
+// (e.g. two Google accounts), each with its own id.
+export interface CalendarConnectionCalendar {
+  id:      string;   // the provider's own calendar id (e.g. "primary", or an email-shaped id)
+  name:    string;
+  color:   string | null;
+  enabled: boolean;  // whether this calendar's events are pulled in
+}
+
+export interface CalendarConnection {
+  id:           string;
+  provider:     string;   // 'google' (future: 'microsoft')
+  accountEmail: string;
+  calendars:    CalendarConnectionCalendar[];
+  createdAt:    string;
 }
 
 export interface CreateCalendarReminderInput {
@@ -321,6 +364,13 @@ export interface ScheduleBlock {
   intervalAnchor: string;        // YYYY-MM-DD — the week containing this date is "week 0" for interval > 1
   exceptions:     string[];      // YYYY-MM-DD dates to skip — a single cancelled occurrence
   notes:          string | null;
+  // Commitment mode (e.g. a gym class schedule you can't always attend, vs a university
+  // timetable you always attend by default): when true, an occurrence renders muted/
+  // uncommitted unless its date is in committedDates — the opposite default from the
+  // classic "attend unless skipped" behaviour, which stays unchanged when this is false.
+  // See CLAUDE.md "Schedule commitment mode".
+  requiresCommitment: boolean;
+  committedDates:     string[];  // YYYY-MM-DD — occurrences explicitly committed to (meaningful only when requiresCommitment is true)
 }
 
 export interface ScheduleTemplate {
@@ -353,6 +403,7 @@ export interface CreateScheduleBlockInput {
   interval?:      number;
   intervalAnchor?: string;
   notes?:         string | null;
+  requiresCommitment?: boolean;
 }
 
 // ── UI-only types (never persisted) ───────────────────────────────────────────
@@ -372,7 +423,7 @@ export interface FilterState {
 }
 
 // ── Note types (from notes.ts) ──────────────────────────────────────────────────
-export type { NoteId, NoteTagId, Note, NoteTab, NoteTag, CreateNoteInput, CreateNoteTagInput, NoteTagFieldDef, NoteTagFieldType } from './notes';
+export type { NoteId, NoteTagId, Note, NoteTab, NoteTag, CreateNoteInput, CreateNoteTagInput, NoteTagFieldDef, NoteTagFieldType, StructuredTagEntryId, StructuredTagEntry } from './notes';
 
 // ── List types (from lists.ts) ───────────────────────────────────────────────
 export type {

@@ -86,6 +86,16 @@ export function AddScheduleModal() {
   const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
   const [blocks,       setBlocks]       = useState<BlockRow[]>([]);
   const [addingBlock,  setAddingBlock]  = useState(false);
+  // Scrolls a block's row into view right after it expands — both the ⚙ button and clicking
+  // a block in the grid preview go through this, so the edit panel is never left off-screen
+  // requiring a manual scroll. A ref map (not a single ref) since there's one row per block.
+  // requestAnimationFrame (rather than an effect keyed on some "just expanded" state) defers
+  // just long enough for the setBlocks update above to commit and the expanded row's DOM to
+  // exist, without adding another piece of state purely to trigger a one-off scroll.
+  const blockRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollToBlock = (id: string) => {
+    requestAnimationFrame(() => blockRowRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  };
 
   // New-block form
   const [newTitle,     setNewTitle]     = useState('');
@@ -95,6 +105,7 @@ export function AddScheduleModal() {
   const [newInterval,  setNewInterval]  = useState(1);
   const [newAnchor,    setNewAnchor]    = useState(todayIso());
   const [newLocation,  setNewLocation]  = useState('');
+  const [newRequiresCommitment, setNewRequiresCommitment] = useState(false);
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -133,8 +144,20 @@ export function AddScheduleModal() {
     setter((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)));
   };
 
-  const toggleExpand = (idx: number) =>
+  const toggleExpand = (idx: number) => {
+    const row = blocks[idx];
+    if (row && !row.expanded) scrollToBlock(row.id);
     setBlocks((prev) => prev.map((r, i) => (i === idx ? { ...r, expanded: !r.expanded } : r)));
+  };
+
+  // Clicking a block in the grid preview (below) expands its row (if not already) and always
+  // scrolls to it — unlike the ⚙ button's toggle, this never collapses an already-expanded row.
+  const expandBlockAndScroll = (blockId: string) => {
+    const idx = blocks.findIndex((r) => r.id === blockId);
+    if (idx === -1) return;
+    setBlocks((prev) => prev.map((r, i) => (i === idx ? { ...r, expanded: true } : r)));
+    scrollToBlock(blockId);
+  };
 
   const updateBlockRow = (idx: number, patch: Partial<ScheduleBlock>) =>
     setBlocks((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
@@ -156,10 +179,13 @@ export function AddScheduleModal() {
       intervalAnchor: newAnchor || startDate || todayIso(),
       exceptions: [],
       notes: null,
+      requiresCommitment: newRequiresCommitment,
+      committedDates: [],
     };
     setBlocks((prev) => [...prev, { ...block, expanded: false }]);
     setNewTitle(''); setNewDays([]); setNewStart('09:00'); setNewEnd('10:00');
     setNewInterval(1); setNewAnchor(startDate || todayIso()); setNewLocation('');
+    setNewRequiresCommitment(false);
     setAddingBlock(false);
   };
 
@@ -266,11 +292,11 @@ export function AddScheduleModal() {
                 <p className={styles.noFields}>No blocks yet. Click the grid below to add one — e.g. "Algorithms Lecture", Mon/Wed/Fri, 10:00–11:00 — or use "+ Add block" for manual entry.</p>
               )}
 
-              <ScheduleWeekGridPreview entries={previewEntries} onCellClick={handleGridClick} />
-              <p className={styles.hint}>Click anywhere on the grid to start a new block at that day and time.</p>
+              <ScheduleWeekGridPreview entries={previewEntries} onCellClick={handleGridClick} onEntryClick={expandBlockAndScroll} />
+              <p className={styles.hint}>Click anywhere on the grid to start a new block at that day and time — click an existing block to jump to editing it.</p>
 
               {blocks.map((row, idx) => (
-                <div key={row.id} className={styles.fieldRow}>
+                <div key={row.id} ref={(el) => { blockRowRefs.current[row.id] = el; }} className={styles.fieldRow}>
                   <div className={styles.fieldRowTop}>
                     <div className={styles.fieldRowMeta}>
                       <span className={styles.fieldName}>{row.title}</span>
@@ -328,21 +354,37 @@ export function AddScheduleModal() {
                           <span>week{row.interval !== 1 ? 's' : ''}</span>
                         </div>
                       </div>
-                      {row.interval > 1 && (
-                        <div className={styles.fieldMini}>
-                          <label className={styles.miniLabel}>First occurrence</label>
-                          <input
-                            type="date"
-                            className={styles.dateInput}
-                            value={row.intervalAnchor}
-                            onChange={(e) => updateBlockRow(idx, { intervalAnchor: e.target.value })}
-                          />
-                          <p className={styles.miniHint}>The week containing this date counts as week 1 — e.g. set this to the second week of term for a block that starts every-other-week from week 2.</p>
-                        </div>
-                      )}
+                      <div className={styles.fieldMini}>
+                        <label className={styles.miniLabel}>First occurrence</label>
+                        <input
+                          type="date"
+                          className={styles.dateInput}
+                          value={row.intervalAnchor}
+                          onChange={(e) => updateBlockRow(idx, { intervalAnchor: e.target.value })}
+                        />
+                        <p className={styles.miniHint}>
+                          {row.interval > 1
+                            ? 'The week containing this date counts as week 1 — e.g. set this to the second week of term for a block that starts every-other-week from week 2.'
+                            : "Occurrences before this date are excluded — e.g. set this to week 3 of term for a class that doesn't start until then."}
+                        </p>
+                      </div>
                       <div className={styles.fieldMini}>
                         <label className={styles.miniLabel}>Location (optional)</label>
                         <input className={styles.miniInput} value={row.location ?? ''} onChange={(e) => updateBlockRow(idx, { location: e.target.value || null })} />
+                      </div>
+                      <div className={styles.fieldMini}>
+                        <label className={styles.miniLabelCheckbox}>
+                          <input
+                            type="checkbox"
+                            checked={row.requiresCommitment ?? false}
+                            onChange={(e) => updateBlockRow(idx, { requiresCommitment: e.target.checked })}
+                          />
+                          Requires weekly commitment
+                        </label>
+                        <p className={styles.miniHint}>
+                          For a schedule you can't always attend (e.g. a gym class) — occurrences show muted on the calendar
+                          until you click one and commit to it, instead of counting as attended by default.
+                        </p>
                       </div>
                       <div className={styles.fieldMini}>
                         <label className={styles.miniLabel}>Skip occurrences</label>
@@ -425,16 +467,32 @@ export function AddScheduleModal() {
                       <span>week{newInterval !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
-                  {newInterval > 1 && (
-                    <div className={styles.fieldMini}>
-                      <label className={styles.miniLabel}>First occurrence</label>
-                      <input type="date" className={styles.dateInput} value={newAnchor} onChange={(e) => setNewAnchor(e.target.value)} />
-                      <p className={styles.hint}>The week containing this date counts as week 1 — e.g. set this to the second week of term for a block that starts every-other-week from week 2.</p>
-                    </div>
-                  )}
+                  <div className={styles.fieldMini}>
+                    <label className={styles.miniLabel}>First occurrence</label>
+                    <input type="date" className={styles.dateInput} value={newAnchor} onChange={(e) => setNewAnchor(e.target.value)} />
+                    <p className={styles.hint}>
+                      {newInterval > 1
+                        ? 'The week containing this date counts as week 1 — e.g. set this to the second week of term for a block that starts every-other-week from week 2.'
+                        : "Occurrences before this date are excluded — e.g. set this to week 3 of term for a class that doesn't start until then."}
+                    </p>
+                  </div>
                   <div className={styles.fieldMini}>
                     <label className={styles.miniLabel}>Location (optional)</label>
                     <input className={styles.miniInput} placeholder="Room / building" value={newLocation} onChange={(e) => setNewLocation(e.target.value)} />
+                  </div>
+                  <div className={styles.fieldMini}>
+                    <label className={styles.miniLabelCheckbox}>
+                      <input
+                        type="checkbox"
+                        checked={newRequiresCommitment}
+                        onChange={(e) => setNewRequiresCommitment(e.target.checked)}
+                      />
+                      Requires weekly commitment
+                    </label>
+                    <p className={styles.miniHint}>
+                      For a schedule you can't always attend (e.g. a gym class) — occurrences show muted on the calendar
+                      until you click one and commit to it, instead of counting as attended by default.
+                    </p>
                   </div>
                   <div className={styles.addFieldBtns}>
                     <button type="button" className={styles.addFieldCancelBtn} onClick={() => setAddingBlock(false)}>Cancel</button>

@@ -9,6 +9,7 @@ import { usePlatform } from '@/hooks/usePlatform';
 import { useAuthStore } from '@/store/authStore';
 import { initSync, stopSync } from '@/services/sync/syncService';
 import { backfillTaskCalendarLinks } from '@/services/taskCalendarBackfill';
+import { syncGoogleCalendars } from '@/services/googleCalendar';
 import { matchesHotkeyId } from '@/store/hotkeyOverridesStore';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { AccountPane } from '@/components/AccountPane/AccountPane';
@@ -31,7 +32,6 @@ import { ListsSection } from '@/components/ListsSection/ListsSection';
 import { AddActivityModal } from '@/components/AddActivityModal/AddActivityModal';
 import { EditActivityTypeModal } from '@/components/EditActivityTypeModal/EditActivityTypeModal';
 import { AddScheduleModal } from '@/components/AddScheduleModal/AddScheduleModal';
-import { ManageSchedulesPane } from '@/components/ManageSchedulesPane/ManageSchedulesPane';
 import { AddListModal } from '@/components/AddListModal/AddListModal';
 import { AddListItemModal } from '@/components/AddListItemModal/AddListItemModal';
 import { AddWatchlistItemModal } from '@/components/AddWatchlistItemModal/AddWatchlistItemModal';
@@ -56,6 +56,7 @@ import { AddRoutineModal } from '@/components/AddRoutineModal/AddRoutineModal';
 import { IntegrationsPane } from '@/components/IntegrationsPane/IntegrationsPane';
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
+import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
 import { AddNoteModal } from '@/components/AddNoteModal/AddNoteModal';
 import { AddNoteTagModal } from '@/components/AddNoteTagModal/AddNoteTagModal';
 import { NoteTagPresetModal } from '@/components/NoteTagPresetModal/NoteTagPresetModal';
@@ -112,6 +113,8 @@ export default function App() {
   const editingWatchlistItemId     = useUIStore((s) => s.editingWatchlistItemId);
   const portfolioChartOpen         = useUIStore((s) => s.portfolioChartOpen);
   const editingNoteId              = useUIStore((s) => s.editingNoteId);
+  const quickAccessOpen            = useUIStore((s) => s.quickAccessOpen);
+  const toggleQuickAccess          = useUIStore((s) => s.toggleQuickAccess);
   const collectionsRecord          = useTaskStore((s) => s.collections);
   const colorEnabled               = useSettingsStore((s) => s.colorEnabled);
   const setChartTickerRowZoom      = useSettingsStore((s) => s.setChartTickerRowZoom);
@@ -233,6 +236,7 @@ export default function App() {
 
   const setActiveView    = useUIStore((s) => s.setActiveView);
   const navigateBack     = useUIStore((s) => s.navigateBack);
+  const navigateForward  = useUIStore((s) => s.navigateForward);
   const taskViewMode     = useUIStore((s) => s.taskViewMode);
   const setTaskViewMode  = useUIStore((s) => s.setTaskViewMode);
 
@@ -245,6 +249,31 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const openSchedules   = useUIStore((s) => s.openSchedules);
+  const toggleSchedules = useUIStore((s) => s.toggleSchedules);
+  const schedulesOpen   = useUIStore((s) => s.schedulesOpen);
+  useEffect(() => {
+    // Google's OAuth redirect lands on bare "/" too (same reasoning as Strava's above) —
+    // jump to Calendar and open the side pane's "Imported calendars" section so the
+    // connected/error state is immediately visible.
+    if (new URLSearchParams(window.location.search).has('googleCalendar')) {
+      setActiveView('calendar');
+      openSchedules();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Syncs connected Google calendars while the app is open — on load/sign-in, then every
+  // 15 minutes. No server-side cron: this app has no service-role Supabase credential
+  // anywhere, and this keeps it that way (see CLAUDE.md "External calendar sync"). A no-op
+  // if there's no session or no connections (syncGoogleCalendars checks both internally).
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authUserId) return;
+    void syncGoogleCalendars();
+    const id = setInterval(() => { void syncGoogleCalendars(); }, 15 * 60_000);
+    return () => clearInterval(id);
+  }, [authUserId]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -288,6 +317,18 @@ export default function App() {
       if (matchesHotkeyId(e, 'action-back')) {
         e.preventDefault();
         navigateBack();
+        return;
+      }
+
+      if (matchesHotkeyId(e, 'action-forward')) {
+        e.preventDefault();
+        navigateForward();
+        return;
+      }
+
+      if (matchesHotkeyId(e, 'action-quick-access')) {
+        e.preventDefault();
+        toggleQuickAccess();
         return;
       }
 
@@ -353,7 +394,7 @@ export default function App() {
     setActiveView, activeView, settingsOpen, openSettings, closeSettings,
     portfolioChartOpen, chartTickerRowZoom, setChartTickerRowZoom, openModal, nudgeNoteEditorZoom,
     endeavourPickerOpen, toggleEndeavourPicker, closeEndeavourPicker, setActiveCollection, collectionsRecord,
-    togglePurposePicker, toggleManage, navigateBack,
+    togglePurposePicker, toggleManage, navigateBack, navigateForward, toggleQuickAccess,
   ]);
 
   const activeCollection = activeCollectionId
@@ -378,12 +419,26 @@ export default function App() {
         <header className={styles.header} style={headerStyle}>
           <div className={styles.headerLeft}>
             {!isAndroid && (
-              <button
-                className={styles.menuBtn}
-                onMouseEnter={handleHoverOpen}
-                onMouseLeave={handleHoverClose}
-                aria-label="Open library"
-              >☰</button>
+              // On Calendar, this hamburger has a different job: rather than the generic
+              // Endeavours/Purposes/Tags hover Sidebar every other section shows, it opens
+              // CalendarSidePane (Layers/Schedules/Imported calendars/Go-to-date) — a
+              // click, not a hover, since that pane is meant to stay open while interacted
+              // with, not just previewed. See CLAUDE.md "Calendar side pane".
+              activeView === 'calendar' ? (
+                <button
+                  className={styles.menuBtn}
+                  onClick={toggleSchedules}
+                  aria-label="Calendar options"
+                  aria-expanded={schedulesOpen}
+                >☰</button>
+              ) : (
+                <button
+                  className={styles.menuBtn}
+                  onMouseEnter={handleHoverOpen}
+                  onMouseLeave={handleHoverClose}
+                  aria-label="Open library"
+                >☰</button>
+              )
             )}
             <h1 className={styles.heading}>
               {activeView === 'calendar'  ? 'Calendar'
@@ -491,12 +546,12 @@ export default function App() {
         {openModal === 'add-activity'           && <AddActivityModal />}
         <EditActivityTypeModal />
         {openModal === 'add-schedule'           && <AddScheduleModal />}
-        <ManageSchedulesPane />
         {editTrackerOpen                     && <EditTrackerPane />}
         {editRoutineOpen                     && <EditRoutinePane />}
         {editingNoteId && activeView !== 'notes' && <NoteEditorPane />}
 
         <LinkHoverPreview />
+        {quickAccessOpen && <QuickAccessPane />}
         {isAndroid && <MobileNav />}
         {isAndroid && <MobileMoreSheet />}
         {isAndroid && <MobileCalendarQuickAdd />}

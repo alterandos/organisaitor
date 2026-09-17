@@ -97,7 +97,8 @@ function NotificationCard({ n }: { n: PendingNotification }) {
 
   const kindClass =
     n.kind === 'event'    ? styles.kindEvent :
-    n.kind === 'reminder' ? styles.kindReminder : styles.kindTask;
+    n.kind === 'reminder' ? styles.kindReminder :
+    n.kind === 'schedule' ? styles.kindSchedule : styles.kindTask;
 
   return (
     <div className={`${styles.card} ${kindClass}`}>

@@ -16,6 +16,27 @@
 }
 .dayCol:last-child { border-right: none; }
 
+.gutter {
+  flex: 0 0 auto;
+  width: 44px;
+  border-right: 1px solid var(--color-border);
+}
+
+.gutterBody {
+  position: relative;
+}
+
+.gutterLabel {
+  position: absolute;
+  left: 0;
+  right: 4px;
+  transform: translateY(-50%);
+  font-size: 0.62rem;
+  color: var(--color-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
 .dayHeader {
   font-size: 0.68rem;
   font-weight: 600;

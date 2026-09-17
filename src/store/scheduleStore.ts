@@ -19,6 +19,13 @@ interface ScheduleState {
   // which only ever touches one block's exception list and shouldn't need the full editor.
   addException:    (scheduleId: ScheduleId, blockId: string, date: string) => void;
   removeException: (scheduleId: ScheduleId, blockId: string, date: string) => void;
+
+  // Commitment mode (see ScheduleBlock.requiresCommitment) — same "targeted, no full editor
+  // needed" shape as addException/removeException above, driven from the occurrence popover.
+  // commitOccurrences accepts more than one date so the popover's "commit for the next N
+  // weeks" bulk action is a single store write, not N of them.
+  commitOccurrences:  (scheduleId: ScheduleId, blockId: string, dates: string[]) => void;
+  uncommitOccurrence: (scheduleId: ScheduleId, blockId: string, date: string) => void;
 }
 
 function touchSchedule(schedule: ScheduleTemplate): ScheduleTemplate {
@@ -82,6 +89,27 @@ export const useScheduleStore = create<ScheduleState>()(
         if (!schedule) return {};
         const blocks = schedule.blocks.map((b) =>
           b.id === blockId ? { ...b, exceptions: b.exceptions.filter((d) => d !== date) } : b
+        );
+        return { schedules: { ...s.schedules, [scheduleId]: touchSchedule({ ...schedule, blocks }) } };
+      }),
+
+      commitOccurrences: (scheduleId, blockId, dates) => set((s) => {
+        const schedule = s.schedules[scheduleId];
+        if (!schedule) return {};
+        const blocks = schedule.blocks.map((b) => {
+          if (b.id !== blockId) return b;
+          const existing = b.committedDates ?? [];
+          const merged = [...new Set([...existing, ...dates])];
+          return { ...b, committedDates: merged };
+        });
+        return { schedules: { ...s.schedules, [scheduleId]: touchSchedule({ ...schedule, blocks }) } };
+      }),
+
+      uncommitOccurrence: (scheduleId, blockId, date) => set((s) => {
+        const schedule = s.schedules[scheduleId];
+        if (!schedule) return {};
+        const blocks = schedule.blocks.map((b) =>
+          b.id === blockId ? { ...b, committedDates: (b.committedDates ?? []).filter((d) => d !== date) } : b
         );
         return { schedules: { ...s.schedules, [scheduleId]: touchSchedule({ ...schedule, blocks }) } };
       }),

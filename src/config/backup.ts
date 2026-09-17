@@ -16,4 +16,8 @@ export const PERSISTED_STORAGE_KEYS = [
   'todo-portfolio',     // portfolioStore
   'todo-settings',      // settingsStore
   'todo-notifications', // notificationStore
+  'todo-recent-items',  // recentItemsStore: Quick Access pane recent/frequent visit history
+  'todo-ui-session',    // uiStore: navigation/session memory (active section, back/forward
+                         // history, each section's last-open item + tab, filters) — modal/
+                         // pane open-states are NOT included, see uiStore.ts's partialize
 ] as const;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { CalendarItemKind, CalendarEventType, NotifyUnit, RepeatFreq, RepeatConfig } from '@/types';
+import type { CalendarItemKind, CalendarEventType, EventStatus, NotifyUnit, RepeatFreq, RepeatConfig } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -42,6 +42,7 @@ export function AddCalendarItemModal() {
   const [notes,             setNotes]             = useState('');
   const [location,          setLocation]          = useState('');
   const [eventType,         setEventType]         = useState<CalendarEventType>('default');
+  const [status,            setStatus]            = useState<EventStatus>('confirmed');
   const [collectionId,      setCollectionId]      = useState<CollectionId | null>(
     activeCollectionId as CollectionId | null
   );
@@ -134,6 +135,7 @@ export function AddCalendarItemModal() {
         notifyBeforeUnit,
         notifyAtTime:      eventType === 'birthday' ? notifyAtTime || null : null,
         repeat:            buildRepeat(),
+        status,
       });
     } else {
       addReminder({
@@ -256,6 +258,20 @@ export function AddCalendarItemModal() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {kind === 'event' && !isBirthday && (
+            <div className={styles.field}>
+              <label className={styles.label}>
+                <input
+                  type="checkbox"
+                  checked={status === 'tentative'}
+                  onChange={(e) => setStatus(e.target.checked ? 'tentative' : 'confirmed')}
+                  style={{ marginRight: '0.4rem' }}
+                />
+                Tentative — not confirmed yet, just a placeholder
+              </label>
             </div>
           )}
 

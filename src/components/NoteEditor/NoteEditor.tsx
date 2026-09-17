@@ -17,14 +17,18 @@ import { SectionDocument, Section, ColumnBlock, Column, MAX_SECTION_COLUMNS } fr
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { NoteId, Note } from '@/types';
+import type { NoteId, Note, CollectionId, StructuredTagEntryId } from '@/types';
 import { NoteTagMark } from './extensions/NoteTagMark';
 import { ArtifactLinkMark } from './extensions/ArtifactLinkMark';
 import { FloatingToolbar } from './FloatingToolbar';
 import { NoteTOC } from './NoteTOC';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { openExternalLink, normalizeLinkUrl } from '@/utils/links';
-import { BUILTIN_TAGS } from './builtinTags';
+import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
+import { getStructuredTagType } from '@/config/structuredTagTypes';
+import { StructuredTagPopover } from './StructuredTagPopover';
+import { getNoteBreadcrumb } from '@/utils/notes';
+import { selectActiveCollectionId } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
 import styles from './NoteEditor.module.css';
 
@@ -227,6 +231,24 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const renameMainTab   = useNoteStore((s) => s.renameMainTab);
   const reorderNoteTabs = useNoteStore((s) => s.reorderNoteTabs);
 
+  // Structured tag entries (Acronym today — see src/config/structuredTagTypes.ts)
+  const addStructuredTagEntry     = useNoteStore((s) => s.addStructuredTagEntry);
+  const updateStructuredTagEntry  = useNoteStore((s) => s.updateStructuredTagEntry);
+  const deleteStructuredTagEntry  = useNoteStore((s) => s.deleteStructuredTagEntry);
+  const [structuredTagRequest, setStructuredTagRequest] = useState<{
+    mode: 'create' | 'edit';
+    tag: BuiltinTag;
+    top: number; left: number;
+    range: { from: number; to: number } | null;   // create mode only — where to apply the mark
+    entryId: string | null;                        // edit mode only
+    initialTerm: string;
+    initialFields: Record<string, string>;
+    initialCollectionId: string | null;
+    meta?: { createdAt: string; updatedAt: string; breadcrumb: string };
+  } | null>(null);
+  const [structuredTagHover, setStructuredTagHover] = useState<HTMLElement | null>(null);
+  const clearStructuredHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const note = editingNoteId ? notes[editingNoteId as NoteId] : null;
 
   const [title, setTitle]           = useState('');
@@ -234,14 +256,23 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const [abstract, setAbstract]     = useState<string | null>(null);
   const [abstractCollapsed, setAbstractCollapsed] = useState(false);
   const [noteMenuOpen, setNoteMenuOpen] = useState(false);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  // Captured once at mount: which note+tab uiStore remembers as last-active, so the load
-  // effect below can restore that tab the first time it loads that same note (and only
-  // that first time — later note switches within this same mount reset to Main normally).
-  const [initialTabRestore] = useState(() => ({
-    noteId: useUIStore.getState().notesLastEditingNoteId,
-    tabId:  useUIStore.getState().notesLastActiveTabId,
-  }));
+  // Seeded once from uiStore's last-active note+tab (notesLastEditingNoteId/
+  // notesLastActiveTabId) so switching to another app and back restores the same tab —
+  // same "seed the state directly, don't restore-after-the-fact" pattern ListsSection.tsx
+  // uses for selectedListId/selectedTabId. An earlier version of this restored the tab via
+  // a *separate* effect after mounting with plain `null`, which raced against the mirror
+  // effect below (that effect fired on every render, including the very first one with the
+  // not-yet-restored `null`, so it could clobber notesLastActiveTabId back to null before
+  // the restore effect ever ran) — seeding directly here removes that race by construction.
+  const [activeTabId, setActiveTabId] = useState<string | null>(() => {
+    const s = useUIStore.getState();
+    if (!editingNoteId || s.notesLastEditingNoteId !== editingNoteId || !s.notesLastActiveTabId) return null;
+    return note?.tabs?.some((t) => t.id === s.notesLastActiveTabId) ? s.notesLastActiveTabId : null;
+  });
+  // True once the load effect below has run for the first time — distinguishes "this is
+  // the initial mount, whose tab was already seeded above, don't reset it" from "the user
+  // switched to a genuinely different note while already mounted, which should reset to
+  // Main" (both cases change `note?.id`, the effect's dependency).
   const hasRestoredTabRef = useRef(false);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -251,7 +282,9 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const draggingTabIdRef = useRef<string | null>(null);
   const dragOverTabIdRef = useRef<string | null>(null);
   const dragOverSideRef  = useRef<'left' | 'right'>('right');
-  const activeTabIdRef   = useRef<string | null>(null);
+  // Seeded from activeTabId's own (already-seeded) initial value — useRef's argument is
+  // only used on the very first render, so this stays in sync with the state above at mount.
+  const activeTabIdRef   = useRef<string | null>(activeTabId);
   const onNavReturnRef  = useRef(onNavReturn);
   onNavReturnRef.current = onNavReturn;
   const saveRef                     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -354,7 +387,121 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     } else {
       scheduleSectionHoverClear();
     }
+
+    if (clearStructuredHoverRef.current) { clearTimeout(clearStructuredHoverRef.current); clearStructuredHoverRef.current = null; }
+    const structuredEl = target.closest('mark[data-structured-entry-id]') as HTMLElement | null;
+    if (structuredEl) {
+      setStructuredTagHover((h) => (h === structuredEl ? h : structuredEl));
+    } else {
+      clearStructuredHoverRef.current = setTimeout(() => setStructuredTagHover(null), 180);
+    }
   }, [cancelHoverClear, scheduleHoverClear, cancelSectionHoverClear, scheduleSectionHoverClear]);
+
+  // ── Structured tag entries (Acronym today) ─────────────────────────────────
+  // Reads everything dynamic via .getState() rather than closured hook values, since
+  // openStructuredTagCreate is called from the editor-focused keydown effect below, whose
+  // dependency array is just [editor] — same "never goes stale" convention already used by
+  // ChronicleView's keyboard-nav effect for the identical reason.
+  const openStructuredTagCreate = (tag: BuiltinTag, from: number, to: number) => {
+    if (!editor) return;
+    const typeDef = getStructuredTagType(tag.typeKey);
+    if (!typeDef) return;
+    const selectedText = editor.state.doc.textBetween(from, to, ' ');
+    const contextText = editor.state.doc.resolve(from).parent.textContent;
+    const inferred = typeDef.infer?.(selectedText, contextText) ?? { term: selectedText, fields: {} };
+    const coords = editor.view.coordsAtPos(to);
+    const currentNote = currentNoteIdRef.current ? useNoteStore.getState().notes[currentNoteIdRef.current as NoteId] : null;
+    setStructuredTagRequest({
+      mode: 'create',
+      tag,
+      top: coords.bottom + 8,
+      left: coords.left,
+      range: { from, to },
+      entryId: null,
+      initialTerm: inferred.term,
+      initialFields: inferred.fields,
+      initialCollectionId: currentNote?.collectionId ?? selectActiveCollectionId(useUIStore.getState()),
+    });
+  };
+
+  const openStructuredTagEditFromEl = (el: HTMLElement) => {
+    const entryId = el.getAttribute('data-structured-entry-id');
+    const tagId   = el.getAttribute('data-tag-id');
+    if (!entryId || !tagId) return;
+    const noteState = useNoteStore.getState();
+    const entry = noteState.structuredTagEntries[entryId as StructuredTagEntryId];
+    const tag   = BUILTIN_TAGS.find((t) => t.id === tagId);
+    const typeDef = tag ? getStructuredTagType(tag.typeKey) : undefined;
+    if (!entry || !tag || !typeDef) return;
+    const rect = el.getBoundingClientRect();
+    const entryNote = noteState.notes[entry.noteId];
+    setStructuredTagRequest({
+      mode: 'edit',
+      tag,
+      top: rect.bottom + 8,
+      left: rect.left,
+      range: null,
+      entryId: entry.id,
+      initialTerm: entry.term,
+      initialFields: entry.fields as Record<string, string>,
+      initialCollectionId: entry.collectionId,
+      meta: {
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
+        breadcrumb: entryNote ? getNoteBreadcrumb(entryNote, noteState.noteTags) : 'Unknown note',
+      },
+    });
+    setStructuredTagHover(null);
+  };
+
+  const handleStructuredTagSave = (data: { term: string; fields: Record<string, string>; collectionId: string | null }) => {
+    if (!structuredTagRequest || !editor) return;
+    if (structuredTagRequest.mode === 'create' && structuredTagRequest.range) {
+      const { from, to } = structuredTagRequest.range;
+      const entryId = addStructuredTagEntry({
+        typeKey:      structuredTagRequest.tag.typeKey,
+        tagId:        structuredTagRequest.tag.id,
+        term:         data.term,
+        fields:       data.fields,
+        noteId:       (currentNoteIdRef.current ?? '') as NoteId,
+        collectionId: data.collectionId as CollectionId | null,
+      });
+      editor.chain().focus().setTextSelection({ from, to }).setMark('noteTag', {
+        tagId: structuredTagRequest.tag.id,
+        color: structuredTagRequest.tag.color,
+        typeKey: structuredTagRequest.tag.typeKey,
+        structuredEntryId: entryId,
+      }).run();
+    } else if (structuredTagRequest.mode === 'edit' && structuredTagRequest.entryId) {
+      updateStructuredTagEntry(structuredTagRequest.entryId as StructuredTagEntryId, {
+        term: data.term, fields: data.fields, collectionId: data.collectionId as CollectionId | null,
+      });
+    }
+    setStructuredTagRequest(null);
+  };
+
+  // Removes the noteTag mark everywhere it appears in the CURRENTLY LOADED note's content —
+  // the only note whose live doc this component can reach. If the entry's own note isn't
+  // the one currently open, its mark is left as-is (orphaned) until that note is next
+  // opened; acceptable for v1, same scope note as the cross-note dedup question flagged in
+  // CLAUDE.md/BACKLOG.md for this feature.
+  const handleStructuredTagDelete = () => {
+    if (!structuredTagRequest?.entryId || !editor) return;
+    const targetEntryId = structuredTagRequest.entryId;
+    deleteStructuredTagEntry(targetEntryId as StructuredTagEntryId);
+    const ranges: { from: number; to: number }[] = [];
+    editor.state.doc.descendants((node, pos) => {
+      if (node.isText && node.marks.some((m) => m.type.name === 'noteTag' && m.attrs.structuredEntryId === targetEntryId)) {
+        ranges.push({ from: pos, to: pos + node.nodeSize });
+      }
+    });
+    if (ranges.length > 0) {
+      let chain = editor.chain().focus();
+      ranges.forEach(({ from, to }) => { chain = chain.setTextSelection({ from, to }).unsetMark('noteTag'); });
+      chain.run();
+    }
+    setStructuredTagRequest(null);
+  };
 
   // Close table picker / note menu when clicking outside
   useEffect(() => {
@@ -586,19 +733,14 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // Load content when the open note changes
   useEffect(() => {
     if (!editor) return;
-    // Reset to Main when switching notes — except right after mount, when we restore
-    // whatever tab was open in notesLastEditingNoteId (uiStore), so coming back to Notes
-    // from another app lands on the same tab, not just the same note.
-    let nextTabId: string | null = null;
-    if (!hasRestoredTabRef.current) {
-      hasRestoredTabRef.current = true;
-      if (
-        note && note.id === initialTabRestore.noteId && initialTabRestore.tabId &&
-        note.tabs?.some((t) => t.id === initialTabRestore.tabId)
-      ) {
-        nextTabId = initialTabRestore.tabId;
-      }
-    }
+    // Reset to Main when switching notes — except on the very first run (the initial
+    // mount), whose tab was already seeded above from notesLastActiveTabId, so coming
+    // back to Notes from another app lands on the same tab, not just the same note. On
+    // the first run this recomputes the same value activeTabId was already seeded with
+    // (a no-op set), rather than skipping the call — same "always call it once,
+    // unconditionally" shape as every other assignment in this effect.
+    const nextTabId = hasRestoredTabRef.current ? null : activeTabId;
+    hasRestoredTabRef.current = true;
     setActiveTabId(nextTabId);
     activeTabIdRef.current = nextTabId;
     setRenamingTabId(null);
@@ -629,10 +771,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     editor?.commands.focus('end');
   }, [focusSignal, editor]);
 
-  // Mirrors the current tab into uiStore on every change, so it's already correct by the
-  // time notesLastEditingNoteId is snapshotted on leaving the Notes section.
+  // Mirrors the current tab into uiStore via the cleanup (not the effect body itself) —
+  // same pattern as ListsSection's selectedListId/selectedTabId mirror. Cleanup fires
+  // right before activeTabId changes again, or on unmount, so it always writes "the tab
+  // that was active until just now" — never the just-mounted `null` default, which the
+  // old fire-on-every-render version did on its very first run, racing the seed above.
   useEffect(() => {
-    setNotesLastActiveTab(activeTabId);
+    return () => setNotesLastActiveTab(activeTabId);
   }, [activeTabId, setNotesLastActiveTab]);
 
   // Capture-phase shortcuts that must intercept before Tiptap handles the same keys
@@ -734,7 +879,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           e.preventDefault();
           const applyTag = () => {
             if (editor.isActive('noteTag', { tagId: tag.id })) {
+              const entryId = editor.getAttributes('noteTag').structuredEntryId as string | null;
               editor.chain().focus().unsetMark('noteTag').run();
+              if (entryId) deleteStructuredTagEntry(entryId as StructuredTagEntryId);
+            } else if (getStructuredTagType(tag.typeKey)) {
+              const { from, to } = editor.state.selection;
+              openStructuredTagCreate(tag, from, to);
+              editor.commands.setTextSelection(to);
             } else {
               editor.chain().focus().setMark('noteTag', { tagId: tag.id, color: tag.color, typeKey: tag.typeKey }).run();
             }
@@ -791,6 +942,10 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
+  // deleteStructuredTagEntry is a stable zustand action; openStructuredTagCreate reads
+  // everything dynamic via .getState() internally (see its own comment above) — neither
+  // needs to be a dep, so this effect still only needs to re-subscribe when `editor` changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
   // ── Tab switching ─────────────────────────────────────────────────────────
@@ -1418,9 +1573,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         <div
           className={styles.editorWrap}
           onMouseOver={handleEditorMouseOver}
-          onMouseLeave={() => { scheduleHoverClear(); scheduleSectionHoverClear(); }}
+          onMouseLeave={() => {
+            scheduleHoverClear();
+            scheduleSectionHoverClear();
+            clearStructuredHoverRef.current = setTimeout(() => setStructuredTagHover(null), 180);
+          }}
         >
-          {editor && <FloatingToolbar editor={editor} noteId={note.id} />}
+          {editor && <FloatingToolbar editor={editor} noteId={note.id} onStructuredTag={openStructuredTagCreate} />}
           <EditorContent editor={editor} className={styles.editor} />
         </div>
 
@@ -1455,6 +1614,46 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           </label>
         );
       })(), document.body)}
+
+      {/* ── Structured tag hover: edit pencil (portal, position:fixed) ────── */}
+      {structuredTagHover && !structuredTagRequest && createPortal((() => {
+        const rect = structuredTagHover.getBoundingClientRect();
+        return (
+          <button
+            type="button"
+            className={styles.structuredTagEditBtn}
+            style={{ position: 'fixed', top: rect.top - 24, left: rect.left }}
+            onMouseEnter={() => { if (clearStructuredHoverRef.current) clearTimeout(clearStructuredHoverRef.current); }}
+            onMouseLeave={() => { clearStructuredHoverRef.current = setTimeout(() => setStructuredTagHover(null), 180); }}
+            onClick={() => openStructuredTagEditFromEl(structuredTagHover)}
+            title="Edit"
+          >
+            ✎
+          </button>
+        );
+      })(), document.body)}
+
+      {structuredTagRequest && (() => {
+        const typeDef = getStructuredTagType(structuredTagRequest.tag.typeKey);
+        if (!typeDef) return null;
+        return (
+          <StructuredTagPopover
+            top={structuredTagRequest.top}
+            left={structuredTagRequest.left}
+            typeDef={typeDef}
+            tagColor={structuredTagRequest.tag.color}
+            tagIcon={structuredTagRequest.tag.icon}
+            mode={structuredTagRequest.mode}
+            initialTerm={structuredTagRequest.initialTerm}
+            initialFields={structuredTagRequest.initialFields}
+            initialCollectionId={structuredTagRequest.initialCollectionId}
+            meta={structuredTagRequest.meta}
+            onSave={handleStructuredTagSave}
+            onCancel={() => setStructuredTagRequest(null)}
+            onDelete={structuredTagRequest.mode === 'edit' ? handleStructuredTagDelete : undefined}
+          />
+        );
+      })()}
 
       {/* ── Table hover controls (portal, position:fixed) ─────────────────── */}
       {tableHover && createPortal((() => {

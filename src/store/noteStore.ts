@@ -1,19 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
-import type { Note, NoteTab, NoteTag, NoteId, NoteTagId, CreateNoteInput, CreateNoteTagInput, NoteTagFieldDef } from '@/types';
-import { newNoteId, newNoteTagId } from '@/utils/id';
+import type { Note, NoteTab, NoteTag, NoteId, NoteTagId, CreateNoteInput, CreateNoteTagInput, NoteTagFieldDef, StructuredTagEntry, StructuredTagEntryId, CollectionId } from '@/types';
+import { newNoteId, newNoteTagId, newStructuredTagEntryId } from '@/utils/id';
 import { now } from '@/utils/date';
 import { resolveNoteInheritedCollectionId } from '@/utils/notes';
+import { useRecentItemsStore } from '@/store/recentItemsStore';
 
 interface NoteData {
   notes: Record<NoteId, Note>;
   noteTags: Record<NoteTagId, NoteTag>;
+  structuredTagEntries: Record<StructuredTagEntryId, StructuredTagEntry>;
 }
 
 const EMPTY: NoteData = {
   notes: {},
   noteTags: {},
+  structuredTagEntries: {},
 };
 
 export interface NoteActions {
@@ -43,6 +46,14 @@ export interface NoteActions {
   // Note tag indent/outdent (hierarchy)
   indentNoteTag: (id: NoteTagId) => void;
   outdentNoteTag: (id: NoteTagId) => void;
+
+  // Structured tag entries (see src/config/structuredTagTypes.ts and types/notes.ts)
+  addStructuredTagEntry: (input: {
+    typeKey: string; tagId: string; term: string; fields: Record<string, unknown>;
+    noteId: NoteId; collectionId: CollectionId | null;
+  }) => StructuredTagEntryId;
+  updateStructuredTagEntry: (id: StructuredTagEntryId, changes: Partial<Pick<StructuredTagEntry, 'term' | 'fields' | 'collectionId'>>) => void;
+  deleteStructuredTagEntry: (id: StructuredTagEntryId) => void;
 
   // Queries
   getNotesByTag: (tagId: NoteTagId) => Note[];
@@ -109,6 +120,7 @@ export const useNoteStore = create<NoteStore>()(
         set((state) => {
           const note = state.notes[id];
           if (!note) return {};
+          useRecentItemsStore.getState().recordVisit('note', id);
           return {
             notes: {
               ...state.notes,
@@ -344,6 +356,45 @@ export const useNoteStore = create<NoteStore>()(
           };
         }),
 
+      // ── Structured tag entries ────────────────────────────────────────────
+
+      addStructuredTagEntry: (input) => {
+        const ts = now();
+        const id = newStructuredTagEntryId();
+        const entry: StructuredTagEntry = {
+          id,
+          typeKey:      input.typeKey,
+          tagId:        input.tagId,
+          term:         input.term,
+          fields:       input.fields,
+          noteId:       input.noteId,
+          collectionId: input.collectionId,
+          createdAt:    ts,
+          updatedAt:    ts,
+        };
+        set((state) => ({ structuredTagEntries: { ...state.structuredTagEntries, [id]: entry } }));
+        return id;
+      },
+
+      updateStructuredTagEntry: (id, changes) =>
+        set((state) => {
+          const entry = state.structuredTagEntries[id];
+          if (!entry) return {};
+          return {
+            structuredTagEntries: {
+              ...state.structuredTagEntries,
+              [id]: { ...entry, ...changes, updatedAt: now() },
+            },
+          };
+        }),
+
+      deleteStructuredTagEntry: (id) =>
+        set((state) => {
+          const entries = { ...state.structuredTagEntries };
+          delete entries[id];
+          return { structuredTagEntries: entries };
+        }),
+
       // ── Queries ────────────────────────────────────────────────────────────
 
       getNotesByTag: (tagId) => {
@@ -367,7 +418,7 @@ export const useNoteStore = create<NoteStore>()(
     }),
     {
       name: 'notes-storage',
-      version: 9,
+      version: 10,
       migrate: (persisted: unknown, fromVersion: number) => {
         let state = persisted as NoteData;
         if (fromVersion < 2) {
@@ -453,6 +504,9 @@ export const useNoteStore = create<NoteStore>()(
             ])
           ) as unknown as Record<NoteTagId, NoteTag>;
           state = { ...state, notes, noteTags };
+        }
+        if (fromVersion < 10) {
+          state = { ...state, structuredTagEntries: (state as { structuredTagEntries?: unknown }).structuredTagEntries ?? {} } as NoteData;
         }
         return state;
       },

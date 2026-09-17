@@ -14,9 +14,12 @@ const DEFAULT_THEME: 'light' | 'dark' | 'system' =
 // reminderType 'default', and 'events' also covers 'birthday'); 'taskScheduled'/
 // 'taskDeadlines' = the shadow rows auto-created from Task.scheduledAt/deadline
 // (eventType/reminderType 'task'). Deliberately not the same thing as a Schedule
-// template's own per-schedule `active` toggle (ManageSchedulesPane) — these four are the
+// template's own per-schedule `active` toggle (CalendarSidePane) — these four are the
 // ones named in the request; Schedules keep their existing, separate toggle mechanism.
-export type CalendarLayerKey = 'events' | 'reminders' | 'taskScheduled' | 'taskDeadlines';
+// 'tentative' is a cross-cutting filter on top of 'events' (a tentative event is still an
+// 'events'-layer item — hiding 'events' hides it too; this toggle only lets tentative ones
+// specifically be hidden while confirmed events keep showing). See CLAUDE.md "Tentative events".
+export type CalendarLayerKey = 'events' | 'reminders' | 'taskScheduled' | 'taskDeadlines' | 'tentative';
 export type CalendarLayerVisibility = Record<CalendarLayerKey, boolean>;
 
 interface SettingsState {
@@ -67,11 +70,15 @@ interface SettingsState {
   setWeekendShadeColor:      (color: string) => void;
   toggleStrikethroughPastDays: () => void;
 
-  // Calendar layer toggle — which categories of item render on the calendar. Location/style
-  // of the panel that edits this is deliberately kept flexible (see CalendarLayersPicker);
-  // this is just the underlying filter state, persisted so a hidden layer stays hidden.
+  // Calendar layer toggle — which categories of item render on the calendar. Edited via
+  // CalendarSidePane's Layers section; this is just the underlying filter state, persisted
+  // so a hidden layer stays hidden.
   calendarLayerVisibility: CalendarLayerVisibility;
   toggleCalendarLayer:     (layer: CalendarLayerKey) => void;
+
+  // ── Quick Access pane (Ctrl+G) ────────────────────────────────────────────────
+  quickAccessRecentCount:    number;   // how many recent/frequent items to list; range 3–20
+  setQuickAccessRecentCount: (n: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -118,21 +125,32 @@ export const useSettingsStore = create<SettingsState>()(
       setWeekendShadeColor:      (color) => set({ weekendShadeColor: color }),
       toggleStrikethroughPastDays: () => set((s) => ({ strikethroughPastDays: !s.strikethroughPastDays })),
 
-      calendarLayerVisibility: { events: true, reminders: true, taskScheduled: true, taskDeadlines: true },
+      calendarLayerVisibility: { events: true, reminders: true, taskScheduled: true, taskDeadlines: true, tentative: true },
       toggleCalendarLayer: (layer) => set((s) => ({
         calendarLayerVisibility: { ...s.calendarLayerVisibility, [layer]: !s.calendarLayerVisibility[layer] },
       })),
+
+      quickAccessRecentCount:    8,
+      setQuickAccessRecentCount: (n) => set({ quickAccessRecentCount: Math.round(Math.max(3, Math.min(20, n))) }),
     }),
     {
       name: 'todo-settings',
-      version: 1,
+      version: 2,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
       // ending up on the new Android-conditional default instead of 'system'.
+      // v1 → v2: backfill calendarLayerVisibility.tentative — zustand's persist merge is
+      // shallow, so an existing user's already-persisted calendarLayerVisibility object
+      // (missing this new key) would otherwise wholesale-replace the in-code default object
+      // that has it, leaving `.tentative` undefined (falsy) and hiding tentative events by
+      // default for anyone who already had the store persisted before this key existed.
       migrate: (persisted, version) => {
         const state = persisted as SettingsState;
         if (version < 1 && !state.theme) state.theme = 'system';
+        if (version < 2 && state.calendarLayerVisibility && state.calendarLayerVisibility.tentative === undefined) {
+          state.calendarLayerVisibility = { ...state.calendarLayerVisibility, tentative: true };
+        }
         return state;
       },
     }

@@ -253,6 +253,19 @@ export function CalendarEventPane() {
             </div>
           </div>
 
+          {(event.eventType ?? 'default') !== 'birthday' && (
+            <div className={styles.field}>
+              <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={(event.status ?? 'confirmed') === 'tentative'}
+                  onChange={(e) => updateEvent(id, { status: e.target.checked ? 'tentative' : 'confirmed' })}
+                />
+                Tentative — not confirmed yet, just a placeholder
+              </label>
+            </div>
+          )}
+
           {(event.eventType ?? 'default') === 'birthday' ? (
             <div className={styles.field}>
               <span className={styles.label}>Notify at</span>

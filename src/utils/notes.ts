@@ -57,6 +57,26 @@ export function getNotebookIcon(
   return '📁';
 }
 
+// Breadcrumb string for a note's location in the notebook tree (e.g. "Notes > Exchanges >
+// Australia") — used wherever a note needs to show its context to the user without a full
+// tree UI (e.g. StructuredTagPopover's "Location" field). Takes the first tagId that
+// resolves to a real ancestor chain; a note with no notebook tag at all reads "Uncategorized".
+export function getNoteBreadcrumb(
+  note: { tagIds: readonly string[] },
+  noteTags: Record<string, NoteTag>,
+): string {
+  for (const tagId of note.tagIds) {
+    const path: string[] = [];
+    let curr: NoteTag | undefined = noteTags[tagId];
+    while (curr) {
+      path.unshift(curr.name);
+      curr = curr.parentTagId ? noteTags[curr.parentTagId] : undefined;
+    }
+    if (path.length > 0) return path.join(' > ');
+  }
+  return 'Uncategorized';
+}
+
 // Notebook IDs that should stay visible when focused on a given Endeavour: notebooks whose
 // effective Endeavour matches, plus their ancestors (so the tree stays navigable to reach them).
 export function getVisibleNoteTagIds(

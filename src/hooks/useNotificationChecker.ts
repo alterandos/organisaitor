@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import type { CalendarEvent, CalendarReminder } from '@/types';
+import type { CalendarEvent, CalendarReminder, ScheduleId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
+import { useScheduleStore } from '@/store/scheduleStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { fireOSNotification } from '@/services/notificationService';
@@ -28,10 +29,22 @@ function reminderTrigger(rem: CalendarReminder, zone: string): Date | null {
   return zonedTimeToUtc(rem.date, rem.time, zone);
 }
 
+// A committed Schedule occurrence (see ScheduleBlock.requiresCommitment/committedDates,
+// CLAUDE.md "Schedule commitment mode") gets a fixed 30-minute-before nudge — deliberately
+// not user-configurable per block, to avoid adding a whole new notify-before config UI to
+// the block editor just for this. Revisit if a fixed lead time proves too rigid in practice.
+const SCHEDULE_NOTIFY_BEFORE_MIN = 30;
+
+function scheduleOccurrenceTrigger(date: string, startTime: string, zone: string): Date {
+  const start = zonedTimeToUtc(date, startTime, zone);
+  return new Date(start.getTime() - SCHEDULE_NOTIFY_BEFORE_MIN * 60_000);
+}
+
 export function useNotificationChecker() {
   const tasks     = useTaskStore((s) => s.tasks);
   const events    = useCalendarStore((s) => s.events);
   const reminders = useCalendarStore((s) => s.reminders);
+  const schedules = useScheduleStore((s) => s.schedules);
   const clockFormat = useSettingsStore((s) => s.clockFormat);
   const timezone    = useSettingsStore((s) => s.timezone);
   const { pending, addPending, removePending, markNotified, lastNotified } = useNotificationStore();
@@ -50,6 +63,12 @@ export function useNotificationChecker() {
           if (!events[n.itemId as import('@/types').CalendarEventId]) removePending(n.id);
         } else if (n.kind === 'reminder') {
           if (!reminders[n.itemId as import('@/types').CalendarReminderId]) removePending(n.id);
+        } else if (n.kind === 'schedule') {
+          const [scheduleId, blockId, date] = n.itemId.split('::');
+          const schedule = schedules[scheduleId as ScheduleId];
+          const block = schedule?.blocks.find((b) => b.id === blockId);
+          const stillCommitted = !!block?.requiresCommitment && (block.committedDates ?? []).includes(date);
+          if (!schedule?.active || !stillCommitted) removePending(n.id);
         }
       });
 
@@ -106,11 +125,36 @@ export function useNotificationChecker() {
           fireOSNotification(rem.title, body);
         }
       });
+
+      // ── Committed Schedule occurrences (commitment mode only) ──
+      // Each occurrence already has a stable, date-specific itemId (the same
+      // `${scheduleId}::${blockId}::${date}` composite CalendarView renders with), so unlike
+      // events/reminders there's no separate "which recurrence is this" problem to solve —
+      // committing to a different date just produces a different itemId.
+      Object.values(schedules).forEach((schedule) => {
+        if (!schedule.active) return;
+        schedule.blocks.forEach((block) => {
+          if (!block.requiresCommitment) return;
+          (block.committedDates ?? []).forEach((date) => {
+            const itemId = `${schedule.id}::${block.id}::${date}`;
+            if (isAlreadyPending(itemId)) return;
+            const trigger = scheduleOccurrenceTrigger(date, block.startTime, zone);
+            const triggerISO = trigger.toISOString();
+            const last = lastNotified(itemId);
+            if (trigger <= now && (!last || last < triggerISO)) {
+              const body = `Committed — starting at ${formatTime(block.startTime, clockFormat)}`;
+              addPending({ itemId, kind: 'schedule', title: block.title, body, triggeredAt: now.toISOString() });
+              markNotified(itemId, triggerISO);
+              fireOSNotification(block.title, body);
+            }
+          });
+        });
+      });
     };
 
     check();
     const id = setInterval(check, 60_000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, events, reminders, clockFormat, timezone]);
+  }, [tasks, events, reminders, schedules, clockFormat, timezone]);
 }

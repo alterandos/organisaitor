@@ -1,16 +1,25 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType } from '@/types';
 import type { Activity } from '@/types/fitness';
+import { useRecentItemsStore } from '@/store/recentItemsStore';
 
 export type AppView = 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
 
 export type CalendarViewMode = 'month' | 'week' | 'day';
 
-// Backspace-to-go-back history. An object shape (not a bare AppView[]) so a future entry
+// Back/forward section-navigation history (Alt+Left / Alt+Right, Backspace remains a
+// secondary alternate for back). An object shape (not a bare AppView[]) so a future entry
 // can carry more than "which section" — e.g. which note/list was open — without a
 // breaking change to the stack's element type. Scoped to app-switching only for now, per
 // the request ("if we leave it at app switching for now that'll be enough, but keep in
 // mind flexibility to expand"). MAX_SECTION_HISTORY is the one place to change the depth.
+//
+// Standard browser back/forward semantics: navigating to a new section (mode 'push', the
+// default) pushes the current section onto the back stack and clears the forward stack;
+// navigateBack pops the back stack and pushes onto forward; navigateForward does the
+// reverse. This is why setActiveView takes a `mode` rather than a bare skip flag — 'back'
+// and 'forward' each need to push onto the *other* stack, not just skip recording.
 export interface SectionHistoryEntry { view: AppView }
 export const MAX_SECTION_HISTORY = 6;
 
@@ -111,10 +120,14 @@ interface UIState {
   openEditActivityType:   (id: string) => void;
   closeEditActivityType:  () => void;
 
-  // Schedules (recurring weekly timetables, e.g. a uni/gym schedule) — manager pane + create/edit modal
+  // Schedules (recurring weekly timetables, e.g. a uni/gym schedule) — CalendarSidePane
+  // (which also shows the calendar layer toggles) + AddScheduleModal for create/edit.
+  // Field names kept as `schedulesOpen`/`openSchedules`/`closeSchedules` even though the
+  // pane now shows Layers too, to avoid an unnecessary rename churn across every call site.
   schedulesOpen:     boolean;
   openSchedules:     () => void;
   closeSchedules:    () => void;
+  toggleSchedules:   () => void;
   showAddSchedule:   () => void;
   openEditSchedule:  (schedule: ScheduleTemplate) => void;
   closeEditSchedule: () => void;
@@ -161,15 +174,17 @@ interface UIState {
   setSortDir:   (d: SortDir) => void;
 
   activeView:    AppView;
-  setActiveView: (view: AppView, opts?: { skipHistory?: boolean }) => void;
+  setActiveView: (view: AppView, opts?: { mode?: 'push' | 'back' | 'forward' }) => void;
 
-  // Backspace-to-go-back: sectionHistory is most-recent-first, capped at
-  // MAX_SECTION_HISTORY. navigateBack() pops the top entry and switches to it via
-  // setActiveView(..., { skipHistory: true }) — skipping the history push is what stops
-  // "going back" itself from being recorded as a new forward move, so repeated Backspace
-  // presses walk further back through the stack instead of bouncing between two entries.
-  sectionHistory: SectionHistoryEntry[];
-  navigateBack:   () => void;
+  // Back/forward section navigation (Alt+Left/Alt+Right primary, Backspace a secondary
+  // alternate for back only). Both lists are most-recent-first, capped at
+  // MAX_SECTION_HISTORY. navigateBack()/navigateForward() pop their own stack and switch
+  // via setActiveView(..., { mode: 'back' | 'forward' }) — see the SectionHistoryEntry
+  // comment above for why a plain 'push' isn't reused for these.
+  sectionHistory:        SectionHistoryEntry[];
+  sectionForwardHistory: SectionHistoryEntry[];
+  navigateBack:    () => void;
+  navigateForward: () => void;
 
   taskViewMode:    TaskViewMode;
   setTaskViewMode: (mode: TaskViewMode) => void;
@@ -314,9 +329,34 @@ interface UIState {
   mobileMoreSheetOpen:  boolean;
   openMobileMoreSheet:  () => void;
   closeMobileMoreSheet: () => void;
+
+  // Suite-wide Quick Access pane (Ctrl+G) — jump straight to a note/notebook/task/list/
+  // Endeavour/tracker/routine by search, or from recent/frequent history. See
+  // src/utils/quickAccess.ts for the provider registry and src/store/recentItemsStore.ts
+  // for the visit-tracking that backs "recent"/"frequent".
+  quickAccessOpen:   boolean;
+  openQuickAccess:   () => void;
+  closeQuickAccess:  () => void;
+  toggleQuickAccess: () => void;
+
+  // Lists' selected-list state lives as local useState in ListsSection.tsx (seeded once from
+  // listsLastActiveListId on mount) rather than in uiStore, so an external navigation request
+  // (Quick Access picking a list while already inside the Lists section) has nothing to write
+  // to that ListsSection would notice. This is that escape hatch: ListsSection watches it in
+  // an effect and applies+clears it, the same "pending request, consumed by the one section
+  // that can act on it" shape as pendingArtifactLink above.
+  pendingListSelectionId: string | null;
+  requestListSelection:   (id: string) => void;
+  clearPendingListSelection: () => void;
 }
 
-export const useUIStore = create<UIState>()((set, get) => ({
+// uiStore is memory-only for everything EXCEPT the fields listed in `partialize` below —
+// navigation/session memory (active section, back/forward history, each section's
+// last-open item + tab, and the Endeavour/Purpose filters). Modal/pane/dropdown
+// open-states are deliberately excluded so the app never reopens pointing at a stale
+// modal, or a possibly-deleted item, after a reload. See PERSISTED_STORAGE_KEYS
+// (src/config/backup.ts) — 'todo-ui-session' is registered there too.
+export const useUIStore = create<UIState>()(persist((set, get) => ({
   openModal:                null,
   activeCollectionIdByView: {},
   endeavourPickerOpen:      false,
@@ -362,6 +402,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
   schedulesOpen:     false,
   openSchedules:     () => set({ schedulesOpen: true  }),
   closeSchedules:    () => set({ schedulesOpen: false }),
+  toggleSchedules:   () => set((s) => ({ schedulesOpen: !s.schedulesOpen })),
   showAddSchedule:   () => set({ openModal: 'add-schedule', editingSchedule: null }),
   openEditSchedule:  (schedule) => set({ openModal: 'add-schedule', editingSchedule: schedule }),
   closeEditSchedule: ()         => set({ openModal: null,           editingSchedule: null      }),
@@ -388,9 +429,12 @@ export const useUIStore = create<UIState>()((set, get) => ({
     editingNoteMetaId: null,
   }),
 
-  setActiveCollection: (id) => set((s) => ({
-    activeCollectionIdByView: { ...s.activeCollectionIdByView, [s.activeView]: id },
-  })),
+  setActiveCollection: (id) => {
+    if (id) useRecentItemsStore.getState().recordVisit('endeavour', id);
+    set((s) => ({
+      activeCollectionIdByView: { ...s.activeCollectionIdByView, [s.activeView]: id },
+    }));
+  },
   openEndeavourPicker:   () => set({ endeavourPickerOpen: true }),
   closeEndeavourPicker:  () => set({ endeavourPickerOpen: false }),
   toggleEndeavourPicker: () => set((s) => ({ endeavourPickerOpen: !s.endeavourPickerOpen })),
@@ -401,7 +445,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
   closeManage:           () => set({ manageOpen: false }),
   toggleManage:          () => set((s) => ({ manageOpen: !s.manageOpen })),
   setManageSection:      (section) => set({ manageSection: section }),
-  openTaskPane:        (id) => set({ editingTaskId: id }),
+  openTaskPane:        (id) => { useRecentItemsStore.getState().recordVisit('task', id); set({ editingTaskId: id }); },
   closeTaskPane:       ()   => set({ editingTaskId: null }),
   openSidebar:         ()   => set({ sidebarOpen: true }),
   closeSidebar:        ()   => set({ sidebarOpen: false }),
@@ -445,11 +489,27 @@ export const useUIStore = create<UIState>()((set, get) => ({
   activeView:    'tasks',
   setActiveView: (view, opts) => set((s) => {
     if (view === s.activeView) return {};
+    const mode = opts?.mode ?? 'push';
+    // 'push' (a normal navigation, e.g. a nav hotkey or clicking a section icon): record
+    // the section we're leaving on the back stack, and invalidate the forward stack — the
+    // same rule a browser follows when you navigate somewhere new after going back.
+    // 'back': don't touch the back stack (navigateBack already popped it) — push the
+    // section we're leaving onto the forward stack instead, so it can be returned to.
+    // 'forward': the mirror image — push the section we're leaving onto the back stack.
+    const sectionHistory =
+      mode === 'push' || mode === 'forward'
+        ? [{ view: s.activeView }, ...s.sectionHistory].slice(0, MAX_SECTION_HISTORY)
+        : s.sectionHistory;
+    const sectionForwardHistory =
+      mode === 'push'
+        ? []
+        : mode === 'back'
+        ? [{ view: s.activeView }, ...s.sectionForwardHistory].slice(0, MAX_SECTION_HISTORY)
+        : s.sectionForwardHistory;
     return {
-      activeView:          view,
-      sectionHistory: opts?.skipHistory
-        ? s.sectionHistory
-        : [{ view: s.activeView }, ...s.sectionHistory].slice(0, MAX_SECTION_HISTORY),
+      activeView: view,
+      sectionHistory,
+      sectionForwardHistory,
       portfolioChartOpen:  false,
       // Close inline note editor and tag view when leaving the notes section (editingNoteId
       // also drives NoteEditorPane's cross-app quick-view elsewhere, so it can't just be left
@@ -474,12 +534,19 @@ export const useUIStore = create<UIState>()((set, get) => ({
     };
   }),
 
-  sectionHistory: [],
+  sectionHistory:        [],
+  sectionForwardHistory: [],
   navigateBack: () => {
     const [prev, ...rest] = get().sectionHistory;
     if (!prev) return;
     set({ sectionHistory: rest });
-    get().setActiveView(prev.view, { skipHistory: true });
+    get().setActiveView(prev.view, { mode: 'back' });
+  },
+  navigateForward: () => {
+    const [next, ...rest] = get().sectionForwardHistory;
+    if (!next) return;
+    set({ sectionForwardHistory: rest });
+    get().setActiveView(next.view, { mode: 'forward' });
   },
 
   taskViewMode:    'overview',
@@ -525,7 +592,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
 
   // Records / Trackers
   activeTrackerId:  null,
-  setActiveTracker: (id) => set({ activeTrackerId: id, activeRoutineId: null }),
+  setActiveTracker: (id) => { if (id) useRecentItemsStore.getState().recordVisit('tracker', id); set({ activeTrackerId: id, activeRoutineId: null }); },
   showAddTracker:   () => set({ openModal: 'add-tracker', pendingTrackerId: null }),
   pendingTrackerId: null,
   showAddEntry:     (trackerId) => set({ openModal: 'add-entry', pendingTrackerId: trackerId, editingEntryId: null }),
@@ -564,7 +631,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
 
   // Notes
   selectedNoteTagId:      null,
-  setSelectedNoteTag:     (id) => set({ selectedNoteTagId: id }),
+  setSelectedNoteTag:     (id) => { if (id) useRecentItemsStore.getState().recordVisit('notebook', id); set({ selectedNoteTagId: id }); },
   expandedNoteTagIds:     [],
   toggleNoteTagExpanded:  (id) => set((s) => ({
     expandedNoteTagIds: s.expandedNoteTagIds.includes(id)
@@ -609,7 +676,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
   openEditRoutine:       (id) => set({ editRoutineOpen: true, editingRoutineId: id }),
   closeEditRoutine:      () => set({ editRoutineOpen: false, editingRoutineId: null }),
   activeRoutineId:       null,
-  setActiveRoutine:      (id) => set({ activeRoutineId: id, activeTrackerId: null }),
+  setActiveRoutine:      (id) => { if (id) useRecentItemsStore.getState().recordVisit('routine', id); set({ activeRoutineId: id, activeTrackerId: null }); },
 
   mobileBackConsumer:         null,
   registerMobileBackConsumer: (fn) => set({ mobileBackConsumer: fn }),
@@ -617,6 +684,33 @@ export const useUIStore = create<UIState>()((set, get) => ({
   mobileMoreSheetOpen:  false,
   openMobileMoreSheet:  () => set({ mobileMoreSheetOpen: true }),
   closeMobileMoreSheet: () => set({ mobileMoreSheetOpen: false }),
+
+  quickAccessOpen:   false,
+  openQuickAccess:   () => set({ quickAccessOpen: true }),
+  closeQuickAccess:  () => set({ quickAccessOpen: false }),
+  toggleQuickAccess: () => set((s) => ({ quickAccessOpen: !s.quickAccessOpen })),
+
+  pendingListSelectionId:    null,
+  requestListSelection:      (id) => set({ pendingListSelectionId: id }),
+  clearPendingListSelection: () => set({ pendingListSelectionId: null }),
+}), {
+  name:    'todo-ui-session',
+  version: 1,
+  partialize: (s) => ({
+    activeView:               s.activeView,
+    sectionHistory:           s.sectionHistory,
+    sectionForwardHistory:    s.sectionForwardHistory,
+    activeCollectionIdByView: s.activeCollectionIdByView,
+    activePurposeIds:         s.activePurposeIds,
+    notesLastEditingNoteId:   s.notesLastEditingNoteId,
+    notesLastActiveTabId:     s.notesLastActiveTabId,
+    selectedNoteTagId:        s.selectedNoteTagId,
+    listsLastActiveListId:    s.listsLastActiveListId,
+    listsLastActiveTabId:     s.listsLastActiveTabId,
+    activeTrackerId:          s.activeTrackerId,
+    activeRoutineId:          s.activeRoutineId,
+    calendarViewMode:         s.calendarViewMode,
+  }),
 }));
 
 // Android back-button priority list (docs/android/00-architecture.md §5d step 1: "is a
@@ -626,6 +720,7 @@ export const useUIStore = create<UIState>()((set, get) => ({
 // Returns true if something was closed (caller should treat the back press as handled).
 export function closeTopmostMobileOverlay(): boolean {
   const s = useUIStore.getState();
+  if (s.quickAccessOpen)                                    { s.closeQuickAccess();       return true; }
   if (s.openModal !== null)                                { s.closeModal();             return true; }
   if (s.calendarQuickAddOpen)                               { s.closeCalendarQuickAdd();  return true; }
   if (s.editingTaskId !== null)                             { s.closeTaskPane();          return true; }

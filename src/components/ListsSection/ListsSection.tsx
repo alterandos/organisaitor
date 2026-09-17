@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
 import { useListStore } from '@/store/listStore';
 import { useUIStore } from '@/store/uiStore';
+import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { LIST_ITEM_STATUS_META } from '@/types/lists';
 import type { ListId, ListItemId, ListItemStatus, ListItem, ListFieldSchema } from '@/types/lists';
 import styles from './ListsSection.module.css';
@@ -466,6 +467,7 @@ export function ListsSection() {
   };
 
   const handleSelectList = (id: ListId) => {
+    useRecentItemsStore.getState().recordVisit('list', id);
     setSelectedListId(id);
     setStatusFilter('all');
     setSelectedTabId('all');
@@ -473,6 +475,18 @@ export function ListsSection() {
     setNewTabName('');
     setEditingCell(null);
   };
+
+  // External navigation request (Quick Access, Ctrl+G) — see uiStore.requestListSelection's
+  // doc comment for why this can't just write selectedListId directly. Goes through the same
+  // handleSelectList as a sidebar click so it also records a visit and resets filters/tabs.
+  const pendingListSelectionId  = useUIStore((s) => s.pendingListSelectionId);
+  const clearPendingListSelection = useUIStore((s) => s.clearPendingListSelection);
+  useEffect(() => {
+    if (!pendingListSelectionId) return;
+    if (lists[pendingListSelectionId as ListId]) handleSelectList(pendingListSelectionId as ListId);
+    clearPendingListSelection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingListSelectionId, lists]);
 
   // Group sidebar lists by kind
   const watchlists    = allLists.filter((l) => l.kind === 'watchlist');

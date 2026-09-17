@@ -52,3 +52,43 @@
 }
 .actionBtn:hover, .actionBtnSecondary:hover { background: var(--color-bg); }
 .actionBtnSecondary { color: var(--color-muted); border-top: 1px solid var(--color-border); }
+
+.commitSection {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.commitSection .actionBtn { color: var(--color-primary); font-weight: 500; }
+
+.commitWeeksRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.85rem 0.55rem;
+}
+
+.commitWeeksRow .actionBtnSecondary {
+  padding: 0.4rem 0.6rem;
+  border-top: none;
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.weeksInput {
+  width: 2.6rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.weeksLabel {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}

@@ -54,6 +54,33 @@ export function expandScheduleBlock(
   return dates;
 }
 
+// For the occurrence popover's "commit for the next N weeks" bulk action: starting from
+// `fromDate` (itself a real occurrence of `block`), steps forward one week at a time and
+// keeps only the dates that are genuinely valid occurrences per the block's own
+// interval/anchor/exceptions — so a biweekly block's "off" weeks are skipped automatically,
+// and the result is always N *real* upcoming occurrences of this exact weekly slot, not N
+// calendar weeks. Bounded by the template's own endDate (if any) and a generous iteration
+// guard so a malformed block can't loop forever.
+export function computeNextOccurrenceDates(
+  block: ScheduleBlock,
+  template: Pick<ScheduleTemplate, 'startDate' | 'endDate'>,
+  fromDate: string,
+  count: number
+): string[] {
+  const dates: string[] = [];
+  const cursor = new Date(`${fromDate}T00:00:00`);
+  let guard = 0;
+  while (dates.length < count && guard < count * 20 + 52) {
+    guard++;
+    cursor.setDate(cursor.getDate() + 7);
+    const ds = toDateStr(cursor);
+    if (template.endDate && ds > template.endDate) break;
+    const matches = expandScheduleBlock(block, template, ds, ds);
+    if (matches.includes(ds)) dates.push(ds);
+  }
+  return dates;
+}
+
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number);
   return h * 60 + m;

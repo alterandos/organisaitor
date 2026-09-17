@@ -6,9 +6,9 @@ import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
-import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
-import { useNoteStore } from '@/store/noteStore';
-import type { NoteId } from '@/types/notes';
+import { deleteTaskWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
+import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import type { CrossAppRef } from '@/types';
 import styles from './TaskPane.module.css';
 
 const PRIORITY_OPTIONS: { value: Priority; label: string; color: string }[] = [
@@ -192,11 +192,18 @@ export function TaskPane() {
 
   const currentLinks = task.links ?? [];
 
-  const notesRecord = useNoteStore((s) => s.notes);
-  const linkedNoteRefs = (task.crossAppRefs ?? []).filter((r) => r.type === 'note');
-  const openLinkedNote = (noteId: string) => {
+  const navigateToCrossAppRef = (ref: CrossAppRef) => {
+    if (ref.type !== 'note') return; // only 'note' targets are navigable today
     useUIStore.getState().setActiveView('notes');
-    useUIStore.getState().openNote(noteId);
+    useUIStore.getState().openNote(ref.id);
+  };
+
+  const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
+    const removed = (task.crossAppRefs ?? []).filter(
+      (r) => !next.some((n) => n.type === r.type && n.id === r.id)
+    );
+    removed.forEach((ref) => unlinkCrossAppRef('task', taskId, ref));
+    updateTask(taskId, { crossAppRefs: next });
   };
 
   const addLink = () => {
@@ -516,29 +523,17 @@ export function TaskPane() {
             </div>
           </div>
 
-          {/* ── Linked notes (reverse of the Notes "Create ▸ Task" flow — see CLAUDE.md
-               "Cross-app linking") ── */}
-          {linkedNoteRefs.length > 0 && (
-            <div className={styles.field}>
-              <span className={styles.label}>Linked notes</span>
-              <div className={styles.chips}>
-                {linkedNoteRefs.map((ref) => {
-                  const note = notesRecord[ref.id as NoteId];
-                  return (
-                    <button
-                      key={ref.id}
-                      type="button"
-                      className={styles.chip}
-                      onClick={() => openLinkedNote(ref.id)}
-                      title="Open this note"
-                    >
-                      📝 {note ? (note.title || 'Untitled') : 'Note (deleted)'}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {/* ── Linked items (Notes today; Calendar/List/Tracker are stubs in the picker
+               itself — see CLAUDE.md "Cross-app linking"). Populated automatically by the
+               Notes "Create ▸ Task" flow, and manually addable/removable here. ── */}
+          <div className={styles.field}>
+            <span className={styles.label}>Linked items</span>
+            <CrossAppRefPicker
+              value={task.crossAppRefs ?? []}
+              onChange={handleCrossAppRefsChange}
+              onNavigate={navigateToCrossAppRef}
+            />
+          </div>
 
           {/* ── Sub-tasks ── */}
           <div className={styles.field}>
