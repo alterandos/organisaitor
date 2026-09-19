@@ -16,6 +16,7 @@ import {
 import type { ScheduleId, ScheduleTemplate, CalendarConnection } from '@/types';
 import styles from './CalendarSidePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 // Which calendar item categories render, filtered via CalendarEvent.eventType/status and
 // CalendarReminder.reminderType. See settingsStore.calendarLayerVisibility for the actual
@@ -295,7 +296,12 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
   };
 
   const handleDisconnect = async (connectionId: string, accountEmail: string) => {
-    if (!window.confirm(`Disconnect ${accountEmail}? Events already imported from it will stay.`)) return;
+    const ok = await confirmDialog({
+      title: `Disconnect ${accountEmail}?`,
+      message: 'Events already imported from it will stay.',
+      confirmLabel: 'Disconnect',
+    });
+    if (!ok) return;
     await disconnectGoogleCalendar(connectionId);
     reloadConnections();
   };
@@ -423,7 +429,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
                       <button
                         type="button"
                         className={`${styles.rowActionBtn} ${styles.rowActionBtnDelete}`}
-                        onClick={() => { if (window.confirm(`Delete "${schedule.name}"?`)) deleteSchedule(schedule.id); }}
+                        onClick={async () => { if (await confirmDelete('schedule', schedule.name)) deleteSchedule(schedule.id); }}
                         title="Delete"
                       >
                         🗑

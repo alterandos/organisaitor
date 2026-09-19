@@ -511,3 +511,7 @@
 }
 .linkAddBtn:hover:not(:disabled) { background: var(--color-bg); color: var(--color-text); }
 .linkAddBtn:disabled { opacity: 0.4; cursor: default; }
+
+.fieldGrow {
+  flex: 1;
+}

@@ -397,7 +397,7 @@ export function TaskPane() {
                 collections={collectionList}
                 value={task.collectionId}
                 onChange={(id) => updateTask(taskId, { collectionId: id })}
-                noneLabel="No Endeavour"
+                noneLabel={LABELS.noCollection}
               />
             </div>
           )}

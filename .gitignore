@@ -43,3 +43,6 @@ android/app/release/
 
 .vercel
 .env*
+
+# Supabase CLI scratch
+supabase/.temp/

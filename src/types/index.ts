@@ -48,7 +48,6 @@ export interface RoutineInstance {
 
 // ── Tracker types ───────────────────────────────────────────────────────────────
 export type TrackerTemplate = 'habit' | 'books' | 'movies' | 'custom';
-export type TrackerViewMode = 'list' | 'heatmap';
 export type FieldType =
   | 'text' | 'number' | 'date' | 'rating'
   | 'select' | 'boolean' | 'url' | 'duration';
@@ -418,34 +417,8 @@ export interface CreateScheduleInput {
   collectionId?: CollectionId | null;
 }
 
-export interface CreateScheduleBlockInput {
-  title:          string;
-  daysOfWeek:     number[];
-  startTime:      string;
-  endTime:        string;
-  location?:      string | null;
-  interval?:      number;
-  intervalAnchor?: string;
-  notes?:         string | null;
-  requiresCommitment?: boolean;
-}
-
 // ── UI-only types (never persisted) ───────────────────────────────────────────
 export type TaskViewMode  = 'focused' | 'overview';
-export type FilterStatus  = 'all' | 'active' | 'completed';
-export type SortField     = 'createdAt' | 'deadline' | 'priority' | 'sortOrder';
-export type SortDirection = 'asc' | 'desc';
-
-export interface FilterState {
-  status:       FilterStatus;
-  tagIds:       TagId[];
-  collectionId: CollectionId | null;
-  purposeId:    PurposeId | null;
-  sortField:    SortField;
-  sortDir:      SortDirection;
-  query:        string;
-}
-
 // ── Note types (from notes.ts) ──────────────────────────────────────────────────
 export type { NoteId, NoteTagId, Note, NoteTab, NoteTag, CreateNoteInput, CreateNoteTagInput, NoteTagFieldDef, NoteTagFieldType, StructuredTagEntryId, StructuredTagEntry } from './notes';
 
@@ -456,4 +429,3 @@ export type {
   ListType, List, ListItem,
   CreateListInput, CreateListItemInput,
 } from './lists';
-export { LIST_ITEM_STATUS_META } from './lists';

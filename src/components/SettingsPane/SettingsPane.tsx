@@ -7,8 +7,9 @@ import { captureBindingFromEvent } from '@/utils/hotkeyBinding';
 import { listTimezones, resolveTimezone, SYSTEM_TIMEZONE } from '@/utils/timezone';
 import { rezoneAllCalendarData } from '@/services/timezoneMigration';
 import styles from './SettingsPane.module.css';
-
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
+
 function renderKeys(combo: string) {
   const parts = combo.split('+');
   return (
@@ -114,17 +115,26 @@ export function SettingsPane() {
       const conflicts = findConflicts(binding, listening.id);
       if (conflicts.length > 0) {
         const names = conflicts.map((c) => c.action).join(', ');
-        const proceed = window.confirm(
-          `"${binding}" is already used by: ${names}.\n\nReassign it to "${def.action}" instead? ` +
-          'The other action will lose this binding (its other slot, if any, is unaffected).'
-        );
-        if (!proceed) { setListening(null); return; }
-        conflicts.forEach((c) => {
-          const cDef = HOTKEYS.find((h) => h.id === c.id);
-          if (!cDef) return;
-          if (effectiveBinding(cDef, 'primary')   === binding) setHotkeyOverride(c.id, 'primary',   null);
-          if (effectiveBinding(cDef, 'secondary') === binding) setHotkeyOverride(c.id, 'secondary', null);
+        const target = listening;
+        // Stop capturing first, or the dialog's own keypresses would be read as a new binding.
+        setListening(null);
+        void confirmDialog({
+          title: `Reassign "${binding}"?`,
+          message:
+            `"${binding}" is already used by: ${names}.\n\nReassign it to "${def.action}" instead? ` +
+            'The other action will lose this binding (its other slot, if any, is unaffected).',
+          confirmLabel: 'Reassign',
+        }).then((proceed) => {
+          if (!proceed) return;
+          conflicts.forEach((c) => {
+            const cDef = HOTKEYS.find((h) => h.id === c.id);
+            if (!cDef) return;
+            if (effectiveBinding(cDef, 'primary')   === binding) setHotkeyOverride(c.id, 'primary',   null);
+            if (effectiveBinding(cDef, 'secondary') === binding) setHotkeyOverride(c.id, 'secondary', null);
+          });
+          setHotkeyOverride(target.id, target.slot, binding);
         });
+        return;
       }
 
       setHotkeyOverride(listening.id, listening.slot, binding);
@@ -144,16 +154,18 @@ export function SettingsPane() {
   const timezone                = useSettingsStore((s) => s.timezone);
   const setTimezone             = useSettingsStore((s) => s.setTimezone);
 
-  const handleTimezoneChange = (nextTz: string) => {
+  const handleTimezoneChange = async (nextTz: string) => {
     const fromZone = resolveTimezone(timezone);
     const toZone   = resolveTimezone(nextTz);
     if (fromZone !== toZone) {
-      const ok = window.confirm(
-        `Change timezone from ${fromZone} to ${toZone}?\n\n` +
-        'Every task deadline, scheduled time, calendar event, and reminder that has a time of day ' +
-        'will be shifted so it still points at the same real-world moment (e.g. a 2:00 PM event may ' +
-        'become 11:00 AM). All-day items (like birthdays) are not affected.'
-      );
+      const ok = await confirmDialog({
+        title: `Change timezone from ${fromZone} to ${toZone}?`,
+        message:
+          'Every task deadline, scheduled time, calendar event, and reminder that has a time of day ' +
+          'will be shifted so it still points at the same real-world moment (e.g. a 2:00 PM event may ' +
+          'become 11:00 AM). All-day items (like birthdays) are not affected.',
+        confirmLabel: 'Change timezone',
+      });
       if (!ok) return;
       rezoneAllCalendarData(fromZone, toZone);
     }
@@ -321,7 +333,14 @@ export function SettingsPane() {
                 <button
                   type="button"
                   className={styles.hotkeysResetAllBtn}
-                  onClick={() => { if (window.confirm('Reset every customized hotkey back to its default?')) resetAllHotkeys(); }}
+                  onClick={async () => {
+                    const ok = await confirmDialog({
+                      title: 'Reset all hotkeys?',
+                      message: 'Every customized hotkey goes back to its default.',
+                      confirmLabel: 'Reset all',
+                    });
+                    if (ok) resetAllHotkeys();
+                  }}
                 >
                   Reset all to defaults
                 </button>

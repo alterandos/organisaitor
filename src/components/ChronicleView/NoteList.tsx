@@ -9,6 +9,8 @@ import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import type { NoteTagId, NoteId, CollectionId } from '@/types';
 import type { Note } from '@/types/notes';
 import styles from './NoteList.module.css';
+import { LABELS } from '@/config/labels';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 interface NoteListProps {
   tagId: NoteTagId;
@@ -49,9 +51,9 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
     ? NOTE_TEMPLATES.find((t) => t.id === note.templateId)
     : undefined;
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${note.title || 'Untitled'}"${locked ? ' (encrypted)' : ''}?`)) return;
+    if (!(await confirmDelete('note', `${note.title || 'Untitled'}${locked ? ' (encrypted)' : ''}`))) return;
     if (editingNoteId === note.id) useUIStore.getState().closeNote();
     deleteNoteWithCleanup(note.id);
   };
@@ -149,7 +151,7 @@ export function NoteList({ tagId, onAddNote, hideHeader }: NoteListProps) {
 
       <div className={styles.notes}>
         {topLevel.length === 0 ? (
-          <div className={styles.empty}>{activeCollectionId ? 'No notes in this Endeavour' : 'No notes yet'}</div>
+          <div className={styles.empty}>{activeCollectionId ? LABELS.noneInCollection('notes') : 'No notes yet'}</div>
         ) : (
           topLevel.map((note) => (
             <NoteRow

@@ -126,7 +126,7 @@ export function CrossAppRefPicker({ value, onChange, onNavigate }: Props) {
       {open && dropdownPos && createPortal(
         <div
           className={styles.dropdown}
-          style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left }}
+          style={{ top: dropdownPos.top, left: dropdownPos.left }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           <div className={styles.typeRow}>

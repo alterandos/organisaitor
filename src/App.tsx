@@ -61,6 +61,7 @@ import { IntegrationsPane } from '@/components/IntegrationsPane/IntegrationsPane
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
+import { ConfirmDialogHost } from '@/components/ConfirmDialog/ConfirmDialog';
 import { AddNoteModal } from '@/components/AddNoteModal/AddNoteModal';
 import { AddNoteTagModal } from '@/components/AddNoteTagModal/AddNoteTagModal';
 import { NoteTagPresetModal } from '@/components/NoteTagPresetModal/NoteTagPresetModal';
@@ -564,6 +565,7 @@ export default function App() {
         {editingNoteId && activeView !== 'notes' && <NoteEditorPane />}
 
         <LinkHoverPreview />
+        <ConfirmDialogHost />
         {quickAccessOpen && <QuickAccessPane />}
         {decryptPrompt && <DecryptPrompt />}
         {isAndroid && <MobileNav />}

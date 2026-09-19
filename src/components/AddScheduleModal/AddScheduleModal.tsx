@@ -12,6 +12,8 @@ import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
 import type { CollectionId, ScheduleBlock } from '@/types';
 import styles from './AddScheduleModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { LABELS } from '@/config/labels';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 // When a schedule has no end date, the "skip occurrences" checklist would otherwise try to list
@@ -140,6 +142,8 @@ export function AddScheduleModal() {
     return () => document.removeEventListener('keydown', handler);
   }, [isVisible, closeEditSchedule]);
 
+  const previewEntries = useMemo(() => blocksToPreviewEntries(blocks, color), [blocks, color]);
+
   if (!isVisible) return null;
 
   const toggleDay = (setter: (fn: (prev: number[]) => number[]) => void, day: number) => {
@@ -228,15 +232,14 @@ export function AddScheduleModal() {
     closeEditSchedule();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!editingSchedule) return;
-    if (!window.confirm(`Delete "${editingSchedule.name}"? This removes all its blocks and any exceptions.`)) return;
+    if (!(await confirmDelete('schedule', editingSchedule.name, 'This removes all its blocks and any exceptions.'))) return;
     deleteSchedule(editingSchedule.id);
     closeEditSchedule();
   };
 
   const allCollections = Object.values(collectionsRecord);
-  const previewEntries = useMemo(() => blocksToPreviewEntries(blocks, color), [blocks, color]);
 
   return (
     <>
@@ -278,7 +281,7 @@ export function AddScheduleModal() {
 
             {allCollections.length > 0 && (
               <div className={styles.field}>
-                <span className={styles.label}>Endeavour</span>
+                <span className={styles.label}>{LABELS.collection}</span>
                 <CollectionPicker collections={allCollections} value={collectionId} onChange={setCollectionId} noneLabel="None" />
               </div>
             )}

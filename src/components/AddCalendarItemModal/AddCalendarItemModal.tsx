@@ -101,7 +101,6 @@ export function AddCalendarItemModal() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closeModal]);
 
   const handleStartTimeChange = (val: string) => {
@@ -299,7 +298,7 @@ export function AddCalendarItemModal() {
                 type="checkbox"
                 checked={important}
                 onChange={(e) => setImportant(e.target.checked)}
-                style={{ marginRight: '0.4rem' }}
+                className={styles.checkboxInput}
               />
               ❗ Important — highlight on the calendar
             </label>
@@ -355,7 +354,7 @@ export function AddCalendarItemModal() {
                       type="checkbox"
                       checked={status === 'tentative'}
                       onChange={(e) => setStatus(e.target.checked ? 'tentative' : 'confirmed')}
-                      style={{ marginRight: '0.4rem' }}
+                      className={styles.checkboxInput}
                     />
                     Tentative — not confirmed yet, just a placeholder
                   </label>
@@ -382,7 +381,7 @@ export function AddCalendarItemModal() {
                       type="checkbox"
                       checked={notifyBeforeOn}
                       onChange={(e) => setNotifyBeforeOn(e.target.checked)}
-                      style={{ marginRight: '0.4rem' }}
+                      className={styles.checkboxInput}
                     />
                     Notify before
                   </label>
@@ -415,7 +414,7 @@ export function AddCalendarItemModal() {
                     type="checkbox"
                     checked={repeatOn}
                     onChange={(e) => setRepeatOn(e.target.checked)}
-                    style={{ marginRight: '0.4rem' }}
+                    className={styles.checkboxInput}
                   />
                   Repeat
                 </label>

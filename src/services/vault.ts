@@ -63,7 +63,6 @@ export function onVaultStatus(fn: (s: VaultStatus) => void): () => void {
   fn(status);
   return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); };
 }
-export function getVaultStatus(): VaultStatus { return status; }
 let lastError: string | null = null;
 // Why the vault is 'unavailable' — surfaced in the Account pane so the cause is visible
 // without opening the console.

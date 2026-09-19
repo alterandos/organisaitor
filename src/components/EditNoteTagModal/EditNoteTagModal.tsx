@@ -9,6 +9,7 @@ import { BUILTIN_TAGS } from '../NoteEditor/builtinTags';
 import type { NoteTagId, NoteTagFieldDef, NoteTagFieldType, CollectionId } from '@/types';
 import styles from './EditNoteTagModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 const PRESET_COLORS = [
   '#5b6ee1', '#2563eb', '#7c3aed', '#db2777',
@@ -56,6 +57,7 @@ export function EditNoteTagModal() {
   }, [tag?.id]);
 
   useEscapeClose(closeEditNoteTag);
+  useCtrlEnterSubmit(() => handleSave(), !!tag && !!editingNoteTagId);
 
   if (!tag || !editingNoteTagId) return null;
 
@@ -71,7 +73,7 @@ export function EditNoteTagModal() {
   const removeField = (id: string) =>
     setFieldSchema((prev) => prev.filter((f) => f.id !== id));
 
-  const handleSave = () => {
+  function handleSave() {
     if (!name.trim()) return;
     updateNoteTag(editingNoteTagId as NoteTagId, {
       name: name.trim(),
@@ -82,7 +84,7 @@ export function EditNoteTagModal() {
       collectionId: isAnnotationTag ? null : collectionId,
     });
     closeEditNoteTag();
-  };
+  }
 
   return (
     <div className={styles.overlay} onClick={closeEditNoteTag}>

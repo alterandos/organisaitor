@@ -7,6 +7,7 @@ import { formatDate } from '@/utils/date';
 import { getStravaConnectUrl, checkStravaStatus, syncStrava, type StravaStatus } from '@/services/strava';
 import type { Activity, ActivityId, ActivityType } from '@/types/fitness';
 import styles from './FitnessSection.module.css';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 function StravaConnect() {
   const [status, setStatus] = useState<StravaStatus | null>(null);
@@ -76,9 +77,9 @@ function ActivityRow({ activity, activityTypes }: { activity: Activity; activity
   const openEditActivity = useUIStore((s) => s.openEditActivity);
   const typeDef = getActivityType(activity.type, activityTypes);
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm(`Delete "${activity.title}"?`)) deleteActivity(activity.id);
+    if (await confirmDelete('activity', activity.title)) deleteActivity(activity.id);
   };
 
   return (

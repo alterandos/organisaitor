@@ -87,9 +87,3 @@ export function captureBindingFromEvent(e: KeyboardEvent): string | null {
   });
 }
 
-// Human-readable form for the rebind UI (kept identical to the binding string itself today
-// — pulled out as its own function so display formatting can diverge from the storage
-// format later without touching call sites).
-export function displayBinding(binding: string): string {
-  return binding;
-}

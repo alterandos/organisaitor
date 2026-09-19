@@ -7,6 +7,7 @@ import { now } from '@/utils/date';
 import type { Collection, Purpose, Tag, CollectionId, PurposeId, TagId } from '@/types';
 import styles from './ManagePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 // Left-nav tabs — add an entry here (+ a render branch below) to extend this view with
 // future sections (e.g. Notebooks, List types) without redesigning the layout.
@@ -68,8 +69,8 @@ function EndeavoursSection() {
   const lists     = active.filter((c) => c.kind === 'list');
 
   const toggleArchive = (c: Collection) => updateCollection(c.id as CollectionId, { archivedAt: c.archivedAt ? null : now() });
-  const handleDelete = (c: Collection) => {
-    if (window.confirm(`Delete "${c.name}"? Tasks will be detached but not deleted.`)) {
+  const handleDelete = async (c: Collection) => {
+    if (await confirmDelete(LABELS.collection.toLowerCase(), c.name, 'Tasks will be detached but not deleted.')) {
       deleteCollection(c.id as CollectionId);
     }
   };
@@ -150,8 +151,8 @@ function PurposesSection() {
   const archived = all.filter((p) => p.archivedAt);
 
   const toggleArchive = (p: Purpose) => updatePurpose(p.id as PurposeId, { archivedAt: p.archivedAt ? null : now() });
-  const handleDelete = (p: Purpose) => {
-    if (window.confirm(`Delete purpose "${p.name}"? It will be removed from all tasks.`)) {
+  const handleDelete = async (p: Purpose) => {
+    if (await confirmDelete('purpose', p.name, 'It will be removed from all tasks.')) {
       deletePurpose(p.id as PurposeId);
     }
   };
@@ -207,8 +208,8 @@ function TagsSection() {
 
   const tags = Object.values(tagsRecord);
 
-  const handleDelete = (t: Tag) => {
-    if (window.confirm(`Delete tag "${t.name}"? It will be removed from all tasks.`)) {
+  const handleDelete = async (t: Tag) => {
+    if (await confirmDelete('tag', t.name, 'It will be removed from all tasks.')) {
       deleteTag(t.id as TagId);
     }
   };

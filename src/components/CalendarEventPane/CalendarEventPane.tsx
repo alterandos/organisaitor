@@ -297,7 +297,7 @@ export function CalendarEventPane() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+            <label className={`${styles.label} ${styles.checkLabel}`}>
               <input
                 type="checkbox"
                 checked={event.important ?? false}
@@ -309,7 +309,7 @@ export function CalendarEventPane() {
 
           {(event.eventType ?? 'default') !== 'birthday' && (
             <div className={styles.field}>
-              <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+              <label className={`${styles.label} ${styles.checkLabel}`}>
                 <input
                   type="checkbox"
                   checked={(event.status ?? 'confirmed') === 'tentative'}
@@ -334,7 +334,7 @@ export function CalendarEventPane() {
             </div>
           ) : (
             <div className={styles.field}>
-              <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+              <label className={`${styles.label} ${styles.checkLabel}`}>
                 <input
                   type="checkbox"
                   checked={event.notifyBeforeValue !== null}
@@ -367,7 +367,7 @@ export function CalendarEventPane() {
 
           {/* ── Repeat ── */}
           <div className={styles.field}>
-            <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+            <label className={`${styles.label} ${styles.checkLabel}`}>
               <input
                 type="checkbox"
                 checked={repeatOn}

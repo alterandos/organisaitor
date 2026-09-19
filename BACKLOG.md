@@ -127,7 +127,7 @@ Associate List items with entities in other apps:
 - Link a List item to a Task (e.g., "watch this weekend" creates a task from a list item)
 - Link a List item to a Calendar event (e.g., "cinema trip" event linked to the movie list item)
 - Cross-app query: from Notes app, create/attach a list related to a Chronicle (e.g., "environmental research reading list")
-- Implementation: use `cross_app_links` table pattern (same as Notes cross-app linking); event bus for in-process linking
+- Implementation: use the embedded `crossAppRefs` pattern (same as Notes cross-app linking — a `CrossAppRef[]` field on the linked entities plus a mark/chip on the other side, cleaned up in `services/crossAppLinkCleanup.ts`); no event bus or join table exists
 
 Other Lists Phase 2+ items:
 - Supabase sync for lists and list items
@@ -876,6 +876,15 @@ a brain-dump) and have an AI agent parse it into structured tasks. The agent
 should infer titles, priorities, deadlines, and collection assignments where
 possible, then present the parsed tasks for review before adding them.
 
+### Voice → agent (partly built)
+Dictation into text fields is built (`Ctrl+D`, see CLAUDE.md "Voice dictation"). Still to do: with **nothing focused**, `Ctrl+D` should open a voice pane whose default destination is the agent (simple commands first), with recording/meeting-minutes as further options. The seam is there — a second destination for the transcript besides the focused field — but the agent interface itself (below) must be designed first.
+
+Also open:
+- A local Whisper `SpeechEngine` — free, offline, works without Google; heavier build (C++/CMake) plus a 150–500 MB model download. `tauri-plugin-stt` wraps whisper-rs but its maturity is unvetted.
+- A Web Speech engine for the PWA; a `RECORD_AUDIO` permission and mic button for Android (no hotkeys there).
+- Spoken-command handling ("new line", "period") and custom vocabulary (Acronym entries, Endeavour names).
+- **Recordings** (lectures, meeting minutes): chunked local audio in IndexedDB, timestamped transcript, speaker labels. Where it lives is undecided and not Notes; a paid feature, audio kept local first.
+
 ### Voice control
 Hands-free task creation and navigation via voice commands. The agent
 interprets spoken input and maps it to app actions (add task, set deadline,
@@ -1197,7 +1206,7 @@ entry as context in the task pane.
 
 ### Third-party integrations (future)
 
-- **Strava**: superseded by the dedicated **Fitness App** spec (see "Fitness App — Physical Exercise Tracking" below) — Strava import now lands as `Activity` records in that separate app, not as Records tracker entries. The two are meant to be cross-linked (`cross_app_links`) rather than merged, so a workout can show up in both a Records habit tracker and the Fitness app without duplicating data. Kept here only as a pointer so this doesn't contradict the newer spec.
+- **Strava**: superseded by the dedicated **Fitness App** spec (see "Fitness App — Physical Exercise Tracking" below) — Strava import now lands as `Activity` records in that separate app, not as Records tracker entries. The two are meant to be cross-linked (via embedded `crossAppRefs`) rather than merged, so a workout can show up in both a Records habit tracker and the Fitness app without duplicating data. Kept here only as a pointer so this doesn't contradict the newer spec.
 - **Goodreads / OpenLibrary**: book metadata autofill (cover image, author,
   genre) when a title is typed.
 - **MyFitnessPal**: nutrition data import.
@@ -1466,7 +1475,7 @@ interface Activity {
 
 ### Cross-linking to Records (futureproofing, not built in Phase 1)
 
-The explicit ask: manual Fitness entries and Records trackers should be linkable later, without redesigning either. This uses the **same `cross_app_links` mechanism already specified for the Notes app** — a normalized table (`source_type`, `source_id`, `target_type`, `target_id`, `link_type`), not denormalized ID arrays on either entity. Concretely: a Records "Gym" tracker entry and a Fitness `Activity` could be linked via a `cross_app_links` row with no schema change to either app — the only requirement is that `Activity` has a stable typed ID today, which it does. Nothing else needs to be built now; this section exists so Phase 1 doesn't accidentally close off the option (e.g. by embedding activity data as a blob inside a tracker entry, which the old Records backlog spec used to suggest before this app existed — corrected above).
+The explicit ask: manual Fitness entries and Records trackers should be linkable later, without redesigning either. Use the **same embedded `crossAppRefs` mechanism the rest of the suite uses** (see CLAUDE.md / docs/features/implemented-features.md "Cross-app linking"): a `crossAppRefs: CrossAppRef[]` field on each side, with `services/crossAppLinkCleanup.ts` keeping both directions free of dead links. (An early plan to use a normalized `cross_app_links` table was dropped — the table was never used and migration 031 removes it.) The only prerequisite is that `Activity` has a stable typed ID today, which it does. Nothing else needs to be built now; this section exists so Phase 1 doesn't accidentally close off the option.
 
 ### UI scope — Phase 1 only
 
@@ -2431,8 +2440,37 @@ Complete dark mode first (steps 1–6) — it benefits desktop immediately and i
 
 ## Roll the shared item-actions pattern out to the remaining apps — not built
 
-`src/components/ItemActions/` (footer, dialogs, hook, banner, icons) currently backs Task, Calendar event and Calendar reminder panes. Still on their own patterns / without archive-delete parity: Notes (`Note.archivedAt` exists in the model but has no UI; delete is `window.confirm`), List items and Lists (`window.confirm`), Portfolio watchlist items, Records trackers/entries/routines (`EditTrackerPane`/`EditRoutinePane` use `window.confirm`), Fitness activities (`window.confirm`), Schedules. Each needs `archivedAt`/`archiveReason` (+ migration + store bump) where archiving makes sense, otherwise just the shared delete confirmation.
+$1 (Update 2026-09-20: the *delete confirmation* for all of those now uses the shared `confirmDelete` dialog, so the wording and keyboard behaviour match — what they still lack is the archive half.)
 
 ## Android back button should use the same overlay stack as Escape — not built
 
 `closeTopmostMobileOverlay()` (`src/store/uiStore.ts`) closes overlays by a *fixed priority list* of store flags, not by which was opened most recently, so it has the same class of inconsistency Escape used to have. Now that every overlay registers with `useEscapeClose` (`src/hooks/useEscapeClose.ts`), the back button could call a `closeTopOverlay()` exported from that module instead (and fall through to `mobileBackConsumer`/section history/minimise when the stack is empty). Needs an on-device check — Android wasn't exercised in the Escape work.
+
+---
+
+## Pattern retrofit backlog
+
+The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record it, apply it to new code, and audit existing code; every site the audit finds that isn't converted yet is listed here **with the check to re-run**. An entry stays until its check finds zero sites. Deliberate exceptions are listed too.
+
+| Pattern | Check to re-run | Known non-conforming / remaining |
+|---------|-----------------|----------------------------------|
+| **No native popups** (`ConfirmDialog`) | `grep -rnE "window\.(confirm\|alert\|prompt)" src` | **Fully applied 2026-09-20** — zero sites. |
+| **Ctrl+Enter on every modal** | list modals/panes; each must bind Ctrl+Enter (`useCtrlEnterSubmit`, or the inline `requestSubmit` effect) | **Fully applied 2026-09-20.** Exception: `NoteTagPresetModal` (no primary action). *Optional tidy:* ~20 older modals still use the inline effect rather than `useCtrlEnterSubmit`. Five of them (`AddNoteModal`, `AddNoteTagModal`, `BulkUploadWatchlistModal`, `ListsSection`, `NoteEditor`) also trip `react-hooks/immutability` because the handler is a `const` referenced from an effect above it — moving them to the hook with a function declaration fixes both. |
+| **Escape via `useEscapeClose`** | `grep -rlE "'Escape'" src` — every hit must be a documented inline handler that calls `stopPropagation` | **Fully applied.** Android's hardware back button still uses a fixed priority list (see "Android back button should use the same overlay stack" above). |
+| **Terms from `labels.ts`** | `grep -rnE "Endeavour" src --include=*.tsx --include=*.ts` outside `labels.ts` and comments | **Endeavour fully applied 2026-09-20.** Other concept names (Purpose, Tracker, Routine, Notebook, Activity…) are still hard-coded in many strings — only Endeavour was audited. Extend `LABELS` and re-audit before renaming any of them. |
+| **No constant inline styles** | `grep -rnE "style=\{\{ ?[a-zA-Z]+: ?('[^']*'\|[0-9.]+)" src --include=*.tsx` | Applied 2026-09-20 except six `NoteEditor.tsx` portaled elements that carry a constant `position: 'fixed'` / `transform` alongside measured `top`/`left` (move the constants into classes). |
+| **CSS colours from variables (dark-mode safe)** | `grep -rnE "#[0-9a-fA-F]{3,8}" src --include=*.module.css` outside `var()` fallbacks | Not audited beyond spotting them. Mostly `#fff` on accent backgrounds (fine). Worth checking in dark mode: `AddTaskModal` priority chips, `CalendarView` pill text colours, `IntegrationsPane` status colours, `ListsSection` kind badges, `WatchlistView` gains/losses. |
+| **Archive + delete via `ItemActions`** | panes for user-owned items | Only Task, Calendar event and Calendar reminder are on it. Notes, notebooks, lists, list items, trackers, routines, activities, schedules and watchlist items delete through `confirmDelete` (correct wording, but no "Archive instead" and no archived state). |
+| **Every persisted store versioned** | each `persist(` has `version` + `migrate` | **Fully applied 2026-09-20.** |
+
+### Data that exists only on one device (sync not built)
+
+Signing out can only safely clear data that is confirmed in the cloud, so these stores are deliberately left alone on sign-out today (see docs/agent-tasks/01, Task 2). **When any of them gains Supabase sync, add it to the sign-out wipe list at the same time.**
+
+- **Fitness** (`fitnessStore`: activities, activity types) — no Supabase tables yet. Sync design already noted in docs/features/fitness.md (custom activity types only; built-ins are re-seeded like `list_types`; `(source, sourceId)` upsert for Strava).
+- **Routine instances** (`routineStore`: the per-day record of which steps of a routine were ticked, whether that day was completed, and the tracker entry it produced). The routine *definitions* (name, steps, schedule) are Collections and already sync; the per-day instances and the Records "history" table built from them do not. Completing a routine does create a `TrackerEntry`, which does sync — so the completion itself reaches the cloud, but a half-ticked checklist and the history table stay on that device. Needs a `routine_instances` table (key `${routineId}_${date}`), mappers, `SYNC_TABLES` entry, and `PERSISTED_STORAGE_KEYS` is already covered.
+
+### Existing stores/actions with no UI (features, not patterns)
+
+- **Custom list types.** `listStore.addListType/updateListType/deleteListType`, the sync path (`list_types`, custom types only) and the mappers all exist, but nothing in the UI creates, edits or deletes a list type — users can only pick the built-ins (including the built-in "Custom" type). Build a list-type manager (name, icon, colour, kind, field schema — the same editor `AddListModal` already has) or remove the plumbing.
+- **Portfolio tags and investment purposes: create only.** `AddPortfolioTagModal` / `AddInvestmentPurposeModal` create them, but `portfolioStore.updatePortfolioTag/deletePortfolioTag/updateInvestmentPurpose/deleteInvestmentPurpose` are never called — a tag or purpose can't be renamed, recoloured or removed once made. It needs an edit/delete affordance (the Manage view pattern would fit).

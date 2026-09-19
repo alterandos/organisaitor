@@ -5,8 +5,6 @@ import { Mark, mergeAttributes } from '@tiptap/core';
 // FloatingToolbar's create-menu comment). Rendered distinctly from both the plain
 // `link` mark and the `noteTag` mark (dashed underline + a small type icon) so a
 // reader can tell at a glance this text spawned something elsewhere in the suite.
-export type ArtifactTargetType = 'task';
-
 export const ArtifactLinkMark = Mark.create({
   name: 'artifactLink',
 

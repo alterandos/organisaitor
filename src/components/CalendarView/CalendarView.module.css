@@ -1074,3 +1074,6 @@
 }
 .dayPaneAddBtnGrid:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
+.dayTimeDayCol {
+  flex: 1;
+}

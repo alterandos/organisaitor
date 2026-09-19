@@ -221,3 +221,7 @@
   transition: opacity 0.15s;
 }
 .saveBtn:hover { opacity: 0.85; }
+
+.colorSwatchNone {
+  background: var(--color-surface-alt);
+}

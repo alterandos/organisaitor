@@ -9,6 +9,8 @@ import { LABELS } from '@/config/labels';
 import type { RoutineTask, RepeatConfig, CollectionId, PurposeId, TagId } from '@/types';
 import styles from './EditRoutinePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAYS   = [1, 2, 3, 4, 5];
@@ -58,6 +60,7 @@ export function EditRoutinePane() {
   }, [routine?.id]);
 
   useEscapeClose(closeEditRoutine, editRoutineOpen);
+  useCtrlEnterSubmit(() => handleSave(), editRoutineOpen && !!routine);
 
   if (!editRoutineOpen || !routine) return null;
 
@@ -106,9 +109,9 @@ export function EditRoutinePane() {
     closeEditRoutine();
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!routine) return;
-    if (!window.confirm(`Delete routine "${routine.name}"? History will also be deleted.`)) return;
+    if (!(await confirmDelete('routine', routine.name, 'Its history will be deleted too.'))) return;
     deleteInstances(routine.id as CollectionId);
     deleteCollection(routine.id as CollectionId);
     if (activeRoutineId === routine.id) setActiveRoutine(null);

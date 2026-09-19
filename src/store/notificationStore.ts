@@ -42,6 +42,6 @@ export const useNotificationStore = create<NotificationState>()(
       })),
       lastNotified: (itemId) => get().notifiedLog[itemId] ?? null,
     }),
-    { name: 'todo-notifications' }
+    { name: 'todo-notifications', version: 1, migrate: (persisted) => persisted as NotificationState }
   )
 );

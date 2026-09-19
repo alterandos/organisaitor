@@ -10,6 +10,7 @@ import type { WatchlistItem, WatchlistItemId, PortfolioTagId, WatchlistColumnId 
 import { TickerChart } from './TickerChart';
 import styles from './WatchlistView.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 function formatPrice(price: number): string {
   if (price >= 1) {
@@ -327,7 +328,7 @@ export function WatchlistView() {
   };
 
   const displayItemCount = Object.values(watchlistItems).length;
-  useEffect(() => { checkTableBottom(); }, [displayItemCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { checkTableBottom(); }, [displayItemCount]);
 
   const openColSelector = () => {
     if (!colSelectorOpen && colBtnRef.current) {
@@ -452,8 +453,8 @@ export function WatchlistView() {
       return next;
     });
 
-  const handleDelete = (id: WatchlistItemId, name: string) => {
-    if (!window.confirm(`Remove "${name}" from your watchlist?`)) return;
+  const handleDelete = async (id: WatchlistItemId, name: string) => {
+    if (!(await confirmDelete('watchlist item', name))) return;
     if (selectedItemId === id) selectItem(null);
     deleteWatchlistItem(id);
   };

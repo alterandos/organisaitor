@@ -6,6 +6,8 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { formatDate } from '@/utils/date';
 import styles from './CalendarImportReviewModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { LABELS } from '@/config/labels';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 export interface ReviewRow {
   key:         string;
@@ -34,6 +36,7 @@ export function CalendarImportReviewModal({ rows: initialRows, onConfirm, onCanc
   const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
 
   useEscapeClose(onCancel);
+  useCtrlEnterSubmit(() => { if (rows.some((r) => r.selected)) handleConfirm(); });
 
   const selectedCount = rows.filter((r) => r.selected).length;
   const allSelected   = rows.length > 0 && selectedCount === rows.length;
@@ -47,9 +50,9 @@ export function CalendarImportReviewModal({ rows: initialRows, onConfirm, onCanc
   const toggleAll = () =>
     setRows((rs) => rs.map((r) => ({ ...r, selected: !allSelected })));
 
-  const handleConfirm = () => {
+  function handleConfirm() {
     onConfirm(rows.filter((r) => r.selected), collectionId);
-  };
+  }
 
   return createPortal(
     <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
@@ -66,7 +69,7 @@ export function CalendarImportReviewModal({ rows: initialRows, onConfirm, onCanc
           </label>
 
           <div className={styles.collectionRow}>
-            <span className={styles.collectionLabel}>Add to Endeavour:</span>
+            <span className={styles.collectionLabel}>{LABELS.addToCollection}</span>
             <CollectionPicker
               collections={allCollections}
               value={collectionId}

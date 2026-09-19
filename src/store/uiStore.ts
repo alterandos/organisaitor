@@ -144,10 +144,8 @@ interface UIState {
   closeEditSchedule: () => void;
 
   setActiveCollection:    (id: string | null) => void;
-  openEndeavourPicker:    () => void;
   closeEndeavourPicker:   () => void;
   toggleEndeavourPicker:  () => void;
-  openPurposePicker:      () => void;
   closePurposePicker:     () => void;
   togglePurposePicker:    () => void;
   openManage:             (section?: ManageSection) => void;
@@ -220,9 +218,6 @@ interface UIState {
 
   // Calendar layer-visibility dropdown (checkboxes; the underlying filter values live in
   // settingsStore, persisted — this is only the panel's transient open/closed state).
-  calendarLayersOpen:   boolean;
-  toggleCalendarLayers: () => void;
-  closeCalendarLayers:  () => void;
 
   calendarItemDate:  string | null;
   calendarItemKind:  CalendarItemKind | null;
@@ -249,7 +244,6 @@ interface UIState {
   showAddEntry:     (trackerId: string) => void;
   editingEntryId:   string | null;
   openEditEntry:    (id: string) => void;
-  closeEditEntry:   () => void;
   editTrackerOpen:    boolean;
   editingTrackerId:   string | null;
   openEditTracker:    (id: string) => void;
@@ -329,7 +323,6 @@ interface UIState {
   noteTagViewTagIds:       string[];
   openNoteTagView:         (tagIds: string[]) => void;
   closeNoteTagView:        () => void;
-  toggleNoteTagViewTagId:  (id: string) => void;
   noteTagViewReturn:       string[] | null;  // tag IDs to restore when clicking "back"
   setNoteTagViewReturn:    (ids: string[] | null) => void;
 
@@ -467,10 +460,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       activeCollectionIdByView: { ...s.activeCollectionIdByView, [s.activeView]: id },
     }));
   },
-  openEndeavourPicker:   () => set({ endeavourPickerOpen: true }),
   closeEndeavourPicker:  () => set({ endeavourPickerOpen: false }),
   toggleEndeavourPicker: () => set((s) => ({ endeavourPickerOpen: !s.endeavourPickerOpen })),
-  openPurposePicker:     () => set({ purposePickerOpen: true }),
   closePurposePicker:    () => set({ purposePickerOpen: false }),
   togglePurposePicker:   () => set((s) => ({ purposePickerOpen: !s.purposePickerOpen })),
   openManage:            (section) => set({ manageOpen: true, manageSection: section ?? 'endeavours' }),
@@ -596,9 +587,6 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   calendarViewMode:    'month',
   setCalendarViewMode: (mode) => set({ calendarViewMode: mode }),
 
-  calendarLayersOpen:   false,
-  toggleCalendarLayers: () => set((s) => ({ calendarLayersOpen: !s.calendarLayersOpen })),
-  closeCalendarLayers:  () => set({ calendarLayersOpen: false }),
 
   calendarItemDate:  null,
   calendarItemKind:  null,
@@ -634,7 +622,6 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   showAddEntry:     (trackerId) => set({ openModal: 'add-entry', pendingTrackerId: trackerId, editingEntryId: null }),
   editingEntryId:   null,
   openEditEntry:    (id) => set({ editingEntryId: id, openModal: 'add-entry' }),
-  closeEditEntry:   () => set({ editingEntryId: null, openModal: null }),
   editTrackerOpen:  false,
   editingTrackerId: null,
   openEditTracker:  (id) => set({ editTrackerOpen: true, editingTrackerId: id }),
@@ -702,11 +689,6 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   noteTagViewTagIds:      [],
   openNoteTagView:        (tagIds) => set({ noteTagViewActive: true, noteTagViewTagIds: tagIds }),
   closeNoteTagView:       () => set({ noteTagViewActive: false, noteTagViewTagIds: [] }),
-  toggleNoteTagViewTagId: (id) => set((s) => ({
-    noteTagViewTagIds: s.noteTagViewTagIds.includes(id)
-      ? s.noteTagViewTagIds.filter((x) => x !== id)
-      : [...s.noteTagViewTagIds, id],
-  })),
   noteTagViewReturn:    null,
   setNoteTagViewReturn: (ids) => set({ noteTagViewReturn: ids }),
 

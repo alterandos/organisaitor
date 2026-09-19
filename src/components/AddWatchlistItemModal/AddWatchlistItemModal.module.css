@@ -304,3 +304,13 @@
 .statusBtnActive { background: var(--color-primary) !important; color: #fff !important; }
 
 .heldAtInput { margin-top: 0; }
+
+.fieldTicker {
+  flex: 0 0 110px;
+  position: relative;
+}
+
+.emptyHint {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}

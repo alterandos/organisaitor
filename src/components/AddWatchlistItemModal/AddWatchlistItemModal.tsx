@@ -142,7 +142,7 @@ export function AddWatchlistItemModal() {
 
         <form ref={formRef} onSubmit={handleSubmit}>
           <div className={styles.row}>
-            <div className={styles.field} style={{ flex: '0 0 110px', position: 'relative' }}>
+            <div className={`${styles.field} ${styles.fieldTicker}`}>
               <label className={styles.fieldLabel} htmlFor="wl-ticker">Ticker</label>
               <input
                 id="wl-ticker"
@@ -245,7 +245,7 @@ export function AddWatchlistItemModal() {
           <div className={styles.field}>
             <label className={styles.fieldLabel}>Tags</label>
             {tags.length === 0
-              ? <span style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>No tags yet — create tags in the sidebar.</span>
+              ? <span className={styles.emptyHint}>No tags yet — create tags in the sidebar.</span>
               : <div className={styles.pillRow}>
                   {tags.map((tag) => (
                     <button

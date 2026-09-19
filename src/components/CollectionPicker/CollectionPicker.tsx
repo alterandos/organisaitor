@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Collection, CollectionId } from '@/types';
 import styles from './CollectionPicker.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   collections: Collection[];
@@ -21,6 +22,8 @@ export function CollectionPicker({ collections, value, onChange, noneLabel = 'No
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
+
+  useEscapeClose(() => setOpen(false), open);
 
   const selected = value ? collections.find((c) => c.id === value) ?? null : null;
 

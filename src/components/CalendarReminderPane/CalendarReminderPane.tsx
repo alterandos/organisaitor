@@ -174,7 +174,7 @@ export function CalendarReminderPane() {
           )}
 
           <div className={styles.field}>
-            <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+            <label className={`${styles.label} ${styles.checkLabel}`}>
               <input
                 type="checkbox"
                 checked={reminder.important ?? false}
@@ -186,7 +186,7 @@ export function CalendarReminderPane() {
 
           {/* ── Repeat ── */}
           <div className={styles.field}>
-            <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+            <label className={`${styles.label} ${styles.checkLabel}`}>
               <input
                 type="checkbox"
                 checked={repeatOn}

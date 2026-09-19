@@ -36,7 +36,7 @@ export function AddTagModal() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [isEdit, closeEditTag, closeModal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isEdit, closeEditTag, closeModal]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();

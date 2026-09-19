@@ -6,6 +6,8 @@ import { todayIso } from '@/utils/date';
 import type { Collection, CollectionId, FieldSchema, TrackerEntry, TrackerEntryId } from '@/types';
 import { RoutineChecklist } from '@/components/RoutineChecklist/RoutineChecklist';
 import styles from './RecordsView.module.css';
+import { LABELS } from '@/config/labels';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 function formatFieldValue(schema: FieldSchema, value: unknown): string {
   if (value === undefined || value === null || value === '') return '—';
@@ -227,15 +229,15 @@ export function RecordsView() {
     ? (collections[activeRoutineId as CollectionId] ?? null)
     : null;
 
-  function handleDeleteTracker(id: string, name: string) {
-    if (window.confirm(`Delete tracker "${name}"? All entries will also be deleted.`)) {
+  async function handleDeleteTracker(id: string, name: string) {
+    if (await confirmDelete('tracker', name, 'All its entries will be deleted too.')) {
       deleteCollection(id as CollectionId);
       if (activeTrackerId === id) setActiveTracker(null);
     }
   }
 
-  function handleDeleteRoutine(id: string, name: string) {
-    if (window.confirm(`Delete routine "${name}"? History will also be deleted.`)) {
+  async function handleDeleteRoutine(id: string, name: string) {
+    if (await confirmDelete('routine', name, 'Its history will be deleted too.')) {
       deleteInstances(id as CollectionId);
       deleteCollection(id as CollectionId);
       if (activeRoutineId === id) setActiveRoutine(null);
@@ -253,7 +255,7 @@ export function RecordsView() {
         </div>
 
         {trackers.length === 0 ? (
-          <p className={styles.sidebarEmpty}>{activeCollectionId ? 'No trackers in this Endeavour.' : 'No trackers yet.'}</p>
+          <p className={styles.sidebarEmpty}>{activeCollectionId ? `${LABELS.noneInCollection('trackers')}.` : 'No trackers yet.'}</p>
         ) : (
           <ul className={styles.trackerList}>
             {trackers.map((t) => (
@@ -291,7 +293,7 @@ export function RecordsView() {
         </div>
 
         {routines.length === 0 ? (
-          <p className={styles.sidebarEmpty}>{activeCollectionId ? 'No routines in this Endeavour.' : 'No routines yet.'}</p>
+          <p className={styles.sidebarEmpty}>{activeCollectionId ? `${LABELS.noneInCollection('routines')}.` : 'No routines yet.'}</p>
         ) : (
           <ul className={styles.trackerList}>
             {routines.map((r) => (
@@ -335,7 +337,7 @@ export function RecordsView() {
               {allTrackers.length === 0 && allRoutines.length === 0
                 ? 'Create a tracker or routine to get started.'
                 : trackers.length === 0 && routines.length === 0
-                ? 'No trackers or routines in this Endeavour.'
+                ? `${LABELS.noneInCollection('trackers or routines')}.`
                 : 'Select a tracker or routine from the sidebar.'}
             </p>
             <button className={styles.emptyStateBtn} onClick={showAddTracker}>

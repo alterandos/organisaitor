@@ -11,6 +11,8 @@ import { NotebookLocationView } from './NotebookLocationView';
 import { NoteEditor } from '../NoteEditor/NoteEditor';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import styles from './ChronicleView.module.css';
+import { LABELS } from '@/config/labels';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 // ── Column order — extend here to add new panels in future ────────────────
 
@@ -194,9 +196,9 @@ function NoteTagTreeNode({
     setHoverExpanded(false);
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${tag.name}" and all its contents?`)) return;
+    if (!(await confirmDelete('notebook', tag.name, 'All its contents will be deleted too.'))) return;
     deleteNoteTag(tag.id as NoteTagId);
     if (isSelected) setSelected(null);
   };
@@ -595,7 +597,7 @@ export function ChronicleView() {
             <div className={styles.panelBody}>
               {rootTags.length === 0 ? (
                 <div className={styles.panelEmpty}>
-                  <p>{visibleTagIds ? 'No notebooks in this Endeavour.' : 'No notebooks yet.'}</p>
+                  <p>{visibleTagIds ? `${LABELS.noneInCollection('notebooks')}.` : 'No notebooks yet.'}</p>
                   <button className={styles.panelEmptyLink} onClick={() => showAddNoteTag(null)}>Create one</button>
                 </div>
               ) : rootTags.map((tag) => (

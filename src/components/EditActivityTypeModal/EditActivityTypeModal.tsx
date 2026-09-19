@@ -6,6 +6,7 @@ import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import type { ActivityFieldSchema, ActivityFieldType, ActivityTypeId } from '@/types/fitness';
 import styles from './EditActivityTypeModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 const FIELD_TYPES: { value: ActivityFieldType; label: string }[] = [
   { value: 'text',     label: 'Text' },
@@ -108,12 +109,17 @@ export function EditActivityTypeModal() {
     setFields((prev) => prev.map((r, i) => i === idx ? { ...r, schema: { ...r.schema, ...patch } } : r));
   }
 
-  function removeField(idx: number) {
+  async function removeField(idx: number) {
     const f = fields[idx].schema;
     const hasData = activityCount > 0 && Object.values(activities).some(
       (a) => a.type === editingActivityTypeId && a.data[f.id] !== undefined && a.data[f.id] !== null && a.data[f.id] !== ''
     );
-    if (hasData && !window.confirm(`Remove "${f.name}"? Existing activity data for this field will be hidden (not deleted).`)) return;
+    if (hasData && !(await confirmDialog({
+      title: `Remove "${f.name}"?`,
+      message: 'Existing activity data for this field will be hidden (not deleted).',
+      confirmLabel: 'Remove',
+      destructive: true,
+    }))) return;
     setFields((prev) => prev.filter((_, i) => i !== idx));
   }
 
@@ -164,12 +170,12 @@ export function EditActivityTypeModal() {
     closeEditActivityType();
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!editingType) return;
-    const warning = activityCount > 0
-      ? `Delete "${editingType.name}"? ${activityCount} activit${activityCount === 1 ? 'y' : 'ies'} using it will show as an unknown type.`
-      : `Delete "${editingType.name}"?`;
-    if (!window.confirm(warning)) return;
+    const detail = activityCount > 0
+      ? `${activityCount} activit${activityCount === 1 ? 'y' : 'ies'} using it will show as an unknown type.`
+      : undefined;
+    if (!(await confirmDelete('activity type', editingType.name, detail))) return;
     deleteActivityType(editingType.id);
     closeEditActivityType();
   }

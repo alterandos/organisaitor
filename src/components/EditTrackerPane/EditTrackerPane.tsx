@@ -9,6 +9,8 @@ import { LABELS } from '@/config/labels';
 import type { FieldSchema, FieldType, CollectionId, PurposeId, TagId } from '@/types';
 import styles from './EditTrackerPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'text',     label: 'Text' },
@@ -79,6 +81,7 @@ export function EditTrackerPane() {
   }, [tracker?.id]);
 
   useEscapeClose(closeEditTracker, editTrackerOpen);
+  useCtrlEnterSubmit(() => handleSave(), editTrackerOpen && !!tracker);
 
   if (!editTrackerOpen || !tracker) return null;
 
@@ -94,12 +97,17 @@ export function EditTrackerPane() {
     setFields((prev) => prev.map((r, i) => i === idx ? { ...r, schema: { ...r.schema, ...patch } } : r));
   }
 
-  function removeField(idx: number) {
+  async function removeField(idx: number) {
     const f = fields[idx].schema;
     const hasData = entryCount > 0 && tracker != null && Object.values(entries).some(
       (e) => e.trackerId === tracker.id && e.data[f.id] !== undefined && e.data[f.id] !== null && e.data[f.id] !== ''
     );
-    if (hasData && !window.confirm(`Remove "${f.name}"? Existing entry data for this field will be hidden (not deleted).`)) return;
+    if (hasData && !(await confirmDialog({
+      title: `Remove "${f.name}"?`,
+      message: 'Existing entry data for this field will be hidden (not deleted).',
+      confirmLabel: 'Remove',
+      destructive: true,
+    }))) return;
     setFields((prev) => prev.filter((_, i) => i !== idx));
   }
 

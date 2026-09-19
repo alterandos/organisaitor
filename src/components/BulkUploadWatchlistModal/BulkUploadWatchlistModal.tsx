@@ -182,7 +182,7 @@ export function BulkUploadWatchlistModal() {
                 ref={fileRef}
                 type="file"
                 accept=".txt,text/plain"
-                style={{ display: 'none' }}
+                hidden
                 onChange={handleFileChange}
               />
             </div>

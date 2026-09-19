@@ -4,6 +4,8 @@ import { LABELS } from '@/config/labels';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import styles from './Sidebar.module.css';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   onHoverEnter: () => void;
@@ -23,6 +25,9 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
   const openEditPurpose     = useUIStore((s) => s.openEditPurpose);
   const openEditCollection  = useUIStore((s) => s.openEditCollection);
   const openManage          = useUIStore((s) => s.openManage);
+  const closeSidebar        = useUIStore((s) => s.closeSidebar);
+
+  useEscapeClose(closeSidebar, sidebarOpen);
 
   const tagsRecord        = useTaskStore((s) => s.tags);
   const purposesRecord    = useTaskStore((s) => s.purposes);
@@ -37,20 +42,20 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
   const projects = allCollections.filter((c) => c.kind === 'project');
   const lists    = allCollections.filter((c) => c.kind === 'list');
 
-  const handleDeleteTag = (id: TagId, name: string) => {
-    if (window.confirm(`Delete tag "${name}"? It will be removed from all tasks.`)) {
+  const handleDeleteTag = async (id: TagId, name: string) => {
+    if (await confirmDelete('tag', name, 'It will be removed from all tasks.')) {
       deleteTag(id);
     }
   };
 
-  const handleDeletePurpose = (id: PurposeId, name: string) => {
-    if (window.confirm(`Delete purpose "${name}"? It will be removed from all tasks.`)) {
+  const handleDeletePurpose = async (id: PurposeId, name: string) => {
+    if (await confirmDelete('purpose', name, 'It will be removed from all tasks.')) {
       deletePurpose(id);
     }
   };
 
-  const handleDeleteCollection = (id: CollectionId, name: string) => {
-    if (window.confirm(`Delete "${name}"? Tasks will be detached but not deleted.`)) {
+  const handleDeleteCollection = async (id: CollectionId, name: string) => {
+    if (await confirmDelete(LABELS.collection.toLowerCase(), name, 'Tasks will be detached but not deleted.')) {
       deleteCollection(id);
     }
   };

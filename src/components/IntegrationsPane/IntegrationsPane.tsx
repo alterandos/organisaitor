@@ -9,6 +9,7 @@ import type { CollectionId } from '@/types';
 import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
 import styles from './IntegrationsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { LABELS } from '@/config/labels';
 
 type ImportStatus = 'idle' | 'success' | 'error';
 
@@ -134,7 +135,7 @@ function CalendarImportCard() {
         <span className={styles.cardDesc}>
           Import from Google Calendar, Outlook, Apple Calendar, or any app that exports .ics files.
           Recurring events are expanded up to 3 years ahead. You'll get a chance to review, deselect,
-          and adjust each event's type (e.g. Birthday) and Endeavour before anything is added.
+          and adjust each event's type (e.g. Birthday) and {LABELS.collection} before anything is added.
         </span>
         {status === 'success' && (
           <div className={`${styles.statusMsg} ${styles.statusSuccess}`}>

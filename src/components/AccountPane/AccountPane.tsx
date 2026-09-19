@@ -392,7 +392,7 @@ export function AccountPane() {
               ref={fileRef}
               type="file"
               accept=".json"
-              style={{ display: 'none' }}
+              hidden
               onChange={handleRestoreFile}
             />
             <button className={styles.signOutBtn} onClick={handleSignOut} disabled={loading}>
@@ -455,7 +455,7 @@ export function AccountPane() {
                 ref={fileRef}
                 type="file"
                 accept=".json"
-                style={{ display: 'none' }}
+                hidden
                 onChange={handleRestoreFile}
               />
               <button className={styles.guestLink} onClick={closeAccount}>

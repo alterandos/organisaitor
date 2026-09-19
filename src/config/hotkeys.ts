@@ -20,6 +20,8 @@
 // "close" convention throughout the app (see the Escape-key audit elsewhere in this file's
 // sibling CLAUDE.md) and reassigning it would be surprising almost everywhere at once.
 
+import { LABELS } from '@/config/labels';
+
 export interface HotkeyDef {
   id:           string;
   primary:      string;
@@ -45,13 +47,13 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'action-settings',  group: 'Actions', primary: 'S',                      action: 'Toggle settings',                  customizable: true },
   { id: 'action-account',   group: 'Actions', primary: 'A',                      action: 'Toggle account',                   customizable: true },
   { id: 'action-escape',    group: 'Actions', primary: 'Esc',                   action: 'Close panel / modal',              protected: true },
-  { id: 'action-endeavour', group: 'Actions', primary: 'E', secondary: 'Ctrl+E', action: 'Expand Endeavour filter',          customizable: true },
-  { id: 'action-endeavour-select', group: 'Actions', primary: '0-9', action: 'Select Endeavour by number (while filter is expanded; 0 = All)' },
+  { id: 'action-endeavour', group: 'Actions', primary: 'E', secondary: 'Ctrl+E', action: `Expand ${LABELS.collection} filter`,          customizable: true },
+  { id: 'action-endeavour-select', group: 'Actions', primary: '0-9', action: `Select ${LABELS.collection} by number (while filter is expanded; 0 = All)` },
   { id: 'action-purpose',   group: 'Actions', primary: 'P', secondary: 'Ctrl+P', action: 'Expand Purpose filter (Tasks section)', customizable: true },
-  { id: 'action-manage',    group: 'Actions', primary: 'M', secondary: 'Ctrl+M', action: 'Open Manage view (Endeavours / Purposes / Tags)', customizable: true },
+  { id: 'action-manage',    group: 'Actions', primary: 'M', secondary: 'Ctrl+M', action: `Open Manage view (${LABELS.collectionPlural} / Purposes / Tags)`, customizable: true },
   { id: 'action-back',      group: 'Actions', primary: 'Alt+Left',  secondary: 'Backspace', action: 'Go back to the previous app section (up to 6 deep)', customizable: true },
   { id: 'action-forward',   group: 'Actions', primary: 'Alt+Right', action: 'Go forward to the next app section (after going back)', customizable: true },
-  { id: 'action-quick-access', group: 'Actions', primary: 'Ctrl+G', action: 'Open Quick Access — jump to a note, notebook, task, list, tracker, routine, or Endeavour', customizable: true },
+  { id: 'action-quick-access', group: 'Actions', primary: 'Ctrl+G', action: 'Open Quick Access — jump to a note, notebook, task, list, tracker, routine, or ' + LABELS.collection, customizable: true },
 
 
   // Item panes — handled locally by useItemActions (src/components/ItemActions/), only while a
@@ -73,6 +75,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'notes-cycle-tabs',    group: 'Notes', primary: 'Ctrl+Tab / Ctrl+PgDn', secondary: 'Ctrl+Shift+Tab / Ctrl+PgUp', action: 'Cycle between this note\'s tabs, reverse with Shift (editor focused)' },
   { id: 'notes-new-tab',       group: 'Notes', primary: 'Ctrl+T',         action: 'New tab — prompts for a name (editor focused)' },
   { id: 'notes-focus-toggle',  group: 'Notes', primary: 'Ctrl+`',        action: 'Move focus between navigation columns and editor' },
+  { id: 'notes-heading-level', group: 'Notes', primary: 'Ctrl+H', action: 'Then press 1–5 to make the paragraph that heading level, or 0 for plain text' },
   { id: 'notes-link',          group: 'Notes', primary: 'Ctrl+L',        action: 'Turn selection into a link, or open "New link" pane if nothing selected' },
   { id: 'notes-create-menu',   group: 'Notes', primary: 'Ctrl+Q',        action: 'Open "Create ▸" menu for the selection (Task/Calendar/List/Tracker) — 1-4 picks, Esc cancels' },
   { id: 'notes-link-select',   group: 'Notes', primary: 'Ctrl+click',    action: 'Select a link\'s text instead of opening it (editor focused)' },

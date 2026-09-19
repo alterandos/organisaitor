@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -9,6 +9,8 @@ import type { ActivityFieldSchema, ActivityTypeId } from '@/types/fitness';
 import type { PurposeId } from '@/types';
 import styles from './AddActivityModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 const NEW_TYPE_VALUE = '__new__';
 
@@ -193,6 +195,8 @@ export function AddActivityModal() {
   }, [editingActivity?.id]);
 
   useEscapeClose(closeEditActivity, isVisible);
+  const formRef = useRef<HTMLFormElement>(null);
+  useCtrlEnterSubmit(() => formRef.current?.requestSubmit(), isVisible);
 
   if (!isVisible) return null;
 
@@ -259,9 +263,9 @@ export function AddActivityModal() {
     }
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!editingActivity) return;
-    if (!window.confirm(`Delete "${editingActivity.title}"?`)) return;
+    if (!(await confirmDelete('activity', editingActivity.title))) return;
     useFitnessStore.getState().deleteActivity(editingActivity.id);
     closeEditActivity();
   }
@@ -285,7 +289,7 @@ export function AddActivityModal() {
           <button type="button" className={styles.closeBtn} onClick={closeEditActivity} aria-label="Close">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           <div className={styles.field}>
             <span className={styles.fieldLabel}>Type</span>
             <div className={styles.typeRow}>

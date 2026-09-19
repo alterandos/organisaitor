@@ -114,6 +114,22 @@ export const useScheduleStore = create<ScheduleState>()(
         return { schedules: { ...s.schedules, [scheduleId]: touchSchedule({ ...schedule, blocks }) } };
       }),
     }),
-    { name: 'todo-schedules' }
+    {
+      name: 'todo-schedules',
+      version: 1,
+      // v0 → v1: blocks gained requiresCommitment/committedDates (commitment mode). The store had
+      // no version before, so every existing schedule arrives here as v0.
+      migrate: (persisted) => {
+        const state = persisted as ScheduleState;
+        for (const schedule of Object.values(state.schedules ?? {})) {
+          schedule.blocks = (schedule.blocks ?? []).map((b) => ({
+            ...b,
+            requiresCommitment: b.requiresCommitment ?? false,
+            committedDates:     b.committedDates ?? [],
+          }));
+        }
+        return state;
+      },
+    }
   )
 );

@@ -1,9 +1,17 @@
 // All user-facing terminology lives here.
 // Renaming any concept requires changing only this file — no logic changes.
 
+const COLLECTION = 'Endeavour';
+const COLLECTION_PLURAL = 'Endeavours';
+
 export const LABELS = {
-  collection:       'Endeavour',
-  collectionPlural: 'Endeavours',
+  collection:       COLLECTION,
+  collectionPlural: COLLECTION_PLURAL,
+  noCollection:     `No ${COLLECTION}`,
+  addToCollection:  `Add to ${COLLECTION}:`,
+  noneInCollection: (things: string) => `No ${things} in this ${COLLECTION}`,
+  quickAccessPlaceholder: `Jump to a note, task, list, tracker, routine, or ${COLLECTION}…`,
+  collectionFilterHint:  `Expand ${COLLECTION} filter`,
   collectionKind: {
     project: 'Project',
     list:    'List',
@@ -34,6 +42,14 @@ export const LABELS = {
     deleteSafeHint:    'Not sure? Archiving keeps it out of the way without losing it.',
     deleteConfirm:     'Delete permanently',
     archiveInstead:    'Archive instead',
+  },
+
+  // In-app replacement for window.confirm()/alert() — see components/ConfirmDialog
+  dialogs: {
+    confirm:    'Confirm',
+    cancel:     'Cancel',
+    ok:         'OK',
+    alertTitle: 'Something went wrong',
   },
 
   // Calendar

@@ -5,6 +5,7 @@ import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import styles from './MobileCalendarQuickAdd.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 // Android-only quick-add sheet for calendar events/reminders (docs/android/02-calendar-app.md
 // §3) — a genuinely separate, faster component from AddCalendarItemModal, same rationale as
@@ -39,10 +40,11 @@ export function MobileCalendarQuickAdd() {
   }, [open]);
 
   useEscapeClose(close, open);
+  useCtrlEnterSubmit(() => submit(), open);
 
   if (!open) return null;
 
-  const submit = () => {
+  function submit() {
     if (!title.trim() || !itemDate) return;
     if (kind === 'event') {
       addEvent({
@@ -60,7 +62,7 @@ export function MobileCalendarQuickAdd() {
       });
     }
     close();
-  };
+  }
 
   const handleMoreOptions = () => {
     showAddCalendarItem(itemDate, kind, time || undefined, title);

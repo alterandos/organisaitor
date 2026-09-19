@@ -6,6 +6,7 @@ import { useRecentItemsStore, type RecentItemEntry } from '@/store/recentItemsSt
 import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem, type QuickAccessItem } from '@/utils/quickAccess';
 import styles from './QuickAccessPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { LABELS } from '@/config/labels';
 
 type Mode = 'recent' | 'frequent';
 
@@ -88,7 +89,7 @@ export function QuickAccessPane() {
           ref={inputRef}
           className={styles.searchInput}
           type="text"
-          placeholder="Jump to a note, task, list, tracker, routine, or Endeavour…"
+          placeholder={LABELS.quickAccessPlaceholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleInputKeyDown}

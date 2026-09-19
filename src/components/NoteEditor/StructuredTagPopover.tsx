@@ -6,6 +6,8 @@ import type { StructuredTagTypeDef } from '@/config/structuredTagTypes';
 import type { CollectionId } from '@/types';
 import styles from './StructuredTagPopover.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { LABELS } from '@/config/labels';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 interface Props {
   top:  number;
@@ -63,6 +65,7 @@ export function StructuredTagPopover({
   }, []);
 
   useEscapeClose(onCancel);
+  useCtrlEnterSubmit(() => handleSave());
 
   const compactField = typeDef.fields[0];
 
@@ -123,7 +126,7 @@ export function StructuredTagPopover({
           ))}
 
           <div className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>Endeavour</label>
+            <label className={styles.fieldLabel}>{LABELS.collection}</label>
             <CollectionPicker
               collections={collections}
               value={collectionId}

@@ -65,8 +65,9 @@
 }
 
 .dropdown {
-  /* position/top/left are set inline (fixed, from the trigger's own rect) — see
-     CrossAppRefPicker.tsx for why this is portaled instead of positioned in-place. */
+  /* top/left are set inline (from the trigger's own rect) — see CrossAppRefPicker.tsx for
+     why this is portaled and fixed instead of positioned in-place. */
+  position: fixed;
   z-index: 1000;
   width: 260px;
   background: var(--color-surface);

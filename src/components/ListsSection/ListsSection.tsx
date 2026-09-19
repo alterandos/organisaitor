@@ -9,6 +9,7 @@ import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { LIST_ITEM_STATUS_META } from '@/types/lists';
 import type { ListId, ListItemId, ListItemStatus, ListItem, ListFieldSchema } from '@/types/lists';
 import styles from './ListsSection.module.css';
+import { alertDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 // ── Status filter (watchlist only) ────────────────────────────────────────────
 type StatusFilter = 'all' | ListItemStatus;
@@ -448,13 +449,13 @@ export function ListsSection() {
 
   const countByStatus = (s: ListItemStatus) => allItemsInList.filter((i) => i.status === s).length;
 
-  const handleDeleteList = (id: ListId, name: string) => {
-    if (!window.confirm(`Delete list "${name}" and all its items?`)) return;
+  const handleDeleteList = async (id: ListId, name: string) => {
+    if (!(await confirmDelete('list', name, 'All its items will be deleted too.'))) return;
     deleteList(id);
   };
 
-  const handleDeleteItem = (item: ListItem) => {
-    if (!window.confirm(`Remove "${item.title}" from the list?`)) return;
+  const handleDeleteItem = async (item: ListItem) => {
+    if (!(await confirmDelete('list item', item.title))) return;
     deleteListItem(item.id);
   };
 
@@ -629,7 +630,7 @@ export function ListsSection() {
                     onClick={() => {
                       encryptList(selectedList.id as ListId).catch((err) => {
                         console.error('[ListsSection] could not encrypt list:', err);
-                        window.alert(err instanceof Error ? err.message : 'Could not encrypt this list.');
+                        void alertDialog(err instanceof Error ? err.message : 'Could not encrypt this list.');
                       });
                     }}
                     title={vaultUnlocked

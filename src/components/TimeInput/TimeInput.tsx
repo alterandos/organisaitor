@@ -89,7 +89,6 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
     setHourStr(use12Hour ? String(n12.hour12) : pad(nh));
     setMinuteStr(pad(nm ?? 0));
     setMeridiem(n12.meridiem);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, use12Hour]);
 
   useEffect(() => {

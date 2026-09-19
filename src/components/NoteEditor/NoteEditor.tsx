@@ -36,6 +36,7 @@ import { noteView, entryView, isNoteLocked } from '@/services/noteSecrets';
 import { useNoteView } from '@/store/noteViews';
 import styles from './NoteEditor.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 
 // Read a note by id THROUGH noteView() — an encrypted note's title/content/tabs are blanked in
 // the store and only resolve via the plaintext cache (see services/noteSecrets.ts).
@@ -1201,6 +1202,17 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             ← Tags
           </button>
         )}
+        {note?.isEncrypted && (
+          <button
+            type="button"
+            className={styles.lockBadge}
+            onClick={() => useUIStore.getState().requestDecrypt('note', note.id)}
+            title={noteLocked
+              ? 'Encrypted — locked on this device. Click to decrypt this note'
+              : 'Encrypted note. Click to decrypt it'}
+            aria-label="Decrypt this note"
+          >🔒</button>
+        )}
         <input
           type="text"
           value={title}
@@ -1213,17 +1225,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           className={styles.titleInput}
           disabled={noteLocked}
         />
-        {note?.isEncrypted && (
-          <button
-            type="button"
-            className={styles.lockBadge}
-            onClick={() => useUIStore.getState().requestDecrypt('note', note.id)}
-            title={noteLocked
-              ? 'Encrypted — locked on this device. Click to decrypt this note'
-              : 'Encrypted note. Click to decrypt it'}
-            aria-label="Decrypt this note"
-          >🔒</button>
-        )}
+        
 
         <div className={styles.toolbar}>
           {/* Heading style selector */}
@@ -1282,7 +1284,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           >x₂</button>
 
           {/* Font color (full picker) */}
-          <div style={{ position: 'relative' }}>
+          <div className={styles.popoverAnchor}>
             <button
               className={`${styles.toolbarBtn} ${colorPickerOpen ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
@@ -1330,7 +1332,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           <div className={styles.toolbarDivider} />
 
           {/* Insert table (with row/col picker) */}
-          <div style={{ position: 'relative' }}>
+          <div className={styles.popoverAnchor}>
             <button
               className={`${styles.toolbarBtn} ${tablePickerOpen ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
@@ -1375,7 +1377,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           <div className={styles.toolbarDivider} />
 
           {/* Columns (per-section layout) */}
-          <div style={{ position: 'relative' }}>
+          <div className={styles.popoverAnchor}>
             <button
               className={`${styles.toolbarBtn} ${columnsPickerOpen ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
@@ -1424,7 +1426,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           <div className={styles.toolbarDivider} />
 
           {/* Note options menu */}
-          <div style={{ position: 'relative' }}>
+          <div className={styles.popoverAnchor}>
             <button
               className={`${styles.toolbarBtnText} ${noteMenuOpen ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
@@ -1471,7 +1473,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                     }
                     useNoteStore.getState().encryptNote(id as NoteId).catch((err) => {
                       console.error('[NoteEditor] encryption toggle failed:', err);
-                      window.alert(err instanceof Error ? err.message : 'Could not change encryption for this note.');
+                      void alertDialog(err instanceof Error ? err.message : 'Could not change encryption for this note.');
                     });
                     setNoteMenuOpen(false);
                   }}

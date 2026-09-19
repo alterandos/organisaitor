@@ -21,14 +21,6 @@ export function useListViews(): Record<ListId, List> {
   }, [lists, version]);
 }
 
-export function useListView(id: string | null | undefined): List | null {
-  const raw = useListStore((s) => (id ? s.lists[id as ListId] : undefined));
-  const version = useSecretsVersion((s) => s.version);
-  return useMemo(() => {
-    void version;
-    return raw ? listView(raw) : null;
-  }, [raw, version]);
-}
 
 export function useListItemViews(): Record<ListItemId, ListItem> {
   const items = useListStore((s) => s.listItems);

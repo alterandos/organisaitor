@@ -322,13 +322,13 @@ export function AddTaskModal() {
           {/* ── Endeavour (always visible) ── */}
           {collectionList.length > 0 && (
             <div className={styles.row}>
-              <div className={styles.field} style={{ flex: 1 }}>
+              <div className={`${styles.field} ${styles.fieldGrow}`}>
                 <label className={styles.label}>{LABELS.collection}</label>
                 <CollectionPicker
                   collections={collectionList}
                   value={collectionId || null}
                   onChange={(id) => setCollectionId(id ?? '')}
-                  noneLabel="No Endeavour"
+                  noneLabel={LABELS.noCollection}
                 />
               </div>
             </div>

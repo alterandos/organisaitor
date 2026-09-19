@@ -9,6 +9,7 @@ import type { NoteTagId, CollectionId } from '@/types';
 import { formatDate } from '@/utils/date';
 import styles from './EditNoteMetaModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 const ACCENT_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#ef4444',
@@ -56,10 +57,12 @@ export function EditNoteMetaModal() {
   }, [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEscapeClose(closeModal);
+  useCtrlEnterSubmit(() => handleSave(), !!note);
 
   if (!note) return null;
 
-  const handleSave = () => {
+  function handleSave() {
+    if (!note) return;
     updateNote(note.id, {
       tagIds: Array.from(selectedTagIds) as NoteTagId[],
       color,
@@ -67,7 +70,7 @@ export function EditNoteMetaModal() {
       collectionId,
     });
     closeModal();
-  };
+  }
 
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((prev) => {
@@ -162,8 +165,7 @@ export function EditNoteMetaModal() {
             <div className={styles.sectionLabel}>Accent colour</div>
             <div className={styles.colorRow}>
               <button
-                className={`${styles.colorSwatch} ${color === null ? styles.colorSwatchActive : ''}`}
-                style={{ background: 'var(--color-surface-alt)' }}
+                className={`${styles.colorSwatch} ${styles.colorSwatchNone} ${color === null ? styles.colorSwatchActive : ''}`}
                 onClick={() => setColor(null)}
                 title="No colour"
               >—</button>

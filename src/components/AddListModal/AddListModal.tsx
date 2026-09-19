@@ -9,6 +9,7 @@ import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import type { ListId, ListFieldSchema, ListFieldType, ListTypeId, ListTab } from '@/types/lists';
 import styles from './AddListModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 
 const FIELD_TYPES: { value: ListFieldType; label: string }[] = [
   { value: 'text',    label: 'Text'    },
@@ -207,7 +208,7 @@ export function AddListModal() {
       if (encryptOnCreate && vaultUnlocked) {
         encryptList(newId).catch((err) => {
           console.error('[AddListModal] could not encrypt the new list:', err);
-          window.alert(err instanceof Error ? err.message : 'Could not encrypt this list.');
+          void alertDialog(err instanceof Error ? err.message : 'Could not encrypt this list.');
         });
       }
     }

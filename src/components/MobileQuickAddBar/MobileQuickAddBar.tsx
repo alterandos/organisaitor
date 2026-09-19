@@ -5,6 +5,8 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import styles from './MobileQuickAddBar.module.css';
+import { LABELS } from '@/config/labels';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const PRIORITY_CYCLE: Priority[] = ['none', 'low', 'medium', 'high'];
 const PRIORITY_LABEL: Record<Priority, string> = { none: 'Priority', low: 'Low', medium: 'Med', high: 'High' };
@@ -34,6 +36,7 @@ export function MobileQuickAddBar() {
   const [collectionId, setCollectionId] = useState<string | null>(null);
   const [dueMenuOpen, setDueMenuOpen] = useState(false);
   const [endeavourMenuOpen, setEndeavourMenuOpen] = useState(false);
+  useEscapeClose(() => { setDueMenuOpen(false); setEndeavourMenuOpen(false); }, dueMenuOpen || endeavourMenuOpen);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
@@ -139,7 +142,7 @@ export function MobileQuickAddBar() {
               className={`${styles.chip} ${collectionId ? styles.chipActive : ''}`}
               onClick={() => setEndeavourMenuOpen((o) => !o)}
             >
-              {collectionId ? collectionsRecord[collectionId as CollectionId]?.name ?? 'Endeavour' : 'Endeavour'}
+              {collectionId ? collectionsRecord[collectionId as CollectionId]?.name ?? LABELS.collection : LABELS.collection}
             </button>
             {endeavourMenuOpen && (
               <div className={styles.popover}>

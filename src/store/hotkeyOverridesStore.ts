@@ -33,7 +33,7 @@ export const useHotkeyOverridesStore = create<HotkeyOverridesState>()(
 
       resetAll: () => set({ overrides: {} }),
     }),
-    { name: 'todo-hotkey-overrides' }
+    { name: 'todo-hotkey-overrides', version: 1, migrate: (persisted) => persisted as HotkeyOverridesState }
   )
 );
 

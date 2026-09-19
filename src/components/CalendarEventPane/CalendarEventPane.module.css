@@ -280,3 +280,10 @@
   border: none;
   border-radius: 0;
 }
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}

@@ -550,7 +550,6 @@ export function CalendarView() {
     if (!pendingCalendarDate) return;
     jumpToDate(pendingCalendarDate);
     useUIStore.getState().clearPendingCalendarDate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingCalendarDate]);
 
   const shiftWeek = (delta: number) => {
@@ -1238,8 +1237,7 @@ export function CalendarView() {
                         ))}
                       </div>
                       <div
-                        className={styles.weekTimeDayCol}
-                        style={{ flex: 1 }}
+                        className={`${styles.weekTimeDayCol} ${styles.dayTimeDayCol}`}
                         onClick={(e) => handleColumnClick(e, selectedDate, dayTimeGrid.layout)}
                       >
                         {dayTimeGrid.layout.offsets.map((top, h) => (
