@@ -8,6 +8,10 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { deleteTaskWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
+import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
+import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
+import { useItemActions } from '@/components/ItemActions/useItemActions';
 import type { CrossAppRef } from '@/types';
 import styles from './TaskPane.module.css';
 
@@ -29,6 +33,8 @@ export function TaskPane() {
   const tagsRecord        = useTaskStore((s) => s.tags);
   const updateTask        = useTaskStore((s) => s.updateTask);
   const addTask           = useTaskStore((s) => s.addTask);
+  const archiveTask       = useTaskStore((s) => s.archiveTask);
+  const restoreTask       = useTaskStore((s) => s.restoreTask);
 
   const addEvent    = useCalendarStore((s) => s.addEvent);
   const updateEvent = useCalendarStore((s) => s.updateEvent);
@@ -76,11 +82,12 @@ export function TaskPane() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeTaskPane(); };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [closeTaskPane]);
+  const { dialog, setDialog, closeDialog } = useItemActions({
+    itemKey:   editingTaskId,
+    archived:  task?.archived ?? false,
+    onClose:   closeTaskPane,
+    onRestore: () => { if (editingTaskId) restoreTask(editingTaskId as TaskId); },
+  });
 
   if (!task) return null;
 
@@ -181,14 +188,24 @@ export function TaskPane() {
       title:        trimmed,
       parentId:     taskId,
       collectionId: task.collectionId,
+      priority:     task.priority,
     });
     setSubtaskInput('');
   };
 
   const handleDelete = () => {
+    closeDialog();
     deleteTaskWithCleanup(taskId);
     closeTaskPane();
   };
+
+  const handleArchive = (reason: string) => {
+    closeDialog();
+    archiveTask(taskId, reason);
+    closeTaskPane();
+  };
+
+  const handleRestore = () => restoreTask(taskId);
 
   const currentLinks = task.links ?? [];
 
@@ -245,6 +262,8 @@ export function TaskPane() {
         </header>
 
         <div className={styles.body}>
+          {task.archived && <ArchivedBanner archivedAt={task.archivedAt} reason={task.archiveReason} />}
+
           <input
             className={styles.titleInput}
             value={title}
@@ -477,7 +496,7 @@ export function TaskPane() {
                     onBlur={() => commitEditLink(idx)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') commitEditLink(idx);
-                      if (e.key === 'Escape') setEditingLinkIdx(null);
+                      if (e.key === 'Escape') { e.stopPropagation(); setEditingLinkIdx(null); }
                     }}
                   />
                 ) : (
@@ -585,10 +604,29 @@ export function TaskPane() {
           </div>
         </div>
 
-        <footer className={styles.footer}>
-          <button className={styles.deleteBtn} onClick={handleDelete}>Delete task</button>
-        </footer>
+        <ItemActionFooter
+          archived={task.archived}
+          deleteLabel="Delete task"
+          onArchive={() => setDialog('archive')}
+          onRestore={handleRestore}
+          onDelete={() => setDialog('delete')}
+        />
       </aside>
+
+      {dialog && (
+        <ItemActionDialog
+          mode={dialog}
+          noun="task"
+          itemTitle={task.title}
+          archiveNote={subtasks.length > 0 ? `Its ${subtasks.length} sub-task${subtasks.length === 1 ? '' : 's'} will be archived with it.` : undefined}
+          alsoRemoves={subtasks.length > 0 ? `and its ${subtasks.length} sub-task${subtasks.length === 1 ? '' : 's'}` : undefined}
+          deleteNote=", along with its calendar entries"
+          onArchive={handleArchive}
+          onDelete={handleDelete}
+          onArchiveInstead={() => setDialog('archive')}
+          onCancel={closeDialog}
+        />
+      )}
     </>
   );
 }

@@ -5,6 +5,7 @@ import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import type { ActivityFieldSchema, ActivityFieldType, ActivityTypeId } from '@/types/fitness';
 import styles from './EditActivityTypeModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const FIELD_TYPES: { value: ActivityFieldType; label: string }[] = [
   { value: 'text',     label: 'Text' },
@@ -79,10 +80,11 @@ export function EditActivityTypeModal() {
     setAddingField(false);
   }, [editActivityTypeOpen, editingActivityTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEscapeClose(() => { closeEditActivityType(); }, editActivityTypeOpen);
+
   useEffect(() => {
     if (!editActivityTypeOpen) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { closeEditActivityType(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && name.trim()) { e.preventDefault(); handleSave(); }
     };
     document.addEventListener('keydown', handler);

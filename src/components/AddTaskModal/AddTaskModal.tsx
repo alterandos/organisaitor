@@ -10,6 +10,7 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import styles from './AddTaskModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 type PendingTag = { id: TagId; name: string; isNew: boolean };
 
@@ -47,7 +48,13 @@ export function AddTaskModal() {
   const [deadlineTime,  setDeadlineTime]  = useState(quickAddPrefill?.deadlineTime ?? '');
   const [scheduledAt,   setScheduledAt]   = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
-  const [priority,      setPriority]      = useState<Priority>(quickAddPrefill?.priority ?? 'none');
+  // A sub-task starts with its parent's priority; the user's own pick always wins over that.
+  const [priority,      setPriority]      = useState<Priority>(
+    quickAddPrefill?.priority
+      ?? (pendingParentId ? useTaskStore.getState().tasks[pendingParentId as TaskId]?.priority : undefined)
+      ?? 'none'
+  );
+  const priorityTouched = useRef(quickAddPrefill?.priority !== undefined);
 
   // Advanced fields — pre-fill collection from active filter, or from MobileQuickAddBar's
   // "More options…" handoff (docs/android/01-tasks-app.md §3.2) when that took place instead
@@ -79,13 +86,14 @@ export function AddTaskModal() {
   const collectionList = Object.values(collectionsRecord);
   const purposeList    = Object.values(purposes).filter((p) => !p.archivedAt);
   const existingTags   = Object.values(tags);
-  const topLevelTasks  = Object.values(tasksRecord).filter((t) => !t.parentId && !t.completed);
+  const topLevelTasks  = Object.values(tasksRecord).filter((t) => !t.parentId && !t.completed && !t.archived);
 
   useEffect(() => { setAdvanced(taskModalAdvanced); }, [taskModalAdvanced]);
 
+  useEscapeClose(() => { handleClose(); });
+
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') { handleClose(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);
@@ -107,7 +115,9 @@ export function AddTaskModal() {
   };
 
   const handleTagKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape') { setShowSuggestions(false); return; }
+    // Only consumes Escape while there is a suggestions list to dismiss; otherwise it falls
+    // through to the modal's own close (this input is always present, unlike the inline editors).
+    if (e.key === 'Escape') { if (showSuggestions && suggestions.length > 0) { e.stopPropagation(); setShowSuggestions(false); } return; }
     if (e.key !== 'Enter' && e.key !== ',') return;
     e.preventDefault();
     const raw = tagInput.trim();
@@ -227,7 +237,6 @@ export function AddTaskModal() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
-            onKeyDown={(e) => e.key === 'Escape' && handleClose()}
           />
 
           <textarea
@@ -273,7 +282,7 @@ export function AddTaskModal() {
                     key={p.value}
                     type="button"
                     className={`${styles.priorityBtn} ${priority === p.value ? styles[`priority_${p.value}`] : ''}`}
-                    onClick={() => setPriority(p.value)}
+                    onClick={() => { priorityTouched.current = true; setPriority(p.value); }}
                   >
                     {p.label}
                   </button>
@@ -477,7 +486,11 @@ export function AddTaskModal() {
                   <select
                     className={styles.select}
                     value={parentId}
-                    onChange={(e) => setParentId(e.target.value as TaskId | '')}
+                    onChange={(e) => {
+                      const next = e.target.value as TaskId | '';
+                      setParentId(next);
+                      if (!priorityTouched.current) setPriority((next && tasksRecord[next]?.priority) || 'none');
+                    }}
                   >
                     <option value="">None (top-level task)</option>
                     {topLevelTasks.map((t) => (

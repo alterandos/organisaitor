@@ -7,6 +7,7 @@ import { TRACKER_TEMPLATES } from '@/config/trackerTemplates';
 import { LABELS } from '@/config/labels';
 import type { TrackerTemplate, PurposeId, TagId, CollectionId } from '@/types';
 import styles from './AddTrackerModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const TEMPLATES: TrackerTemplate[] = ['habit', 'books', 'movies', 'custom'];
 
@@ -31,9 +32,10 @@ export function AddTrackerModal() {
   const tagList       = Object.values(tags);
   const allCollections = Object.values(collectionsRecord);
 
+  useEscapeClose(() => { closeModal(); });
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

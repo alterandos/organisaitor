@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -8,6 +8,7 @@ import { CalendarImportReviewModal, type ReviewRow } from '@/components/Calendar
 import type { CollectionId } from '@/types';
 import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
 import styles from './IntegrationsPane.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 type ImportStatus = 'idle' | 'success' | 'error';
 
@@ -332,11 +333,7 @@ function RestoreCard() {
 export function IntegrationsPane() {
   const closeIntegrations = useUIStore((s) => s.closeIntegrations);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeIntegrations(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeIntegrations]);
+  useEscapeClose(closeIntegrations);
 
   return (
     <>

@@ -9,6 +9,7 @@ import type {
 import { newCollectionId, newPurposeId } from '@/utils/id';
 import { createTask } from '@/services/taskService';
 import { now } from '@/utils/date';
+import { mergeNewLinks } from '@/utils/links';
 import { useTrackerStore } from '@/store/trackerStore';
 
 const EMPTY: AppData = {
@@ -25,7 +26,8 @@ export interface TaskActions {
   updateTask:  (id: TaskId, changes: Partial<Omit<Task, 'id' | 'createdAt'>>) => void;
   toggleTask:  (id: TaskId) => void;
   deleteTask:  (id: TaskId) => void;
-  archiveTask: (id: TaskId) => void;
+  archiveTask: (id: TaskId, reason?: string | null) => void;
+  restoreTask: (id: TaskId) => void;
 
   // Tags
   addTag:    (tag: Tag) => void;
@@ -76,10 +78,14 @@ export const useTaskStore = create<TaskStore>()(
         set((state) => {
           const task = state.tasks[id];
           if (!task) return {};
+          // Links newly typed into the notes are copied into the links list too.
+          const patch = changes.notes !== undefined
+            ? { ...changes, links: mergeNewLinks(changes.links ?? task.links ?? [], changes.notes, task.notes) }
+            : changes;
           return {
             tasks: {
               ...state.tasks,
-              [id]: { ...task, ...changes, updatedAt: now() },
+              [id]: { ...task, ...patch, updatedAt: now() },
             },
           };
         }),
@@ -97,11 +103,36 @@ export const useTaskStore = create<TaskStore>()(
           };
         }),
 
-      archiveTask: (id) =>
+      // Sub-tasks are archived with their parent under the same archivedAt stamp, which is
+      // what lets restoreTask bring back exactly that group and not sub-tasks archived on
+      // their own earlier.
+      archiveTask: (id, reason) =>
         set((state) => {
           const task = state.tasks[id];
-          if (!task) return {};
-          return { tasks: { ...state.tasks, [id]: { ...task, archived: true, updatedAt: now() } } };
+          if (!task || task.archived) return {};
+          const ts = now();
+          const archiveReason = reason?.trim() || null;
+          const stamp = { archived: true, archivedAt: ts, archiveReason, updatedAt: ts };
+          const tasks: AppData['tasks'] = { ...state.tasks, [id]: { ...task, ...stamp } };
+          for (const subId of task.subtaskIds ?? []) {
+            const sub = tasks[subId];
+            if (sub && !sub.archived) tasks[subId] = { ...sub, ...stamp };
+          }
+          return { tasks };
+        }),
+
+      restoreTask: (id) =>
+        set((state) => {
+          const task = state.tasks[id];
+          if (!task || !task.archived) return {};
+          const ts = now();
+          const clear = { archived: false, archivedAt: null, archiveReason: null, updatedAt: ts };
+          const tasks: AppData['tasks'] = { ...state.tasks, [id]: { ...task, ...clear } };
+          for (const subId of task.subtaskIds ?? []) {
+            const sub = tasks[subId];
+            if (sub?.archived && sub.archivedAt === task.archivedAt) tasks[subId] = { ...sub, ...clear };
+          }
+          return { tasks };
         }),
 
       deleteTask: (id) =>
@@ -254,8 +285,11 @@ export const useTaskStore = create<TaskStore>()(
     }),
     {
       name:    'todo-app-storage',
-      version: 10,
+      version: 11,
+      // The steps up to v10 each return early, so v11 is applied afterwards to whatever they
+      // produce — otherwise a v9 store would return from its own step and never reach it.
       migrate: (persisted, fromVersion) => {
+        const migrated = ((): AppData => {
         const state = persisted as AppData & TaskActions;
         if (fromVersion < 2) return EMPTY;
         // Apply all collection patches cumulatively
@@ -330,6 +364,19 @@ export const useTaskStore = create<TaskStore>()(
           return { ...state, tasks: patched };
         }
         return state;
+        })();
+
+        if (fromVersion >= 11 || !migrated.tasks) return migrated;
+        const tasks: AppData['tasks'] = {} as AppData['tasks'];
+        for (const [id, task] of Object.entries(migrated.tasks)) {
+          const t = task as Task & { archivedAt?: string | null; archiveReason?: string | null };
+          tasks[id as TaskId] = {
+            ...t,
+            archivedAt:    t.archivedAt ?? (t.archived ? t.updatedAt : null),
+            archiveReason: t.archiveReason ?? null,
+          } as Task;
+        }
+        return { ...migrated, tasks };
       },
     }
   )

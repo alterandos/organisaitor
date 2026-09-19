@@ -4,6 +4,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import styles from './MobileCalendarQuickAdd.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 // Android-only quick-add sheet for calendar events/reminders (docs/android/02-calendar-app.md
 // §3) — a genuinely separate, faster component from AddCalendarItemModal, same rationale as
@@ -37,12 +38,7 @@ export function MobileCalendarQuickAdd() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open, close]);
+  useEscapeClose(close, open);
 
   if (!open) return null;
 

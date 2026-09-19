@@ -8,6 +8,7 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { LABELS } from '@/config/labels';
 import type { FieldSchema, FieldType, CollectionId, PurposeId, TagId } from '@/types';
 import styles from './EditTrackerPane.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'text',     label: 'Text' },
@@ -77,12 +78,7 @@ export function EditTrackerPane() {
     }
   }, [tracker?.id]);
 
-  useEffect(() => {
-    if (!editTrackerOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeEditTracker(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [editTrackerOpen, closeEditTracker]);
+  useEscapeClose(closeEditTracker, editTrackerOpen);
 
   if (!editTrackerOpen || !tracker) return null;
 

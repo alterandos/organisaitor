@@ -159,6 +159,8 @@ export interface Task {
   calendarReminderId: CalendarReminderId | null; // auto-created reminder when deadline is set
   remindAt:      string | null;
   archived:     boolean;
+  archivedAt:    string | null;        // when it was archived; null while active
+  archiveReason: string | null;        // optional "why" captured at archive time — kept separate from notes
   kind:          TaskKind;             // 'action' | 'waiting' | 'milestone' (default: 'action')
   timeIntensity: TimeIntensity | null; // effort estimate — null means unset
   parentId:      TaskId | null;        // set → this task is a sub-task
@@ -276,6 +278,8 @@ export interface CalendarEvent {
   status:             EventStatus;      // 'confirmed' (default) | 'tentative' — see EventStatus
   important:          boolean;          // flagged important — red outline + ❗ on the calendar
   crossAppRefs:       CrossAppRef[];    // reverse cross-app links (e.g. the note(s) this event was created from)
+  archivedAt:         string | null;    // sunset, not deleted — hidden from the calendar, restorable (same as Task)
+  archiveReason:      string | null;    // optional "why", captured when archiving
   // External calendar sync provenance (see CLAUDE.md "External calendar sync — built (Google,
   // Phase 1)"). All null for a native, in-app-created event. Once synced in, this app is the
   // source of truth — these fields are provenance/dedup only, never used to re-sync or
@@ -303,6 +307,8 @@ export interface CalendarReminder {
   repeat:       RepeatConfig | null;
   important:    boolean;              // flagged important — red outline + ❗ on the calendar
   crossAppRefs: CrossAppRef[];        // reverse cross-app links (e.g. the note(s) this reminder was created from)
+  archivedAt:    string | null;       // sunset, not deleted — hidden from the calendar, restorable (same as Task)
+  archiveReason: string | null;       // optional "why", captured when archiving
   // When to notify for a reminder with no time (a whole-day one): N days before `date` (0 = on the
   // day), at this HH:MM. Ignored when `time` is set — that notifies at the time itself.
   notifyDaysBefore: number;

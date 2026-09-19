@@ -8,6 +8,7 @@ import { todayIso } from '@/utils/date';
 import type { ActivityFieldSchema, ActivityTypeId } from '@/types/fitness';
 import type { PurposeId } from '@/types';
 import styles from './AddActivityModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const NEW_TYPE_VALUE = '__new__';
 
@@ -191,12 +192,7 @@ export function AddActivityModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingActivity?.id]);
 
-  useEffect(() => {
-    if (!isVisible) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeEditActivity(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isVisible, closeEditActivity]);
+  useEscapeClose(closeEditActivity, isVisible);
 
   if (!isVisible) return null;
 

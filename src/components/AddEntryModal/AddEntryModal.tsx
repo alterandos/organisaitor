@@ -5,6 +5,7 @@ import { useUIStore } from '@/store/uiStore';
 import type { FieldSchema, CollectionId, TrackerEntryId } from '@/types';
 import { todayIso } from '@/utils/date';
 import styles from './AddEntryModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 // ── Field renderer ────────────────────────────────────────────────
 
@@ -181,10 +182,11 @@ export function AddEntryModal() {
 
   const isVisible = openModal === 'add-entry';
 
+  useEscapeClose(() => { closeModal(); }, isVisible);
+
   useEffect(() => {
     if (!isVisible) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

@@ -13,6 +13,7 @@ import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyFi
 import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
 import type { CollectionId } from '@/types';
 import styles from './AddCalendarItemModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 function todayStr(): string {
   return todayIsoInZone(resolveTimezone(useSettingsStore.getState().timezone));
@@ -92,9 +93,10 @@ export function AddCalendarItemModal() {
     closeModal();
   };
 
+  useEscapeClose(() => { handleClose(); });
+
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') { handleClose(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

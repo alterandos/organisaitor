@@ -8,6 +8,7 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { LABELS } from '@/config/labels';
 import type { RoutineTask, RepeatConfig, CollectionId, PurposeId, TagId } from '@/types';
 import styles from './EditRoutinePane.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAYS   = [1, 2, 3, 4, 5];
@@ -56,12 +57,7 @@ export function EditRoutinePane() {
     }
   }, [routine?.id]);
 
-  useEffect(() => {
-    if (!editRoutineOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeEditRoutine(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [editRoutineOpen, closeEditRoutine]);
+  useEscapeClose(closeEditRoutine, editRoutineOpen);
 
   if (!editRoutineOpen || !routine) return null;
 

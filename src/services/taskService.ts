@@ -1,6 +1,7 @@
 import type { Task, CreateTaskInput } from '@/types';
 import { newTaskId } from '@/utils/id';
 import { now } from '@/utils/date';
+import { mergeNewLinks } from '@/utils/links';
 
 export function createTask(input: CreateTaskInput, sortOrder: number): Task {
   const ts = now();
@@ -10,7 +11,7 @@ export function createTask(input: CreateTaskInput, sortOrder: number): Task {
     updatedAt:    ts,
     title:        input.title.trim(),
     notes:        input.notes  ?? null,
-    links:        input.links  ?? [],
+    links:        mergeNewLinks(input.links ?? [], input.notes),
     completed:    false,
     completedAt:  null,
     collectionId: input.collectionId ?? null,
@@ -25,7 +26,9 @@ export function createTask(input: CreateTaskInput, sortOrder: number): Task {
     calendarReminderId: input.calendarReminderId ?? null,
     remindAt:        null,
     archived:     false,
-    kind:          input.kind          ?? 'action',
+    archivedAt:    null,
+    archiveReason: null,
+    kind:         input.kind          ?? 'action',
     timeIntensity: input.timeIntensity ?? null,
     parentId:      input.parentId      ?? null,
     subtaskIds:   [],

@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { ChronicleView } from '../ChronicleView/ChronicleView';
 import { TagView } from './TagView';
 import { TagFAB } from './TagFAB';
 import { EditNoteTagModal } from '../EditNoteTagModal/EditNoteTagModal';
 import styles from './NotesSection.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function NotesSection() {
   const noteTagViewActive = useUIStore((s) => s.noteTagViewActive);
@@ -12,12 +12,7 @@ export function NotesSection() {
   const editNoteTagOpen   = useUIStore((s) => s.editNoteTagOpen);
 
   // Esc closes tag view
-  useEffect(() => {
-    if (!noteTagViewActive) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeNoteTagView(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [noteTagViewActive, closeNoteTagView]);
+  useEscapeClose(closeNoteTagView, noteTagViewActive);
 
   return (
     <div className={styles.container}>

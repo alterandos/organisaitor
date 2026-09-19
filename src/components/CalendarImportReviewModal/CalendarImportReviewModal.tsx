@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CalendarEventType, CollectionId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { formatDate } from '@/utils/date';
 import styles from './CalendarImportReviewModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export interface ReviewRow {
   key:         string;
@@ -32,11 +33,7 @@ export function CalendarImportReviewModal({ rows: initialRows, onConfirm, onCanc
   );
   const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onCancel]);
+  useEscapeClose(onCancel);
 
   const selectedCount = rows.filter((r) => r.selected).length;
   const allSelected   = rows.length > 0 && selectedCount === rows.length;

@@ -301,7 +301,6 @@ export default function App() {
       // Takes over the keyboard entirely until closed, so this must run before the
       // digit-based section-switch hotkeys below.
       if (endeavourPickerOpen) {
-        if (e.key === 'Escape') { e.preventDefault(); closeEndeavourPicker(); return; }
         if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey) {
           e.preventDefault();
           if (e.key === '0') {

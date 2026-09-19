@@ -7,6 +7,7 @@ import type { AssetClass, WatchlistStatus, InvestmentPurposeId, PortfolioTagId, 
 import { useTickerLookup } from '@/integrations/useTickerLookup';
 import type { TickerMatch } from '@/integrations/types';
 import styles from './AddWatchlistItemModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function AddWatchlistItemModal() {
   const editingWatchlistItemId = useUIStore((s) => s.editingWatchlistItemId);
@@ -40,9 +41,10 @@ export function AddWatchlistItemModal() {
   const nameAutoFilledRef = useRef(false);
   const formRef           = useRef<HTMLFormElement>(null);
 
+  useEscapeClose(() => { closeModal(); });
+
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

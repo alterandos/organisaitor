@@ -7,6 +7,7 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { LABELS } from '@/config/labels';
 import type { RoutineTask, RepeatConfig, PurposeId, TagId, CollectionId } from '@/types';
 import styles from './AddRoutineModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAYS   = [1, 2, 3, 4, 5];
@@ -25,9 +26,10 @@ export function AddRoutineModal() {
   const openModal  = useUIStore((s) => s.openModal);
   const activeCollectionId = useUIStore(selectActiveCollectionId);
 
+  useEscapeClose(() => { closeModal(); });
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

@@ -89,9 +89,11 @@ export function useNotificationChecker() {
           const t = tasks[n.itemId as import('@/types').TaskId];
           if (!t || t.completed || t.archived) removePending(n.id);
         } else if (n.kind === 'event') {
-          if (!events[n.itemId as import('@/types').CalendarEventId]) removePending(n.id);
+          const ev = events[n.itemId as import('@/types').CalendarEventId];
+          if (!ev || ev.archivedAt) removePending(n.id);
         } else if (n.kind === 'reminder') {
-          if (!reminders[n.itemId as import('@/types').CalendarReminderId]) removePending(n.id);
+          const rem = reminders[n.itemId as import('@/types').CalendarReminderId];
+          if (!rem || rem.archivedAt) removePending(n.id);
         } else if (n.kind === 'schedule') {
           const [scheduleId, blockId, date] = n.itemId.split('::');
           const schedule = schedules[scheduleId as ScheduleId];
@@ -118,7 +120,7 @@ export function useNotificationChecker() {
 
       // ── Events ──
       Object.values(events).forEach((ev) => {
-        if (isAlreadyPending(ev.id)) return;
+        if (ev.archivedAt || isAlreadyPending(ev.id)) return;
         const trigger = eventTrigger(ev, zone);
         if (!trigger) return;
         const triggerISO = trigger.toISOString();
@@ -133,7 +135,7 @@ export function useNotificationChecker() {
 
       // ── Reminders (includes task-deadline shadow reminders) ──
       Object.values(reminders).forEach((rem) => {
-        if (isAlreadyPending(rem.id)) return;
+        if (rem.archivedAt || isAlreadyPending(rem.id)) return;
         const isTaskDeadline = rem.reminderType === 'task';
         if (isTaskDeadline) {
           const linkedTask = taskByDeadlineReminderId.get(rem.id);

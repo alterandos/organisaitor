@@ -1,8 +1,11 @@
+/* z-index 102 (not the everyday-modal tier 30): the pane's "Open full task form" button opens
+   this while TaskPane (overlay 100 / pane 101) is still open, and at 30 it sat underneath it,
+   unclickable. Same tier as AddScheduleModal opening from inside an already-open pane. */
 .overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  z-index: 30;
+  z-index: 102;
   display: flex;
   align-items: flex-end;
   justify-content: center;

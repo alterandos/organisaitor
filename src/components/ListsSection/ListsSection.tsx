@@ -92,7 +92,7 @@ function FieldInput({
         : (e.target.value === '' ? null : e.target.value))}
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-        if (e.key === 'Escape') onCancel();
+        if (e.key === 'Escape') { e.stopPropagation(); onCancel(); }
       }}
     />
   );
@@ -140,7 +140,7 @@ function ItemCard({
             onBlur={(e) => { const v = e.target.value.trim(); v ? onTitleSave(v) : onCancelEdit(); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-              if (e.key === 'Escape') onCancelEdit();
+              if (e.key === 'Escape') { e.stopPropagation(); onCancelEdit(); }
             }}
           />
         ) : (
@@ -212,7 +212,7 @@ function ItemCard({
           className={styles.inlineNotesInput}
           defaultValue={item.notes ?? ''}
           onBlur={(e) => onNotesSave(e.target.value.trim() || null)}
-          onKeyDown={(e) => { if (e.key === 'Escape') onCancelEdit(); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onCancelEdit(); } }}
         />
       ) : item.notes ? (
         <p className={styles.itemNotes} title={item.notes} onClick={() => onStartEdit('notes')}>{item.notes}</p>
@@ -727,7 +727,7 @@ export function ListsSection() {
                     onChange={(e) => setNewTabName(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') { e.preventDefault(); handleConfirmTab(); }
-                      if (e.key === 'Escape') { setAddingTab(false); setNewTabName(''); }
+                      if (e.key === 'Escape') { e.stopPropagation(); setAddingTab(false); setNewTabName(''); }
                     }}
                     onBlur={() => {
                       if (newTabName.trim()) handleConfirmTab();

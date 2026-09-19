@@ -5,6 +5,7 @@ import { useUIStore } from '@/store/uiStore';
 import { newTagId } from '@/utils/id';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import styles from './AddTagModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function AddTagModal() {
   const [name, setName]   = useState('');
@@ -27,9 +28,10 @@ export function AddTagModal() {
   const handleClose = () => isEdit ? closeEditTag() : closeModal();
   const formRef = useRef<HTMLFormElement>(null);
 
+  useEscapeClose(() => { handleClose(); });
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClose();
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

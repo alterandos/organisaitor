@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useScheduleStore } from '@/store/scheduleStore';
+import { useCalendarStore } from '@/store/calendarStore';
+import { ArchiveIcon } from '@/components/ItemActions/icons';
 import { useUIStore, type CalendarViewMode } from '@/store/uiStore';
 import { useSettingsStore, type CalendarLayerKey } from '@/store/settingsStore';
 import { useAuthStore } from '@/store/authStore';
@@ -13,6 +15,7 @@ import {
 } from '@/services/googleCalendar';
 import type { ScheduleId, ScheduleTemplate, CalendarConnection } from '@/types';
 import styles from './CalendarSidePane.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 // Which calendar item categories render, filtered via CalendarEvent.eventType/status and
 // CalendarReminder.reminderType. See settingsStore.calendarLayerVisibility for the actual
@@ -102,7 +105,26 @@ function MiniDatePicker({ anchorDate, onSelect }: MiniDatePickerProps) {
   const days = useMemo(() => buildMonthGrid(viewYear, viewMonth), [viewYear, viewMonth]);
   const today = todayIso();
 
-  const shiftYear = (delta: number) => setViewYear((y) => y + delta);
+  // Every navigation control here (year/month arrows, the month dropdown, a typed year on
+  // Enter/blur) moves the calendar itself immediately, not just this widget's own view — the
+  // day-of-month carried over is the calendar's current one, clamped to the new month's length
+  // (month view always anchors on the 1st, so it is unaffected). Picking a day in the grid
+  // still jumps to that exact date.
+  const goTo = (year: number, month: number) => {
+    setViewYear(year);
+    setViewMonth(month);
+    const day = Math.min(anchor.getDate(), new Date(year, month + 1, 0).getDate());
+    onSelect(`${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+  };
+  const shiftYear = (delta: number) => goTo(viewYear + delta, viewMonth);
+  // Stepping past December/January rolls the year over, so ‹/› can be held to scroll through time.
+  const shiftMonth = (delta: number) => {
+    const idx = viewYear * 12 + viewMonth + delta;
+    goTo(Math.floor(idx / 12), ((idx % 12) + 12) % 12);
+  };
+  const commitTypedYear = () => {
+    if (Number.isInteger(viewYear) && viewYear >= 1 && viewYear <= 9999 && viewYear !== anchor.getFullYear()) goTo(viewYear, viewMonth);
+  };
 
   return (
     <div className={styles.picker}>
@@ -117,20 +139,26 @@ function MiniDatePicker({ anchorDate, onSelect }: MiniDatePickerProps) {
             const v = Number(e.target.value);
             if (!Number.isNaN(v)) setViewYear(v);
           }}
+          onBlur={commitTypedYear}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
           aria-label="Year"
         />
         <button type="button" className={styles.pickerStepBtn} onClick={() => shiftYear(1)} title="1 year forward">›</button>
         <button type="button" className={styles.pickerStepBtn} onClick={() => shiftYear(10)} title="10 years forward">»</button>
       </div>
 
-      <select
-        className={styles.pickerMonthSelect}
-        value={viewMonth}
-        onChange={(e) => setViewMonth(Number(e.target.value))}
-        aria-label="Month"
-      >
-        {MONTH_NAMES.map((name, i) => <option key={name} value={i}>{name}</option>)}
-      </select>
+      <div className={styles.pickerMonthRow}>
+        <button type="button" className={styles.pickerStepBtn} onClick={() => shiftMonth(-1)} title="Previous month" aria-label="Previous month">‹</button>
+        <select
+          className={styles.pickerMonthSelect}
+          value={viewMonth}
+          onChange={(e) => goTo(viewYear, Number(e.target.value))}
+          aria-label="Month"
+        >
+          {MONTH_NAMES.map((name, i) => <option key={name} value={i}>{name}</option>)}
+        </select>
+        <button type="button" className={styles.pickerStepBtn} onClick={() => shiftMonth(1)} title="Next month" aria-label="Next month">›</button>
+      </div>
 
       <div className={styles.pickerDayLabels}>
         {DAY_LETTERS.map((d, i) => <span key={i}>{d}</span>)}
@@ -196,7 +224,23 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
   const close = useUIStore((s) => s.closeSchedules);
   const showAddSchedule = useUIStore((s) => s.showAddSchedule);
   const openEditSchedule = useUIStore((s) => s.openEditSchedule);
-  const openModal        = useUIStore((s) => s.openModal);
+  const openEventPane    = useUIStore((s) => s.openCalendarEventPane);
+  const openReminderPane = useUIStore((s) => s.openCalendarReminderPane);
+  const eventsRecord     = useCalendarStore((s) => s.events);
+  const remindersRecord  = useCalendarStore((s) => s.reminders);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+
+  // A task's shadow event/reminder is archived with the task (and shown in the task list's own
+  // Archived group), so only free-standing calendar items are listed here.
+  const archivedItems = useMemo(() => {
+    const events = Object.values(eventsRecord)
+      .filter((e) => e.archivedAt && e.eventType !== 'task')
+      .map((e) => ({ kind: 'event' as const, id: e.id as string, title: e.title, date: e.date }));
+    const reminders = Object.values(remindersRecord)
+      .filter((r) => r.archivedAt && r.reminderType !== 'task')
+      .map((r) => ({ kind: 'reminder' as const, id: r.id as string, title: r.title, date: r.date }));
+    return [...events, ...reminders].sort((a, b) => b.date.localeCompare(a.date));
+  }, [eventsRecord, remindersRecord]);
 
   const schedulesRecord = useScheduleStore((s) => s.schedules);
   const toggleActive    = useScheduleStore((s) => s.toggleScheduleActive);
@@ -210,9 +254,9 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
     viewMode === 'month' ? 'Go to month' :
     viewMode === 'week'  ? 'Go to week'  : 'Go to day';
   const jumpHint =
-    viewMode === 'month' ? "Jumps to the month containing this date." :
-    viewMode === 'week'  ? "Jumps to the week containing this date." :
-                            'Jumps directly to this date.';
+    viewMode === 'month' ? "Use the arrows to move the calendar, or click a date to jump to its month." :
+    viewMode === 'week'  ? "Use the arrows to move the calendar, or click a date to jump to its week." :
+                            'Use the arrows to move the calendar, or click a date to jump straight to it.';
 
   // ── Imported calendars (Google — see CLAUDE.md "External calendar sync") ──
   const authUser = useAuthStore((s) => s.user);
@@ -273,17 +317,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
     }
   };
 
-  useEffect(() => {
-    if (!open) return;
-    // Guarded on openModal: AddScheduleModal can open on top of this pane (editing/creating a
-    // schedule from here), and it has its own Escape handler — without this check, one Escape
-    // press would close both layers at once instead of just the topmost one.
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && openModal !== 'add-schedule') close();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open, close, openModal]);
+  useEscapeClose(close, open);
 
   const schedules = useMemo(
     () => Object.values(schedulesRecord).sort((a, b) => a.name.localeCompare(b.name)),
@@ -482,6 +516,32 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
               </>
             )}
           </div>
+
+          {/* ── Archived events & reminders ── */}
+          {archivedItems.length > 0 && (
+            <div className={styles.section}>
+              <button type="button" className={styles.archivedToggle} onClick={() => setArchivedOpen((o) => !o)} aria-expanded={archivedOpen}>
+                <span className={`${styles.chevron} ${archivedOpen ? styles.chevronOpen : ''}`}>▸</span>
+                <ArchiveIcon width={14} height={14} /> Archived ({archivedItems.length})
+              </button>
+              {archivedOpen && (
+                <div className={styles.archivedList}>
+                  {archivedItems.map((item) => (
+                    <button
+                      key={`${item.kind}:${item.id}`}
+                      type="button"
+                      className={styles.archivedRow}
+                      onClick={() => (item.kind === 'event' ? openEventPane(item.id) : openReminderPane(item.id))}
+                    >
+                      <span className={styles.archivedTitle}>{item.title}</span>
+                      <span className={styles.archivedMeta}>{item.kind === 'event' ? 'Event' : 'Reminder'} · {formatDate(item.date)}</span>
+                    </button>
+                  ))}
+                  <p className={styles.hint}>Open one to see why it was archived, or to restore it.</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </aside>
     </>

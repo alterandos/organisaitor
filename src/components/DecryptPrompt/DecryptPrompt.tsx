@@ -10,6 +10,7 @@ import {
 import type { NoteId } from '@/types/notes';
 import type { ListId } from '@/types/lists';
 import styles from './DecryptPrompt.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 // "Enter your passphrase to permanently decrypt this note/list." Opened by the clickable 🔒
 // icons (uiStore.requestDecrypt). Deliberately asks for the passphrase (or recovery code) even
@@ -29,15 +30,15 @@ export function DecryptPrompt() {
 
   useEffect(() => onVaultStatus(setStatus), []);
 
+  useEscapeClose(close);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopImmediatePropagation(); close(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
-    // Capture phase so Escape closes only this prompt, not a pane/modal it was opened from.
-    document.addEventListener('keydown', handler, true);
-    return () => document.removeEventListener('keydown', handler, true);
-  }, [close]);
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   if (!prompt) return null;
   const noun = prompt.kind === 'note' ? 'note' : 'list';

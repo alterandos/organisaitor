@@ -6,6 +6,7 @@ import { getBatchQuotes, fetchSector } from '@/integrations/tickerService';
 import { todayIso } from '@/utils/date';
 import type { PortfolioTagId, WatchlistStatus } from '@/types/portfolio';
 import styles from './BulkUploadWatchlistModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 // Map common exchange prefixes to Yahoo Finance ticker suffixes.
 const EXCHANGE_SUFFIX: Record<string, string> = {
@@ -76,9 +77,10 @@ export function BulkUploadWatchlistModal() {
   const toggleTag = (id: PortfolioTagId) =>
     setSelectedTagIds((prev) => prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]);
 
+  useEscapeClose(() => { closeModal(); });
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && phase === 'input') {
         e.preventDefault();
         handleSubmit();

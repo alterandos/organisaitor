@@ -35,6 +35,7 @@ import { onVaultStatus, registerBeforeLock } from '@/services/vault';
 import { noteView, entryView, isNoteLocked } from '@/services/noteSecrets';
 import { useNoteView } from '@/store/noteViews';
 import styles from './NoteEditor.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 // Read a note by id THROUGH noteView() — an encrypted note's title/content/tabs are blanked in
 // the store and only resolve via the plaintext cache (see services/noteSecrets.ts).
@@ -548,20 +549,15 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
 
   useEffect(() => {
     if (!newLinkPane) return;
-    const handler = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-      setNewLinkPane(null);
-    };
-    const id = setTimeout(() => {
-      document.addEventListener('click', handler);
-      document.addEventListener('keydown', handler);
-    }, 0);
+    const handler = () => setNewLinkPane(null);
+    const id = setTimeout(() => document.addEventListener('click', handler), 0);
     return () => {
       clearTimeout(id);
       document.removeEventListener('click', handler);
-      document.removeEventListener('keydown', handler);
     };
   }, [newLinkPane]);
+
+  useEscapeClose(() => setNewLinkPane(null), !!newLinkPane);
 
   const insertNewLink = () => {
     const url = normalizeLinkUrl(newLinkUrl);

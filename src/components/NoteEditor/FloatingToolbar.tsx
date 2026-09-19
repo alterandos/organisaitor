@@ -11,6 +11,7 @@ import type { CrossAppRefType } from '@/types';
 import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
 import { getStructuredTagType } from '@/config/structuredTagTypes';
 import styles from './FloatingToolbar.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   editor: Editor;
@@ -253,18 +254,17 @@ export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
   // nothing), not by inspection. Consolidated here (rather than a handler per sub-panel) so
   // Escape has one obvious priority order: back out of whichever sub-panel is open, or — from
   // the normal button row — collapse the selection and hide the whole toolbar.
+  useEscapeClose(() => {
+    if (showCreateMenu) { setShowCreateMenu(false); setStubMessage(null); return; }
+    if (showTags) { setShowTags(false); setSearch(''); return; }
+    if (showLinkInput) { setShowLinkInput(false); setLinkUrl(''); return; }
+    if (showColorPicker) { setShowColorPicker(false); return; }
+    editor.commands.setTextSelection(editor.state.selection.to);
+  }, !!pos);
+
   useEffect(() => {
     if (!pos) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (showCreateMenu) { setShowCreateMenu(false); setStubMessage(null); return; }
-        if (showTags) { setShowTags(false); setSearch(''); return; }
-        if (showLinkInput) { setShowLinkInput(false); setLinkUrl(''); return; }
-        if (showColorPicker) { setShowColorPicker(false); return; }
-        editor.commands.setTextSelection(editor.state.selection.to);
-        return;
-      }
       if (showCreateMenu) {
         const num = parseInt(e.key);
         if (!isNaN(num) && num >= 1 && num <= CREATE_MENU_OPTIONS.length) {
@@ -324,7 +324,7 @@ export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape') { setShowTags(false); setSearch(''); return; }
+    if (e.key === 'Escape') { e.stopPropagation(); setShowTags(false); setSearch(''); return; }
     if (e.key === 'Enter' && allFiltered.length === 1) { applyTagItem(allFiltered[0]); return; }
     // 1–9 selects by position in the filtered list
     const num = parseInt(e.key);
@@ -374,7 +374,7 @@ export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
             onChange={(e) => setLinkUrl(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); applyLink(); }
-              if (e.key === 'Escape') { setShowLinkInput(false); setLinkUrl(''); }
+              if (e.key === 'Escape') { e.stopPropagation(); setShowLinkInput(false); setLinkUrl(''); }
             }}
             placeholder="https://…"
           />

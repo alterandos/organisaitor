@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSettingsStore } from '@/store/settingsStore';
 import { formatTime } from '@/utils/date';
 import styles from './TimeInput.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   className?:  string;
@@ -96,14 +97,11 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
     const onDown = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
+
+  useEscapeClose(() => setOpen(false), open);
 
   useEffect(() => {
     if (!open) return;

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import styles from './PurposeFilterPicker.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   // See CollectionFilterPicker's identical prop for the rationale — same treatment applied
@@ -24,16 +25,11 @@ export function PurposeFilterPicker({ variant = 'dropdown' }: Props) {
     const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) closePurposePicker();
     };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closePurposePicker();
-    };
     document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
+    return () => document.removeEventListener('mousedown', handleClick);
   }, [open, closePurposePicker]);
+
+  useEscapeClose(closePurposePicker, open);
 
   const purposes = Object.values(purposesRecord).filter((p) => !p.archivedAt);
   if (purposes.length === 0) return null;

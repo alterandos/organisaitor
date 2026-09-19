@@ -8,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import type { NoteTagId, CollectionId } from '@/types';
 import { formatDate } from '@/utils/date';
 import styles from './EditNoteMetaModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const ACCENT_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#ef4444',
@@ -54,11 +55,7 @@ export function EditNoteMetaModal() {
     }
   }, [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeModal]);
+  useEscapeClose(closeModal);
 
   if (!note) return null;
 

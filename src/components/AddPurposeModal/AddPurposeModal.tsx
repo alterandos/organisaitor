@@ -5,6 +5,7 @@ import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { now } from '@/utils/date';
 import styles from './AddPurposeModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function AddPurposeModal() {
   const [name, setName]               = useState('');
@@ -32,9 +33,10 @@ export function AddPurposeModal() {
   const handleClose = () => isEdit ? closeEditPurpose() : closeModal();
   const formRef = useRef<HTMLFormElement>(null);
 
+  useEscapeClose(() => { handleClose(); });
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClose();
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

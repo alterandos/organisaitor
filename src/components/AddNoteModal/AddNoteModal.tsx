@@ -8,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import { resolveNoteInheritedCollectionId } from '@/utils/notes';
 import type { NoteTagId, CollectionId } from '@/types';
 import styles from './AddNoteModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function AddNoteModal() {
   const closeModal        = useUIStore((s) => s.closeModal);
@@ -42,9 +43,10 @@ export function AddNoteModal() {
     setCollectionId(resolveNoteInheritedCollectionId(selectedTagIds, noteTags));
   }, [selectedTagIds, noteTags]);
 
+  useEscapeClose(() => { closeModal(); });
+
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSave(); }
     };
     document.addEventListener('keydown', handler);

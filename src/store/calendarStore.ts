@@ -27,10 +27,14 @@ interface CalendarState {
   addEvent:    (input: CreateCalendarEventInput)    => CalendarEventId;
   updateEvent: (id: CalendarEventId, changes: Partial<Omit<CalendarEvent,    'id' | 'createdAt'>>) => void;
   deleteEvent: (id: CalendarEventId)                => void;
+  archiveEvent: (id: CalendarEventId, reason?: string | null) => void;
+  restoreEvent: (id: CalendarEventId) => void;
 
   addReminder:    (input: CreateCalendarReminderInput)    => CalendarReminderId;
   updateReminder: (id: CalendarReminderId, changes: Partial<Omit<CalendarReminder, 'id' | 'createdAt'>>) => void;
   deleteReminder: (id: CalendarReminderId)                => void;
+  archiveReminder: (id: CalendarReminderId, reason?: string | null) => void;
+  restoreReminder: (id: CalendarReminderId) => void;
 
   // Individual-occurrence editing for repeating items (see src/utils/recurrence.ts). "skip" =
   // delete just this date; "endBefore" = delete this date and everything after; "detach" =
@@ -89,6 +93,8 @@ export const useCalendarStore = create<CalendarState>()(
           status:            input.status             ?? 'confirmed',
           important:         input.important         ?? false,
           crossAppRefs:      input.crossAppRefs      ?? [],
+          archivedAt:        null,
+          archiveReason:     null,
           source:              input.source              ?? null,
           sourceConnectionId:  input.sourceConnectionId   ?? null,
           sourceCalendarId:    input.sourceCalendarId     ?? null,
@@ -103,6 +109,19 @@ export const useCalendarStore = create<CalendarState>()(
         const event = s.events[id];
         if (!event) return {};
         return { events: { ...s.events, [id]: { ...event, ...changes, updatedAt: now() } } };
+      }),
+
+      archiveEvent: (id, reason) => set((s) => {
+        const event = s.events[id];
+        if (!event || event.archivedAt) return {};
+        const ts = now();
+        return { events: { ...s.events, [id]: { ...event, archivedAt: ts, archiveReason: reason?.trim() || null, updatedAt: ts } } };
+      }),
+
+      restoreEvent: (id) => set((s) => {
+        const event = s.events[id];
+        if (!event?.archivedAt) return {};
+        return { events: { ...s.events, [id]: { ...event, archivedAt: null, archiveReason: null, updatedAt: now() } } };
       }),
 
       deleteEvent: (id) => set((s) => {
@@ -127,6 +146,8 @@ export const useCalendarStore = create<CalendarState>()(
           repeat:       input.repeat ?? null,
           important:    input.important ?? false,
           crossAppRefs: input.crossAppRefs ?? [],
+          archivedAt:    null,
+          archiveReason: null,
           notifyDaysBefore: input.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE,
           notifyAtTime:     input.notifyAtTime     ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
         };
@@ -138,6 +159,19 @@ export const useCalendarStore = create<CalendarState>()(
         const reminder = s.reminders[id];
         if (!reminder) return {};
         return { reminders: { ...s.reminders, [id]: { ...reminder, ...changes, updatedAt: now() } } };
+      }),
+
+      archiveReminder: (id, reason) => set((s) => {
+        const reminder = s.reminders[id];
+        if (!reminder || reminder.archivedAt) return {};
+        const ts = now();
+        return { reminders: { ...s.reminders, [id]: { ...reminder, archivedAt: ts, archiveReason: reason?.trim() || null, updatedAt: ts } } };
+      }),
+
+      restoreReminder: (id) => set((s) => {
+        const reminder = s.reminders[id];
+        if (!reminder?.archivedAt) return {};
+        return { reminders: { ...s.reminders, [id]: { ...reminder, archivedAt: null, archiveReason: null, updatedAt: now() } } };
       }),
 
       deleteReminder: (id) => set((s) => {
@@ -220,7 +254,7 @@ export const useCalendarStore = create<CalendarState>()(
     }),
     {
       name: 'todo-calendar',
-      version: 8,
+      version: 9,
       migrate(state: any, version: number) {
         if (version < 2) {
           const events = state.events ?? {};
@@ -266,6 +300,10 @@ export const useCalendarStore = create<CalendarState>()(
             ev.notifyBeforeValue = n.value;
             ev.notifyBeforeUnit = n.unit;
           });
+        }
+        if (version < 9) {
+          Object.values(state.events ?? {}).forEach((ev: any) => { if (ev.archivedAt === undefined) ev.archivedAt = null; if (ev.archiveReason === undefined) ev.archiveReason = null; });
+          Object.values(state.reminders ?? {}).forEach((rem: any) => { if (rem.archivedAt === undefined) rem.archivedAt = null; if (rem.archiveReason === undefined) rem.archiveReason = null; });
         }
         return state as CalendarState;
       },

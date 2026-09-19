@@ -13,6 +13,7 @@ import {
 } from '@/services/vault';
 import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
 import styles from './AccountPane.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 type Mode = 'signin' | 'signup';
 
@@ -67,11 +68,7 @@ export function AccountPane() {
   const [trustDevice, setTrustDevice] = useState(true);
   const [showUnlock, setShowUnlock] = useState(false);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeAccount(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeAccount]);
+  useEscapeClose(closeAccount);
 
   useEffect(() => onSyncStatus((s, e) => { setSyncStatus(s); setSyncErr(e); }), []);
   useEffect(() => onVaultStatus((s) => { setVaultStatus(s); if (s !== 'locked') setShowUnlock(false); }), []);

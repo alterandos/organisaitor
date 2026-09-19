@@ -3,6 +3,7 @@ import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { isAppEnabled } from '@/config/apps';
 import styles from './MobileMoreSheet.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const DISMISS_THRESHOLD_PX = 80;
 
@@ -22,14 +23,7 @@ export function MobileMoreSheet() {
   const [dragY, setDragY] = useState(0);
   const dragStateRef = useRef<{ startY: number; dragging: boolean } | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isOpen, close]);
+  useEscapeClose(close, isOpen);
 
   useEffect(() => { if (!isOpen) setDragY(0); }, [isOpen]);
 

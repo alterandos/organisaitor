@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import type { ManageSection } from '@/store/uiStore';
@@ -6,6 +6,7 @@ import { LABELS } from '@/config/labels';
 import { now } from '@/utils/date';
 import type { Collection, Purpose, Tag, CollectionId, PurposeId, TagId } from '@/types';
 import styles from './ManagePane.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 // Left-nav tabs — add an entry here (+ a render branch below) to extend this view with
 // future sections (e.g. Notebooks, List types) without redesigning the layout.
@@ -237,12 +238,7 @@ export function ManagePane() {
   const setManageSection = useUIStore((s) => s.setManageSection);
   const closeManage   = useUIStore((s) => s.closeManage);
 
-  useEffect(() => {
-    if (!manageOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeManage(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [manageOpen, closeManage]);
+  useEscapeClose(closeManage, manageOpen);
 
   if (!manageOpen) return null;
 

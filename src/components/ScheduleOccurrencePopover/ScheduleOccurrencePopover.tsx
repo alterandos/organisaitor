@@ -7,6 +7,7 @@ import { formatTime, formatDate } from '@/utils/date';
 import { computeNextOccurrenceDates } from '@/utils/scheduleOccurrences';
 import type { ScheduleId } from '@/types';
 import styles from './ScheduleOccurrencePopover.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   scheduleId: ScheduleId;
@@ -45,14 +46,11 @@ export function ScheduleOccurrencePopover({ scheduleId, blockId, date, title, st
     const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
+    return () => document.removeEventListener('mousedown', handleClick);
   }, [onClose]);
+
+  useEscapeClose(onClose);
 
   const handleSkip = () => {
     addException(scheduleId, blockId, date);

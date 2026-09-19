@@ -11,6 +11,10 @@ import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPic
 import { deleteReminderWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import type { CrossAppRef } from '@/types';
 import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
+import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
+import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
+import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
+import { useItemActions } from '@/components/ItemActions/useItemActions';
 import styles from './CalendarReminderPane.module.css';
 
 export function CalendarReminderPane() {
@@ -23,6 +27,14 @@ export function CalendarReminderPane() {
   const collectionsRecord = useTaskStore((s) => s.collections);
 
   const reminder = editingId ? remindersRecord[editingId as CalendarReminderId] : null;
+  const archiveReminder = useCalendarStore((s) => s.archiveReminder);
+  const restoreReminder = useCalendarStore((s) => s.restoreReminder);
+  const { dialog, setDialog, closeDialog } = useItemActions({
+    itemKey:   editingId,
+    archived:  !!reminder?.archivedAt,
+    onClose:   closePane,
+    onRestore: () => { if (editingId) restoreReminder(editingId as CalendarReminderId); },
+  });
 
   const [title,          setTitle]          = useState('');
   const [notes,          setNotes]          = useState('');
@@ -49,12 +61,6 @@ export function CalendarReminderPane() {
     }
   }, [reminder?.id]);
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closePane(); };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [closePane]);
-
   if (!reminder) return null;
 
   const id = reminder.id;
@@ -71,7 +77,8 @@ export function CalendarReminderPane() {
     if (v !== reminder.notes) updateReminder(id, { notes: v });
   };
 
-  const handleDelete = () => { deleteReminderWithCleanup(id); closePane(); };
+  const handleDelete = () => { closeDialog(); deleteReminderWithCleanup(id); closePane(); };
+  const handleArchive = (reason: string) => { closeDialog(); archiveReminder(id, reason); closePane(); };
 
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
     if (ref.type !== 'note') return;
@@ -104,6 +111,8 @@ export function CalendarReminderPane() {
         </header>
 
         <div className={styles.body}>
+          {reminder.archivedAt && <ArchivedBanner archivedAt={reminder.archivedAt} reason={reminder.archiveReason} />}
+
           {reminder.repeat && (
             <RecurrenceScopeBar
               kind="reminder"
@@ -285,12 +294,28 @@ export function CalendarReminderPane() {
           )}
         </div>
 
-        <footer className={styles.footer}>
-          <button className={styles.deleteBtn} onClick={handleDelete}>
-            {reminder.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.reminder.toLowerCase()}`}
-          </button>
-        </footer>
+        <ItemActionFooter
+          archived={!!reminder.archivedAt}
+          deleteLabel={reminder.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.reminder.toLowerCase()}`}
+          onArchive={() => setDialog('archive')}
+          onRestore={() => restoreReminder(id)}
+          onDelete={() => setDialog('delete')}
+        />
       </aside>
+
+      {dialog && (
+        <ItemActionDialog
+          mode={dialog}
+          noun="reminder"
+          itemTitle={reminder.title}
+          archiveNote={reminder.repeat ? 'The whole repeating series is archived, not just this occurrence.' : undefined}
+          alsoRemoves={reminder.repeat ? 'and all of its occurrences' : undefined}
+          onArchive={handleArchive}
+          onDelete={handleDelete}
+          onArchiveInstead={() => setDialog('archive')}
+          onCancel={closeDialog}
+        />
+      )}
     </>
   );
 }

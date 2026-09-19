@@ -8,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import { BUILTIN_TAGS } from '../NoteEditor/builtinTags';
 import type { NoteTagId, NoteTagFieldDef, NoteTagFieldType, CollectionId } from '@/types';
 import styles from './EditNoteTagModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const PRESET_COLORS = [
   '#5b6ee1', '#2563eb', '#7c3aed', '#db2777',
@@ -54,11 +55,7 @@ export function EditNoteTagModal() {
     }
   }, [tag?.id]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeEditNoteTag(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeEditNoteTag]);
+  useEscapeClose(closeEditNoteTag);
 
   if (!tag || !editingNoteTagId) return null;
 

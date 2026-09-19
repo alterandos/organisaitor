@@ -11,6 +11,10 @@ import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPic
 import { deleteEventWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import type { CrossAppRef } from '@/types';
 import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
+import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
+import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
+import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
+import { useItemActions } from '@/components/ItemActions/useItemActions';
 import styles from './CalendarEventPane.module.css';
 
 const EVENT_TYPES: { value: CalendarEventType; label: string; icon: string }[] = [
@@ -30,6 +34,17 @@ export function CalendarEventPane() {
   const tasksRecord       = useTaskStore((s) => s.tasks);
 
   const event = editingId ? eventsRecord[editingId as CalendarEventId] : null;
+  const archiveEvent = useCalendarStore((s) => s.archiveEvent);
+  const restoreEvent = useCalendarStore((s) => s.restoreEvent);
+  // A task's scheduled shadow event is archived/restored with the task itself, never on its own.
+  const isTaskShadow = !!editingId && Object.values(tasksRecord).some((t) => t.calendarEventId === editingId);
+  const { dialog, setDialog, closeDialog } = useItemActions({
+    itemKey:    editingId,
+    archived:   !!event?.archivedAt,
+    canArchive: !isTaskShadow,
+    onClose:    closePane,
+    onRestore:  () => { if (editingId) restoreEvent(editingId as CalendarEventId); },
+  });
 
   const [title,          setTitle]          = useState('');
   const [notes,          setNotes]          = useState('');
@@ -64,12 +79,6 @@ export function CalendarEventPane() {
     }
   }, [event?.id]);
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closePane(); };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [closePane]);
-
   if (!event) return null;
 
   const id = event.id;
@@ -96,7 +105,8 @@ export function CalendarEventPane() {
     if (v !== event.notes) updateEvent(id, { notes: v });
   };
 
-  const handleDelete = () => { deleteEventWithCleanup(id); closePane(); };
+  const handleDelete = () => { closeDialog(); deleteEventWithCleanup(id); closePane(); };
+  const handleArchive = (reason: string) => { closeDialog(); archiveEvent(id, reason); closePane(); };
 
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
     if (ref.type !== 'note') return;
@@ -158,6 +168,8 @@ export function CalendarEventPane() {
         </header>
 
         <div className={styles.body}>
+          {event.archivedAt && <ArchivedBanner archivedAt={event.archivedAt} reason={event.archiveReason} />}
+
           {event.repeat && (
             <RecurrenceScopeBar
               kind="event"
@@ -463,12 +475,30 @@ export function CalendarEventPane() {
           )}
         </div>
 
-        <footer className={styles.footer}>
-          <button className={styles.deleteBtn} onClick={handleDelete}>
-            {event.repeat ? `Delete all occurrences` : `Delete ${LABELS.calendarItemKind.event.toLowerCase()}`}
-          </button>
-        </footer>
+        <ItemActionFooter
+          archived={!!event.archivedAt}
+          canArchive={!isTaskShadow}
+          deleteLabel={event.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.event.toLowerCase()}`}
+          onArchive={() => setDialog('archive')}
+          onRestore={() => restoreEvent(id)}
+          onDelete={() => setDialog('delete')}
+        />
       </aside>
+
+      {dialog && (
+        <ItemActionDialog
+          mode={dialog}
+          noun="event"
+          itemTitle={event.title}
+          archiveNote={event.repeat ? 'The whole repeating series is archived, not just this occurrence.' : undefined}
+          alsoRemoves={event.repeat ? 'and all of its occurrences' : undefined}
+          canArchive={!isTaskShadow}
+          onArchive={handleArchive}
+          onDelete={handleDelete}
+          onArchiveInstead={() => setDialog('archive')}
+          onCancel={closeDialog}
+        />
+      )}
     </>
   );
 }

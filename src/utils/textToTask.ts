@@ -3,7 +3,7 @@
 // AddTaskModal, pre-filled) before a task is actually created — never used to silently
 // populate data.
 import type { Priority } from '@/types';
-import { normalizeLinkUrl } from '@/utils/links';
+import { extractUrls } from '@/utils/links';
 
 export interface InferredTaskFields {
   title:        string;
@@ -243,15 +243,6 @@ function findLinkSpans(text: string): Span[] {
   return [...text.matchAll(URL_PATTERN)].map((m) => ({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length }));
 }
 
-function inferLinksFromText(text: string): string[] {
-  const found = text.match(/\bhttps?:\/\/[^\s<>"')]+|\bwww\.[^\s<>"')]+/gi) ?? [];
-  const cleaned = found
-    .map((u) => u.replace(/[.,;:!?)]+$/, '')) // trim trailing sentence punctuation
-    .map((u) => normalizeLinkUrl(u))
-    .filter(Boolean);
-  return [...new Set(cleaned)];
-}
-
 function inferDateMatch(rawText: string, now: Date): ({ iso: string } & Span) | null {
   const candidates = findDateCandidates(rawText, now)
     .map((c) => ({ ...c, y: resolveYear(c.y, c.m, c.d, c.yearExplicit, now) }));
@@ -279,7 +270,7 @@ export function inferTaskFromSelection(rawText: string, now: Date = new Date()):
     deadline,
     deadlineTime,
     priority: inferPriorityFromText(rawText),
-    links: inferLinksFromText(rawText),
+    links: extractUrls(rawText),
   };
 }
 
@@ -372,7 +363,7 @@ export function inferCalendarItemFromSelection(rawText: string, extraLinks: stri
     ...findLinkSpans(rawText),
   ]);
   const kind = range || EVENT_WORDS.test(rawText) ? 'event' : 'reminder';
-  const links = [...new Set([...inferLinksFromText(rawText), ...extraLinks])];
+  const links = [...new Set([...extractUrls(rawText), ...extraLinks])];
 
   return {
     title,

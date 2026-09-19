@@ -40,6 +40,10 @@ export function deleteTaskWithCleanup(taskId: TaskId) {
   const task = useTaskStore.getState().tasks[taskId];
   if (!task) return;
 
+  // Sub-tasks go with their parent — deleteTask alone would leave them with a dangling
+  // parentId, which the task list never renders (it only shows tasks without a parent).
+  for (const subId of [...(task.subtaskIds ?? [])]) deleteTaskWithCleanup(subId);
+
   if (task.calendarEventId) useCalendarStore.getState().deleteEvent(task.calendarEventId);
   if (task.calendarReminderId) useCalendarStore.getState().deleteReminder(task.calendarReminderId);
 

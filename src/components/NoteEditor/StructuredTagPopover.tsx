@@ -5,6 +5,7 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import type { StructuredTagTypeDef } from '@/config/structuredTagTypes';
 import type { CollectionId } from '@/types';
 import styles from './StructuredTagPopover.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   top:  number;
@@ -49,23 +50,19 @@ export function StructuredTagPopover({
   };
 
   useEffect(() => {
-    const handler = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent) {
-        if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
-        return;
-      }
+    const handler = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) onCancel();
     };
     // mousedown deferred a tick so the click that opened this popover doesn't immediately close it.
     const id = setTimeout(() => document.addEventListener('mousedown', handler), 0);
-    document.addEventListener('keydown', handler, true);
     return () => {
       clearTimeout(id);
       document.removeEventListener('mousedown', handler);
-      document.removeEventListener('keydown', handler, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEscapeClose(onCancel);
 
   const compactField = typeDef.fields[0];
 

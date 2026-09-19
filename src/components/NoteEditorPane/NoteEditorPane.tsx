@@ -5,6 +5,7 @@ import { useNoteView } from '@/store/noteViews';
 import { isNoteLocked } from '@/services/noteSecrets';
 import type { NoteId } from '@/types';
 import styles from './NoteEditorPane.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function NoteEditorPane() {
   const editingNoteId = useUIStore((s) => s.editingNoteId);
@@ -55,15 +56,7 @@ export function NoteEditorPane() {
     doSave();
   };
 
-  useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeNote();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeNote]);
+  useEscapeClose(closeNote);
 
   if (!note || !editingNoteId) return null;
 

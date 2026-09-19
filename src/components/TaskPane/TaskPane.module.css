@@ -571,27 +571,6 @@
 
 /* ── Footer ───────────────────────────────────────────── */
 
-.footer {
-  padding: 1rem 1.25rem;
-  border-top: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.deleteBtn {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1.5px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
-  border-radius: var(--radius-md);
-  background: transparent;
-  font-size: 0.88rem;
-  font-family: inherit;
-  color: var(--color-danger);
-  cursor: pointer;
-  transition: background 140ms ease;
-}
-
-.deleteBtn:hover { background: var(--color-danger-muted); }
-
 /* Android: always full-screen, regardless of viewport width — overrides the narrow-browser
    bottom-sheet fallback above (higher specificity wins over the bare .pane inside @media). */
 :global(.platform-android) .pane {

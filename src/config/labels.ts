@@ -18,6 +18,24 @@ export const LABELS = {
   milestoneDate: 'Milestone date',
   scheduledFor:  'Scheduled',
 
+  // Shared by every item pane that can be archived/deleted (Task, Calendar event, Calendar
+  // reminder — and future apps): see src/components/ItemActions/.
+  itemActions: {
+    archive:           'Archive',
+    restore:           'Restore',
+    archivedGroup:     'Archived',
+    reasonLabel:       'Why are you archiving it? (optional)',
+    reasonPlaceholder: 'e.g. No longer relevant, replaced by something else, decided not to do it…',
+    reasonHeading:     'Reason',
+    archiveTitle:      (noun: string) => `Archive this ${noun}?`,
+    archiveHint:       (hiddenFrom: string) => `It leaves ${hiddenFrom} but is kept, and you can restore it any time.`,
+    deleteTitle:       (noun: string) => `Delete this ${noun} permanently?`,
+    deleteWarning:     'This cannot be undone.',
+    deleteSafeHint:    'Not sure? Archiving keeps it out of the way without losing it.',
+    deleteConfirm:     'Delete permanently',
+    archiveInstead:    'Archive instead',
+  },
+
   // Calendar
   calendarItemKind: {
     event:    'Event',

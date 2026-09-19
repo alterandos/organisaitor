@@ -4,6 +4,7 @@ import { usePortfolioStore } from '@/store/portfolioStore';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import styles from './AddInvestmentPurposeModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function AddInvestmentPurposeModal() {
   const [name,  setName]  = useState('');
@@ -13,9 +14,10 @@ export function AddInvestmentPurposeModal() {
   const addInvestmentPurpose = usePortfolioStore((s) => s.addInvestmentPurpose);
   const closeModal           = useUIStore((s) => s.closeModal);
 
+  useEscapeClose(() => { closeModal(); });
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

@@ -1,22 +1,16 @@
-import { useEffect } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useNoteStore } from '@/store/noteStore';
 import { NOTE_TAG_PRESETS } from '@/config/noteTagPresets';
 import type { NoteTag } from '@/types/notes';
 import styles from './NoteTagPresetModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function NoteTagPresetModal() {
   const closeModal   = useUIStore((s) => s.closeModal);
   const noteTags     = useNoteStore((s) => s.noteTags);
   const addNoteTag   = useNoteStore((s) => s.addNoteTag);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeModal();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeModal]);
+  useEscapeClose(closeModal);
 
   const installedPresetKeys = new Set(
     Object.values(noteTags as Record<string, NoteTag>)

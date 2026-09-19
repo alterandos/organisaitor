@@ -5,6 +5,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useRecentItemsStore, type RecentItemEntry } from '@/store/recentItemsStore';
 import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem, type QuickAccessItem } from '@/utils/quickAccess';
 import styles from './QuickAccessPane.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 type Mode = 'recent' | 'frequent';
 
@@ -56,13 +57,7 @@ export function QuickAccessPane() {
     setHighlightIndex((i) => Math.min(i, Math.max(0, items.length - 1)));
   }, [items.length]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); closeQuickAccess(); }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeQuickAccess]);
+  useEscapeClose(closeQuickAccess);
 
   const select = (item: QuickAccessItem) => {
     navigateToQuickAccessItem(item);

@@ -2425,3 +2425,14 @@ Complete dark mode first (steps 1–6) — it benefits desktop immediately and i
 28. Create signing keystore; build release `.aab`; upload to Play Store Internal Testing.
 
 ---
+
+
+---
+
+## Roll the shared item-actions pattern out to the remaining apps — not built
+
+`src/components/ItemActions/` (footer, dialogs, hook, banner, icons) currently backs Task, Calendar event and Calendar reminder panes. Still on their own patterns / without archive-delete parity: Notes (`Note.archivedAt` exists in the model but has no UI; delete is `window.confirm`), List items and Lists (`window.confirm`), Portfolio watchlist items, Records trackers/entries/routines (`EditTrackerPane`/`EditRoutinePane` use `window.confirm`), Fitness activities (`window.confirm`), Schedules. Each needs `archivedAt`/`archiveReason` (+ migration + store bump) where archiving makes sense, otherwise just the shared delete confirmation.
+
+## Android back button should use the same overlay stack as Escape — not built
+
+`closeTopmostMobileOverlay()` (`src/store/uiStore.ts`) closes overlays by a *fixed priority list* of store flags, not by which was opened most recently, so it has the same class of inconsistency Escape used to have. Now that every overlay registers with `useEscapeClose` (`src/hooks/useEscapeClose.ts`), the back button could call a `closeTopOverlay()` exported from that module instead (and fall through to `mobileBackConsumer`/section history/minimise when the stack is empty). Needs an on-device check — Android wasn't exercised in the Escape work.

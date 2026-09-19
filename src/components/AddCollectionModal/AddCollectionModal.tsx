@@ -7,6 +7,7 @@ import { computeMilestones } from '@/utils/milestones';
 import { formatDate, now } from '@/utils/date';
 import type { CollectionId, CollectionKind, PurposeId } from '@/types';
 import styles from './AddCollectionModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function AddCollectionModal() {
   const addCollection    = useTaskStore((s) => s.addCollection);
@@ -49,10 +50,11 @@ export function AddCollectionModal() {
 
   const formRef = useRef<HTMLFormElement>(null);
 
+  useEscapeClose(() => { if (isEditMode) closeEditCollection(); else closeModal(); }, isVisible);
+
   useEffect(() => {
     if (!isVisible) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { if (isEditMode) closeEditCollection(); else closeModal(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

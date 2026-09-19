@@ -196,7 +196,7 @@ export function CalendarView() {
   const days = useMemo(() => buildCalendarDays(year, month), [year, month]);
 
   const spanEventsArray = useMemo(
-    () => Object.values(events).filter(ev => ev.endDate != null && ev.endDate > ev.date),
+    () => Object.values(events).filter(ev => !ev.archivedAt && ev.endDate != null && ev.endDate > ev.date),
     [events]
   );
 
@@ -223,6 +223,7 @@ export function CalendarView() {
     const rangeEnd   = days.length > 0 ? toDateStr(days[days.length - 1].date) : '';
 
     Object.values(tasks).forEach((task) => {
+      if (task.archived) return;
       if (task.deadline) {
         if (!layerVisibility.taskDeadlines) return;
         if (activeCollectionId && task.collectionId !== activeCollectionId) return;
@@ -245,7 +246,13 @@ export function CalendarView() {
       Object.values(tasks).map((t) => t.calendarEventId).filter((id): id is CalendarEventId => !!id)
     );
 
+    // An archived task's shadow event is kept (restoring the task brings it back) but hidden.
+    const archivedTaskEventIds = new Set(
+      Object.values(tasks).filter((t) => t.archived && t.calendarEventId).map((t) => t.calendarEventId)
+    );
+
     Object.values(events).forEach((ev) => {
+      if (ev.archivedAt || archivedTaskEventIds.has(ev.id)) return;
       const isTaskEvent = (ev.eventType ?? 'default') === 'task';
       if (isTaskEvent ? !layerVisibility.taskScheduled : !layerVisibility.events) return;
       // Tentative is a filter on top of the 'events' layer, not a separate one — a task-linked
@@ -286,6 +293,7 @@ export function CalendarView() {
     });
 
     Object.values(reminders).forEach((rem) => {
+      if (rem.archivedAt) return;
       // Task-deadline-derived reminders (reminderType: 'task') are excluded here — the
       // deadline already rendered above as its own dedicated kind:'task' pill (synthesized
       // directly from the Task, so it gets live completion styling and opens TaskPane in

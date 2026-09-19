@@ -5,6 +5,7 @@ import { getOrderedEndeavours } from '@/utils/collections';
 import { LABELS } from '@/config/labels';
 import type { CollectionId } from '@/types';
 import styles from './CollectionFilterPicker.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   // 'dropdown' (default) is desktop's positioned-dropdown chrome, unchanged. 'sheet' renders
@@ -29,16 +30,11 @@ export function CollectionFilterPicker({ variant = 'dropdown' }: Props) {
     const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) closeEndeavourPicker();
     };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeEndeavourPicker();
-    };
     document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
+    return () => document.removeEventListener('mousedown', handleClick);
   }, [open, closeEndeavourPicker]);
+
+  useEscapeClose(closeEndeavourPicker, open);
 
   const ordered = getOrderedEndeavours(collectionsRecord);
   if (ordered.length === 0) return null;

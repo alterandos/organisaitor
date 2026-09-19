@@ -8,6 +8,7 @@ import { listTimezones, resolveTimezone, SYSTEM_TIMEZONE } from '@/utils/timezon
 import { rezoneAllCalendarData } from '@/services/timezoneMigration';
 import styles from './SettingsPane.module.css';
 
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 function renderKeys(combo: string) {
   const parts = combo.split('+');
   return (
@@ -90,11 +91,7 @@ export function SettingsPane() {
     return slot === 'primary' ? h.primary : (h.secondary ?? null);
   };
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !listening) closeSettings(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeSettings, listening]);
+  useEscapeClose(() => { if (!listening) closeSettings(); });
 
   // Captures the next keypress while `listening` is set. Registered in the capture phase
   // so it runs before the effect above (and before anything else) — Escape here cancels

@@ -11,6 +11,7 @@ import { todayIso, formatDate, computeLinkedEndTime } from '@/utils/date';
 import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
 import type { CollectionId, ScheduleBlock } from '@/types';
 import styles from './AddScheduleModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 // When a schedule has no end date, the "skip occurrences" checklist would otherwise try to list
@@ -128,10 +129,11 @@ export function AddScheduleModal() {
     setAddingBlock(false);
   }, [editingSchedule?.id, isVisible]);
 
+  useEscapeClose(() => { closeEditSchedule(); }, isVisible);
+
   useEffect(() => {
     if (!isVisible) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { closeEditSchedule(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);

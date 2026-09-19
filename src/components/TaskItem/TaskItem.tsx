@@ -142,7 +142,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   const itemEl = (
     <div
       ref={rowRef}
-      className={`${styles.item} ${task.completed ? styles.itemDone : ''} ${isSubtask ? styles.subtask : ''} ${expanded ? styles.itemExpanded : ''}`}
+      className={`${styles.item} ${task.completed || task.archived ? styles.itemDone : ''} ${isSubtask ? styles.subtask : ''} ${expanded ? styles.itemExpanded : ''}`}
       style={itemStyle}
       onClick={(e) => { if (deleteRevealed) { setSwipeX(0); setDeleteRevealed(false); return; } handleRowClick(e); }}
     >

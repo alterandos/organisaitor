@@ -8,6 +8,7 @@ import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import type { ListId, ListFieldSchema, ListFieldType, ListTypeId, ListTab } from '@/types/lists';
 import styles from './AddListModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const FIELD_TYPES: { value: ListFieldType; label: string }[] = [
   { value: 'text',    label: 'Text'    },
@@ -65,9 +66,10 @@ export function AddListModal() {
     }
   }, [editingListId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEscapeClose(() => { closeModal(); });
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeModal();
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         formRef.current?.requestSubmit();

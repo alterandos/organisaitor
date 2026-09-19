@@ -15,7 +15,8 @@ export function computeMilestones(
         t.collectionId === collectionId &&
         t.deadline !== null &&
         !t.parentId &&
-        !t.completed,
+        !t.completed &&
+        !t.archived,
     )
     .map((t) => ({
       id:     `milestone-task-${t.id}`,

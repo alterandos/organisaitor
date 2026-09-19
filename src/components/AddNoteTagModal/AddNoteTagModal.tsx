@@ -7,6 +7,7 @@ import { LABELS } from '@/config/labels';
 import type { CollectionId } from '@/types';
 import { BUILTIN_TAGS } from '../NoteEditor/builtinTags';
 import styles from './AddNoteTagModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 const PRESET_COLORS = [
   '#5b6ee1', '#2563eb', '#7c3aed', '#db2777',
@@ -59,9 +60,10 @@ export function AddNoteTagModal() {
     if (!color) setColor(builtin.color);
   };
 
+  useEscapeClose(() => { closeModal(); });
+
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleCreate(); }
     };
     document.addEventListener('keydown', handler);

@@ -6,6 +6,7 @@ import { useUIStore } from '@/store/uiStore';
 import { LIST_ITEM_STATUS_META } from '@/types/lists';
 import type { ListItemStatus, ListFieldSchema, ListId, ListItemId } from '@/types/lists';
 import styles from './AddListItemModal.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 // ── Dynamic field input ───────────────────────────────────────────────────────
 function FieldInput({
@@ -150,9 +151,10 @@ export function AddListItemModal() {
     }
   }, [editingListItemId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEscapeClose(() => { closeModal(); });
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         formRef.current?.requestSubmit();

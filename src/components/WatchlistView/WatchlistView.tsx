@@ -9,6 +9,7 @@ import { ASSET_CLASS_META, formatMarketCap } from '@/types/portfolio';
 import type { WatchlistItem, WatchlistItemId, PortfolioTagId, WatchlistColumnId } from '@/types/portfolio';
 import { TickerChart } from './TickerChart';
 import styles from './WatchlistView.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 function formatPrice(price: number): string {
   if (price >= 1) {
@@ -254,12 +255,7 @@ export function WatchlistView() {
     setTagEditItemId(null);
   };
 
-  useEffect(() => {
-    if (!selectedItemId) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') selectItem(null); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [selectedItemId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEscapeClose(() => selectItem(null), !!selectedItemId);
 
   useEffect(() => {
     if (!colSelectorOpen) return;
@@ -316,14 +312,13 @@ export function WatchlistView() {
     const handleMouse = (e: MouseEvent) => {
       if (!tagPopoverRef.current?.contains(e.target as Node)) setTagEditItemId(null);
     };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setTagEditItemId(null); };
     document.addEventListener('mousedown', handleMouse);
-    document.addEventListener('keydown', handleKey);
     return () => {
       document.removeEventListener('mousedown', handleMouse);
-      document.removeEventListener('keydown', handleKey);
     };
   }, [tagEditItemId]);
+
+  useEscapeClose(() => setTagEditItemId(null), !!tagEditItemId);
 
   const checkTableBottom = () => {
     const el = tableContainerRef.current;

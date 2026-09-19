@@ -53,6 +53,13 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'action-forward',   group: 'Actions', primary: 'Alt+Right', action: 'Go forward to the next app section (after going back)', customizable: true },
   { id: 'action-quick-access', group: 'Actions', primary: 'Ctrl+G', action: 'Open Quick Access — jump to a note, notebook, task, list, tracker, routine, or Endeavour', customizable: true },
 
+
+  // Item panes — handled locally by useItemActions (src/components/ItemActions/), only while a
+  // task / calendar event / calendar reminder pane is open. Not customizable (component-local).
+  { id: 'task-archive', group: 'Item panes', primary: 'Ctrl+Shift+A', action: 'Archive the open task / event / reminder (Restore, if it\'s already archived)' },
+  { id: 'task-delete',  group: 'Item panes', primary: 'Delete', secondary: 'Ctrl+Shift+D', action: 'Delete the open task / event / reminder — always asks for confirmation (plain Delete is ignored while typing in a field)' },
+  { id: 'task-archive-confirm', group: 'Item panes', primary: 'Ctrl+Enter', action: 'Confirm the archive dialog (Esc cancels)' },
+
   // Calendar
   { id: 'calendar-toggle-side-pane', group: 'Calendar', primary: 'O', action: 'Toggle the Calendar side pane (Go to date / Layers / Schedules / Imported calendars)' },
   { id: 'calendar-period',  group: 'Calendar', primary: '←/→', secondary: 'PgUp/PgDn', action: 'Previous/next period (month, week, or day — matches current view)' },
@@ -87,4 +94,4 @@ export const HOTKEYS: HotkeyDef[] = [
 ];
 
 // Ordered list of groups for rendering in the correct sequence.
-export const HOTKEY_GROUPS = ['Navigation', 'Actions', 'Calendar', 'Notes', 'Lists', 'Portfolio'] as const;
+export const HOTKEY_GROUPS = ['Navigation', 'Actions', 'Item panes', 'Calendar', 'Notes', 'Lists', 'Portfolio'] as const;

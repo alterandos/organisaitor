@@ -4,6 +4,7 @@ import { useNoteViews } from '@/store/noteViews';
 import type { CrossAppRef, CrossAppRefType } from '@/types';
 import type { NoteId } from '@/types/notes';
 import styles from './CrossAppRefPicker.module.css';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   value:    CrossAppRef[];
@@ -69,30 +70,13 @@ export function CrossAppRefPicker({ value, onChange, onNavigate }: Props) {
     const handleClick = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     };
-    // Capture phase + stopImmediatePropagation, not bubble + stopPropagation: this picker is
-    // meant to be embeddable inside modals (AddTaskModal) that have their own bubble-phase
-    // document Escape listener already registered (before this dropdown ever opens, since the
-    // modal mounts first) — a bubble-phase listener here would fire *after* the modal's, by
-    // which point the whole modal has already closed. A capture-phase listener on `document`
-    // always runs before any bubble-phase listener anywhere in the tree, regardless of mount
-    // order, and stopImmediatePropagation (unlike stopPropagation) actually prevents that
-    // later sibling listener on the same `document` target from running at all. Same fix
-    // shape as CalendarSidePane/AddScheduleModal's Escape conflict (see CLAUDE.md) — found
-    // here via a live round-trip (Escape closed the whole AddTaskModal, not just this
-    // dropdown), not by inspection.
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      setOpen(false);
-    };
     document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey, true);
     return () => {
       document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey, true);
     };
   }, [open]);
+
+  useEscapeClose(() => setOpen(false), open);
 
   const linkedNoteIds = new Set(value.filter((r) => r.type === 'note').map((r) => r.id));
   const q = search.trim().toLowerCase();

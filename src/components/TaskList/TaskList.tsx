@@ -4,6 +4,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import type { SortField, SortDir } from '@/store/uiStore';
 import { TaskItem } from '@/components/TaskItem/TaskItem';
+import { LABELS } from '@/config/labels';
 import styles from './TaskList.module.css';
 
 function deadlineMs(t: Task): number {
@@ -42,6 +43,7 @@ function buildSorter(
 
 export function TaskList() {
   const [completedOpen, setCompletedOpen] = useState(false);
+  const [archivedOpen,  setArchivedOpen]  = useState(false);
   const [toggledIds, setToggledIds]       = useState(new Set<string>());
 
   const tasksRecord         = useTaskStore((s) => s.tasks);
@@ -68,7 +70,12 @@ export function TaskList() {
   };
 
   const allTasks = Object.values(tasksRecord);
-  const topLevel = allTasks.filter((t) => !t.parentId);
+  // A sub-task archived on its own (parent still active) has nowhere else to appear, so it
+  // joins the pool and lands in the Archived group; sub-tasks archived along with their
+  // parent are shown nested under that parent there instead.
+  const topLevel = allTasks.filter((t) =>
+    !t.parentId || (t.archived && !tasksRecord[t.parentId]?.archived && !!tasksRecord[t.parentId])
+  );
 
   const byCollection = activeCollectionId
     ? topLevel.filter((t) => t.collectionId === activeCollectionId)
@@ -95,8 +102,9 @@ export function TaskList() {
     : byPurpose;
 
   const sorter    = buildSorter(sortField, sortDir, collectionsRecord);
-  const active    = tasks.filter((t) => !t.completed).sort(sorter);
-  const completed = tasks.filter((t) =>  t.completed).sort(sorter);
+  const active    = tasks.filter((t) => !t.archived && !t.completed).sort(sorter);
+  const completed = tasks.filter((t) => !t.archived &&  t.completed).sort(sorter);
+  const archived  = tasks.filter((t) =>  t.archived).sort(sorter);
 
   function getCollectionColor(task: Task): string | null {
     if (!task.collectionId) return null;
@@ -105,7 +113,8 @@ export function TaskList() {
 
   function renderTaskGroup(task: Task) {
     const color    = getCollectionColor(task);
-    const subtasks = (task.subtaskIds ?? []).map((id) => tasksRecord[id]).filter(Boolean) as Task[];
+    const subtasks = ((task.subtaskIds ?? []).map((id) => tasksRecord[id]).filter(Boolean) as Task[])
+      .filter((s) => task.archived || !s.archived);
     const expanded = isExpanded(task.id);
 
     return (
@@ -158,6 +167,18 @@ export function TaskList() {
             Completed ({completed.length})
           </button>
           {completedOpen && completed.map((task) => renderTaskGroup(task))}
+        </>
+      )}
+      {archived.length > 0 && (
+        <>
+          <button
+            className={styles.sectionToggle}
+            onClick={() => setArchivedOpen((o) => !o)}
+          >
+            <span className={`${styles.chevron} ${archivedOpen ? styles.chevronOpen : ''}`}>▸</span>
+            {LABELS.itemActions.archivedGroup} ({archived.length})
+          </button>
+          {archivedOpen && archived.map((task) => renderTaskGroup(task))}
         </>
       )}
     </div>

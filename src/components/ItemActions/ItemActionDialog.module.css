@@ -1,0 +1,150 @@
+/* z-index 102: opens from inside TaskPane (overlay 100 / pane 101), same tier reasoning as
+   AddScheduleModal opening from inside an already-open pane. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 102;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 520px) {
+  .overlay { align-items: center; padding: 1rem; }
+}
+
+.modal {
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 500px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 1.5rem;
+  box-shadow: 0 -4px 28px rgba(0, 0, 0, 0.14);
+}
+
+@media (min-width: 520px) {
+  .modal { border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18); }
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.itemName {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  font-size: 0.82rem;
+  color: var(--color-muted);
+  line-height: 1.5;
+  margin: 0 0 1rem;
+}
+
+.warning {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  margin: 0 0 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--color-danger-muted);
+  border-left: 3px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+}
+
+.label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  margin-bottom: 0.35rem;
+}
+
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.7rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.88rem;
+  resize: vertical;
+  margin-bottom: 1.25rem;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.cancelBtn,
+.secondaryBtn,
+.primaryBtn,
+.dangerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  transition: background 140ms ease;
+}
+
+.cancelBtn:hover,
+.secondaryBtn:hover { background: var(--color-surface-alt); }
+
+.primaryBtn {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.primaryBtn:hover { background: var(--color-primary-hover); }
+
+.dangerBtn {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: #fff;
+}
+
+.dangerBtn:hover { filter: brightness(0.92); }
+
+.cancelBtn:focus-visible,
+.secondaryBtn:focus-visible,
+.primaryBtn:focus-visible,
+.dangerBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.kbd {
+  margin-left: 0.35rem;
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
+@media (max-width: 519px) {
+  .kbd { display: none; }
+}
