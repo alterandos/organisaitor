@@ -7,6 +7,7 @@ import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon } f
 import type { NoteTagId, CollectionId } from '@/types';
 import type { NoteTag } from '@/types/notes';
 import { NoteList } from './NoteList';
+import { NotebookLocationView } from './NotebookLocationView';
 import { NoteEditor } from '../NoteEditor/NoteEditor';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import styles from './ChronicleView.module.css';
@@ -440,9 +441,10 @@ export function ChronicleView() {
   const lastNavColRef = useRef<Exclude<ColId, 'editor'>>('list');
 
   const noteTags          = useNoteStore((s) => s.noteTags);
+  const notes             = useNoteStore((s) => s.notes);
   const selectedNoteTagId = useUIStore((s) => s.selectedNoteTagId);
   const editingNoteId     = useUIStore((s) => s.editingNoteId);
-  const showAddNoteTag    = useUIStore((s) => s.showAddNoteTag);
+  const showAddNoteTag   = useUIStore((s) => s.showAddNoteTag);
   const showAddNote       = useUIStore((s) => s.showAddNote);
   const activeCollectionId = useUIStore(selectActiveCollectionId) as CollectionId | null;
 
@@ -670,10 +672,14 @@ export function ChronicleView() {
             focusSignal={editorFocusSignal}
             onNavReturn={() => setFocusedCol(lastNavColRef.current)}
           />
+        ) : selectedNoteTagId && noteTags[selectedNoteTagId] ? (
+          <NotebookLocationView
+            tagId={selectedNoteTagId}
+            noteIds={getTopLevelNotes(notes, noteTags, selectedNoteTagId, activeCollectionId).map((n) => n.id)}
+            visibleTagIds={visibleTagIds}
+          />
         ) : (
-          <div className={styles.editorEmpty}>
-            {selectedNoteTagId ? 'Select a note to edit, or create a new one' : 'Select a notebook to get started'}
-          </div>
+          <div className={styles.editorEmpty}>Select a notebook to get started</div>
         )}
       </div>
 

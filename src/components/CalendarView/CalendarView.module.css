@@ -488,6 +488,14 @@
   background-blend-mode: overlay;
 }
 
+/* Flagged important (CalendarEvent/CalendarReminder.important): a red outline drawn as an inset
+   box-shadow, not a border — it adds no size, so it can't shift week/day time-grid block
+   geometry, and it can't be clobbered by the inline borderLeft getPillStyle sets for an
+   Endeavour/Schedule color. The ❗ icon comes from the item's typeIcon. */
+.calItemImportant {
+  box-shadow: inset 0 0 0 1.5px var(--color-danger);
+}
+
 .calItemIcon {
   flex-shrink: 0;
   font-size: 0.7rem;

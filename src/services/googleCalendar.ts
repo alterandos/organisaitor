@@ -3,6 +3,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { resolveTimezone, utcToZonedTime } from '@/utils/timezone';
 import { addDaysToIso } from '@/utils/date';
+import { deriveNotifyBefore, type GoogleEventReminders, type GoogleCalendarMeta } from '@/utils/googleReminders';
 import { apiFetch } from '@/utils/apiFetch';
 import type { CalendarConnection, CalendarConnectionCalendar, CreateCalendarEventInput } from '@/types';
 
@@ -14,6 +15,7 @@ interface RawGoogleEvent {
   description?: string;
   start?: { date?: string; dateTime?: string };
   end?:   { date?: string; dateTime?: string };
+  reminders?: GoogleEventReminders;
 }
 
 async function accessToken(): Promise<string | null> {
@@ -121,7 +123,7 @@ export async function disconnectGoogleCalendar(connectionId: string): Promise<vo
 // is EXCLUSIVE per their API, so a single-day all-day event needs no endDate and a
 // multi-day one needs its end date shifted back by one day.
 function mapGoogleEvent(
-  raw: RawGoogleEvent, connectionId: string, calendarId: string, accountZone: string
+  raw: RawGoogleEvent, connectionId: string, calendarId: string, accountZone: string, calendarMeta?: GoogleCalendarMeta
 ): (CreateCalendarEventInput & { sourceConnectionId: string; sourceCalendarId: string; sourceEventId: string }) | null {
   const title = raw.summary?.trim() || '(Untitled)';
   const sourceRaw = raw as unknown as Record<string, unknown>;
@@ -140,7 +142,8 @@ function mapGoogleEvent(
     const date = raw.start.date;
     const endExclusive = raw.end?.date ?? date;
     const endDate = endExclusive > addDaysToIso(date, 1) ? addDaysToIso(endExclusive, -1) : null;
-    return { ...base, date, endDate, startTime: null, endTime: null };
+    const notify = deriveNotifyBefore(raw.reminders, calendarMeta, true);
+    return { ...base, date, endDate, startTime: null, endTime: null, notifyBeforeValue: notify.value, notifyBeforeUnit: notify.unit };
   }
 
   if (!raw.start?.dateTime) return null; // malformed — skip rather than crash the whole sync
@@ -152,7 +155,8 @@ function mapGoogleEvent(
     endTime = endZoned.time;
     if (endZoned.date !== date) endDate = endZoned.date;
   }
-  return { ...base, date, endDate, startTime, endTime };
+  const notify = deriveNotifyBefore(raw.reminders, calendarMeta, false);
+  return { ...base, date, endDate, startTime, endTime, notifyBeforeValue: notify.value, notifyBeforeUnit: notify.unit };
 }
 
 // Pulls events for every enabled calendar across every connection (server-side fetch, see
@@ -163,7 +167,8 @@ export async function syncGoogleCalendars(): Promise<{ created: number; failed: 
   const token = await accessToken();
   if (!token) return { created: 0, failed: 0 };
 
-  let events: { connectionId: string; calendarId: string; event: RawGoogleEvent | { error: string } }[];
+  type SyncedEvent = { connectionId: string; calendarId: string; event: RawGoogleEvent | { error: string }; calendar?: GoogleCalendarMeta };
+  let events: SyncedEvent[];
   try {
     const res = await apiFetch('/api/google-calendar-sync', {
       method: 'POST',
@@ -171,7 +176,7 @@ export async function syncGoogleCalendars(): Promise<{ created: number; failed: 
     });
     if (!res.ok) return { created: 0, failed: 0 };
     // Same local-dev-has-no-/api/*-routing caveat as fetchGoogleCalendarConnections above.
-    ({ events } = await res.json() as { events: { connectionId: string; calendarId: string; event: RawGoogleEvent | { error: string } }[] });
+    ({ events } = await res.json() as { events: SyncedEvent[] });
   } catch {
     return { created: 0, failed: 0 };
   }
@@ -180,9 +185,9 @@ export async function syncGoogleCalendars(): Promise<{ created: number; failed: 
 
   let created = 0;
   let failed = 0;
-  for (const { connectionId, calendarId, event } of events) {
+  for (const { connectionId, calendarId, event, calendar } of events) {
     if (calendarId === '__error__') { failed++; continue; }
-    const mapped = mapGoogleEvent(event as RawGoogleEvent, connectionId, calendarId, accountZone);
+    const mapped = mapGoogleEvent(event as RawGoogleEvent, connectionId, calendarId, accountZone, calendar);
     if (!mapped) continue;
     const id = upsertSyncedEvent(mapped);
     if (id) created++;

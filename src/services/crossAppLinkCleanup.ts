@@ -12,7 +12,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { stripArtifactLinksFromContent } from '@/utils/noteContent';
 import { noteView, isNoteLocked } from '@/services/noteSecrets';
-import type { TaskId, NoteId, CrossAppRef, CrossAppRefType } from '@/types';
+import type { TaskId, NoteId, CalendarEventId, CalendarReminderId, CrossAppRef, CrossAppRefType } from '@/types';
 
 function stripArtifactLinksFromNote(noteId: NoteId, targetType: string, targetId: string) {
   const raw = useNoteStore.getState().notes[noteId];
@@ -50,6 +50,26 @@ export function deleteTaskWithCleanup(taskId: TaskId) {
   useTaskStore.getState().deleteTask(taskId);
 }
 
+// Deleting a calendar event/reminder that was created from (or manually linked to) a note: strip
+// the note's ArtifactLinkMark pointing at it, same as deleteTaskWithCleanup does for tasks.
+export function deleteEventWithCleanup(eventId: CalendarEventId) {
+  const event = useCalendarStore.getState().events[eventId];
+  if (!event) return;
+  for (const ref of event.crossAppRefs ?? []) {
+    if (ref.type === 'note') stripArtifactLinksFromNote(ref.id as NoteId, 'event', eventId);
+  }
+  useCalendarStore.getState().deleteEvent(eventId);
+}
+
+export function deleteReminderWithCleanup(reminderId: CalendarReminderId) {
+  const reminder = useCalendarStore.getState().reminders[reminderId];
+  if (!reminder) return;
+  for (const ref of reminder.crossAppRefs ?? []) {
+    if (ref.type === 'note') stripArtifactLinksFromNote(ref.id as NoteId, 'reminder', reminderId);
+  }
+  useCalendarStore.getState().deleteReminder(reminderId);
+}
+
 // Deletes a note and strips any dangling reverse reference to it (e.g. a Task's
 // crossAppRefs entry pointing at this note). The note's own outgoing ArtifactLinkMarks
 // disappear along with its content — nothing to clean up on that side. Any StructuredTagEntry
@@ -64,6 +84,14 @@ export function deleteNoteWithCleanup(noteId: NoteId) {
       });
     }
   }
+  const calendar = useCalendarStore.getState();
+  const isThisNote = (r: CrossAppRef) => r.type === 'note' && r.id === noteId;
+  for (const event of Object.values(calendar.events)) {
+    if (event.crossAppRefs?.some(isThisNote)) calendar.updateEvent(event.id, { crossAppRefs: event.crossAppRefs.filter((r) => !isThisNote(r)) });
+  }
+  for (const reminder of Object.values(calendar.reminders)) {
+    if (reminder.crossAppRefs?.some(isThisNote)) calendar.updateReminder(reminder.id, { crossAppRefs: reminder.crossAppRefs.filter((r) => !isThisNote(r)) });
+  }
   const { structuredTagEntries, deleteStructuredTagEntry } = useNoteStore.getState();
   for (const entry of Object.values(structuredTagEntries)) {
     if (entry.noteId === noteId) deleteStructuredTagEntry(entry.id);
@@ -75,12 +103,17 @@ export function deleteNoteWithCleanup(noteId: NoteId) {
 // button (the mark itself is already unset on the live editor by the caller) — strips the
 // matching reverse entry from the target's crossAppRefs so it doesn't outlive the mark.
 export function removeCrossAppRefFromTarget(targetType: CrossAppRefType, targetId: string, ref: { type: CrossAppRefType; id: string }) {
-  if (targetType !== 'task') return; // only 'task' targets exist today
-  const task = useTaskStore.getState().tasks[targetId as TaskId];
-  if (!task) return;
-  useTaskStore.getState().updateTask(task.id, {
-    crossAppRefs: (task.crossAppRefs ?? []).filter((r) => !(r.type === ref.type && r.id === ref.id)),
-  });
+  const keep = (refs: CrossAppRef[] | undefined) => (refs ?? []).filter((r) => !(r.type === ref.type && r.id === ref.id));
+  if (targetType === 'task') {
+    const task = useTaskStore.getState().tasks[targetId as TaskId];
+    if (task) useTaskStore.getState().updateTask(task.id, { crossAppRefs: keep(task.crossAppRefs) });
+  } else if (targetType === 'event') {
+    const event = useCalendarStore.getState().events[targetId as CalendarEventId];
+    if (event) useCalendarStore.getState().updateEvent(event.id, { crossAppRefs: keep(event.crossAppRefs) });
+  } else if (targetType === 'reminder') {
+    const reminder = useCalendarStore.getState().reminders[targetId as CalendarReminderId];
+    if (reminder) useCalendarStore.getState().updateReminder(reminder.id, { crossAppRefs: keep(reminder.crossAppRefs) });
+  }
 }
 
 // Called from the *target's* own edit UI (e.g. TaskPane's CrossAppRefPicker "×" button) when

@@ -1,4 +1,4 @@
-import { getValidAccessToken, fetchGoogleCalendarEvents } from './_lib/googleCalendar';
+import { getValidAccessToken, fetchGoogleCalendarEvents, fetchGoogleCalendarList } from './_lib/googleCalendar';
 import { getUserClient, bearerToken } from './_lib/supabaseEdge';
 
 export const config = { runtime: 'edge' };
@@ -29,20 +29,25 @@ export default async function handler(req: Request): Promise<Response> {
   if (connError) return Response.json({ error: connError.message }, { status: 500 });
   if (!connections || connections.length === 0) return Response.json({ events: [] });
 
-  const results: { connectionId: string; calendarId: string; event: unknown }[] = [];
+  const results: { connectionId: string; calendarId: string; event: unknown; calendar?: unknown }[] = [];
 
   for (const connection of connections) {
     const enabledCalendars: string[] = connection.calendars_enabled ?? [];
     if (enabledCalendars.length === 0) continue;
     try {
       const accessToken = await getValidAccessToken(supabase, connection);
+      // Each calendar's default reminders and our access level on it: an event that says "use the
+      // default reminders" carries no times of its own, so the client needs the calendar's.
+      const calendarList = await fetchGoogleCalendarList(accessToken);
       for (const calendarId of enabledCalendars) {
+        const entry = calendarList.find((c) => c.id === calendarId);
+        const calendar = { defaultReminders: entry?.defaultReminders, accessRole: entry?.accessRole };
         const events = await fetchGoogleCalendarEvents(accessToken, calendarId);
         for (const event of events) {
           // Cancelled instances of an expanded recurring event still come back from the
           // API (singleEvents=true) — skip them rather than importing a "cancelled" event.
           if (event.status === 'cancelled') continue;
-          results.push({ connectionId: connection.id, calendarId, event });
+          results.push({ connectionId: connection.id, calendarId, event, calendar });
         }
       }
     } catch (e) {

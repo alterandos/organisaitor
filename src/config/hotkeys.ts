@@ -43,7 +43,8 @@ export const HOTKEYS: HotkeyDef[] = [
   // Actions
   { id: 'action-new-item',  group: 'Actions', primary: 'N', secondary: 'Space',  action: 'New item (task / event / entry) — Ctrl+N also works', customizable: true },
   { id: 'action-settings',  group: 'Actions', primary: 'S',                      action: 'Toggle settings',                  customizable: true },
-  { id: 'action-escape',    group: 'Actions', primary: 'Esc',                    action: 'Close panel / modal',              protected: true },
+  { id: 'action-account',   group: 'Actions', primary: 'A',                      action: 'Toggle account',                   customizable: true },
+  { id: 'action-escape',    group: 'Actions', primary: 'Esc',                   action: 'Close panel / modal',              protected: true },
   { id: 'action-endeavour', group: 'Actions', primary: 'E', secondary: 'Ctrl+E', action: 'Expand Endeavour filter',          customizable: true },
   { id: 'action-endeavour-select', group: 'Actions', primary: '0-9', action: 'Select Endeavour by number (while filter is expanded; 0 = All)' },
   { id: 'action-purpose',   group: 'Actions', primary: 'P', secondary: 'Ctrl+P', action: 'Expand Purpose filter (Tasks section)', customizable: true },

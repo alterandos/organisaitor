@@ -93,6 +93,7 @@ function AppSectionFallback() {
 export default function App() {
   const { isAndroid } = usePlatform();
   const openAccount                = useUIStore((s) => s.openAccount);
+  const closeAccount               = useUIStore((s) => s.closeAccount);
   const accountOpen                = useUIStore((s) => s.accountOpen);
   const openModal                  = useUIStore((s) => s.openModal);
   const editingTaskId              = useUIStore((s) => s.editingTaskId);
@@ -352,6 +353,12 @@ export default function App() {
         return;
       }
 
+      if (matchesHotkeyId(e, 'action-account')) {
+        e.preventDefault();
+        if (accountOpen) closeAccount(); else openAccount();
+        return;
+      }
+
       if (matchesHotkeyId(e, 'action-endeavour')) {
         if (activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness') { e.preventDefault(); toggleEndeavourPicker(); }
         return;
@@ -398,6 +405,7 @@ export default function App() {
     return () => document.removeEventListener('keydown', handler);
   }, [
     setActiveView, activeView, settingsOpen, openSettings, closeSettings,
+    accountOpen, openAccount, closeAccount,
     portfolioChartOpen, chartTickerRowZoom, setChartTickerRowZoom, openModal, nudgeNoteEditorZoom,
     endeavourPickerOpen, toggleEndeavourPicker, closeEndeavourPicker, setActiveCollection, collectionsRecord,
     togglePurposePicker, toggleManage, navigateBack, navigateForward, toggleQuickAccess,

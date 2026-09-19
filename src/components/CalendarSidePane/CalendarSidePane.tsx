@@ -210,7 +210,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
     viewMode === 'month' ? 'Go to month' :
     viewMode === 'week'  ? 'Go to week'  : 'Go to day';
   const jumpHint =
-    viewMode === 'month' ? "Jumps to this date's month — handy for skipping straight to a different year." :
+    viewMode === 'month' ? "Jumps to the month containing this date." :
     viewMode === 'week'  ? "Jumps to the week containing this date." :
                             'Jumps directly to this date.';
 

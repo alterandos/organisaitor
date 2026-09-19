@@ -5,7 +5,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
 import { normalizeLinkUrl } from '@/utils/links';
-import { inferTaskFromSelection } from '@/utils/textToTask';
+import { inferTaskFromSelection, inferCalendarItemFromSelection } from '@/utils/textToTask';
 import type { NoteId, StructuredTagEntryId } from '@/types/notes';
 import type { CrossAppRefType } from '@/types';
 import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
@@ -41,8 +41,8 @@ const BASIC_COLORS = [
   '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#94a3b8',
 ];
 
-// The "Create ▸" menu (Ctrl+Q / the "+" toolbar button). Task is the only wired option in
-// this pass — Calendar/List/Tracker are documented stubs (see BACKLOG.md "Cross-app built-in
+// The "Create ▸" menu (Ctrl+Q / the "+" toolbar button). Task and Calendar item are wired —
+// List/Tracker are documented stubs (see BACKLOG.md "Cross-app built-in
 // tag types") that show a short "coming soon" message instead of silently doing nothing.
 // `enabled: false` entries still get a number/click target so the menu always reads as
 // complete, matching the eventual set rather than growing a new row every time a target ships.
@@ -55,7 +55,7 @@ interface CreateMenuOption {
 
 const CREATE_MENU_OPTIONS: CreateMenuOption[] = [
   { type: 'task',        label: 'Task',            icon: '📋', enabled: true  },
-  { type: 'event',       label: 'Calendar item',    icon: '📅', enabled: false },
+  { type: 'event',       label: 'Calendar item',    icon: '📅', enabled: true  },
   { type: 'listItem',    label: 'List item',        icon: '📃', enabled: false },
   { type: 'trackerEntry',label: 'Tracker entry',    icon: '📊', enabled: false },
 ];
@@ -206,6 +206,24 @@ export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
 
     const { from, to } = editor.state.selection;
     const text = editor.state.doc.textBetween(from, to, ' ');
+
+    // Calendar item: infer event-vs-reminder, date and time(s), then hand off to the real
+    // AddCalendarItemModal pre-filled — same shape as the Task hand-off below. The pending link's
+    // targetType is a first guess; the modal reports the kind actually chosen when it resolves.
+    if (option.type === 'event') {
+      const cal = inferCalendarItemFromSelection(text, extractHyperlinkUrls(from, to));
+      useUIStore.getState().setPendingArtifactLink({ noteId, from, to, targetType: cal.kind });
+      useUIStore.getState().showAddCalendarItem(cal.date ?? undefined, cal.kind, cal.startTime ?? undefined, cal.title, {
+        endTime:      cal.endTime,
+        notes:        cal.notes,
+        location:     cal.location,
+        collectionId: noteCollectionId ?? activeCollectionId ?? null,
+      });
+      setShowCreateMenu(false);
+      editor.commands.setTextSelection(to);
+      return;
+    }
+
     const inferred = inferTaskFromSelection(text);
     const links = [...new Set([...inferred.links, ...extractHyperlinkUrls(from, to)])];
 

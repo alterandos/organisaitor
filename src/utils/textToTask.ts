@@ -191,18 +191,24 @@ function findDateCandidates(text: string, today: Date): DateCandidate[] {
   return candidates.sort((a, b) => a.index - b.index);
 }
 
-function findTime(text: string): string | null {
-  if (/\bnoon\b/i.test(text)) return '12:00';
-  if (/\bmidnight\b/i.test(text)) return '00:00';
+interface Span { start: number; end: number }
+
+function spanOf(m: RegExpExecArray): Span {
+  return { start: m.index, end: m.index + m[0].length };
+}
+
+function findTimeMatch(text: string): ({ time: string } & Span) | null {
+  const word = /\b(noon|midnight)\b/i.exec(text);
+  if (word) return { time: word[1].toLowerCase() === 'noon' ? '12:00' : '00:00', ...spanOf(word) };
   const ampm = /\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b/i.exec(text);
   if (ampm) {
     let h = parseInt(ampm[1], 10) % 12;
     if (ampm[3].toLowerCase() === 'pm') h += 12;
     const min = ampm[2] ? parseInt(ampm[2], 10) : 0;
-    return `${pad2(h)}:${pad2(min)}`;
+    return { time: `${pad2(h)}:${pad2(min)}`, ...spanOf(ampm) };
   }
   const h24 = /\b([01]?\d|2[0-3]):([0-5]\d)\b/.exec(text);
-  if (h24) return `${pad2(parseInt(h24[1], 10))}:${h24[2]}`;
+  if (h24) return { time: `${pad2(parseInt(h24[1], 10))}:${h24[2]}`, ...spanOf(h24) };
   return null;
 }
 
@@ -231,6 +237,12 @@ function inferPriorityFromText(text: string): Priority | null {
   return null;
 }
 
+const URL_PATTERN = /\bhttps?:\/\/[^\s<>"')]+|\bwww\.[^\s<>"')]+/gi;
+
+function findLinkSpans(text: string): Span[] {
+  return [...text.matchAll(URL_PATTERN)].map((m) => ({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length }));
+}
+
 function inferLinksFromText(text: string): string[] {
   const found = text.match(/\bhttps?:\/\/[^\s<>"')]+|\bwww\.[^\s<>"')]+/gi) ?? [];
   const cleaned = found
@@ -240,15 +252,27 @@ function inferLinksFromText(text: string): string[] {
   return [...new Set(cleaned)];
 }
 
-export function inferTaskFromSelection(rawText: string, now: Date = new Date()): InferredTaskFields {
-  const title = rawText.replace(/\s+/g, ' ').trim();
-
+function inferDateMatch(rawText: string, now: Date): ({ iso: string } & Span) | null {
   const candidates = findDateCandidates(rawText, now)
     .map((c) => ({ ...c, y: resolveYear(c.y, c.m, c.d, c.yearExplicit, now) }));
   const best = pickBestCandidate(rawText, candidates);
+  return best ? { iso: toIso(best.y, best.m, best.d), start: best.index, end: best.index + best.length } : null;
+}
 
-  const deadline = best ? toIso(best.y, best.m, best.d) : null;
-  const deadlineTime = deadline ? findTime(rawText) : null;
+export function inferTaskFromSelection(rawText: string, now: Date = new Date()): InferredTaskFields {
+  const dateMatch = inferDateMatch(rawText, now);
+  const deadline = dateMatch?.iso ?? null;
+  // A time is only used (and so only removed from the title) alongside a date.
+  const timeMatch = dateMatch ? findTimeMatch(rawText) : null;
+  const deadlineTime = timeMatch?.time ?? null;
+  // Date, time and plain URLs (which become the task's links) come out of the title, with the
+  // connector words that introduced them — see stripSpans. Priority words stay: "urgent" is
+  // still part of what the task says.
+  const title = stripSpans(rawText, [
+    ...(dateMatch ? [dateMatch] : []),
+    ...(timeMatch ? [timeMatch] : []),
+    ...findLinkSpans(rawText),
+  ]);
 
   return {
     title,
@@ -256,5 +280,107 @@ export function inferTaskFromSelection(rawText: string, now: Date = new Date()):
     deadlineTime,
     priority: inferPriorityFromText(rawText),
     links: inferLinksFromText(rawText),
+  };
+}
+
+// ── Calendar item (event or reminder) ─────────────────────────────────────────
+
+export interface InferredCalendarFields {
+  title:     string;
+  kind:      'event' | 'reminder';
+  date:      string | null;   // YYYY-MM-DD — null = no date found, caller defaults to today
+  startTime: string | null;   // HH:MM (24-hour)
+  endTime:   string | null;
+  location:  string | null;   // first link found (a meeting URL reads naturally as an event's location)
+  notes:     string | null;   // any further links
+}
+
+const EVENT_WORDS = /\b(meeting|appointment|lunch|dinner|breakfast|interview|class|lecture|conference|party|flight|session|workshop|webinar|seminar|catch[\s-]?up|check[\s-]?in|concert|wedding)\b/i;
+
+function to24hMinutes(hour: number, minute: number, meridiem: string | undefined): number {
+  if (!meridiem) return hour * 60 + minute;
+  let h = hour % 12;
+  if (meridiem.toLowerCase() === 'pm') h += 12;
+  return h * 60 + minute;
+}
+
+// "2pm-3pm", "2-3pm", "14:00 to 15:30", "9:30am – 10:15am". Each side must carry a colon or an
+// am/pm (the start may borrow the end's am/pm) — a bare "10-15" is far more likely a page range
+// or a count than a time range, same caution the numeric-date rules above take.
+function findTimeRange(text: string): ({ start: string; end: string } & { span: Span }) | null {
+  const m = /\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)?\s*(?:-|–|—|to|until|till)\s*(\d{1,2})(?::([0-5]\d))?\s*(am|pm)?\b/i.exec(text);
+  if (!m) return null;
+  const [, h1, m1, mer1, h2, m2, mer2] = m;
+  if (!(m1 || mer1 || mer2) || !(m2 || mer2)) return null;
+  const sh = parseInt(h1, 10), eh = parseInt(h2, 10);
+  if (sh > 24 || eh > 24) return null;
+  const endMin = to24hMinutes(eh, m2 ? parseInt(m2, 10) : 0, mer2);
+  let startMin = to24hMinutes(sh, m1 ? parseInt(m1, 10) : 0, mer1 ?? mer2);
+  // "11-1pm" borrowed pm for the start, putting it after the end — the start meant am.
+  if (!mer1 && startMin > endMin && startMin >= 12 * 60) startMin -= 12 * 60;
+  const fmt = (min: number) => `${pad2(Math.floor(min / 60) % 24)}:${pad2(min % 60)}`;
+  return { start: fmt(startMin), end: fmt(endMin), span: spanOf(m) };
+}
+
+// Words that only introduced a date or time ("due ON Friday", "meet AT 2pm", "FROM 2pm to 3pm",
+// "ON THE 5th") — they go with it once it's been lifted out into its own field. A connector can
+// stack with an article; "due" and similar words that say what the thing IS are left alone.
+const LEADING_CONNECTOR = /(?:(?:\b(?:on|by|before|until|till|at|from|around)\s+|@\s*)?(?:the\s+)?)$/i;
+
+// Removes the given spans (plus any connector words just before each) from the text and tidies
+// what's left: collapsed whitespace, no dangling punctuation or empty brackets. Falls back to the
+// original if nothing meaningful remains (the whole selection was just a date).
+function stripSpans(text: string, spans: Span[]): string {
+  const extended = spans.map((sp) => {
+    const m = LEADING_CONNECTOR.exec(text.slice(0, sp.start));
+    return { start: m ? sp.start - m[0].length : sp.start, end: sp.end };
+  }).sort((a, b) => a.start - b.start);
+
+  const merged: Span[] = [];
+  for (const sp of extended) {
+    const last = merged[merged.length - 1];
+    if (last && sp.start <= last.end) last.end = Math.max(last.end, sp.end);
+    else merged.push({ ...sp });
+  }
+
+  let out = '';
+  let cursor = 0;
+  for (const sp of merged) { out += text.slice(cursor, sp.start) + ' '; cursor = sp.end; }
+  out += text.slice(cursor);
+
+  const cleaned = out
+    .replace(/\(\s*\)|\[\s*\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/^[\s,;:\-–—]+|[\s,;:\-–—]+$/g, '')
+    .trim();
+  return cleaned || text.replace(/\s+/g, ' ').trim();
+}
+
+// Event vs reminder: a time range, or a word naming something you attend, reads as an event (it
+// occupies time); anything else reads as a reminder (a point in time to be nudged about). A best
+// guess only — the modal it opens in still has the Event/Reminder toggle.
+export function inferCalendarItemFromSelection(rawText: string, extraLinks: string[] = [], now: Date = new Date()): InferredCalendarFields {
+  const dateMatch = inferDateMatch(rawText, now);
+  const date = dateMatch?.iso ?? null;
+  const range = findTimeRange(rawText);
+  const timeMatch = range ? null : findTimeMatch(rawText);
+  // Everything that ends up in its own field (date, time(s), links) comes out of the title.
+  const title = stripSpans(rawText, [
+    ...(dateMatch ? [dateMatch] : []),
+    ...(range ? [range.span] : timeMatch ? [timeMatch] : []),
+    ...findLinkSpans(rawText),
+  ]);
+  const kind = range || EVENT_WORDS.test(rawText) ? 'event' : 'reminder';
+  const links = [...new Set([...inferLinksFromText(rawText), ...extraLinks])];
+
+  return {
+    title,
+    kind,
+    date,
+    startTime: range?.start ?? timeMatch?.time ?? null,
+    endTime: range?.end ?? null,
+    location: kind === 'event' ? (links[0] ?? null) : null,
+    notes: (kind === 'event' ? links.slice(1) : links).join('\n') || null,
   };
 }

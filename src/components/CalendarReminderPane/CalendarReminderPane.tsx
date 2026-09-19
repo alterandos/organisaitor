@@ -6,14 +6,20 @@ import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
+import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
+import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import { deleteReminderWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
+import type { CrossAppRef } from '@/types';
+import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
 import styles from './CalendarReminderPane.module.css';
 
 export function CalendarReminderPane() {
   const editingId         = useUIStore((s) => s.editingCalendarReminderId);
+  const occurrenceDate    = useUIStore((s) => s.editingCalendarReminderOccurrence);
   const closePane         = useUIStore((s) => s.closeCalendarReminderPane);
+  const openPane          = useUIStore((s) => s.openCalendarReminderPane);
   const remindersRecord   = useCalendarStore((s) => s.reminders);
   const updateReminder    = useCalendarStore((s) => s.updateReminder);
-  const deleteReminder    = useCalendarStore((s) => s.deleteReminder);
   const collectionsRecord = useTaskStore((s) => s.collections);
 
   const reminder = editingId ? remindersRecord[editingId as CalendarReminderId] : null;
@@ -65,11 +71,25 @@ export function CalendarReminderPane() {
     if (v !== reminder.notes) updateReminder(id, { notes: v });
   };
 
-  const handleDelete = () => { deleteReminder(id); closePane(); };
+  const handleDelete = () => { deleteReminderWithCleanup(id); closePane(); };
+
+  const navigateToCrossAppRef = (ref: CrossAppRef) => {
+    if (ref.type !== 'note') return;
+    closePane();
+    useUIStore.getState().setActiveView('notes');
+    useUIStore.getState().openNote(ref.id);
+  };
+
+  const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
+    (reminder.crossAppRefs ?? [])
+      .filter((r) => !next.some((n) => n.type === r.type && n.id === r.id))
+      .forEach((ref) => unlinkCrossAppRef('reminder', id, ref));
+    updateReminder(id, { crossAppRefs: next });
+  };
 
   const saveRepeat = (on: boolean, freq: RepeatFreq, interval: number, endKind: RepeatConfig['endKind'], count: number, until: string) => {
     const r: RepeatConfig | null = on
-      ? { freq, interval, endKind, count: endKind === 'count' ? count : null, until: endKind === 'until' ? until || null : null }
+      ? { freq, interval, endKind, count: endKind === 'count' ? count : null, until: endKind === 'until' ? until || null : null, exceptions: reminder.repeat?.exceptions }
       : null;
     updateReminder(id, { repeat: r });
   };
@@ -84,6 +104,18 @@ export function CalendarReminderPane() {
         </header>
 
         <div className={styles.body}>
+          {reminder.repeat && (
+            <RecurrenceScopeBar
+              kind="reminder"
+              id={id}
+              baseDate={reminder.date}
+              repeat={reminder.repeat}
+              occurrenceDate={occurrenceDate}
+              onClose={closePane}
+              onSwitch={(newId) => openPane(newId)}
+            />
+          )}
+
           <input
             className={styles.titleInput}
             value={title}
@@ -119,6 +151,28 @@ export function CalendarReminderPane() {
               value={reminder.time ?? ''}
               onChange={(v) => updateReminder(id, { time: v || null })}
             />
+          </div>
+
+          {!reminder.time && (
+            <div className={styles.field}>
+              <span className={styles.label}>Notify me</span>
+              <AllDayNotifyField
+                daysBefore={reminder.notifyDaysBefore ?? 1}
+                atTime={reminder.notifyAtTime ?? '17:00'}
+                onChange={(d, t) => updateReminder(id, { notifyDaysBefore: d, notifyAtTime: t })}
+              />
+            </div>
+          )}
+
+          <div className={styles.field}>
+            <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={reminder.important ?? false}
+                onChange={(e) => updateReminder(id, { important: e.target.checked })}
+              />
+              ❗ Important — highlight on the calendar
+            </label>
           </div>
 
           {/* ── Repeat ── */}
@@ -209,6 +263,15 @@ export function CalendarReminderPane() {
             )}
           </div>
 
+          <div className={styles.field}>
+            <span className={styles.label}>Linked items</span>
+            <CrossAppRefPicker
+              value={reminder.crossAppRefs ?? []}
+              onChange={handleCrossAppRefsChange}
+              onNavigate={navigateToCrossAppRef}
+            />
+          </div>
+
           {allCollections.length > 0 && (
             <div className={styles.field}>
               <span className={styles.label}>{LABELS.collection}</span>
@@ -224,7 +287,7 @@ export function CalendarReminderPane() {
 
         <footer className={styles.footer}>
           <button className={styles.deleteBtn} onClick={handleDelete}>
-            Delete {LABELS.calendarItemKind.reminder.toLowerCase()}
+            {reminder.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.reminder.toLowerCase()}`}
           </button>
         </footer>
       </aside>

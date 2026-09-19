@@ -9,6 +9,8 @@ import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date
 import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
+import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
+import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
 import type { CollectionId } from '@/types';
 import styles from './AddCalendarItemModal.module.css';
 
@@ -27,6 +29,7 @@ export function AddCalendarItemModal() {
   const prefillKind        = useUIStore((s) => s.calendarItemKind);
   const prefillTime        = useUIStore((s) => s.calendarItemTime);
   const prefillTitle       = useUIStore((s) => s.calendarItemTitle);
+  const prefillExtra       = useUIStore((s) => s.calendarItemExtra);
   const activeCollectionId = useUIStore(selectActiveCollectionId);
   const addEvent           = useCalendarStore((s) => s.addEvent);
   const addReminder        = useCalendarStore((s) => s.addReminder);
@@ -37,15 +40,19 @@ export function AddCalendarItemModal() {
   const [date,              setDate]              = useState(prefillDate ?? todayStr());
   const [endDate,           setEndDate]           = useState('');
   const [startTime,         setStartTime]         = useState(prefillTime ?? '');
-  const [endTime,           setEndTime]           = useState(prefillTime ? timeAddMinutes(prefillTime, 30) : '');
+  const [endTime,           setEndTime]           = useState(prefillExtra?.endTime ?? (prefillTime ? timeAddMinutes(prefillTime, 30) : ''));
   const [time,              setTime]              = useState(prefillTime ?? '');
-  const [notes,             setNotes]             = useState('');
-  const [location,          setLocation]          = useState('');
+  const [notes,             setNotes]             = useState(prefillExtra?.notes ?? '');
+  const [location,          setLocation]          = useState(prefillExtra?.location ?? '');
   const [eventType,         setEventType]         = useState<CalendarEventType>('default');
   const [status,            setStatus]            = useState<EventStatus>('confirmed');
   const [collectionId,      setCollectionId]      = useState<CollectionId | null>(
-    activeCollectionId as CollectionId | null
+    (prefillExtra?.collectionId ?? activeCollectionId) as CollectionId | null
   );
+  const [important,         setImportant]         = useState(false);
+  const [allDayNotifyDays,  setAllDayNotifyDays]  = useState(DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE);
+  const [allDayNotifyAt,    setAllDayNotifyAt]    = useState(DEFAULT_ALLDAY_NOTIFY_AT_TIME);
+  const [notifyBeforeOn,    setNotifyBeforeOn]    = useState(false);
   const [notifyBeforeValue, setNotifyBeforeValue] = useState(1);
   const [notifyBeforeUnit,  setNotifyBeforeUnit]  = useState<NotifyUnit>('hours');
   const [notifyAtTime,      setNotifyAtTime]      = useState('12:00');
@@ -62,7 +69,8 @@ export function AddCalendarItemModal() {
   // commits before minute) would cascade: the hour-only commit auto-links an end time, then the
   // minute commit sees that already-set end and "preserves its minutes" instead of re-deriving
   // fresh, producing a stuck/wrong result. See CLAUDE.md's Timepicker section for the full story.
-  const endAutoRef = useRef(true);
+  // A range typed in the note ("2-3pm") arrives as a real end time, not one of our own guesses.
+  const endAutoRef = useRef(!prefillExtra?.endTime);
 
   const allCollections = Object.values(collectionsRecord);
 
@@ -77,13 +85,21 @@ export function AddCalendarItemModal() {
     };
   }
 
+  // Abandoning the modal must drop a pending Notes "Create ▸ Calendar item" link request, or a
+  // later unrelated creation could pick it up (same reason AddTaskModal does this).
+  const handleClose = () => {
+    if (useUIStore.getState().pendingArtifactLink) useUIStore.getState().clearPendingArtifactLink();
+    closeModal();
+  };
+
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') { closeModal(); return; }
+      if (e.key === 'Escape') { handleClose(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closeModal]);
 
   const handleStartTimeChange = (val: string) => {
@@ -120,8 +136,14 @@ export function AddCalendarItemModal() {
     e.preventDefault();
     if (!title.trim() || !date) return;
 
+    // Created from a Notes selection: record the reverse link now and report the new id (and the
+    // kind actually chosen — the user may have flipped Event/Reminder) back so NoteEditor can
+    // apply the forward mark. See AddTaskModal's identical handling.
+    const pending = useUIStore.getState().pendingArtifactLink;
+    const crossAppRefs = pending ? [{ type: 'note' as const, id: pending.noteId }] : [];
+
     if (kind === 'event') {
-      addEvent({
+      const eventId = addEvent({
         title,
         date,
         endDate:           (endDate && endDate > date) ? endDate : null,
@@ -131,21 +153,29 @@ export function AddCalendarItemModal() {
         location:          location     || null,
         eventType,
         collectionId:      collectionId || null,
-        notifyBeforeValue,
+        notifyBeforeValue: notifyBeforeOn ? notifyBeforeValue : null,
         notifyBeforeUnit,
         notifyAtTime:      eventType === 'birthday' ? notifyAtTime || null : null,
         repeat:            buildRepeat(),
         status,
+        important,
+        crossAppRefs,
       });
+      if (pending) useUIStore.getState().resolveArtifactLink(eventId, 'event');
     } else {
-      addReminder({
+      const reminderId = addReminder({
         title,
         date,
         time:         time         || null,
         notes:        notes        || null,
         collectionId: collectionId || null,
         repeat:       buildRepeat(),
+        important,
+        crossAppRefs,
+        notifyDaysBefore: allDayNotifyDays,
+        notifyAtTime:     allDayNotifyAt,
       });
+      if (pending) useUIStore.getState().resolveArtifactLink(reminderId, 'reminder');
     }
     closeModal();
   };
@@ -154,11 +184,11 @@ export function AddCalendarItemModal() {
   const showAdvanced = kind === 'reminder' || formExpanded;
 
   return (
-    <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
+    <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
       <div className={styles.modal}>
         <div className={styles.header}>
           <span className={styles.title}>New {LABELS.calendarItemKind[kind]}</span>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">✕</button>
         </div>
 
         {/* Type toggle */}
@@ -261,19 +291,17 @@ export function AddCalendarItemModal() {
             </div>
           )}
 
-          {kind === 'event' && !isBirthday && (
-            <div className={styles.field}>
-              <label className={styles.label}>
-                <input
-                  type="checkbox"
-                  checked={status === 'tentative'}
-                  onChange={(e) => setStatus(e.target.checked ? 'tentative' : 'confirmed')}
-                  style={{ marginRight: '0.4rem' }}
-                />
-                Tentative — not confirmed yet, just a placeholder
-              </label>
-            </div>
-          )}
+          <div className={styles.field}>
+            <label className={styles.label}>
+              <input
+                type="checkbox"
+                checked={important}
+                onChange={(e) => setImportant(e.target.checked)}
+                style={{ marginRight: '0.4rem' }}
+              />
+              ❗ Important — highlight on the calendar
+            </label>
+          </div>
 
           {isBirthday && (
             <div className={styles.field}>
@@ -297,6 +325,17 @@ export function AddCalendarItemModal() {
             </div>
           )}
 
+          {kind === 'reminder' && !time && (
+            <div className={styles.field}>
+              <label className={styles.label}>Notify me</label>
+              <AllDayNotifyField
+                daysBefore={allDayNotifyDays}
+                atTime={allDayNotifyAt}
+                onChange={(d, t) => { setAllDayNotifyDays(d); setAllDayNotifyAt(t); }}
+              />
+            </div>
+          )}
+
           <button
             type="button"
             className={styles.formExpandBtn}
@@ -307,6 +346,20 @@ export function AddCalendarItemModal() {
 
           {showAdvanced && (
             <>
+              {kind === 'event' && !isBirthday && (
+                <div className={styles.field}>
+                  <label className={styles.label}>
+                    <input
+                      type="checkbox"
+                      checked={status === 'tentative'}
+                      onChange={(e) => setStatus(e.target.checked ? 'tentative' : 'confirmed')}
+                      style={{ marginRight: '0.4rem' }}
+                    />
+                    Tentative — not confirmed yet, just a placeholder
+                  </label>
+                </div>
+              )}
+
               {kind === 'event' && (
                 <div className={styles.field}>
                   <label className={styles.label}>Location (optional)</label>
@@ -322,25 +375,35 @@ export function AddCalendarItemModal() {
 
               {kind === 'event' && !isBirthday && (
                 <div className={styles.field}>
-                  <label className={styles.label}>Notify before</label>
-                  <div className={styles.timeRow}>
+                  <label className={styles.label}>
                     <input
-                      type="number"
-                      className={styles.notifyNum}
-                      value={notifyBeforeValue}
-                      min={1}
-                      onChange={(e) => setNotifyBeforeValue(Math.max(1, Number(e.target.value)))}
+                      type="checkbox"
+                      checked={notifyBeforeOn}
+                      onChange={(e) => setNotifyBeforeOn(e.target.checked)}
+                      style={{ marginRight: '0.4rem' }}
                     />
-                    <select
-                      className={styles.select}
-                      value={notifyBeforeUnit}
-                      onChange={(e) => setNotifyBeforeUnit(e.target.value as NotifyUnit)}
-                    >
-                      <option value="minutes">minutes before</option>
-                      <option value="hours">hours before</option>
-                      <option value="days">days before</option>
-                    </select>
-                  </div>
+                    Notify before
+                  </label>
+                  {notifyBeforeOn && (
+                    <div className={styles.timeRow}>
+                      <input
+                        type="number"
+                        className={styles.notifyNum}
+                        value={notifyBeforeValue}
+                        min={1}
+                        onChange={(e) => setNotifyBeforeValue(Math.max(1, Number(e.target.value)))}
+                      />
+                      <select
+                        className={styles.select}
+                        value={notifyBeforeUnit}
+                        onChange={(e) => setNotifyBeforeUnit(e.target.value as NotifyUnit)}
+                      >
+                        <option value="minutes">minutes before</option>
+                        <option value="hours">hours before</option>
+                        <option value="days">days before</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -424,7 +487,7 @@ export function AddCalendarItemModal() {
           )}
 
           <div className={styles.actions}>
-            <button type="button" className={styles.cancelBtn} onClick={closeModal}>Cancel</button>
+            <button type="button" className={styles.cancelBtn} onClick={handleClose}>Cancel</button>
             <button
               type="submit"
               className={styles.submitBtn}

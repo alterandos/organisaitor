@@ -248,6 +248,10 @@ export interface RepeatConfig {
   count:       number | null;                   // number of total occurrences
   until:       string | null;                   // YYYY-MM-DD
   daysOfWeek?: number[];                        // 0=Sun … 6=Sat; used by routines
+  // Individual occurrence dates (YYYY-MM-DD) removed from a repeating calendar event/reminder —
+  // "delete just this one". Lives inside RepeatConfig (already a jsonb column) so it needs no
+  // schema change. See src/utils/recurrence.ts.
+  exceptions?: string[];
 }
 
 // A time-bounded appointment (e.g. "Doctor at 2pm–3pm").
@@ -264,12 +268,14 @@ export interface CalendarEvent {
   collectionId:       CollectionId | null;
   createdAt:          string;
   updatedAt:          string;
-  notifyBeforeValue:  number;
+  notifyBeforeValue:  number | null;    // null = no "notify before" notification (opt-in, like repeat)
   notifyBeforeUnit:   NotifyUnit;
   remindAt:           string | null;
   notifyAtTime:       string | null;
   repeat:             RepeatConfig | null;
   status:             EventStatus;      // 'confirmed' (default) | 'tentative' — see EventStatus
+  important:          boolean;          // flagged important — red outline + ❗ on the calendar
+  crossAppRefs:       CrossAppRef[];    // reverse cross-app links (e.g. the note(s) this event was created from)
   // External calendar sync provenance (see CLAUDE.md "External calendar sync — built (Google,
   // Phase 1)"). All null for a native, in-app-created event. Once synced in, this app is the
   // source of truth — these fields are provenance/dedup only, never used to re-sync or
@@ -295,6 +301,12 @@ export interface CalendarReminder {
   updatedAt:    string;
   remindAt:     string | null;
   repeat:       RepeatConfig | null;
+  important:    boolean;              // flagged important — red outline + ❗ on the calendar
+  crossAppRefs: CrossAppRef[];        // reverse cross-app links (e.g. the note(s) this reminder was created from)
+  // When to notify for a reminder with no time (a whole-day one): N days before `date` (0 = on the
+  // day), at this HH:MM. Ignored when `time` is set — that notifies at the time itself.
+  notifyDaysBefore: number;
+  notifyAtTime:     string;
 }
 
 export interface CreateCalendarEventInput {
@@ -307,11 +319,13 @@ export interface CreateCalendarEventInput {
   location?:          string | null;
   eventType?:         CalendarEventType;
   collectionId?:      CollectionId | null;
-  notifyBeforeValue?: number;
+  notifyBeforeValue?: number | null;
   notifyBeforeUnit?:  NotifyUnit;
   notifyAtTime?:      string | null;
   repeat?:            RepeatConfig | null;
   status?:            EventStatus;
+  important?:         boolean;
+  crossAppRefs?:      CrossAppRef[];
   source?:             string | null;
   sourceConnectionId?: string | null;
   sourceCalendarId?:   string | null;
@@ -346,6 +360,10 @@ export interface CreateCalendarReminderInput {
   collectionId?: CollectionId | null;
   reminderType?: CalendarReminderType;
   repeat?:       RepeatConfig | null;
+  important?:    boolean;
+  crossAppRefs?: CrossAppRef[];
+  notifyDaysBefore?: number;
+  notifyAtTime?:     string;
 }
 
 // ── Schedule (recurring weekly timetable, e.g. a university/gym schedule) ───────

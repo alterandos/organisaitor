@@ -6,8 +6,10 @@ import { useScheduleStore } from '@/store/scheduleStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { fireOSNotification } from '@/services/notificationService';
-import { formatTime } from '@/utils/date';
-import { zonedTimeToUtc, resolveTimezone } from '@/utils/timezone';
+import { formatTime, addDaysToIso } from '@/utils/date';
+import { zonedTimeToUtc, utcToZonedTime, resolveTimezone } from '@/utils/timezone';
+import { isOccurrenceSkipped } from '@/utils/recurrence';
+import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
 
 function toMinutes(value: number, unit: 'minutes' | 'hours' | 'days'): number {
   if (unit === 'hours') return value * 60;
@@ -17,16 +19,43 @@ function toMinutes(value: number, unit: 'minutes' | 'hours' | 'days'): number {
 
 function eventTrigger(event: CalendarEvent, zone: string): Date | null {
   if (event.remindAt) return new Date(event.remindAt);
-  if (!event.startTime) return null;
-  const start = zonedTimeToUtc(event.date, event.startTime, zone);
+  if (event.notifyBeforeValue === null) return null;
+  if (isOccurrenceSkipped(event.repeat, event.date)) return null;
+  // An all-day event has no start time: its lead time counts back from midnight at the start of
+  // its day, which is how Google measures it too ("1 day before at 9 AM" = 15 hours).
+  const start = zonedTimeToUtc(event.date, event.startTime ?? '00:00', zone);
   const mins  = toMinutes(event.notifyBeforeValue, event.notifyBeforeUnit);
-  return new Date(start.getTime() - mins * 60_000);
+  const trigger = new Date(start.getTime() - mins * 60_000);
+  // Importing an account brings in the last month of events; announcing all of those, or anything
+  // that was over a day ago, would just be noise.
+  if (trigger.getTime() < Date.now() - 24 * 60 * 60_000) return null;
+  if (event.source && trigger.getTime() < new Date(event.createdAt).getTime()) return null;
+  return trigger;
+}
+
+// An all-day event's notification can land the evening before, so "Today" would be wrong.
+function allDayBody(eventDate: string, trigger: Date, zone: string): string {
+  const from = new Date(utcToZonedTime(trigger, zone).date + 'T00:00:00').getTime();
+  const days = Math.round((new Date(eventDate + 'T00:00:00').getTime() - from) / 86_400_000);
+  return days <= 0 ? 'All day today' : days === 1 ? 'All day tomorrow' : `All day in ${days} days`;
 }
 
 function reminderTrigger(rem: CalendarReminder, zone: string): Date | null {
   if (rem.remindAt) return new Date(rem.remindAt);
-  if (!rem.time) return null;
-  return zonedTimeToUtc(rem.date, rem.time, zone);
+  if (isOccurrenceSkipped(rem.repeat, rem.date)) return null;
+  if (rem.time) return zonedTimeToUtc(rem.date, rem.time, zone);
+
+  // Whole-day reminder: fires at its own configured moment (default the evening before).
+  const trigger = zonedTimeToUtc(
+    addDaysToIso(rem.date, -(rem.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE)),
+    rem.notifyAtTime ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
+    zone,
+  );
+  // A moment that passed before the reminder existed, or long ago, isn't worth announcing —
+  // otherwise every pre-existing whole-day reminder would fire the first time this ran.
+  if (trigger.getTime() < new Date(rem.createdAt).getTime()) return null;
+  if (trigger.getTime() < Date.now() - 24 * 60 * 60_000) return null;
+  return trigger;
 }
 
 // A committed Schedule occurrence (see ScheduleBlock.requiresCommitment/committedDates,
@@ -95,7 +124,7 @@ export function useNotificationChecker() {
         const triggerISO = trigger.toISOString();
         const last = lastNotified(ev.id);
         if (trigger <= now && (!last || last < triggerISO)) {
-          const body = ev.startTime ? `Starting at ${formatTime(ev.startTime, clockFormat)}` : 'Today';
+          const body = ev.startTime ? `Starting at ${formatTime(ev.startTime, clockFormat)}` : allDayBody(ev.date, trigger, zone);
           addPending({ itemId: ev.id, kind: 'event', title: ev.title, body, triggeredAt: now.toISOString() });
           markNotified(ev.id, triggerISO);
           fireOSNotification(ev.title, body);
@@ -117,9 +146,10 @@ export function useNotificationChecker() {
         if (trigger <= now && (!last || last < triggerISO)) {
           // Task-deadline shadow reminders keep the original "Due at/today" wording
           // (matching TaskItem's own deadline pill) rather than the generic "Reminder…".
+          const when = rem.notifyDaysBefore === 0 ? 'today' : rem.notifyDaysBefore === 1 ? 'tomorrow' : `in ${rem.notifyDaysBefore} days`;
           const body = rem.time
             ? `${isTaskDeadline ? 'Due' : 'Reminder'} at ${formatTime(rem.time, clockFormat)}`
-            : (isTaskDeadline ? 'Due today' : 'Reminder today');
+            : (isTaskDeadline ? `Due ${when}` : `Reminder ${when}`);
           addPending({ itemId: rem.id, kind: 'reminder', title: rem.title, body, triggeredAt: now.toISOString() });
           markNotified(rem.id, triggerISO);
           fireOSNotification(rem.title, body);

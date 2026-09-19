@@ -8,6 +8,15 @@ export type AppView = 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' |
 
 export type CalendarViewMode = 'month' | 'week' | 'day';
 
+// Fields the Notes "Create ▸ Calendar item" flow pre-fills in AddCalendarItemModal beyond the
+// date/kind/time/title already carried by showAddCalendarItem's own params.
+export interface CalendarItemPrefillExtra {
+  endTime?:      string | null;
+  notes?:        string | null;
+  location?:     string | null;
+  collectionId?: string | null;
+}
+
 // Back/forward section-navigation history (Alt+Left / Alt+Right, Backspace remains a
 // secondary alternate for back). An object shape (not a bare AppView[]) so a future entry
 // can carry more than "which section" — e.g. which note/list was open — without a
@@ -101,7 +110,9 @@ interface UIState {
   // pending link at a time — matches there only ever being one create modal open at once.
   pendingArtifactLink: { noteId: string; from: number; to: number; targetType: CrossAppRefType; resolvedTargetId?: string } | null;
   setPendingArtifactLink:   (link: { noteId: string; from: number; to: number; targetType: CrossAppRefType }) => void;
-  resolveArtifactLink:      (targetId: string) => void;
+  // targetType overrides the pending link's type when what actually got created differs from what
+  // was requested — e.g. the Calendar-item modal lets the user flip Event/Reminder after opening.
+  resolveArtifactLink:      (targetId: string, targetType?: CrossAppRefType) => void;
   clearPendingArtifactLink: () => void;
   showAddCollection: () => void;
   taskModalAdvanced: boolean;
@@ -191,9 +202,14 @@ interface UIState {
 
   editingCalendarEventId:    string | null;
   editingCalendarReminderId: string | null;
-  openCalendarEventPane:     (id: string) => void;
+  // The occurrence date (YYYY-MM-DD) that was clicked, for a repeating item — lets the pane offer
+  // "this occurrence only / this and following / all" (RecurrenceScopeBar). null when opened
+  // from somewhere with no specific occurrence in mind.
+  editingCalendarEventOccurrence:    string | null;
+  editingCalendarReminderOccurrence: string | null;
+  openCalendarEventPane:     (id: string, occurrenceDate?: string) => void;
   closeCalendarEventPane:    () => void;
-  openCalendarReminderPane:  (id: string) => void;
+  openCalendarReminderPane:  (id: string, occurrenceDate?: string) => void;
   closeCalendarReminderPane: () => void;
 
   // Which of Month/Week/Day CalendarView is showing — lifted out of CalendarView's own
@@ -212,7 +228,9 @@ interface UIState {
   calendarItemKind:  CalendarItemKind | null;
   calendarItemTime:  string | null;
   calendarItemTitle: string | null;
-  showAddCalendarItem: (date?: string, kind?: CalendarItemKind, time?: string, title?: string) => void;
+  // Extra fields the Notes "Create ▸ Calendar item" flow pre-fills beyond the four above.
+  calendarItemExtra: CalendarItemPrefillExtra | null;
+  showAddCalendarItem: (date?: string, kind?: CalendarItemKind, time?: string, title?: string, extra?: CalendarItemPrefillExtra) => void;
 
   // Android quick-add sheet for calendar events/reminders (docs/android/02-calendar-app.md §3) —
   // a separate, faster component from AddCalendarItemModal, not just that modal pre-filled.
@@ -354,6 +372,13 @@ interface UIState {
   pendingListSelectionId: string | null;
   requestListSelection:   (id: string) => void;
   clearPendingListSelection: () => void;
+
+  // Same "pending request, consumed by the section that can act on it" shape: CalendarView's
+  // visible year/month/selectedDate are local state, so something outside it (a note's link to an
+  // event) can't move the calendar directly. CalendarView applies this via its jumpToDate and clears it.
+  pendingCalendarDate: string | null;
+  requestCalendarDate: (date: string) => void;
+  clearPendingCalendarDate: () => void;
 }
 
 // uiStore is memory-only for everything EXCEPT the fields listed in `partialize` below —
@@ -388,8 +413,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   pendingArtifactLink:      null,
   setPendingArtifactLink:   (link) => set({ pendingArtifactLink: link }),
-  resolveArtifactLink:      (targetId) => set((s) =>
-    s.pendingArtifactLink ? { pendingArtifactLink: { ...s.pendingArtifactLink, resolvedTargetId: targetId } } : {}
+  resolveArtifactLink:      (targetId, targetType) => set((s) =>
+    s.pendingArtifactLink ? { pendingArtifactLink: { ...s.pendingArtifactLink, resolvedTargetId: targetId, ...(targetType ? { targetType } : {}) } } : {}
   ),
   clearPendingArtifactLink: () => set({ pendingArtifactLink: null }),
   showAddCollection: () => set({ openModal: 'add-collection' }),
@@ -426,6 +451,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     calendarItemDate: null,
     calendarItemKind: null,
     calendarItemTitle: null,
+    calendarItemExtra: null,
     editingEntryId: null,
     editingWatchlistItemId: null,
     editingListId: null,
@@ -560,10 +586,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   editingCalendarEventId:    null,
   editingCalendarReminderId: null,
-  openCalendarEventPane:     (id) => set({ editingCalendarEventId: id }),
-  closeCalendarEventPane:    ()   => set({ editingCalendarEventId: null }),
-  openCalendarReminderPane:  (id) => set({ editingCalendarReminderId: id }),
-  closeCalendarReminderPane: ()   => set({ editingCalendarReminderId: null }),
+  editingCalendarEventOccurrence:    null,
+  editingCalendarReminderOccurrence: null,
+  openCalendarEventPane:     (id, occurrenceDate) => set({ editingCalendarEventId: id, editingCalendarEventOccurrence: occurrenceDate ?? null }),
+  closeCalendarEventPane:    ()   => set({ editingCalendarEventId: null, editingCalendarEventOccurrence: null }),
+  openCalendarReminderPane:  (id, occurrenceDate) => set({ editingCalendarReminderId: id, editingCalendarReminderOccurrence: occurrenceDate ?? null }),
+  closeCalendarReminderPane: ()   => set({ editingCalendarReminderId: null, editingCalendarReminderOccurrence: null }),
 
   calendarViewMode:    'month',
   setCalendarViewMode: (mode) => set({ calendarViewMode: mode }),
@@ -576,12 +604,14 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   calendarItemKind:  null,
   calendarItemTime:  null,
   calendarItemTitle: null,
-  showAddCalendarItem: (date, kind, time, title) => set({
+  calendarItemExtra: null,
+  showAddCalendarItem: (date, kind, time, title, extra) => set({
     openModal: 'add-calendar-item',
     calendarItemDate: date ?? null,
     calendarItemKind: kind ?? null,
     calendarItemTime: time ?? null,
     calendarItemTitle: title ?? null,
+    calendarItemExtra: extra ?? null,
   }),
 
   calendarQuickAddOpen: false,
@@ -637,7 +667,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   // Notes
   selectedNoteTagId:      null,
-  setSelectedNoteTag:     (id) => { if (id) useRecentItemsStore.getState().recordVisit('notebook', id); set({ selectedNoteTagId: id }); },
+  // Moving to a different notebook also closes the open note — otherwise the previous
+  // notebook's note would sit in the editor pane under the new notebook's list.
+  setSelectedNoteTag:     (id) => {
+    if (id) useRecentItemsStore.getState().recordVisit('notebook', id);
+    set((s) => ({ selectedNoteTagId: id, ...(id !== s.selectedNoteTagId ? { editingNoteId: null } : {}) }));
+  },
   expandedNoteTagIds:     [],
   toggleNoteTagExpanded:  (id) => set((s) => ({
     expandedNoteTagIds: s.expandedNoteTagIds.includes(id)
@@ -703,6 +738,9 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   pendingListSelectionId:    null,
   requestListSelection:      (id) => set({ pendingListSelectionId: id }),
   clearPendingListSelection: () => set({ pendingListSelectionId: null }),
+  pendingCalendarDate:       null,
+  requestCalendarDate:       (date) => set({ pendingCalendarDate: date }),
+  clearPendingCalendarDate:  () => set({ pendingCalendarDate: null }),
 }), {
   name:    'todo-ui-session',
   version: 1,

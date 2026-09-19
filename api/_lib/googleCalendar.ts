@@ -72,6 +72,8 @@ export interface GoogleCalendarListEntry {
   summary:         string;
   backgroundColor?: string;
   primary?:        boolean;
+  accessRole?:     string;                                  // owner | writer | reader | freeBusyReader
+  defaultReminders?: { method: string; minutes: number }[]; // what an event using "default" reminders gets
 }
 
 export async function fetchGoogleCalendarList(accessToken: string): Promise<GoogleCalendarListEntry[]> {
@@ -91,6 +93,7 @@ export interface GoogleCalendarEvent {
   description?: string;
   start?:  { date?: string; dateTime?: string; timeZone?: string };
   end?:    { date?: string; dateTime?: string; timeZone?: string };
+  reminders?: { useDefault?: boolean; overrides?: { method: string; minutes: number }[] };
 }
 
 // 1 month back / 6 months forward — pulling in a Google account's entire history would be

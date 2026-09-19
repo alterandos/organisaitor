@@ -10,6 +10,9 @@ import type {
 } from '@/types';
 import { newCalendarEventId, newCalendarReminderId } from '@/utils/id';
 import { now } from '@/utils/date';
+import { deriveNotifyBefore } from '@/utils/googleReminders';
+import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
+import { withException, endedBefore, tailOf } from '@/utils/recurrence';
 
 // Composite key for one externally-sourced event, used to decide "have I already imported
 // this" — see importedSourceKeys below.
@@ -28,6 +31,21 @@ interface CalendarState {
   addReminder:    (input: CreateCalendarReminderInput)    => CalendarReminderId;
   updateReminder: (id: CalendarReminderId, changes: Partial<Omit<CalendarReminder, 'id' | 'createdAt'>>) => void;
   deleteReminder: (id: CalendarReminderId)                => void;
+
+  // Individual-occurrence editing for repeating items (see src/utils/recurrence.ts). "skip" =
+  // delete just this date; "endBefore" = delete this date and everything after; "detach" =
+  // pull this date out of the series into its own standalone item; "split" = start a new
+  // series from this date so later occurrences can be edited independently of earlier ones.
+  // detach/split return the id of the item that now represents that date, or null if the
+  // source item wasn't a repeating one.
+  skipEventOccurrence:       (id: CalendarEventId, date: string) => void;
+  endEventSeriesBefore:      (id: CalendarEventId, date: string) => void;
+  detachEventOccurrence:     (id: CalendarEventId, date: string) => CalendarEventId | null;
+  splitEventSeries:          (id: CalendarEventId, date: string) => CalendarEventId | null;
+  skipReminderOccurrence:    (id: CalendarReminderId, date: string) => void;
+  endReminderSeriesBefore:   (id: CalendarReminderId, date: string) => void;
+  detachReminderOccurrence:  (id: CalendarReminderId, date: string) => CalendarReminderId | null;
+  splitReminderSeries:       (id: CalendarReminderId, date: string) => CalendarReminderId | null;
 
   // External calendar sync (see CLAUDE.md "External calendar sync — built (Google, Phase
   // 1)"). Local-only, deliberately NOT part of the Supabase-synced entity rows — a plain
@@ -63,12 +81,14 @@ export const useCalendarStore = create<CalendarState>()(
           collectionId:      input.collectionId       ?? null,
           createdAt:         ts,
           updatedAt:         ts,
-          notifyBeforeValue: input.notifyBeforeValue  ?? 1,
+          notifyBeforeValue: input.notifyBeforeValue  ?? null,
           notifyBeforeUnit:  input.notifyBeforeUnit   ?? 'hours',
           remindAt:          null,
           notifyAtTime:      input.notifyAtTime       ?? null,
           repeat:            input.repeat             ?? null,
           status:            input.status             ?? 'confirmed',
+          important:         input.important         ?? false,
+          crossAppRefs:      input.crossAppRefs      ?? [],
           source:              input.source              ?? null,
           sourceConnectionId:  input.sourceConnectionId   ?? null,
           sourceCalendarId:    input.sourceCalendarId     ?? null,
@@ -105,6 +125,10 @@ export const useCalendarStore = create<CalendarState>()(
           updatedAt:    ts,
           remindAt:     null,
           repeat:       input.repeat ?? null,
+          important:    input.important ?? false,
+          crossAppRefs: input.crossAppRefs ?? [],
+          notifyDaysBefore: input.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE,
+          notifyAtTime:     input.notifyAtTime     ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
         };
         set((s) => ({ reminders: { ...s.reminders, [id]: reminder } }));
         return id;
@@ -120,6 +144,60 @@ export const useCalendarStore = create<CalendarState>()(
         const { [id]: _, ...rest } = s.reminders;
         return { reminders: rest as Record<CalendarReminderId, CalendarReminder> };
       }),
+
+      skipEventOccurrence: (id, date) => {
+        const ev = get().events[id];
+        if (ev?.repeat) get().updateEvent(id, { repeat: withException(ev.repeat, date) });
+      },
+
+      endEventSeriesBefore: (id, date) => {
+        const ev = get().events[id];
+        if (!ev?.repeat) return;
+        if (date <= ev.date) get().deleteEvent(id);
+        else get().updateEvent(id, { repeat: endedBefore(ev.repeat, date) });
+      },
+
+      detachEventOccurrence: (id, date) => {
+        const ev = get().events[id];
+        if (!ev?.repeat) return null;
+        get().updateEvent(id, { repeat: withException(ev.repeat, date) });
+        return get().addEvent({ ...ev, date, endDate: null, crossAppRefs: [], repeat: null, source: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceRaw: null });
+      },
+
+      splitEventSeries: (id, date) => {
+        const ev = get().events[id];
+        if (!ev?.repeat || date <= ev.date) return null;
+        const tail = tailOf(ev.date, ev.repeat, date);
+        get().updateEvent(id, { repeat: endedBefore(ev.repeat, date) });
+        return get().addEvent({ ...ev, date, endDate: null, crossAppRefs: [], repeat: tail, source: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceRaw: null });
+      },
+
+      skipReminderOccurrence: (id, date) => {
+        const rem = get().reminders[id];
+        if (rem?.repeat) get().updateReminder(id, { repeat: withException(rem.repeat, date) });
+      },
+
+      endReminderSeriesBefore: (id, date) => {
+        const rem = get().reminders[id];
+        if (!rem?.repeat) return;
+        if (date <= rem.date) get().deleteReminder(id);
+        else get().updateReminder(id, { repeat: endedBefore(rem.repeat, date) });
+      },
+
+      detachReminderOccurrence: (id, date) => {
+        const rem = get().reminders[id];
+        if (!rem?.repeat) return null;
+        get().updateReminder(id, { repeat: withException(rem.repeat, date) });
+        return get().addReminder({ ...rem, date, crossAppRefs: [], repeat: null });
+      },
+
+      splitReminderSeries: (id, date) => {
+        const rem = get().reminders[id];
+        if (!rem?.repeat || date <= rem.date) return null;
+        const tail = tailOf(rem.date, rem.repeat, date);
+        get().updateReminder(id, { repeat: endedBefore(rem.repeat, date) });
+        return get().addReminder({ ...rem, date, crossAppRefs: [], repeat: tail });
+      },
 
       importedSourceKeys: [],
       upsertSyncedEvent: (input) => {
@@ -142,7 +220,7 @@ export const useCalendarStore = create<CalendarState>()(
     }),
     {
       name: 'todo-calendar',
-      version: 5,
+      version: 8,
       migrate(state: any, version: number) {
         if (version < 2) {
           const events = state.events ?? {};
@@ -166,6 +244,28 @@ export const useCalendarStore = create<CalendarState>()(
             if (ev.sourceRaw === undefined)           ev.sourceRaw = null;
           });
           if (state.importedSourceKeys === undefined) state.importedSourceKeys = [];
+        }
+        if (version < 6) {
+          Object.values(state.events ?? {}).forEach((ev: any) => { if (ev.important === undefined) ev.important = false; if (ev.crossAppRefs === undefined) ev.crossAppRefs = []; });
+          Object.values(state.reminders ?? {}).forEach((rem: any) => { if (rem.important === undefined) rem.important = false; if (rem.crossAppRefs === undefined) rem.crossAppRefs = []; });
+        }
+        if (version < 7) {
+          Object.values(state.reminders ?? {}).forEach((rem: any) => {
+            if (rem.notifyDaysBefore === undefined) rem.notifyDaysBefore = DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE;
+            if (rem.notifyAtTime === undefined) rem.notifyAtTime = DEFAULT_ALLDAY_NOTIFY_AT_TIME;
+          });
+        }
+        if (version < 8) {
+          // Google events imported while "notify before" defaulted to off never got a notification.
+          // Re-derive theirs from the reminders Google sent (kept in sourceRaw). Only events never
+          // edited here (updatedAt === createdAt), so a deliberate "off" isn't overridden; the
+          // calendar's own default reminders weren't stored, so this can only use the event's own.
+          Object.values(state.events ?? {}).forEach((ev: any) => {
+            if (ev.source !== 'google' || ev.notifyBeforeValue !== null || ev.updatedAt !== ev.createdAt) return;
+            const n = deriveNotifyBefore(ev.sourceRaw?.reminders, undefined, !ev.startTime);
+            ev.notifyBeforeValue = n.value;
+            ev.notifyBeforeUnit = n.unit;
+          });
         }
         return state as CalendarState;
       },

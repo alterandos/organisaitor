@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import type { TaskId, CalendarEventId, CalendarReminderId, CollectionId, RepeatConfig, CalendarEvent, ScheduleId, EventStatus } from '@/types';
+import type { TaskId, CalendarEventId, CalendarReminderId, CollectionId, CalendarEvent, ScheduleId, EventStatus } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
@@ -9,6 +9,7 @@ import { usePlatform } from '@/hooks/usePlatform';
 import { formatTime, timeAddMinutes } from '@/utils/date';
 import { resolveTimezone, todayIsoInZone, utcToZonedTime } from '@/utils/timezone';
 import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
+import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
 import {
   buildHourLayout, minutesToY, layoutDayTimeGrid, timeToMinutes,
   yToMinutes, snapMinutes,
@@ -24,8 +25,8 @@ import styles from './CalendarView.module.css';
 
 type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
-  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; status: EventStatus }
-  | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string }
+  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
+  | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; important: boolean; occurrenceDate: string }
   | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean };
 
 interface SpanSlot {
@@ -38,6 +39,7 @@ interface SpanSlot {
   isEnd:        boolean;  // event ends in this week
   collectionId: CollectionId | null;
   status:       EventStatus;
+  important:    boolean;
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -114,37 +116,11 @@ function getWeekSpanSlots(weekDateStrs: string[], spanEvents: CalendarEvent[]): 
       isEnd:        evEnd <= weekEnd,
       collectionId: ev.collectionId,
       status:       ev.status ?? 'confirmed',
+      important:    ev.important ?? false,
     });
   }
 
   return slots;
-}
-
-function expandRepeat(baseDateStr: string, repeat: RepeatConfig, rangeStart: string, rangeEnd: string): string[] {
-  const dates: string[] = [];
-  const base = new Date(baseDateStr + 'T00:00:00');
-  let cur = new Date(base);
-  let count = 0;
-  const until = repeat.endKind === 'until' && repeat.until ? new Date(repeat.until + 'T00:00:00') : null;
-  const maxCount = repeat.endKind === 'count' ? (repeat.count ?? 365) : 9999;
-
-  while (count < maxCount) {
-    const str = toDateStr(cur);
-    if (str > rangeEnd) break;
-    if (until && cur > until) break;
-    if (str !== baseDateStr && str >= rangeStart && str <= rangeEnd) dates.push(str);
-
-    count++;
-    const next = new Date(cur);
-    const n = repeat.interval;
-    if      (repeat.freq === 'daily')   next.setDate(next.getDate() + n);
-    else if (repeat.freq === 'weekly')  next.setDate(next.getDate() + n * 7);
-    else if (repeat.freq === 'monthly') next.setMonth(next.getMonth() + n);
-    else                                next.setFullYear(next.getFullYear() + n);
-    if (toDateStr(next) === str) break;
-    cur = next;
-  }
-  return dates;
 }
 
 // Week/day time-grid layout: see src/utils/timeGrid.ts for the shared, generic implementation
@@ -286,23 +262,25 @@ export function CalendarView() {
         // Birthday takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
         // event auto-created from a task's scheduledAt (see Task.calendarEventId) so the calendar
         // reads as task-linked without changing the event's click/edit behaviour.
-        typeIcon: (ev.eventType ?? 'default') === 'birthday' ? '🎉' : taskLinkedEventIds.has(ev.id) ? '🕐' : '',
+        typeIcon: `${ev.important ? '❗' : ''}${(ev.eventType ?? 'default') === 'birthday' ? '🎉' : taskLinkedEventIds.has(ev.id) ? '🕐' : ''}`,
         status: ev.status ?? 'confirmed',
+        important: ev.important ?? false,
+        occurrenceDate: ev.date,
       };
 
       if (ev.endDate && ev.endDate > ev.date) {
         // Multi-day event: push to all covered dates within view range
         let cur = ev.date;
         while (cur <= ev.endDate) {
-          if (cur >= rangeStart && cur <= rangeEnd) push(cur, item);
+          if (cur >= rangeStart && cur <= rangeEnd) push(cur, { ...item, occurrenceDate: cur });
           const d = new Date(cur + 'T00:00:00');
           d.setDate(d.getDate() + 1);
           cur = toDateStr(d);
         }
       } else {
-        push(ev.date, item);
+        if (!isOccurrenceSkipped(ev.repeat, ev.date)) push(ev.date, item);
         if (ev.repeat) {
-          for (const d of expandRepeat(ev.date, ev.repeat, rangeStart, rangeEnd)) push(d, item);
+          for (const d of expandRepeat(ev.date, ev.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d });
         }
       }
     });
@@ -323,11 +301,13 @@ export function CalendarView() {
         time: rem.time,
         collectionId: rem.collectionId,
         notes: rem.notes,
-        typeIcon: '',
+        typeIcon: rem.important ? '❗' : '',
+        important: rem.important ?? false,
+        occurrenceDate: rem.date,
       };
-      push(rem.date, item);
+      if (!isOccurrenceSkipped(rem.repeat, rem.date)) push(rem.date, item);
       if (rem.repeat) {
-        for (const d of expandRepeat(rem.date, rem.repeat, rangeStart, rangeEnd)) push(d, item);
+        for (const d of expandRepeat(rem.date, rem.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d });
       }
     });
 
@@ -554,6 +534,17 @@ export function CalendarView() {
     setSelectedDate(dateStr);
   };
 
+  // A request from elsewhere to show a particular date (e.g. clicking a note's link to an
+  // event). Also runs on mount, since navigating here from another section mounts this view
+  // with the request already pending.
+  const pendingCalendarDate = useUIStore((s) => s.pendingCalendarDate);
+  useEffect(() => {
+    if (!pendingCalendarDate) return;
+    jumpToDate(pendingCalendarDate);
+    useUIStore.getState().clearPendingCalendarDate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCalendarDate]);
+
   const shiftWeek = (delta: number) => {
     const d = new Date(selectedDate + 'T00:00:00');
     d.setDate(d.getDate() + delta * 7);
@@ -695,8 +686,8 @@ export function CalendarView() {
   const handleItemClick = (e: React.MouseEvent, item: CalDisplayItem) => {
     e.stopPropagation();
     if (item.kind === 'task')     openTaskPane(item.id);
-    if (item.kind === 'event')    openCalendarEventPane(item.id);
-    if (item.kind === 'reminder') openCalendarReminderPane(item.id);
+    if (item.kind === 'event')    openCalendarEventPane(item.id, item.occurrenceDate);
+    if (item.kind === 'reminder') openCalendarReminderPane(item.id, item.occurrenceDate);
     if (item.kind === 'schedule') {
       const rect = e.currentTarget.getBoundingClientRect();
       setOccurrencePopover({ item, x: rect.left, y: rect.bottom + 4 });
@@ -764,6 +755,9 @@ export function CalendarView() {
   // purpose — both mean "this is a possibility on your calendar, not yet a sure thing."
   const isTentativeItem = (item: CalDisplayItem): boolean =>
     (item.kind === 'event' && item.status === 'tentative') || (item.kind === 'schedule' && !item.committed);
+
+  const isImportantItem = (item: CalDisplayItem): boolean =>
+    (item.kind === 'event' || item.kind === 'reminder') && item.important;
 
   const getPillStyle = (item: CalDisplayItem): React.CSSProperties => {
     // A Schedule's own colour takes priority — it's the whole point of the "layer" model that
@@ -847,7 +841,7 @@ export function CalendarView() {
               return (
                 <button
                   key={`${item.kind}-${item.id}`}
-                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
+                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                   style={getPillStyle(item)}
                   onClick={(e) => handleItemClick(e, item)}
                 >
@@ -949,7 +943,7 @@ export function CalendarView() {
                         {slots.map(slot => (
                           <button
                             key={slot.eventId}
-                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''}`}
+                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''}`}
                             style={{
                               gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                               gridRow: slot.row + 1,
@@ -983,7 +977,7 @@ export function CalendarView() {
                               return (
                                 <button
                                   key={`${item.kind}-${item.id}`}
-                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
+                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                                   style={getPillStyle(item)}
                                   onClick={(e) => handleItemClick(e, item)}
                                   onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1045,7 +1039,7 @@ export function CalendarView() {
                     {weekViewSpanSlots.map(slot => (
                       <button
                         key={slot.eventId}
-                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''}`}
+                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''}`}
                         style={{
                           gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                           gridRow: slot.row + 1,
@@ -1070,7 +1064,7 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
+                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                               style={getPillStyle(item)}
                               onClick={(e) => handleItemClick(e, item)}
                               onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1148,7 +1142,7 @@ export function CalendarView() {
                             return (
                               <button
                                 key={`${item.kind}-${item.id}`}
-                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
+                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                                 style={{
                                   top, height,
                                   left:  `${col * widthPct}%`,
@@ -1199,7 +1193,7 @@ export function CalendarView() {
                         return (
                           <button
                             key={`${item.kind}-${item.id}`}
-                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
+                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                             style={getPillStyle(item)}
                             onClick={(e) => handleItemClick(e, item)}
                             onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1266,7 +1260,7 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
+                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                               style={{
                                 top, height,
                                 left:  `${col * widthPct}%`,
@@ -1319,7 +1313,7 @@ export function CalendarView() {
                   return (
                     <button
                       key={`${item.kind}-${item.id}`}
-                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''}`}
+                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                       style={getPillStyle(item)}
                       onClick={(e) => { handleItemClick(e, item); setDayPaneDate(null); }}
                     >

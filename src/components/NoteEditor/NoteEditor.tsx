@@ -30,6 +30,7 @@ import { StructuredTagPopover } from './StructuredTagPopover';
 import { getNoteBreadcrumb } from '@/utils/notes';
 import { selectActiveCollectionId } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
+import { useCalendarStore } from '@/store/calendarStore';
 import { onVaultStatus, registerBeforeLock } from '@/services/vault';
 import { noteView, entryView, isNoteLocked } from '@/services/noteSecrets';
 import { useNoteView } from '@/store/noteViews';
@@ -681,6 +682,17 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             useUIStore.getState().setActiveView('tasks');
             useUIStore.getState().openTaskPane(targetId);
           }
+          const calendar = useCalendarStore.getState();
+          if (targetType === 'event' && targetId && calendar.events[targetId as import('@/types').CalendarEventId]) {
+            useUIStore.getState().setActiveView('calendar');
+            useUIStore.getState().requestCalendarDate(calendar.events[targetId as import('@/types').CalendarEventId].date);
+            useUIStore.getState().openCalendarEventPane(targetId);
+          }
+          if (targetType === 'reminder' && targetId && calendar.reminders[targetId as import('@/types').CalendarReminderId]) {
+            useUIStore.getState().setActiveView('calendar');
+            useUIStore.getState().requestCalendarDate(calendar.reminders[targetId as import('@/types').CalendarReminderId].date);
+            useUIStore.getState().openCalendarReminderPane(targetId);
+          }
           return true;
         }
 
@@ -756,6 +768,10 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // Load content when the open note changes
   useEffect(() => {
     if (!editor) return;
+    // A debounced save from the previous note may still be pending. Write it now, while the
+    // editor still holds that note's content — the timer would otherwise fire after setContent
+    // below and save the NEW note's content under the OLD note's id.
+    if (saveRef.current && currentNoteIdRef.current && currentNoteIdRef.current !== note?.id) flushCurrentTab();
     // Reset to Main when switching notes — except on the very first run (the initial
     // mount), whose tab was already seeded above from notesLastActiveTabId, so coming
     // back to Notes from another app lands on the same tab, not just the same note. On
@@ -810,6 +826,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     setAbstract(note.abstract ?? null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteLocked]);
+
+  // The editor unmounts whenever no note is open (e.g. moving to another notebook) — save any
+  // edit still sitting in its debounce first. Reads flushCurrentTab through a ref so the
+  // cleanup calls the latest closure, not the one from the render that registered it.
+  const flushOnUnmountRef = useRef<() => void>(() => {});
+  useEffect(() => { flushOnUnmountRef.current = () => { if (saveRef.current) flushCurrentTab(); }; });
+  useEffect(() => () => flushOnUnmountRef.current(), []);
 
   // Focus the editor when the signal increments (Right arrow from nav column)
   useEffect(() => {

@@ -7,6 +7,10 @@ import { LABELS } from '@/config/labels';
 import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
+import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import { deleteEventWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
+import type { CrossAppRef } from '@/types';
+import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
 import styles from './CalendarEventPane.module.css';
 
 const EVENT_TYPES: { value: CalendarEventType; label: string; icon: string }[] = [
@@ -16,11 +20,12 @@ const EVENT_TYPES: { value: CalendarEventType; label: string; icon: string }[] =
 
 export function CalendarEventPane() {
   const editingId         = useUIStore((s) => s.editingCalendarEventId);
+  const occurrenceDate    = useUIStore((s) => s.editingCalendarEventOccurrence);
   const closePane         = useUIStore((s) => s.closeCalendarEventPane);
+  const openPane          = useUIStore((s) => s.openCalendarEventPane);
   const openTaskPane      = useUIStore((s) => s.openTaskPane);
   const eventsRecord      = useCalendarStore((s) => s.events);
   const updateEvent       = useCalendarStore((s) => s.updateEvent);
-  const deleteEvent       = useCalendarStore((s) => s.deleteEvent);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const tasksRecord       = useTaskStore((s) => s.tasks);
 
@@ -91,7 +96,21 @@ export function CalendarEventPane() {
     if (v !== event.notes) updateEvent(id, { notes: v });
   };
 
-  const handleDelete = () => { deleteEvent(id); closePane(); };
+  const handleDelete = () => { deleteEventWithCleanup(id); closePane(); };
+
+  const navigateToCrossAppRef = (ref: CrossAppRef) => {
+    if (ref.type !== 'note') return;
+    closePane();
+    useUIStore.getState().setActiveView('notes');
+    useUIStore.getState().openNote(ref.id);
+  };
+
+  const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
+    (event.crossAppRefs ?? [])
+      .filter((r) => !next.some((n) => n.type === r.type && n.id === r.id))
+      .forEach((ref) => unlinkCrossAppRef('event', id, ref));
+    updateEvent(id, { crossAppRefs: next });
+  };
 
   const handleStartTimeChange = (val: string) => {
     const newStart = val || null;
@@ -124,7 +143,7 @@ export function CalendarEventPane() {
 
   const saveRepeat = (on: boolean, freq: RepeatFreq, interval: number, endKind: RepeatConfig['endKind'], count: number, until: string) => {
     const r: RepeatConfig | null = on
-      ? { freq, interval, endKind, count: endKind === 'count' ? count : null, until: endKind === 'until' ? until || null : null }
+      ? { freq, interval, endKind, count: endKind === 'count' ? count : null, until: endKind === 'until' ? until || null : null, exceptions: event.repeat?.exceptions }
       : null;
     updateEvent(id, { repeat: r });
   };
@@ -139,6 +158,18 @@ export function CalendarEventPane() {
         </header>
 
         <div className={styles.body}>
+          {event.repeat && (
+            <RecurrenceScopeBar
+              kind="event"
+              id={id}
+              baseDate={event.date}
+              repeat={event.repeat}
+              occurrenceDate={occurrenceDate}
+              onClose={closePane}
+              onSwitch={(newId) => openPane(newId)}
+            />
+          )}
+
           {linkedTask && (
             <button type="button" className={styles.linkedTaskChip} onClick={openLinkedTask}>
               🕐 Linked task: {linkedTask.title}
@@ -253,6 +284,17 @@ export function CalendarEventPane() {
             </div>
           </div>
 
+          <div className={styles.field}>
+            <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={event.important ?? false}
+                onChange={(e) => updateEvent(id, { important: e.target.checked })}
+              />
+              ❗ Important — highlight on the calendar
+            </label>
+          </div>
+
           {(event.eventType ?? 'default') !== 'birthday' && (
             <div className={styles.field}>
               <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
@@ -280,25 +322,34 @@ export function CalendarEventPane() {
             </div>
           ) : (
             <div className={styles.field}>
-              <span className={styles.label}>Notify before</span>
-              <div className={styles.timeRow}>
+              <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
                 <input
-                  type="number"
-                  className={styles.notifyNum}
-                  value={event.notifyBeforeValue}
-                  min={1}
-                  onChange={(e) => updateEvent(id, { notifyBeforeValue: Math.max(1, Number(e.target.value)) })}
+                  type="checkbox"
+                  checked={event.notifyBeforeValue !== null}
+                  onChange={(e) => updateEvent(id, { notifyBeforeValue: e.target.checked ? 1 : null })}
                 />
-                <select
-                  className={styles.select}
-                  value={event.notifyBeforeUnit}
-                  onChange={(e) => updateEvent(id, { notifyBeforeUnit: e.target.value as NotifyUnit })}
-                >
-                  <option value="minutes">minutes before</option>
-                  <option value="hours">hours before</option>
-                  <option value="days">days before</option>
-                </select>
-              </div>
+                Notify before
+              </label>
+              {event.notifyBeforeValue !== null && (
+                <div className={styles.timeRow}>
+                  <input
+                    type="number"
+                    className={styles.notifyNum}
+                    value={event.notifyBeforeValue}
+                    min={1}
+                    onChange={(e) => updateEvent(id, { notifyBeforeValue: Math.max(1, Number(e.target.value)) })}
+                  />
+                  <select
+                    className={styles.select}
+                    value={event.notifyBeforeUnit}
+                    onChange={(e) => updateEvent(id, { notifyBeforeUnit: e.target.value as NotifyUnit })}
+                  >
+                    <option value="minutes">minutes before</option>
+                    <option value="hours">hours before</option>
+                    <option value="days">days before</option>
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
@@ -390,6 +441,15 @@ export function CalendarEventPane() {
             )}
           </div>
 
+          <div className={styles.field}>
+            <span className={styles.label}>Linked items</span>
+            <CrossAppRefPicker
+              value={event.crossAppRefs ?? []}
+              onChange={handleCrossAppRefsChange}
+              onNavigate={navigateToCrossAppRef}
+            />
+          </div>
+
           {allCollections.length > 0 && (
             <div className={styles.field}>
               <span className={styles.label}>{LABELS.collection}</span>
@@ -405,7 +465,7 @@ export function CalendarEventPane() {
 
         <footer className={styles.footer}>
           <button className={styles.deleteBtn} onClick={handleDelete}>
-            Delete {LABELS.calendarItemKind.event.toLowerCase()}
+            {event.repeat ? `Delete all occurrences` : `Delete ${LABELS.calendarItemKind.event.toLowerCase()}`}
           </button>
         </footer>
       </aside>
