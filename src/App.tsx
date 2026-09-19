@@ -8,6 +8,10 @@ import { openExternalLink } from '@/utils/links';
 import { usePlatform } from '@/hooks/usePlatform';
 import { useAuthStore } from '@/store/authStore';
 import { initSync, stopSync } from '@/services/sync/syncService';
+import { checkVaultStatus, resetVaultModuleState } from '@/services/vault';
+import { initNoteSecretsSync } from '@/services/noteSecretsSync';
+import { initListSecretsSync } from '@/services/listSecretsSync';
+import { DecryptPrompt } from '@/components/DecryptPrompt/DecryptPrompt';
 import { backfillTaskCalendarLinks } from '@/services/taskCalendarBackfill';
 import { syncGoogleCalendars } from '@/services/googleCalendar';
 import { matchesHotkeyId } from '@/store/hotkeyOverridesStore';
@@ -114,6 +118,7 @@ export default function App() {
   const portfolioChartOpen         = useUIStore((s) => s.portfolioChartOpen);
   const editingNoteId              = useUIStore((s) => s.editingNoteId);
   const quickAccessOpen            = useUIStore((s) => s.quickAccessOpen);
+  const decryptPrompt              = useUIStore((s) => s.decryptPrompt);
   const toggleQuickAccess          = useUIStore((s) => s.toggleQuickAccess);
   const collectionsRecord          = useTaskStore((s) => s.collections);
   const colorEnabled               = useSettingsStore((s) => s.colorEnabled);
@@ -196,6 +201,7 @@ export default function App() {
   }, [isAndroid]);
 
   useNotificationChecker();
+  useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); }, []);
 
   const setSession = useAuthStore((s) => s.setSession);
   const authUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -212,13 +218,13 @@ export default function App() {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) initSync(session.user.id);
+      if (session) { initSync(session.user.id); checkVaultStatus(session.user.id); }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (event === 'SIGNED_IN'  && session) initSync(session.user.id);
-      if (event === 'SIGNED_OUT')             stopSync();
+      if (event === 'SIGNED_IN'  && session) { initSync(session.user.id); checkVaultStatus(session.user.id); }
+      if (event === 'SIGNED_OUT')             { stopSync(); resetVaultModuleState(); }
     });
 
     return () => subscription.unsubscribe();
@@ -552,6 +558,7 @@ export default function App() {
 
         <LinkHoverPreview />
         {quickAccessOpen && <QuickAccessPane />}
+        {decryptPrompt && <DecryptPrompt />}
         {isAndroid && <MobileNav />}
         {isAndroid && <MobileMoreSheet />}
         {isAndroid && <MobileCalendarQuickAdd />}

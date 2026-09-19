@@ -30,7 +30,18 @@ import { StructuredTagPopover } from './StructuredTagPopover';
 import { getNoteBreadcrumb } from '@/utils/notes';
 import { selectActiveCollectionId } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
+import { onVaultStatus, registerBeforeLock } from '@/services/vault';
+import { noteView, entryView, isNoteLocked } from '@/services/noteSecrets';
+import { useNoteView } from '@/store/noteViews';
 import styles from './NoteEditor.module.css';
+
+// Read a note by id THROUGH noteView() — an encrypted note's title/content/tabs are blanked in
+// the store and only resolve via the plaintext cache (see services/noteSecrets.ts).
+function viewOf(id: string | null | undefined): Note | undefined {
+  if (!id) return undefined;
+  const raw = useNoteStore.getState().notes[id as NoteId];
+  return raw ? noteView(raw) : undefined;
+}
 
 // The document schema requires content to be `section+` (see extensions/Section.ts).
 // Notes saved before the sections feature (or very old plain-text notes) have block
@@ -249,13 +260,21 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const [structuredTagHover, setStructuredTagHover] = useState<HTMLElement | null>(null);
   const clearStructuredHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const note = editingNoteId ? notes[editingNoteId as NoteId] : null;
+  const rawNote = editingNoteId ? notes[editingNoteId as NoteId] : null;
+  const note = useNoteView(editingNoteId);
 
   const [title, setTitle]           = useState('');
   const [tocOpen, setTocOpen]       = useState(false);
   const [abstract, setAbstract]     = useState<string | null>(null);
   const [abstractCollapsed, setAbstractCollapsed] = useState(false);
   const [noteMenuOpen, setNoteMenuOpen] = useState(false);
+  // See src/services/vault.ts — encryption applies to Note.content (Main tab) only, not
+  // NoteTab.content. A locked encrypted note shows a placeholder instead of the editor;
+  // see the `noteLocked` render guard below.
+  const [vaultUnlocked, setVaultUnlocked] = useState(false);
+  useEffect(() => onVaultStatus((s) => setVaultUnlocked(s === 'unlocked')), []);
+  // `note` (a view) re-derives when the plaintext cache changes, so this is current every render.
+  const noteLocked = !!rawNote && isNoteLocked(rawNote);
   // Seeded once from uiStore's last-active note+tab (notesLastEditingNoteId/
   // notesLastActiveTabId) so switching to another app and back restores the same tab —
   // same "seed the state directly, don't restore-after-the-fact" pattern ListsSection.tsx
@@ -429,7 +448,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     const tagId   = el.getAttribute('data-tag-id');
     if (!entryId || !tagId) return;
     const noteState = useNoteStore.getState();
-    const entry = noteState.structuredTagEntries[entryId as StructuredTagEntryId];
+    const rawEntry = noteState.structuredTagEntries[entryId as StructuredTagEntryId];
+    const entry = rawEntry ? entryView(rawEntry) : undefined;
     const tag   = BUILTIN_TAGS.find((t) => t.id === tagId);
     const typeDef = tag ? getStructuredTagType(tag.typeKey) : undefined;
     if (!entry || !tag || !typeDef) return;
@@ -718,10 +738,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       if (!id) return;
       if (saveRef.current) clearTimeout(saveRef.current);
       saveRef.current = setTimeout(() => {
+        // The store decides whether this note is encrypted and, if so, re-encrypts (see
+        // noteStore.editNote) — the editor just saves plaintext like it always did.
+        const json = JSON.stringify(ed.getJSON());
         if (tabId !== null) {
-          useNoteStore.getState().updateNoteTabContent(id as NoteId, tabId, JSON.stringify(ed.getJSON()));
+          useNoteStore.getState().updateNoteTabContent(id as NoteId, tabId, json);
         } else {
-          updateNote(id as NoteId, { content: JSON.stringify(ed.getJSON()) });
+          updateNote(id as NoteId, { content: json });
         }
       }, 1500);
     },
@@ -760,10 +783,33 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     setAbstract(note.abstract ?? null);
     setAbstractCollapsed(false);
     isLoadingRef.current = true;
-    editor.commands.setContent(parseContent(note.content));
+    // A locked note's view has blank content — keep the editor empty (it's hidden behind the
+    // lock placeholder anyway) rather than ever parsing anything derived from ciphertext.
+    editor.commands.setContent(noteLocked ? '' : parseContent(note.content));
     isLoadingRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.id, editor]);
+
+  // The open note just became locked or readable (Lock now, or the vault unlocked — e.g. via
+  // Account, or a trusted-device auto-unlock landing after the note opened). Reload the editor
+  // and the title/abstract inputs from the current view WITHOUT resetting the tab the way a
+  // full note-switch (the effect above) would. On lock this also wipes the plaintext out of the
+  // ProseMirror doc, so locking doesn't leave the text sitting in a hidden editor.
+  useEffect(() => {
+    if (!editor || !note) return;
+    isLoadingRef.current = true;
+    if (noteLocked) {
+      editor.commands.setContent('');
+    } else {
+      const tabId = activeTabIdRef.current;
+      const tab = tabId ? note.tabs.find((t) => t.id === tabId) : null;
+      editor.commands.setContent(parseContent(tab ? tab.content : note.content));
+    }
+    isLoadingRef.current = false;
+    setTitle(note.title);
+    setAbstract(note.abstract ?? null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteLocked]);
 
   // Focus the editor when the signal increments (Right arrow from nav column)
   useEffect(() => {
@@ -807,7 +853,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         e.stopPropagation();
         const id = currentNoteIdRef.current;
         if (!id) return;
-        const currentNote = useNoteStore.getState().notes[id as NoteId];
+        const currentNote = viewOf(id);
         if (!currentNote) return;
         const defaultName = `Tab ${currentNote.tabs.length + 1}`;
         const newTabId = addNoteTab(id as NoteId, defaultName);
@@ -826,7 +872,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         e.stopPropagation();
         const id = currentNoteIdRef.current;
         if (!id) return;
-        const currentNote = useNoteStore.getState().notes[id as NoteId];
+        const currentNote = viewOf(id);
         if (!currentNote) return;
         const display = buildDisplayOrder(currentNote);
         const allTabIds = display.map(({ id: tid, isMain }) => isMain ? null : tid);
@@ -969,7 +1015,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     activeTabIdRef.current = tabId;
     const id = currentNoteIdRef.current;
     if (!id || !editor) return;
-    const latestNote = useNoteStore.getState().notes[id as NoteId];
+    const latestNote = viewOf(id);
     if (!latestNote) return;
     isLoadingRef.current = true;
     if (tabId === null) {
@@ -980,6 +1026,23 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     }
     isLoadingRef.current = false;
   };
+
+  // Flush unsaved edits BEFORE the vault key is dropped: once locked nothing can be encrypted,
+  // so a still-pending autosave/title/abstract debounce would be refused and the edit lost.
+  // Registered with vault.lockVault(); reads its inputs through a ref so it always sees the
+  // latest title/abstract/editor rather than the closure from whichever render registered it.
+  const beforeLockRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    beforeLockRef.current = () => {
+      const id = currentNoteIdRef.current;
+      if (!id || !editor) return;
+      if (!useNoteStore.getState().notes[id as NoteId]?.isEncrypted) return;
+      if (abstractSaveRef.current) { clearTimeout(abstractSaveRef.current); abstractSaveRef.current = null; updateNote(id as NoteId, { abstract }); }
+      flushCurrentTab();
+      if (title.trim()) updateNote(id as NoteId, { title: title.trim() });
+    };
+  });
+  useEffect(() => registerBeforeLock(() => beforeLockRef.current()), []);
 
   // Notes "Create ▸ Task" flow (FloatingToolbar): a selection was turned into a request to
   // create some other entity, and AddTaskModal has now reported the new id back via
@@ -1129,7 +1192,19 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           }}
           placeholder="Untitled note"
           className={styles.titleInput}
+          disabled={noteLocked}
         />
+        {note?.isEncrypted && (
+          <button
+            type="button"
+            className={styles.lockBadge}
+            onClick={() => useUIStore.getState().requestDecrypt('note', note.id)}
+            title={noteLocked
+              ? 'Encrypted — locked on this device. Click to decrypt this note'
+              : 'Encrypted note. Click to decrypt it'}
+            aria-label="Decrypt this note"
+          >🔒</button>
+        )}
 
         <div className={styles.toolbar}>
           {/* Heading style selector */}
@@ -1356,6 +1431,34 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                 >
                   {abstract !== null ? '✓ Abstract' : 'Add abstract'}
                 </button>
+                <button
+                  className={styles.noteMenuItem}
+                  disabled={!vaultUnlocked && !note?.isEncrypted}
+                  title={!vaultUnlocked && !note?.isEncrypted ? 'Unlock encryption in Settings → Account first' : undefined}
+                  onClick={() => {
+                    const id = currentNoteIdRef.current;
+                    if (!id || !editor) return;
+                    if (!noteLocked) {
+                      // Save anything still sitting in a debounce first, so the payload built from
+                      // the store includes the very latest text.
+                      flushCurrentTab();
+                      if (title.trim()) updateNote(id as NoteId, { title: title.trim() });
+                    }
+                    if (note?.isEncrypted) {
+                      // Removing encryption asks for the passphrase (same as clicking the 🔒).
+                      useUIStore.getState().requestDecrypt('note', id);
+                      setNoteMenuOpen(false);
+                      return;
+                    }
+                    useNoteStore.getState().encryptNote(id as NoteId).catch((err) => {
+                      console.error('[NoteEditor] encryption toggle failed:', err);
+                      window.alert(err instanceof Error ? err.message : 'Could not change encryption for this note.');
+                    });
+                    setNoteMenuOpen(false);
+                  }}
+                >
+                  {note?.isEncrypted ? '🔓 Remove encryption' : '🔒 Encrypt this note'}
+                </button>
               </div>
             )}
           </div>
@@ -1408,7 +1511,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                 if (!dragging || !overTabId || dragging === overTabId) return;
                 const id = currentNoteIdRef.current;
                 if (!id) return;
-                const noteState = useNoteStore.getState().notes[id as NoteId];
+                const noteState = viewOf(id);
                 if (!noteState) return;
                 const currentOrder = (noteState.tabOrder ?? []).length
                   ? noteState.tabOrder
@@ -1579,8 +1682,18 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             clearStructuredHoverRef.current = setTimeout(() => setStructuredTagHover(null), 180);
           }}
         >
-          {editor && <FloatingToolbar editor={editor} noteId={note.id} onStructuredTag={openStructuredTagCreate} />}
-          <EditorContent editor={editor} className={styles.editor} />
+          {noteLocked ? (
+            <div className={styles.lockedPlaceholder}>
+              🔒 This note is encrypted and locked on this device.
+              <br />
+              Click the unlock icon in the toolbar or go to Account Settings to unlock it.
+            </div>
+          ) : (
+            <>
+              {editor && <FloatingToolbar editor={editor} noteId={note.id} onStructuredTag={openStructuredTagCreate} />}
+              <EditorContent editor={editor} className={styles.editor} />
+            </>
+          )}
         </div>
 
         {tocOpen && editor && (

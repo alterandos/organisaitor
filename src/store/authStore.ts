@@ -4,6 +4,7 @@ import { supabase } from '@/services/supabase';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTrackerStore } from '@/store/trackerStore';
+import { stopSync } from '@/services/sync/syncService';
 
 interface AuthState {
   user:        User | null;
@@ -41,6 +42,12 @@ export const useAuthStore = create<AuthState>()((set) => ({
   },
 
   signOut: async () => {
+    // Stop sync FIRST. The wipe below empties the synced stores while the sync subscription
+    // is still live, which syncDiff reads as "the user deleted every item" and answers with a
+    // soft-delete of everything in the cloud. That used to be rejected with 401 only because
+    // supabase.auth.signOut() had already revoked the token — a data-loss bug protected purely
+    // by ordering luck. With sync stopped, the wipe is a purely local cache clear.
+    stopSync();
     await supabase.auth.signOut();
     set({ user: null, session: null });
     // Clear in-memory stores and localStorage cache so the app shows empty

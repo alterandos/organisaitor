@@ -4,8 +4,12 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useListStore } from '@/store/listStore';
+import { useNoteStore } from '@/store/noteStore';
+import { usePortfolioStore } from '@/store/portfolioStore';
 import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, TrackerEntry, ScheduleTemplate } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
+import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
+import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
 import {
   taskToRow,       rowToTask,
   collectionToRow, rowToCollection,
@@ -18,6 +22,12 @@ import {
   listToRow,       rowToList,
   listItemToRow,   rowToListItem,
   listTypeToRow,   rowToListType,
+  noteToRow,       rowToNote,
+  noteTagToRow,    rowToNoteTag,
+  structuredTagEntryToRow, rowToStructuredTagEntry,
+  watchlistItemToRow,      rowToWatchlistItem,
+  portfolioTagToRow,       rowToPortfolioTag,
+  investmentPurposeToRow,  rowToInvestmentPurpose,
 } from './mappers';
 
 // Custom (non-built-in) list types only — built-ins have fixed ids, are re-seeded
@@ -58,6 +68,14 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
+// Same order as the Promise.all fetch list in runInitSync — index i of one is index i of the other.
+const SYNC_TABLES = [
+  'tasks', 'collections', 'tags', 'purposes', 'calendar_events', 'calendar_reminders',
+  'tracker_entries', 'schedules', 'lists', 'list_items', 'list_types',
+  'notes', 'note_tags', 'structured_tag_entries',
+  'watchlist_items', 'portfolio_tags', 'investment_purposes',
+] as const;
+
 export function initSync(userId: string): Promise<void> {
   return enqueue(() => runInitSync(userId));
 }
@@ -80,18 +98,31 @@ async function runInitSync(userId: string): Promise<void> {
       supabase.from('lists').select('*').eq('user_id', userId),
       supabase.from('list_items').select('*').eq('user_id', userId),
       supabase.from('list_types').select('*').eq('user_id', userId),
+      supabase.from('notes').select('*').eq('user_id', userId),
+      supabase.from('note_tags').select('*').eq('user_id', userId),
+      supabase.from('structured_tag_entries').select('*').eq('user_id', userId),
+      supabase.from('watchlist_items').select('*').eq('user_id', userId),
+      supabase.from('portfolio_tags').select('*').eq('user_id', userId),
+      supabase.from('investment_purposes').select('*').eq('user_id', userId),
     ]);
 
-    // Surface any permission/connection errors
-    const firstError = results.find((r) => r.error)?.error;
-    if (firstError) {
-      throw new Error(firstError.message);
+    // A table that fails to load (missing grant/migration, transient error) must not stop
+    // every OTHER table from syncing — it used to (one all-or-nothing throw), which meant
+    // e.g. a not-yet-migrated Portfolio table blocked Tasks/Trackers from hydrating at all.
+    // Failed tables come back as null (a no-op for mergeRecords), are named in the status
+    // error afterward, and suppress the "looks empty, so push local up" branch below, since
+    // an unreadable table could be hiding real remote data.
+    const failed = SYNC_TABLES.filter((_, i) => results[i].error);
+    for (const [i, name] of SYNC_TABLES.entries()) {
+      if (results[i].error) console.error(`[sync] could not load ${name}:`, results[i].error!.message);
     }
 
     const [
       dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries,
       dbSchedules, dbLists, dbListItems, dbListTypes,
-    ] = results.map((r) => r.data);
+      dbNotes, dbNoteTags, dbStructuredTagEntries,
+      dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
+    ] = results.map((r) => (r.error ? null : r.data));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const liveCount = (rows: any[] | null) => (rows ?? []).filter((r) => !r.deleted_at).length;
@@ -100,18 +131,23 @@ async function runInitSync(userId: string): Promise<void> {
       liveCount(dbCollections) === 0 &&
       liveCount(dbEvents) === 0 &&
       liveCount(dbSchedules) === 0 &&
-      liveCount(dbLists) === 0;
+      liveCount(dbLists) === 0 &&
+      liveCount(dbNotes) === 0 &&
+      liveCount(dbWatchlistItems) === 0;
 
-    if (isEmpty) {
+    if (isEmpty && failed.length === 0) {
       await upsertAllToSupabase(userId);
     } else {
       hydrateStores(
         dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries,
         dbSchedules, dbLists, dbListItems, dbListTypes,
+        dbNotes, dbNoteTags, dbStructuredTagEntries,
+        dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
       );
     }
 
-    setStatus('idle');
+    if (failed.length > 0) setStatus('error', `Could not sync: ${failed.join(', ')} (other data synced normally)`);
+    else setStatus('idle');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[sync] init failed:', msg);
@@ -132,6 +168,8 @@ export type UploadCounts = {
   tasks: number; collections: number; tags: number; purposes: number;
   events: number; reminders: number; entries: number;
   schedules: number; lists: number; listItems: number; listTypes: number;
+  notes: number; noteTags: number; structuredTagEntries: number;
+  watchlistItems: number; portfolioTags: number; investmentPurposes: number;
 };
 
 // Force-uploads ALL current store data to Supabase (upsert), reading live in-memory
@@ -200,6 +238,8 @@ function hydrateStores(...args: Array<any[] | null>) {
   const [
     dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries,
     dbSchedules, dbLists, dbListItems, dbListTypes,
+    dbNotes, dbNoteTags, dbStructuredTagEntries,
+    dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
   ] = args;
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
@@ -235,6 +275,20 @@ function hydrateStores(...args: Array<any[] | null>) {
     // tombstoned here.
     listTypes: mergeRecords(local.listTypes, dbListTypes, rowToListType),
   }) as Parameters<typeof useListStore.setState>[0]);
+
+  // @ts-expect-error — setState updater param typed loosely against the full store shape
+  useNoteStore.setState((local) => ({
+    notes:                mergeRecords(local.notes,                dbNotes,                rowToNote),
+    noteTags:              mergeRecords(local.noteTags,              dbNoteTags,             rowToNoteTag),
+    structuredTagEntries: mergeRecords(local.structuredTagEntries, dbStructuredTagEntries, rowToStructuredTagEntry),
+  }) as Parameters<typeof useNoteStore.setState>[0]);
+
+  // @ts-expect-error — setState updater param typed loosely against the full store shape
+  usePortfolioStore.setState((local) => ({
+    watchlistItems:     mergeRecords(local.watchlistItems,     dbWatchlistItems,     rowToWatchlistItem),
+    portfolioTags:      mergeRecords(local.portfolioTags,      dbPortfolioTags,      rowToPortfolioTag),
+    investmentPurposes: mergeRecords(local.investmentPurposes, dbInvestmentPurposes, rowToInvestmentPurpose),
+  }) as Parameters<typeof usePortfolioStore.setState>[0]);
 }
 
 // ── Upload ──────────────────────────────────────────────────────
@@ -246,6 +300,8 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const { entries } = useTrackerStore.getState();
   const { schedules } = useScheduleStore.getState();
   const { lists, listItems, listTypes } = useListStore.getState();
+  const { notes, noteTags, structuredTagEntries } = useNoteStore.getState();
+  const { watchlistItems, portfolioTags, investmentPurposes } = usePortfolioStore.getState();
 
   const allTasks       = Object.values(tasks);
   const allCollections = Object.values(collections);
@@ -258,6 +314,12 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const allLists       = Object.values(lists);
   const allListItems   = Object.values(listItems);
   const allListTypes   = Object.values(customListTypes(listTypes));
+  const allNotes       = Object.values(notes);
+  const allNoteTags    = Object.values(noteTags);
+  const allStructuredTagEntries = Object.values(structuredTagEntries);
+  const allWatchlistItems     = Object.values(watchlistItems);
+  const allPortfolioTags      = Object.values(portfolioTags);
+  const allInvestmentPurposes = Object.values(investmentPurposes);
 
   const results = await Promise.all([
     allTasks.length       > 0 ? supabase.from('tasks').upsert(allTasks.map((t) => taskToRow(t, userId)))               : null,
@@ -271,6 +333,12 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     allLists.length       > 0 ? supabase.from('lists').upsert(allLists.map((l) => listToRow(l, userId)))               : null,
     allListItems.length   > 0 ? supabase.from('list_items').upsert(allListItems.map((i) => listItemToRow(i, userId))) : null,
     allListTypes.length   > 0 ? supabase.from('list_types').upsert(allListTypes.map((t) => listTypeToRow(t, userId))) : null,
+    allNotes.length       > 0 ? supabase.from('notes').upsert(allNotes.map((n) => noteToRow(n, userId)))               : null,
+    allNoteTags.length    > 0 ? supabase.from('note_tags').upsert(allNoteTags.map((t) => noteTagToRow(t, userId)))     : null,
+    allStructuredTagEntries.length > 0 ? supabase.from('structured_tag_entries').upsert(allStructuredTagEntries.map((e) => structuredTagEntryToRow(e, userId))) : null,
+    allWatchlistItems.length     > 0 ? supabase.from('watchlist_items').upsert(allWatchlistItems.map((i) => watchlistItemToRow(i, userId)))         : null,
+    allPortfolioTags.length      > 0 ? supabase.from('portfolio_tags').upsert(allPortfolioTags.map((t) => portfolioTagToRow(t, userId)))            : null,
+    allInvestmentPurposes.length > 0 ? supabase.from('investment_purposes').upsert(allInvestmentPurposes.map((p) => investmentPurposeToRow(p, userId))) : null,
   ]);
 
   const firstError = results.find((r) => r?.error)?.error;
@@ -281,6 +349,8 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     purposes: allPurposes.length, events: allEvents.length, reminders: allReminders.length,
     entries: allEntries.length, schedules: allSchedules.length, lists: allLists.length,
     listItems: allListItems.length, listTypes: allListTypes.length,
+    notes: allNotes.length, noteTags: allNoteTags.length, structuredTagEntries: allStructuredTagEntries.length,
+    watchlistItems: allWatchlistItems.length, portfolioTags: allPortfolioTags.length, investmentPurposes: allInvestmentPurposes.length,
   };
 }
 
@@ -341,7 +411,33 @@ function setupSubscriptions(userId: string): void {
       syncDiff('list_types', customListTypes(prev.listTypes as any), customListTypes(state.listTypes as any), (t) => listTypeToRow(t as ListType, userId));
   });
 
-  unsubscribers = [unsubTask, unsubCal, unsubTracker, unsubSchedule, unsubList];
+  const unsubNote = useNoteStore.subscribe((state, prev) => {
+    if (hydrating) return;
+
+    if (state.notes !== prev.notes)
+      syncDiff('notes', prev.notes, state.notes, (n) => noteToRow(n as Note, userId));
+
+    if (state.noteTags !== prev.noteTags)
+      syncDiff('note_tags', prev.noteTags, state.noteTags, (t) => noteTagToRow(t as NoteTag, userId));
+
+    if (state.structuredTagEntries !== prev.structuredTagEntries)
+      syncDiff('structured_tag_entries', prev.structuredTagEntries, state.structuredTagEntries, (e) => structuredTagEntryToRow(e as StructuredTagEntry, userId));
+  });
+
+  const unsubPortfolio = usePortfolioStore.subscribe((state, prev) => {
+    if (hydrating) return;
+
+    if (state.watchlistItems !== prev.watchlistItems)
+      syncDiff('watchlist_items', prev.watchlistItems, state.watchlistItems, (i) => watchlistItemToRow(i as WatchlistItem, userId));
+
+    if (state.portfolioTags !== prev.portfolioTags)
+      syncDiff('portfolio_tags', prev.portfolioTags, state.portfolioTags, (t) => portfolioTagToRow(t as PortfolioTag, userId));
+
+    if (state.investmentPurposes !== prev.investmentPurposes)
+      syncDiff('investment_purposes', prev.investmentPurposes, state.investmentPurposes, (p) => investmentPurposeToRow(p as InvestmentPurpose, userId));
+  });
+
+  unsubscribers = [unsubTask, unsubCal, unsubTracker, unsubSchedule, unsubList, unsubNote, unsubPortfolio];
 }
 
 // ── Diff + sync ─────────────────────────────────────────────────

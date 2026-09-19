@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
 import { useListStore } from '@/store/listStore';
+import { useListViews, useListItemViews } from '@/store/listViews';
+import { isListLocked } from '@/services/listSecrets';
+import { onVaultStatus } from '@/services/vault';
 import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { LIST_ITEM_STATUS_META } from '@/types/lists';
@@ -246,9 +249,18 @@ function ItemCard({
 
 // ── Main section ──────────────────────────────────────────────────────────────
 export function ListsSection() {
-  const lists      = useListStore((s) => s.lists);
-  const listItems  = useListStore((s) => s.listItems);
+  // Read lists/items THROUGH the views: an encrypted list's name/fields/tabs and its items'
+  // contents are blank in the store (see services/listSecrets.ts). `rawLists` is only for the
+  // lock check. Writes below go through store actions that route encrypted lists themselves.
+  const lists      = useListViews();
+  const listItems  = useListItemViews();
+  const rawLists   = useListStore((s) => s.lists);
   const listTypes  = useListStore((s) => s.listTypes);
+  const encryptList = useListStore((s) => s.encryptList);
+  const requestDecrypt = useUIStore((s) => s.requestDecrypt);
+  const openAccount    = useUIStore((s) => s.openAccount);
+  const [vaultUnlocked, setVaultUnlocked] = useState(false);
+  useEffect(() => onVaultStatus((s) => setVaultUnlocked(s === 'unlocked')), []);
   const deleteList     = useListStore((s) => s.deleteList);
   const updateList     = useListStore((s) => s.updateList);
   const updateListItem = useListStore((s) => s.updateListItem);
@@ -307,6 +319,8 @@ export function ListsSection() {
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
   const selectedList = selectedListId ? lists[selectedListId] : null;
+  const selectedRaw  = selectedListId ? rawLists[selectedListId] : null;
+  const selectedListLocked = !!selectedRaw && isListLocked(selectedRaw);
 
   // Visual sidebar order (watchlists group, then reference group) — used both by the sidebar
   // render below and by the arrow-key nav-area handler, so pressing ↓ always lands on whatever
@@ -332,11 +346,14 @@ export function ListsSection() {
 
   // A restored tab id (or one whose tab was since deleted) that no longer exists on the
   // current list falls back to "All", same as removeListTab's own tabId reassignment.
+  // (Skipped while the list is locked: its view has no tabs, but they're not gone — resetting
+  // here would throw away the remembered tab every time the vault locks or hasn't unlocked yet.)
   useEffect(() => {
+    if (selectedListLocked) return;
     if (selectedTabId !== 'all' && !selectedList?.tabs?.some((t) => t.id === selectedTabId)) {
       setSelectedTabId('all');
     }
-  }, [selectedList, selectedTabId]);
+  }, [selectedList, selectedTabId, selectedListLocked]);
 
   // Mirrors the current list+tab into uiStore on every change (and therefore on unmount
   // too, via the cleanup's closure) so switching apps and back restores this same view —
@@ -509,17 +526,27 @@ export function ListsSection() {
           <span className={styles.sidebarItemCount}>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
         </div>
         <div className={styles.sidebarItemActions}>
-          <button
-            className={styles.sidebarActionBtn}
-            onClick={(e) => { e.stopPropagation(); openEditList(list.id); }}
-            title="Edit list"
-          >✎</button>
+          {!(rawLists[list.id as ListId] && isListLocked(rawLists[list.id as ListId])) && (
+            <button
+              className={styles.sidebarActionBtn}
+              onClick={(e) => { e.stopPropagation(); openEditList(list.id); }}
+              title="Edit list"
+            >✎</button>
+          )}
           <button
             className={`${styles.sidebarActionBtn} ${styles.sidebarDeleteBtn}`}
             onClick={(e) => { e.stopPropagation(); handleDeleteList(list.id as ListId, list.name); }}
             title="Delete list"
           >✕</button>
         </div>
+        {list.isEncrypted && (
+          <button
+            className={styles.lockBtn}
+            onClick={(e) => { e.stopPropagation(); requestDecrypt('list', list.id); }}
+            title="Encrypted list. Click to decrypt it"
+            aria-label="Decrypt this list"
+          >🔒</button>
+        )}
       </div>
     );
   };
@@ -585,21 +612,56 @@ export function ListsSection() {
                 </div>
               </div>
               <div className={styles.mainHeaderRight}>
-                <button
-                  className={styles.addTabBtn}
-                  onClick={() => { setAddingTab(true); setNewTabName(''); }}
-                  title="Add tab"
-                >
-                  + Tab
-                </button>
-                <button
-                  className={styles.headerIconBtn}
-                  onClick={() => openEditList(selectedList.id)}
-                  title="Edit list"
-                >✎</button>
+                {selectedList.isEncrypted && (
+                  <button
+                    className={styles.headerIconBtn}
+                    onClick={() => requestDecrypt('list', selectedList.id)}
+                    title={selectedListLocked
+                      ? 'Encrypted — locked on this device. Click to decrypt this list'
+                      : 'Encrypted list. Click to decrypt it'}
+                    aria-label="Decrypt this list"
+                  >🔒</button>
+                )}
+                {!selectedList.isEncrypted && (
+                  <button
+                    className={styles.addTabBtn}
+                    disabled={!vaultUnlocked}
+                    onClick={() => {
+                      encryptList(selectedList.id as ListId).catch((err) => {
+                        console.error('[ListsSection] could not encrypt list:', err);
+                        window.alert(err instanceof Error ? err.message : 'Could not encrypt this list.');
+                      });
+                    }}
+                    title={vaultUnlocked
+                      ? 'Encrypt this list (fully encrypts content uploaded to the cloud)'
+                      : 'Unlock encryption in Account first'}
+                  >
+                    🔒 Encrypt
+                  </button>
+                )}
+                {!selectedListLocked && (
+                  <>
+                    <button
+                      className={styles.headerIconBtn}
+                      onClick={() => openEditList(selectedList.id)}
+                      title="Edit list"
+                    >✎</button>
+                  </>
+                )}
               </div>
             </div>
 
+            {selectedListLocked ? (
+              <div className={styles.emptyMain}>
+                <span className={styles.emptyIcon}>🔒</span>
+                <p className={styles.emptyTitle}>This list is encrypted</p>
+                <p className={styles.emptyHint}>
+                  Encryption is locked on this device. Unlock it in Account to see this list’s contents.
+                </p>
+                <button className={styles.emptyCreateBtn} onClick={openAccount}>Unlock encryption</button>
+              </div>
+            ) : (
+            <>
             {/* Tab bar */}
             {showTabBar && (
               <div className={styles.listTabs}>
@@ -825,6 +887,8 @@ export function ListsSection() {
                   </tbody>
                 </table>
               </div>
+            )}
+            </>
             )}
           </>
         )}

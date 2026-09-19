@@ -479,6 +479,35 @@
   min-width: 0;
 }
 
+.lockBadge {
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  border: none;
+  background: transparent;
+  padding: 0.2rem 0.3rem;
+  border-radius: var(--radius-sm);
+}
+
+.lockBadge:hover {
+  background: var(--color-surface-alt);
+}
+
+.lockedPlaceholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
 .editor {
   flex: 1;
   display: flex;
@@ -751,6 +780,8 @@
 }
 
 .editorContent mark[data-artifact-type="task"]::after { content: "📋"; }
+.editorContent mark[data-artifact-type="event"]::after { content: "📅"; }
+.editorContent mark[data-artifact-type="reminder"]::after { content: "⏰"; }
 
 /* ── Tables ──────────────────────────────────────────────────────────────── */
 

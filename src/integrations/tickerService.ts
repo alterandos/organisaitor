@@ -1,5 +1,6 @@
 import type { TickerMatch, TickerQuote } from './types';
 import type { AssetClass } from '@/types/portfolio';
+import { apiFetch } from '@/utils/apiFetch';
 
 // In dev, Vite proxies /yf/* → https://query1.finance.yahoo.com/* (Node.js, no CORS).
 // In production, Vercel edge functions at /api/* handle the same proxy.
@@ -56,7 +57,7 @@ export async function searchTickers(q: string): Promise<TickerMatch[]> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return quotes.filter((item: any) => item.isYahooFinance !== false).map(mapYFSearch);
     }
-    const res = await fetch(`/api/ticker-search?q=${encodeURIComponent(q)}`);
+    const res = await apiFetch(`/api/ticker-search?q=${encodeURIComponent(q)}`);
     if (!res.ok) return [];
     return res.json();
   } catch (err) {
@@ -79,7 +80,7 @@ export async function getBatchQuotes(symbols: string[]): Promise<TickerQuote[]> 
       const data = await res.json();
       return (data?.quoteResponse?.result ?? []).map(mapYFQuote);
     }
-    const res = await fetch(`/api/ticker-quote?symbols=${encodeURIComponent(joined)}`);
+    const res = await apiFetch(`/api/ticker-quote?symbols=${encodeURIComponent(joined)}`);
     if (!res.ok) return [];
     return res.json();
   } catch (err) {
@@ -94,7 +95,7 @@ export async function fetchSector(symbol: string): Promise<string | null> {
     const path = USE_PROXY
       ? `/yf/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=assetProfile`
       : `/api/ticker-sector?symbol=${encodeURIComponent(symbol)}`;
-    const res = await fetch(path, { headers: YF_HEADERS });
+    const res = await apiFetch(path, { headers: YF_HEADERS });
     if (!res.ok) return null;
     const data = await res.json();
     return data?.quoteSummary?.result?.[0]?.assetProfile?.sector ?? null;
@@ -113,7 +114,7 @@ export async function getChartHistory(
     ? `/yf/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`
     : `/api/ticker-chart?symbol=${encodeURIComponent(symbol)}&interval=${interval}&range=${range}`;
   try {
-    const res = await fetch(path, { headers: YF_HEADERS });
+    const res = await apiFetch(path, { headers: YF_HEADERS });
     if (!res.ok) return [];
     const data = await res.json();
     const result = data?.chart?.result?.[0];

@@ -19,7 +19,10 @@ import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore, type QuickAccessTargetType, type RecentItemEntry } from '@/store/recentItemsStore';
 import { getNotebookIcon } from '@/utils/notes';
 import { LABELS } from '@/config/labels';
-import type { NoteId, NoteTagId } from '@/types/notes';
+import { noteView } from '@/services/noteSecrets';
+import { listView } from '@/services/listSecrets';
+import type { List } from '@/types/lists';
+import type { Note, NoteId, NoteTagId } from '@/types/notes';
 import type { ListId } from '@/types/lists';
 import type { TaskId, CollectionId } from '@/types';
 
@@ -40,16 +43,28 @@ interface QuickAccessProvider {
   navigate:  (entityId: string) => void;
 }
 
+// Encrypted notes resolve through noteView() (their title is blank in the store) and get a 🔒
+// in place of the usual 📝 so they're recognisable in results and recents.
+const noteItem = (raw: Note): QuickAccessItem => {
+  const n = noteView(raw);
+  return {
+    key: `note:${n.id}`, type: 'note', entityId: n.id,
+    title: n.title || 'Untitled note',
+    subtitle: n.isEncrypted ? 'Note · Encrypted' : 'Note',
+    icon: n.isEncrypted ? '🔒' : '📝',
+  };
+};
+
 const noteProvider: QuickAccessProvider = {
   type: 'note',
   typeLabel: 'Note',
   list: () => Object.values(useNoteStore.getState().notes)
     .filter((n) => !n.archivedAt)
-    .map((n) => ({ key: `note:${n.id}`, type: 'note', entityId: n.id, title: n.title || 'Untitled note', subtitle: 'Note', icon: '📝' })),
+    .map(noteItem),
   resolve: (id) => {
     const n = useNoteStore.getState().notes[id as NoteId];
     if (!n || n.archivedAt) return null;
-    return { key: `note:${n.id}`, type: 'note', entityId: n.id, title: n.title || 'Untitled note', subtitle: 'Note', icon: '📝' };
+    return noteItem(n);
   },
   navigate: (id) => {
     useUIStore.getState().setActiveView('notes');
@@ -105,15 +120,25 @@ const taskProvider: QuickAccessProvider = {
   },
 };
 
+// Read through listView(): an encrypted list's name is blank in the store. Like notes, an
+// encrypted list gets a 🔒 icon and an "Encrypted" subtitle (its name reads "Encrypted list" while locked).
+const listItem = (raw: List): QuickAccessItem => {
+  const l = listView(raw);
+  const kindLabel = l.kind === 'watchlist' ? 'Watchlist' : 'Reference list';
+  return {
+    key: `list:${l.id}`, type: 'list', entityId: l.id, title: l.name,
+    subtitle: l.isEncrypted ? `${kindLabel} · Encrypted` : kindLabel,
+    icon: l.isEncrypted ? '🔒' : (l.icon || '📋'),
+  };
+};
+
 const listProvider: QuickAccessProvider = {
   type: 'list',
   typeLabel: LABELS.list,
-  list: () => Object.values(useListStore.getState().lists)
-    .map((l) => ({ key: `list:${l.id}`, type: 'list', entityId: l.id, title: l.name, subtitle: l.kind === 'watchlist' ? 'Watchlist' : 'Reference list', icon: l.icon || '📋' })),
+  list: () => Object.values(useListStore.getState().lists).map(listItem),
   resolve: (id) => {
     const l = useListStore.getState().lists[id as ListId];
-    if (!l) return null;
-    return { key: `list:${l.id}`, type: 'list', entityId: l.id, title: l.name, subtitle: l.kind === 'watchlist' ? 'Watchlist' : 'Reference list', icon: l.icon || '📋' };
+    return l ? listItem(l) : null;
   },
   navigate: (id) => {
     useUIStore.getState().setActiveView('lists');

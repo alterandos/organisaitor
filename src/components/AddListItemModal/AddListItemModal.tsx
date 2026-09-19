@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { useListStore } from '@/store/listStore';
+import { useListViews, useListItemViews } from '@/store/listViews';
 import { useUIStore } from '@/store/uiStore';
 import { LIST_ITEM_STATUS_META } from '@/types/lists';
 import type { ListItemStatus, ListFieldSchema, ListId, ListItemId } from '@/types/lists';
@@ -110,8 +111,8 @@ function FieldInput({
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 export function AddListItemModal() {
-  const lists          = useListStore((s) => s.lists);
-  const listItems      = useListStore((s) => s.listItems);
+  const lists          = useListViews();
+  const listItems      = useListItemViews();
   const addListItem    = useListStore((s) => s.addListItem);
   const updateListItem = useListStore((s) => s.updateListItem);
 

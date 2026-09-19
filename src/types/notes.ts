@@ -43,6 +43,15 @@ export interface Note {
   tabOrder: string[];                 // Ordered IDs including '__main__'; [] = default order (main first)
   templateId: string | null;          // NoteTemplateDef.id used to create this note (config/noteTemplates.ts); null = blank/unknown
   collectionId: CollectionId | null;  // Endeavour this note belongs to; defaults to its notebook's Endeavour on create (see noteStore.addNote)
+  // When true, this note's SENSITIVE fields — title, content, abstract, extra tabs (names + content),
+  // mainTabName, tagData — live only inside `encryptedPayload` (one AES-GCM envelope, see
+  // src/services/noteSecrets.ts) and are BLANKED on the stored object: at rest locally and in
+  // Supabase alike. Plaintext exists only in a memory cache while the vault is unlocked; read a
+  // note through noteView() (never `note.title` etc. directly) so encrypted notes resolve.
+  // Still plaintext by design (needed for the tree/filters/sync merge): tagIds, color, pinned,
+  // parentId, tabOrder, templateId, collectionId, and all timestamps.
+  isEncrypted: boolean;
+  encryptedPayload: string | null;
 }
 
 // ── NoteTag entity (hierarchical) ──────────────────────────────────────────────
@@ -109,4 +118,8 @@ export interface StructuredTagEntry {
   collectionId: CollectionId | null;      // Endeavour
   createdAt:    string;
   updatedAt:    string;
+  // Same scheme as Note.isEncrypted: an entry's `term` (a verbatim excerpt of note text) and
+  // `fields` are ciphertext-only whenever its note is encrypted.
+  isEncrypted:      boolean;
+  encryptedPayload: string | null;
 }

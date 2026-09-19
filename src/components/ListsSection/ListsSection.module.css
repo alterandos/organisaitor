@@ -130,6 +130,18 @@
 
 .sidebarItemIcon { font-size: 0.9rem; flex-shrink: 0; }
 
+.lockBtn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.lockBtn:hover { background: var(--color-surface-alt); }
+
 .sidebarItemInfo {
   flex: 1;
   min-width: 0;

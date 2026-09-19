@@ -19,6 +19,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.vercel
 
 # Editor directories and files
 .vscode/*
@@ -39,3 +40,6 @@ android/.idea/
 android/local.properties
 android/captures/
 android/app/release/
+
+.vercel
+.env*

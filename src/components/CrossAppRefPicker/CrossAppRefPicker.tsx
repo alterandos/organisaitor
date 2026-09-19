@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useNoteStore } from '@/store/noteStore';
+import { useNoteViews } from '@/store/noteViews';
 import type { CrossAppRef, CrossAppRefType } from '@/types';
 import type { NoteId } from '@/types/notes';
 import styles from './CrossAppRefPicker.module.css';
@@ -32,7 +32,8 @@ export function CrossAppRefPicker({ value, onChange, onNavigate }: Props) {
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const addBtnRef = useRef<HTMLButtonElement>(null);
-  const notesRecord = useNoteStore((s) => s.notes);
+  // Views: an encrypted note's title is blank in the store (see services/noteSecrets.ts).
+  const notesRecord = useNoteViews();
 
   // Portaled to document.body, position:fixed from the trigger's own rect — not rendered
   // in-place with position:absolute. This picker is meant to be embedded inside forms that
@@ -114,7 +115,8 @@ export function CrossAppRefPicker({ value, onChange, onNavigate }: Props) {
     <div className={styles.root} ref={rootRef}>
       <div className={styles.chips}>
         {value.map((ref) => {
-          const label = ref.type === 'note' ? (notesRecord[ref.id as NoteId]?.title || 'Untitled') : ref.id;
+          const linked = ref.type === 'note' ? notesRecord[ref.id as NoteId] : undefined;
+          const label = ref.type === 'note' ? `${linked?.isEncrypted ? '🔒 ' : ''}${linked?.title || 'Untitled'}` : ref.id;
           const icon = ICON_BY_TYPE[ref.type] ?? '🔗';
           return (
             <span key={`${ref.type}:${ref.id}`} className={styles.chip}>
@@ -167,7 +169,7 @@ export function CrossAppRefPicker({ value, onChange, onNavigate }: Props) {
             ) : (
               noteResults.map((n) => (
                 <button key={n.id} type="button" className={styles.result} onClick={() => addNote(n.id)}>
-                  📝 {n.title || 'Untitled'}
+                  {n.isEncrypted ? '🔒' : '📝'} {n.title || 'Untitled'}
                 </button>
               ))
             )}

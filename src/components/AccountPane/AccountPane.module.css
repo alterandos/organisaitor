@@ -155,6 +155,59 @@
   gap: 0.25rem;
 }
 
+.vaultSection {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+}
+
+.recoveryCode {
+  font-family: monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.7rem;
+  margin-bottom: 0.65rem;
+  user-select: all;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+  margin-bottom: 0.65rem;
+  cursor: pointer;
+}
+.checkboxRow input { accent-color: var(--color-primary); cursor: pointer; }
+
+.lockedBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.6rem 0.5rem;
+  background: none;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lockedBtn:hover { border-color: var(--color-primary); background: var(--color-primary-subtle); }
+.lockedIcon { font-size: 1.6rem; line-height: 1; }
+.lockedSub { font-size: 0.75rem; font-weight: 400; color: var(--color-muted); }
+
 .guestLink {
   display: block;
   width: 100%;

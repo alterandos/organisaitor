@@ -6,6 +6,13 @@ import { newNoteId, newNoteTagId, newStructuredTagEntryId } from '@/utils/id';
 import { now } from '@/utils/date';
 import { resolveNoteInheritedCollectionId } from '@/utils/notes';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
+import {
+  noteView, isNoteLocked, extractNoteSecrets, blankNoteSecrets, applyNoteSecrets, entryView, isEntryLocked,
+  extractEntrySecrets, blankEntrySecrets,
+  putNoteSecrets, dropNoteSecrets, putEntrySecrets, dropEntrySecrets,
+  queueEncrypt, encryptSecrets, decryptSecrets, type NoteSecrets, type EntrySecrets,
+} from '@/services/noteSecrets';
+import { decryptField } from '@/services/vault';
 
 interface NoteData {
   notes: Record<NoteId, Note>;
@@ -23,6 +30,11 @@ export interface NoteActions {
   // Notes
   addNote: (input: CreateNoteInput) => NoteId;
   updateNote: (id: NoteId, changes: Partial<Omit<Note, 'id' | 'createdAt' | 'userId'>>) => void;
+  // Encryption (see src/services/noteSecrets.ts). encryptNote needs the vault UNLOCKED (rejects
+  // otherwise); decryptNote also needs the note's plaintext available (rejects if locked).
+  encryptNote: (id: NoteId) => Promise<void>;
+  decryptNote: (id: NoteId) => Promise<void>;
+  upgradeLegacyEncryptedNote: (id: NoteId) => Promise<void>;
   touchNote: (id: NoteId) => void;   // Update lastViewedAt without changing updatedAt
   deleteNote: (id: NoteId) => void;
 
@@ -96,6 +108,8 @@ export const useNoteStore = create<NoteStore>()(
           tabOrder: [],
           templateId: input.templateId ?? null,
           collectionId,
+          isEncrypted: false,
+          encryptedPayload: null,
           userId: '', // Will be set by sync service
         };
         set((state) => ({
@@ -104,17 +118,11 @@ export const useNoteStore = create<NoteStore>()(
         return id;
       },
 
-      updateNote: (id, changes) =>
-        set((state) => {
-          const note = state.notes[id];
-          if (!note) return {};
-          return {
-            notes: {
-              ...state.notes,
-              [id]: { ...note, ...changes, updatedAt: now() },
-            },
-          };
-        }),
+      updateNote: (id, changes) => editNote(id, (n) => ({ ...n, ...changes })),
+
+      encryptNote: (id) => encryptNoteImpl(id),
+      decryptNote: (id) => decryptNoteImpl(id),
+      upgradeLegacyEncryptedNote: (id) => upgradeLegacyImpl(id),
 
       touchNote: (id) =>
         set((state) => {
@@ -131,6 +139,7 @@ export const useNoteStore = create<NoteStore>()(
 
       deleteNote: (id) =>
         set((state) => {
+          dropNoteSecrets(id);
           const notes = { ...state.notes };
           delete notes[id];
           // Orphaned children become top-level
@@ -168,83 +177,37 @@ export const useNoteStore = create<NoteStore>()(
 
       addNoteTab: (noteId, name) => {
         const tabId = nanoid(8);
-        set((state) => {
-          const note = state.notes[noteId];
-          if (!note) return {};
+        editNote(noteId, (note) => {
           const tab: NoteTab = { id: tabId, name: name.trim() || 'Tab', content: '' };
           const currentOrder = (note.tabOrder ?? []).length
             ? note.tabOrder
             : ['__main__', ...note.tabs.map((t) => t.id)];
-          return {
-            notes: {
-              ...state.notes,
-              [noteId]: { ...note, tabs: [...note.tabs, tab], tabOrder: [...currentOrder, tabId], updatedAt: now() },
-            },
-          };
+          return { ...note, tabs: [...note.tabs, tab], tabOrder: [...currentOrder, tabId] };
         });
         return tabId;
       },
 
       removeNoteTab: (noteId, tabId) =>
-        set((state) => {
-          const note = state.notes[noteId];
-          if (!note) return {};
-          return {
-            notes: {
-              ...state.notes,
-              [noteId]: {
-                ...note,
-                tabs: note.tabs.filter((t) => t.id !== tabId),
-                tabOrder: (note.tabOrder ?? []).filter((id) => id !== tabId),
-                updatedAt: now(),
-              },
-            },
-          };
-        }),
+        editNote(noteId, (note) => ({
+          ...note,
+          tabs: note.tabs.filter((t) => t.id !== tabId),
+          tabOrder: (note.tabOrder ?? []).filter((id) => id !== tabId),
+        })),
 
       renameNoteTab: (noteId, tabId, name) =>
-        set((state) => {
-          const note = state.notes[noteId];
-          if (!note) return {};
-          return {
-            notes: {
-              ...state.notes,
-              [noteId]: {
-                ...note,
-                tabs: note.tabs.map((t) => t.id === tabId ? { ...t, name: name.trim() || t.name } : t),
-                updatedAt: now(),
-              },
-            },
-          };
-        }),
+        editNote(noteId, (note) => ({
+          ...note,
+          tabs: note.tabs.map((t) => t.id === tabId ? { ...t, name: name.trim() || t.name } : t),
+        })),
 
       updateNoteTabContent: (noteId, tabId, content) =>
-        set((state) => {
-          const note = state.notes[noteId];
-          if (!note) return {};
-          return {
-            notes: {
-              ...state.notes,
-              [noteId]: {
-                ...note,
-                tabs: note.tabs.map((t) => t.id === tabId ? { ...t, content } : t),
-                updatedAt: now(),
-              },
-            },
-          };
-        }),
+        editNote(noteId, (note) => ({
+          ...note,
+          tabs: note.tabs.map((t) => t.id === tabId ? { ...t, content } : t),
+        })),
 
       renameMainTab: (noteId, name) =>
-        set((state) => {
-          const note = state.notes[noteId];
-          if (!note) return {};
-          return {
-            notes: {
-              ...state.notes,
-              [noteId]: { ...note, mainTabName: name.trim() || 'Main', updatedAt: now() },
-            },
-          };
-        }),
+        editNote(noteId, (note) => ({ ...note, mainTabName: name.trim() || 'Main' })),
 
       reorderNoteTabs: (noteId, newOrder) =>
         set((state) => {
@@ -371,25 +334,30 @@ export const useNoteStore = create<NoteStore>()(
           collectionId: input.collectionId,
           createdAt:    ts,
           updatedAt:    ts,
+          isEncrypted:      false,
+          encryptedPayload: null,
         };
+        // An entry made from an encrypted note's text is born encrypted: its `term` is a
+        // verbatim excerpt of that note, so a plaintext row would leak it.
+        const host = get().notes[input.noteId];
+        if (host?.isEncrypted && !isNoteLocked(host)) {
+          const secrets = extractEntrySecrets(entry);
+          putEntrySecrets(id, secrets, null, true);
+          set((state) => ({
+            structuredTagEntries: { ...state.structuredTagEntries, [id]: { ...blankEntrySecrets(entry), isEncrypted: true } },
+          }));
+          queueEncrypt(`entry:${id}`, secrets, (payload) => landEntryPayload(id, secrets, payload));
+          return id;
+        }
         set((state) => ({ structuredTagEntries: { ...state.structuredTagEntries, [id]: entry } }));
         return id;
       },
 
-      updateStructuredTagEntry: (id, changes) =>
-        set((state) => {
-          const entry = state.structuredTagEntries[id];
-          if (!entry) return {};
-          return {
-            structuredTagEntries: {
-              ...state.structuredTagEntries,
-              [id]: { ...entry, ...changes, updatedAt: now() },
-            },
-          };
-        }),
+      updateStructuredTagEntry: (id, changes) => editEntry(id, (e) => ({ ...e, ...changes })),
 
       deleteStructuredTagEntry: (id) =>
         set((state) => {
+          dropEntrySecrets(id);
           const entries = { ...state.structuredTagEntries };
           delete entries[id];
           return { structuredTagEntries: entries };
@@ -418,7 +386,7 @@ export const useNoteStore = create<NoteStore>()(
     }),
     {
       name: 'notes-storage',
-      version: 10,
+      version: 12,
       migrate: (persisted: unknown, fromVersion: number) => {
         let state = persisted as NoteData;
         if (fromVersion < 2) {
@@ -508,8 +476,186 @@ export const useNoteStore = create<NoteStore>()(
         if (fromVersion < 10) {
           state = { ...state, structuredTagEntries: (state as { structuredTagEntries?: unknown }).structuredTagEntries ?? {} } as NoteData;
         }
+        if (fromVersion < 11) {
+          const notes = Object.fromEntries(
+            Object.entries(state.notes ?? {}).map(([id, note]) => [
+              id,
+              { isEncrypted: false, ...(note as object) },
+            ])
+          ) as unknown as Record<NoteId, Note>;
+          state = { ...state, notes };
+        }
+        if (fromVersion < 12) {
+          const notes = Object.fromEntries(
+            Object.entries(state.notes ?? {}).map(([id, note]) => [
+              id,
+              { encryptedPayload: null, ...(note as object) },
+            ])
+          ) as unknown as Record<NoteId, Note>;
+          const structuredTagEntries = Object.fromEntries(
+            Object.entries(state.structuredTagEntries ?? {}).map(([id, entry]) => [
+              id,
+              { isEncrypted: false, encryptedPayload: null, ...(entry as object) },
+            ])
+          ) as unknown as Record<StructuredTagEntryId, StructuredTagEntry>;
+          state = { ...state, notes, structuredTagEntries };
+        }
         return state;
       },
     }
   )
 );
+
+// ── Encryption-aware mutation helpers ────────────────────────────────────────
+// Module-level (not inside the store creator) so the actions above can reference them lazily;
+// they read/write through useNoteStore. See src/services/noteSecrets.ts for the model.
+
+type NoteMap = Record<NoteId, Note>;
+type EntryMap = Record<StructuredTagEntryId, StructuredTagEntry>;
+
+const putNote = (id: NoteId, note: Note) =>
+  useNoteStore.setState((s) => ({ notes: { ...s.notes, [id]: note } as NoteMap }));
+const putEntry = (id: StructuredTagEntryId, entry: StructuredTagEntry) =>
+  useNoteStore.setState((s) => ({ structuredTagEntries: { ...s.structuredTagEntries, [id]: entry } as EntryMap }));
+
+const entriesOfNote = (noteId: NoteId) =>
+  Object.values(useNoteStore.getState().structuredTagEntries).filter((e) => e.noteId === noteId);
+
+// Apply `edit` — written against the READABLE (plaintext) form of a note — to note `id`. For a
+// plain note that's a normal update. For an encrypted note the edit is applied to the cached
+// plaintext immediately (the UI never waits on crypto) and re-encrypted in the background; an
+// edit to a LOCKED encrypted note is refused rather than silently corrupting it.
+function editNote(id: NoteId, edit: (n: Note) => Note): void {
+  const raw = useNoteStore.getState().notes[id];
+  if (!raw) return;
+  if (!raw.isEncrypted) {
+    putNote(id, { ...edit(raw), updatedAt: now() });
+    return;
+  }
+  if (isNoteLocked(raw)) {
+    console.warn('[noteStore] ignored an edit to a locked encrypted note:', id);
+    return;
+  }
+  const edited = edit(noteView(raw));
+  const secrets = extractNoteSecrets(edited);
+  putNoteSecrets(id, secrets, raw.encryptedPayload, true);
+  putNote(id, { ...blankNoteSecrets(edited), isEncrypted: true, encryptedPayload: raw.encryptedPayload, updatedAt: now() });
+  queueEncrypt(`note:${id}`, secrets, (payload) => landNotePayload(id, secrets, payload));
+}
+
+// Store first, cache second: the cache entry is `dirty` (trusted regardless of payload) until
+// the second step, so this order never shows a "locked" flash between the two writes.
+function landNotePayload(id: NoteId, secrets: NoteSecrets, payload: string): void {
+  const cur = useNoteStore.getState().notes[id];
+  if (!cur || !cur.isEncrypted) return; // deleted or decrypted while this was encrypting
+  putNote(id, { ...cur, encryptedPayload: payload });
+  putNoteSecrets(id, secrets, payload, false);
+}
+
+function editEntry(id: StructuredTagEntryId, edit: (e: StructuredTagEntry) => StructuredTagEntry): void {
+  const raw = useNoteStore.getState().structuredTagEntries[id];
+  if (!raw) return;
+  if (!raw.isEncrypted) {
+    putEntry(id, { ...edit(raw), updatedAt: now() });
+    return;
+  }
+  if (isEntryLocked(raw)) {
+    console.warn('[noteStore] ignored an edit to a locked encrypted entry:', id);
+    return;
+  }
+  const edited = edit(entryView(raw));
+  const secrets = extractEntrySecrets(edited);
+  putEntrySecrets(id, secrets, raw.encryptedPayload, true);
+  putEntry(id, { ...blankEntrySecrets(edited), isEncrypted: true, encryptedPayload: raw.encryptedPayload, updatedAt: now() });
+  queueEncrypt(`entry:${id}`, secrets, (payload) => landEntryPayload(id, secrets, payload));
+}
+
+function landEntryPayload(id: StructuredTagEntryId, secrets: EntrySecrets, payload: string): void {
+  const cur = useNoteStore.getState().structuredTagEntries[id];
+  if (!cur || !cur.isEncrypted) return;
+  putEntry(id, { ...cur, encryptedPayload: payload });
+  putEntrySecrets(id, secrets, payload, false);
+}
+
+async function encryptEntryImpl(id: StructuredTagEntryId): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const raw = useNoteStore.getState().structuredTagEntries[id];
+    if (!raw || raw.isEncrypted) return;
+    const secrets = extractEntrySecrets(raw);
+    const payload = await encryptSecrets(secrets);
+    if (useNoteStore.getState().structuredTagEntries[id] !== raw) continue; // edited mid-encrypt — redo on the fresh text
+    putEntry(id, { ...blankEntrySecrets(raw), isEncrypted: true, encryptedPayload: payload, updatedAt: now() });
+    putEntrySecrets(id, secrets, payload, false);
+    return;
+  }
+  throw new Error('An entry kept changing while it was being encrypted; try again.');
+}
+
+async function decryptEntryImpl(id: StructuredTagEntryId): Promise<void> {
+  const raw = useNoteStore.getState().structuredTagEntries[id];
+  if (!raw || !raw.isEncrypted) return;
+  // Don't rely on the cache being warm: it's filled asynchronously after unlock.
+  const secrets = isEntryLocked(raw)
+    ? (raw.encryptedPayload ? await decryptSecrets<EntrySecrets>(raw.encryptedPayload) : null)
+    : extractEntrySecrets(entryView(raw));
+  if (!secrets) throw new Error('Could not read this entry\u2019s encrypted contents.');
+  putEntry(id, { ...raw, term: secrets.term, fields: secrets.fields, isEncrypted: false, encryptedPayload: null, updatedAt: now() });
+  dropEntrySecrets(id);
+}
+
+async function encryptNoteImpl(id: NoteId): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const raw = useNoteStore.getState().notes[id];
+    if (!raw || raw.isEncrypted) return;
+    const secrets = extractNoteSecrets(raw);
+    const payload = await encryptSecrets(secrets); // rejects "Vault is locked" if it is
+    if (useNoteStore.getState().notes[id] !== raw) continue; // edited mid-encrypt — redo on the fresh text
+    putNote(id, { ...blankNoteSecrets(raw), isEncrypted: true, encryptedPayload: payload, updatedAt: now() });
+    putNoteSecrets(id, secrets, payload, false);
+    // Entries hold verbatim excerpts of this note's text — they must follow it.
+    await Promise.all(entriesOfNote(id).map((e) => encryptEntryImpl(e.id)));
+    return;
+  }
+  throw new Error('This note kept changing while it was being encrypted; try again.');
+}
+
+async function decryptNoteImpl(id: NoteId): Promise<void> {
+  const raw = useNoteStore.getState().notes[id];
+  if (!raw || !raw.isEncrypted) return;
+  // Don't rely on the cache being warm: it's filled asynchronously after unlock, and the
+  // decrypt-with-password prompt unlocks the vault and decrypts in one go.
+  const secrets = isNoteLocked(raw)
+    ? (raw.encryptedPayload ? await decryptSecrets<NoteSecrets>(raw.encryptedPayload) : null)
+    : extractNoteSecrets(noteView(raw));
+  if (!secrets) throw new Error('Unlock encryption first \u2014 this note\u2019s contents aren\u2019t available.');
+  putNote(id, { ...applyNoteSecrets(raw, secrets), isEncrypted: false, encryptedPayload: null, updatedAt: now() });
+  dropNoteSecrets(id);
+  await Promise.all(entriesOfNote(id).map((e) => decryptEntryImpl(e.id)));
+}
+
+// Notes encrypted by the first version of this feature kept title/abstract/tabs in plaintext and
+// stored only `content` as an envelope, with no encryptedPayload. Once the vault is unlocked,
+// fold them into the new all-fields payload (called from noteSecretsSync). Failures are
+// remembered so a permanently-unreadable legacy note isn't retried on every store change.
+const upgrading = new Set<string>();
+const upgradeFailed = new Set<string>();
+async function upgradeLegacyImpl(id: NoteId): Promise<void> {
+  const raw = useNoteStore.getState().notes[id];
+  if (!raw || !raw.isEncrypted || raw.encryptedPayload) return;
+  if (upgrading.has(id) || upgradeFailed.has(id)) return;
+  upgrading.add(id);
+  try {
+    const content = await decryptField(raw.content);
+    const secrets = extractNoteSecrets({ ...raw, content });
+    const payload = await encryptSecrets(secrets);
+    if (useNoteStore.getState().notes[id] !== raw) return; // changed mid-upgrade — retried on the next store change
+    putNote(id, { ...blankNoteSecrets(raw), isEncrypted: true, encryptedPayload: payload, updatedAt: now() });
+    putNoteSecrets(id, secrets, payload, false);
+    await Promise.all(entriesOfNote(id).map((e) => encryptEntryImpl(e.id)));
+  } catch (err) {
+    upgradeFailed.add(id);
+    console.error('[noteStore] could not upgrade legacy encrypted note', id, err);
+  } finally {
+    upgrading.delete(id);
+  }
+}

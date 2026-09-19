@@ -11,11 +11,18 @@ import { useTaskStore } from '@/store/taskStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { stripArtifactLinksFromContent } from '@/utils/noteContent';
+import { noteView, isNoteLocked } from '@/services/noteSecrets';
 import type { TaskId, NoteId, CrossAppRef, CrossAppRefType } from '@/types';
 
 function stripArtifactLinksFromNote(noteId: NoteId, targetType: string, targetId: string) {
-  const note = useNoteStore.getState().notes[noteId];
-  if (!note) return;
+  const raw = useNoteStore.getState().notes[noteId];
+  if (!raw) return;
+  // An encrypted note's content is ciphertext-only until the vault is unlocked, so a LOCKED
+  // note can't be rewritten — its now-dead mark stays. That's harmless: clicking it already
+  // checks the target still exists before navigating. Unlocked, the view has plaintext and
+  // the store's update actions re-encrypt the result.
+  if (isNoteLocked(raw)) return;
+  const note = noteView(raw);
 
   const main = stripArtifactLinksFromContent(note.content, targetType, targetId);
   if (main.changed) useNoteStore.getState().updateNote(noteId, { content: main.content });

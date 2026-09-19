@@ -99,6 +99,21 @@
 }
 
 /* Note type icon (from the template used to create the note, if any) */
+.noteLockBtn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.noteLockBtn:hover {
+  background: var(--color-surface-alt);
+}
+
 .noteTypeIcon {
   flex-shrink: 0;
   font-size: 0.85rem;

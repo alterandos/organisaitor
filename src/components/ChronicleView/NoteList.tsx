@@ -4,6 +4,7 @@ import { formatDate } from '@/utils/date';
 import { NOTE_TEMPLATES } from '@/config/noteTemplates';
 import { getNoteEffectiveCollectionId } from '@/utils/notes';
 import { deleteNoteWithCleanup } from '@/services/crossAppLinkCleanup';
+import { noteView, isNoteLocked, useSecretsVersion } from '@/services/noteSecrets';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import type { NoteTagId, NoteId, CollectionId } from '@/types';
 import type { Note } from '@/types/notes';
@@ -24,7 +25,12 @@ interface NoteRowProps {
   allNotes: Note[];     // All notes for this tag (for computing children)
 }
 
-function NoteRow({ note, indent, siblings, allNotes }: NoteRowProps) {
+function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
+  // Title comes from the decrypted view for an encrypted note (blank in the store). Subscribing
+  // to the cache version re-renders the row when the vault locks/unlocks.
+  useSecretsVersion((s) => s.version);
+  const note = noteView(rawNote);
+  const locked = isNoteLocked(rawNote);
   const openNote         = useUIStore((s) => s.openNote);
   const showEditNoteMeta = useUIStore((s) => s.showEditNoteMeta);
   const editingNoteId    = useUIStore((s) => s.editingNoteId);
@@ -45,7 +51,7 @@ function NoteRow({ note, indent, siblings, allNotes }: NoteRowProps) {
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${note.title || 'Untitled'}"?`)) return;
+    if (!window.confirm(`Delete "${note.title || 'Untitled'}"${locked ? ' (encrypted)' : ''}?`)) return;
     if (editingNoteId === note.id) useUIStore.getState().closeNote();
     deleteNoteWithCleanup(note.id);
   };
@@ -56,8 +62,19 @@ function NoteRow({ note, indent, siblings, allNotes }: NoteRowProps) {
         className={`${styles.noteItem} ${isActive ? styles.noteItemActive : ''}`}
         style={{ borderLeftColor: note.color ?? '#e5e7eb', paddingLeft: `${4 + indent * 20}px` }}
       >
+        {note.isEncrypted && (
+          <button
+            className={styles.noteLockBtn}
+            onClick={(e) => { e.stopPropagation(); useUIStore.getState().requestDecrypt('note', note.id); }}
+            title="Encrypted note. Click to decrypt."
+            aria-label="Decrypt this note"
+          >🔒</button>
+        )}
         <button className={styles.noteMain} onClick={() => openNote(note.id)}>
-          <TruncatedText text={note.title || '(Untitled)'} className={styles.noteTitle} />
+          <TruncatedText
+            text={note.title || '(Untitled)'}
+            className={styles.noteTitle}
+          />
           <div className={styles.noteTime}>{formatDate(note.updatedAt)}</div>
         </button>
         {template && (

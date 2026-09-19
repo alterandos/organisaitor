@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNoteStore } from '@/store/noteStore';
+import { useNoteViews, useEntryViews } from '@/store/noteViews';
 import { useUIStore } from '@/store/uiStore';
 import { BUILTIN_TAGS, type BuiltinTag } from '../NoteEditor/builtinTags';
 import { getStructuredTagType } from '@/config/structuredTagTypes';
@@ -10,6 +11,10 @@ import styles from './TagView.module.css';
 type SortMode = 'type' | 'alpha' | 'count';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+// A 🔒 sits next to an encrypted note's name wherever notes are listed.
+const noteLabel = (n: Pick<Note, 'title' | 'isEncrypted'> | undefined) =>
+  `${n?.isEncrypted ? '🔒 ' : ''}${n?.title || '(Untitled)'}`;
 
 function getTaggedSegments(content: string, tagId: string): string[] {
   const segments: string[] = [];
@@ -86,9 +91,10 @@ export function TagView() {
   const openNote            = useUIStore((s) => s.openNote);
   const closeNote           = useUIStore((s) => s.closeNote);
   const setNoteTagViewReturn = useUIStore((s) => s.setNoteTagViewReturn);
-  const notesRecord         = useNoteStore((s) => s.notes);
+  // Views, not raw records: an encrypted note's title/content are blank in the store.
+  const notesRecord         = useNoteViews();
   const noteTagsRecord      = useNoteStore((s) => s.noteTags);
-  const structuredTagEntries = useNoteStore((s) => s.structuredTagEntries);
+  const structuredTagEntries = useEntryViews();
 
   const [sort, setSort]           = useState<SortMode>('type');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -113,7 +119,7 @@ export function TagView() {
           const existing = noteMap.get(entry.noteId);
           if (existing) { existing.structuredEntries!.push(entry); return; }
           noteMap.set(entry.noteId, {
-            noteId: entry.noteId, title: note?.title || '(Untitled)',
+            noteId: entry.noteId, title: noteLabel(note),
             segments: [], preview: '', structuredEntries: [entry],
           });
         });
@@ -138,7 +144,7 @@ export function TagView() {
       notes.forEach((note) => {
         const segs = getTaggedSegments(note.content, tagId);
         if (segs.length > 0) {
-          noteMap.set(note.id, { noteId: note.id, title: note.title || '(Untitled)', segments: segs, preview: '' });
+          noteMap.set(note.id, { noteId: note.id, title: noteLabel(note), segments: segs, preview: '' });
         }
       });
 
@@ -163,7 +169,7 @@ export function TagView() {
     if (userTag) {
       const matching = notes.filter((n) => n.tagIds.includes(tagId as never));
       const entry: NoteEntry[] = matching.map((n) => ({
-        noteId: n.id, title: n.title || '(Untitled)',
+        noteId: n.id, title: noteLabel(n),
         segments: [], preview: getContentPreview(n.content),
       }));
       const path = (() => {
@@ -263,7 +269,7 @@ export function TagView() {
                               {/* Structured tag type (Acronym, etc.): show term + fields */}
                               {entry.structuredEntries?.map((se) => (
                                 <div key={se.id} className={styles.segment} onClick={() => handleNoteClick(entry.noteId)}>
-                                  <span className={styles.segmentQuote}>{se.term}</span>
+                                  <span className={styles.segmentQuote}>{se.isEncrypted ? '🔒 ' : ''}{se.term}</span>
                                   {Object.entries(se.fields)
                                     .filter(([, v]) => v)
                                     .map(([fieldId, value]) => (

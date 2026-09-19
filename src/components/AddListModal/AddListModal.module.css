@@ -515,3 +515,20 @@
 }
 .submitBtn:hover { filter: brightness(1.1); }
 .submitBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.encryptRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.encryptRow input { accent-color: var(--color-primary); cursor: pointer; }
+
+.encryptHint {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}

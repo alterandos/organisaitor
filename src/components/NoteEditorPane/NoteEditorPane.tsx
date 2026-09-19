@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
+import { useNoteView } from '@/store/noteViews';
+import { isNoteLocked } from '@/services/noteSecrets';
 import type { NoteId } from '@/types';
 import styles from './NoteEditorPane.module.css';
 
@@ -11,7 +13,10 @@ export function NoteEditorPane() {
   const notes = useNoteStore((s) => s.notes);
   const updateNote = useNoteStore((s) => s.updateNote);
 
-  const note = editingNoteId ? notes[editingNoteId as NoteId] : null;
+  const rawNote = editingNoteId ? notes[editingNoteId as NoteId] : null;
+  // A view, not the raw record — an encrypted note's title/content are blank in the store.
+  const note = useNoteView(editingNoteId);
+  const locked = !!rawNote && isNoteLocked(rawNote);
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -22,7 +27,8 @@ export function NoteEditorPane() {
       setTitle(note.title);
       setContent(note.content);
     }
-  }, [note?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note?.id, locked]);
 
   const doSave = () => {
     if (!editingNoteId) return;
@@ -71,7 +77,9 @@ export function NoteEditorPane() {
           onBlur={handleBlur}
           placeholder="Untitled note"
           className={styles.titleInput}
+          disabled={locked}
         />
+        {note.isEncrypted && <span title={locked ? 'Encrypted — locked on this device' : 'Encrypted note'}>🔒</span>}
         <button
           className={styles.closeBtn}
           onClick={closeNote}
@@ -85,8 +93,9 @@ export function NoteEditorPane() {
         value={content}
         onChange={handleContentChange}
         onBlur={handleBlur}
-        placeholder="Start typing..."
+        placeholder={locked ? 'This note is encrypted and locked — unlock it from Account.' : 'Start typing...'}
         className={styles.editor}
+        disabled={locked}
       />
 
       <div className={styles.footer}>

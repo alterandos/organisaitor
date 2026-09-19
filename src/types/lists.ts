@@ -60,6 +60,11 @@ export interface List {
   icon:        string | null;
   fieldSchema: ListFieldSchema[];
   tabs:        ListTab[];            // empty = flat list (no tab bar shown)
+  // Client-side encryption (see src/services/listSecrets.ts). When true, name/description/typeId/
+  // fieldSchema/tabs are BLANKED here and live only inside `encryptedPayload` — read an encrypted
+  // list through listView(), never off the store directly.
+  isEncrypted:      boolean;
+  encryptedPayload: string | null;
   createdAt:   string;
   updatedAt:   string;
 }
@@ -75,6 +80,10 @@ export interface ListItem {
   notes:     string | null;
   links:     string[];
   order:     number;
+  // Same model as List.isEncrypted: title/data/notes/links blanked, held in `encryptedPayload`.
+  // An item is encrypted exactly when its list is.
+  isEncrypted:      boolean;
+  encryptedPayload: string | null;
   createdAt: string;
   updatedAt: string;
 }

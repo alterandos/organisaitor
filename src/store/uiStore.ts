@@ -334,6 +334,12 @@ interface UIState {
   // Endeavour/tracker/routine by search, or from recent/frequent history. See
   // src/utils/quickAccess.ts for the provider registry and src/store/recentItemsStore.ts
   // for the visit-tracking that backs "recent"/"frequent".
+  // "Confirm your passphrase to permanently decrypt this note/list" prompt (DecryptPrompt).
+  // Requested by the clickable 🔒 icons; not persisted.
+  decryptPrompt:       { kind: 'note' | 'list'; id: string } | null;
+  requestDecrypt:      (kind: 'note' | 'list', id: string) => void;
+  closeDecryptPrompt:  () => void;
+
   quickAccessOpen:   boolean;
   openQuickAccess:   () => void;
   closeQuickAccess:  () => void;
@@ -685,6 +691,10 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   openMobileMoreSheet:  () => set({ mobileMoreSheetOpen: true }),
   closeMobileMoreSheet: () => set({ mobileMoreSheetOpen: false }),
 
+  decryptPrompt:       null,
+  requestDecrypt:      (kind, id) => set({ decryptPrompt: { kind, id } }),
+  closeDecryptPrompt:  () => set({ decryptPrompt: null }),
+
   quickAccessOpen:   false,
   openQuickAccess:   () => set({ quickAccessOpen: true }),
   closeQuickAccess:  () => set({ quickAccessOpen: false }),
@@ -720,6 +730,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 // Returns true if something was closed (caller should treat the back press as handled).
 export function closeTopmostMobileOverlay(): boolean {
   const s = useUIStore.getState();
+  if (s.decryptPrompt)                                      { s.closeDecryptPrompt();     return true; }
   if (s.quickAccessOpen)                                    { s.closeQuickAccess();       return true; }
   if (s.openModal !== null)                                { s.closeModal();             return true; }
   if (s.calendarQuickAddOpen)                               { s.closeCalendarQuickAdd();  return true; }

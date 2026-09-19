@@ -5,6 +5,40 @@ Format: brief description + context/motivation.
 
 ---
 
+## Notes/Portfolio/Fitness Supabase sync — Notes and Portfolio built (2026-09-19); Fitness still pending
+
+Surfaced 2026-09-19 when the user opened a freshly-built Tauri desktop app and found Notes/Portfolio empty (Tasks/Calendar/Trackers/Lists were fine) — traced to `localStorage` being origin-scoped, which only exposed the deeper issue: those two stores (and Fitness) were never wired into `syncService.ts` at all.
+
+**Notes: built — see CLAUDE.md "Notes Supabase sync."** `notes`/`note_tags`/`structured_tag_entries` tables (migration `020_notes_sync.sql`, applied to live — see "Live migration status" in CLAUDE.md), wired into the standard sync pipeline (soft-delete tombstones, `mergeRecords()`, the `enqueue()` mutex). `noteStore` bumped to v11.
+
+**Portfolio: built — see CLAUDE.md "Portfolio Supabase sync."** `watchlist_items`/`portfolio_tags`/`investment_purposes` tables (migration `021_portfolio_sync.sql`, applied to live — see "Live migration status" in CLAUDE.md), same pipeline. No `portfolioStore` version bump needed. `WatchlistColumn[]` (table display prefs) deliberately stays local-only — cosmetic, not portfolio data.
+
+**Still not built — Fitness. Paused here deliberately (2026-09-19)** — Notes and Portfolio are built and verified (`tsc`/`eslint`/`npm run build` all clean); the user chose to stop and test those two live (run migrations `019`–`021` against the live Supabase project, exercise vault setup/Note encryption/Portfolio sync) before picking Fitness back up. Next session should just pick up Fitness sync directly, following the exact same pattern as Notes/Portfolio above:
+- `Activity` + `ActivityType` (custom types only, same "built-ins never sync" rule `list_types` already established) — CLAUDE.md's own Fitness section already reserved the shape for this (`source`/`sourceId`/`sourceRaw` fields exist specifically so Strava-synced activities upsert cleanly once this lands).
+- Confirmed to ship **plaintext** (no encryption) when built — see the encryption entry below for why Notes was the only one that got an encrypt-toggle in this pass.
+
+---
+
+## Client-side encryption for sensitive content — Notes and Lists built (2026-09-20); other apps not yet
+
+**Built for Notes, comprehensively (2026-09-20) — see CLAUDE.md "Client-side encryption for Notes — comprehensive"** (title, content, abstract, extra tabs incl. names, tag attribute values, and the structured-tag entries derived from the note; one AES-GCM envelope, plaintext only in a memory cache). Originally built for `Note.content` alone on 2026-09-19 (see CLAUDE.md "Client-side encryption for Note content" for the vault itself) (`src/services/vault.ts`, `user_vault` table via `019_user_vault.sql` — applied to live — see "Live migration status" in CLAUDE.md, `AccountPane.tsx`'s vault setup/unlock UI, `NoteEditor.tsx`'s lock/encrypt wiring). Per-item opt-in (not full-schema) — see that CLAUDE.md entry for the full design reasoning (why per-item over full-schema, why the wrapping secret can't be the Supabase login password, the mandatory-recovery-code and "trust this device" decisions) and CLAUDE.md's "Notes Supabase sync" entry for how it interacts with that.
+
+**The underlying vault/key-management core is generic and app-agnostic by design** (adding a second encryptable field later — a Task note, a Calendar event detail, a Portfolio/Fitness field — is a small, additive change once a store's sync exists at all), but the **field-level UI rollout is still narrow**: only `Note.content` (Main tab; `NoteTab.content` for additional tabs is not covered) got an actual toggle in this pass. Lists/Tasks/Calendar's existing Add/Edit UI is untouched.
+
+**Lists built too (2026-09-20)** — per-list encryption of name/description/type/field schema/tabs and every item's title/data/notes/links; see CLAUDE.md "Client-side encryption for Lists" (including the recorded answer on whether it's strong enough for passwords/banking details: the cipher is, the practical strength depends on the passphrase). Clicking any 🔒 (notes and lists) now asks for the passphrase to permanently decrypt.
+
+**Still open, no immediate trigger yet**:
+- **Passphrase strength** — the setup form accepts 8 characters, which is weak if a cloud dump ever leaked and were attacked offline. Options: a strength meter and/or a longer minimum (or a "generate a passphrase" helper), higher PBKDF2 iterations or Argon2, and auto-relock after inactivity. Worth doing before promoting encrypted Lists as suitable for passwords/banking details.
+- Lists: a per-tab or per-item encryption choice was deliberately not built (per-list only); list `kind`/`color`/`icon`, item `status`/`tabId`/`order` and item/tab counts stay plaintext.
+- Lists' locked state shows a placeholder for the whole list; there's no "locked but browse titles" mode (titles are encrypted too).
+- Whether/when to extend the encrypt-toggle UI to Task notes, Calendar event details, or a Portfolio/Fitness field, once those apps have sync at all.
+- An OS-backed secure store for "trust this device" on Tauri (`tauri-plugin-stronghold` or the OS keychain) / Android (Keystore) — currently IndexedDB everywhere, which is convenience-only (no access boundary stronger than the browser/OS login already provides).
+- **Things an encrypted note still leaks, deliberately or not yet**: notebook/tag *names* and which notebook a note is in (needed for the tree/filters); `templateId` (reveals the note type); and — the one likely to surprise — **anything created from a note in another app**: a Task made via "Create ▸ Task" keeps the selected text as its plaintext title in `tasks`. Options if that matters: warn when creating a task from an encrypted note, or offer per-task encryption once the vault is extended to Tasks.
+- Encrypted notes can't be searched by *body* text while locked (by design); full-text search (still not built) would need to be client-side over the unlocked cache.
+- Per-tab encryption granularity (currently a note is all-or-nothing), and hiding — rather than just disabling — the title/abstract inputs while locked.
+
+---
+
 ## uiStore persistence — navigation/session memory built; broader scope still deferred
 
 **Built**: `uiStore` is now persisted to localStorage (`todo-ui-session`, per-device only — no cross-device sync) via zustand's `persist` middleware with a `partialize`, scoped deliberately to **navigation/session memory**: `activeView`, back/forward history (`sectionHistory`/`sectionForwardHistory`), `activeCollectionIdByView`, `activePurposeIds`, `notesLastEditingNoteId`/`notesLastActiveTabId`, `selectedNoteTagId`, `listsLastActiveListId`/`listsLastActiveTabId`, `activeTrackerId`/`activeRoutineId`, `calendarViewMode`. See CLAUDE.md's uiStore entry for the full field list and reasoning.
@@ -826,6 +860,14 @@ should come first since they cover the large majority of real users.
 
 ---
 
+## Desktop (Tauri) API access — built for Tauri (2026-09-19); Android equivalent still open
+
+~~Desktop (Tauri) and Android builds can't reach `/api/*`~~ — **the Tauri half is now built, see CLAUDE.md's "Desktop (Tauri) API access" entry.** `src/utils/apiFetch.ts` routes every `/api/*` call through `@tauri-apps/plugin-http`'s native fetch (bypassing CORS entirely) against the production Vercel URL when running under Tauri; `src-tauri/capabilities/default.json`'s `http:default` scope was widened to allow it. Verified with a real `npm run tauri build` release installer.
+
+**Still open — Android/Capacitor.** `capacitor.config.ts` has the identical "static files, no backend" shape (`webDir: 'dist'`, no `server.url`), so the same relative-`/api/*`-call problem applies there too — not investigated or fixed yet. Would need the Capacitor equivalent of `@tauri-apps/plugin-http` (likely `@capacitor/http`'s native fetch override, or a manually-registered CORS allowlist since Android's WebView CORS behavior differs from Tauri's) plus extending `apiFetch()`'s platform branch. Revisit when Android Fitness/Strava/Calendar-sync work is picked up.
+
+---
+
 ## AI Agent Integration
 
 ### Notes-dump → tasks
@@ -1451,7 +1493,7 @@ Followed the planned shape: the Portfolio app's ticker data proxy through Vercel
 
 **The redirect-identity problem, solved:** Strava's callback is a full browser navigation, so there's no way to attach a Supabase `Authorization` header to it. Fixed by passing the user's current Supabase access token through the OAuth **`state`** parameter — `api/strava-oauth-callback.ts` reads it back out, calls `supabase.auth.getUser()` to identify the user, and writes as that user, so RLS applies normally. No service-role key anywhere in this codebase.
 
-**Supabase table — built, not yet run:**
+**Supabase table — built and applied to live:**
 - `fitness_strava_connection` (`supabase/migrations/012_fitness_strava.sql`) — one row per user: `user_id`, `athlete_id`, `access_token`, `refresh_token`, `expires_at`, `scope`, timestamps. RLS scoped to the owning user. **This migration has been written but not yet executed against the live Supabase project** — that's the one remaining step before Connect will work end-to-end.
 
 **Deviation from the original plan — no `fitness_activities` Supabase table (yet):** the original spec called for a second table mirroring `Activity` server-side. What actually got built keeps activities exactly where they already lived — `fitnessStore`, localStorage-only — and `syncStrava()` just upserts synced activities into that same local store via the pre-existing `upsertBySource()`. Simpler for Phase 1 (matches "start local, Supabase sync is a later phase" already true of `noteStore`/`listStore`), but it means synced activities don't survive a `localStorage.clear()` or show up on a second device without a re-sync. Revisit alongside whenever Fitness gets real Supabase sync (see "Not yet done" below).

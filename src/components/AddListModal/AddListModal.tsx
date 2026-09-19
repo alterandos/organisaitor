@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { nanoid } from 'nanoid';
 import { useListStore } from '@/store/listStore';
+import { useListViews } from '@/store/listViews';
+import { onVaultStatus } from '@/services/vault';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import type { ListId, ListFieldSchema, ListFieldType, ListTypeId, ListTab } from '@/types/lists';
@@ -20,10 +22,11 @@ const FIELD_TYPES: { value: ListFieldType; label: string }[] = [
 const EMOJI_PRESETS = ['📋', '🎬', '📚', '📺', '🎵', '🔬', '📍', '🎮', '🍽️', '✈️', '💡', '⭐'];
 
 export function AddListModal() {
-  const lists      = useListStore((s) => s.lists);
+  const lists      = useListViews();
   const listTypes  = useListStore((s) => s.listTypes);
   const addList    = useListStore((s) => s.addList);
   const updateList = useListStore((s) => s.updateList);
+  const encryptList = useListStore((s) => s.encryptList);
   const closeModal       = useUIStore((s) => s.closeModal);
   const editingListId    = useUIStore((s) => s.editingListId);
 
@@ -44,6 +47,9 @@ export function AddListModal() {
   const [newSelectOption,    setNewSelectOption]    = useState<Record<string, string>>({});
   const [newTabSelectOption, setNewTabSelectOption] = useState<Record<string, string>>({});
   const [expandedTabs, setExpandedTabs] = useState<Set<number>>(new Set());
+  const [encryptOnCreate, setEncryptOnCreate] = useState(false);
+  const [vaultUnlocked, setVaultUnlocked] = useState(false);
+  useEffect(() => onVaultStatus((s) => setVaultUnlocked(s === 'unlocked')), []);
 
   // Populate from existing when editing
   useEffect(() => {
@@ -187,7 +193,7 @@ export function AddListModal() {
         tabs: validTabs,
       });
     } else {
-      addList({
+      const newId = addList({
         name: name.trim(),
         description: description.trim() || null,
         typeId: selectedTypeId,
@@ -196,6 +202,12 @@ export function AddListModal() {
         fieldSchema: validFields,
         tabs: validTabs,
       });
+      if (encryptOnCreate && vaultUnlocked) {
+        encryptList(newId).catch((err) => {
+          console.error('[AddListModal] could not encrypt the new list:', err);
+          window.alert(err instanceof Error ? err.message : 'Could not encrypt this list.');
+        });
+      }
     }
     closeModal();
   };
@@ -470,6 +482,19 @@ export function AddListModal() {
               </div>
             )}
           </div>
+
+          {!isEditing && (
+            <label className={styles.encryptRow} title={vaultUnlocked ? undefined : 'Set up or unlock encryption in Account first'}>
+              <input
+                type="checkbox"
+                checked={encryptOnCreate && vaultUnlocked}
+                disabled={!vaultUnlocked}
+                onChange={(e) => setEncryptOnCreate(e.target.checked)}
+              />
+              <span>🔒 Encrypt this list</span>
+              {!vaultUnlocked && <span className={styles.encryptHint}>Unlock encryption in Account to enable</span>}
+            </label>
+          )}
 
           <div className={styles.actions}>
             <button type="button" className={styles.cancelBtn} onClick={closeModal}>Cancel</button>

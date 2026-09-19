@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useNoteStore } from '@/store/noteStore';
+import { useNoteView } from '@/store/noteViews';
 import { useTaskStore } from '@/store/taskStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { LABELS } from '@/config/labels';
-import type { NoteId, NoteTagId, CollectionId } from '@/types';
+import type { NoteTagId, CollectionId } from '@/types';
 import { formatDate } from '@/utils/date';
 import styles from './EditNoteMetaModal.module.css';
 
@@ -32,13 +33,12 @@ function buildTagList(
 export function EditNoteMetaModal() {
   const closeModal       = useUIStore((s) => s.closeModal);
   const editingNoteMetaId = useUIStore((s) => s.editingNoteMetaId);
-  const notes            = useNoteStore((s) => s.notes);
   const noteTags         = useNoteStore((s) => s.noteTags);
   const updateNote       = useNoteStore((s) => s.updateNote);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const allCollections   = Object.values(collectionsRecord);
 
-  const note = editingNoteMetaId ? notes[editingNoteMetaId as NoteId] : null;
+  const note = useNoteView(editingNoteMetaId);
 
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [color, setColor]   = useState<string | null>(null);
@@ -95,7 +95,7 @@ export function EditNoteMetaModal() {
           <button className={styles.closeBtn} onClick={closeModal}>×</button>
         </div>
 
-        <div className={styles.noteTitle}>{note.title || '(Untitled)'}</div>
+        <div className={styles.noteTitle}>{note.isEncrypted ? '🔒 ' : ''}{note.title || '(Untitled)'}</div>
 
         <div className={styles.body}>
 

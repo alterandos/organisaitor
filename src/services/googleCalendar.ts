@@ -3,6 +3,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { resolveTimezone, utcToZonedTime } from '@/utils/timezone';
 import { addDaysToIso } from '@/utils/date';
+import { apiFetch } from '@/utils/apiFetch';
 import type { CalendarConnection, CalendarConnectionCalendar, CreateCalendarEventInput } from '@/types';
 
 interface RawGoogleEvent {
@@ -56,7 +57,7 @@ export async function fetchGoogleCalendarConnections(): Promise<CalendarConnecti
 
   let connections: { id: string; provider: string; accountEmail: string; createdAt: string }[];
   try {
-    const statusRes = await fetch('/api/google-calendar-status', { headers: { Authorization: `Bearer ${token}` } });
+    const statusRes = await apiFetch('/api/google-calendar-status', { headers: { Authorization: `Bearer ${token}` } });
     if (!statusRes.ok) return [];
     // Local `vite dev` has no /api/* routing (only Vercel/`vercel dev` do), so this fetch can
     // come back 200 OK with the edge function's own source text instead of real JSON — `.ok`
@@ -71,7 +72,7 @@ export async function fetchGoogleCalendarConnections(): Promise<CalendarConnecti
 
   const withCalendars = await Promise.all(connections.map(async (c): Promise<CalendarConnection> => {
     try {
-      const listRes = await fetch(`/api/google-calendar-list?connectionId=${encodeURIComponent(c.id)}`, {
+      const listRes = await apiFetch(`/api/google-calendar-list?connectionId=${encodeURIComponent(c.id)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const calendars: CalendarConnectionCalendar[] = listRes.ok ? (await listRes.json()).calendars : [];
@@ -86,7 +87,7 @@ export async function fetchGoogleCalendarConnections(): Promise<CalendarConnecti
 export async function setGoogleCalendarEnabled(connectionId: string, calendarId: string, enabled: boolean): Promise<void> {
   const token = await accessToken();
   if (!token) throw new Error('Not signed in');
-  const res = await fetch('/api/google-calendar-set-enabled', {
+  const res = await apiFetch('/api/google-calendar-set-enabled', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ connectionId, calendarId, enabled }),
@@ -100,7 +101,7 @@ export async function setGoogleCalendarEnabled(connectionId: string, calendarId:
 export async function disconnectGoogleCalendar(connectionId: string): Promise<void> {
   const token = await accessToken();
   if (!token) throw new Error('Not signed in');
-  const res = await fetch('/api/google-calendar-disconnect', {
+  const res = await apiFetch('/api/google-calendar-disconnect', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ connectionId }),
@@ -164,7 +165,7 @@ export async function syncGoogleCalendars(): Promise<{ created: number; failed: 
 
   let events: { connectionId: string; calendarId: string; event: RawGoogleEvent | { error: string } }[];
   try {
-    const res = await fetch('/api/google-calendar-sync', {
+    const res = await apiFetch('/api/google-calendar-sync', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });

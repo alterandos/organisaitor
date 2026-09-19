@@ -1,6 +1,7 @@
 import { supabase } from '@/services/supabase';
 import { useFitnessStore } from '@/store/fitnessStore';
 import type { ActivityTypeId } from '@/types/fitness';
+import { apiFetch } from '@/utils/apiFetch';
 
 export interface StravaStatus {
   connected:   boolean;
@@ -52,7 +53,7 @@ export async function checkStravaStatus(): Promise<StravaStatus> {
   if (!token) return { connected: false };
 
   try {
-    const res = await fetch('/api/strava-status', {
+    const res = await apiFetch('/api/strava-status', {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { connected: false };
@@ -73,7 +74,7 @@ export async function syncStrava(): Promise<number> {
   const token = await accessToken();
   if (!token) throw new Error('Not signed in');
 
-  const res = await fetch('/api/strava-sync', {
+  const res = await apiFetch('/api/strava-sync', {
     method:  'POST',
     headers: { Authorization: `Bearer ${token}` },
   });
