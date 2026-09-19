@@ -345,8 +345,7 @@ Every new column on a persisted type needs:
 
 | Migrations | Status | Confirmed |
 |------------|--------|-----------|
-| `024` – `027` | **Applied** | 2026-09-20, confirmed by user ("24, 25, 26, and 27 have all been run in Supabase"). `024` encrypted note payloads, `025` calendar important/optional-notify, `026` reminder all-day notify, `027` encrypted lists. Reported by the user, not independently verified. |
-| `001` – `023` | **Applied** | 2026-09-19, confirmed by user (`001`–`022` as a batch: "ran all SQLs from 001 to 022"; `023` separately: "Migration 23 SQL has been completed"). Reported by the user, not independently verified. `022` (grants) was written *after* 019–021 and run after them. Earlier "written, not yet run" notes on 012–021 predate this and were stale — removed. |
+| `001` – `027` | **Applied** | Everything through `027` has been run against the live project, confirmed by the user. `001`–`022` as a batch on 2026-09-19 ("ran all SQLs from 001 to 022"), `023` separately ("Migration 23 SQL has been completed"), and `024`–`027` on 2026-09-20 ("24, 25, 26, and 27 have all been run"; then "All Supabase SQL has been run up to 027 inclusive"). Reported by the user, not independently verified. `022` (grants) was written *after* 019–021 and run after them. Earlier "written, not yet run" notes on 012–021 predate this and were stale — removed. **No migration is currently pending**; the next new one is `028`. |
 
 ### Migration history
 
