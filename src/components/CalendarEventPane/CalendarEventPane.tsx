@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import type { CalendarEventId, CalendarEventType, NotifyUnit, RepeatFreq, RepeatConfig } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -46,38 +46,21 @@ export function CalendarEventPane() {
     onRestore:  () => { if (editingId) restoreEvent(editingId as CalendarEventId); },
   });
 
-  const [title,          setTitle]          = useState('');
-  const [notes,          setNotes]          = useState('');
+  const repeat = event?.repeat ?? null;
+  const [title,          setTitle]          = useState(() => event?.title ?? '');
+  const [notes,          setNotes]          = useState(() => event?.notes ?? '');
   const [notifyAtTime,   setNotifyAtTime]   = useState(event?.notifyAtTime ?? '12:00');
-  const [repeatOn,       setRepeatOn]       = useState(false);
-  const [repeatFreq,     setRepeatFreq]     = useState<RepeatFreq>('weekly');
-  const [repeatInterval, setRepeatInterval] = useState(1);
-  const [repeatEndKind,  setRepeatEndKind]  = useState<RepeatConfig['endKind']>('forever');
-  const [repeatCount,    setRepeatCount]    = useState(10);
-  const [repeatUntil,    setRepeatUntil]    = useState('');
+  const [repeatOn,       setRepeatOn]       = useState(!!repeat);
+  const [repeatFreq,     setRepeatFreq]     = useState<RepeatFreq>(repeat?.freq ?? 'weekly');
+  const [repeatInterval, setRepeatInterval] = useState(repeat?.interval ?? 1);
+  const [repeatEndKind,  setRepeatEndKind]  = useState<RepeatConfig['endKind']>(repeat?.endKind ?? 'forever');
+  const [repeatCount,    setRepeatCount]    = useState(repeat?.count ?? 10);
+  const [repeatUntil,    setRepeatUntil]    = useState(repeat?.until ?? '');
   // See AddCalendarItemModal's identical ref for why this exists — prevents the linked-end-time
   // cascade from getting "stuck" on its own previous guess while a start time is typed digit by
-  // digit. Reset whenever a different event is opened, since a pre-existing endTime here counts
-  // as genuinely user-set (it was saved), not one of our own in-progress auto-guesses.
-  const endAutoRef = useRef(true);
-
-  useEffect(() => {
-    if (event) {
-      setTitle(event.title);
-      setNotes(event.notes ?? '');
-      setNotifyAtTime(event.notifyAtTime ?? '12:00');
-      const r = event.repeat;
-      setRepeatOn(!!r);
-      if (r) {
-        setRepeatFreq(r.freq);
-        setRepeatInterval(r.interval);
-        setRepeatEndKind(r.endKind);
-        setRepeatCount(r.count ?? 10);
-        setRepeatUntil(r.until ?? '');
-      }
-      endAutoRef.current = false;
-    }
-  }, [event?.id]);
+  // digit. A pre-existing endTime here counts as genuinely user-set (it was saved), not one of our
+  // own in-progress auto-guesses; App.tsx remounts this pane per event (key), so it starts fresh.
+  const endAutoRef = useRef(!event);
 
   if (!event) return null;
 

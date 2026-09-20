@@ -10,6 +10,7 @@ export function NotesSection() {
   const noteTagViewActive = useUIStore((s) => s.noteTagViewActive);
   const closeNoteTagView  = useUIStore((s) => s.closeNoteTagView);
   const editNoteTagOpen   = useUIStore((s) => s.editNoteTagOpen);
+  const editingNoteTagId  = useUIStore((s) => s.editingNoteTagId);
 
   // Esc closes tag view
   useEscapeClose(closeNoteTagView, noteTagViewActive);
@@ -18,7 +19,7 @@ export function NotesSection() {
     <div className={styles.container}>
       {noteTagViewActive ? <TagView /> : <ChronicleView />}
       <TagFAB />
-      {editNoteTagOpen && <EditNoteTagModal />}
+      {editNoteTagOpen && <EditNoteTagModal key={editingNoteTagId} />}
     </div>
   );
 }

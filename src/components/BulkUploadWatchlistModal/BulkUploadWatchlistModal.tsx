@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import type { ChangeEvent, DragEvent, MouseEvent } from 'react';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useUIStore } from '@/store/uiStore';
@@ -7,6 +7,7 @@ import { todayIso } from '@/utils/date';
 import type { PortfolioTagId, WatchlistStatus } from '@/types/portfolio';
 import styles from './BulkUploadWatchlistModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 // Map common exchange prefixes to Yahoo Finance ticker suffixes.
 const EXCHANGE_SUFFIX: Record<string, string> = {
@@ -79,18 +80,6 @@ export function BulkUploadWatchlistModal() {
 
   useEscapeClose(() => { closeModal(); });
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && phase === 'input') {
-        e.preventDefault();
-        handleSubmit();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [closeModal, phase, rawText, bulkStatus, bulkHeldAt, selectedTagIds]);
-
   const existingTickers = new Set(
     Object.values(watchlistItems).map((i) => i.ticker?.toUpperCase()).filter(Boolean) as string[],
   );
@@ -122,7 +111,7 @@ export function BulkUploadWatchlistModal() {
     if (e.target === e.currentTarget) closeModal();
   };
 
-  const handleSubmit = async () => {
+  async function handleSubmit() {
     if (newOnes.length === 0) return;
     setPhase('loading');
 
@@ -152,7 +141,9 @@ export function BulkUploadWatchlistModal() {
 
     setResult({ added: newOnes.length, skipped: already });
     setPhase('done');
-  };
+  }
+
+  useCtrlEnterSubmit(() => { if (phase === 'input') handleSubmit(); });
 
   return (
     <div className={styles.overlay} onClick={handleOverlay}>

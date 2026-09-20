@@ -49,11 +49,11 @@ export function EditActivityTypeModal() {
     : null;
   const isEditMode = editingActivityTypeId !== null;
 
-  const [name,   setName]   = useState('');
-  const [icon,   setIcon]   = useState('');
-  const [color,  setColor]  = useState<string | null>(null);
-  const [tracksDistance, setTracksDistance] = useState(true);
-  const [fields, setFields] = useState<FieldRow[]>([]);
+  const [name,   setName]   = useState(() => editingType?.name ?? '');
+  const [icon,   setIcon]   = useState(() => editingType?.icon ?? '');
+  const [color,  setColor]  = useState<string | null>(() => editingType?.color ?? null);
+  const [tracksDistance, setTracksDistance] = useState(() => editingType?.tracksDistance ?? true);
+  const [fields, setFields] = useState<FieldRow[]>(() => editingType ? editingType.fieldSchema.map(fieldToRow) : []);
 
   const [addingField, setAddingField]   = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
@@ -62,24 +62,6 @@ export function EditActivityTypeModal() {
   const [newFieldMax,  setNewFieldMax]  = useState('5');
   const [newFieldUnit, setNewFieldUnit] = useState('');
   const [newFieldOpts, setNewFieldOpts] = useState('');
-
-  useEffect(() => {
-    if (!editActivityTypeOpen) return;
-    if (editingType) {
-      setName(editingType.name);
-      setIcon(editingType.icon);
-      setColor(editingType.color);
-      setTracksDistance(editingType.tracksDistance);
-      setFields(editingType.fieldSchema.map(fieldToRow));
-    } else {
-      setName('');
-      setIcon('');
-      setColor(null);
-      setTracksDistance(true);
-      setFields([]);
-    }
-    setAddingField(false);
-  }, [editActivityTypeOpen, editingActivityTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEscapeClose(() => { closeEditActivityType(); }, editActivityTypeOpen);
 

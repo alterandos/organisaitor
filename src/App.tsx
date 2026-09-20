@@ -33,6 +33,8 @@ import { CalendarView } from '@/components/CalendarView/CalendarView';
 import { RecordsView } from '@/components/RecordsView/RecordsView';
 import { NotesSection } from '@/components/NotesSection/NotesSection';
 import { ListsSection } from '@/components/ListsSection/ListsSection';
+import { ErrorBoundary } from '@/components/ErrorBoundary/ErrorBoundary';
+import { LABELS } from '@/config/labels';
 import { AddActivityModal } from '@/components/AddActivityModal/AddActivityModal';
 import { EditActivityTypeModal } from '@/components/EditActivityTypeModal/EditActivityTypeModal';
 import { AddScheduleModal } from '@/components/AddScheduleModal/AddScheduleModal';
@@ -61,7 +63,9 @@ import { IntegrationsPane } from '@/components/IntegrationsPane/IntegrationsPane
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
+import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog/ConfirmDialog';
+import { toggleDictation } from '@/services/speech/dictation';
 import { AddNoteModal } from '@/components/AddNoteModal/AddNoteModal';
 import { AddNoteTagModal } from '@/components/AddNoteTagModal/AddNoteTagModal';
 import { NoteTagPresetModal } from '@/components/NoteTagPresetModal/NoteTagPresetModal';
@@ -116,6 +120,21 @@ export default function App() {
   const integrationsOpen           = useUIStore((s) => s.integrationsOpen);
   const editTrackerOpen            = useUIStore((s) => s.editTrackerOpen);
   const editRoutineOpen            = useUIStore((s) => s.editRoutineOpen);
+  const editingCollection            = useUIStore((s) => s.editingCollection);
+  const editingPurpose               = useUIStore((s) => s.editingPurpose);
+  const editingTag                   = useUIStore((s) => s.editingTag);
+  const editingEntryId               = useUIStore((s) => s.editingEntryId);
+  const pendingTrackerId             = useUIStore((s) => s.pendingTrackerId);
+  const editingListId                = useUIStore((s) => s.editingListId);
+  const editingListItemId            = useUIStore((s) => s.editingListItemId);
+  const editingActivity              = useUIStore((s) => s.editingActivity);
+  const editingSchedule              = useUIStore((s) => s.editingSchedule);
+  const mobileMoreSheetOpen        = useUIStore((s) => s.mobileMoreSheetOpen);
+  const calendarQuickAddOpen       = useUIStore((s) => s.calendarQuickAddOpen);
+  const editingRoutineId           = useUIStore((s) => s.editingRoutineId);
+  const editingTrackerId           = useUIStore((s) => s.editingTrackerId);
+  const editActivityTypeOpen        = useUIStore((s) => s.editActivityTypeOpen);
+  const editingActivityTypeId       = useUIStore((s) => s.editingActivityTypeId);
   const editingWatchlistItemId     = useUIStore((s) => s.editingWatchlistItemId);
   const portfolioChartOpen         = useUIStore((s) => s.portfolioChartOpen);
   const editingNoteId              = useUIStore((s) => s.editingNoteId);
@@ -290,6 +309,13 @@ export default function App() {
       if (activeView === 'notes' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
         if (e.key === '-') { e.preventDefault(); nudgeNoteEditorZoom(-0.1); return; }
         if (e.key === '=') { e.preventDefault(); nudgeNoteEditorZoom(0.1); return; }
+      }
+
+      // Dictation — also before the isTyping guard: it exists to be used from inside a text field.
+      if (matchesHotkeyId(e, 'action-dictate')) {
+        e.preventDefault();
+        toggleDictation();
+        return;
       }
 
       // Don't fire when typing in inputs
@@ -484,6 +510,7 @@ export default function App() {
           </div>
         </header>
 
+        <ErrorBoundary key={activeView} scope="section" section={LABELS.views[activeView]}>
         {activeView === 'tasks' && (
           <>
             <main
@@ -527,50 +554,52 @@ export default function App() {
         {activeView === 'fitness' && isAppEnabled('fitness') && (
           <Suspense fallback={<AppSectionFallback />}><FitnessSection /></Suspense>
         )}
+        </ErrorBoundary>
 
         <AddTaskButton />
 
         {!isAndroid && <Sidebar onHoverEnter={handleHoverOpen} onHoverLeave={handleHoverClose} />}
-        {editingTaskId             && <TaskPane />}
+        {editingTaskId             && <TaskPane key={editingTaskId} />}
         {settingsOpen              && <SettingsPane />}
         <ManagePane />
         {accountOpen               && <AccountPane />}
         {integrationsOpen          && <IntegrationsPane />}
-        {editingCalendarEventId    && <CalendarEventPane />}
-        {editingCalendarReminderId && <CalendarReminderPane />}
+        {editingCalendarEventId    && <CalendarEventPane key={editingCalendarEventId} />}
+        {editingCalendarReminderId && <CalendarReminderPane key={editingCalendarReminderId} />}
 
         {openModal === 'add-task'            && <AddTaskModal />}
-        {openModal === 'add-collection'      && <AddCollectionModal />}
-        {openModal === 'add-purpose'         && <AddPurposeModal />}
-        {openModal === 'add-tag'             && <AddTagModal />}
+        {openModal === 'add-collection'      && <AddCollectionModal key={editingCollection?.id ?? 'new'} />}
+        {openModal === 'add-purpose'         && <AddPurposeModal key={editingPurpose?.id ?? 'new'} />}
+        {openModal === 'add-tag'             && <AddTagModal key={editingTag?.id ?? 'new'} />}
         {openModal === 'add-calendar-item'   && <AddCalendarItemModal />}
         {openModal === 'add-tracker'            && <AddTrackerModal />}
-        {openModal === 'add-entry'             && <AddEntryModal />}
+        {openModal === 'add-entry'             && <AddEntryModal key={editingEntryId ?? pendingTrackerId ?? 'new'} />}
         {openModal === 'add-routine'           && <AddRoutineModal />}
         {openModal === 'add-watchlist-item'      && <AddWatchlistItemModal key={editingWatchlistItemId ?? 'new'} />}
         {openModal === 'add-portfolio-tag'       && <AddPortfolioTagModal />}
         {openModal === 'add-investment-purpose'  && <AddInvestmentPurposeModal />}
         {openModal === 'bulk-upload-watchlist'   && <BulkUploadWatchlistModal />}
-        {openModal === 'add-list'               && <AddListModal />}
-        {openModal === 'add-list-item'          && <AddListItemModal />}
+        {openModal === 'add-list'               && <AddListModal key={editingListId ?? 'new'} />}
+        {openModal === 'add-list-item'          && <AddListItemModal key={editingListItemId ?? 'new'} />}
         {openModal === 'add-note'               && <AddNoteModal />}
         {openModal === 'add-note-tag'           && <AddNoteTagModal />}
         {openModal === 'note-tag-presets'       && <NoteTagPresetModal />}
         {openModal === 'edit-note-meta'         && <EditNoteMetaModal />}
-        {openModal === 'add-activity'           && <AddActivityModal />}
-        <EditActivityTypeModal />
-        {openModal === 'add-schedule'           && <AddScheduleModal />}
-        {editTrackerOpen                     && <EditTrackerPane />}
-        {editRoutineOpen                     && <EditRoutinePane />}
+        {openModal === 'add-activity'           && <AddActivityModal key={editingActivity?.id ?? 'new'} />}
+        {editActivityTypeOpen                   && <EditActivityTypeModal key={editingActivityTypeId ?? 'new'} />}
+        {openModal === 'add-schedule'           && <AddScheduleModal key={editingSchedule?.id ?? 'new'} />}
+        {editTrackerOpen                     && <EditTrackerPane key={editingTrackerId} />}
+        {editRoutineOpen                     && <EditRoutinePane key={editingRoutineId} />}
         {editingNoteId && activeView !== 'notes' && <NoteEditorPane />}
 
         <LinkHoverPreview />
+        <VoiceIndicator />
         <ConfirmDialogHost />
         {quickAccessOpen && <QuickAccessPane />}
         {decryptPrompt && <DecryptPrompt />}
         {isAndroid && <MobileNav />}
-        {isAndroid && <MobileMoreSheet />}
-        {isAndroid && <MobileCalendarQuickAdd />}
+        {isAndroid && mobileMoreSheetOpen && <MobileMoreSheet />}
+        {isAndroid && calendarQuickAddOpen && <MobileCalendarQuickAdd />}
       </div>
     </div>
   );

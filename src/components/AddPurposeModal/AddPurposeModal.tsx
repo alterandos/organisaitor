@@ -8,10 +8,6 @@ import styles from './AddPurposeModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function AddPurposeModal() {
-  const [name, setName]               = useState('');
-  const [description, setDescription] = useState('');
-  const [color, setColor]             = useState<string | null>(null);
-
   const addPurpose       = useTaskStore((s) => s.addPurpose);
   const updatePurpose    = useTaskStore((s) => s.updatePurpose);
   const closeModal       = useUIStore((s) => s.closeModal);
@@ -20,15 +16,9 @@ export function AddPurposeModal() {
 
   const isEdit = editingPurpose !== null;
 
-  useEffect(() => {
-    if (editingPurpose) {
-      setName(editingPurpose.name);
-      setDescription(editingPurpose.description ?? '');
-      setColor(editingPurpose.color);
-    } else {
-      setName(''); setDescription(''); setColor(null);
-    }
-  }, [editingPurpose?.id]);
+  const [name, setName]               = useState(() => editingPurpose?.name ?? '');
+  const [description, setDescription] = useState(() => editingPurpose?.description ?? '');
+  const [color, setColor]             = useState<string | null>(() => editingPurpose?.color ?? null);
 
   const handleClose = () => isEdit ? closeEditPurpose() : closeModal();
   const formRef = useRef<HTMLFormElement>(null);

@@ -38,7 +38,8 @@ export function AddWatchlistItemModal() {
   const closeModal          = useUIStore((s) => s.closeModal);
 
   const { status: lookupStatus, candidates, autoFill, onTickerBlur, selectCandidate, clearLookup } = useTickerLookup();
-  const nameAutoFilledRef = useRef(false);
+  const [nameAutoFilled, setNameAutoFilled] = useState(false);
+  const [appliedAutoFill, setAppliedAutoFill] = useState(autoFill);
   const formRef           = useRef<HTMLFormElement>(null);
 
   useEscapeClose(() => { closeModal(); });
@@ -51,22 +52,26 @@ export function AddWatchlistItemModal() {
     return () => document.removeEventListener('keydown', handler);
   }, [closeModal]);
 
-  useEffect(() => {
-    if (!autoFill) return;
-    if (!name || nameAutoFilledRef.current) {
-      setName(autoFill.name);
-      nameAutoFilledRef.current = true;
+  // A fresh lookup result fills in what the user hasn't typed themselves (adjust-state-during-render,
+  // not an effect: this only mirrors the hook's result into form state).
+  if (autoFill !== appliedAutoFill) {
+    setAppliedAutoFill(autoFill);
+    if (autoFill) {
+      if (!name || nameAutoFilled) {
+        setName(autoFill.name);
+        setNameAutoFilled(true);
+      }
+      if (autoFill.marketCapValue !== null) setMarketCapValue(autoFill.marketCapValue);
+      if (autoFill.assetClass)             setAssetClass(autoFill.assetClass);
+      if (autoFill.sector)                 setSector(autoFill.sector);
+      if (autoFill.exchange)               setExchange(autoFill.exchange);
     }
-    if (autoFill.marketCapValue !== null) setMarketCapValue(autoFill.marketCapValue);
-    if (autoFill.assetClass)             setAssetClass(autoFill.assetClass);
-    if (autoFill.sector)                 setSector(autoFill.sector);
-    if (autoFill.exchange)               setExchange(autoFill.exchange);
-  }, [autoFill]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const handleTickerChange = (val: string) => {
     setTicker(val);
     clearLookup();
-    nameAutoFilledRef.current = false;
+    setNameAutoFilled(false);
     setMarketCapValue(null);
     setAssetClass(null);
     setSector(null);
@@ -187,7 +192,7 @@ export function AddWatchlistItemModal() {
                 className={styles.input}
                 placeholder="Apple Inc."
                 value={name}
-                onChange={(e) => { setName(e.target.value); nameAutoFilledRef.current = false; }}
+                onChange={(e) => { setName(e.target.value); setNameAutoFilled(false); }}
                 required
               />
             </div>

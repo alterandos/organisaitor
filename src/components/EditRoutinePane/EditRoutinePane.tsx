@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { nanoid } from 'nanoid';
 import { useTaskStore } from '@/store/taskStore';
 import { useRoutineStore } from '@/store/routineStore';
@@ -38,26 +38,15 @@ export function EditRoutinePane() {
     ? (collections[editingRoutineId as CollectionId] ?? null)
     : null;
 
-  const [name,       setName]       = useState('');
-  const [color,      setColor]      = useState<string | null>(null);
-  const [purposeIds, setPurposeIds] = useState<PurposeId[]>([]);
-  const [tagIds,     setTagIds]     = useState<TagId[]>([]);
-  const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
-  const [tasks,      setTasks]      = useState<RoutineTask[]>([]);
-  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
+  // App.tsx remounts this pane per routine (key), so these initialise from the routine being edited.
+  const [name,       setName]       = useState(() => routine?.name ?? '');
+  const [color,      setColor]      = useState<string | null>(() => routine?.color ?? null);
+  const [purposeIds, setPurposeIds] = useState<PurposeId[]>(() => (routine?.purposeIds ?? []) as PurposeId[]);
+  const [tagIds,     setTagIds]     = useState<TagId[]>(() => (routine?.tagIds ?? []) as TagId[]);
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(() => routine?.collectionId ?? null);
+  const [tasks,      setTasks]      = useState<RoutineTask[]>(() => routine?.routineTasks ?? []);
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>(() => routine?.repeatConfig?.daysOfWeek ?? []);
   const [newTitle,   setNewTitle]   = useState('');
-
-  useEffect(() => {
-    if (routine) {
-      setName(routine.name);
-      setColor(routine.color ?? null);
-      setPurposeIds((routine.purposeIds ?? []) as PurposeId[]);
-      setTagIds((routine.tagIds ?? []) as TagId[]);
-      setCollectionId(routine.collectionId);
-      setTasks(routine.routineTasks ?? []);
-      setDaysOfWeek(routine.repeatConfig?.daysOfWeek ?? []);
-    }
-  }, [routine?.id]);
 
   useEscapeClose(closeEditRoutine, editRoutineOpen);
   useCtrlEnterSubmit(() => handleSave(), editRoutineOpen && !!routine);

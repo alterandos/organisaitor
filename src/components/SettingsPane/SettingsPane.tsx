@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { HOTKEYS, HOTKEY_GROUPS } from '@/config/hotkeys';
-import { useHotkeyOverridesStore, findConflicts } from '@/store/hotkeyOverridesStore';
+import { useHotkeyOverridesStore, findConflicts, getEffectiveBinding } from '@/store/hotkeyOverridesStore';
+import { SPEECH_LANGUAGES } from '@/services/speech/languages';
 import { captureBindingFromEvent } from '@/utils/hotkeyBinding';
 import { listTimezones, resolveTimezone, SYSTEM_TIMEZONE } from '@/utils/timezone';
 import { rezoneAllCalendarData } from '@/services/timezoneMigration';
@@ -154,6 +155,9 @@ export function SettingsPane() {
   const timezone                = useSettingsStore((s) => s.timezone);
   const setTimezone             = useSettingsStore((s) => s.setTimezone);
 
+  const speechLanguage          = useSettingsStore((s) => s.speechLanguage);
+  const setSpeechLanguage       = useSettingsStore((s) => s.setSpeechLanguage);
+
   const handleTimezoneChange = async (nextTz: string) => {
     const fromZone = resolveTimezone(timezone);
     const toZone   = resolveTimezone(nextTz);
@@ -254,6 +258,28 @@ export function SettingsPane() {
                 <option value={SYSTEM_TIMEZONE}>System (auto-detect)</option>
                 {listTimezones().map((tz) => (
                   <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+            </div>
+          </section>
+
+          <section className={styles.section}>
+            <h3 className={styles.sectionLabel}>Voice dictation</h3>
+            <div className={styles.setting}>
+              <div className={styles.settingInfo}>
+                <span className={styles.settingName}>Language</span>
+                <span className={styles.settingDesc}>
+                  Click into any text field and press {getEffectiveBinding('action-dictate').primary ?? 'Ctrl+D'} to dictate.
+                </span>
+              </div>
+              <select
+                className={styles.timezoneSelect}
+                value={speechLanguage}
+                onChange={(e) => setSpeechLanguage(e.target.value)}
+              >
+                <option value="system">System ({navigator.language})</option>
+                {SPEECH_LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>{l.name}</option>
                 ))}
               </select>
             </div>

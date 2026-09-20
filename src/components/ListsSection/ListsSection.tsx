@@ -331,14 +331,13 @@ export function ListsSection() {
     ...allLists.filter((l) => l.kind !== 'watchlist'),
   ];
 
-  useEffect(() => {
-    if (selectedListId && !lists[selectedListId]) {
-      setSelectedListId(allLists[0]?.id ?? null);
-    }
-    if (!selectedListId && allLists.length > 0) {
-      setSelectedListId(allLists[0].id as ListId);
-    }
-  }, [lists]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Keep a valid list selected: fall back to the first list when the selected one is deleted, and
+  // pick the first one when nothing is selected yet (adjusts state during render, not in an effect).
+  if (selectedListId && !lists[selectedListId]) {
+    setSelectedListId(allLists[0]?.id ?? null);
+  } else if (!selectedListId && allLists.length > 0) {
+    setSelectedListId(allLists[0].id as ListId);
+  }
 
   useEffect(() => {
     setActiveListId(selectedListId);
@@ -349,12 +348,9 @@ export function ListsSection() {
   // current list falls back to "All", same as removeListTab's own tabId reassignment.
   // (Skipped while the list is locked: its view has no tabs, but they're not gone — resetting
   // here would throw away the remembered tab every time the vault locks or hasn't unlocked yet.)
-  useEffect(() => {
-    if (selectedListLocked) return;
-    if (selectedTabId !== 'all' && !selectedList?.tabs?.some((t) => t.id === selectedTabId)) {
-      setSelectedTabId('all');
-    }
-  }, [selectedList, selectedTabId, selectedListLocked]);
+  if (!selectedListLocked && selectedTabId !== 'all' && !selectedList?.tabs?.some((t) => t.id === selectedTabId)) {
+    setSelectedTabId('all');
+  }
 
   // Mirrors the current list+tab into uiStore on every change (and therefore on unmount
   // too, via the cleanup's closure) so switching apps and back restores this same view —
@@ -384,6 +380,16 @@ export function ListsSection() {
     return selectedList.fieldSchema ?? [];
   })();
   const showTabBar  = hasTabs || addingTab;
+
+  function handleSelectList(id: ListId) {
+    useRecentItemsStore.getState().recordVisit('list', id);
+    setSelectedListId(id);
+    setStatusFilter('all');
+    setSelectedTabId('all');
+    setAddingTab(false);
+    setNewTabName('');
+    setEditingCell(null);
+  }
 
   // Ctrl+PgUp/PgDn *and* Ctrl+Tab/Ctrl+Shift+Tab both cycle through this list's tabs (All + each
   // named tab) — two bindings for the same action, matching the convention NoteEditor.tsx uses
@@ -484,16 +490,6 @@ export function ListsSection() {
     updateList(selectedListId, { tabs: newTabs });
   };
 
-  const handleSelectList = (id: ListId) => {
-    useRecentItemsStore.getState().recordVisit('list', id);
-    setSelectedListId(id);
-    setStatusFilter('all');
-    setSelectedTabId('all');
-    setAddingTab(false);
-    setNewTabName('');
-    setEditingCell(null);
-  };
-
   // External navigation request (Quick Access, Ctrl+G) — see uiStore.requestListSelection's
   // doc comment for why this can't just write selectedListId directly. Goes through the same
   // handleSelectList as a sidebar click so it also records a visit and resets filters/tabs.
@@ -501,6 +497,7 @@ export function ListsSection() {
   const clearPendingListSelection = useUIStore((s) => s.clearPendingListSelection);
   useEffect(() => {
     if (!pendingListSelectionId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- consumes a one-shot selection request posted to uiStore by another section, then clears it
     if (lists[pendingListSelectionId as ListId]) handleSelectList(pendingListSelectionId as ListId);
     clearPendingListSelection();
     // eslint-disable-next-line react-hooks/exhaustive-deps

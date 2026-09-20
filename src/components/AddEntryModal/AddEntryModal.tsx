@@ -176,10 +176,6 @@ export function AddEntryModal() {
   const closeModal       = useUIStore((s) => s.closeModal);
 
   const formRef = useRef<HTMLFormElement>(null);
-  const [date,  setDate]  = useState<string>(todayIso());
-  const [data,  setData]  = useState<Record<string, unknown>>({});
-  const [notes, setNotes] = useState('');
-
   const isVisible = openModal === 'add-entry';
 
   useEscapeClose(() => { closeModal(); }, isVisible);
@@ -205,18 +201,9 @@ export function AddEntryModal() {
     editingEntry ? (collections[editingEntry.trackerId as CollectionId] ?? null) : null
   );
 
-  useEffect(() => {
-    if (!isVisible) return;
-    if (editingEntry) {
-      setDate(editingEntry.date);
-      setData(editingEntry.data ?? {});
-      setNotes(editingEntry.notes ?? '');
-    } else {
-      setDate(todayIso());
-      setData({});
-      setNotes('');
-    }
-  }, [isVisible, editingEntry?.id]);
+  const [date,  setDate]  = useState<string>(() => editingEntry?.date ?? todayIso());
+  const [data,  setData]  = useState<Record<string, unknown>>(() => editingEntry?.data ?? {});
+  const [notes, setNotes] = useState(() => editingEntry?.notes ?? '');
 
   if (!isVisible) return null;
 

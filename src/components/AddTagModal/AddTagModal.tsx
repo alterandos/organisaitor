@@ -8,10 +8,6 @@ import styles from './AddTagModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function AddTagModal() {
-  const [name, setName]   = useState('');
-  const [color, setColor] = useState<string | null>(null);
-  const [notes, setNotes] = useState<string>('');
-
   const addTag       = useTaskStore((s) => s.addTag);
   const updateTag    = useTaskStore((s) => s.updateTag);
   const closeModal   = useUIStore((s) => s.closeModal);
@@ -20,10 +16,9 @@ export function AddTagModal() {
 
   const isEdit = editingTag !== null;
 
-  useEffect(() => {
-    if (editingTag) { setName(editingTag.name); setColor(editingTag.color); setNotes(editingTag.notes ?? ''); }
-    else            { setName(''); setColor(null); setNotes(''); }
-  }, [editingTag?.id]);
+  const [name, setName]   = useState(() => editingTag?.name ?? '');
+  const [color, setColor] = useState<string | null>(() => editingTag?.color ?? null);
+  const [notes, setNotes] = useState<string>(() => editingTag?.notes ?? '');
 
   const handleClose = () => isEdit ? closeEditTag() : closeModal();
   const formRef = useRef<HTMLFormElement>(null);

@@ -77,19 +77,23 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
 
   // Re-sync internal segments when the value changes externally (e.g. form reset, editing a
   // different item, a linked start/end auto-adjustment from elsewhere) or when the 12h/24h
-  // format itself changes, so displayed digits stay correct.
-  useEffect(() => {
+  // format itself changes, so displayed digits stay correct. Adjusts state during render (keyed on
+  // value + format) rather than in an effect.
+  const syncKey = `${value ?? ''}|${use12Hour}`;
+  const [syncedKey, setSyncedKey] = useState(syncKey);
+  if (syncKey !== syncedKey) {
+    setSyncedKey(syncKey);
     const [nh, nm] = value ? value.split(':').map(Number) : [null, null];
     if (nh === null || Number.isNaN(nh)) {
       setHourStr('');
       setMinuteStr('');
-      return;
+    } else {
+      const n12 = to12(nh);
+      setHourStr(use12Hour ? String(n12.hour12) : pad(nh));
+      setMinuteStr(pad(nm ?? 0));
+      setMeridiem(n12.meridiem);
     }
-    const n12 = to12(nh);
-    setHourStr(use12Hour ? String(n12.hour12) : pad(nh));
-    setMinuteStr(pad(nm ?? 0));
-    setMeridiem(n12.meridiem);
-  }, [value, use12Hour]);
+  }
 
   useEffect(() => {
     if (!open) return;

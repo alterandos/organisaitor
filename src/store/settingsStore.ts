@@ -36,6 +36,10 @@ interface SettingsState {
   timezone:    string;
   setTimezone: (tz: string) => void;
 
+  // Voice dictation language: a BCP-47 code, or 'system' (the browser's language).
+  speechLanguage:    string;
+  setSpeechLanguage: (lang: string) => void;
+
   // ── Portfolio — chart view ────────────────────────────────────────────────────
   chartTickerRowZoom:    number;   // multiplier on the compact row size; 1.0 = default (40% smaller than original)
   setChartTickerRowZoom: (z: number) => void;
@@ -92,6 +96,9 @@ export const useSettingsStore = create<SettingsState>()(
 
       timezone:    'system',
       setTimezone: (tz) => set({ timezone: tz }),
+
+      speechLanguage:    'system',
+      setSpeechLanguage: (lang) => set({ speechLanguage: lang }),
 
       chartTickerRowZoom:    1.0,
       setChartTickerRowZoom: (z) => set({ chartTickerRowZoom: Math.max(0.5, Math.min(3.0, Math.round(z * 10) / 10)) }),

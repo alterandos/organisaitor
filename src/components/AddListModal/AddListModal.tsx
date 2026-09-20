@@ -38,34 +38,22 @@ export function AddListModal() {
   const formRef = useRef<HTMLFormElement>(null);
 
   // ── Form state ──────────────────────────────────────────────────────────────
-  const [name,        setName]        = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedTypeId, setSelectedTypeId] = useState<ListTypeId | null>(null);
-  const [color,       setColor]       = useState<string | null>(null);
-  const [icon,        setIcon]        = useState<string | null>(null);
-  const [fields,      setFields]      = useState<ListFieldSchema[]>([]);
-  const [tabs,        setTabs]        = useState<ListTab[]>([]);
-  const [typeChosen,  setTypeChosen]  = useState(false);
+  const [name,        setName]        = useState(() => existing?.name ?? '');
+  const [description, setDescription] = useState(() => existing?.description ?? '');
+  const [selectedTypeId, setSelectedTypeId] = useState<ListTypeId | null>(() => existing?.typeId ?? null);
+  const [color,       setColor]       = useState<string | null>(() => existing?.color ?? null);
+  const [icon,        setIcon]        = useState<string | null>(() => existing?.icon ?? null);
+  const [fields,      setFields]      = useState<ListFieldSchema[]>(() =>
+    existing ? existing.fieldSchema.map((f: ListFieldSchema) => ({ ...f, options: f.options ? [...f.options] : undefined })) : []);
+  const [tabs,        setTabs]        = useState<ListTab[]>(() =>
+    existing?.tabs ? existing.tabs.map((t) => ({ ...t, fieldSchema: t.fieldSchema ? [...t.fieldSchema] : [] })) : []);
+  const [typeChosen,  setTypeChosen]  = useState(() => !!existing);
   const [newSelectOption,    setNewSelectOption]    = useState<Record<string, string>>({});
   const [newTabSelectOption, setNewTabSelectOption] = useState<Record<string, string>>({});
   const [expandedTabs, setExpandedTabs] = useState<Set<number>>(new Set());
   const [encryptOnCreate, setEncryptOnCreate] = useState(false);
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
   useEffect(() => onVaultStatus((s) => setVaultUnlocked(s === 'unlocked')), []);
-
-  // Populate from existing when editing
-  useEffect(() => {
-    if (existing) {
-      setName(existing.name);
-      setDescription(existing.description ?? '');
-      setSelectedTypeId(existing.typeId);
-      setColor(existing.color);
-      setIcon(existing.icon);
-      setFields(existing.fieldSchema.map((f: ListFieldSchema) => ({ ...f, options: f.options ? [...f.options] : undefined })));
-      setTabs(existing.tabs ? existing.tabs.map((t) => ({ ...t, fieldSchema: t.fieldSchema ? [...t.fieldSchema] : [] })) : []);
-      setTypeChosen(true);
-    }
-  }, [editingListId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEscapeClose(() => { closeModal(); });
 

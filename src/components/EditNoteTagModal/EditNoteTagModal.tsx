@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { nanoid } from 'nanoid';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
@@ -38,23 +38,13 @@ export function EditNoteTagModal() {
 
   const tag = editingNoteTagId ? noteTags[editingNoteTagId as NoteTagId] : null;
 
-  const [name, setName]             = useState('');
-  const [icon, setIcon]             = useState('');
-  const [color, setColor]           = useState<string | null>(null);
-  const [typeKey, setTypeKey]       = useState('');
-  const [fieldSchema, setFieldSchema] = useState<NoteTagFieldDef[]>([]);
-  const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
-
-  useEffect(() => {
-    if (tag) {
-      setName(tag.name);
-      setIcon(tag.icon ?? '');
-      setColor(tag.color);
-      setTypeKey(tag.tagTypeId ?? '');
-      setFieldSchema(tag.fieldSchema ?? []);
-      setCollectionId(tag.collectionId);
-    }
-  }, [tag?.id]);
+  // NotesSection remounts this modal per tag (key), so these initialise from the tag being edited.
+  const [name, setName]             = useState(() => tag?.name ?? '');
+  const [icon, setIcon]             = useState(() => tag?.icon ?? '');
+  const [color, setColor]           = useState<string | null>(() => tag?.color ?? null);
+  const [typeKey, setTypeKey]       = useState(() => tag?.tagTypeId ?? '');
+  const [fieldSchema, setFieldSchema] = useState<NoteTagFieldDef[]>(() => tag?.fieldSchema ?? []);
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(() => tag?.collectionId ?? null);
 
   useEscapeClose(closeEditNoteTag);
   useCtrlEnterSubmit(() => handleSave(), !!tag && !!editingNoteTagId);

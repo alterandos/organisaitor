@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { PurposeId, TagId, Task, Collection } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -56,7 +56,11 @@ export function TaskList() {
   const sortDir            = useUIStore((s) => s.sortDir);
   const taskViewMode       = useUIStore((s) => s.taskViewMode);
 
-  useEffect(() => { setToggledIds(new Set()); }, [taskViewMode]);
+  const [prevTaskViewMode, setPrevTaskViewMode] = useState(taskViewMode);
+  if (prevTaskViewMode !== taskViewMode) {
+    setPrevTaskViewMode(taskViewMode);
+    setToggledIds(new Set());
+  }
 
   const isExpanded = (taskId: string): boolean =>
     taskViewMode === 'focused' ? !toggledIds.has(taskId) : toggledIds.has(taskId);

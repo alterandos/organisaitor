@@ -22,21 +22,17 @@ export function MobileCalendarQuickAdd() {
   const addEvent    = useCalendarStore((s) => s.addEvent);
   const addReminder = useCalendarStore((s) => s.addReminder);
 
+  // App.tsx mounts this only while open, so the form initialises from the prefill on every open.
   const [title, setTitle] = useState('');
-  const [kind, setKind]   = useState<CalendarItemKind>('event');
-  const [itemDate, setItemDate] = useState('');
-  const [time, setTime]   = useState('');
+  const [kind, setKind]   = useState<CalendarItemKind>(prefillKind);
+  const [itemDate, setItemDate] = useState(date ?? '');
+  const [time, setTime]   = useState(prefillTime ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    setTitle('');
-    setKind(prefillKind);
-    setItemDate(date ?? '');
-    setTime(prefillTime ?? '');
     const t = setTimeout(() => inputRef.current?.focus(), 50);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEscapeClose(close, open);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -8,6 +8,7 @@ import type { CollectionId } from '@/types';
 import { BUILTIN_TAGS } from '../NoteEditor/builtinTags';
 import styles from './AddNoteTagModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 const PRESET_COLORS = [
   '#5b6ee1', '#2563eb', '#7c3aed', '#db2777',
@@ -62,15 +63,7 @@ export function AddNoteTagModal() {
 
   useEscapeClose(() => { closeModal(); });
 
-  useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleCreate(); }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeModal]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleCreate = () => {
+  function handleCreate() {
     if (!name.trim()) return;
     addNoteTag({
       name: name.trim(),
@@ -82,7 +75,9 @@ export function AddNoteTagModal() {
       collectionId: isTag ? null : collectionId,
     });
     closeModal();
-  };
+  }
+
+  useCtrlEnterSubmit(() => handleCreate());
 
   return (
     <div className={styles.overlay} onClick={closeModal}>

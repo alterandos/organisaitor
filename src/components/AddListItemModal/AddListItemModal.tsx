@@ -129,27 +129,13 @@ export function AddListItemModal() {
 
   const formRef = useRef<HTMLFormElement>(null);
 
-  const [title,    setTitle]    = useState('');
-  const [status,   setStatus]   = useState<ListItemStatus>('want');
-  const [tabId,    setTabId]    = useState<string | null>(!isEditing ? (pendingListItemTabId ?? null) : null);
-  const [data,     setData]     = useState<Record<string, unknown>>({});
-  const [notes,    setNotes]    = useState('');
-  const [links,    setLinks]    = useState<string[]>([]);
+  const [title,    setTitle]    = useState(() => existing?.title ?? '');
+  const [status,   setStatus]   = useState<ListItemStatus>(() => existing?.status ?? 'want');
+  const [tabId,    setTabId]    = useState<string | null>(() => existing ? (existing.tabId ?? null) : !isEditing ? (pendingListItemTabId ?? null) : null);
+  const [data,     setData]     = useState<Record<string, unknown>>(() => existing ? { ...existing.data } : {});
+  const [notes,    setNotes]    = useState(() => existing?.notes ?? '');
+  const [links,    setLinks]    = useState<string[]>(() => existing ? [...existing.links] : []);
   const [newLink,  setNewLink]  = useState('');
-
-  // Populate from existing item when editing; inherit pending tab for new items
-  useEffect(() => {
-    if (existing) {
-      setTitle(existing.title);
-      setStatus(existing.status);
-      setTabId(existing.tabId ?? null);
-      setData({ ...existing.data });
-      setNotes(existing.notes ?? '');
-      setLinks([...existing.links]);
-    } else {
-      setTabId(pendingListItemTabId ?? null);
-    }
-  }, [editingListItemId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEscapeClose(() => { closeModal(); });
 

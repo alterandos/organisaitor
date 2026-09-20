@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { CalendarReminderId, RepeatFreq, RepeatConfig } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -36,30 +36,15 @@ export function CalendarReminderPane() {
     onRestore: () => { if (editingId) restoreReminder(editingId as CalendarReminderId); },
   });
 
-  const [title,          setTitle]          = useState('');
-  const [notes,          setNotes]          = useState('');
-  const [repeatOn,       setRepeatOn]       = useState(false);
-  const [repeatFreq,     setRepeatFreq]     = useState<RepeatFreq>('weekly');
-  const [repeatInterval, setRepeatInterval] = useState(1);
-  const [repeatEndKind,  setRepeatEndKind]  = useState<RepeatConfig['endKind']>('forever');
-  const [repeatCount,    setRepeatCount]    = useState(10);
-  const [repeatUntil,    setRepeatUntil]    = useState('');
-
-  useEffect(() => {
-    if (reminder) {
-      setTitle(reminder.title);
-      setNotes(reminder.notes ?? '');
-      const r = reminder.repeat;
-      setRepeatOn(!!r);
-      if (r) {
-        setRepeatFreq(r.freq);
-        setRepeatInterval(r.interval);
-        setRepeatEndKind(r.endKind);
-        setRepeatCount(r.count ?? 10);
-        setRepeatUntil(r.until ?? '');
-      }
-    }
-  }, [reminder?.id]);
+  const repeat = reminder?.repeat ?? null;
+  const [title,          setTitle]          = useState(() => reminder?.title ?? '');
+  const [notes,          setNotes]          = useState(() => reminder?.notes ?? '');
+  const [repeatOn,       setRepeatOn]       = useState(!!repeat);
+  const [repeatFreq,     setRepeatFreq]     = useState<RepeatFreq>(repeat?.freq ?? 'weekly');
+  const [repeatInterval, setRepeatInterval] = useState(repeat?.interval ?? 1);
+  const [repeatEndKind,  setRepeatEndKind]  = useState<RepeatConfig['endKind']>(repeat?.endKind ?? 'forever');
+  const [repeatCount,    setRepeatCount]    = useState(repeat?.count ?? 10);
+  const [repeatUntil,    setRepeatUntil]    = useState(repeat?.until ?? '');
 
   if (!reminder) return null;
 

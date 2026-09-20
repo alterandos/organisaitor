@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import { mintOAuthState } from '@/services/oauthState';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { resolveTimezone, utcToZonedTime } from '@/utils/timezone';
@@ -24,8 +25,9 @@ async function accessToken(): Promise<string | null> {
 }
 
 // Google's redirect-back is a full page navigation, so there's no way to send an
-// Authorization header — the access token rides along in the OAuth `state` param instead
-// (same fix api/google-calendar-oauth-callback.ts's sibling Strava flow already uses).
+// Authorization header — a single-use nonce (mintOAuthState) rides in the OAuth `state` param
+// instead (same flow as Strava's). Throws if the nonce can't be minted (e.g. migration 032
+// not run yet).
 // access_type=offline + prompt=consent force Google to re-issue a refresh_token every time
 // (by default it's only issued on the very first consent, which would silently break
 // re-connecting an account whose refresh_token was lost or revoked).
@@ -44,7 +46,7 @@ export async function getGoogleCalendarConnectUrl(): Promise<string | null> {
     access_type:   'offline',
     prompt:        'consent',
     scope:         'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email',
-    state:         token,
+    state:         await mintOAuthState('google'),
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { isAppEnabled } from '@/config/apps';
@@ -24,8 +24,6 @@ export function MobileMoreSheet() {
   const dragStateRef = useRef<{ startY: number; dragging: boolean } | null>(null);
 
   useEscapeClose(close, isOpen);
-
-  useEffect(() => { if (!isOpen) setDragY(0); }, [isOpen]);
 
   if (!isOpen) return null;
 

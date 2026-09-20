@@ -13,6 +13,17 @@ export function getUserClient(accessToken: string) {
   });
 }
 
+// An unauthenticated (anon-key) client, for the OAuth callbacks: a full-page redirect carries
+// no user session, so they can only call the security-definer save_* functions (migration 032),
+// which authorise the write by consuming the single-use `state` nonce.
+export function getAnonClient() {
+  const url    = process.env.VITE_SUPABASE_URL as string;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY as string;
+  return createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 export function bearerToken(req: Request): string | null {
   const header = req.headers.get('authorization') ?? '';
   const match = /^Bearer\s+(.+)$/i.exec(header);

@@ -16,7 +16,7 @@ import {
 import type { ScheduleId, ScheduleTemplate, CalendarConnection } from '@/types';
 import styles from './CalendarSidePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { alertDialog, confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 // Which calendar item categories render, filtered via CalendarEvent.eventType/status and
 // CalendarReminder.reminderType. See settingsStore.calendarLayerVisibility for the actual
@@ -273,13 +273,18 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- (re)fetches the connections from the network whenever the pane opens or the account changes
     if (open) reloadConnections();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, authUser]);
 
   const handleConnect = async () => {
-    const url = await getGoogleCalendarConnectUrl();
-    if (url) window.location.href = url;
+    try {
+      const url = await getGoogleCalendarConnectUrl();
+      if (url) window.location.href = url;
+    } catch (e) {
+      await alertDialog(e instanceof Error ? e.message : 'Could not start the Google Calendar connection.');
+    }
   };
 
   const handleToggleCalendar = async (connectionId: string, calendarId: string, enabled: boolean) => {

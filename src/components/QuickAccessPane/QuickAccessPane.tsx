@@ -29,9 +29,6 @@ export function QuickAccessPane() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setQuery('');
-    setMode('recent');
-    setHighlightIndex(0);
     // Autofocus needs a tick — the portal content isn't in the DOM yet on the same render
     // this effect fires in (mount effects run right after the DOM commit, which is enough
     // for a plain focus() call, but a rAF avoids any doubt across browsers/portals).
@@ -54,9 +51,8 @@ export function QuickAccessPane() {
     if (staleEntries.length > 0) pruneStaleRecentEntries(staleEntries);
   }, [staleEntries]);
 
-  useEffect(() => {
-    setHighlightIndex((i) => Math.min(i, Math.max(0, items.length - 1)));
-  }, [items.length]);
+  const lastIndex = Math.max(0, items.length - 1);
+  if (highlightIndex > lastIndex) setHighlightIndex(lastIndex);
 
   useEscapeClose(closeQuickAccess);
 

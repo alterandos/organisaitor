@@ -1,6 +1,10 @@
 # Agent brief 01 — OAuth token in URL, safe sign-out, error boundary, hook-lint debt
 
-**Status:** Not started
+**Status:** Done 2026-09-20 — all four tasks built. Migration `032_oauth_state.sql` was run by the user 2026-09-20. Not verified end-to-end: the OAuth round-trip and sign-out against a real Supabase account (no credentials or `vercel dev` here); login-CSRF binding deliberately not built (BACKLOG.md "OAuth flow hardening"); 41 unrelated lint errors remain.
+- Task 1: done 2026-09-20 — nonce-in-`state` via migration `032_oauth_state.sql` (migration run by the user 2026-09-20). Not verified end-to-end (needs `vercel dev` + the migration); login-CSRF binding deliberately not built, logged in BACKLOG.md.
+- Task 2: done 2026-09-20 — `requestSignOut()` + `clearSyncedLocalData()`; 23-check Playwright run passed. Not verified against a real Supabase account (same-account restore / different-account isolation rely on unchanged `runInitSync`). Involuntary sign-outs still don't wipe (documented).
+- Task 3: done 2026-09-20 — `ErrorBoundary` (app + per-section), `downloadBackup()` extracted to `utils/backupExport.ts`; 10-check Playwright run passed with a temporary throw (removed). Dark theme / Android layout of the fallback not checked.
+- Task 4: done 2026-09-20 — 35 `set-state-in-effect` + 6 `immutability` cleared (eslint 82 errors/10 warnings -> 41/0); 5 justified `eslint-disable`s remain; `refs` left for brief 02 as instructed. 54/55 scripted browser checks (the 1 is a bad regex in my check); Android-only components, `FloatingToolbar` hide-reset and watchlist autofill not exercised in a browser.
 
 ## Bookkeeping — you do this yourself; the user will not
 

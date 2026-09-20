@@ -12,32 +12,34 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 function StravaConnect() {
   const [status, setStatus] = useState<StravaStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  // Post-OAuth redirect: api/strava-oauth-callback.ts sends the user back to
+  // /?strava=connected or /?strava=error&reason=... after the token exchange.
+  const [message, setMessage] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('strava');
+    if (result === 'connected') return 'Strava connected!';
+    if (result === 'error') return `Strava connection failed: ${params.get('reason') ?? 'unknown error'}`;
+    return null;
+  });
 
   useEffect(() => {
     checkStravaStatus().then(setStatus);
-
-    // Post-OAuth redirect: api/strava-oauth-callback.ts sends the user back to
-    // /?strava=connected or /?strava=error&reason=... after the token exchange.
-    const params = new URLSearchParams(window.location.search);
-    const result = params.get('strava');
-    if (result === 'connected') {
-      setMessage('Strava connected!');
-      checkStravaStatus().then(setStatus);
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (result === 'error') {
-      setMessage(`Strava connection failed: ${params.get('reason') ?? 'unknown error'}`);
+    if (new URLSearchParams(window.location.search).has('strava')) {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
   const handleConnect = async () => {
-    const url = await getStravaConnectUrl();
-    if (!url) {
-      setMessage('Sign in first to connect Strava.');
-      return;
+    try {
+      const url = await getStravaConnectUrl();
+      if (!url) {
+        setMessage('Sign in first to connect Strava.');
+        return;
+      }
+      window.location.href = url;
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Could not start the Strava connection.');
     }
-    window.location.href = url;
   };
 
   const handleSync = async () => {

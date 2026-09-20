@@ -55,6 +55,7 @@ export function TickerChart({ item, price, change, changePercent, onClose }: Pro
 
   // Load / reload data when ticker or range changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- status mirrors an external fetch that starts here
     if (!item.ticker) { setStatus('error'); return; }
     if (!seriesRef.current || !chartRef.current) return;
 

@@ -18,7 +18,11 @@ interface Options {
 export function useItemActions({ itemKey, archived, canArchive = true, onClose, onRestore }: Options) {
   const [dialog, setDialog] = useState<'archive' | 'delete' | null>(null);
 
-  useEffect(() => { setDialog(null); }, [itemKey]);
+  const [prevItemKey, setPrevItemKey] = useState(itemKey);
+  if (prevItemKey !== itemKey) {
+    setPrevItemKey(itemKey);
+    setDialog(null);
+  }
 
   useEscapeClose(onClose, !!itemKey);
 

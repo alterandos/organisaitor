@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { nanoid } from 'nanoid';
 import { useTaskStore } from '@/store/taskStore';
 import { useTrackerStore } from '@/store/trackerStore';
@@ -53,12 +53,13 @@ export function EditTrackerPane() {
     : null;
 
   // ── Form state ────────────────────────────────────────────────────────────
-  const [name,        setName]        = useState('');
-  const [color,       setColor]       = useState<string | null>(null);
-  const [purposeIds,  setPurposeIds]  = useState<PurposeId[]>([]);
-  const [tagIds,      setTagIds]      = useState<TagId[]>([]);
-  const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
-  const [fields,      setFields]      = useState<FieldRow[]>([]);
+  // App.tsx remounts this pane per tracker (key), so these initialise from the tracker being edited.
+  const [name,        setName]        = useState(() => tracker?.name ?? '');
+  const [color,       setColor]       = useState<string | null>(() => tracker?.color ?? null);
+  const [purposeIds,  setPurposeIds]  = useState<PurposeId[]>(() => (tracker?.purposeIds ?? []) as PurposeId[]);
+  const [tagIds,      setTagIds]      = useState<TagId[]>(() => (tracker?.tagIds ?? []) as TagId[]);
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(() => tracker?.collectionId ?? null);
+  const [fields,      setFields]      = useState<FieldRow[]>(() => (tracker?.fieldSchema ?? []).map(fieldToRow));
 
   // New-field form
   const [addingField, setAddingField]       = useState(false);
@@ -68,17 +69,6 @@ export function EditTrackerPane() {
   const [newFieldMax,  setNewFieldMax]      = useState('5');
   const [newFieldUnit, setNewFieldUnit]     = useState('');
   const [newFieldOpts, setNewFieldOpts]     = useState('');
-
-  useEffect(() => {
-    if (tracker) {
-      setName(tracker.name);
-      setColor(tracker.color ?? null);
-      setPurposeIds((tracker.purposeIds ?? []) as PurposeId[]);
-      setTagIds((tracker.tagIds ?? []) as TagId[]);
-      setCollectionId(tracker.collectionId);
-      setFields((tracker.fieldSchema ?? []).map(fieldToRow));
-    }
-  }, [tracker?.id]);
 
   useEscapeClose(closeEditTracker, editTrackerOpen);
   useCtrlEnterSubmit(() => handleSave(), editTrackerOpen && !!tracker);

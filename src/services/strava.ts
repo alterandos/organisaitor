@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import { mintOAuthState } from '@/services/oauthState';
 import { useFitnessStore } from '@/store/fitnessStore';
 import type { ActivityTypeId } from '@/types/fitness';
 import { apiFetch } from '@/utils/apiFetch';
@@ -27,8 +28,9 @@ async function accessToken(): Promise<string | null> {
 }
 
 // Strava's redirect-back is a full page navigation, so there's no way to send an
-// Authorization header — the access token rides along in the OAuth `state` param instead
-// and api/strava-oauth-callback.ts uses it to identify + authenticate the user server-side.
+// Authorization header — a single-use nonce (mintOAuthState) rides in the OAuth `state` param
+// instead, and api/strava-oauth-callback.ts redeems it to learn which user is connecting.
+// Throws if the nonce can't be minted (e.g. migration 032 not run yet).
 export async function getStravaConnectUrl(): Promise<string | null> {
   const token = await accessToken();
   if (!token) return null;
@@ -43,7 +45,7 @@ export async function getStravaConnectUrl(): Promise<string | null> {
     response_type:     'code',
     approval_prompt:   'auto',
     scope:              'activity:read',
-    state:              token,
+    state:              await mintOAuthState('strava'),
   });
   return `https://www.strava.com/oauth/authorize?${params.toString()}`;
 }

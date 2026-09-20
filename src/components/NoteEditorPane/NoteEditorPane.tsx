@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { useNoteView } from '@/store/noteViews';
@@ -19,17 +19,21 @@ export function NoteEditorPane() {
   const note = useNoteView(editingNoteId);
   const locked = !!rawNote && isNoteLocked(rawNote);
 
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+  const [title, setTitle] = useState(() => note?.title ?? '');
+  const [content, setContent] = useState(() => note?.content ?? '');
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
+  // Re-read the note's text when a different note opens, or when it (un)locks — an encrypted note's
+  // plaintext arrives after the vault decrypts it (adjusts state during render, not in an effect).
+  const syncKey = note ? `${note.id}:${locked}` : null;
+  const [syncedKey, setSyncedKey] = useState(syncKey);
+  if (syncKey !== syncedKey) {
+    setSyncedKey(syncKey);
     if (note) {
       setTitle(note.title);
       setContent(note.content);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note?.id, locked]);
+  }
 
   const doSave = () => {
     if (!editingNoteId) return;

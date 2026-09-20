@@ -1,10 +1,8 @@
 import { create } from 'zustand';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
-import { useTaskStore } from '@/store/taskStore';
-import { useCalendarStore } from '@/store/calendarStore';
-import { useTrackerStore } from '@/store/trackerStore';
 import { stopSync } from '@/services/sync/syncService';
+import { clearSyncedLocalData } from '@/services/clearLocalData';
 
 interface AuthState {
   user:        User | null;
@@ -50,13 +48,8 @@ export const useAuthStore = create<AuthState>()((set) => ({
     stopSync();
     await supabase.auth.signOut();
     set({ user: null, session: null });
-    // Clear in-memory stores and localStorage cache so the app shows empty
-    // when signed out. Data is safely in Supabase and reloads on next sign-in.
-    useTaskStore.setState({ tasks: {}, collections: {}, tags: {}, purposes: {} } as never);
-    useCalendarStore.setState({ events: {}, reminders: {} } as never);
-    useTrackerStore.setState({ entries: {} } as never);
-    localStorage.removeItem('todo-app-storage');
-    localStorage.removeItem('todo-calendar');
-    localStorage.removeItem('todo-tracker');
+    // Clear this device's copy of every cloud-synced store. Callers go through requestSignOut()
+    // (services/signOut.ts), which has already confirmed the data is safely in the cloud.
+    clearSyncedLocalData();
   },
 }));

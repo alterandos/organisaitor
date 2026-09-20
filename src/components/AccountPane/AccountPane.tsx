@@ -5,6 +5,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { isSupabaseConfigured } from '@/services/supabase';
+import { requestSignOut } from '@/services/signOut';
 import { forceUpload, onSyncStatus, type SyncStatus } from '@/services/sync/syncService';
 import {
   onVaultStatus, type VaultStatus,
@@ -12,33 +13,17 @@ import {
   trustThisDevice, getVaultError, retryVaultCheck,
 } from '@/services/vault';
 import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
+import { downloadBackup } from '@/utils/backupExport';
 import styles from './AccountPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 type Mode = 'signin' | 'signup';
 
-function downloadBackup() {
-  const backup: Record<string, unknown> = { exportedAt: new Date().toISOString(), version: 2 };
-  for (const key of PERSISTED_STORAGE_KEYS) {
-    const val = localStorage.getItem(key);
-    if (val !== null) backup[key] = JSON.parse(val);
-  }
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `organisaitor-backup-${new Date().toISOString().split('T')[0]}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 const REMEMBERED_EMAIL_KEY = 'todo-remembered-email';
 
 export function AccountPane() {
   const closeAccount = useUIStore((s) => s.closeAccount);
-  const { user, loading, signIn, signUp, signOut } = useAuthStore();
+  const { user, loading, signIn, signUp } = useAuthStore();
 
   const [rememberedEmail] = useState(() => localStorage.getItem(REMEMBERED_EMAIL_KEY));
   const [mode,        setMode]        = useState<Mode>('signin');
@@ -148,7 +133,7 @@ export function AccountPane() {
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    if (!await requestSignOut()) return;
     setEmail(localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? '');
     setPassword('');
   };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteView } from '@/store/noteViews';
@@ -6,6 +6,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { LABELS } from '@/config/labels';
 import type { NoteTagId, CollectionId } from '@/types';
+import type { Note } from '@/types/notes';
 import { formatDate } from '@/utils/date';
 import styles from './EditNoteMetaModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -32,37 +33,31 @@ function buildTagList(
     ]);
 }
 
+// The note can be briefly unavailable (an encrypted note whose plaintext isn't decrypted yet), so
+// the form only mounts once it exists, keyed by note, and initialises its state from it.
 export function EditNoteMetaModal() {
-  const closeModal       = useUIStore((s) => s.closeModal);
   const editingNoteMetaId = useUIStore((s) => s.editingNoteMetaId);
+  const note = useNoteView(editingNoteMetaId);
+  if (!note) return null;
+  return <EditNoteMetaForm key={note.id} note={note} />;
+}
+
+function EditNoteMetaForm({ note }: { note: Note }) {
+  const closeModal       = useUIStore((s) => s.closeModal);
   const noteTags         = useNoteStore((s) => s.noteTags);
   const updateNote       = useNoteStore((s) => s.updateNote);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const allCollections   = Object.values(collectionsRecord);
 
-  const note = useNoteView(editingNoteMetaId);
-
-  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
-  const [color, setColor]   = useState<string | null>(null);
-  const [pinned, setPinned] = useState(false);
-  const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
-
-  useEffect(() => {
-    if (note) {
-      setSelectedTagIds(new Set(note.tagIds));
-      setColor(note.color);
-      setPinned(note.pinned);
-      setCollectionId(note.collectionId);
-    }
-  }, [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(() => new Set(note.tagIds));
+  const [color, setColor]   = useState<string | null>(note.color);
+  const [pinned, setPinned] = useState(note.pinned);
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(note.collectionId);
 
   useEscapeClose(closeModal);
-  useCtrlEnterSubmit(() => handleSave(), !!note);
-
-  if (!note) return null;
+  useCtrlEnterSubmit(() => handleSave());
 
   function handleSave() {
-    if (!note) return;
     updateNote(note.id, {
       tagIds: Array.from(selectedTagIds) as NoteTagId[],
       color,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -9,6 +9,7 @@ import { resolveNoteInheritedCollectionId } from '@/utils/notes';
 import type { NoteTagId, CollectionId } from '@/types';
 import styles from './AddNoteModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 export function AddNoteModal() {
   const closeModal        = useUIStore((s) => s.closeModal);
@@ -23,37 +24,20 @@ export function AddNoteModal() {
   const allCollections = Object.values(collectionsRecord);
 
   const [title, setTitle]             = useState('');
-  const [selectedTagIds, setSelectedTagIds] = useState<NoteTagId[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<NoteTagId[]>(() => selectedNoteTagId ? [selectedNoteTagId] : []);
   const [showTagPicker, setShowTagPicker]   = useState(false);
   const [tagPickerPath, setTagPickerPath]   = useState<NoteTagId[]>([]);
   const [templateId, setTemplateId]         = useState(NOTE_TEMPLATES[0].id);
-  const [collectionId, setCollectionId]     = useState<CollectionId | null>(null);
-  const collectionManuallySet = useRef(false);
-
-  // Pre-select the currently active notebook
-  useEffect(() => {
-    if (selectedNoteTagId) {
-      setSelectedTagIds([selectedNoteTagId]);
-    }
-  }, [selectedNoteTagId]);
-
-  // Default the Endeavour from the selected notebook(s)' Endeavour, unless the user picked one explicitly
-  useEffect(() => {
-    if (collectionManuallySet.current) return;
-    setCollectionId(resolveNoteInheritedCollectionId(selectedTagIds, noteTags));
-  }, [selectedTagIds, noteTags]);
+  // undefined = follow the selected notebook(s)' Endeavour; anything else is the user's explicit pick
+  const [pickedCollectionId, setPickedCollectionId] = useState<CollectionId | null | undefined>(undefined);
+  const collectionId = pickedCollectionId !== undefined
+    ? pickedCollectionId
+    : resolveNoteInheritedCollectionId(selectedTagIds, noteTags);
 
   useEscapeClose(() => { closeModal(); });
+  useCtrlEnterSubmit(() => handleSave());
 
-  useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSave(); }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeModal]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSave = (openEditor = false) => {
+  function handleSave(openEditor = false) {
     if (!title.trim()) return;
     const template = NOTE_TEMPLATES.find((t) => t.id === templateId);
     const noteId = addNote({
@@ -70,11 +54,10 @@ export function AddNoteModal() {
       setTitle('');
       setSelectedTagIds([]);
       setTemplateId(NOTE_TEMPLATES[0].id);
-      setCollectionId(null);
-      collectionManuallySet.current = false;
+      setPickedCollectionId(undefined);
       closeModal();
     }
-  };
+  }
 
   const handleTagSelect = (tagId: NoteTagId) => {
     const children = getChildTags(tagId);
@@ -190,7 +173,7 @@ export function AddNoteModal() {
               <CollectionPicker
                 collections={allCollections}
                 value={collectionId}
-                onChange={(id) => { collectionManuallySet.current = true; setCollectionId(id); }}
+                onChange={setPickedCollectionId}
                 noneLabel={`No ${LABELS.collection}`}
               />
             </div>

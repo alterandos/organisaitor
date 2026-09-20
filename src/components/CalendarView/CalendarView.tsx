@@ -548,6 +548,7 @@ export function CalendarView() {
   const pendingCalendarDate = useUIStore((s) => s.pendingCalendarDate);
   useEffect(() => {
     if (!pendingCalendarDate) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- consumes a one-shot navigation request posted to uiStore by another section, then clears it
     jumpToDate(pendingCalendarDate);
     useUIStore.getState().clearPendingCalendarDate();
   }, [pendingCalendarDate]);

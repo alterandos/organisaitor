@@ -95,14 +95,16 @@ export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
   }, [editor, updatePos]);
 
   // Reset tag/link/color/create picker when toolbar hides
-  useEffect(() => {
+  const [prevPos, setPrevPos] = useState(pos);
+  if (prevPos !== pos) {
+    setPrevPos(pos);
     if (!pos) {
       setShowTags(false); setSearch('');
       setShowLinkInput(false); setLinkUrl('');
       setShowColorPicker(false);
       setShowCreateMenu(false); setStubMessage(null);
     }
-  }, [pos]);
+  }
 
   // Ctrl+Space: select current block (if nothing selected) then open tag picker
   useEffect(() => {

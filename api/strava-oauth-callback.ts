@@ -1,13 +1,13 @@
 import { exchangeStravaCode } from './_lib/strava';
-import { getUserClient } from './_lib/supabaseEdge';
+import { getAnonClient } from './_lib/supabaseEdge';
 
 export const config = { runtime: 'edge' };
 
 // Strava redirects the browser here after the user approves the connection (a full page
-// navigation, not a fetch — so there's no Authorization header). `state` carries the
-// user's Supabase access token instead (set by the client when it builds the authorize
-// URL); we use it to identify who's connecting and to make the DB write as that user,
-// so RLS applies normally. See BACKLOG.md "Fitness App" for the full OAuth flow.
+// navigation, not a fetch — so there's no Authorization header). `state` is a single-use,
+// 10-minute nonce minted by the signed-in client (mint_oauth_state, migration 032) — never a
+// credential. save_strava_connection consumes it and writes the row for the user it was
+// minted for; a reused, expired or wrong-provider state is rejected there.
 export default async function handler(req: Request): Promise<Response> {
   const url   = new URL(req.url);
   const code  = url.searchParams.get('code');
@@ -21,23 +21,19 @@ export default async function handler(req: Request): Promise<Response> {
   if (!code || !state) return fail('missing_params');
 
   try {
-    const supabase = getUserClient(state);
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) return fail('session_expired');
-
     const tokens = await exchangeStravaCode(code);
 
-    const { error: upsertError } = await supabase.from('fitness_strava_connection').upsert({
-      user_id:       userData.user.id,
-      athlete_id:    tokens.athlete?.id ?? 0,
-      access_token:  tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expires_at:    tokens.expires_at,
-      scope:         url.searchParams.get('scope') ?? 'activity:read',
-      updated_at:    new Date().toISOString(),
+    const { data, error } = await getAnonClient().rpc('save_strava_connection', {
+      p_nonce:         state,
+      p_athlete_id:    tokens.athlete?.id ?? 0,
+      p_access_token:  tokens.access_token,
+      p_refresh_token: tokens.refresh_token,
+      p_expires_at:    tokens.expires_at,
+      p_scope:         url.searchParams.get('scope') ?? 'activity:read',
     });
 
-    if (upsertError) return fail(upsertError.message);
+    if (error) return fail(error.message);
+    if (data !== 'ok') return fail(String(data));
 
     return Response.redirect(`${origin}/?strava=connected`, 302);
   } catch (e) {

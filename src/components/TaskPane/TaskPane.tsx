@@ -45,8 +45,9 @@ export function TaskPane() {
 
   const task = editingTaskId ? tasksRecord[editingTaskId as TaskId] : null;
 
-  const [title,          setTitle]          = useState('');
-  const [notes,          setNotes]          = useState('');
+  // App.tsx remounts this pane per task (key), so these initialise from the task being edited.
+  const [title,          setTitle]          = useState(() => task?.title ?? '');
+  const [notes,          setNotes]          = useState(() => task?.notes ?? '');
   const [tagSearch,      setTagSearch]      = useState('');
   const [tagDropOpen,    setTagDropOpen]    = useState(false);
   const [subtaskInput,   setSubtaskInput]   = useState('');
@@ -55,13 +56,6 @@ export function TaskPane() {
   const [editingLinkVal, setEditingLinkVal] = useState('');
   const tagInputRef  = useRef<HTMLInputElement>(null);
   const notesRef     = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (task) {
-      setTitle(task.title);
-      setNotes(task.notes ?? '');
-    }
-  }, [task?.id]);
 
   // Notes field grows with content up to 40% of the window height, then scrolls.
   useEffect(() => {

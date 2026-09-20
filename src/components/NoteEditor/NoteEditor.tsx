@@ -759,6 +759,39 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     },
   });
 
+  // ── Tab switching ─────────────────────────────────────────────────────────
+
+  const flushCurrentTab = () => {
+    const id = currentNoteIdRef.current;
+    const tabId = activeTabIdRef.current;
+    if (!id || !editor) return;
+    if (saveRef.current) { clearTimeout(saveRef.current); saveRef.current = null; }
+    const content = JSON.stringify(editor.getJSON());
+    if (tabId !== null) {
+      useNoteStore.getState().updateNoteTabContent(id as NoteId, tabId, content);
+    } else {
+      updateNote(id as NoteId, { content });
+    }
+  };
+
+  const switchTab = (tabId: string | null) => {
+    flushCurrentTab();
+    setActiveTabId(tabId);
+    activeTabIdRef.current = tabId;
+    const id = currentNoteIdRef.current;
+    if (!id || !editor) return;
+    const latestNote = viewOf(id);
+    if (!latestNote) return;
+    isLoadingRef.current = true;
+    if (tabId === null) {
+      editor.commands.setContent(parseContent(latestNote.content));
+    } else {
+      const tab = latestNote.tabs.find((t) => t.id === tabId);
+      editor.commands.setContent(parseContent(tab?.content ?? ''));
+    }
+    isLoadingRef.current = false;
+  };
+
   // Keep editorRef in sync so runTableCmd can access it without a dependency
   editorRef.current = editor;
 
@@ -819,6 +852,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       editor.commands.setContent(parseContent(tab ? tab.content : note.content));
     }
     isLoadingRef.current = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reloads the Tiptap editor (an external system) on lock/unlock; the title/abstract inputs mirror the same reload
     setTitle(note.title);
     setAbstract(note.abstract ?? null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1013,39 +1047,6 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // needs to be a dep, so this effect still only needs to re-subscribe when `editor` changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
-
-  // ── Tab switching ─────────────────────────────────────────────────────────
-
-  const flushCurrentTab = () => {
-    const id = currentNoteIdRef.current;
-    const tabId = activeTabIdRef.current;
-    if (!id || !editor) return;
-    if (saveRef.current) { clearTimeout(saveRef.current); saveRef.current = null; }
-    const content = JSON.stringify(editor.getJSON());
-    if (tabId !== null) {
-      useNoteStore.getState().updateNoteTabContent(id as NoteId, tabId, content);
-    } else {
-      updateNote(id as NoteId, { content });
-    }
-  };
-
-  const switchTab = (tabId: string | null) => {
-    flushCurrentTab();
-    setActiveTabId(tabId);
-    activeTabIdRef.current = tabId;
-    const id = currentNoteIdRef.current;
-    if (!id || !editor) return;
-    const latestNote = viewOf(id);
-    if (!latestNote) return;
-    isLoadingRef.current = true;
-    if (tabId === null) {
-      editor.commands.setContent(parseContent(latestNote.content));
-    } else {
-      const tab = latestNote.tabs.find((t) => t.id === tabId);
-      editor.commands.setContent(parseContent(tab?.content ?? ''));
-    }
-    isLoadingRef.current = false;
-  };
 
   // Flush unsaved edits BEFORE the vault key is dropped: once locked nothing can be encrypted,
   // so a still-pending autosave/title/abstract debounce would be refused and the edit lost.

@@ -82,12 +82,12 @@ export function AddScheduleModal() {
   const updateSchedule    = useScheduleStore((s) => s.updateSchedule);
   const deleteSchedule    = useScheduleStore((s) => s.deleteSchedule);
 
-  const [name,         setName]         = useState('');
-  const [color,        setColor]        = useState<string | null>(null);
-  const [startDate,    setStartDate]    = useState('');
-  const [endDate,      setEndDate]      = useState('');
-  const [collectionId, setCollectionId] = useState<CollectionId | null>(null);
-  const [blocks,       setBlocks]       = useState<BlockRow[]>([]);
+  const [name,         setName]         = useState(() => editingSchedule?.name ?? '');
+  const [color,        setColor]        = useState<string | null>(() => editingSchedule?.color ?? null);
+  const [startDate,    setStartDate]    = useState(() => editingSchedule?.startDate ?? '');
+  const [endDate,      setEndDate]      = useState(() => editingSchedule?.endDate ?? '');
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(() => editingSchedule?.collectionId ?? null);
+  const [blocks,       setBlocks]       = useState<BlockRow[]>(() => editingSchedule ? editingSchedule.blocks.map(blockToRow) : []);
   const [addingBlock,  setAddingBlock]  = useState(false);
   // Scrolls a block's row into view right after it expands — both the ⚙ button and clicking
   // a block in the grid preview go through this, so the edit panel is never left off-screen
@@ -111,25 +111,6 @@ export function AddScheduleModal() {
   const [newRequiresCommitment, setNewRequiresCommitment] = useState(false);
 
   const formRef = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    if (editingSchedule) {
-      setName(editingSchedule.name);
-      setColor(editingSchedule.color ?? null);
-      setStartDate(editingSchedule.startDate ?? '');
-      setEndDate(editingSchedule.endDate ?? '');
-      setCollectionId(editingSchedule.collectionId);
-      setBlocks(editingSchedule.blocks.map(blockToRow));
-    } else {
-      setName('');
-      setColor(null);
-      setStartDate('');
-      setEndDate('');
-      setCollectionId(null);
-      setBlocks([]);
-    }
-    setAddingBlock(false);
-  }, [editingSchedule?.id, isVisible]);
 
   useEscapeClose(() => { closeEditSchedule(); }, isVisible);
 

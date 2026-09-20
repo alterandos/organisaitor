@@ -88,7 +88,11 @@ export function AddTaskModal() {
   const existingTags   = Object.values(tags);
   const topLevelTasks  = Object.values(tasksRecord).filter((t) => !t.parentId && !t.completed && !t.archived);
 
-  useEffect(() => { setAdvanced(taskModalAdvanced); }, [taskModalAdvanced]);
+  const [prevTaskModalAdvanced, setPrevTaskModalAdvanced] = useState(taskModalAdvanced);
+  if (prevTaskModalAdvanced !== taskModalAdvanced) {
+    setPrevTaskModalAdvanced(taskModalAdvanced);
+    setAdvanced(taskModalAdvanced);
+  }
 
   useEscapeClose(() => { handleClose(); });
 

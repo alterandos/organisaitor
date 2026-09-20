@@ -25,28 +25,11 @@ export function AddCollectionModal() {
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [kind, setKind]               = useState<CollectionKind>('project');
-  const [name, setName]               = useState('');
-  const [description, setDescription] = useState('');
-  const [color, setColor]             = useState<string | null>(null);
-  const [deadline, setDeadline]       = useState('');
+  const [name, setName]               = useState(() => editingCollection?.name ?? '');
+  const [description, setDescription] = useState(() => editingCollection?.description ?? '');
+  const [color, setColor]             = useState<string | null>(() => editingCollection?.color ?? null);
+  const [deadline, setDeadline]       = useState(() => editingCollection?.deadline ?? '');
   const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>([]);
-
-  // Pre-fill when entering edit mode
-  useEffect(() => {
-    if (editingCollection) {
-      setName(editingCollection.name);
-      setDescription(editingCollection.description ?? '');
-      setColor(editingCollection.color ?? null);
-      setDeadline(editingCollection.deadline ?? '');
-    } else {
-      setKind('project');
-      setName('');
-      setDescription('');
-      setColor(null);
-      setDeadline('');
-      setSelectedPurposeIds([]);
-    }
-  }, [editingCollection]);
 
   const formRef = useRef<HTMLFormElement>(null);
 

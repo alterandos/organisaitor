@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -158,41 +158,17 @@ export function AddActivityModal() {
   const topTypes = getTopActivityTypes(activityTypes, activities, 3);
   const topTypeIds = new Set(topTypes.map((t) => t.id));
 
-  const [type,       setType]       = useState<ActivityTypeId>(topTypes[0]?.id ?? ('run' as ActivityTypeId));
-  const [title,      setTitle]      = useState('');
-  const [date,       setDate]       = useState(todayIso());
-  const [distanceKm, setDistanceKm] = useState('');
-  const [hours,      setHours]      = useState('');
-  const [minutes,    setMinutes]    = useState('');
-  const [notes,      setNotes]      = useState('');
-  const [fieldData,  setFieldData]  = useState<Record<string, unknown>>({});
-  const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>([]);
+  const initialMinutes = editingActivity?.movingTimeSeconds ? Math.round(editingActivity.movingTimeSeconds / 60) : 0;
 
-  useEffect(() => {
-    if (editingActivity) {
-      setType(editingActivity.type);
-      setTitle(editingActivity.title);
-      setDate(editingActivity.startedAt.slice(0, 10));
-      setDistanceKm(editingActivity.distanceMeters ? String(editingActivity.distanceMeters / 1000) : '');
-      const totalMin = editingActivity.movingTimeSeconds ? Math.round(editingActivity.movingTimeSeconds / 60) : 0;
-      setHours(totalMin ? String(Math.floor(totalMin / 60)) : '');
-      setMinutes(totalMin ? String(totalMin % 60) : '');
-      setNotes(editingActivity.notes ?? '');
-      setFieldData(editingActivity.data ?? {});
-      setSelectedPurposeIds(editingActivity.purposeIds ?? []);
-    } else {
-      setType(topTypes[0]?.id ?? ('run' as ActivityTypeId));
-      setTitle('');
-      setDate(todayIso());
-      setDistanceKm('');
-      setHours('');
-      setMinutes('');
-      setNotes('');
-      setFieldData({});
-      setSelectedPurposeIds([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingActivity?.id]);
+  const [type,       setType]       = useState<ActivityTypeId>(() => editingActivity?.type ?? topTypes[0]?.id ?? ('run' as ActivityTypeId));
+  const [title,      setTitle]      = useState(() => editingActivity?.title ?? '');
+  const [date,       setDate]       = useState(() => editingActivity ? editingActivity.startedAt.slice(0, 10) : todayIso());
+  const [distanceKm, setDistanceKm] = useState(() => editingActivity?.distanceMeters ? String(editingActivity.distanceMeters / 1000) : '');
+  const [hours,      setHours]      = useState(() => initialMinutes ? String(Math.floor(initialMinutes / 60)) : '');
+  const [minutes,    setMinutes]    = useState(() => initialMinutes ? String(initialMinutes % 60) : '');
+  const [notes,      setNotes]      = useState(() => editingActivity?.notes ?? '');
+  const [fieldData,  setFieldData]  = useState<Record<string, unknown>>(() => editingActivity?.data ?? {});
+  const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>(() => editingActivity?.purposeIds ?? []);
 
   useEscapeClose(closeEditActivity, isVisible);
   const formRef = useRef<HTMLFormElement>(null);
