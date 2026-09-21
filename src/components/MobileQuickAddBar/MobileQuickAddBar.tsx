@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import type { Priority, CollectionId, CalendarReminderId } from '@/types';
+import type { Priority, CollectionId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
-import { useCalendarStore } from '@/store/calendarStore';
+import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import styles from './MobileQuickAddBar.module.css';
@@ -41,11 +41,9 @@ export function MobileQuickAddBar() {
   const inputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
-  const addTask = useTaskStore((s) => s.addTask);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const activeCollectionId = useUIStore(selectActiveCollectionId);
   const showAddTaskWithPrefill = useUIStore((s) => s.showAddTaskWithPrefill);
-  const addReminder = useCalendarStore((s) => s.addReminder);
 
   const reset = () => {
     setTitle('');
@@ -58,19 +56,10 @@ export function MobileQuickAddBar() {
 
   const submit = () => {
     if (!title.trim()) return;
-    let calendarReminderId: CalendarReminderId | null = null;
-    if (dueDate) {
-      calendarReminderId = addReminder({
-        title: title.trim(),
-        date: dueDate,
-        reminderType: 'task',
-      });
-    }
-    addTask({
+    addTaskWithCalendar({
       title: title.trim(),
       collectionId: (collectionId ?? activeCollectionId) as never ?? null,
       deadline: dueDate,
-      calendarReminderId,
       priority,
     });
     reset();

@@ -11,7 +11,7 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
 import { LinksField } from '@/components/LinksField/LinksField';
-import { mergeNewLinks } from '@/utils/links';
+import { buildCalendarEventInput, buildCalendarReminderInput } from '@/utils/calendarItemInput';
 import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
 import type { CollectionId } from '@/types';
 import styles from './AddCalendarItemModal.module.css';
@@ -147,40 +147,40 @@ export function AddCalendarItemModal() {
     const crossAppRefs = pending ? [{ type: 'note' as const, id: pending.noteId, ...(pending.tabId ? { tabId: pending.tabId } : {}) }] : [];
 
     if (kind === 'event') {
-      const eventId = addEvent({
+      const eventId = addEvent(buildCalendarEventInput({
         title,
         date,
-        endDate:           (endDate && endDate > date) ? endDate : null,
-        startTime:         startTime    || null,
-        endTime:           endTime      || null,
-        notes:             notes        || null,
-        links:             mergeNewLinks(links, notes),
-        location:          location     || null,
+        endDate,
+        startTime,
+        endTime,
+        notes,
+        links,
+        location,
         eventType,
-        collectionId:      collectionId || null,
+        collectionId,
         notifyBeforeValue: notifyBeforeOn ? notifyBeforeValue : null,
         notifyBeforeUnit,
-        notifyAtTime:      eventType === 'birthday' ? notifyAtTime || null : null,
-        repeat:            buildRepeat(),
+        notifyAtTime,
+        repeat: buildRepeat(),
         status,
         important,
         crossAppRefs,
-      });
+      }));
       if (pending) useUIStore.getState().resolveArtifactLink(eventId, 'event');
     } else {
-      const reminderId = addReminder({
+      const reminderId = addReminder(buildCalendarReminderInput({
         title,
         date,
-        time:         time         || null,
-        notes:        notes        || null,
-        links:        mergeNewLinks(links, notes),
-        collectionId: collectionId || null,
-        repeat:       buildRepeat(),
+        time,
+        notes,
+        links,
+        collectionId,
+        repeat: buildRepeat(),
         important,
         crossAppRefs,
         notifyDaysBefore: allDayNotifyDays,
         notifyAtTime:     allDayNotifyAt,
-      });
+      }));
       if (pending) useUIStore.getState().resolveArtifactLink(reminderId, 'reminder');
     }
     closeModal();

@@ -900,9 +900,22 @@ read/write access to the task store and can perform batch operations,
 re-prioritisation, and smart scheduling on behalf of the user.
 
 **Architecture note:** all three features share a common "agent interface"
-layer — a well-defined API surface over the Zustand stores. Design that
-interface before building any individual feature so each agent type can use
-the same underlying operations.
+layer — a well-defined API surface over the Zustand stores. **That layer now
+exists for tasks, calendar, schedules and Endeavours/Purposes/Tags** (`src/agent/`,
+built 2026-09-22 — see `docs/ai/02-command-layer.md`); each agent type below uses it.
+
+### The in-app assistant — remaining phases (confirmed 2026-09-22)
+The agent lives inside the app (the user talks to an in-app chat; the app calls a
+model with the user's own API key, later a local model). Full reasoning, the invariants
+register and every decision are in `docs/ai/01-capability-inventory.md`. Still to build, in order:
+1. **Chunk B — notes.** A headless note-content module (markdown → Tiptap `doc > section+`, heading outline, append/replace under a heading); the note editor reloading from the store on an external change when it has no unsaved edits (today an external write to the open note is silently overwritten by the editor's next save); note commands (`create_note`, `append_to_note`, `replace_note_section`, `update_note_properties`, `get_note` with outline, `create_notebook`) and keyword search over note text (reuse `utils/noteSearchText.ts`); encrypted notes/lists excluded in `agent/access.ts`, with a planted-secrets test; `touchNote` must never be called by a read.
+2. **The chat panel and agent loop** (client-side): send the tool list + messages to the provider, run the calls through `runCommand` with a shared `batchId` per user request, image paste for screenshots, the review screen for `needs_approval` proposals (reuse the `CalendarImportReviewModal` pattern), an "undo this request" action, an agent-activity view over the audit log.
+3. **The agent manual** (system prompt) generated from the command schemas + a short terminology guide, and **evals** (scripted scenarios → expected store diffs, run per model incl. small local ones).
+4. **Provider abstraction** (user's own key stored per device, never synced; local OpenAI-compatible endpoint); check CORS per provider (Tauri/Android use native HTTP).
+5. **Cross-device attribution:** a small synced table recording which items an agent created (a Supabase migration).
+6. **Phone widget** that opens the assistant with the app closed (headless launch on Android).
+7. **Archive support for notes, lists/items, schedules, Portfolio items and activities** (per entity: store action, the shared `ItemActions` UI, a migration), then extend `archive_item`. Until then agents create and modify those but cannot remove them.
+8. Commands for Lists, Records (trackers, entries, routines), Fitness and Portfolio.
 
 ---
 
@@ -2467,7 +2480,9 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 | **Archive + delete via `ItemActions`** | panes for user-owned items | Only Task, Calendar event and Calendar reminder are on it. Notes, notebooks, lists, list items, trackers, routines, activities, schedules and watchlist items delete through `confirmDelete` (correct wording, but no "Archive instead" and no archived state). |
 | **No effect-copying of item state into forms** (`react-hooks/set-state-in-effect`) | `npx eslint . \| grep -c set-state-in-effect` | **Fully applied 2026-09-20** — zero errors (was 35). Five documented `eslint-disable` sites remain, each a genuine external sync: `CalendarSidePane` (network fetch on open), `CalendarView` and `ListsSection` (consuming a one-shot request posted to uiStore by another section), `TickerChart` (fetch status), `NoteEditor` (Tiptap reload on lock/unlock). Related lint debt not covered by this pattern (41 errors total): `react-hooks/refs` x9 (`NoteEditor`, `ChronicleView` — docs/agent-tasks/02), `preserve-manual-memoization` x2, `no-explicit-any` x13, `no-unused-vars` x7, `ban-ts-comment` x4, `no-empty` x3, `no-unused-expressions` x2, `only-export-components` x1. |
 | **Every persisted store versioned** | each `persist(` has `version` + `migrate` | **Fully applied 2026-09-20.** |
-| **Every persisted store uses `persistStorage()`** | `grep -L persistStorage $(grep -rl "persist(" src/store)` must list nothing | **Fully applied 2026-09-21** — all 14 persisted stores. |
+| **Every persisted store uses `persistStorage()`** | `grep -L persistStorage $(grep -rl "persist(" src/store)` must list nothing | **Fully applied 2026-09-21** — all 14 persisted stores; the two agent stores (2026-09-22) use it too. |
+| **Agent commands touch data only through `agent/access.ts`** | `npm test` (`boundary.test.ts`) and `npx eslint src/agent` | **Fully applied 2026-09-22** (new code). Standing rule: "Agent command layer" in CLAUDE.md. |
+| **One implementation of each create/edit rule, shared by the UI and the agent** | for calendar items: every `addEvent(`/`addReminder(` call site should build its input with `utils/calendarItemInput.ts`; for schedule blocks: `createScheduleBlock` | Applied to `AddCalendarItemModal` and `AddScheduleModal` 2026-09-22. **Remaining:** `MobileCalendarQuickAdd` builds its own event/reminder input, `CalendarEventPane` applies the end-date and notes→links rules itself on edit, and the ICS import in `IntegrationsPane` builds events directly. |
 
 ### Local storage headroom (logged 2026-09-21; notes moved to IndexedDB 2026-09-22)
 

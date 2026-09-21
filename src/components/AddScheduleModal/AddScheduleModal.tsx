@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { nanoid } from 'nanoid';
 import { useTaskStore } from '@/store/taskStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useUIStore } from '@/store/uiStore';
@@ -9,6 +8,7 @@ import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { ScheduleWeekGridPreview, type PreviewEntry } from '@/components/ScheduleWeekGridPreview/ScheduleWeekGridPreview';
 import { todayIso, formatDate, computeLinkedEndTime } from '@/utils/date';
 import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
+import { createScheduleBlock } from '@/utils/scheduleBlocks';
 import type { CollectionId, ScheduleBlock } from '@/types';
 import styles from './AddScheduleModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -155,20 +155,16 @@ export function AddScheduleModal() {
   const commitAddBlock = () => {
     const title = newTitle.trim();
     if (!title || newDays.length === 0) return;
-    const block: ScheduleBlock = {
-      id: nanoid(8),
+    const block = createScheduleBlock({
       title,
       daysOfWeek: newDays,
       startTime: newStart,
       endTime: newEnd,
-      location: newLocation.trim() || null,
+      location: newLocation,
       interval: newInterval,
       intervalAnchor: newAnchor || startDate || todayIso(),
-      exceptions: [],
-      notes: null,
       requiresCommitment: newRequiresCommitment,
-      committedDates: [],
-    };
+    });
     setBlocks((prev) => [...prev, { ...block, expanded: false }]);
     setNewTitle(''); setNewDays([]); setNewStart('09:00'); setNewEnd('10:00');
     setNewInterval(1); setNewAnchor(startDate || todayIso()); setNewLocation('');
@@ -207,8 +203,7 @@ export function AddScheduleModal() {
     if (editingSchedule) {
       updateSchedule(editingSchedule.id, payload);
     } else {
-      const id = addSchedule(payload);
-      updateSchedule(id, { blocks: payload.blocks });
+      addSchedule(payload);
     }
     closeEditSchedule();
   };

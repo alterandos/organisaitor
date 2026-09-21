@@ -49,7 +49,7 @@ export const useScheduleStore = create<ScheduleState>()(
           endDate:      input.endDate      ?? null,
           active:       true,
           collectionId: input.collectionId ?? null,
-          blocks:       [],
+          blocks:       input.blocks       ?? [],
           createdAt:    ts,
           updatedAt:    ts,
         };

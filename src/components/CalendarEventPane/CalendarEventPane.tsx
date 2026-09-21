@@ -10,6 +10,7 @@ import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteEventWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
+import { updateCalendarEventLinked as updateEvent } from '@/services/taskCalendarLinks';
 import type { CrossAppRef } from '@/types';
 import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
@@ -30,7 +31,6 @@ export function CalendarEventPane() {
   const openPane          = useUIStore((s) => s.openCalendarEventPane);
   const openTaskPane      = useUIStore((s) => s.openTaskPane);
   const eventsRecord      = useCalendarStore((s) => s.events);
-  const updateEvent       = useCalendarStore((s) => s.updateEvent);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const tasksRecord       = useTaskStore((s) => s.tasks);
 
@@ -263,22 +263,24 @@ export function CalendarEventPane() {
             </div>
           </div>
 
-          <div className={styles.field}>
-            <span className={styles.label}>Event type</span>
-            <div className={styles.typeRow}>
-              {EVENT_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  className={`${styles.typeBtn} ${(event.eventType ?? 'default') === t.value ? styles.typeBtnActive : ''}`}
-                  onClick={() => updateEvent(id, { eventType: t.value })}
-                >
-                  {t.icon && <span>{t.icon}</span>}
-                  {t.label}
-                </button>
-              ))}
+          {!isTaskShadow && (
+            <div className={styles.field}>
+              <span className={styles.label}>Event type</span>
+              <div className={styles.typeRow}>
+                {EVENT_TYPES.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    className={`${styles.typeBtn} ${(event.eventType ?? 'default') === t.value ? styles.typeBtnActive : ''}`}
+                    onClick={() => updateEvent(id, { eventType: t.value })}
+                  >
+                    {t.icon && <span>{t.icon}</span>}
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className={styles.field}>
             <label className={`${styles.label} ${styles.checkLabel}`}>
@@ -349,8 +351,8 @@ export function CalendarEventPane() {
             </div>
           )}
 
-          {/* ── Repeat ── */}
-          <div className={styles.field}>
+          {/* ── Repeat — not offered on a task's scheduled event: the task itself doesn't repeat ── */}
+          {!isTaskShadow && <div className={styles.field}>
             <label className={`${styles.label} ${styles.checkLabel}`}>
               <input
                 type="checkbox"
@@ -435,6 +437,11 @@ export function CalendarEventPane() {
                 </div>
               </div>
             )}
+          </div>}
+
+          <div className={styles.field}>
+            <span className={styles.label}>Links</span>
+            <LinksField links={event.links ?? []} onChange={(next) => updateEvent(id, { links: next })} />
           </div>
 
           <div className={styles.field}>

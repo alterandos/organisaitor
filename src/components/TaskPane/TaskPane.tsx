@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Priority, TagId, PurposeId, TaskKind, TaskId, TimeIntensity } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
-import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { deleteTaskWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
+import { addTaskWithCalendar, updateTaskLinked } from '@/services/taskCalendarLinks';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
@@ -33,17 +33,9 @@ export function TaskPane() {
   const purposesRecord    = useTaskStore((s) => s.purposes);
   const tagsRecord        = useTaskStore((s) => s.tags);
   const updateTask        = useTaskStore((s) => s.updateTask);
-  const addTask           = useTaskStore((s) => s.addTask);
   const archiveTask       = useTaskStore((s) => s.archiveTask);
   const restoreTask       = useTaskStore((s) => s.restoreTask);
   const toggleTask        = useTaskStore((s) => s.toggleTask);
-
-  const addEvent    = useCalendarStore((s) => s.addEvent);
-  const updateEvent = useCalendarStore((s) => s.updateEvent);
-  const deleteEvent = useCalendarStore((s) => s.deleteEvent);
-  const addReminder    = useCalendarStore((s) => s.addReminder);
-  const updateReminder = useCalendarStore((s) => s.updateReminder);
-  const deleteReminder = useCalendarStore((s) => s.deleteReminder);
 
   const task = editingTaskId ? tasksRecord[editingTaskId as TaskId] : null;
 
@@ -92,7 +84,7 @@ export function TaskPane() {
 
   const saveTitle = () => {
     const trimmed = title.trim();
-    if (trimmed && trimmed !== task.title) updateTask(taskId, { title: trimmed });
+    if (trimmed && trimmed !== task.title) updateTaskLinked(taskId, { title: trimmed });
     else if (!trimmed) setTitle(task.title);
   };
 
@@ -101,56 +93,20 @@ export function TaskPane() {
     if (val !== task.notes) updateTask(taskId, { notes: val });
   };
 
-  // Mirrors handleScheduledAtChange/handleScheduledTimeChange below exactly — same
-  // create/update/delete-shadow-entity pattern, just producing a CalendarReminder
-  // (reminderType: 'task') instead of a CalendarEvent.
+  // The shadow calendar reminder/event follow from these — see services/taskCalendarLinks.ts.
   const handleDeadlineChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value || null;
-    if (!val) {
-      if (task.calendarReminderId) {
-        deleteReminder(task.calendarReminderId);
-        updateTask(taskId, { deadline: null, deadlineTime: null, calendarReminderId: null });
-      } else {
-        updateTask(taskId, { deadline: null, deadlineTime: null });
-      }
-    } else if (task.calendarReminderId) {
-      updateReminder(task.calendarReminderId, { date: val, title: task.title });
-      updateTask(taskId, { deadline: val });
-    } else {
-      const remId = addReminder({ title: task.title, date: val, time: task.deadlineTime ?? null, reminderType: 'task' });
-      updateTask(taskId, { deadline: val, calendarReminderId: remId });
-    }
+    updateTaskLinked(taskId, val ? { deadline: val } : { deadline: null, deadlineTime: null });
   };
 
-  const handleDeadlineTimeChange = (v: string) => {
-    const val = v || null;
-    if (task.calendarReminderId) updateReminder(task.calendarReminderId, { time: val });
-    updateTask(taskId, { deadlineTime: val });
-  };
+  const handleDeadlineTimeChange = (v: string) => updateTaskLinked(taskId, { deadlineTime: v || null });
 
   const handleScheduledAtChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value || null;
-    if (!val) {
-      if (task.calendarEventId) {
-        deleteEvent(task.calendarEventId);
-        updateTask(taskId, { scheduledAt: null, scheduledTime: null, calendarEventId: null });
-      } else {
-        updateTask(taskId, { scheduledAt: null, scheduledTime: null });
-      }
-    } else if (task.calendarEventId) {
-      updateEvent(task.calendarEventId, { date: val, title: task.title });
-      updateTask(taskId, { scheduledAt: val });
-    } else {
-      const evId = addEvent({ title: task.title, date: val, startTime: task.scheduledTime ?? null, eventType: 'task' });
-      updateTask(taskId, { scheduledAt: val, calendarEventId: evId });
-    }
+    updateTaskLinked(taskId, val ? { scheduledAt: val } : { scheduledAt: null, scheduledTime: null });
   };
 
-  const handleScheduledTimeChange = (v: string) => {
-    const val = v || null;
-    if (task.calendarEventId) updateEvent(task.calendarEventId, { startTime: val });
-    updateTask(taskId, { scheduledTime: val });
-  };
+  const handleScheduledTimeChange = (v: string) => updateTaskLinked(taskId, { scheduledTime: v || null });
 
   const handlePriorityClick = (p: Priority) =>
     updateTask(taskId, { priority: p === task.priority ? 'none' : p });
@@ -176,13 +132,7 @@ export function TaskPane() {
   const handleAddSubtask = () => {
     const trimmed = subtaskInput.trim();
     if (!trimmed) return;
-    // Inherit from parent — extend this list as new inheritable fields are added
-    addTask({
-      title:        trimmed,
-      parentId:     taskId,
-      collectionId: task.collectionId,
-      priority:     task.priority,
-    });
+    addTaskWithCalendar({ title: trimmed, parentId: taskId });
     setSubtaskInput('');
   };
 

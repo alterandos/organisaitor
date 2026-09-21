@@ -424,6 +424,7 @@ export interface CreateScheduleInput {
   startDate?:    string | null;
   endDate?:      string | null;
   collectionId?: CollectionId | null;
+  blocks?:       ScheduleBlock[];
 }
 
 // ── UI-only types (never persisted) ───────────────────────────────────────────

@@ -63,6 +63,8 @@ export const LABELS = {
       'todo-recent-items':     'Quick Access history',
       'todo-hotkey-overrides': 'Keyboard shortcuts',
       'todo-ui-session':       'Session',
+      'agent-log':             'Assistant activity log',
+      'agent-batches':         'Assistant undo history',
     } as Record<string, string>,
     fullTitle:   'Storage on this device is full',
     fullMessage: (biggest: string) => `Your latest changes can't be saved on this device any more, so they'll be lost if you close the app — nothing is lost while it stays open, and if you're signed in they still sync to your account. ${biggest} Open Settings → Storage to see what is using the space.`.replace('  ', ' '),

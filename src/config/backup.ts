@@ -19,6 +19,8 @@ export const PERSISTED_STORAGE_KEYS = [
   'todo-notifications', // notificationStore
   'todo-recent-items',  // recentItemsStore: Quick Access pane recent/frequent visit history
   'todo-hotkey-overrides', // hotkeyOverridesStore: user-rebound keyboard shortcuts
+  'agent-log',          // agentLogStore: what the assistant did (local audit log)
+  'agent-batches',      // agentBatchStore: before-snapshots so an assistant change can be undone
   'todo-ui-session',    // uiStore: navigation/session memory (active section, back/forward
                          // history, each section's last-open item + tab, filters) — modal/
                          // pane open-states are NOT included, see uiStore.ts's partialize

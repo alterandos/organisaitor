@@ -8,6 +8,8 @@ import { usePortfolioStore } from '@/store/portfolioStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import { useUIStore } from '@/store/uiStore';
+import { useAgentLogStore } from '@/store/agentLogStore';
+import { useAgentBatchStore } from '@/store/agentBatchStore';
 
 // Empties this device's copy of every CLOUD-SYNCED store (the persist middleware rewrites each
 // store's localStorage key with the empty state, so nothing is left behind there either) plus
@@ -43,6 +45,10 @@ export function clearSyncedLocalData(): void {
     portfolioTags:      portfolio.portfolioTags,
     investmentPurposes: portfolio.investmentPurposes,
   });
+
+  // Local-only, but the batches hold copies of the account's records, so they go with it.
+  useAgentLogStore.getState().clear();
+  useAgentBatchStore.getState().clear();
 
   useRecentItemsStore.setState({ items: {} });
   useNotificationStore.setState({ pending: [] });
