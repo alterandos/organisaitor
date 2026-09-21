@@ -7,6 +7,7 @@ import type {
 } from '@/types/fitness';
 import { BUILTIN_ACTIVITY_TYPE_SEEDS } from '@/config/activityTypes';
 import { now } from '@/utils/date';
+import { persistStorage } from '@/utils/persistStorage';
 
 interface FitnessData {
   activities:    Record<ActivityId, Activity>;
@@ -169,6 +170,7 @@ export const useFitnessStore = create<FitnessStore>()(
     }),
     {
       name:    'fitness-storage',
+      storage: persistStorage(),
       version: 3,
       migrate: (persisted, fromVersion) => {
         let state = persisted as FitnessData;

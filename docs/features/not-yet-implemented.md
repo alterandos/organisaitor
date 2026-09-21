@@ -39,7 +39,7 @@ Summary list only — full specs are in `BACKLOG.md`.
 - Milestone tasks (kind='milestone' on calendar surface)
 - Mini-calendar toggle in task list
 - Daily planner view
-- AI agent integration (notes-dump → tasks, voice, custom agent)
+- AI agent integration — the command layer for tasks/calendar/schedules is built (`docs/ai/02-command-layer.md`); still to do: notes commands, the in-app chat and review screen, provider abstraction, agent manual + evals, phone widget (BACKLOG.md "AI Agent Integration")
 - Third-party imports (Strava, Goodreads)
 
 ---

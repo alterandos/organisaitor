@@ -30,6 +30,14 @@
   outline-offset: 2px;
 }
 
+.completedBtn {
+  border-color: var(--color-success);
+  color: var(--color-success-text);
+  background: var(--color-success-muted);
+}
+
+.completedBtn:hover { background: var(--color-success-muted); }
+
 .deleteBtn {
   border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
   color: var(--color-danger);

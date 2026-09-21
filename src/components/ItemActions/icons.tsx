@@ -25,6 +25,15 @@ function Icon({ children, ...rest }: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function CheckCircleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m8 12.5 3 3 5-6" />
+    </Icon>
+  );
+}
+
 export function TrashIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

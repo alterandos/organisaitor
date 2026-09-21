@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Capacitor } from '@capacitor/core';
 import type { ClockFormat } from '@/utils/date';
+import { persistStorage } from '@/utils/persistStorage';
 
 // Every other platform defaults to 'system'; Android defaults to 'dark' (see
 // docs/android/00-architecture.md §5c). Only affects a brand-new install with no
@@ -142,6 +143,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'todo-settings',
+      storage: persistStorage(),
       version: 2,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration

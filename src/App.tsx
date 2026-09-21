@@ -81,6 +81,8 @@ import { isAppEnabled } from '@/config/apps';
 import type { CollectionId } from '@/types';
 import styles from './App.module.css';
 
+if (import.meta.env.DEV) void import('@/agent/devHandle');
+
 // Add-on apps (Portfolio, Fitness) are code-split from the core bundle — their code
 // only downloads when a user actually navigates to them. Core sections (Tasks,
 // Calendar, Records, Lists, Notes) stay eagerly bundled since every user has them.

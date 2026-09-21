@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "My ToDo",
+  "productName": "Organisaitor",
   "version": "0.1.0",
-  "identifier": "com.mytodo.app",
+  "identifier": "com.organisaitor.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "My ToDo",
+        "title": "Organisaitor",
         "width": 1280,
         "height": 820,
         "minWidth": 720,

@@ -63,6 +63,11 @@ export function deleteEventWithCleanup(eventId: CalendarEventId) {
     if (ref.type === 'note') stripArtifactLinksFromNote(ref.id as NoteId, 'event', eventId);
   }
   useCalendarStore.getState().deleteEvent(eventId);
+
+  // Deleting a task's scheduled event un-schedules the task (it stays, minus the date) rather than
+  // leaving it pointing at an event that's gone.
+  const linkedTask = Object.values(useTaskStore.getState().tasks).find((t) => t.calendarEventId === eventId);
+  if (linkedTask) useTaskStore.getState().updateTask(linkedTask.id, { scheduledAt: null, scheduledTime: null, calendarEventId: null });
 }
 
 export function deleteReminderWithCleanup(reminderId: CalendarReminderId) {

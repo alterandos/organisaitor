@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CollectionId, RoutineInstance, TrackerEntryId } from '@/types';
+import { persistStorage } from '@/utils/persistStorage';
 
 type InstanceKey = string; // `${routineId}_${date}`
 
@@ -58,6 +59,6 @@ export const useRoutineStore = create<RoutineState>()(
         });
       },
     }),
-    { name: 'todo-routines', version: 1 }
+    { name: 'todo-routines', storage: persistStorage(), version: 1 }
   )
 );

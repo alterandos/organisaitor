@@ -14,6 +14,7 @@ import {
 } from '@/services/vault';
 import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
 import { downloadBackup } from '@/utils/backupExport';
+import { writePersistedValue } from '@/utils/idbStorage';
 import styles from './AccountPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 
@@ -173,7 +174,7 @@ export function AccountPane() {
       let restored = 0;
       for (const key of PERSISTED_STORAGE_KEYS) {
         if (key in backup) {
-          localStorage.setItem(key, JSON.stringify(backup[key]));
+          await writePersistedValue(key, JSON.stringify(backup[key]));
           restored++;
         }
       }

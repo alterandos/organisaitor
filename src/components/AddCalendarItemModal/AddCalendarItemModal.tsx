@@ -10,6 +10,8 @@ import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
+import { LinksField } from '@/components/LinksField/LinksField';
+import { buildCalendarEventInput, buildCalendarReminderInput } from '@/utils/calendarItemInput';
 import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
 import type { CollectionId } from '@/types';
 import styles from './AddCalendarItemModal.module.css';
@@ -44,6 +46,7 @@ export function AddCalendarItemModal() {
   const [endTime,           setEndTime]           = useState(prefillExtra?.endTime ?? (prefillTime ? timeAddMinutes(prefillTime, 30) : ''));
   const [time,              setTime]              = useState(prefillTime ?? '');
   const [notes,             setNotes]             = useState(prefillExtra?.notes ?? '');
+  const [links,             setLinks]             = useState<string[]>([]);
   const [location,          setLocation]          = useState(prefillExtra?.location ?? '');
   const [eventType,         setEventType]         = useState<CalendarEventType>('default');
   const [status,            setStatus]            = useState<EventStatus>('confirmed');
@@ -141,41 +144,43 @@ export function AddCalendarItemModal() {
     // kind actually chosen — the user may have flipped Event/Reminder) back so NoteEditor can
     // apply the forward mark. See AddTaskModal's identical handling.
     const pending = useUIStore.getState().pendingArtifactLink;
-    const crossAppRefs = pending ? [{ type: 'note' as const, id: pending.noteId }] : [];
+    const crossAppRefs = pending ? [{ type: 'note' as const, id: pending.noteId, ...(pending.tabId ? { tabId: pending.tabId } : {}) }] : [];
 
     if (kind === 'event') {
-      const eventId = addEvent({
+      const eventId = addEvent(buildCalendarEventInput({
         title,
         date,
-        endDate:           (endDate && endDate > date) ? endDate : null,
-        startTime:         startTime    || null,
-        endTime:           endTime      || null,
-        notes:             notes        || null,
-        location:          location     || null,
+        endDate,
+        startTime,
+        endTime,
+        notes,
+        links,
+        location,
         eventType,
-        collectionId:      collectionId || null,
+        collectionId,
         notifyBeforeValue: notifyBeforeOn ? notifyBeforeValue : null,
         notifyBeforeUnit,
-        notifyAtTime:      eventType === 'birthday' ? notifyAtTime || null : null,
-        repeat:            buildRepeat(),
+        notifyAtTime,
+        repeat: buildRepeat(),
         status,
         important,
         crossAppRefs,
-      });
+      }));
       if (pending) useUIStore.getState().resolveArtifactLink(eventId, 'event');
     } else {
-      const reminderId = addReminder({
+      const reminderId = addReminder(buildCalendarReminderInput({
         title,
         date,
-        time:         time         || null,
-        notes:        notes        || null,
-        collectionId: collectionId || null,
-        repeat:       buildRepeat(),
+        time,
+        notes,
+        links,
+        collectionId,
+        repeat: buildRepeat(),
         important,
         crossAppRefs,
         notifyDaysBefore: allDayNotifyDays,
         notifyAtTime:     allDayNotifyAt,
-      });
+      }));
       if (pending) useUIStore.getState().resolveArtifactLink(reminderId, 'reminder');
     }
     closeModal();
@@ -471,6 +476,11 @@ export function AddCalendarItemModal() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Links (optional)</label>
+                <LinksField links={links} onChange={setLinks} />
               </div>
 
               {allCollections.length > 0 && (

@@ -11,6 +11,7 @@ import { createTask } from '@/services/taskService';
 import { now } from '@/utils/date';
 import { mergeNewLinks } from '@/utils/links';
 import { useTrackerStore } from '@/store/trackerStore';
+import { persistStorage } from '@/utils/persistStorage';
 
 const EMPTY: AppData = {
   version:     2,
@@ -35,12 +36,12 @@ export interface TaskActions {
   deleteTag: (id: TagId) => void;
 
   // Collections (projects, lists, trackers …)
-  addCollection:    (input: CreateCollectionInput) => void;
+  addCollection:    (input: CreateCollectionInput) => CollectionId;
   updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'completed' | 'completedAt' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt'>>) => void;
   deleteCollection: (id: CollectionId) => void;
 
   // Purposes
-  addPurpose:    (input: CreatePurposeInput) => void;
+  addPurpose:    (input: CreatePurposeInput) => PurposeId;
   updatePurpose: (id: PurposeId, changes: Partial<Pick<Purpose, 'name' | 'color' | 'description' | 'archivedAt'>>) => void;
   deletePurpose: (id: PurposeId) => void;
 }
@@ -186,11 +187,12 @@ export const useTaskStore = create<TaskStore>()(
 
       // ── Collections ────────────────────────────────────────────────────────
 
-      addCollection: (input) =>
+      addCollection: (input) => {
+        const id = newCollectionId();
         set((state) => {
           const ts = now();
           const collection: Collection = {
-            id:           newCollectionId(),
+            id,
             kind:         input.kind,
             name:         input.name.trim(),
             description:  input.description  ?? null,
@@ -209,7 +211,9 @@ export const useTaskStore = create<TaskStore>()(
             updatedAt:    ts,
           };
           return { collections: { ...state.collections, [collection.id]: collection } };
-        }),
+        });
+        return id;
+      },
 
       updateCollection: (id, changes) =>
         set((state) => {
@@ -242,11 +246,12 @@ export const useTaskStore = create<TaskStore>()(
 
       // ── Purposes ───────────────────────────────────────────────────────────
 
-      addPurpose: (input) =>
+      addPurpose: (input) => {
+        const id = newPurposeId();
         set((state) => {
           const ts = now();
           const purpose: Purpose = {
-            id:          newPurposeId(),
+            id,
             name:        input.name.trim(),
             description: input.description ?? null,
             color:       input.color       ?? null,
@@ -255,7 +260,9 @@ export const useTaskStore = create<TaskStore>()(
             updatedAt:   ts,
           };
           return { purposes: { ...state.purposes, [purpose.id]: purpose } };
-        }),
+        });
+        return id;
+      },
 
       updatePurpose: (id, changes) =>
         set((state) => {
@@ -285,6 +292,7 @@ export const useTaskStore = create<TaskStore>()(
     }),
     {
       name:    'todo-app-storage',
+      storage: persistStorage(),
       version: 11,
       // The steps up to v10 each return early, so v11 is applied afterwards to whatever they
       // produce — otherwise a v9 store would return from its own step and never reach it.

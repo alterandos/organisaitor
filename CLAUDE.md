@@ -53,6 +53,7 @@ The suite is extended to Android via **Capacitor**, wrapping this same codebase 
 | `docs/features/not-yet-implemented.md` | Short summary list (full specs are in BACKLOG.md) |
 | `docs/android/` | Android/Capacitor architecture, phased plan, and `implementation-status.md` |
 | `docs/agent-tasks/` | Self-contained briefs for follow-up work an agent can pick up cold |
+| `docs/ai/` | The AI agent integration: `01-capability-inventory.md` (what the app can do, invariants, decisions, what is left) and `02-command-layer.md` (the built command layer: design, how to add a command, tests) |
 | `BACKLOG.md` | Confirmed-but-unbuilt requirements, and the **Pattern retrofit backlog** |
 
 **Cross-references:** wherever this file says "see Implemented features" or names a feature entry in quotes ("Shared item actions", "Cross-app linking", "Timepicker rebuild", "Suite-wide Quick Access pane", …), it means the matching bullet in `docs/features/implemented-features.md` — search for the quoted name. Fitness, Schedules and external calendar sync have their own files in `docs/features/`.
@@ -105,7 +106,7 @@ The split only stays useful if every agent follows the same structure. These rul
 - [ ] If a SQL migration was added: it includes its own `grant … to authenticated` (if it creates a table), is listed in "Migration history" **and** in "Live migration status" as `Pending — not yet run`, and the user has been told to run it — it only becomes `Applied` once they confirm
 - [ ] If a new persisted store was added: its key is in `PERSISTED_STORAGE_KEYS` (`src/config/backup.ts`) and it has a `version`
 - [ ] If a new pattern was defined: recorded here, applied to new code, and the retrofit audit logged in BACKLOG.md
-- [ ] Build passes (`npm run build`)
+- [ ] Build passes (`npm run build`) and tests pass (`npm test`)
 - [ ] Feature tested end-to-end
 - [ ] A future Claude reading CLAUDE.md + the docs + BACKLOG.md would understand what exists, where the code lives, how it connects, and what's not done
 
@@ -119,6 +120,7 @@ The split only stays useful if every agent follows the same structure. These rul
 - **Supabase** for auth + optional cloud sync
 - `nanoid` for ID generation; branded ID types for all entities
 - Path alias `@/` → `src/`
+- **Zod 4** for the agent command layer's input schemas (also emitted as the JSON Schema a model API needs) and **Vitest** for tests (`npm test`; test files sit beside the code as `*.test.ts`)
 
 ---
 
@@ -249,10 +251,10 @@ interface RepeatConfig {
 | Store | Persist key | Version | Persisted to | Purpose |
 |-------|------------|---------|-------------|---------|
 | `taskStore` | `todo-app-storage` | **v11** | localStorage + Supabase | tasks, collections, tags, purposes |
-| `calendarStore` | `todo-calendar` | **v9** | localStorage + Supabase | calendar events, reminders |
+| `calendarStore` | `todo-calendar` | **v10** | localStorage + Supabase | calendar events, reminders |
 | `trackerStore` | `todo-tracker` | **v1** | localStorage + Supabase | tracker entries |
 | `routineStore` | `todo-routines` | **v1** | localStorage only | daily routine instances (transient) |
-| `noteStore` | `notes-storage` | **v12** | localStorage + Supabase | notes, note tags, structured tag entries |
+| `noteStore` | `notes-storage` | **v12** | **IndexedDB** (not localStorage — see below) + Supabase | notes, note tags, structured tag entries |
 | `listStore` | `lists-storage` | **v5** | localStorage + Supabase | lists, list items, list types (custom types only) |
 | `portfolioStore` | `todo-portfolio` | **v7** | localStorage + Supabase | watchlist items, portfolio tags, investment purposes (Portfolio app) — `columnConfig` (table display prefs) stays local-only |
 | `fitnessStore` | `fitness-storage` | **v3** | localStorage only | activities + activity types (Fitness app) |
@@ -265,6 +267,8 @@ interface RepeatConfig {
 | `hotkeyOverridesStore` | `todo-hotkey-overrides` | **v1** | localStorage only | user-rebound keyboard shortcuts (see "Hotkeys rule") |
 | `dialogStore` | — | — | memory only | queue behind `confirmDialog()` / `alertDialog()` (see "Confirmations and alerts") |
 | `voiceStore` | — | — | memory only | voice-dictation status and level for `VoiceIndicator` |
+| `agentLogStore` | `agent-log` | **v1** | localStorage only | audit log of every agent command (reads as ids only); capped at 2000 entries; cleared on sign-out |
+| `agentBatchStore` | `agent-batches` | **v1** | localStorage only | before-snapshots so an agent's changes can be undone; capped at 50 batches; cleared on sign-out |
 
 ### Zustand migration rule
 
@@ -273,6 +277,12 @@ When adding fields to a persisted store's shape: **bump `version`** and write a 
 Current taskStore v11 migrate backfills: `routineTasks: []`, `repeatConfig: null`, `fieldSchema: []`, `tagIds: []` on collections (v5); `scheduledAt: null`, `scheduledTime: null`, `calendarEventId: null` on tasks (v6); `collectionId: null` on collections (v7); `archivedAt: null` on both collections and purposes (v8); `calendarReminderId: null` on tasks (v9); `crossAppRefs: []` on tasks (v10); `archivedAt` (from `updatedAt` for already-archived tasks, else `null`) + `archiveReason: null` on tasks (v11). The steps up to v10 each `return` early, so v11 is deliberately applied as a wrapper *after* them (in `migrate`, an IIFE around the old body) — a v9 store returns from its own step and would otherwise never reach a later `if (fromVersion < 11)` block. Follow that wrapper pattern for v12+ rather than adding another early-return block.
 
 **Unversioned stores:** persisted data with no `version` arrives as v0. The first time such a store's shape changes, give it `version: 1` and a `migrate` that backfills the new fields (`scheduleStore` did exactly this) — a `version` with no `migrate` makes zustand discard the stored state. Every persisted store now has a version.
+
+**Every persisted store uses `storage: persistStorage()`** (`src/utils/persistStorage.ts`) in its `persist` options — never zustand's default localStorage. Browsers give the whole site roughly 5 MB of localStorage, shared by every store, and zustand's persist calls `setItem` inside the store's own `set`, so a full quota throws a `QuotaExceededError` out of whatever action was running (opening a note, in the report that found this) and takes the section down through the error boundary. `persistStorage()` catches that one error: the change stays in memory (and still syncs, if signed in), the user gets an alert naming the biggest store and pointing at Settings → Storage, repeated every 10 minutes while writes keep failing, and the app carries on. Any other storage error still throws. Audit: `grep -L persistStorage` over the files that contain `persist(` must list nothing.
+
+**The one exception is `noteStore`, which uses `storage: persistStorageIdb()` (`src/utils/idbStorage.ts`) and lives in IndexedDB** — notes hold pasted images inline and were the store that hit the 5 MB ceiling. IndexedDB has hundreds of MB, and works the same in the browser, Tauri's WebView2 and Android's WebView. How it keeps zustand's persist synchronous: `main.tsx` awaits `preloadIdbStorage()` (opens database `organisaitor`, object store `kv`, loads the IndexedDB-backed keys into an in-memory map, and on first run moves any old localStorage copy across — put first, remove from localStorage only after) and only THEN dynamically imports `App`, so **no store module may be imported before that finishes** (a store created early would read an empty cache and could persist an empty state over the real data; `idbBacked.getItem/setItem` throw if used before it is ready, on purpose). After that `getItem` reads the map and every `setItem` updates it and is written to IndexedDB in the background (write-behind, one write at a time, latest value wins). If IndexedDB can't be opened the key stays in the guarded localStorage. A failed background write goes through the same alert as a full localStorage (`reportPersistFailure`).
+
+**Because of that, backup and restore must not read/write localStorage directly for a persisted key** — use `readPersistedValue(key)` / `writePersistedValue(key, value)` (`idbStorage.ts`; `backupExport.ts`, `AccountPane` and `IntegrationsPane` do). `writePersistedValue` also freezes further IndexedDB writes until the reload that restore always does, so the running app can't overwrite the restored data. To move another store to IndexedDB: use `persistStorageIdb()` and add its key to `IDB_STORAGE_KEYS`.
 
 **Also:** when adding a brand-new persisted store (not just a field on an existing one), add its `persist` `name` to `PERSISTED_STORAGE_KEYS` in `src/config/backup.ts` — that's the one list both full-app Export/Restore implementations (`AccountPane`, `IntegrationsPane`) read from. This list drifted out of sync with reality once already (Records/Routines/Notes/Lists/Portfolio/Fitness were all silently missing from backups for a while), so treat it the same as a migration: part of shipping the store, not a follow-up.
 
@@ -359,6 +369,14 @@ Every new column on a persisted type needs:
 1. A mapper update in `mappers.ts`
 2. A migration in `supabase/migrations/NNN_description.sql`
 
+### How sync works (`src/services/sync/syncService.ts`)
+
+- **Local first.** The app always renders from this device (localStorage; IndexedDB for notes). If signed in, `initSync` then downloads every row of every synced table (on launch, on sign-in, and Android pull-to-refresh) and merges per id — newest `updatedAt` wins, a remote soft-delete removes the local item. No realtime and no periodic pull: another device's changes arrive on its next load.
+- **Every local change is recorded, then pushed.** `watch()`/`trackChanges()` record each changed or deleted row id in a **pending-changes queue** persisted in localStorage (`todo-sync-pending`, deliberately NOT in `PERSISTED_STORAGE_KEYS`; per account; cleared on sign-out by `clearPendingSync()`), then `pushIds()` sends the row's *current* state (or a soft-delete if it no longer exists locally) immediately. An entry is forgotten only after Supabase accepts it. Failures stay queued and are retried when the browser comes back online, every 60 s while anything waits, and after each load — so being offline, a failed request, or closing the window mid-request no longer loses a change.
+- **After each load's merge**, `queueLocalOnlyAndNewer()` queues anything that exists only locally (created offline / before sign-in) or is newer locally than in the cloud, and `mergeRecords()` refuses to resurrect a row deleted on this device but not yet reported. Tables whose records have no `updatedAt` (tags, list types, portfolio tags/purposes) can only be detected as "missing remotely"; an offline *edit* to one of those still loses to the cloud.
+- **Adding a synced table or store property:** add it to `SYNC_TABLES`, `TABLE_DEFS` (how to read its local records and build a row), the `fetch` list in `runInitSync`, `hydrateStores` (with its table name passed to `mergeRecords`), `upsertAllToSupabase`, and `setupSubscriptions` (`watch()`); plus the mapper and migration below. Missing `TABLE_DEFS`/`watch` means its changes silently never sync.
+- Never call `authStore.signOut()`/wipe the stores while `watch()` subscriptions are live — the wipe would be read as "user deleted everything" (`stopSync()` first; see `authStore.signOut`).
+
 ### Live migration status (Supabase project `zwbyvspbamovlqfxpjft`)
 
 **This table is the only source of truth for which SQL has actually been executed against the live database.** The files in `supabase/migrations/` only *describe* schema — nothing applies them automatically (no `supabase/config.toml`, project isn't CLI-linked); the user runs each one by hand in the Supabase SQL editor. So a migration file existing, or code depending on it, tells you nothing about whether it's live.
@@ -372,12 +390,13 @@ Every new column on a persisted type needs:
 
 | Migrations | Status | Confirmed |
 |------------|--------|-----------|
-| `001` – `027` | **Applied** | Everything through `027` has been run against the live project, confirmed by the user. `001`–`022` as a batch on 2026-09-19 ("ran all SQLs from 001 to 022"), `023` separately ("Migration 23 SQL has been completed"), and `024`–`027` on 2026-09-20 ("24, 25, 26, and 27 have all been run"; then "All Supabase SQL has been run up to 027 inclusive"). Reported by the user, not independently verified. `022` (grants) was written *after* 019–021 and run after them. Earlier "written, not yet run" notes on 012–021 predate this and were stale — removed. **No migration is currently pending**; the next new one is `033`. |
+| `001` – `027` | **Applied** | Everything through `027` has been run against the live project, confirmed by the user. `001`–`022` as a batch on 2026-09-19 ("ran all SQLs from 001 to 022"), `023` separately ("Migration 23 SQL has been completed"), and `024`–`027` on 2026-09-20 ("24, 25, 26, and 27 have all been run"; then "All Supabase SQL has been run up to 027 inclusive"). Reported by the user, not independently verified. `022` (grants) was written *after* 019–021 and run after them. Earlier "written, not yet run" notes on 012–021 predate this and were stale — removed. the next new one is `034`. |
 | `029` | **Applied** | `029_calendar_archive.sql` (archive timestamp + reason on calendar events and reminders) — run against the live project, confirmed by the user 2026-09-20 ("I've run SQL 029 in Supabase"). Reported by the user, not independently verified. |
 | `030` | **Applied** | `030_speech_usage.sql` (voice dictation usage table + `record_speech_usage()` function) — run against the live project, confirmed by the user 2026-09-20 ("030 has been run in Supabase"). Reported by the user, not independently verified. |
 | `031` | **Applied** | `031_drop_cross_app_links.sql` (drops the never-used `cross_app_links` table) — run against the live project, confirmed by the user 2026-09-20 ("031 has been run"). Reported by the user, not independently verified. |
 | `028` | **Applied** | `028_task_archive_reason.sql` (task archive timestamp + reason) — run against the live project, confirmed by the user 2026-09-20 ("SQL task zero two eight has been run in Supabase"). Reported by the user, not independently verified. |
 | `032` | **Applied** | `032_oauth_state.sql` (`oauth_states` nonce table + `mint_oauth_state` / `save_strava_connection` / `save_calendar_connection` functions — the OAuth `state` is now a single-use nonce instead of the user's access token) — run against the live project, confirmed by the user 2026-09-20 ("032 has been run in supabase"). Reported by the user, not independently verified. |
+| `033` | **Applied** | `033_calendar_links.sql` (`links text[]` on `calendar_events` and `calendar_reminders`). every event/reminder upsert now sends `links`, so those two tables reject writes until it is applied (sync isolates the failure per table; nothing else breaks). |
 
 ### Migration history
 
@@ -415,6 +434,7 @@ Every new column on a persisted type needs:
 | `030_speech_usage.sql` | New `speech_usage` table (per-user, per-day seconds; select-only via RLS + `grant select`) and a security-definer `record_speech_usage(p_seconds, p_monthly_limit)` function (`grant execute`) that checks the monthly cap and increments in one step — a user-writable counter would let anyone reset their own limit. See "Voice dictation". Applied 2026-09-20 |
 | `031_drop_cross_app_links.sql` | Drops `cross_app_links` (created by 008, granted by 022): superseded by embedded `crossAppRefs` columns (016, 025) and never read or written by any code. Applied 2026-09-20 |
 | `032_oauth_state.sql` | New `oauth_states` table (RLS on, **no policies, no grants** — only the functions touch it) and three security-definer functions: `mint_oauth_state(p_provider)` (`grant execute` to `authenticated`; binds a random ≥244-bit nonce to `auth.uid()` + provider, 10-minute expiry, one live nonce per user+provider) and `save_strava_connection(...)` / `save_calendar_connection(...)` (`grant execute` to `anon`; called by the two OAuth callbacks with the anon key — each deletes the nonce in the statement that validates it, so it is single-use, then upserts the connection row for the nonce's user). Replaces putting the access token in the OAuth `state` URL. See "OAuth `state` nonces" in `docs/features/implemented-features.md`. Applied 2026-09-20 (confirmed by user). |
+| `033_calendar_links.sql` | `links text[] not null default '{}'` on `calendar_events` and `calendar_reminders` — same as `tasks.links`; see "Calendar links, Complete button, pane Ctrl+Enter, TimeInput Enter" in `docs/features/implemented-features.md`. Alters existing tables only, so no new grant. **Pending — not yet run** |
 
 ### Supabase tables (summary)
 
@@ -443,6 +463,9 @@ Every new column on a persisted type needs:
 src/
   App.tsx                    — root: hotkey handler, modal routing, section switcher
   types/index.ts             — all TypeScript interfaces and unions
+  types/agent.ts             — agent command-layer types (RiskTier, EntityKind, AgentLogEntry, AgentBatch); not re-exported from index.ts
+  agent/                     — the AI agent command layer (see "Agent command layer" below and docs/ai/02-command-layer.md): access.ts (THE boundary: what an agent can read and do), commands/*.ts, run.ts (runCommand), registry.ts (toolDefinitions), batch.ts (snapshot/diff/revert), errors.ts, devHandle.ts (dev-only console handle)
+  test/                      — Vitest setup (Map-backed localStorage) and helpers
   config/
     hotkeys.ts               — HOTKEYS[] + HOTKEY_GROUPS (single source of truth)
     labels.ts                — all user-facing strings; rename concepts here
@@ -474,10 +497,12 @@ src/
     mappers.ts               — xToRow / rowToX for every entity
   services/signOut.ts       — requestSignOut(): THE way to sign out — confirms (and says what stays on the device), locks the vault, force-uploads and only wipes if that succeeded (else warns, user can cancel), then authStore.signOut(). Never call authStore.signOut() directly from UI
   services/clearLocalData.ts — clearSyncedLocalData(): empties every CLOUD-SYNCED store + the account-specific selection ids (each reset from its own getInitialState()). Local-only stores (fitness, routine instances, settings, hotkeys, portfolio columnConfig) are deliberately left; add a store here in the same change that gives it cloud sync
+  services/shrinkNoteImages.ts — shrinkNoteImages(): recompresses every large inline image in every note and tab (skips locked encrypted notes; closes the open note first so the editor can't autosave its old copy over the result); Settings → Storage's button
   services/oauthState.ts    — mintOAuthState(provider): the single-use nonce used as the OAuth `state` for Strava/Google connect (migration 032); never put a credential in an OAuth URL
   services/strava.ts         — client-side Strava wrapper: getStravaConnectUrl(), checkStravaStatus(), syncStrava() (calls api/strava-* edge functions, upserts results into fitnessStore)
   services/googleCalendar.ts — client-side Google Calendar sync wrapper: getGoogleCalendarConnectUrl(), fetchGoogleCalendarConnections(), setGoogleCalendarEnabled(), disconnectGoogleCalendar(), syncGoogleCalendars() (calls api/google-calendar-* edge functions, maps + upserts results into calendarStore via upsertSyncedEvent) — see "External calendar sync"
   services/crossAppLinkCleanup.ts — deleteTaskWithCleanup/deleteNoteWithCleanup/removeCrossAppRefFromTarget: keeps cross-app links (Task.crossAppRefs, Notes' ArtifactLinkMark) from going dead when either side is deleted; the one module allowed to import both taskStore and noteStore (they must never import each other directly) — see "Cross-app linking"
+  services/taskCalendarLinks.ts — keeps a task's shadow calendar reminder (deadline) and event (scheduled date) matching the task, and flows edits made on the event back — the one place that logic lives (see "Task ⇄ calendar shadow entries" in Implemented features); like crossAppLinkCleanup it may import both taskStore and calendarStore
   services/noteSecrets.ts    — the encrypted-notes model: NoteSecrets/EntrySecrets shapes, the memory-only plaintext cache, noteView()/entryView()/isNoteLocked() (the ONE way to read a possibly-encrypted note), the serialized re-encrypt queue (queueEncrypt/flushEncryptions) — see "Client-side encryption for Notes — comprehensive"
   services/noteSecretsSync.ts — keeps that cache in step: decrypts encrypted notes/entries when the vault unlocks or a sync pull brings new payloads, wipes it on lock, upgrades v1 legacy encrypted notes
   services/listSecrets.ts    — the encrypted-lists model (Lists twin of noteSecrets.ts): ListSecrets/ItemSecrets shapes, memory-only plaintext caches, listView()/itemView()/isListLocked() — the ONE way to read a possibly-encrypted list/item. Reuses noteSecrets.ts's crypto, serialised re-encrypt queue and cache-version counter
@@ -490,6 +515,8 @@ src/
   services/vault.ts          — client-side encryption vault: setupVault/unlockWithPassphrase/unlockWithRecoveryCode/lockVault, trustThisDevice (IndexedDB key cache), encryptField/decryptField (AES-GCM via Web Crypto) — see "Client-side encryption for Note content"
   utils/
     backupExport.ts          — downloadBackup(): exports every `PERSISTED_STORAGE_KEYS` key straight from localStorage (works without the app rendering); used by AccountPane and the ErrorBoundary fallback
+    calendarItemInput.ts     — buildCalendarEventInput / buildCalendarReminderInput: the rules for turning what a person or an agent supplied into a stored event/reminder (used by AddCalendarItemModal and the agent commands)
+    scheduleBlocks.ts        — createScheduleBlock(): the one place a ScheduleBlock's defaults live (used by AddScheduleModal and the agent commands)
     date.ts                  — todayIso(), formatDate(), timeAddMinutes(), addDaysToIso(), computeLinkedEndTime() (auto-derives a linked end time from a start time — see Timepicker rebuild in Implemented features), etc.
     id.ts                    — typed nanoid wrappers
     notes.ts                 — Note/NoteTag Endeavour resolution: getEffectiveCollectionId, resolveNoteInheritedCollectionId, getNoteEffectiveCollectionId, getVisibleNoteTagIds, getNoteBreadcrumb (location string for StructuredTagPopover)
@@ -500,6 +527,13 @@ src/
     links.ts                 — openExternalLink(url) (Tauri-aware: routes through @tauri-apps/plugin-opener under Tauri, @capacitor/browser under Android, window.open() in the browser/PWA) and normalizeLinkUrl(raw) (prefixes bare domains with https://); shared by TaskItem/TaskPane/Notes link UI and App.tsx's global external-link click interceptor
     apiFetch.ts               — apiFetch(path, init): drop-in fetch() replacement for /api/* calls; routes through @tauri-apps/plugin-http's native fetch against the production Vercel URL under Tauri (bypasses browser CORS, no edge-function changes needed), plain same-origin fetch everywhere else — see "Desktop (Tauri) API access" in Implemented features
     textToTask.ts            — inferTaskFromSelection(text): non-AI date/time/priority/link inference for the Notes "Create ▸ Task" feature (see Implemented features) — regex-based, no external dependency; locale-aware (Intl) for ambiguous numeric dates
+    idbStorage.ts            — IndexedDB persistence for the notes store: preloadIdbStorage() (awaited in main.tsx before the app is imported), persistStorageIdb(), readPersistedValue()/writePersistedValue() for backup/restore, IDB_STORAGE_KEYS, getIdbUsage()
+    persistStorage.ts        — THE `storage:` for every persist() (guards QuotaExceededError, see Zustand migration rule) + getStorageUsage()/formatStorageSize() for Settings → Storage
+    imageCompress.ts         — compressImageBlob(file) / recompressDataUrl(dataUrl): scale to fit 1600 px + WebP, used on paste into notes and by shrinkNoteImages
+    noteTabs.ts              — MAIN_TAB_ID ('__main__'), linkTabIdFor / effectiveLinkTabId / tabNameOf: how a CrossAppRef.tabId (a link naming one tab of a note) is recorded, resolved (deleted tab → main) and named
+    keywords.ts              — extractKeywords(text) (stop-words/short words dropped, max 8) + stemForMatch(word); used by NotePickerModal's title-keyword suggestions
+    noteSearchText.ts        — getNoteTabTexts(note): cached plain text of a note's main tab and each extra tab for searching (never caches encrypted notes); read a note's text for search through this, not by re-parsing its JSON
+    openCrossAppTarget.ts    — (in services/) openArtifactTarget(type,id): opens a linked task/event/reminder in its section; used by editor link clicks and the Linked-from pills
     noteContent.ts           — stripArtifactLinksFromContent(contentJson, targetType, targetId): pure JSON-tree walk over a Note's stored Tiptap content, editor-independent (the note being cleaned up is rarely the one currently open) — used by crossAppLinkCleanup.ts
     haptics.ts               — Android-only guarded haptic wrappers (hapticLight/Medium/Success/Warning), no-op via Capacitor.isNativePlatform() elsewhere
     timeGrid.ts              — shared hourly time-grid layout math (buildHourLayout, minutesToY, layoutDayTimeGrid, markActiveHours), generic over item type; used by CalendarView's week/day views and CalendarSidePane's overlay-preview grid
@@ -521,7 +555,7 @@ src/
     TaskList/                — main task list + collapsible Routines section
     TaskItem/                — single task row; shows subtask progress pill
     TaskPane/                — slide-in task detail/edit pane
-    ItemActions/             — the SHARED archive/restore + delete pattern every item pane uses (Task, Calendar event, Calendar reminder; future apps' panes should too) — see "Shared item actions" in Implemented features: icons.tsx (TrashIcon/ArchiveIcon/RestoreIcon), ItemActionFooter, ItemActionDialog (archive-with-reason + delete-confirm, portaled z-102), ArchivedBanner, useItemActions hook (dialog state + Escape + hotkeys)
+    ItemActions/             — the SHARED archive/restore + delete pattern every item pane uses (Task, Calendar event, Calendar reminder; future apps' panes should too) — see "Shared item actions" in Implemented features: icons.tsx (TrashIcon/ArchiveIcon/RestoreIcon/CheckCircleIcon), ItemActionFooter (optional Complete/Mark-incomplete toggle for task-backed items), ItemActionDialog (archive-with-reason + delete-confirm, portaled z-102), ArchivedBanner, useItemActions hook (dialog state + Escape + Ctrl+Enter + hotkeys)
     AddTaskModal/            — create task (basic + advanced sections)
     AddTaskButton/           — speed-dial FAB (view-aware)
     AddCollectionModal/      — create endeavour (project/list/tracker/routine)
@@ -542,16 +576,18 @@ src/
     CalendarSidePane/        — left-sliding pane (Calendar section): Layers toggles + Schedule list/manager (active toggle, conflict hint, overlay-preview grid) in one place — supersedes the old CalendarLayersPicker (header dropdown) and ManageSchedulesPane (right-sliding pane), see "Calendar side pane" in Implemented features
     ScheduleOccurrencePopover/ — click a Schedule occurrence on the calendar: skip this date, commit/uncommit (commitment mode), or jump to editing the Schedule
     TimeInput/               — segmented hour/minute/AM-PM combobox respecting settingsStore.clockFormat (not a native <input type="time">, see Clock format setting below and the Timepicker rebuild entry in Implemented features), plus a quick-pick dropdown of half-hour times
+    LinksField/              — the shared links list (clickable / edit / delete / add) used by TaskPane, CalendarEventPane and CalendarReminderPane; links typed into notes arrive via `mergeNewLinks` in the store's update action, never here
     LinkHoverPreview/        — app-wide: shows a hovered link's URL bottom-left (see "Link hover preview" pattern below)
     QuickAccessPane/         — app-wide, Ctrl+G: portaled search-and-jump overlay across Notes/Notebooks/Tasks/Lists/Endeavours/Trackers/Routines, or browse Recent/Frequent visit history (see "Suite-wide Quick Access pane" in Implemented features)
     TruncatedText/           — wraps a CSS-ellipsis-truncated name/title; shows the full text in a floating tooltip below the row on hover, only when actually truncated. Used by ChronicleView's tree node names and NoteList's note titles
-    SettingsPane/            — settings slide-in; reads HOTKEYS[] dynamically
+    SettingsPane/            — settings slide-in; reads HOTKEYS[] dynamically; StorageSection.tsx = the Storage block (per-store usage + Shrink images in notes)
     ManagePane/              — library admin (Endeavours/Purposes/Tags): left-nav tabs + content, opened by clicking (not hovering) the header hamburger; archive/restore/delete rows. MANAGE_SECTIONS array in the file is the extension point for future tabs
     AccountPane/             — Supabase auth + account info
     IntegrationsPane/        — (stub) future integrations
     ColorPicker/             — reusable colour swatch picker
     CollectionPicker/        — CollectionPicker.tsx (single-select dropdown, used in create/edit forms) + CollectionFilterPicker.tsx (header Endeavour-focus picker, numbered for the E/Ctrl+E hotkey)
-    CrossAppRefPicker/       — controlled { value: CrossAppRef[]; onChange; onNavigate? } widget: chips for existing links + a "+ Link" popover (portaled to document.body, position:fixed — see "Cross-app linking" for why) to search and add more. Note is the only wired type; Calendar/List/Tracker render as stubs. Used by AddTaskModal and TaskPane
+    CrossAppRefPicker/       — controlled { value: CrossAppRef[]; onChange; onNavigate? } widget: chips for existing links (with the note's notebook) + a "+ Link" button that opens NotePickerModal. Note is the only wired type; Calendar/List/Tracker are BACKLOG. Used by AddTaskModal, TaskPane, CalendarEventPane and CalendarReminderPane
+    NotePickerModal/         — the "link a note" search dialog (portaled to document.body, z-index 1000): title + notebook path + preview + date per result, multi-word search over title/path/content, title-keyword suggestions while the search box is empty (`suggestFrom`), keyboard nav; captures Ctrl+Enter so the pane/modal behind it doesn't answer. Any future "pick a note" UI should reuse it rather than list notes by title alone — titles are not unique
     PurposeFilterPicker/     — header Purpose-focus picker (multi-select checkboxes), Tasks section only; P/Ctrl+P hotkey
     SortBar/                 — sort controls for task list
     NoteEditor/              — Tiptap v3 rich-text editor with toolbar, zoom, table support, abstract, attributes panel
@@ -561,6 +597,7 @@ src/
       extensions/ArtifactLinkMark.ts — Mark (targetType/targetId attrs) marking a span of note text as the source of a cross-app entity created from it via FloatingToolbar's "Create ▸" menu (Ctrl+Q); see "Cross-app linking" in Implemented features
       extensions/NoteTagMark.ts      — Mark (tagId/color/typeKey/structuredEntryId attrs) for annotation tags; structuredEntryId links a tagged passage to its StructuredTagEntry (see "Structured tag entries")
       builtinTags.ts         — 8 built-in annotation tag definitions (Important/Concept/Definition/Example/Question/Reference/Learn Later/Acronym) — typeKey drives both Learn Later's future create-task action and Acronym's structured-tag-entry behaviour
+      NoteBacklinks.tsx      — the "Linked from" bar under a note's title: single pill / "🔗 N" chip + list, each pill openable, draggable into the text, or insertable at the cursor (derived from other items' crossAppRefs via store/noteBacklinks.ts — nothing stored); artifactLinkInsert.ts holds the insert/drop helpers
     StructuredTagPopover.tsx — create/edit popover shared by every structured tag type (Acronym today): compact term+field preview with Enter-to-accept, "More options" expands in place to show every field + Endeavour + (edit mode) location/timestamps
     NoteEditorPane/          — slide-in pane wrapping NoteEditor for non-Notes sections
     AddNoteModal/            — quick-add note (Ctrl+Space) with hierarchical tag picker
@@ -636,6 +673,8 @@ useEffect(() => {
 
 `requestSubmit()` (not calling `handleSubmit` directly) is the important detail — it goes through the DOM form submission machinery, so it always invokes whatever `onSubmit` is bound in the **current** render, respects `disabled`/native validation the same way clicking the visible submit button would, and can never fire a stale closure over old form state. For a component with **no `<form>`** (a plain "Save" button as the primary action — the Edit panes, `EditNoteMetaModal`, `EditActivityTypeModal`, `BulkUploadWatchlistModal`, …) use **`useCtrlEnterSubmit(() => handleSave(), active)`** (`src/hooks/useCtrlEnterSubmit.ts`): it keeps the callback in a ref refreshed every render, so an inline closure can never call stale state. Call it above the early `return null`, pass `active` = the same condition the early return uses, and declare the handler as a **function declaration** (`function handleSave() {}`), not a `const` arrow — a `const` defined below the hook call trips `react-hooks/immutability`, and a hoisted declaration doesn't. (The hook is also fine for form modals: `useCtrlEnterSubmit(() => formRef.current?.requestSubmit())`. The ~20 older modals keep the inline effect above; migrating them is in BACKLOG.md's Pattern retrofit backlog.)
 
+**Item panes** (Task, Calendar event, Calendar reminder) get it from `useItemActions`: those panes save each field on change/blur rather than through a Save button, so Ctrl+Enter blurs the focused field (committing a half-typed title, note, time or link) and closes the pane. It does nothing while the archive/delete dialog is open — the dialog owns it then.
+
 **Deliberately not wired**: `NoteTagPresetModal` only (a list of independent "Install" actions — no primary action). Every other modal, pane and popover with a primary action binds it, including `CalendarImportReviewModal` (Import) and the `ConfirmDialog` (confirm). When two layers both bind Ctrl+Enter (a confirmation opened over a modal), the confirmation's listener runs in the capture phase and calls `stopImmediatePropagation`, so only the top layer answers.
 
 ### Confirmations and alerts — never `window.confirm()` / `alert()` / `prompt()`
@@ -647,6 +686,8 @@ useEffect(() => {
 - `await alertDialog(message)` — an error the user needs to see.
 
 All three return promises, so the handler becomes `async`. Where a listener owns the keyboard while it waits (`SettingsPane`'s hotkey capture), stop listening *before* opening the dialog. If an item has a real archive concept, prefer the `ItemActions` pane pattern instead (it offers "Archive instead").
+
+**A prompt raised by what the user is typing** (e.g. the note editor's "remove the link too?") passes `focusDelayMs` (and optionally `isStale`): the dialog shows at once but takes no focus and ignores Ctrl+Enter for that long, so a stray Enter can't answer it; if `isStale()` is true when the delay ends it closes itself as cancel.
 
 ### Speed-dial FAB (`AddTaskButton`)
 
@@ -768,6 +809,20 @@ All user-facing strings that might be renamed are in `src/config/labels.ts`. "Co
 
 ---
 
+## Agent command layer — the boundary rule
+
+An AI agent reads and changes the app's data **only** through commands in `src/agent/commands/`, and a command touches data **only** through `src/agent/access.ts` (`read` / `write`) — never a store or service directly (an ESLint rule fails the build; `boundary.test.ts` proves it fires). Consequences that constrain new code:
+
+- **No delete, ever.** `access.write` has no delete; agents archive. Don't add one. Undoing an agent's own creations is `revertBatch`, a user action.
+- **Encrypted notes/lists are invisible to agents** — even while the vault is unlocked, existence included. `access.read` is where they are dropped; when a store with encrypted content gets commands, filter there and extend the planted-secrets test.
+- **Read commands are side-effect free** (no `touchNote`, no recording of visits); the runner undoes and rejects a read that changes tracked data. Agent reads go in the audit log instead.
+- **Anything that changes tracked data is undoable as a batch.** A newly tracked store goes in `TRACKED` in `batch.ts`.
+- **When you add or change an operation on an entity an agent can reach**, keep the rule in ONE place (a store action or a service like `taskCalendarLinks.ts`, or a util like `calendarItemInput.ts`) that both the UI and `access.ts` call — don't re-implement it in a component.
+
+How it works, the command list, and how to add one: `docs/ai/02-command-layer.md`. Remaining phases and the reasoning: `docs/ai/01-capability-inventory.md`.
+
+---
+
 ## Pattern governance — one way of doing each thing, across the whole suite
 
 This project grew in stages, and several patterns were agreed only after a lot of code existed — which is how the audit on 2026-09-20 found ~28 native popups, 13 hard-coded terms and 5 modals without Ctrl+Enter. The rule that prevents a repeat:
@@ -787,6 +842,7 @@ Not bugs in normal use; recorded so they aren't rediscovered from scratch.
 - **`api/ticker-*` are unauthenticated proxies to Yahoo Finance's unofficial endpoint.** Anyone who finds the URL can use the deployment's quota, and the unofficial API carries terms-of-service risk. They are unauthenticated **on purpose**: Portfolio must work for guests with no account, so simply requiring the Supabase Bearer token would break guest mode. A real fix needs per-IP rate limiting (Vercel KV/Upstash or Vercel's firewall rules) and/or moving to an official market-data API with a server-side key.
 - **Soft-delete tombstones are never purged** (`deleted_at` rows stay forever). Fine at current scale; add a scheduled purge of rows older than ~90 days once any table grows.
 - **`calendar_events.notify_before_value` is `integer`** but `CalendarEventPane` feeds it a free-typed number, so typing `1.5` would fail sync (see migration 023's note). Clamp/round the input, or widen the column.
+- **The other stores still live in localStorage (about 5 MB for the whole site).** Notes moved to IndexedDB (see "Zustand migration rule"), so pasted images no longer count against it, but every save still re-serialises a whole store (opening a note writes `lastViewedAt`, which rewrites *all* notes — now a database write rather than a localStorage one) and images are still inline base64 in note content, which also inflates every Supabase sync of a note. Pasted images are scaled to 1600 px / WebP on the way in (`utils/imageCompress.ts`) and Settings → Storage can shrink existing ones (`services/shrinkNoteImages.ts`). Remaining ideas are in BACKLOG.md "Local storage headroom".
 - **Modal z-index tiers are ad hoc** (28 / 30 / 100 / 102 / 110 / 1000 for modals; 400 Quick Access; 500 voice indicator; 1100 confirm dialog; 10000 link preview). It only matters when one overlay opens over another: a modal opened *from inside a pane* needs a tier above the pane's 100/101 (use 102), and anything that can be summoned from anywhere sits above the modals. `AddListModal`, `AddListItemModal` and `EditNoteTagModal` are at 100, the same tier as the panes, but nothing opens them from inside a pane today. Centralising these as `--z-*` tokens is optional tidying (docs/agent-tasks/02).
 
 ---

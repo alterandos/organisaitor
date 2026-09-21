@@ -7,6 +7,7 @@ import { resolveTimezone, rezoneWallClock } from '@/utils/timezone';
 import { CalendarImportReviewModal, type ReviewRow } from '@/components/CalendarImportReviewModal/CalendarImportReviewModal';
 import type { CollectionId } from '@/types';
 import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
+import { writePersistedValue } from '@/utils/idbStorage';
 import styles from './IntegrationsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
@@ -256,13 +257,13 @@ function RestoreCard() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const backup = JSON.parse(ev.target?.result as string) as Record<string, unknown>;
         let restored = 0;
         for (const key of PERSISTED_STORAGE_KEYS) {
           if (key in backup) {
-            localStorage.setItem(key, JSON.stringify(backup[key]));
+            await writePersistedValue(key, JSON.stringify(backup[key]));
             restored++;
           }
         }

@@ -16,6 +16,12 @@ export interface DialogRequest {
   destructive:   boolean;
   confirmLabel:  string;
   cancelLabel:   string;
+  // Non-zero: the dialog is shown at once but doesn't take keyboard focus (or answer Ctrl+Enter) for
+  // this long, so a prompt caused by what the user is typing can't be answered by their next keystroke.
+  focusDelayMs:  number;
+  // Checked when the delay ends; if it returns true the dialog closes itself as "cancel" — for a
+  // prompt whose reason went away while it was waiting.
+  isStale?:      () => boolean;
   resolve:       (ok: boolean) => void;
 }
 

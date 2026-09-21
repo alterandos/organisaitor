@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { useTaskStore } from '@/store/taskStore';
-import { useCalendarStore } from '@/store/calendarStore';
+import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { newTagId } from '@/utils/id';
 import { LABELS } from '@/config/labels';
@@ -74,10 +74,7 @@ export function AddTaskModal() {
   // manual pick here can never be mistaken for undoing the automatic one.
   const [manualCrossAppRefs, setManualCrossAppRefs]  = useState<CrossAppRef[]>([]);
 
-  const addTask = useTaskStore((s) => s.addTask);
   const addTag  = useTaskStore((s) => s.addTag);
-  const addEvent    = useCalendarStore((s) => s.addEvent);
-  const addReminder = useCalendarStore((s) => s.addReminder);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const purposes   = useTaskStore((s) => s.purposes);
   const tags       = useTaskStore((s) => s.tags);
@@ -165,29 +162,6 @@ export function AddTaskModal() {
       addTag({ id: t.id, name: t.name, color: null, notes: null })
     );
 
-    // Pre-create the calendar event if a scheduled date is set
-    let calendarEventId: import('@/types').CalendarEventId | null = null;
-    if (scheduledAt) {
-      calendarEventId = addEvent({
-        title,
-        date:      scheduledAt,
-        startTime: scheduledTime || null,
-        eventType: 'task',
-      });
-    }
-
-    // Pre-create the shadow reminder if a deadline is set — same pattern as scheduledAt
-    // above, just producing a CalendarReminder instead of a CalendarEvent.
-    let calendarReminderId: import('@/types').CalendarReminderId | null = null;
-    if (deadline) {
-      calendarReminderId = addReminder({
-        title,
-        date:         deadline,
-        time:         deadlineTime || null,
-        reminderType: 'task',
-      });
-    }
-
     // If this creation originated from a Notes selection (FloatingToolbar's "+ Create"
     // menu), record the reverse link now and report the new id back so NoteEditor can
     // apply the forward ArtifactLinkMark and clear the pending request itself. The ref's
@@ -197,12 +171,14 @@ export function AddTaskModal() {
     // was manually picked via the "Linked items" field, deduped in case the same note was
     // both the creation source and manually re-added.
     const pendingArtifactLink = useUIStore.getState().pendingArtifactLink;
-    const autoRef = pendingArtifactLink ? [{ type: 'note' as const, id: pendingArtifactLink.noteId }] : [];
+    const autoRef = pendingArtifactLink
+      ? [{ type: 'note' as const, id: pendingArtifactLink.noteId, ...(pendingArtifactLink.tabId ? { tabId: pendingArtifactLink.tabId } : {}) }]
+      : [];
     const crossAppRefs = [...autoRef, ...manualCrossAppRefs].filter(
       (ref, i, all) => all.findIndex((r) => r.type === ref.type && r.id === ref.id) === i
     );
 
-    const taskId = addTask({
+    const taskId = addTaskWithCalendar({
       title,
       notes:           notes || null,
       links:           links.filter(Boolean),
@@ -210,8 +186,6 @@ export function AddTaskModal() {
       deadlineTime:    deadlineTime || null,
       scheduledAt:     scheduledAt  || null,
       scheduledTime:   scheduledTime || null,
-      calendarEventId: calendarEventId,
-      calendarReminderId: calendarReminderId,
       priority,
       collectionId: collectionId ? collectionId as CollectionId : null,
       tagIds:       pendingTags.map((t) => t.id),
@@ -480,7 +454,7 @@ export function AddTaskModal() {
                   itself — see CLAUDE.md "Cross-app linking") */}
               <div className={styles.field}>
                 <label className={styles.label}>Linked items</label>
-                <CrossAppRefPicker value={manualCrossAppRefs} onChange={setManualCrossAppRefs} />
+                <CrossAppRefPicker value={manualCrossAppRefs} onChange={setManualCrossAppRefs} suggestFrom={title} />
               </div>
 
               {/* Parent task */}

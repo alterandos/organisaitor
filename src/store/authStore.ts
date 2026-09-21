@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
-import { stopSync } from '@/services/sync/syncService';
+import { stopSync, clearPendingSync } from '@/services/sync/syncService';
 import { clearSyncedLocalData } from '@/services/clearLocalData';
 
 interface AuthState {
@@ -51,5 +51,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
     // Clear this device's copy of every cloud-synced store. Callers go through requestSignOut()
     // (services/signOut.ts), which has already confirmed the data is safely in the cloud.
     clearSyncedLocalData();
+    // Changes still waiting to sync belonged to the account that just left.
+    clearPendingSync();
   },
 }));

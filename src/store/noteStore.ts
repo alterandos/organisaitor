@@ -13,6 +13,7 @@ import {
   queueEncrypt, encryptSecrets, decryptSecrets, type NoteSecrets, type EntrySecrets,
 } from '@/services/noteSecrets';
 import { decryptField } from '@/services/vault';
+import { persistStorageIdb } from '@/utils/idbStorage';
 
 interface NoteData {
   notes: Record<NoteId, Note>;
@@ -386,6 +387,7 @@ export const useNoteStore = create<NoteStore>()(
     }),
     {
       name: 'notes-storage',
+      storage: persistStorageIdb(),
       version: 12,
       migrate: (persisted: unknown, fromVersion: number) => {
         let state = persisted as NoteData;
