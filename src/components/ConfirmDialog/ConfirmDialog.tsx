@@ -17,14 +17,26 @@ function Dialog({ request }: { request: DialogRequest }) {
   // Registered last, so it is the top of the Escape stack and closes before whatever it opened over.
   useEscapeClose(isAlert ? confirm : cancel);
 
+  // With a focus delay the dialog is up but inert (focus stays where the user was typing, and
+  // Ctrl+Enter is ignored) until the delay ends; then, unless the reason for asking has gone away
+  // (isStale), it takes focus like any other dialog.
+  const armedRef = useRef(request.focusDelayMs === 0);
   // A destructive prompt lands on Cancel so a reflexive Enter can't confirm it.
-  useEffect(() => { focusRef.current?.focus(); }, []);
+  useEffect(() => {
+    if (request.focusDelayMs === 0) { focusRef.current?.focus(); return; }
+    const timer = setTimeout(() => {
+      if (request.isStale?.()) { settle(request.id, false); return; }
+      armedRef.current = true;
+      focusRef.current?.focus();
+    }, request.focusDelayMs);
+    return () => clearTimeout(timer);
+  }, [request, settle]);
 
   // Capture phase + stopImmediatePropagation: the modal underneath may have its own Ctrl+Enter
   // (submit) listener, and this dialog must be the only one that answers.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && armedRef.current) {
         e.preventDefault();
         e.stopImmediatePropagation();
         confirmRef.current();

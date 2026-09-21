@@ -38,6 +38,185 @@ const customListTypes = (types: Record<string, ListType>) =>
 // Suppresses outbound sync while stores are being hydrated from Supabase.
 let hydrating = false;
 let unsubscribers: Array<() => void> = [];
+let currentUserId: string | null = null;
+
+// ── Table registry ──────────────────────────────────────────────
+// Every synced table: how to read its current local records and turn one into a row. Used by the
+// change tracker, the retry flush and the post-load reconcile below.
+
+type Records = Record<string, unknown>;
+interface TableDef { get: () => Records; toRow: (item: unknown, userId: string) => Record<string, unknown> }
+
+const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
+  tasks:                  { get: () => useTaskStore.getState().tasks,                  toRow: (i, u) => taskToRow(i as Task, u) },
+  collections:            { get: () => useTaskStore.getState().collections,            toRow: (i, u) => collectionToRow(i as Collection, u) },
+  tags:                   { get: () => useTaskStore.getState().tags,                   toRow: (i, u) => tagToRow(i as Tag, u) },
+  purposes:               { get: () => useTaskStore.getState().purposes,               toRow: (i, u) => purposeToRow(i as Purpose, u) },
+  calendar_events:        { get: () => useCalendarStore.getState().events,             toRow: (i, u) => eventToRow(i as CalendarEvent, u) },
+  calendar_reminders:     { get: () => useCalendarStore.getState().reminders,          toRow: (i, u) => reminderToRow(i as CalendarReminder, u) },
+  tracker_entries:        { get: () => useTrackerStore.getState().entries,             toRow: (i, u) => entryToRow(i as TrackerEntry, u) },
+  schedules:              { get: () => useScheduleStore.getState().schedules,          toRow: (i, u) => scheduleToRow(i as ScheduleTemplate, u) },
+  lists:                  { get: () => useListStore.getState().lists,                  toRow: (i, u) => listToRow(i as List, u) },
+  list_items:             { get: () => useListStore.getState().listItems,              toRow: (i, u) => listItemToRow(i as ListItem, u) },
+  list_types:             { get: () => customListTypes(useListStore.getState().listTypes as Record<string, ListType>), toRow: (i, u) => listTypeToRow(i as ListType, u) },
+  notes:                  { get: () => useNoteStore.getState().notes,                  toRow: (i, u) => noteToRow(i as Note, u) },
+  note_tags:              { get: () => useNoteStore.getState().noteTags,               toRow: (i, u) => noteTagToRow(i as NoteTag, u) },
+  structured_tag_entries: { get: () => useNoteStore.getState().structuredTagEntries,   toRow: (i, u) => structuredTagEntryToRow(i as StructuredTagEntry, u) },
+  watchlist_items:        { get: () => usePortfolioStore.getState().watchlistItems,    toRow: (i, u) => watchlistItemToRow(i as WatchlistItem, u) },
+  portfolio_tags:         { get: () => usePortfolioStore.getState().portfolioTags,     toRow: (i, u) => portfolioTagToRow(i as PortfolioTag, u) },
+  investment_purposes:    { get: () => usePortfolioStore.getState().investmentPurposes, toRow: (i, u) => investmentPurposeToRow(i as InvestmentPurpose, u) },
+};
+
+// ── Pending changes ─────────────────────────────────────────────
+// Every local change is recorded here BEFORE it is sent, and forgotten only once Supabase has
+// accepted it. That is what makes sync survive being offline, a failed request, or the window
+// closing mid-request: the record lives in localStorage, so the next launch (or the next retry)
+// pushes whatever is still in it. Entries are just "this row id changed"; what is sent is always
+// the row's CURRENT local state, or a soft-delete if it no longer exists locally — so several
+// edits collapse into one push and a delete made offline is not lost.
+//
+// Deliberately not in PERSISTED_STORAGE_KEYS (config/backup.ts): it is per-device, per-account
+// sync bookkeeping, and restoring it from a backup would replay stale changes. It is discarded when
+// the signed-in account differs, and on sign-out (clearPendingSync, called by authStore).
+
+const PENDING_KEY = 'todo-sync-pending';
+const RETRY_EVERY_MS = 60_000;
+
+interface PendingState { userId: string; tables: Record<string, Record<string, number>> }
+let pending: PendingState | null = null;
+let pendingSeq = 0;
+let retryTimer: ReturnType<typeof setInterval> | null = null;
+let onlineListener: (() => void) | null = null;
+// True while the sync status is 'error' because a PUSH failed (as opposed to a failed initial load),
+// so a later fully-successful flush knows it may clear it.
+let pushFailed = false;
+
+function loadPending(userId: string) {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    const stored = raw ? (JSON.parse(raw) as PendingState) : null;
+    pending = stored && stored.userId === userId ? stored : { userId, tables: {} };
+    // Another account's leftovers are dropped from disk too, not just from memory.
+    if (stored && stored.userId !== userId) savePending();
+  } catch {
+    pending = { userId, tables: {} };
+  }
+}
+
+function savePending() {
+  try {
+    if (pending) localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+  } catch {
+    // A full localStorage here only costs the restart-safety of the queue; the in-memory copy and
+    // this session's retries still work.
+  }
+}
+
+// Forgets every pending change. For sign-out, after the local data has been wiped.
+export function clearPendingSync(): void {
+  pending = null;
+  try { localStorage.removeItem(PENDING_KEY); } catch { /* nothing to clear */ }
+}
+
+function markDirty(table: string, ids: string[]) {
+  if (!pending) return;
+  const t = (pending.tables[table] ??= {});
+  for (const id of ids) t[id] = ++pendingSeq;
+  savePending();
+}
+
+const dirtyIds = (table: string): string[] => Object.keys(pending?.tables[table] ?? {});
+const pendingCount = () => Object.values(pending?.tables ?? {}).reduce((n, t) => n + Object.keys(t).length, 0);
+
+// Sends the given rows' current state (or a soft-delete for one that no longer exists locally) and,
+// only on success, forgets them — unless the row changed again while the request was in flight, in
+// which case its newer entry stays for the next push. Returns whether everything was accepted.
+async function pushIds(userId: string, table: keyof typeof TABLE_DEFS, ids: string[]): Promise<boolean> {
+  if (ids.length === 0) return true;
+  const def = TABLE_DEFS[table];
+  const records = def.get();
+  const sent = new Map(ids.map((id) => [id, pending?.tables[table]?.[id]]));
+  const upserts: Record<string, unknown>[] = [];
+  const deletes: string[] = [];
+  for (const id of ids) {
+    if (id in records) upserts.push(def.toRow(records[id], userId));
+    else deletes.push(id);
+  }
+
+  let error: string | null = null;
+  try {
+    if (upserts.length > 0) {
+      const res = await supabase.from(table).upsert(upserts);
+      if (res.error) error = res.error.message;
+    }
+    if (!error && deletes.length > 0) {
+      // Soft delete (tombstone), not a hard DELETE — a hard delete leaves no trace for another
+      // device's next hydrateStores() to distinguish "deleted elsewhere" from "never uploaded from
+      // here", so a deletion could never propagate across devices.
+      const res = await supabase.from(table).update({ deleted_at: new Date().toISOString() }).in('id', deletes);
+      if (res.error) error = res.error.message;
+    }
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+  }
+
+  if (error) {
+    console.error(`[sync] push ${table}:`, error);
+    if (syncStatus !== 'syncing') { pushFailed = true; setStatus('error', `${error} — will retry (${pendingCount()} change${pendingCount() === 1 ? '' : 's'} waiting)`); }
+    return false;
+  }
+
+  const t = pending?.tables[table];
+  if (t) {
+    for (const id of ids) if (t[id] === sent.get(id)) delete t[id];
+    if (Object.keys(t).length === 0) delete pending!.tables[table];
+    savePending();
+  }
+  if (pushFailed && pendingCount() === 0 && syncStatus !== 'syncing') { pushFailed = false; setStatus('idle'); }
+  return true;
+}
+
+// Pushes everything still pending, table by table. Called after each load, when the browser comes
+// back online, and every RETRY_EVERY_MS while anything is waiting.
+let flushing: Promise<void> | null = null;
+function flushPending(userId: string): Promise<void> {
+  if (flushing) return flushing;
+  flushing = (async () => {
+    try {
+      for (const table of Object.keys(TABLE_DEFS) as Array<keyof typeof TABLE_DEFS>) {
+        const ids = dirtyIds(table);
+        if (ids.length > 0) await pushIds(userId, table, ids);
+      }
+    } finally {
+      flushing = null;
+    }
+  })();
+  return flushing;
+}
+
+// After the load's merge: anything that exists only here (created offline, or before signing in),
+// or is newer here than in Supabase (edited offline, or in the moment between the app opening and
+// the load finishing), is queued for upload. hydrateStores keeps such items but never used to send
+// them. Only tables that loaded are considered — an unreadable table could be hiding remote data.
+// Tables whose records carry no updatedAt (tags, list types, portfolio tags/purposes) can only be
+// detected as "not there yet"; a local edit to one of those while offline still loses to the cloud.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function queueLocalOnlyAndNewer(remote: Record<string, any[] | null>) {
+  for (const table of Object.keys(TABLE_DEFS) as Array<keyof typeof TABLE_DEFS>) {
+    const rows = remote[table];
+    if (!rows) continue;
+    const byId = new Map<string, { updated_at?: string; deleted_at?: string | null }>(rows.map((r) => [r.id as string, r]));
+    const ids: string[] = [];
+    for (const [id, item] of Object.entries(TABLE_DEFS[table].get())) {
+      const row = byId.get(id);
+      if (!row) { ids.push(id); continue; }
+      if (row.deleted_at) continue;
+      const local = (item as { updatedAt?: string }).updatedAt;
+      if (local && row.updated_at && Date.parse(local) > Date.parse(row.updated_at)) ids.push(id);
+    }
+    if (ids.length > 0) markDirty(table, ids);
+  }
+}
 
 // ── Public API ──────────────────────────────────────────────────
 
@@ -82,6 +261,7 @@ export function initSync(userId: string): Promise<void> {
 
 async function runInitSync(userId: string): Promise<void> {
   stopSync();
+  loadPending(userId);
   hydrating = true;
   setStatus('syncing');
 
@@ -144,6 +324,7 @@ async function runInitSync(userId: string): Promise<void> {
         dbNotes, dbNoteTags, dbStructuredTagEntries,
         dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
       );
+      queueLocalOnlyAndNewer(Object.fromEntries(SYNC_TABLES.map((t, i) => [t, results[i].error ? null : results[i].data])));
     }
 
     if (failed.length > 0) setStatus('error', `Could not sync: ${failed.join(', ')} (other data synced normally)`);
@@ -157,11 +338,15 @@ async function runInitSync(userId: string): Promise<void> {
   }
 
   setupSubscriptions(userId);
+  if (pendingCount() > 0) void flushPending(userId);
 }
 
 export function stopSync(): void {
   unsubscribers.forEach((u) => u());
   unsubscribers = [];
+  if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
+  if (onlineListener) { window.removeEventListener('online', onlineListener); onlineListener = null; }
+  currentUserId = null;
 }
 
 export type UploadCounts = {
@@ -184,6 +369,8 @@ async function runForceUpload(userId: string): Promise<UploadCounts> {
   try {
     const counts = await upsertAllToSupabase(userId);
     setStatus('idle');
+    // upsertAll only sends what exists; deletions made offline are pending soft-deletes.
+    void flushPending(userId);
     return counts;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -211,14 +398,19 @@ function mergeRecords<T>(
   rows: any[] | null | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rowToItem: (r: any) => T,
+  table: string,
 ): Record<string, T> {
   const result: Record<string, T> = { ...local };
+  // Rows deleted on THIS device whose soft-delete hasn't reached the cloud yet (deleted offline, or
+  // the request failed): the cloud still has them alive, but they must not come back.
+  const deletedHere = new Set(dirtyIds(table).filter((id) => !(id in local)));
   for (const row of rows ?? []) {
     const id = row.id as string;
     if (row.deleted_at) {
       delete result[id];
       continue;
     }
+    if (deletedHere.has(id)) continue;
     const item = rowToItem(row);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const existingUpdatedAt = (result[id] as any)?.updatedAt;
@@ -244,50 +436,50 @@ function hydrateStores(...args: Array<any[] | null>) {
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useTaskStore.setState((local) => ({
-    tasks:       mergeRecords(local.tasks,       dbTasks,       rowToTask),
-    collections: mergeRecords(local.collections, dbCollections, rowToCollection),
-    tags:        mergeRecords(local.tags,        dbTags,        rowToTag),
-    purposes:    mergeRecords(local.purposes,    dbPurposes,    rowToPurpose),
+    tasks:       mergeRecords(local.tasks,       dbTasks,       rowToTask, 'tasks'),
+    collections: mergeRecords(local.collections, dbCollections, rowToCollection, 'collections'),
+    tags:        mergeRecords(local.tags,        dbTags,        rowToTag, 'tags'),
+    purposes:    mergeRecords(local.purposes,    dbPurposes,    rowToPurpose, 'purposes'),
   }) as Parameters<typeof useTaskStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useCalendarStore.setState((local) => ({
-    events:    mergeRecords(local.events,    dbEvents,    rowToEvent),
-    reminders: mergeRecords(local.reminders, dbReminders, rowToReminder),
+    events:    mergeRecords(local.events,    dbEvents,    rowToEvent, 'calendar_events'),
+    reminders: mergeRecords(local.reminders, dbReminders, rowToReminder, 'calendar_reminders'),
   }) as Parameters<typeof useCalendarStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useTrackerStore.setState((local) => ({
-    entries: mergeRecords(local.entries, dbEntries, rowToEntry),
+    entries: mergeRecords(local.entries, dbEntries, rowToEntry, 'tracker_entries'),
   }) as Parameters<typeof useTrackerStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useScheduleStore.setState((local) => ({
-    schedules: mergeRecords(local.schedules, dbSchedules, rowToSchedule),
+    schedules: mergeRecords(local.schedules, dbSchedules, rowToSchedule, 'schedules'),
   }) as Parameters<typeof useScheduleStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useListStore.setState((local) => ({
-    lists:     mergeRecords(local.lists,     dbLists,     rowToList),
-    listItems: mergeRecords(local.listItems, dbListItems, rowToListItem),
+    lists:     mergeRecords(local.lists,     dbLists,     rowToList, 'lists'),
+    listItems: mergeRecords(local.listItems, dbListItems, rowToListItem, 'list_items'),
     // Built-ins in `local.listTypes` are preserved untouched by mergeRecords (remote
     // never contains their fixed ids); only the custom entries can be added/updated/
     // tombstoned here.
-    listTypes: mergeRecords(local.listTypes, dbListTypes, rowToListType),
+    listTypes: mergeRecords(local.listTypes, dbListTypes, rowToListType, 'list_types'),
   }) as Parameters<typeof useListStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useNoteStore.setState((local) => ({
-    notes:                mergeRecords(local.notes,                dbNotes,                rowToNote),
-    noteTags:              mergeRecords(local.noteTags,              dbNoteTags,             rowToNoteTag),
-    structuredTagEntries: mergeRecords(local.structuredTagEntries, dbStructuredTagEntries, rowToStructuredTagEntry),
+    notes:                mergeRecords(local.notes,                dbNotes,                rowToNote, 'notes'),
+    noteTags:              mergeRecords(local.noteTags,              dbNoteTags,             rowToNoteTag, 'note_tags'),
+    structuredTagEntries: mergeRecords(local.structuredTagEntries, dbStructuredTagEntries, rowToStructuredTagEntry, 'structured_tag_entries'),
   }) as Parameters<typeof useNoteStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   usePortfolioStore.setState((local) => ({
-    watchlistItems:     mergeRecords(local.watchlistItems,     dbWatchlistItems,     rowToWatchlistItem),
-    portfolioTags:      mergeRecords(local.portfolioTags,      dbPortfolioTags,      rowToPortfolioTag),
-    investmentPurposes: mergeRecords(local.investmentPurposes, dbInvestmentPurposes, rowToInvestmentPurpose),
+    watchlistItems:     mergeRecords(local.watchlistItems,     dbWatchlistItems,     rowToWatchlistItem, 'watchlist_items'),
+    portfolioTags:      mergeRecords(local.portfolioTags,      dbPortfolioTags,      rowToPortfolioTag, 'portfolio_tags'),
+    investmentPurposes: mergeRecords(local.investmentPurposes, dbInvestmentPurposes, rowToInvestmentPurpose, 'investment_purposes'),
   }) as Parameters<typeof usePortfolioStore.setState>[0]);
 }
 
@@ -356,119 +548,67 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
 
 // ── Subscriptions ───────────────────────────────────────────────
 
-function setupSubscriptions(userId: string): void {
-  const unsubTask = useTaskStore.subscribe((state, prev) => {
-    if (hydrating) return;
-
-    if (state.tasks !== prev.tasks)
-      syncDiff('tasks', prev.tasks, state.tasks, (t) => taskToRow(t as Task, userId));
-
-    if (state.collections !== prev.collections)
-      syncDiff('collections', prev.collections, state.collections, (c) => collectionToRow(c as Collection, userId));
-
-    if (state.tags !== prev.tags)
-      syncDiff('tags', prev.tags, state.tags, (t) => tagToRow(t as Tag, userId));
-
-    if (state.purposes !== prev.purposes)
-      syncDiff('purposes', prev.purposes, state.purposes, (p) => purposeToRow(p as Purpose, userId));
-  });
-
-  const unsubCal = useCalendarStore.subscribe((state, prev) => {
-    if (hydrating) return;
-
-    if (state.events !== prev.events)
-      syncDiff('calendar_events', prev.events, state.events, (e) => eventToRow(e as CalendarEvent, userId));
-
-    if (state.reminders !== prev.reminders)
-      syncDiff('calendar_reminders', prev.reminders, state.reminders, (r) => reminderToRow(r as CalendarReminder, userId));
-  });
-
-  const unsubTracker = useTrackerStore.subscribe((state, prev) => {
-    if (hydrating) return;
-
-    if (state.entries !== prev.entries)
-      syncDiff('tracker_entries', prev.entries, state.entries, (e) => entryToRow(e as TrackerEntry, userId));
-  });
-
-  const unsubSchedule = useScheduleStore.subscribe((state, prev) => {
-    if (hydrating) return;
-
-    if (state.schedules !== prev.schedules)
-      syncDiff('schedules', prev.schedules, state.schedules, (s) => scheduleToRow(s as ScheduleTemplate, userId));
-  });
-
-  const unsubList = useListStore.subscribe((state, prev) => {
-    if (hydrating) return;
-
-    if (state.lists !== prev.lists)
-      syncDiff('lists', prev.lists, state.lists, (l) => listToRow(l as List, userId));
-
-    if (state.listItems !== prev.listItems)
-      syncDiff('list_items', prev.listItems, state.listItems, (i) => listItemToRow(i as ListItem, userId));
-
-    if (state.listTypes !== prev.listTypes)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      syncDiff('list_types', customListTypes(prev.listTypes as any), customListTypes(state.listTypes as any), (t) => listTypeToRow(t as ListType, userId));
-  });
-
-  const unsubNote = useNoteStore.subscribe((state, prev) => {
-    if (hydrating) return;
-
-    if (state.notes !== prev.notes)
-      syncDiff('notes', prev.notes, state.notes, (n) => noteToRow(n as Note, userId));
-
-    if (state.noteTags !== prev.noteTags)
-      syncDiff('note_tags', prev.noteTags, state.noteTags, (t) => noteTagToRow(t as NoteTag, userId));
-
-    if (state.structuredTagEntries !== prev.structuredTagEntries)
-      syncDiff('structured_tag_entries', prev.structuredTagEntries, state.structuredTagEntries, (e) => structuredTagEntryToRow(e as StructuredTagEntry, userId));
-  });
-
-  const unsubPortfolio = usePortfolioStore.subscribe((state, prev) => {
-    if (hydrating) return;
-
-    if (state.watchlistItems !== prev.watchlistItems)
-      syncDiff('watchlist_items', prev.watchlistItems, state.watchlistItems, (i) => watchlistItemToRow(i as WatchlistItem, userId));
-
-    if (state.portfolioTags !== prev.portfolioTags)
-      syncDiff('portfolio_tags', prev.portfolioTags, state.portfolioTags, (t) => portfolioTagToRow(t as PortfolioTag, userId));
-
-    if (state.investmentPurposes !== prev.investmentPurposes)
-      syncDiff('investment_purposes', prev.investmentPurposes, state.investmentPurposes, (p) => investmentPurposeToRow(p as InvestmentPurpose, userId));
-  });
-
-  unsubscribers = [unsubTask, unsubCal, unsubTracker, unsubSchedule, unsubList, unsubNote, unsubPortfolio];
+// Records each change to a table and pushes it at once (no batching or delay). The record is what
+// lets a failed or interrupted push be retried later — see "Pending changes".
+function trackChanges(userId: string, table: keyof typeof TABLE_DEFS, prev: Records, next: Records): void {
+  const ids: string[] = [];
+  for (const [id, item] of Object.entries(next)) if (item !== prev[id]) ids.push(id);
+  for (const id of Object.keys(prev)) if (!(id in next)) ids.push(id);
+  if (ids.length === 0) return;
+  markDirty(table, ids);
+  void pushIds(userId, table, ids);
 }
 
-// ── Diff + sync ─────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Watchable = { subscribe: (listener: (state: any, prev: any) => void) => () => void };
 
-function syncDiff(
-  table: string,
-  prev: Record<string, unknown>,
-  next: Record<string, unknown>,
-  toRow: (item: unknown) => Record<string, unknown>,
-): void {
-  const toUpsert: Record<string, unknown>[] = [];
-  const toDelete: string[] = [];
+// Subscribes to one store, tracking the listed record-maps (store property → table). List types
+// pass `only` so built-ins (never synced) are ignored.
+function watch(
+  userId: string,
+  store: Watchable,
+  fields: Array<{ prop: string; table: keyof typeof TABLE_DEFS; only?: (r: Records) => Records }>,
+): () => void {
+  return store.subscribe((state, prev) => {
+    if (hydrating) return;
+    for (const f of fields) {
+      if (state[f.prop] === prev[f.prop]) continue;
+      const a = f.only ? f.only(prev[f.prop]) : prev[f.prop];
+      const b = f.only ? f.only(state[f.prop]) : state[f.prop];
+      trackChanges(userId, f.table, a, b);
+    }
+  });
+}
 
-  for (const [id, item] of Object.entries(next)) {
-    if (item !== prev[id]) toUpsert.push(toRow(item));
-  }
-  for (const id of Object.keys(prev)) {
-    if (!(id in next)) toDelete.push(id);
-  }
+function setupSubscriptions(userId: string): void {
+  currentUserId = userId;
+  unsubscribers = [
+    watch(userId, useTaskStore, [
+      { prop: 'tasks', table: 'tasks' }, { prop: 'collections', table: 'collections' },
+      { prop: 'tags', table: 'tags' },   { prop: 'purposes', table: 'purposes' },
+    ]),
+    watch(userId, useCalendarStore, [
+      { prop: 'events', table: 'calendar_events' }, { prop: 'reminders', table: 'calendar_reminders' },
+    ]),
+    watch(userId, useTrackerStore,  [{ prop: 'entries', table: 'tracker_entries' }]),
+    watch(userId, useScheduleStore, [{ prop: 'schedules', table: 'schedules' }]),
+    watch(userId, useListStore, [
+      { prop: 'lists', table: 'lists' }, { prop: 'listItems', table: 'list_items' },
+      { prop: 'listTypes', table: 'list_types', only: customListTypes as (r: Records) => Records },
+    ]),
+    watch(userId, useNoteStore, [
+      { prop: 'notes', table: 'notes' }, { prop: 'noteTags', table: 'note_tags' },
+      { prop: 'structuredTagEntries', table: 'structured_tag_entries' },
+    ]),
+    watch(userId, usePortfolioStore, [
+      { prop: 'watchlistItems', table: 'watchlist_items' }, { prop: 'portfolioTags', table: 'portfolio_tags' },
+      { prop: 'investmentPurposes', table: 'investment_purposes' },
+    ]),
+  ];
 
-  if (toUpsert.length > 0) {
-    supabase.from(table).upsert(toUpsert).then(({ error }) => {
-      if (error) { console.error(`[sync] upsert ${table}:`, error.message); setStatus('error', error.message); }
-    });
-  }
-  if (toDelete.length > 0) {
-    // Soft delete (tombstone), not a hard DELETE — a hard delete leaves no trace for
-    // another device's next hydrateStores() to distinguish "deleted elsewhere" from
-    // "never uploaded from here," so a deletion could never propagate across devices.
-    supabase.from(table).update({ deleted_at: new Date().toISOString() }).in('id', toDelete).then(({ error }) => {
-      if (error) { console.error(`[sync] delete ${table}:`, error.message); setStatus('error', error.message); }
-    });
-  }
+  // Retry what didn't get through: when the browser reports it is back online, and on a timer while
+  // anything is still waiting.
+  onlineListener = () => { if (currentUserId && pendingCount() > 0) void flushPending(currentUserId); };
+  window.addEventListener('online', onlineListener);
+  retryTimer = setInterval(() => { if (currentUserId && pendingCount() > 0) void flushPending(currentUserId); }, RETRY_EVERY_MS);
 }

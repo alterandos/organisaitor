@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { persistStorage } from '@/utils/persistStorage';
 
 // Cross-app "navigable target" types the Quick Access pane (Ctrl+G) can jump to. Kept as its
 // own small union here (not re-exported through types/index.ts) so new target types can be
@@ -69,6 +70,6 @@ export const useRecentItemsStore = create<RecentItemsState>()(
         return { items };
       }),
     }),
-    { name: 'todo-recent-items', version: 1 }
+    { name: 'todo-recent-items', storage: persistStorage(), version: 1 }
   )
 );

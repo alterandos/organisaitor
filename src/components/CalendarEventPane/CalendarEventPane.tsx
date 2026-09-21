@@ -8,6 +8,7 @@ import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteEventWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import type { CrossAppRef } from '@/types';
 import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
@@ -95,7 +96,7 @@ export function CalendarEventPane() {
     if (ref.type !== 'note') return;
     closePane();
     useUIStore.getState().setActiveView('notes');
-    useUIStore.getState().openNote(ref.id);
+    useUIStore.getState().openNote(ref.id, ref.tabId);
   };
 
   const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
@@ -437,9 +438,15 @@ export function CalendarEventPane() {
           </div>
 
           <div className={styles.field}>
+            <span className={styles.label}>Links</span>
+            <LinksField links={event.links ?? []} onChange={(next) => updateEvent(id, { links: next })} />
+          </div>
+
+          <div className={styles.field}>
             <span className={styles.label}>Linked items</span>
             <CrossAppRefPicker
               value={event.crossAppRefs ?? []}
+              suggestFrom={event.title}
               onChange={handleCrossAppRefsChange}
               onNavigate={navigateToCrossAppRef}
             />
@@ -461,6 +468,8 @@ export function CalendarEventPane() {
         <ItemActionFooter
           archived={!!event.archivedAt}
           canArchive={!isTaskShadow}
+          completed={linkedTask?.completed}
+          onToggleComplete={linkedTask ? () => useTaskStore.getState().toggleTask(linkedTask.id) : undefined}
           deleteLabel={event.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.event.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreEvent(id)}

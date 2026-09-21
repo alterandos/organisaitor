@@ -8,6 +8,7 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteReminderWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import type { CrossAppRef } from '@/types';
 import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
@@ -25,6 +26,8 @@ export function CalendarReminderPane() {
   const remindersRecord   = useCalendarStore((s) => s.reminders);
   const updateReminder    = useCalendarStore((s) => s.updateReminder);
   const collectionsRecord = useTaskStore((s) => s.collections);
+  const tasksRecord       = useTaskStore((s) => s.tasks);
+  const openTaskPane      = useUIStore((s) => s.openTaskPane);
 
   const reminder = editingId ? remindersRecord[editingId as CalendarReminderId] : null;
   const archiveReminder = useCalendarStore((s) => s.archiveReminder);
@@ -50,6 +53,15 @@ export function CalendarReminderPane() {
 
   const id = reminder.id;
   const allCollections = Object.values(collectionsRecord);
+  // A task's deadline is mirrored as a reminder (Task.calendarReminderId) — same link as the
+  // event pane's, so the task can be opened or completed from here.
+  const linkedTask = Object.values(tasksRecord).find((t) => t.calendarReminderId === id) ?? null;
+
+  const openLinkedTask = () => {
+    if (!linkedTask) return;
+    closePane();
+    openTaskPane(linkedTask.id);
+  };
 
   const saveTitle = () => {
     const v = title.trim();
@@ -69,7 +81,7 @@ export function CalendarReminderPane() {
     if (ref.type !== 'note') return;
     closePane();
     useUIStore.getState().setActiveView('notes');
-    useUIStore.getState().openNote(ref.id);
+    useUIStore.getState().openNote(ref.id, ref.tabId);
   };
 
   const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
@@ -108,6 +120,12 @@ export function CalendarReminderPane() {
               onClose={closePane}
               onSwitch={(newId) => openPane(newId)}
             />
+          )}
+
+          {linkedTask && (
+            <button type="button" className={styles.linkedTaskChip} onClick={openLinkedTask}>
+              🕐 Linked task: {linkedTask.title}
+            </button>
           )}
 
           <input
@@ -258,9 +276,15 @@ export function CalendarReminderPane() {
           </div>
 
           <div className={styles.field}>
+            <span className={styles.label}>Links</span>
+            <LinksField links={reminder.links ?? []} onChange={(next) => updateReminder(id, { links: next })} />
+          </div>
+
+          <div className={styles.field}>
             <span className={styles.label}>Linked items</span>
             <CrossAppRefPicker
               value={reminder.crossAppRefs ?? []}
+              suggestFrom={reminder.title}
               onChange={handleCrossAppRefsChange}
               onNavigate={navigateToCrossAppRef}
             />
@@ -281,6 +305,8 @@ export function CalendarReminderPane() {
 
         <ItemActionFooter
           archived={!!reminder.archivedAt}
+          completed={linkedTask?.completed}
+          onToggleComplete={linkedTask ? () => useTaskStore.getState().toggleTask(linkedTask.id) : undefined}
           deleteLabel={reminder.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.reminder.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreReminder(id)}

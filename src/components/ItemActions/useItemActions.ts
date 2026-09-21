@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 
 interface Options {
   itemKey:     string | null;   // identity of the open item — the dialog resets when it changes
@@ -15,6 +16,7 @@ interface Options {
 //   Ctrl+Shift+D        delete (opens the confirmation)
 //   Escape              closes the pane (the dialog registers its own, later, so it closes first —
 //                       see useEscapeClose)
+//   Ctrl+Enter          commits the focused field and closes the pane (see useCtrlEnterSubmit)
 export function useItemActions({ itemKey, archived, canArchive = true, onClose, onRestore }: Options) {
   const [dialog, setDialog] = useState<'archive' | 'delete' | null>(null);
 
@@ -25,6 +27,15 @@ export function useItemActions({ itemKey, archived, canArchive = true, onClose, 
   }
 
   useEscapeClose(onClose, !!itemKey);
+
+  // These panes save each field as it changes or loses focus, so "accept" means: blur the focused
+  // field (which commits a half-typed title, note, time or link) and close. While a dialog is open
+  // Ctrl+Enter belongs to the dialog.
+  useCtrlEnterSubmit(() => {
+    if (dialog) return;
+    (document.activeElement as HTMLElement | null)?.blur();
+    onClose();
+  }, !!itemKey);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {

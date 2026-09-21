@@ -8,6 +8,7 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { deleteTaskWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import { LinksField } from '@/components/LinksField/LinksField';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
@@ -35,6 +36,7 @@ export function TaskPane() {
   const addTask           = useTaskStore((s) => s.addTask);
   const archiveTask       = useTaskStore((s) => s.archiveTask);
   const restoreTask       = useTaskStore((s) => s.restoreTask);
+  const toggleTask        = useTaskStore((s) => s.toggleTask);
 
   const addEvent    = useCalendarStore((s) => s.addEvent);
   const updateEvent = useCalendarStore((s) => s.updateEvent);
@@ -51,9 +53,6 @@ export function TaskPane() {
   const [tagSearch,      setTagSearch]      = useState('');
   const [tagDropOpen,    setTagDropOpen]    = useState(false);
   const [subtaskInput,   setSubtaskInput]   = useState('');
-  const [linkInput,      setLinkInput]      = useState('');
-  const [editingLinkIdx, setEditingLinkIdx] = useState<number | null>(null);
-  const [editingLinkVal, setEditingLinkVal] = useState('');
   const tagInputRef  = useRef<HTMLInputElement>(null);
   const notesRef     = useRef<HTMLTextAreaElement>(null);
 
@@ -201,12 +200,10 @@ export function TaskPane() {
 
   const handleRestore = () => restoreTask(taskId);
 
-  const currentLinks = task.links ?? [];
-
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
     if (ref.type !== 'note') return; // only 'note' targets are navigable today
     useUIStore.getState().setActiveView('notes');
-    useUIStore.getState().openNote(ref.id);
+    useUIStore.getState().openNote(ref.id, ref.tabId);
   };
 
   const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
@@ -215,31 +212,6 @@ export function TaskPane() {
     );
     removed.forEach((ref) => unlinkCrossAppRef('task', taskId, ref));
     updateTask(taskId, { crossAppRefs: next });
-  };
-
-  const addLink = () => {
-    const url = linkInput.trim();
-    if (!url) return;
-    updateTask(taskId, { links: [...currentLinks, url] });
-    setLinkInput('');
-  };
-
-  const deleteLink = (idx: number) =>
-    updateTask(taskId, { links: currentLinks.filter((_, i) => i !== idx) });
-
-  const startEditLink = (idx: number) => {
-    setEditingLinkIdx(idx);
-    setEditingLinkVal(currentLinks[idx]);
-  };
-
-  const commitEditLink = (idx: number) => {
-    const url = editingLinkVal.trim();
-    if (url) {
-      const next = [...currentLinks];
-      next[idx] = url;
-      updateTask(taskId, { links: next });
-    }
-    setEditingLinkIdx(null);
   };
 
   const subtasks = (task.subtaskIds ?? [])
@@ -479,61 +451,7 @@ export function TaskPane() {
           {/* ── Links ── */}
           <div className={styles.field}>
             <span className={styles.label}>Links</span>
-            {currentLinks.map((url, idx) => (
-              <div key={idx} className={styles.linkRow}>
-                {editingLinkIdx === idx ? (
-                  <input
-                    className={styles.linkEditInput}
-                    value={editingLinkVal}
-                    autoFocus
-                    onChange={(e) => setEditingLinkVal(e.target.value)}
-                    onBlur={() => commitEditLink(idx)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitEditLink(idx);
-                      if (e.key === 'Escape') { e.stopPropagation(); setEditingLinkIdx(null); }
-                    }}
-                  />
-                ) : (
-                  <a
-                    href={url.startsWith('http') ? url : `https://${url}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.linkAnchor}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {url}
-                  </a>
-                )}
-                <button
-                  className={styles.linkIconBtn}
-                  onClick={() => startEditLink(idx)}
-                  aria-label="Edit link"
-                  title="Edit"
-                >✎</button>
-                <button
-                  className={`${styles.linkIconBtn} ${styles.linkDeleteBtn}`}
-                  onClick={() => deleteLink(idx)}
-                  aria-label="Delete link"
-                  title="Delete"
-                >×</button>
-              </div>
-            ))}
-            <div className={styles.linkAdd}>
-              <input
-                className={styles.linkInput}
-                placeholder="https://…"
-                value={linkInput}
-                onChange={(e) => setLinkInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
-                onBlur={addLink}
-              />
-              <button
-                type="button"
-                className={styles.linkAddBtn}
-                onClick={addLink}
-                disabled={!linkInput.trim()}
-              >+</button>
-            </div>
+            <LinksField links={task.links ?? []} onChange={(next) => updateTask(taskId, { links: next })} />
           </div>
 
           {/* ── Linked items (Notes today; Calendar/List/Tracker are stubs in the picker
@@ -543,6 +461,7 @@ export function TaskPane() {
             <span className={styles.label}>Linked items</span>
             <CrossAppRefPicker
               value={task.crossAppRefs ?? []}
+              suggestFrom={task.title}
               onChange={handleCrossAppRefsChange}
               onNavigate={navigateToCrossAppRef}
             />
@@ -600,6 +519,8 @@ export function TaskPane() {
 
         <ItemActionFooter
           archived={task.archived}
+          completed={task.completed}
+          onToggleComplete={() => toggleTask(taskId)}
           deleteLabel="Delete task"
           onArchive={() => setDialog('archive')}
           onRestore={handleRestore}

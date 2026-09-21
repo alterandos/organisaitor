@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useState } from 'react';
+import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews } from '@/store/noteViews';
-import type { CrossAppRef, CrossAppRefType } from '@/types';
+import { NotePickerModal } from '@/components/NotePickerModal/NotePickerModal';
+import { getNoteBreadcrumb } from '@/utils/notes';
+import { tabNameOf } from '@/utils/noteTabs';
+import type { CrossAppRef } from '@/types';
 import type { NoteId } from '@/types/notes';
 import styles from './CrossAppRefPicker.module.css';
-import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 interface Props {
   value:    CrossAppRef[];
@@ -13,97 +15,44 @@ interface Props {
   // already exists). Omitted in a create form (AddTaskModal) where navigating away would
   // just abandon the in-progress task.
   onNavigate?: (ref: CrossAppRef) => void;
+  // Title of the item the links are being added to; its keywords drive the picker's suggestions.
+  suggestFrom?: string;
 }
 
-// Note is the only wired target today; the rest mirror FloatingToolbar's "Create ▸" menu
-// stubs so this picker's type row already reads as the eventual complete set — see
-// BACKLOG.md "Cross-app built-in tag types" for what each of these needs once built.
-const TYPE_OPTIONS: { type: CrossAppRefType; label: string; icon: string; enabled: boolean }[] = [
-  { type: 'note',         label: 'Note',          icon: '📝', enabled: true  },
-  { type: 'event',        label: 'Calendar item', icon: '📅', enabled: false },
-  { type: 'listItem',     label: 'List item',     icon: '📃', enabled: false },
-  { type: 'trackerEntry', label: 'Tracker entry', icon: '📊', enabled: false },
-];
+// Note is the only wired target today. The other planned targets (Calendar item, List item,
+// Tracker entry — see BACKLOG.md "Cross-app built-in tag types") need their own picker dialog
+// alongside NotePickerModal; this component stays the one generic { value; onChange; onNavigate? }
+// widget and would pick the dialog by type.
+const ICON_BY_TYPE: Record<string, string> = { note: '📝', event: '📅', listItem: '📃', trackerEntry: '📊' };
 
-const ICON_BY_TYPE: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map((t) => [t.type, t.icon]));
-
-export function CrossAppRefPicker({ value, onChange, onNavigate }: Props) {
+// The picker is a dialog portaled to document.body (see NotePickerModal), not a popover rendered
+// in place: this widget is embedded in forms that scroll, and an in-place dropdown there changes
+// the scroll height as it opens/closes, which once made a click land on the wrong button.
+export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom }: Props) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const addBtnRef = useRef<HTMLButtonElement>(null);
   // Views: an encrypted note's title is blank in the store (see services/noteSecrets.ts).
   const notesRecord = useNoteViews();
-
-  // Portaled to document.body, position:fixed from the trigger's own rect — not rendered
-  // in-place with position:absolute. This picker is meant to be embedded inside forms that
-  // can themselves scroll (AddTaskModal's advanced section is a long, scrollable form): an
-  // absolutely-positioned dropdown there still contributes to its scrollable ancestor's
-  // scrollHeight, so closing it (e.g. the outside-mousedown handler below, firing as part of
-  // a click that's *also* headed for a button further down the form) shrinks that
-  // scrollHeight and the browser clamps/shifts the scroll position mid-click — the button
-  // physically moves between the click's mousedown and mouseup, so the click lands on
-  // whatever is now under the cursor instead. Confirmed via a live round-trip: clicking
-  // AddTaskModal's submit button right after picking a note here silently did nothing,
-  // because the mouseup actually landed on this picker's own chip row once the form
-  // reflowed. Portaling removes it from the scrollable ancestor's layout entirely, matching
-  // the same fix shape already used elsewhere in this app (NoteEditor's table hover
-  // controls, LinkHoverPreview) for exactly this class of problem.
-  const openDropdown = () => {
-    const rect = addBtnRef.current?.getBoundingClientRect();
-    if (rect) {
-      const DROPDOWN_WIDTH = 260;
-      const ESTIMATED_HEIGHT = 220; // type row + search + up to ~8 results
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const top = spaceBelow >= ESTIMATED_HEIGHT + 8
-        ? rect.bottom + 4
-        : Math.max(8, rect.top - ESTIMATED_HEIGHT - 4); // flip above the trigger
-      const left = Math.min(rect.left, window.innerWidth - DROPDOWN_WIDTH - 8);
-      setDropdownPos({ top, left });
-    }
-    setOpen(true);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const handleClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-    };
-  }, [open]);
-
-  useEscapeClose(() => setOpen(false), open);
+  const noteTags    = useNoteStore((s) => s.noteTags);
 
   const linkedNoteIds = new Set(value.filter((r) => r.type === 'note').map((r) => r.id));
-  const q = search.trim().toLowerCase();
-  const noteResults = Object.values(notesRecord)
-    .filter((n) => !linkedNoteIds.has(n.id))
-    .filter((n) => !q || (n.title || '').toLowerCase().includes(q))
-    .sort((a, b) => new Date(b.lastViewedAt ?? b.updatedAt).getTime() - new Date(a.lastViewedAt ?? a.updatedAt).getTime())
-    .slice(0, 8);
 
-  const addNote = (noteId: string) => {
-    onChange([...value, { type: 'note', id: noteId }]);
-    setSearch('');
-  };
+  const addNote = (noteId: string, tabId?: string) => onChange([...value, { type: 'note', id: noteId, ...(tabId ? { tabId } : {}) }]);
 
   const removeRef = (ref: CrossAppRef) => {
     onChange(value.filter((r) => !(r.type === ref.type && r.id === ref.id)));
   };
 
   return (
-    <div className={styles.root} ref={rootRef}>
+    <div className={styles.root}>
       <div className={styles.chips}>
         {value.map((ref) => {
           const linked = ref.type === 'note' ? notesRecord[ref.id as NoteId] : undefined;
           const label = ref.type === 'note' ? `${linked?.isEncrypted ? '🔒 ' : ''}${linked?.title || 'Untitled'}` : ref.id;
+          const path = linked ? getNoteBreadcrumb(linked, noteTags) : null;
+          const tabName = linked ? tabNameOf(linked, ref.tabId) : null;
           const icon = ICON_BY_TYPE[ref.type] ?? '🔗';
           return (
-            <span key={`${ref.type}:${ref.id}`} className={styles.chip}>
+            <span key={`${ref.type}:${ref.id}`} className={styles.chip} title={path ? `${path} › ${label}` : undefined}>
               {onNavigate ? (
                 <button type="button" className={styles.chipLabel} onClick={() => onNavigate(ref)}>
                   {icon} {label}
@@ -111,56 +60,16 @@ export function CrossAppRefPicker({ value, onChange, onNavigate }: Props) {
               ) : (
                 <span className={styles.chipLabel}>{icon} {label}</span>
               )}
+              {tabName && <span className={styles.chipTab}>› {tabName}</span>}
+              {path && <span className={styles.chipPath}>{path.split(' > ').pop()}</span>}
               <button type="button" className={styles.chipRemove} onClick={() => removeRef(ref)} aria-label="Remove link">×</button>
             </span>
           );
         })}
-        <button
-          ref={addBtnRef}
-          type="button"
-          className={styles.addBtn}
-          onClick={() => (open ? setOpen(false) : openDropdown())}
-        >+ Link</button>
+        <button type="button" className={styles.addBtn} onClick={() => setOpen(true)}>+ Link</button>
       </div>
 
-      {open && dropdownPos && createPortal(
-        <div
-          className={styles.dropdown}
-          style={{ top: dropdownPos.top, left: dropdownPos.left }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div className={styles.typeRow}>
-            {TYPE_OPTIONS.map((t) => (
-              <span
-                key={t.type}
-                className={`${styles.typeChip} ${t.enabled ? styles.typeChipActive : styles.typeChipStub}`}
-                title={t.enabled ? t.label : `${t.label} — coming soon`}
-              >
-                {t.icon} {t.label}{!t.enabled && ' (soon)'}
-              </span>
-            ))}
-          </div>
-          <input
-            autoFocus
-            className={styles.search}
-            placeholder="Search notes…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div className={styles.results}>
-            {noteResults.length === 0 ? (
-              <div className={styles.empty}>{q ? 'No notes found' : 'No notes yet'}</div>
-            ) : (
-              noteResults.map((n) => (
-                <button key={n.id} type="button" className={styles.result} onClick={() => addNote(n.id)}>
-                  {n.isEncrypted ? '🔒' : '📝'} {n.title || 'Untitled'}
-                </button>
-              ))
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
+      {open && <NotePickerModal excludeIds={linkedNoteIds} suggestFrom={suggestFrom} onPick={addNote} onClose={() => setOpen(false)} />}
     </div>
   );
 }

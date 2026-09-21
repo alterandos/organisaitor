@@ -46,11 +46,62 @@ export const LABELS = {
     } as Record<string, string>,
   },
 
+  // Local storage limits — see utils/persistStorage.ts and Settings → Storage.
+  storage: {
+    keyNames: {
+      'todo-app-storage':      'Tasks',
+      'todo-calendar':         'Calendar',
+      'todo-schedules':        'Schedules',
+      'todo-tracker':          'Records',
+      'todo-routines':         'Routines',
+      'notes-storage':         'Notes',
+      'lists-storage':         'Lists',
+      'fitness-storage':       'Fitness',
+      'todo-portfolio':        'Portfolio',
+      'todo-settings':         'Settings',
+      'todo-notifications':    'Notifications',
+      'todo-recent-items':     'Quick Access history',
+      'todo-hotkey-overrides': 'Keyboard shortcuts',
+      'todo-ui-session':       'Session',
+    } as Record<string, string>,
+    fullTitle:   'Storage on this device is full',
+    fullMessage: (biggest: string) => `Your latest changes can't be saved on this device any more, so they'll be lost if you close the app — nothing is lost while it stays open, and if you're signed in they still sync to your account. ${biggest} Open Settings → Storage to see what is using the space.`.replace('  ', ' '),
+    saveFailedTitle:   "Changes couldn't be saved",
+    saveFailedMessage: "Your latest changes couldn't be saved on this device, so they'll be lost if you close the app. If you're signed in they still sync to your account. Try exporting a backup (Account → Export).",
+    section:     'Storage',
+    usageName:   'Used on this device',
+    usageDesc:   "Most data lives in the browser's local storage, which allows roughly 5 MB in total. Notes are kept in a separate database with far more room. Sizes are approximate.",
+    inDatabase:  'database',
+    shrinkName:  'Shrink images in notes',
+    shrinkDesc:  'Recompresses large pasted images (to fit 1600 px) in every note and tab. Text is untouched; the image quality on screen stays good. The open note is closed first.',
+    shrinkButton: 'Shrink images',
+    shrinking:   'Shrinking…',
+    shrinkNothing: 'No large images found.',
+    shrinkDone:  (images: number, notes: number, saved: string) => `Shrank ${images} image${images === 1 ? '' : 's'} in ${notes} note${notes === 1 ? '' : 's'}, freeing about ${saved}.`,
+  },
+
+  // The "Linked from" bar in a note and its remove-link prompt: src/components/NoteEditor/NoteBacklinks.tsx.
+  noteBacklinks: {
+    linkedFrom:      'Linked from',
+    open:            'Open',
+    insert:          'Insert into the note at the cursor as a link',
+    remove:          'Remove this link',
+    otherTabs:       'On other tabs',
+    goToTab:         (tab: string) => `Go to the "${tab}" tab`,
+    chipTitleOtherTabs: (here: number, elsewhere: number) => `${here} on this tab, ${elsewhere} on other tabs`,
+    removeTitle:     'Remove the link too?',
+    removeMessage:   (noun: string) => `You removed the text that linked to this ${noun}. Remove the link entirely, or keep it in this note's "Linked from" list?`,
+    removeConfirm:   'Remove link entirely',
+    keepLink:        'Keep link',
+  },
+
   // Shared by every item pane that can be archived/deleted (Task, Calendar event, Calendar
   // reminder — and future apps): see src/components/ItemActions/.
   itemActions: {
     archive:           'Archive',
     restore:           'Restore',
+    complete:          'Complete',
+    reopen:            'Mark incomplete',
     archivedGroup:     'Archived',
     reasonLabel:       'Why are you archiving it? (optional)',
     reasonPlaceholder: 'e.g. No longer relevant, replaced by something else, decided not to do it…',

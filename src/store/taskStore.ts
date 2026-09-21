@@ -11,6 +11,7 @@ import { createTask } from '@/services/taskService';
 import { now } from '@/utils/date';
 import { mergeNewLinks } from '@/utils/links';
 import { useTrackerStore } from '@/store/trackerStore';
+import { persistStorage } from '@/utils/persistStorage';
 
 const EMPTY: AppData = {
   version:     2,
@@ -285,6 +286,7 @@ export const useTaskStore = create<TaskStore>()(
     }),
     {
       name:    'todo-app-storage',
+      storage: persistStorage(),
       version: 11,
       // The steps up to v10 each return early, so v11 is applied afterwards to whatever they
       // produce — otherwise a v9 store would return from its own step and never reach it.

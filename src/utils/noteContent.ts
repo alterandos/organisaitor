@@ -9,6 +9,55 @@ interface TiptapNode {
   [key: string]: unknown;
 }
 
+// Plain text of a stored Tiptap doc, blocks separated by a space — for searching and for a short
+// preview line, never for rendering. Stops after `maxChars` so a huge note stays cheap.
+export function noteContentToText(contentJson: string, maxChars = 4000): string {
+  if (!contentJson) return '';
+  let doc: TiptapNode;
+  try {
+    doc = JSON.parse(contentJson);
+  } catch {
+    return '';
+  }
+  const parts: string[] = [];
+  let length = 0;
+  const walk = (node: TiptapNode) => {
+    if (length >= maxChars) return;
+    if (typeof node.text === 'string') {
+      parts.push(node.text);
+      length += node.text.length;
+    }
+    if (node.content?.length) {
+      node.content.forEach(walk);
+      parts.push(' ');
+      length += 1;
+    }
+  };
+  walk(doc);
+  return parts.join('').replace(/\s+/g, ' ').trim();
+}
+
+// Every cross-app target ("task:<id>", "event:<id>", …) that a stored content JSON string has an
+// `artifactLink` mark for — i.e. which items this piece of a note links to from its text.
+export function collectArtifactTargets(contentJson: string): Set<string> {
+  const out = new Set<string>();
+  if (!contentJson) return out;
+  let doc: TiptapNode;
+  try {
+    doc = JSON.parse(contentJson);
+  } catch {
+    return out;
+  }
+  const walk = (node: TiptapNode) => {
+    for (const m of node.marks ?? []) {
+      if (m.type === 'artifactLink' && m.attrs?.targetId) out.add(`${m.attrs.targetType}:${m.attrs.targetId}`);
+    }
+    node.content?.forEach(walk);
+  };
+  walk(doc);
+  return out;
+}
+
 // Removes any `artifactLink` mark pointing at (targetType, targetId) from a content JSON
 // string, leaving the underlying text intact (same effect as the editor's "Remove link"
 // button — unmarks, never deletes). Returns the original string unchanged (changed: false)

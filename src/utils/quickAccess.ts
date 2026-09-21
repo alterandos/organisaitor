@@ -17,7 +17,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
 import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore, type QuickAccessTargetType, type RecentItemEntry } from '@/store/recentItemsStore';
-import { getNotebookIcon } from '@/utils/notes';
+import { getNotebookIcon, getNoteBreadcrumb } from '@/utils/notes';
 import { LABELS } from '@/config/labels';
 import { noteView } from '@/services/noteSecrets';
 import { listView } from '@/services/listSecrets';
@@ -50,7 +50,8 @@ const noteItem = (raw: Note): QuickAccessItem => {
   return {
     key: `note:${n.id}`, type: 'note', entityId: n.id,
     title: n.title || 'Untitled note',
-    subtitle: n.isEncrypted ? 'Note · Encrypted' : 'Note',
+    // The notebook path tells apart notes that share a title.
+    subtitle: `Note · ${getNoteBreadcrumb(n, useNoteStore.getState().noteTags)}${n.isEncrypted ? ' · Encrypted' : ''}`,
     icon: n.isEncrypted ? '🔒' : '📝',
   };
 };

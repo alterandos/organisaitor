@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
 import { todayIso } from '@/utils/date';
+import { persistStorage } from '@/utils/persistStorage';
 import type {
   WatchlistItem, WatchlistItemId,
   PortfolioTag, PortfolioTagId,
@@ -162,6 +163,7 @@ export const usePortfolioStore = create<PortfolioState>()(
     }),
     {
       name:    'todo-portfolio',
+      storage: persistStorage(),
       version: 7,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as PortfolioState;

@@ -9,6 +9,7 @@ import type {
   CreateListInput, CreateListItemInput,
 } from '@/types/lists';
 import { encryptSecrets, decryptSecrets, queueEncrypt } from '@/services/noteSecrets';
+import { persistStorage } from '@/utils/persistStorage';
 import {
   extractListSecrets, blankListSecrets, extractItemSecrets, blankItemSecrets,
   putListSecrets, putItemSecrets, dropListSecrets, dropItemSecrets,
@@ -312,6 +313,7 @@ export const useListStore = create<ListState>()(
     }),
     {
       name: 'lists-storage',
+      storage: persistStorage(),
       version: 5,
       migrate: (persisted, fromVersion) => {
         let state = persisted as any;

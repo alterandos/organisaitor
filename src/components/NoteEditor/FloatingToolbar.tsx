@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
-import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
 import { normalizeLinkUrl } from '@/utils/links';
 import { inferTaskFromSelection, inferCalendarItemFromSelection } from '@/utils/textToTask';
 import type { NoteId, StructuredTagEntryId } from '@/types/notes';
@@ -16,6 +15,8 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 interface Props {
   editor: Editor;
   noteId: string;
+  // The tab the selection is in, in CrossAppRef.tabId form (undefined for a note without extra tabs).
+  getLinkTabId: () => string | undefined;
   // Applying a structured-type tag (Acronym today — see structuredTagTypes.ts) opens a
   // create/preview popover instead of tagging immediately; NoteEditor owns that popover's
   // state since it also needs to apply the resulting mark, so this hands the request up
@@ -61,7 +62,7 @@ const CREATE_MENU_OPTIONS: CreateMenuOption[] = [
   { type: 'trackerEntry',label: 'Tracker entry',    icon: '📊', enabled: false },
 ];
 
-export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
+export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag }: Props) {
   const [pos, setPos]           = useState<ToolbarPos | null>(null);
   const [showTags, setShowTags] = useState(false);
   const [search, setSearch]     = useState('');
@@ -215,7 +216,7 @@ export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
     // targetType is a first guess; the modal reports the kind actually chosen when it resolves.
     if (option.type === 'event') {
       const cal = inferCalendarItemFromSelection(text, extractHyperlinkUrls(from, to));
-      useUIStore.getState().setPendingArtifactLink({ noteId, from, to, targetType: cal.kind });
+      useUIStore.getState().setPendingArtifactLink({ noteId, from, to, targetType: cal.kind, tabId: getLinkTabId() });
       useUIStore.getState().showAddCalendarItem(cal.date ?? undefined, cal.kind, cal.startTime ?? undefined, cal.title, {
         endTime:      cal.endTime,
         notes:        cal.notes,
@@ -230,7 +231,7 @@ export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
     const inferred = inferTaskFromSelection(text);
     const links = [...new Set([...inferred.links, ...extractHyperlinkUrls(from, to)])];
 
-    useUIStore.getState().setPendingArtifactLink({ noteId, from, to, targetType: 'task' });
+    useUIStore.getState().setPendingArtifactLink({ noteId, from, to, targetType: 'task', tabId: getLinkTabId() });
     useUIStore.getState().showAddTaskWithPrefill({
       title:        inferred.title,
       priority:     inferred.priority ?? 'none',
@@ -317,12 +318,10 @@ export function FloatingToolbar({ editor, noteId, onStructuredTag }: Props) {
     if (entryId) useNoteStore.getState().deleteStructuredTagEntry(entryId as StructuredTagEntryId);
   };
 
+  // Only unmarks the text. Whether the task/event link itself should go too is asked by the editor
+  // (NoteEditor's removed-link prompt), which sees this and a deleted passage alike.
   const removeArtifactLink = () => {
-    const attrs = editor.getAttributes('artifactLink') as { targetType?: CrossAppRefType; targetId?: string };
     editor.chain().focus().unsetMark('artifactLink').run();
-    if (attrs.targetType && attrs.targetId) {
-      removeCrossAppRefFromTarget(attrs.targetType, attrs.targetId, { type: 'note', id: noteId });
-    }
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

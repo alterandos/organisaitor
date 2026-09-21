@@ -13,6 +13,8 @@ import { now } from '@/utils/date';
 import { deriveNotifyBefore } from '@/utils/googleReminders';
 import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
 import { withException, endedBefore, tailOf } from '@/utils/recurrence';
+import { mergeNewLinks } from '@/utils/links';
+import { persistStorage } from '@/utils/persistStorage';
 
 // Composite key for one externally-sourced event, used to decide "have I already imported
 // this" — see importedSourceKeys below.
@@ -80,6 +82,7 @@ export const useCalendarStore = create<CalendarState>()(
           startTime:         input.startTime          ?? null,
           endTime:           input.endTime            ?? null,
           notes:             input.notes              ?? null,
+          links:             input.links ?? mergeNewLinks([], input.notes),
           location:          input.location           ?? null,
           eventType:         input.eventType          ?? 'default',
           collectionId:      input.collectionId       ?? null,
@@ -108,7 +111,11 @@ export const useCalendarStore = create<CalendarState>()(
       updateEvent: (id, changes) => set((s) => {
         const event = s.events[id];
         if (!event) return {};
-        return { events: { ...s.events, [id]: { ...event, ...changes, updatedAt: now() } } };
+        // Links newly typed into the notes are copied into the links list too.
+        const patch = changes.notes !== undefined
+          ? { ...changes, links: mergeNewLinks(changes.links ?? event.links ?? [], changes.notes, event.notes) }
+          : changes;
+        return { events: { ...s.events, [id]: { ...event, ...patch, updatedAt: now() } } };
       }),
 
       archiveEvent: (id, reason) => set((s) => {
@@ -138,6 +145,7 @@ export const useCalendarStore = create<CalendarState>()(
           date:         input.date,
           time:         input.time         ?? null,
           notes:        input.notes        ?? null,
+          links:        input.links ?? mergeNewLinks([], input.notes),
           collectionId: input.collectionId ?? null,
           reminderType: input.reminderType ?? 'default',
           createdAt:    ts,
@@ -158,7 +166,10 @@ export const useCalendarStore = create<CalendarState>()(
       updateReminder: (id, changes) => set((s) => {
         const reminder = s.reminders[id];
         if (!reminder) return {};
-        return { reminders: { ...s.reminders, [id]: { ...reminder, ...changes, updatedAt: now() } } };
+        const patch = changes.notes !== undefined
+          ? { ...changes, links: mergeNewLinks(changes.links ?? reminder.links ?? [], changes.notes, reminder.notes) }
+          : changes;
+        return { reminders: { ...s.reminders, [id]: { ...reminder, ...patch, updatedAt: now() } } };
       }),
 
       archiveReminder: (id, reason) => set((s) => {
@@ -254,7 +265,8 @@ export const useCalendarStore = create<CalendarState>()(
     }),
     {
       name: 'todo-calendar',
-      version: 9,
+      storage: persistStorage(),
+      version: 10,
       migrate(state: any, version: number) {
         if (version < 2) {
           const events = state.events ?? {};
@@ -304,6 +316,10 @@ export const useCalendarStore = create<CalendarState>()(
         if (version < 9) {
           Object.values(state.events ?? {}).forEach((ev: any) => { if (ev.archivedAt === undefined) ev.archivedAt = null; if (ev.archiveReason === undefined) ev.archiveReason = null; });
           Object.values(state.reminders ?? {}).forEach((rem: any) => { if (rem.archivedAt === undefined) rem.archivedAt = null; if (rem.archiveReason === undefined) rem.archiveReason = null; });
+        }
+        if (version < 10) {
+          Object.values(state.events ?? {}).forEach((ev: any) => { if (ev.links === undefined) ev.links = []; });
+          Object.values(state.reminders ?? {}).forEach((rem: any) => { if (rem.links === undefined) rem.links = []; });
         }
         return state as CalendarState;
       },

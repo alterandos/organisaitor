@@ -27,6 +27,11 @@ export type CrossAppRefType = 'note' | 'task' | 'event' | 'reminder' | 'listItem
 export interface CrossAppRef {
   type: CrossAppRefType;
   id:   string;
+  // Only meaningful when type is 'note': which tab of the note the link is about ('__main__' for the
+  // main tab, else a NoteTab id). Absent = the whole note — every link made before tabs could be
+  // targeted, and any link to a note that has no tabs. One link per item per note, so this is an
+  // attribute of the link, not part of its identity.
+  tabId?: string;
 }
 export type TimeIntensity  = 'low' | 'medium' | 'high'; // extensible — add more as needed
 
@@ -264,6 +269,7 @@ export interface CalendarEvent {
   startTime:          string | null;        // HH:MM (24-hour)
   endTime:            string | null;        // HH:MM (24-hour)
   notes:              string | null;
+  links:              string[];             // same as Task.links — links typed into `notes` are copied here too
   location:           string | null;
   eventType:          CalendarEventType;
   collectionId:       CollectionId | null;
@@ -298,6 +304,7 @@ export interface CalendarReminder {
   date:         string;               // YYYY-MM-DD
   time:         string | null;        // HH:MM (24-hour)
   notes:        string | null;
+  links:        string[];             // same as Task.links — links typed into `notes` are copied here too
   collectionId: CollectionId | null;
   reminderType: CalendarReminderType; // 'default' | 'task' — see CalendarReminderType
   createdAt:    string;
@@ -321,6 +328,7 @@ export interface CreateCalendarEventInput {
   startTime?:         string | null;
   endTime?:           string | null;
   notes?:             string | null;
+  links?:             string[];
   location?:          string | null;
   eventType?:         CalendarEventType;
   collectionId?:      CollectionId | null;
@@ -362,6 +370,7 @@ export interface CreateCalendarReminderInput {
   date:         string;
   time?:        string | null;
   notes?:       string | null;
+  links?:       string[];
   collectionId?: CollectionId | null;
   reminderType?: CalendarReminderType;
   repeat?:       RepeatConfig | null;

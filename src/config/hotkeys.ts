@@ -61,6 +61,7 @@ export const HOTKEYS: HotkeyDef[] = [
   // task / calendar event / calendar reminder pane is open. Not customizable (component-local).
   { id: 'task-archive', group: 'Item panes', primary: 'Ctrl+Shift+A', action: 'Archive the open task / event / reminder (Restore, if it\'s already archived)' },
   { id: 'task-delete',  group: 'Item panes', primary: 'Delete', secondary: 'Ctrl+Shift+D', action: 'Delete the open task / event / reminder — always asks for confirmation (plain Delete is ignored while typing in a field)' },
+  { id: 'task-save', group: 'Item panes', primary: 'Ctrl+Enter', action: 'Save and close the open task / event / reminder pane' },
   { id: 'task-archive-confirm', group: 'Item panes', primary: 'Ctrl+Enter', action: 'Confirm the archive dialog (Esc cancels)' },
 
   // Calendar

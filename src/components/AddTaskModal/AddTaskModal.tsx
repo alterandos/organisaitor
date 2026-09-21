@@ -197,7 +197,9 @@ export function AddTaskModal() {
     // was manually picked via the "Linked items" field, deduped in case the same note was
     // both the creation source and manually re-added.
     const pendingArtifactLink = useUIStore.getState().pendingArtifactLink;
-    const autoRef = pendingArtifactLink ? [{ type: 'note' as const, id: pendingArtifactLink.noteId }] : [];
+    const autoRef = pendingArtifactLink
+      ? [{ type: 'note' as const, id: pendingArtifactLink.noteId, ...(pendingArtifactLink.tabId ? { tabId: pendingArtifactLink.tabId } : {}) }]
+      : [];
     const crossAppRefs = [...autoRef, ...manualCrossAppRefs].filter(
       (ref, i, all) => all.findIndex((r) => r.type === ref.type && r.id === ref.id) === i
     );
@@ -480,7 +482,7 @@ export function AddTaskModal() {
                   itself — see CLAUDE.md "Cross-app linking") */}
               <div className={styles.field}>
                 <label className={styles.label}>Linked items</label>
-                <CrossAppRefPicker value={manualCrossAppRefs} onChange={setManualCrossAppRefs} />
+                <CrossAppRefPicker value={manualCrossAppRefs} onChange={setManualCrossAppRefs} suggestFrom={title} />
               </div>
 
               {/* Parent task */}

@@ -151,6 +151,13 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
       if (next === '') onChange('');
       return;
     }
+    if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+      // Accept what's typed and move on to the minutes; the hour's blur handler does the commit
+      // (and the padding of a lone digit). Without preventDefault a surrounding form would submit.
+      e.preventDefault();
+      if (hourStr !== '') minuteRef.current?.focus();
+      return;
+    }
     if (e.key === 'Tab' || e.key === 'Enter' || e.key.startsWith('Arrow')) return;
     if (!/^[0-9]$/.test(e.key)) { e.preventDefault(); return; }
     e.preventDefault();
@@ -193,6 +200,13 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
       const next = minuteStr.slice(0, -1);
       setMinuteStr(next);
       if (next === '') onChange('');
+      return;
+    }
+    if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+      // Accept: blurring runs the minute's commit (padding a lone digit); close the quick-pick list.
+      e.preventDefault();
+      setOpen(false);
+      e.currentTarget.blur();
       return;
     }
     if (e.key === 'Tab' || e.key === 'Enter' || e.key.startsWith('Arrow')) return;

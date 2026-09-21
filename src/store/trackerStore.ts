@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { TrackerEntry, TrackerEntryId, CollectionId, CreateTrackerEntryInput } from '@/types';
 import { newTrackerEntryId } from '@/utils/id';
 import { now } from '@/utils/date';
+import { persistStorage } from '@/utils/persistStorage';
 
 interface TrackerState {
   entries: Record<TrackerEntryId, TrackerEntry>;
@@ -61,6 +62,7 @@ export const useTrackerStore = create<TrackerState>()(
     }),
     {
       name:    'todo-tracker',
+      storage: persistStorage(),
       version: 1,
     }
   )

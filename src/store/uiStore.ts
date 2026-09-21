@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType } from '@/types';
 import type { Activity } from '@/types/fitness';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
+import { persistStorage } from '@/utils/persistStorage';
 
 export type AppView = 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
 
@@ -108,8 +109,9 @@ interface UIState {
   // creating modal (e.g. AddTaskModal) once the new entity's id is known, which NoteEditor
   // watches for to apply the ArtifactLinkMark and then clears this field itself. Only one
   // pending link at a time — matches there only ever being one create modal open at once.
-  pendingArtifactLink: { noteId: string; from: number; to: number; targetType: CrossAppRefType; resolvedTargetId?: string } | null;
-  setPendingArtifactLink:   (link: { noteId: string; from: number; to: number; targetType: CrossAppRefType }) => void;
+  // tabId: the note tab the selection was in (see CrossAppRef.tabId), carried into the reverse link.
+  pendingArtifactLink: { noteId: string; from: number; to: number; targetType: CrossAppRefType; tabId?: string; resolvedTargetId?: string } | null;
+  setPendingArtifactLink:   (link: { noteId: string; from: number; to: number; targetType: CrossAppRefType; tabId?: string }) => void;
   // targetType overrides the pending link's type when what actually got created differs from what
   // was requested — e.g. the Calendar-item modal lets the user flip Event/Reminder after opening.
   resolveArtifactLink:      (targetId: string, targetType?: CrossAppRefType) => void;
@@ -295,7 +297,10 @@ interface UIState {
   pendingNoteTagParentId:  NoteTagId | null;
   pendingNoteTagKind:      'area' | 'tag';
   editingNoteId:           string | null;
-  openNote:                (id: string) => void;
+  // tabId (optional): open on that tab of the note — '__main__' or a NoteTab id. Consumed by NoteEditor.
+  openNote:                (id: string, tabId?: string) => void;
+  requestedNoteTab:        { noteId: string; tabId: string } | null;
+  clearRequestedNoteTab:   () => void;
   closeNote:               () => void;
   // Remembers which note (if any) was open in the Notes section so switching away and
   // back restores it — separate from editingNoteId, which also drives NoteEditorPane's
@@ -669,7 +674,9 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   pendingNoteTagParentId: null,
   pendingNoteTagKind:     'area',
   editingNoteId:          null,
-  openNote:               (id) => set({ editingNoteId: id }),
+  openNote:               (id, tabId) => set({ editingNoteId: id, requestedNoteTab: tabId ? { noteId: id, tabId } : null }),
+  requestedNoteTab:       null,
+  clearRequestedNoteTab:  () => set({ requestedNoteTab: null }),
   closeNote:              ()   => set({ editingNoteId: null }),
   notesLastEditingNoteId: null,
   notesLastActiveTabId:   null,
@@ -725,6 +732,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   clearPendingCalendarDate:  () => set({ pendingCalendarDate: null }),
 }), {
   name:    'todo-ui-session',
+  storage: persistStorage(),
   version: 1,
   partialize: (s) => ({
     activeView:               s.activeView,

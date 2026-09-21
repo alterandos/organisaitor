@@ -378,3 +378,22 @@
   border-radius: 0;
   animation: none;
 }
+
+/* ── Storage ─────────────────────────────────────────────── */
+
+.usageList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 9rem;
+  font-size: 0.8rem;
+}
+
+.usageRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.1rem 0;
+}
+
+.usageSize { color: var(--color-muted); font-variant-numeric: tabular-nums; }

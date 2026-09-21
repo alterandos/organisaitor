@@ -10,7 +10,8 @@ export const PERSISTED_STORAGE_KEYS = [
   'todo-schedules',     // scheduleStore: Schedule templates (recurring weekly timetables)
   'todo-tracker',       // trackerStore: tracker entries (Records)
   'todo-routines',      // routineStore: routine instances (Records)
-  'notes-storage',      // noteStore: notes, note tags
+  'notes-storage',      // noteStore: notes, note tags — lives in IndexedDB, not localStorage: read/write it via
+                        // readPersistedValue/writePersistedValue (utils/idbStorage.ts), never localStorage directly
   'lists-storage',      // listStore: lists, list items, list types
   'fitness-storage',    // fitnessStore: activities, activity types
   'todo-portfolio',     // portfolioStore

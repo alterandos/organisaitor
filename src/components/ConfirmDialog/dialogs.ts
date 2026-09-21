@@ -11,6 +11,8 @@ export interface ConfirmOptions {
   destructive?:  boolean;   // red confirm button, and focus starts on Cancel
   confirmLabel?: string;
   cancelLabel?:  string;
+  focusDelayMs?: number;    // show now, but don't take focus for this long — see DialogRequest
+  isStale?:      () => boolean;
 }
 
 export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
@@ -25,6 +27,8 @@ export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
       destructive:  opts.destructive ?? false,
       confirmLabel: opts.confirmLabel ?? LABELS.dialogs.confirm,
       cancelLabel:  opts.cancelLabel ?? LABELS.dialogs.cancel,
+      focusDelayMs: opts.focusDelayMs ?? 0,
+      isStale:      opts.isStale,
       resolve,
     });
   });
@@ -55,6 +59,7 @@ export function alertDialog(message: string, title: string = LABELS.dialogs.aler
       destructive:  false,
       confirmLabel: LABELS.dialogs.ok,
       cancelLabel:  '',
+      focusDelayMs: 0,
       resolve:      () => resolve(),
     });
   });

@@ -7,6 +7,7 @@ import { SPEECH_LANGUAGES } from '@/services/speech/languages';
 import { captureBindingFromEvent } from '@/utils/hotkeyBinding';
 import { listTimezones, resolveTimezone, SYSTEM_TIMEZONE } from '@/utils/timezone';
 import { rezoneAllCalendarData } from '@/services/timezoneMigration';
+import { StorageSection } from './StorageSection';
 import styles from './SettingsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
@@ -284,6 +285,8 @@ export function SettingsPane() {
               </select>
             </div>
           </section>
+
+          <StorageSection />
 
           {activeView === 'tasks' && (
             <section className={styles.section}>

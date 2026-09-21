@@ -20,6 +20,18 @@ import { useSettingsStore } from '@/store/settingsStore';
 import type { NoteId, Note, CollectionId, StructuredTagEntryId } from '@/types';
 import { NoteTagMark } from './extensions/NoteTagMark';
 import { ArtifactLinkMark } from './extensions/ArtifactLinkMark';
+import { NoteBacklinks } from './NoteBacklinks';
+import { handleArtifactDrop } from './artifactLinkInsert';
+import { RemoveMarkStep } from '@tiptap/pm/transform';
+import type { Transaction } from '@tiptap/pm/state';
+import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
+import { getNoteBacklinks } from '@/store/noteBacklinks';
+import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
+import { collectArtifactTargets } from '@/utils/noteContent';
+import { linkTabIdFor, MAIN_TAB_ID } from '@/utils/noteTabs';
+import { LABELS } from '@/config/labels';
+import { compressImageBlob } from '@/utils/imageCompress';
 import { FloatingToolbar } from './FloatingToolbar';
 import { NoteTOC } from './NoteTOC';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
@@ -29,8 +41,6 @@ import { getStructuredTagType } from '@/config/structuredTagTypes';
 import { StructuredTagPopover } from './StructuredTagPopover';
 import { getNoteBreadcrumb } from '@/utils/notes';
 import { selectActiveCollectionId } from '@/store/uiStore';
-import { useTaskStore } from '@/store/taskStore';
-import { useCalendarStore } from '@/store/calendarStore';
 import { onVaultStatus, registerBeforeLock } from '@/services/vault';
 import { noteView, entryView, isNoteLocked } from '@/services/noteSecrets';
 import { useNoteView } from '@/store/noteViews';
@@ -40,6 +50,32 @@ import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 
 // Read a note by id THROUGH noteView() — an encrypted note's title/content/tabs are blanked in
 // the store and only resolve via the plaintext cache (see services/noteSecrets.ts).
+// When linked text is removed, the "remove the link too?" dialog appears at once but takes no
+// keyboard focus for this long — the user is usually mid-typing, and a stray Enter must not answer
+// it. If the text has come back by then (cut and paste elsewhere), the dialog closes itself.
+const REMOVED_LINK_FOCUS_DELAY_MS = 1200;
+
+// Targets ("task:<id>") of artifactLink marks that a transaction deleted or unmarked. Only the
+// ranges the steps touched are scanned, so this stays cheap on every keystroke; a target found here
+// may still exist elsewhere in the note, which the delayed check verifies.
+function removedArtifactTargets(tr: Transaction): Set<string> {
+  const out = new Set<string>();
+  tr.steps.forEach((step, i) => {
+    const doc = tr.docs[i];
+    const scan = (from: number, to: number) => {
+      if (from === to) return;
+      doc.nodesBetween(from, Math.min(to, doc.content.size), (node) => {
+        for (const m of node.marks) {
+          if (m.type.name === 'artifactLink' && m.attrs.targetId) out.add(`${m.attrs.targetType}:${m.attrs.targetId}`);
+        }
+      });
+    };
+    if (step instanceof RemoveMarkStep) scan(step.from, step.to);
+    else step.getMap().forEach((oldStart: number, oldEnd: number) => scan(oldStart, oldEnd));
+  });
+  return out;
+}
+
 function viewOf(id: string | null | undefined): Note | undefined {
   if (!id) return undefined;
   const raw = useNoteStore.getState().notes[id as NoteId];
@@ -313,6 +349,9 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const abstractSaveRef             = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentNoteIdRef      = useRef<string | null>(null);
   const isLoadingRef          = useRef(false);
+  const removedLinkTargetsRef = useRef<Set<string>>(new Set());
+  const promptingLinkKeysRef  = useRef<Set<string>>(new Set());
+  const checkRemovedLinksRef  = useRef<() => void>(() => {});
   const containerRef          = useRef<HTMLDivElement>(null);
 
   // ── Table insert picker ───────────────────────────────────────────────────
@@ -675,21 +714,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             }
             return true;
           }
-          if (targetType === 'task' && targetId && useTaskStore.getState().tasks[targetId as import('@/types').TaskId]) {
-            useUIStore.getState().setActiveView('tasks');
-            useUIStore.getState().openTaskPane(targetId);
-          }
-          const calendar = useCalendarStore.getState();
-          if (targetType === 'event' && targetId && calendar.events[targetId as import('@/types').CalendarEventId]) {
-            useUIStore.getState().setActiveView('calendar');
-            useUIStore.getState().requestCalendarDate(calendar.events[targetId as import('@/types').CalendarEventId].date);
-            useUIStore.getState().openCalendarEventPane(targetId);
-          }
-          if (targetType === 'reminder' && targetId && calendar.reminders[targetId as import('@/types').CalendarReminderId]) {
-            useUIStore.getState().setActiveView('calendar');
-            useUIStore.getState().requestCalendarDate(calendar.reminders[targetId as import('@/types').CalendarReminderId].date);
-            useUIStore.getState().openCalendarReminderPane(targetId);
-          }
+          openArtifactTarget(targetType, targetId);
           return true;
         }
 
@@ -707,6 +732,9 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         );
         return true;
       },
+      handleDrop(view, event) {
+        return handleArtifactDrop(view, event);
+      },
       handlePaste(view, event) {
         // Image paste
         const files = event.clipboardData?.files;
@@ -714,15 +742,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           const file = files[0];
           if (file.type.startsWith('image/')) {
             event.preventDefault();
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              const src = e.target?.result as string;
-              if (!src) return;
+            // Scaled down and re-encoded first: images live inline in the note, and the whole app
+            // shares roughly 5 MB of localStorage (see utils/imageCompress.ts).
+            void compressImageBlob(file).then((src) => {
               const node = view.state.schema.nodes.image?.create({ src });
               if (!node) return;
               view.dispatch(view.state.tr.replaceSelectionWith(node));
-            };
-            reader.readAsDataURL(file);
+            });
             return true;
           }
         }
@@ -740,8 +766,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         return false;
       },
     },
-    onUpdate: ({ editor: ed }) => {
+    onUpdate: ({ editor: ed, transaction }) => {
       if (isLoadingRef.current) return;
+      // Undo/redo is left alone: undoing a just-inserted link shouldn't ask about the link.
+      if (!transaction.getMeta('history$')) {
+        for (const t of removedArtifactTargets(transaction)) removedLinkTargetsRef.current.add(t);
+      }
+      if (removedLinkTargetsRef.current.size > 0) checkRemovedLinksRef.current();
       const id = currentNoteIdRef.current;
       const tabId = activeTabIdRef.current;
       if (!id) return;
@@ -795,6 +826,47 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // Keep editorRef in sync so runTableCmd can access it without a dependency
   editorRef.current = editor;
 
+  // Runs after an edit that deleted or unmarked linked text (see onUpdate). If the note no longer
+  // links to an item from ANY of its text — main content or any tab — but the item still links back
+  // to the note, ask whether to drop that link too; "keep" leaves it in the "Linked from" bar,
+  // where it can still be dragged back in.
+  useEffect(() => {
+    checkRemovedLinksRef.current = async () => {
+      const noteId = currentNoteIdRef.current;
+      const candidates = [...removedLinkTargetsRef.current];
+      removedLinkTargetsRef.current.clear();
+      if (!noteId || !editor || candidates.length === 0) return;
+      // Whether any of the note's text — main content or any tab, live editor included — still links
+      // to the target. The open tab is flushed first so the stored copy is current.
+      const linkTextRemains = (key: string) => {
+        flushCurrentTab();
+        const stored = viewOf(noteId);
+        return !stored || [stored.content, ...stored.tabs.map((t) => t.content)].some((json) => collectArtifactTargets(json).has(key));
+      };
+      for (const key of candidates) {
+        if (linkTextRemains(key) || promptingLinkKeysRef.current.has(key)) continue;
+        const [targetType, ...rest] = key.split(':');
+        const targetId = rest.join(':');
+        const link = getNoteBacklinks(noteId).find((l) => l.type === targetType && l.id === targetId);
+        if (!link) continue;
+        const noun = link.type === 'task' ? 'task' : link.type === 'event' ? 'event' : 'reminder';
+        promptingLinkKeysRef.current.add(key);
+        const remove = await confirmDialog({
+          focusDelayMs: REMOVED_LINK_FOCUS_DELAY_MS,
+          // Gone stale if the text came back, or the link was removed some other way, meanwhile.
+          isStale:      () => linkTextRemains(key) || !getNoteBacklinks(noteId).some((l) => l.type === targetType && l.id === targetId),
+          title:        LABELS.noteBacklinks.removeTitle,
+          itemName:     link.title,
+          message:      LABELS.noteBacklinks.removeMessage(noun),
+          confirmLabel: LABELS.noteBacklinks.removeConfirm,
+          cancelLabel:  LABELS.noteBacklinks.keepLink,
+        });
+        promptingLinkKeysRef.current.delete(key);
+        if (remove) removeCrossAppRefFromTarget(link.type, link.id, { type: 'note', id: noteId });
+      }
+    };
+  });
+
   // Load content when the open note changes
   useEffect(() => {
     if (!editor) return;
@@ -823,6 +895,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       setAbstractCollapsed(false);
       return;
     }
+    // Pending "was that link's text removed?" checks belong to the note being left.
+    removedLinkTargetsRef.current.clear();
     touchNote(note.id);
     currentNoteIdRef.current = note.id;
     setTitle(note.title);
@@ -835,6 +909,21 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     isLoadingRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.id, editor]);
+
+  // Something asked to open this note on a particular tab (a link that names one — see
+  // CrossAppRef.tabId). Declared after the load effect above so that, when the request also
+  // switched notes, the note has already been loaded on its main tab. A tab that no longer exists
+  // simply leaves the note on its main tab.
+  const requestedNoteTab = useUIStore((s) => s.requestedNoteTab);
+  useEffect(() => {
+    if (!editor || !note || !requestedNoteTab || requestedNoteTab.noteId !== note.id) return;
+    const { tabId } = requestedNoteTab;
+    useUIStore.getState().clearRequestedNoteTab();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- consumes a one-shot request from another part of the app and reloads the editor (an external system) onto that tab
+    if (tabId === MAIN_TAB_ID) switchTab(null);
+    else if (note.tabs.some((t) => t.id === tabId)) switchTab(tabId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- switchTab is a per-render closure over refs; the request itself is the trigger
+  }, [requestedNoteTab, editor, note?.id]);
 
   // The open note just became locked or readable (Lock now, or the vault unlocked — e.g. via
   // Account, or a trusted-device auto-unlock landing after the note opened). Reload the editor
@@ -864,6 +953,19 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const flushOnUnmountRef = useRef<() => void>(() => {});
   useEffect(() => { flushOnUnmountRef.current = () => { if (saveRef.current) flushCurrentTab(); }; });
   useEffect(() => () => flushOnUnmountRef.current(), []);
+  // Closing the window (or the tab going to the background) unmounts nothing, so without this the last
+  // moment of typing — still inside the 1.5 s autosave debounce — would never reach the store, and so
+  // neither the local database nor the cloud.
+  useEffect(() => {
+    const flush = () => flushOnUnmountRef.current();
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 
   // Focus the editor when the signal increments (Right arrow from nav column)
   useEffect(() => {
@@ -1489,6 +1591,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         <button className={styles.closeBtn} onClick={closeNote} title="Close (Esc)">✕</button>
       </div>
 
+      <NoteBacklinks note={note} activeTabId={activeTabId} editor={editor} canInsert={!noteLocked} onSwitchTab={switchTab} />
+
       {/* ── Tab bar ──────────────────────────────────────────────────────── */}
       <div className={styles.tabBar}>
         {buildDisplayOrder(note).map(({ id: tabId, name: tabName, isMain }) => {
@@ -1712,7 +1816,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             </div>
           ) : (
             <>
-              {editor && <FloatingToolbar editor={editor} noteId={note.id} onStructuredTag={openStructuredTagCreate} />}
+              {editor && <FloatingToolbar editor={editor} noteId={note.id} getLinkTabId={() => linkTabIdFor(viewOf(currentNoteIdRef.current), activeTabIdRef.current)} onStructuredTag={openStructuredTagCreate} />}
               <EditorContent editor={editor} className={styles.editor} />
             </>
           )}

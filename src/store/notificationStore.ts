@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
+import { persistStorage } from '@/utils/persistStorage';
 
 export type NotificationKind = 'task-timed' | 'task-untimed' | 'event' | 'reminder' | 'schedule';
 
@@ -42,6 +43,6 @@ export const useNotificationStore = create<NotificationState>()(
       })),
       lastNotified: (itemId) => get().notifiedLog[itemId] ?? null,
     }),
-    { name: 'todo-notifications', version: 1, migrate: (persisted) => persisted as NotificationState }
+    { name: 'todo-notifications', storage: persistStorage(), version: 1, migrate: (persisted) => persisted as NotificationState }
   )
 );

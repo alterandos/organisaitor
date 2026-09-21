@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { HOTKEYS } from '@/config/hotkeys';
 import { matchesBinding } from '@/utils/hotkeyBinding';
+import { persistStorage } from '@/utils/persistStorage';
 
 // A slot is `undefined` (no override — use the hotkeys.ts default) or a binding string, or
 // `null` (the user explicitly cleared this slot, e.g. removed the secondary binding
@@ -33,7 +34,7 @@ export const useHotkeyOverridesStore = create<HotkeyOverridesState>()(
 
       resetAll: () => set({ overrides: {} }),
     }),
-    { name: 'todo-hotkey-overrides', version: 1, migrate: (persisted) => persisted as HotkeyOverridesState }
+    { name: 'todo-hotkey-overrides', storage: persistStorage(), version: 1, migrate: (persisted) => persisted as HotkeyOverridesState }
   )
 );
 

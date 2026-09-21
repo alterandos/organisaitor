@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { ScheduleId, ScheduleTemplate, CreateScheduleInput } from '@/types';
 import { newScheduleId } from '@/utils/id';
 import { now } from '@/utils/date';
+import { persistStorage } from '@/utils/persistStorage';
 
 interface ScheduleState {
   schedules: Record<ScheduleId, ScheduleTemplate>;
@@ -116,6 +117,7 @@ export const useScheduleStore = create<ScheduleState>()(
     }),
     {
       name: 'todo-schedules',
+      storage: persistStorage(),
       version: 1,
       // v0 → v1: blocks gained requiresCommitment/committedDates (commitment mode). The store had
       // no version before, so every existing schedule arrives here as v0.
