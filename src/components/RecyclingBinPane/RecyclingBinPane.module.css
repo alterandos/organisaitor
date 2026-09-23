@@ -1,0 +1,180 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 520px) {
+  .overlay { align-items: center; padding: 1rem; }
+}
+
+.pane {
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 -4px 28px rgba(0,0,0,0.14);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 520px) {
+  .pane { border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.title { font-size: 0.95rem; font-weight: 600; }
+
+.closeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--color-muted);
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: color 120ms ease;
+}
+.closeBtn:hover { color: var(--color-text); }
+
+.body {
+  padding: 0.85rem 1.25rem 1.1rem;
+  overflow-y: auto;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.filterChip {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-family: inherit;
+  padding: 0.25rem 0.7rem;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.filterChip:hover { color: var(--color-text); }
+.filterChipActive {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.empty {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  text-align: center;
+  padding: 1.5rem 0.5rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+}
+
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  font-size: 0.73rem;
+  color: var(--color-muted);
+}
+
+.rowActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.restoreBtn,
+.deleteBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-family: inherit;
+  padding: 0.3rem 0.6rem;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  white-space: nowrap;
+}
+.restoreBtn { color: var(--color-primary); }
+.restoreBtn:hover { background: var(--color-primary-subtle); border-color: var(--color-primary-border); }
+.deleteBtn { color: var(--color-danger); }
+.deleteBtn:hover { background: var(--color-danger-muted); border-color: var(--color-danger); }
+
+.emptyBinBtn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-family: inherit;
+  padding: 0.5rem 1rem;
+  margin-top: 0.9rem;
+  transition: background 120ms ease;
+}
+.emptyBinBtn:hover { background: var(--color-danger-muted); }
+
+/* Android: always full-screen, not a bottom sheet — matches every other slide-in pane. */
+:global(.platform-android) .overlay { align-items: stretch; }
+:global(.platform-android) .pane {
+  max-width: none;
+  height: 100%;
+  max-height: 100dvh;
+  border-radius: 0;
+}

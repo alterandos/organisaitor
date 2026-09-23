@@ -4,6 +4,7 @@ import type { ScheduleId, ScheduleTemplate, CreateScheduleInput } from '@/types'
 import { newScheduleId } from '@/utils/id';
 import { now } from '@/utils/date';
 import { persistStorage } from '@/utils/persistStorage';
+import { moveToTrash } from '@/services/trashCapture';
 
 interface ScheduleState {
   schedules: Record<ScheduleId, ScheduleTemplate>;
@@ -64,7 +65,8 @@ export const useScheduleStore = create<ScheduleState>()(
       }),
 
       deleteSchedule: (id) => set((s) => {
-        const { [id]: _, ...rest } = s.schedules;
+        const { [id]: removed, ...rest } = s.schedules;
+        if (removed) moveToTrash('schedule', removed);
         return { schedules: rest as Record<ScheduleId, ScheduleTemplate> };
       }),
 

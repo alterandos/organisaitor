@@ -17,13 +17,15 @@ import { downloadBackup } from '@/utils/backupExport';
 import { writePersistedValue } from '@/utils/idbStorage';
 import styles from './AccountPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { LABELS } from '@/config/labels';
 
 type Mode = 'signin' | 'signup';
 
 const REMEMBERED_EMAIL_KEY = 'todo-remembered-email';
 
 export function AccountPane() {
-  const closeAccount = useUIStore((s) => s.closeAccount);
+  const closeAccount     = useUIStore((s) => s.closeAccount);
+  const openRecyclingBin = useUIStore((s) => s.openRecyclingBin);
   const { user, loading, signIn, signUp } = useAuthStore();
 
   const [rememberedEmail] = useState(() => localStorage.getItem(REMEMBERED_EMAIL_KEY));
@@ -381,6 +383,13 @@ export function AccountPane() {
               hidden
               onChange={handleRestoreFile}
             />
+            <button
+              className={styles.exportBtn}
+              onClick={() => { closeAccount(); openRecyclingBin(); }}
+              type="button"
+            >
+              {LABELS.recyclingBin.openFromAccount}
+            </button>
             <button className={styles.signOutBtn} onClick={handleSignOut} disabled={loading}>
               Sign out
             </button>
@@ -444,6 +453,13 @@ export function AccountPane() {
                 hidden
                 onChange={handleRestoreFile}
               />
+              <button
+                className={styles.exportBtn}
+                onClick={() => { closeAccount(); openRecyclingBin(); }}
+                type="button"
+              >
+                {LABELS.recyclingBin.openFromAccount}
+              </button>
               <button className={styles.guestLink} onClick={closeAccount}>
                 Continue without account
               </button>

@@ -4,6 +4,7 @@ import type { TrackerEntry, TrackerEntryId, CollectionId, CreateTrackerEntryInpu
 import { newTrackerEntryId } from '@/utils/id';
 import { now } from '@/utils/date';
 import { persistStorage } from '@/utils/persistStorage';
+import { moveToTrash } from '@/services/trashCapture';
 
 interface TrackerState {
   entries: Record<TrackerEntryId, TrackerEntry>;
@@ -48,6 +49,8 @@ export const useTrackerStore = create<TrackerState>()(
 
       deleteEntry: (id) =>
         set((state) => {
+          const entry = state.entries[id];
+          if (entry) moveToTrash('trackerEntry', entry);
           const entries = { ...state.entries };
           delete entries[id];
           return { entries };

@@ -15,6 +15,7 @@ import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from
 import { withException, endedBefore, tailOf } from '@/utils/recurrence';
 import { mergeNewLinks } from '@/utils/links';
 import { persistStorage } from '@/utils/persistStorage';
+import { moveToTrash } from '@/services/trashCapture';
 
 // Composite key for one externally-sourced event, used to decide "have I already imported
 // this" — see importedSourceKeys below.
@@ -132,7 +133,8 @@ export const useCalendarStore = create<CalendarState>()(
       }),
 
       deleteEvent: (id) => set((s) => {
-        const { [id]: _, ...rest } = s.events;
+        const { [id]: removed, ...rest } = s.events;
+        if (removed) moveToTrash('calendarEvent', removed);
         return { events: rest as Record<CalendarEventId, CalendarEvent> };
       }),
 
@@ -153,6 +155,7 @@ export const useCalendarStore = create<CalendarState>()(
           remindAt:     null,
           repeat:       input.repeat ?? null,
           important:    input.important ?? false,
+          status:       input.status ?? 'confirmed',
           crossAppRefs: input.crossAppRefs ?? [],
           archivedAt:    null,
           archiveReason: null,
@@ -186,7 +189,8 @@ export const useCalendarStore = create<CalendarState>()(
       }),
 
       deleteReminder: (id) => set((s) => {
-        const { [id]: _, ...rest } = s.reminders;
+        const { [id]: removed, ...rest } = s.reminders;
+        if (removed) moveToTrash('calendarReminder', removed);
         return { reminders: rest as Record<CalendarReminderId, CalendarReminder> };
       }),
 
@@ -266,7 +270,7 @@ export const useCalendarStore = create<CalendarState>()(
     {
       name: 'todo-calendar',
       storage: persistStorage(),
-      version: 10,
+      version: 11,
       migrate(state: any, version: number) {
         if (version < 2) {
           const events = state.events ?? {};
@@ -320,6 +324,9 @@ export const useCalendarStore = create<CalendarState>()(
         if (version < 10) {
           Object.values(state.events ?? {}).forEach((ev: any) => { if (ev.links === undefined) ev.links = []; });
           Object.values(state.reminders ?? {}).forEach((rem: any) => { if (rem.links === undefined) rem.links = []; });
+        }
+        if (version < 11) {
+          Object.values(state.reminders ?? {}).forEach((rem: any) => { if (rem.status === undefined) rem.status = 'confirmed'; });
         }
         return state as CalendarState;
       },

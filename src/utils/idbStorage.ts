@@ -15,7 +15,10 @@ import { guardedLocalStorage, reportPersistFailure } from '@/utils/persistStorag
 // If IndexedDB can't be opened (some private-browsing modes), the affected keys stay on the guarded
 // localStorage, exactly as before.
 
-export const IDB_STORAGE_KEYS: readonly string[] = ['notes-storage'];
+// trash-storage (trashStore, Recycling Bin) joins notes-storage here for the same reason: a
+// trashed item's snapshot can be a full deleted note, images and all, plus an indefinitely-
+// growing archive of every other deleted entity type suite-wide.
+export const IDB_STORAGE_KEYS: readonly string[] = ['notes-storage', 'trash-storage'];
 
 const DB_NAME = 'organisaitor';
 const KV      = 'kv';

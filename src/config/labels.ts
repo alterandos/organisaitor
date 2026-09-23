@@ -65,6 +65,7 @@ export const LABELS = {
       'todo-ui-session':       'Session',
       'agent-log':             'Assistant activity log',
       'agent-batches':         'Assistant undo history',
+      'trash-storage':         'Recycling Bin',
     } as Record<string, string>,
     fullTitle:   'Storage on this device is full',
     fullMessage: (biggest: string) => `Your latest changes can't be saved on this device any more, so they'll be lost if you close the app — nothing is lost while it stays open, and if you're signed in they still sync to your account. ${biggest} Open Settings → Storage to see what is using the space.`.replace('  ', ' '),
@@ -115,6 +116,23 @@ export const LABELS = {
     deleteSafeHint:    'Not sure? Archiving keeps it out of the way without losing it.',
     deleteConfirm:     'Delete permanently',
     archiveInstead:    'Archive instead',
+  },
+
+  // Suite-wide Recycling Bin — see src/services/trash.ts, src/services/trashCapture.ts,
+  // src/components/RecyclingBinPane/.
+  recyclingBin: {
+    title:            'Recycling Bin',
+    openFromAccount:  'Recycling Bin',
+    filterAll:        'All',
+    empty:            'The recycling bin is empty.',
+    emptyFiltered:    (section: string) => `Nothing from ${section} in the recycling bin.`,
+    deletedByYou:     'by You',
+    restore:          'Restore',
+    deleteForever:    'Delete forever',
+    emptyBinButton:   'Empty recycling bin',
+    emptyBinTitle:    'Empty the recycling bin?',
+    emptyBinMessage:  'Everything in the recycling bin will be permanently deleted.',
+    emptyBinConfirm:  'Empty bin',
   },
 
   // In-app replacement for window.confirm()/alert() — see components/ConfirmDialog

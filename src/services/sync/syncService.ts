@@ -6,10 +6,12 @@ import { useScheduleStore } from '@/store/scheduleStore';
 import { useListStore } from '@/store/listStore';
 import { useNoteStore } from '@/store/noteStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
+import { useTrashStore } from '@/store/trashStore';
 import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, TrackerEntry, ScheduleTemplate } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
+import type { TrashEntry } from '@/types/trash';
 import {
   taskToRow,       rowToTask,
   collectionToRow, rowToCollection,
@@ -28,6 +30,7 @@ import {
   watchlistItemToRow,      rowToWatchlistItem,
   portfolioTagToRow,       rowToPortfolioTag,
   investmentPurposeToRow,  rowToInvestmentPurpose,
+  trashEntryToRow,         rowToTrashEntry,
 } from './mappers';
 
 // Custom (non-built-in) list types only — built-ins have fixed ids, are re-seeded
@@ -65,6 +68,7 @@ const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
   watchlist_items:        { get: () => usePortfolioStore.getState().watchlistItems,    toRow: (i, u) => watchlistItemToRow(i as WatchlistItem, u) },
   portfolio_tags:         { get: () => usePortfolioStore.getState().portfolioTags,     toRow: (i, u) => portfolioTagToRow(i as PortfolioTag, u) },
   investment_purposes:    { get: () => usePortfolioStore.getState().investmentPurposes, toRow: (i, u) => investmentPurposeToRow(i as InvestmentPurpose, u) },
+  trash_items:            { get: () => useTrashStore.getState().entries,                toRow: (i, u) => trashEntryToRow(i as TrashEntry, u) },
 };
 
 // ── Pending changes ─────────────────────────────────────────────
@@ -253,6 +257,7 @@ const SYNC_TABLES = [
   'tracker_entries', 'schedules', 'lists', 'list_items', 'list_types',
   'notes', 'note_tags', 'structured_tag_entries',
   'watchlist_items', 'portfolio_tags', 'investment_purposes',
+  'trash_items',
 ] as const;
 
 export function initSync(userId: string): Promise<void> {
@@ -284,6 +289,7 @@ async function runInitSync(userId: string): Promise<void> {
       supabase.from('watchlist_items').select('*').eq('user_id', userId),
       supabase.from('portfolio_tags').select('*').eq('user_id', userId),
       supabase.from('investment_purposes').select('*').eq('user_id', userId),
+      supabase.from('trash_items').select('*').eq('user_id', userId),
     ]);
 
     // A table that fails to load (missing grant/migration, transient error) must not stop
@@ -302,6 +308,7 @@ async function runInitSync(userId: string): Promise<void> {
       dbSchedules, dbLists, dbListItems, dbListTypes,
       dbNotes, dbNoteTags, dbStructuredTagEntries,
       dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
+      dbTrashItems,
     ] = results.map((r) => (r.error ? null : r.data));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -323,6 +330,7 @@ async function runInitSync(userId: string): Promise<void> {
         dbSchedules, dbLists, dbListItems, dbListTypes,
         dbNotes, dbNoteTags, dbStructuredTagEntries,
         dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
+        dbTrashItems,
       );
       queueLocalOnlyAndNewer(Object.fromEntries(SYNC_TABLES.map((t, i) => [t, results[i].error ? null : results[i].data])));
     }
@@ -355,6 +363,7 @@ export type UploadCounts = {
   schedules: number; lists: number; listItems: number; listTypes: number;
   notes: number; noteTags: number; structuredTagEntries: number;
   watchlistItems: number; portfolioTags: number; investmentPurposes: number;
+  trashItems: number;
 };
 
 // Force-uploads ALL current store data to Supabase (upsert), reading live in-memory
@@ -432,6 +441,7 @@ function hydrateStores(...args: Array<any[] | null>) {
     dbSchedules, dbLists, dbListItems, dbListTypes,
     dbNotes, dbNoteTags, dbStructuredTagEntries,
     dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
+    dbTrashItems,
   ] = args;
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
@@ -481,6 +491,11 @@ function hydrateStores(...args: Array<any[] | null>) {
     portfolioTags:      mergeRecords(local.portfolioTags,      dbPortfolioTags,      rowToPortfolioTag, 'portfolio_tags'),
     investmentPurposes: mergeRecords(local.investmentPurposes, dbInvestmentPurposes, rowToInvestmentPurpose, 'investment_purposes'),
   }) as Parameters<typeof usePortfolioStore.setState>[0]);
+
+  // @ts-expect-error — setState updater param typed loosely against the full store shape
+  useTrashStore.setState((local) => ({
+    entries: mergeRecords(local.entries, dbTrashItems, rowToTrashEntry, 'trash_items'),
+  }) as Parameters<typeof useTrashStore.setState>[0]);
 }
 
 // ── Upload ──────────────────────────────────────────────────────
@@ -494,6 +509,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const { lists, listItems, listTypes } = useListStore.getState();
   const { notes, noteTags, structuredTagEntries } = useNoteStore.getState();
   const { watchlistItems, portfolioTags, investmentPurposes } = usePortfolioStore.getState();
+  const { entries: trashEntries } = useTrashStore.getState();
 
   const allTasks       = Object.values(tasks);
   const allCollections = Object.values(collections);
@@ -512,6 +528,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const allWatchlistItems     = Object.values(watchlistItems);
   const allPortfolioTags      = Object.values(portfolioTags);
   const allInvestmentPurposes = Object.values(investmentPurposes);
+  const allTrashItems         = Object.values(trashEntries);
 
   const results = await Promise.all([
     allTasks.length       > 0 ? supabase.from('tasks').upsert(allTasks.map((t) => taskToRow(t, userId)))               : null,
@@ -531,6 +548,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     allWatchlistItems.length     > 0 ? supabase.from('watchlist_items').upsert(allWatchlistItems.map((i) => watchlistItemToRow(i, userId)))         : null,
     allPortfolioTags.length      > 0 ? supabase.from('portfolio_tags').upsert(allPortfolioTags.map((t) => portfolioTagToRow(t, userId)))            : null,
     allInvestmentPurposes.length > 0 ? supabase.from('investment_purposes').upsert(allInvestmentPurposes.map((p) => investmentPurposeToRow(p, userId))) : null,
+    allTrashItems.length         > 0 ? supabase.from('trash_items').upsert(allTrashItems.map((t) => trashEntryToRow(t, userId))) : null,
   ]);
 
   const firstError = results.find((r) => r?.error)?.error;
@@ -543,6 +561,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     listItems: allListItems.length, listTypes: allListTypes.length,
     notes: allNotes.length, noteTags: allNoteTags.length, structuredTagEntries: allStructuredTagEntries.length,
     watchlistItems: allWatchlistItems.length, portfolioTags: allPortfolioTags.length, investmentPurposes: allInvestmentPurposes.length,
+    trashItems: allTrashItems.length,
   };
 }
 
@@ -604,6 +623,7 @@ function setupSubscriptions(userId: string): void {
       { prop: 'watchlistItems', table: 'watchlist_items' }, { prop: 'portfolioTags', table: 'portfolio_tags' },
       { prop: 'investmentPurposes', table: 'investment_purposes' },
     ]),
+    watch(userId, useTrashStore, [{ prop: 'entries', table: 'trash_items' }]),
   ];
 
   // Retry what didn't get through: when the browser reports it is back online, and on a timer while

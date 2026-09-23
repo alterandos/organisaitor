@@ -27,6 +27,20 @@ export const formatTime = (time: string, clockFormat: ClockFormat = 'system'): s
 export const formatDeadline = (date: string, time: string | null, clockFormat: ClockFormat = 'system'): string =>
   time ? `${formatDate(date)} ${formatTime(time, clockFormat)}` : formatDate(date);
 
+// "3m ago" / "2h ago" / "5d ago" / falls back to formatDate beyond a week. Used by
+// RecyclingBinPane's "deleted …" rows; general enough to belong here rather than trash-specific.
+export const formatRelativeTime = (iso: string): string => {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1)   return 'just now';
+  if (minutes < 60)  return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24)    return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7)      return `${days}d ago`;
+  return formatDate(iso);
+};
+
 export const isOverdue = (date: string, time: string | null = null, timezone: string = SYSTEM_TIMEZONE): boolean => {
   const target = zonedTimeToUtc(date, time ?? '00:00', resolveTimezone(timezone));
   return target < new Date();

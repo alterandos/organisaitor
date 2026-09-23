@@ -124,6 +124,20 @@ The split only stays useful if every agent follows the same structure. These rul
 
 ---
 
+## Testing
+
+Full plan and status: `docs/agent-tasks/02-testing-and-engineering-hygiene.md` (Part A — what's built vs. remaining per phase; Part B — engineering hygiene items). Short version:
+
+- `npm test` (`vitest run`) runs the whole suite; `npm run test:watch` for watch mode; `npm run check` runs `tsc -b && eslint . && vitest run && vite build` (currently fails on eslint's pre-existing baseline — see Part B7 — CI gates on that baseline instead of zero, `.github/workflows/ci.yml`).
+- Node environment by default; jsdom is available per-file via `// @vitest-environment jsdom` for component tests (Testing Library is installed but no component tests exist yet).
+- `src/test/setup.ts` provides a Map-backed `localStorage` and awaits `preloadIdbStorage()` (no IndexedDB in Node, so it falls back to localStorage) — every test file gets this automatically via `vitest.config.ts`'s `setupFiles`.
+- **Store migration tests** (`src/store/migrations.test.ts`) seed `localStorage` with an old-version fixture, then `vi.resetModules()` + dynamically `import()` the store module fresh so zustand's `persist` rehydrates through `migrate` for real; a few microtask ticks (`await Promise.resolve()` x3) let rehydration settle even against a synchronous storage. This is how the taskStore multi-version-skip migration bug (see "Zustand migration rule" above) was found.
+- **Mapper round-trip tests** (`src/services/sync/mappers.test.ts`) assert `rowToX(xToRow(entity))` equals `entity` for every synced entity — catches a forgotten column the moment the fixture uses it.
+- **Pattern tests** (`src/test/patterns.test.ts`) are BACKLOG.md's "Pattern retrofit backlog" turned into executable checks (native popups, Escape handling, Ctrl+Enter, Endeavour terminology, hotkey ids, `SYNC_TABLES` vs. the sync fetch list, migration grants, store-import boundaries, inline styles, persisted-store registration, zustand selector stability). **A new pattern ships with a pattern test** — add a check here in the same change that records the pattern in "Pattern governance" below.
+- Not yet built: component/hook tests (Phase 3), Playwright E2E (Phase 4), the encryption/edge-function/sync-merge test harnesses (rest of Phase 2), and most of Part B.
+
+---
+
 ## Sections & navigation
 
 Nav order matches hotkey order (top to bottom in sidebar):
@@ -251,7 +265,7 @@ interface RepeatConfig {
 | Store | Persist key | Version | Persisted to | Purpose |
 |-------|------------|---------|-------------|---------|
 | `taskStore` | `todo-app-storage` | **v11** | localStorage + Supabase | tasks, collections, tags, purposes |
-| `calendarStore` | `todo-calendar` | **v10** | localStorage + Supabase | calendar events, reminders |
+| `calendarStore` | `todo-calendar` | **v11** | localStorage + Supabase | calendar events, reminders |
 | `trackerStore` | `todo-tracker` | **v1** | localStorage + Supabase | tracker entries |
 | `routineStore` | `todo-routines` | **v1** | localStorage only | daily routine instances (transient) |
 | `noteStore` | `notes-storage` | **v12** | **IndexedDB** (not localStorage — see below) + Supabase | notes, note tags, structured tag entries |
@@ -269,12 +283,13 @@ interface RepeatConfig {
 | `voiceStore` | — | — | memory only | voice-dictation status and level for `VoiceIndicator` |
 | `agentLogStore` | `agent-log` | **v1** | localStorage only | audit log of every agent command (reads as ids only); capped at 2000 entries; cleared on sign-out |
 | `agentBatchStore` | `agent-batches` | **v1** | localStorage only | before-snapshots so an agent's changes can be undone; capped at 50 batches; cleared on sign-out |
+| `trashStore` | `trash-storage` | **v1** | **IndexedDB** (not localStorage — same reasoning as `noteStore`) + Supabase | suite-wide Recycling Bin: a snapshot of every item deleted from any store, kept for restore — see "Recycling Bin" below |
 
 ### Zustand migration rule
 
 When adding fields to a persisted store's shape: **bump `version`** and write a **cumulative `migrate` function** that backfills defaults for every prior version. Never write non-cumulative migrations.
 
-Current taskStore v11 migrate backfills: `routineTasks: []`, `repeatConfig: null`, `fieldSchema: []`, `tagIds: []` on collections (v5); `scheduledAt: null`, `scheduledTime: null`, `calendarEventId: null` on tasks (v6); `collectionId: null` on collections (v7); `archivedAt: null` on both collections and purposes (v8); `calendarReminderId: null` on tasks (v9); `crossAppRefs: []` on tasks (v10); `archivedAt` (from `updatedAt` for already-archived tasks, else `null`) + `archiveReason: null` on tasks (v11). The steps up to v10 each `return` early, so v11 is deliberately applied as a wrapper *after* them (in `migrate`, an IIFE around the old body) — a v9 store returns from its own step and would otherwise never reach a later `if (fromVersion < 11)` block. Follow that wrapper pattern for v12+ rather than adding another early-return block.
+Current taskStore v11 migrate backfills: `routineTasks: []`, `repeatConfig: null`, `fieldSchema: []`, `tagIds: []` on collections (v5); `scheduledAt: null`, `scheduledTime: null`, `calendarEventId: null` on tasks (v6); `collectionId: null` on collections (v7); `archivedAt: null` on both collections and purposes (v8); `calendarReminderId: null` on tasks (v9); `crossAppRefs: []` on tasks (v10); `archivedAt` (from `updatedAt` for already-archived tasks, else `null`) + `archiveReason: null` on tasks (v11). Each `if (fromVersion < N)` step **reassigns `state` and falls through** rather than returning — this matters because `migrate` is called once per load with whatever version is on disk, so a store that skipped several app versions in one load (not opened for months) must still receive every intervening step, not just the first applicable one. **Bug found and fixed 2026-09-24:** every step used to `return` immediately after applying its own patch, so a store more than one version behind silently skipped every later step (a v2 store jumping straight to v11 got only the v5 collections patch and the v11 wrapper's own fields, missing v6/v7/v8/v9/v10 entirely) — caught by `src/store/migrations.test.ts`'s "v2 -> v11" fixture; see BACKLOG.md. Follow the fall-through pattern for v12+ — never `return` from inside an individual version step again.
 
 **Unversioned stores:** persisted data with no `version` arrives as v0. The first time such a store's shape changes, give it `version: 1` and a `migrate` that backfills the new fields (`scheduleStore` did exactly this) — a `version` with no `migrate` makes zustand discard the stored state. Every persisted store now has a version.
 
@@ -342,6 +357,12 @@ closeModal()
 openTaskPane(id), closeTaskPane()
 editingTaskId: string | null
 
+// TaskList expand/collapse — lifted out of TaskList's own local state so it survives
+// navigating away (TaskList unmounts on every section switch) and back. Memory-only (not
+// persisted) — resets on reload, same scope as sortField/sortDir.
+taskExpandedIds: string[]
+toggleTaskExpanded(taskId), clearTaskExpanded()  // setTaskViewMode() also clears it itself
+
 // Settings / account / integrations (slide-in panes)
 settingsOpen, openSettings(), closeSettings()
 accountOpen, openAccount(), closeAccount()
@@ -352,6 +373,13 @@ editTrackerOpen, editingTrackerId, openEditTracker(id), closeEditTracker()
 editingEntryId, openEditEntry(id), closeEditEntry()
 editingCalendarEventId, openCalendarEventPane(id), closeCalendarEventPane()
 editingCalendarReminderId, openCalendarReminderPane(id), closeCalendarReminderPane()
+
+// Calendar last-edited memory — persisted; restores whichever event/reminder pane was open
+// when Calendar was last left, on returning to Calendar (any path — section click, hotkey, or
+// Alt+Left/Right), but only within CALENDAR_LAST_EDITING_TTL_MS (30 min, checked at read time
+// in setActiveView — no background timer). Not cleared when the pane is closed while still in
+// Calendar — "last edited," not "currently open."
+calendarLastEditing: { type: 'event' | 'reminder'; id: string; at: string } | null
 
 // Records
 activeTrackerId: string | null
@@ -390,13 +418,15 @@ Every new column on a persisted type needs:
 
 | Migrations | Status | Confirmed |
 |------------|--------|-----------|
-| `001` – `027` | **Applied** | Everything through `027` has been run against the live project, confirmed by the user. `001`–`022` as a batch on 2026-09-19 ("ran all SQLs from 001 to 022"), `023` separately ("Migration 23 SQL has been completed"), and `024`–`027` on 2026-09-20 ("24, 25, 26, and 27 have all been run"; then "All Supabase SQL has been run up to 027 inclusive"). Reported by the user, not independently verified. `022` (grants) was written *after* 019–021 and run after them. Earlier "written, not yet run" notes on 012–021 predate this and were stale — removed. the next new one is `034`. |
+| `001` – `027` | **Applied** | Everything through `027` has been run against the live project, confirmed by the user. `001`–`022` as a batch on 2026-09-19 ("ran all SQLs from 001 to 022"), `023` separately ("Migration 23 SQL has been completed"), and `024`–`027` on 2026-09-20 ("24, 25, 26, and 27 have all been run"; then "All Supabase SQL has been run up to 027 inclusive"). Reported by the user, not independently verified. `022` (grants) was written *after* 019–021 and run after them. Earlier "written, not yet run" notes on 012–021 predate this and were stale — removed. |
 | `029` | **Applied** | `029_calendar_archive.sql` (archive timestamp + reason on calendar events and reminders) — run against the live project, confirmed by the user 2026-09-20 ("I've run SQL 029 in Supabase"). Reported by the user, not independently verified. |
 | `030` | **Applied** | `030_speech_usage.sql` (voice dictation usage table + `record_speech_usage()` function) — run against the live project, confirmed by the user 2026-09-20 ("030 has been run in Supabase"). Reported by the user, not independently verified. |
 | `031` | **Applied** | `031_drop_cross_app_links.sql` (drops the never-used `cross_app_links` table) — run against the live project, confirmed by the user 2026-09-20 ("031 has been run"). Reported by the user, not independently verified. |
 | `028` | **Applied** | `028_task_archive_reason.sql` (task archive timestamp + reason) — run against the live project, confirmed by the user 2026-09-20 ("SQL task zero two eight has been run in Supabase"). Reported by the user, not independently verified. |
 | `032` | **Applied** | `032_oauth_state.sql` (`oauth_states` nonce table + `mint_oauth_state` / `save_strava_connection` / `save_calendar_connection` functions — the OAuth `state` is now a single-use nonce instead of the user's access token) — run against the live project, confirmed by the user 2026-09-20 ("032 has been run in supabase"). Reported by the user, not independently verified. |
 | `033` | **Applied** | `033_calendar_links.sql` (`links text[]` on `calendar_events` and `calendar_reminders`). every event/reminder upsert now sends `links`, so those two tables reject writes until it is applied (sync isolates the failure per table; nothing else breaks). |
+| `034` | **Pending — not yet run** | `034_trash_items.sql` (new `trash_items` table — the suite-wide Recycling Bin; see "Recycling Bin" above). `trashStore` still works fully locally without it (IndexedDB-backed) — only cross-device sync of trash entries is blocked until this runs, isolated per-table like every other migration. |
+| `035` | **Pending — not yet run** | `035_reminder_tentative.sql` (`status text` on `calendar_reminders`, extending the Events-only "tentative" flag to Reminders too, per the request 2026-09-24). Every reminder upsert now sends `status`, so `calendar_reminders` rejects writes until this runs (sync isolates the failure per table; nothing else breaks). |
 
 ### Migration history
 
@@ -434,7 +464,9 @@ Every new column on a persisted type needs:
 | `030_speech_usage.sql` | New `speech_usage` table (per-user, per-day seconds; select-only via RLS + `grant select`) and a security-definer `record_speech_usage(p_seconds, p_monthly_limit)` function (`grant execute`) that checks the monthly cap and increments in one step — a user-writable counter would let anyone reset their own limit. See "Voice dictation". Applied 2026-09-20 |
 | `031_drop_cross_app_links.sql` | Drops `cross_app_links` (created by 008, granted by 022): superseded by embedded `crossAppRefs` columns (016, 025) and never read or written by any code. Applied 2026-09-20 |
 | `032_oauth_state.sql` | New `oauth_states` table (RLS on, **no policies, no grants** — only the functions touch it) and three security-definer functions: `mint_oauth_state(p_provider)` (`grant execute` to `authenticated`; binds a random ≥244-bit nonce to `auth.uid()` + provider, 10-minute expiry, one live nonce per user+provider) and `save_strava_connection(...)` / `save_calendar_connection(...)` (`grant execute` to `anon`; called by the two OAuth callbacks with the anon key — each deletes the nonce in the statement that validates it, so it is single-use, then upserts the connection row for the nonce's user). Replaces putting the access token in the OAuth `state` URL. See "OAuth `state` nonces" in `docs/features/implemented-features.md`. Applied 2026-09-20 (confirmed by user). |
-| `033_calendar_links.sql` | `links text[] not null default '{}'` on `calendar_events` and `calendar_reminders` — same as `tasks.links`; see "Calendar links, Complete button, pane Ctrl+Enter, TimeInput Enter" in `docs/features/implemented-features.md`. Alters existing tables only, so no new grant. **Pending — not yet run** |
+| `033_calendar_links.sql` | `links text[] not null default '{}'` on `calendar_events` and `calendar_reminders` — same as `tasks.links`; see "Calendar links, Complete button, pane Ctrl+Enter, TimeInput Enter" in `docs/features/implemented-features.md`. Alters existing tables only, so no new grant. Applied — see "Live migration status" above. |
+| `034_trash_items.sql` | New `trash_items` table — the suite-wide Recycling Bin (see "Recycling Bin" in `docs/features/implemented-features.md`). `trashStore` works fully locally (IndexedDB-backed) without it; only cross-device sync of trash entries is blocked until run. **Pending — not yet run** |
+| `035_reminder_tentative.sql` | `status text not null default 'confirmed'` on `calendar_reminders` — same `EventStatus` (`'confirmed' \| 'tentative'`) column `calendar_events` has had since `017`, extended to Reminders 2026-09-24 (see "Tentative events" below — reopens what was a deliberate Events-only scope decision). Alters an existing table only, so no new grant. **Pending — not yet run** |
 
 ### Supabase tables (summary)
 
@@ -442,7 +474,7 @@ Every new column on a persisted type needs:
 - **collections** — mirrors Collection; includes `field_schema jsonb`, `routine_tasks jsonb`, `repeat_config jsonb`, `collection_id text`, `archived_at timestamptz`
 - **tags** — mirrors Tag; includes `notes text`
 - **purposes** — mirrors Purpose; includes `archived_at timestamptz`
-- **calendar_events** / **calendar_reminders** — CalendarEvent / CalendarReminder; `calendar_reminders` includes `reminder_type text` (`'default' | 'task'` — see "Task Calendar Items — layers"); `calendar_events` includes `status text` (`'confirmed' | 'tentative'` — see "Tentative events") and `source`/`source_connection_id`/`source_calendar_id`/`source_event_id`/`source_raw` (external calendar sync provenance — see "External calendar sync")
+- **calendar_events** / **calendar_reminders** — CalendarEvent / CalendarReminder; `calendar_reminders` includes `reminder_type text` (`'default' | 'task'` — see "Task Calendar Items — layers") and, since `035`, `status text` (`'confirmed' | 'tentative'`, same column and meaning as events — see "Tentative events"); `calendar_events` includes `status text` and `source`/`source_connection_id`/`source_calendar_id`/`source_event_id`/`source_raw` (external calendar sync provenance — see "External calendar sync")
 - **calendar_connections** — one row per connected external calendar account (Google today); `id` is a real primary key (not `user_id`), since multiple connections per user are supported — a real structural difference from `fitness_strava_connection`, which only ever needs one row per user; unique on `(user_id, provider, account_email)`; `access_token`/`refresh_token`/`expires_at`/`scope` never read client-side, only through `api/google-calendar-*.ts`; `calendars_enabled jsonb` lists which of the account's calendars are opted into syncing
 - **tracker_entries** — TrackerEntry; `data jsonb`, RLS on `user_id`
 - **fitness_strava_connection** — one row per user: `athlete_id`, `access_token`, `refresh_token`, `expires_at`, `scope`; RLS on `user_id`; never read client-side directly, only through `api/strava-status.ts` / `api/strava-sync.ts`
@@ -454,6 +486,17 @@ Every new column on a persisted type needs:
 - **user_vault** — one row per user: `wrapped_key`/`wrapped_key_iv`/`salt` (passphrase-unwrap path) and `recovery_wrapped_key`/`recovery_wrapped_key_iv`/`recovery_salt` (recovery-code-unwrap path), both wrapping the same underlying AES-GCM vault key; `kdf_iterations`; RLS on `user_id`; never holds anything usable without a secret only the client has — see "Client-side encryption for Note content"
 - **watchlist_items** — mirrors `WatchlistItem`; `investment_purpose_ids`/`tag_ids`/`links` all `jsonb`
 - **portfolio_tags** / **investment_purposes** — mirror `PortfolioTag` / `InvestmentPurpose`; neither has `created_at`/`updated_at` in the domain model (same as `Tag`) — merges fall back to remote-wins, tombstone-aware, same as `tags`/`list_types`. `investment_purposes`' built-in seed rows (fixed ids like `ip-dividend`) are ordinary synced data here, unlike `list_types`' built-ins — portfolioStore has no re-seed-on-load mechanism and never blocks editing/deleting a seed purpose
+- **trash_items** — mirrors `TrashEntry` (the Recycling Bin, see below); `snapshot jsonb` holds the deleted entity verbatim, `deleted_by jsonb`; `original_deleted_at` is the domain "when was this deleted" timestamp — kept distinct from this row's own `deleted_at` sync tombstone (set only when a trash entry itself is forgotten — emptied or restored)
+
+### Recycling Bin (suite-wide delete/restore)
+
+Every store's `delete*` action is a real local removal — the record is spliced out of its record map, same as always. What makes it recoverable is `services/trashCapture.ts`'s `moveToTrash(kind, entity)`, called from inside the delete action **before** the record is removed: it resolves a short title/context line from the entity's own fields (never another store — a trashed item must stay identifiable even if everything it referenced is itself later deleted or trashed) and adds a `TrashEntry` (`types/trash.ts`) to `trashStore`. `services/trash.ts` (the mirror image) holds `restoreFromTrash`/`deleteForever` and imports every domain store to write a snapshot back — it is imported **only** by `RecyclingBinPane`, never by a store, which is what keeps `trashCapture.ts` (imported by every store) free of an import cycle. A cascade delete that splices out children inline instead of calling their own `delete*` action (`taskStore.deleteCollection`'s tracker entries, `listStore.deleteList`'s items) must call `moveToTrash` for each child itself, or a restore brings the parent back with no way to recover what was inside it.
+
+**Rules for new code:**
+- **A new `delete*` action on any store must call `moveToTrash('<kind>', entity)`** before removing the record, and add its kind to `TrashableKind` (`types/trash.ts`), a resolver in `trashCapture.ts`'s `RESOLVERS`, and a restore target in `trash.ts`'s `RESTORE_TARGETS`.
+- **Every mapper's `xToRow` function must send `deleted_at: null` explicitly**, not omit the column — Supabase's `upsert()` only touches columns present in the object, so omitting it would leave a row previously tombstoned by another device (or restored from the bin) zombie-tombstoned forever, deleted again on the next `hydrateStores()`. Enforced by `src/test/patterns.test.ts`'s "every mapper xToRow sends an explicit deleted_at: null" check.
+- Agents cannot delete anything (`access.write` has no delete — see "Agent command layer" below), so every trash entry's `deletedBy` is `{ type: 'user' }` today; the type is a union (`{ type: 'user' } | { type: 'agent'; batchId }`) purely so a future agent-delete capability wouldn't need a breaking change, per BACKLOG.md.
+- Reachable via `Ctrl+Shift+R` or the "Recycling Bin" button in Account (chosen over Settings/Integrations — Account already owns the closest sibling concept, full-app Export/Restore backup).
 
 ---
 
@@ -464,6 +507,7 @@ src/
   App.tsx                    — root: hotkey handler, modal routing, section switcher
   types/index.ts             — all TypeScript interfaces and unions
   types/agent.ts             — agent command-layer types (RiskTier, EntityKind, AgentLogEntry, AgentBatch); not re-exported from index.ts
+  types/trash.ts             — Recycling Bin types (TrashEntry, TrashableKind, DeletedBy); not re-exported from index.ts — see "Recycling Bin" above
   agent/                     — the AI agent command layer (see "Agent command layer" below and docs/ai/02-command-layer.md): access.ts (THE boundary: what an agent can read and do), commands/*.ts, run.ts (runCommand), registry.ts (toolDefinitions), batch.ts (snapshot/diff/revert), errors.ts, devHandle.ts (dev-only console handle)
   test/                      — Vitest setup (Map-backed localStorage) and helpers
   config/
@@ -492,6 +536,7 @@ src/
     hotkeyOverridesStore.ts  — user-rebound hotkeys (persisted `todo-hotkey-overrides`); `matchesHotkeyId`, `findConflicts`
     notificationStore.ts     — pending in-app notifications + already-notified log (persisted `todo-notifications`)
     voiceStore.ts            — voice dictation status/level for VoiceIndicator (memory-only, written by services/speech/dictation.ts)
+    trashStore.ts            — Recycling Bin: TrashEntry snapshots (persisted `trash-storage`, IndexedDB), see "Recycling Bin" above
   services/sync/
     syncService.ts           — Supabase push/pull
     mappers.ts               — xToRow / rowToX for every entity
@@ -503,6 +548,8 @@ src/
   services/googleCalendar.ts — client-side Google Calendar sync wrapper: getGoogleCalendarConnectUrl(), fetchGoogleCalendarConnections(), setGoogleCalendarEnabled(), disconnectGoogleCalendar(), syncGoogleCalendars() (calls api/google-calendar-* edge functions, maps + upserts results into calendarStore via upsertSyncedEvent) — see "External calendar sync"
   services/crossAppLinkCleanup.ts — deleteTaskWithCleanup/deleteNoteWithCleanup/removeCrossAppRefFromTarget: keeps cross-app links (Task.crossAppRefs, Notes' ArtifactLinkMark) from going dead when either side is deleted; the one module allowed to import both taskStore and noteStore (they must never import each other directly) — see "Cross-app linking"
   services/taskCalendarLinks.ts — keeps a task's shadow calendar reminder (deadline) and event (scheduled date) matching the task, and flows edits made on the event back — the one place that logic lives (see "Task ⇄ calendar shadow entries" in Implemented features); like crossAppLinkCleanup it may import both taskStore and calendarStore
+  services/trashCapture.ts  — moveToTrash(kind, entity): the write half of the Recycling Bin, called from inside every store's own delete* action. Deliberately imports NO domain store (only trashStore) so every domain store can import it without an import cycle — see "Recycling Bin" above
+  services/trash.ts         — restoreFromTrash(entryId)/deleteForever(entryId): the restore half, imports every domain store to write a snapshot back; imported ONLY by RecyclingBinPane, never by a store
   services/noteSecrets.ts    — the encrypted-notes model: NoteSecrets/EntrySecrets shapes, the memory-only plaintext cache, noteView()/entryView()/isNoteLocked() (the ONE way to read a possibly-encrypted note), the serialized re-encrypt queue (queueEncrypt/flushEncryptions) — see "Client-side encryption for Notes — comprehensive"
   services/noteSecretsSync.ts — keeps that cache in step: decrypts encrypted notes/entries when the vault unlocks or a sync pull brings new payloads, wipes it on lock, upgrades v1 legacy encrypted notes
   services/listSecrets.ts    — the encrypted-lists model (Lists twin of noteSecrets.ts): ListSecrets/ItemSecrets shapes, memory-only plaintext caches, listView()/itemView()/isListLocked() — the ONE way to read a possibly-encrypted list/item. Reuses noteSecrets.ts's crypto, serialised re-encrypt queue and cache-version counter
@@ -584,6 +631,7 @@ src/
     ManagePane/              — library admin (Endeavours/Purposes/Tags): left-nav tabs + content, opened by clicking (not hovering) the header hamburger; archive/restore/delete rows. MANAGE_SECTIONS array in the file is the extension point for future tabs
     AccountPane/             — Supabase auth + account info
     IntegrationsPane/        — (stub) future integrations
+    RecyclingBinPane/        — suite-wide Recycling Bin: Ctrl+Shift+R or the "Recycling Bin" button in Account; filter chips by section, Restore / Delete forever per row, "Empty recycling bin" — see "Recycling Bin" above
     ColorPicker/             — reusable colour swatch picker
     CollectionPicker/        — CollectionPicker.tsx (single-select dropdown, used in create/edit forms) + CollectionFilterPicker.tsx (header Endeavour-focus picker, numbered for the E/Ctrl+E hotkey)
     CrossAppRefPicker/       — controlled { value: CrossAppRef[]; onChange; onNavigate? } widget: chips for existing links (with the note's notebook) + a "+ Link" button that opens NotePickerModal. Note is the only wired type; Calendar/List/Tracker are BACKLOG. Used by AddTaskModal, TaskPane, CalendarEventPane and CalendarReminderPane
@@ -730,6 +778,7 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 | `N` | `Space` | New item (section-aware, see below) — `Ctrl+N` also works |
 | `S` | — | Toggle settings |
 | `A` | — | Toggle account pane (`action-account`, customizable) |
+| `Ctrl+Shift+R` | — | Open/close the Recycling Bin (`action-recycling-bin`, customizable) |
 | `Esc` | — | Close panel / modal |
 | `E` | `Ctrl+E` | Expand the Endeavour filter (header) — Tasks/Calendar/Records/Notes only |
 | `0`-`9` | — | While the Endeavour filter is expanded: select an Endeavour by its position (0 = All) |
@@ -789,6 +838,7 @@ All user-facing strings that might be renamed are in `src/config/labels.ts`. "Co
 - CSS: all styles in `.module.css` files. Class names in camelCase.
 - Dynamic values (e.g. `style={{ background: color }}`, or measured `top`/`left`) are the only acceptable inline styles — a constant style (`marginRight`, `display: flex`, `position: relative`) belongs in the module CSS. A hidden file input uses the `hidden` attribute.
 - **No native popups** (`window.confirm/alert/prompt`) — see "Confirmations and alerts".
+- **Zustand selectors must return a referentially-stable snapshot.** Never `useXStore((s) => Object.values(s.foo))` (or `.keys()`/`.entries()`, or an inline array/object literal) — it allocates a new reference on every call, and under React 18's `useSyncExternalStore` that causes an infinite render loop ("Maximum update depth exceeded"), not just wasted renders. Select the raw record/array field (`useXStore((s) => s.foo)`, a stable reference until it actually changes) and derive (`Object.values(...)`, mapping, filtering) in the render body instead. Caught `src/test/patterns.test.ts` ("zustand selectors return a stable reference"); found in `StructuredTagPopover.tsx` 2026-09-24 (crashed the Notes section whenever the Acronym popover opened).
 - **User-facing terms come from `config/labels.ts`** — any string that names Endeavour/Collection, Purpose, Tracker, Routine, List, Activity, … uses `LABELS`, so renaming a concept stays a one-file change. Hotkey descriptions in `hotkeys.ts` too.
 
 ---
@@ -832,6 +882,7 @@ This project grew in stages, and several patterns were agreed only after a lot o
 3. **A retrofit entry stays in the backlog until its check finds zero sites.** Fixing some sites is progress, not completion; update the list.
 4. **The deliberate exceptions are written down too** (e.g. `NoteTagPresetModal` has no Ctrl+Enter) — an undocumented exception is indistinguishable from a bug at the next audit.
 5. Re-run the checks in "Pattern retrofit backlog" when you touch an area, and before calling an audit clean.
+6. **A new pattern ships with a pattern test.** `src/test/patterns.test.ts` (see "Testing" above) turns most of "Pattern retrofit backlog"'s manual greps into an automated check that runs with `npm test`. When step 2 above records a new or changed pattern, add or update its check in that file in the same change — a grep a human has to remember to re-run drifts; a test in CI doesn't.
 
 ---
 

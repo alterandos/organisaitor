@@ -14,6 +14,7 @@ import {
 } from '@/services/noteSecrets';
 import { decryptField } from '@/services/vault';
 import { persistStorageIdb } from '@/utils/idbStorage';
+import { moveToTrash } from '@/services/trashCapture';
 
 interface NoteData {
   notes: Record<NoteId, Note>;
@@ -140,6 +141,8 @@ export const useNoteStore = create<NoteStore>()(
 
       deleteNote: (id) =>
         set((state) => {
+          const note = state.notes[id];
+          if (note) moveToTrash('note', note);
           dropNoteSecrets(id);
           const notes = { ...state.notes };
           delete notes[id];
@@ -267,6 +270,8 @@ export const useNoteStore = create<NoteStore>()(
 
       deleteNoteTag: (id) =>
         set((state) => {
+          const tag = state.noteTags[id];
+          if (tag) moveToTrash('noteTag', tag);
           const noteTags = { ...state.noteTags };
           delete noteTags[id];
           // Remove tag from all notes
@@ -358,6 +363,8 @@ export const useNoteStore = create<NoteStore>()(
 
       deleteStructuredTagEntry: (id) =>
         set((state) => {
+          const entry = state.structuredTagEntries[id];
+          if (entry) moveToTrash('structuredTagEntry', entry);
           dropEntrySecrets(id);
           const entries = { ...state.structuredTagEntries };
           delete entries[id];

@@ -12,6 +12,7 @@ import { now } from '@/utils/date';
 import { mergeNewLinks } from '@/utils/links';
 import { useTrackerStore } from '@/store/trackerStore';
 import { persistStorage } from '@/utils/persistStorage';
+import { moveToTrash } from '@/services/trashCapture';
 
 const EMPTY: AppData = {
   version:     2,
@@ -50,7 +51,7 @@ type TaskStore = AppData & TaskActions;
 
 export const useTaskStore = create<TaskStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...EMPTY,
 
       // ── Tasks ──────────────────────────────────────────────────────────────
@@ -139,6 +140,7 @@ export const useTaskStore = create<TaskStore>()(
       deleteTask: (id) =>
         set((state) => {
           const task = state.tasks[id];
+          if (task) moveToTrash('task', task);
           const tasks = { ...state.tasks };
           delete tasks[id];
 
@@ -168,6 +170,8 @@ export const useTaskStore = create<TaskStore>()(
 
       deleteTag: (id) =>
         set((state) => {
+          const tag = state.tags[id];
+          if (tag) moveToTrash('tag', tag);
           const tags = { ...state.tags };
           delete tags[id];
           const tasks = Object.fromEntries(
@@ -228,7 +232,15 @@ export const useTaskStore = create<TaskStore>()(
         }),
 
       deleteCollection: (id) => {
-        // Delete tracker entries for this collection if it's a tracker
+        const collection = get().collections[id];
+        if (collection) moveToTrash('collection', collection);
+        // Delete tracker entries for this collection if it's a tracker — deleteEntriesForTracker
+        // splices them out in bulk without going through trackerStore.deleteEntry, so each one
+        // needs its own trash entry captured here first or a restore would bring the tracker
+        // back with no entries and nowhere to recover them from.
+        for (const entry of Object.values(useTrackerStore.getState().entries)) {
+          if (entry.trackerId === id) moveToTrash('trackerEntry', entry);
+        }
         useTrackerStore.getState().deleteEntriesForTracker(id as CollectionId);
         set((state) => {
           const collections = { ...state.collections };
@@ -273,6 +285,8 @@ export const useTaskStore = create<TaskStore>()(
 
       deletePurpose: (id) =>
         set((state) => {
+          const purpose = state.purposes[id];
+          if (purpose) moveToTrash('purpose', purpose);
           const purposes = { ...state.purposes };
           delete purposes[id];
           const tasks = Object.fromEntries(
@@ -294,13 +308,17 @@ export const useTaskStore = create<TaskStore>()(
       name:    'todo-app-storage',
       storage: persistStorage(),
       version: 11,
-      // The steps up to v10 each return early, so v11 is applied afterwards to whatever they
-      // produce — otherwise a v9 store would return from its own step and never reach it.
+      // Cumulative: every step below whose version threshold the persisted store is behind
+      // on gets applied, in order, to the same `state` — none of them return early. (A v9 ->
+      // v11 upgrade, say, must also carry forward whatever a v2 -> v11 upgrade needs from the
+      // v5/v6/v7/v8 steps; an early return after the first applicable step would silently skip
+      // every later one for anyone who skipped several app versions between loads — e.g. hadn't
+      // opened the app in a while. Bug found and fixed 2026-09-24 by
+      // src/store/migrations.test.ts's taskStore "v2 -> v11" fixture — see BACKLOG.md.)
       migrate: (persisted, fromVersion) => {
-        const migrated = ((): AppData => {
-        const state = persisted as AppData & TaskActions;
+        let state = persisted as AppData & TaskActions;
         if (fromVersion < 2) return EMPTY;
-        // Apply all collection patches cumulatively
+
         if (fromVersion < 5 && state.collections) {
           const patched: AppData['collections'] = {} as AppData['collections'];
           for (const [id, col] of Object.entries(state.collections)) {
@@ -313,7 +331,7 @@ export const useTaskStore = create<TaskStore>()(
               repeatConfig: (c as Collection).repeatConfig ?? null,
             } as Collection;
           }
-          return { ...state, collections: patched };
+          state = { ...state, collections: patched };
         }
         if (fromVersion < 6 && state.tasks) {
           const patched: AppData['tasks'] = {} as AppData['tasks'];
@@ -326,7 +344,7 @@ export const useTaskStore = create<TaskStore>()(
               calendarEventId: (t.calendarEventId ?? null) as Task['calendarEventId'],
             } as Task;
           }
-          return { ...state, tasks: patched };
+          state = { ...state, tasks: patched };
         }
         if (fromVersion < 7 && state.collections) {
           const patched: AppData['collections'] = {} as AppData['collections'];
@@ -334,7 +352,7 @@ export const useTaskStore = create<TaskStore>()(
             const c = col as Collection & { collectionId?: CollectionId | null };
             patched[id as CollectionId] = { ...c, collectionId: c.collectionId ?? null } as Collection;
           }
-          return { ...state, collections: patched };
+          state = { ...state, collections: patched };
         }
         if (fromVersion < 8) {
           const collections: AppData['collections'] = {} as AppData['collections'];
@@ -347,7 +365,7 @@ export const useTaskStore = create<TaskStore>()(
             const p = purpose as Purpose & { archivedAt?: string | null };
             purposes[id as PurposeId] = { ...p, archivedAt: p.archivedAt ?? null } as Purpose;
           }
-          return { ...state, collections, purposes };
+          state = { ...state, collections, purposes };
         }
         if (fromVersion < 9 && state.tasks) {
           const patched: AppData['tasks'] = {} as AppData['tasks'];
@@ -358,7 +376,7 @@ export const useTaskStore = create<TaskStore>()(
               calendarReminderId: (t.calendarReminderId ?? null) as Task['calendarReminderId'],
             } as Task;
           }
-          return { ...state, tasks: patched };
+          state = { ...state, tasks: patched };
         }
         if (fromVersion < 10 && state.tasks) {
           const patched: AppData['tasks'] = {} as AppData['tasks'];
@@ -369,22 +387,21 @@ export const useTaskStore = create<TaskStore>()(
               crossAppRefs: (t.crossAppRefs ?? []) as Task['crossAppRefs'],
             } as Task;
           }
-          return { ...state, tasks: patched };
+          state = { ...state, tasks: patched };
+        }
+        if (fromVersion < 11 && state.tasks) {
+          const patched: AppData['tasks'] = {} as AppData['tasks'];
+          for (const [id, task] of Object.entries(state.tasks)) {
+            const t = task as Task & { archivedAt?: string | null; archiveReason?: string | null };
+            patched[id as TaskId] = {
+              ...t,
+              archivedAt:    t.archivedAt ?? (t.archived ? t.updatedAt : null),
+              archiveReason: t.archiveReason ?? null,
+            } as Task;
+          }
+          state = { ...state, tasks: patched };
         }
         return state;
-        })();
-
-        if (fromVersion >= 11 || !migrated.tasks) return migrated;
-        const tasks: AppData['tasks'] = {} as AppData['tasks'];
-        for (const [id, task] of Object.entries(migrated.tasks)) {
-          const t = task as Task & { archivedAt?: string | null; archiveReason?: string | null };
-          tasks[id as TaskId] = {
-            ...t,
-            archivedAt:    t.archivedAt ?? (t.archived ? t.updatedAt : null),
-            archiveReason: t.archiveReason ?? null,
-          } as Task;
-        }
-        return { ...migrated, tasks };
       },
     }
   )

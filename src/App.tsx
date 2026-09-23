@@ -14,7 +14,7 @@ import { initListSecretsSync } from '@/services/listSecretsSync';
 import { DecryptPrompt } from '@/components/DecryptPrompt/DecryptPrompt';
 import { backfillTaskCalendarLinks } from '@/services/taskCalendarBackfill';
 import { syncGoogleCalendars } from '@/services/googleCalendar';
-import { matchesHotkeyId } from '@/store/hotkeyOverridesStore';
+import { matchesHotkeyId, matchesHotkeyPrimary } from '@/store/hotkeyOverridesStore';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { AccountPane } from '@/components/AccountPane/AccountPane';
 import { TaskList } from '@/components/TaskList/TaskList';
@@ -60,6 +60,7 @@ import { EditTrackerPane } from '@/components/EditTrackerPane/EditTrackerPane';
 import { EditRoutinePane } from '@/components/EditRoutinePane/EditRoutinePane';
 import { AddRoutineModal } from '@/components/AddRoutineModal/AddRoutineModal';
 import { IntegrationsPane } from '@/components/IntegrationsPane/IntegrationsPane';
+import { RecyclingBinPane } from '@/components/RecyclingBinPane/RecyclingBinPane';
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
@@ -120,6 +121,9 @@ export default function App() {
   const editingCalendarEventId     = useUIStore((s) => s.editingCalendarEventId);
   const editingCalendarReminderId  = useUIStore((s) => s.editingCalendarReminderId);
   const integrationsOpen           = useUIStore((s) => s.integrationsOpen);
+  const recyclingBinOpen           = useUIStore((s) => s.recyclingBinOpen);
+  const openRecyclingBin           = useUIStore((s) => s.openRecyclingBin);
+  const closeRecyclingBin          = useUIStore((s) => s.closeRecyclingBin);
   const editTrackerOpen            = useUIStore((s) => s.editTrackerOpen);
   const editRoutineOpen            = useUIStore((s) => s.editRoutineOpen);
   const editingCollection            = useUIStore((s) => s.editingCollection);
@@ -320,11 +324,36 @@ export default function App() {
         return;
       }
 
+      // Back/forward — the PRIMARY binding only (Alt+Left/Right) fires before the isTyping
+      // guard: it isn't a text-editing binding in any browser/OS text field, so there's
+      // nothing for it to conflict with. The SECONDARY binding (Backspace) deliberately does
+      // NOT get this bypass — Backspace must keep deleting the previous character while
+      // typing, never navigate; it only acts as "back" below, once isTyping is confirmed false.
+      if (matchesHotkeyPrimary(e, 'action-back')) {
+        e.preventDefault();
+        navigateBack();
+        return;
+      }
+      if (matchesHotkeyPrimary(e, 'action-forward')) {
+        e.preventDefault();
+        navigateForward();
+        return;
+      }
+
       // Don't fire when typing in inputs
       const tag = (e.target as HTMLElement)?.tagName;
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
         || (e.target as HTMLElement)?.isContentEditable;
       if (isTyping) return;
+
+      // Backspace (action-back's secondary) reaches here, now that isTyping is confirmed
+      // false. matchesHotkeyId also re-checks the primary binding, harmlessly redundant
+      // with the bypass above since a typing-field target already returned by now.
+      if (matchesHotkeyId(e, 'action-back')) {
+        e.preventDefault();
+        navigateBack();
+        return;
+      }
 
       // Endeavour filter: while expanded, 0-9 select (0 = All) and Escape closes.
       // Takes over the keyboard entirely until closed, so this must run before the
@@ -349,17 +378,8 @@ export default function App() {
       // resolves each id's effective binding (an override if set, else the hotkeys.ts
       // default) and checks it against this event. Everything below behaves identically to
       // before customization existed as long as nothing has actually been rebound.
-      if (matchesHotkeyId(e, 'action-back')) {
-        e.preventDefault();
-        navigateBack();
-        return;
-      }
-
-      if (matchesHotkeyId(e, 'action-forward')) {
-        e.preventDefault();
-        navigateForward();
-        return;
-      }
+      // (action-back/action-forward are dispatched above, before the isTyping guard, so
+      // Alt+Left/Right also works while focus is in a text field.)
 
       if (matchesHotkeyId(e, 'action-quick-access')) {
         e.preventDefault();
@@ -384,6 +404,12 @@ export default function App() {
       if (matchesHotkeyId(e, 'action-account')) {
         e.preventDefault();
         if (accountOpen) closeAccount(); else openAccount();
+        return;
+      }
+
+      if (matchesHotkeyId(e, 'action-recycling-bin')) {
+        e.preventDefault();
+        if (recyclingBinOpen) closeRecyclingBin(); else openRecyclingBin();
         return;
       }
 
@@ -434,6 +460,7 @@ export default function App() {
   }, [
     setActiveView, activeView, settingsOpen, openSettings, closeSettings,
     accountOpen, openAccount, closeAccount,
+    recyclingBinOpen, openRecyclingBin, closeRecyclingBin,
     portfolioChartOpen, chartTickerRowZoom, setChartTickerRowZoom, openModal, nudgeNoteEditorZoom,
     endeavourPickerOpen, toggleEndeavourPicker, closeEndeavourPicker, setActiveCollection, collectionsRecord,
     togglePurposePicker, toggleManage, navigateBack, navigateForward, toggleQuickAccess,
@@ -566,6 +593,7 @@ export default function App() {
         <ManagePane />
         {accountOpen               && <AccountPane />}
         {integrationsOpen          && <IntegrationsPane />}
+        {recyclingBinOpen          && <RecyclingBinPane />}
         {editingCalendarEventId    && <CalendarEventPane key={editingCalendarEventId} />}
         {editingCalendarReminderId && <CalendarReminderPane key={editingCalendarReminderId} />}
 

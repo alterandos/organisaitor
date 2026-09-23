@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
 import { todayIso } from '@/utils/date';
 import { persistStorage } from '@/utils/persistStorage';
+import { moveToTrash } from '@/services/trashCapture';
 import type {
   WatchlistItem, WatchlistItemId,
   PortfolioTag, PortfolioTagId,
@@ -106,6 +107,8 @@ export const usePortfolioStore = create<PortfolioState>()(
       }),
 
       deleteWatchlistItem: (id) => set((s) => {
+        const item = s.watchlistItems[id];
+        if (item) moveToTrash('watchlistItem', item);
         const next = { ...s.watchlistItems };
         delete next[id];
         return { watchlistItems: next };
@@ -124,6 +127,8 @@ export const usePortfolioStore = create<PortfolioState>()(
       }),
 
       deletePortfolioTag: (id) => set((s) => {
+        const tag = s.portfolioTags[id];
+        if (tag) moveToTrash('portfolioTag', tag);
         const next = { ...s.portfolioTags };
         delete next[id];
         const watchlistItems = Object.fromEntries(
@@ -148,6 +153,8 @@ export const usePortfolioStore = create<PortfolioState>()(
       }),
 
       deleteInvestmentPurpose: (id) => set((s) => {
+        const purpose = s.investmentPurposes[id];
+        if (purpose) moveToTrash('investmentPurpose', purpose);
         const next = { ...s.investmentPurposes };
         delete next[id];
         const watchlistItems = Object.fromEntries(

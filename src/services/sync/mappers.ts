@@ -6,6 +6,7 @@ import type {
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
+import type { TrashEntry, TrashEntryId, TrashableKind, DeletedBy } from '@/types/trash';
 
 // ── Task ────────────────────────────────────────────────────────
 
@@ -40,6 +41,12 @@ export function taskToRow(t: Task, userId: string) {
     cross_app_refs: t.crossAppRefs   ?? [],
     created_at:     t.createdAt,
     updated_at:     t.updatedAt,
+    // Explicit null on every live upsert (not merely omitted) so a row previously
+    // tombstoned by another device — e.g. restored from the Recycling Bin — has its
+    // tombstone actually cleared. Supabase's upsert() only touches columns present in the
+    // object, so leaving this out would let a stale deleted_at survive forever and get the
+    // restored row deleted again on the next hydrateStores() (see mergeRecords()).
+    deleted_at:     null,
   };
 }
 
@@ -99,6 +106,7 @@ export function collectionToRow(c: Collection, userId: string) {
     archived_at:   c.archivedAt    ?? null,
     created_at:    c.createdAt,
     updated_at:    c.updatedAt,
+    deleted_at:    null,
   };
 }
 
@@ -137,6 +145,7 @@ export function entryToRow(e: TrackerEntry, userId: string) {
     notes:      e.notes     ?? null,
     created_at: e.createdAt,
     updated_at: e.updatedAt,
+    deleted_at: null,
   };
 }
 
@@ -156,7 +165,7 @@ export function rowToEntry(r: Record<string, any>): TrackerEntry {
 // ── Tag ─────────────────────────────────────────────────────────
 
 export function tagToRow(t: Tag, userId: string) {
-  return { id: t.id, user_id: userId, name: t.name, color: t.color, notes: t.notes ?? null };
+  return { id: t.id, user_id: userId, name: t.name, color: t.color, notes: t.notes ?? null, deleted_at: null };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -176,6 +185,7 @@ export function purposeToRow(p: Purpose, userId: string) {
     archived_at: p.archivedAt   ?? null,
     created_at:  p.createdAt,
     updated_at:  p.updatedAt,
+    deleted_at:  null,
   };
 }
 
@@ -225,6 +235,7 @@ export function eventToRow(e: CalendarEvent, userId: string) {
     source_raw:           e.sourceRaw,
     created_at:          e.createdAt,
     updated_at:          e.updatedAt,
+    deleted_at:          null,
   };
 }
 
@@ -278,6 +289,7 @@ export function reminderToRow(r: CalendarReminder, userId: string) {
     remind_at:     r.remindAt,
     repeat:        r.repeat,
     important:     r.important,
+    status:        r.status ?? 'confirmed',
     notify_days_before: r.notifyDaysBefore ?? 1,
     notify_at_time:     r.notifyAtTime ?? '17:00',
     cross_app_refs: r.crossAppRefs ?? [],
@@ -285,6 +297,7 @@ export function reminderToRow(r: CalendarReminder, userId: string) {
     archive_reason: r.archiveReason ?? null,
     created_at:    r.createdAt,
     updated_at:    r.updatedAt,
+    deleted_at:    null,
   };
 }
 
@@ -302,6 +315,7 @@ export function rowToReminder(r: Record<string, any>): CalendarReminder {
     remindAt:     r.remind_at     ?? null,
     repeat:       r.repeat        ?? null,
     important:    r.important     ?? false,
+    status:       r.status        ?? 'confirmed',
     notifyDaysBefore: r.notify_days_before ?? 1,
     notifyAtTime:     r.notify_at_time     ?? '17:00',
     crossAppRefs: r.cross_app_refs ?? [],
@@ -327,6 +341,7 @@ export function scheduleToRow(s: ScheduleTemplate, userId: string) {
     blocks:        s.blocks       ?? [],
     created_at:    s.createdAt,
     updated_at:    s.updatedAt,
+    deleted_at:    null,
   };
 }
 
@@ -364,6 +379,7 @@ export function listToRow(l: List, userId: string) {
     encrypted_payload: l.encryptedPayload ?? null,
     created_at:   l.createdAt,
     updated_at:   l.updatedAt,
+    deleted_at:   null,
   };
 }
 
@@ -404,6 +420,7 @@ export function listItemToRow(i: ListItem, userId: string) {
     encrypted_payload: i.encryptedPayload ?? null,
     created_at: i.createdAt,
     updated_at: i.updatedAt,
+    deleted_at: null,
   };
 }
 
@@ -437,6 +454,7 @@ export function listTypeToRow(t: ListType, userId: string) {
     color:          t.color ?? null,
     kind:           t.kind,
     default_fields: t.defaultFields ?? [],
+    deleted_at:     null,
   };
 }
 
@@ -481,6 +499,7 @@ export function noteToRow(n: Note, userId: string) {
     archived_at:     n.archivedAt ?? null,
     created_at:      n.createdAt,
     updated_at:      n.updatedAt,
+    deleted_at:      null,
   };
 }
 
@@ -530,6 +549,7 @@ export function noteTagToRow(t: NoteTag, userId: string) {
     collection_id: t.collectionId ?? null,
     created_at:    t.createdAt,
     updated_at:    t.updatedAt,
+    deleted_at:    null,
   };
 }
 
@@ -570,6 +590,7 @@ export function structuredTagEntryToRow(e: StructuredTagEntry, userId: string) {
     encrypted_payload: e.encryptedPayload ?? null,
     created_at:    e.createdAt,
     updated_at:    e.updatedAt,
+    deleted_at:    null,
   };
 }
 
@@ -611,6 +632,7 @@ export function watchlistItemToRow(i: WatchlistItem, userId: string) {
     date_added:             i.dateAdded,
     created_at:             i.createdAt,
     updated_at:             i.updatedAt,
+    deleted_at:             null,
   };
 }
 
@@ -639,7 +661,7 @@ export function rowToWatchlistItem(r: Record<string, any>): WatchlistItem {
 // ── PortfolioTag (no timestamps in the domain model — same as Tag) ────────────
 
 export function portfolioTagToRow(t: PortfolioTag, userId: string) {
-  return { id: t.id, user_id: userId, name: t.name, color: t.color ?? null };
+  return { id: t.id, user_id: userId, name: t.name, color: t.color ?? null, deleted_at: null };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -650,10 +672,48 @@ export function rowToPortfolioTag(r: Record<string, any>): PortfolioTag {
 // ── InvestmentPurpose (no timestamps in the domain model — same as Tag) ───────
 
 export function investmentPurposeToRow(p: InvestmentPurpose, userId: string) {
-  return { id: p.id, user_id: userId, name: p.name, color: p.color ?? null };
+  return { id: p.id, user_id: userId, name: p.name, color: p.color ?? null, deleted_at: null };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToInvestmentPurpose(r: Record<string, any>): InvestmentPurpose {
   return { id: r.id, name: r.name, color: r.color ?? null };
+}
+
+// ── TrashEntry (Recycling Bin) ─────────────────────────────────────────────────
+// `deletedAt` (the domain fact — when the ORIGINAL ENTITY was deleted) maps to
+// `original_deleted_at`, not `deleted_at` — the latter is this row's own sync tombstone,
+// same convention as every other table, and must not be conflated with the former.
+
+export function trashEntryToRow(t: TrashEntry, userId: string) {
+  return {
+    id:                  t.id,
+    user_id:             userId,
+    kind:                t.kind,
+    source_app:          t.sourceApp,
+    source_section:      t.sourceSection,
+    title:               t.title,
+    context_line:        t.contextLine,
+    snapshot:            t.snapshot,
+    original_deleted_at: t.deletedAt,
+    deleted_by:          t.deletedBy,
+    created_at:          t.deletedAt,
+    updated_at:          t.deletedAt,
+    deleted_at:          null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToTrashEntry(r: Record<string, any>): TrashEntry {
+  return {
+    id:            r.id as TrashEntryId,
+    kind:          r.kind as TrashableKind,
+    sourceApp:     r.source_app,
+    sourceSection: r.source_section,
+    title:         r.title,
+    contextLine:   r.context_line ?? '',
+    snapshot:      r.snapshot,
+    deletedAt:     r.original_deleted_at,
+    deletedBy:     (r.deleted_by ?? { type: 'user' }) as DeletedBy,
+  };
 }

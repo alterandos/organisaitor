@@ -56,6 +56,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'action-quick-access', group: 'Actions', primary: 'Ctrl+G', action: 'Open Quick Access — jump to a note, notebook, task, list, tracker, routine, or ' + LABELS.collection, customizable: true },
 
   { id: 'action-dictate', group: 'Actions', primary: 'Ctrl+D', action: 'Dictate into the focused text field — press again (or Enter) to finish, Esc cancels', customizable: true },
+  { id: 'action-recycling-bin', group: 'Actions', primary: 'Ctrl+Shift+R', action: 'Open/close the Recycling Bin', customizable: true },
 
   // Item panes — handled locally by useItemActions (src/components/ItemActions/), only while a
   // task / calendar event / calendar reminder pane is open. Not customizable (component-local).

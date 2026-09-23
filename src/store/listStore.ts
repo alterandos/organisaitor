@@ -10,6 +10,7 @@ import type {
 } from '@/types/lists';
 import { encryptSecrets, decryptSecrets, queueEncrypt } from '@/services/noteSecrets';
 import { persistStorage } from '@/utils/persistStorage';
+import { moveToTrash } from '@/services/trashCapture';
 import {
   extractListSecrets, blankListSecrets, extractItemSecrets, blankItemSecrets,
   putListSecrets, putItemSecrets, dropListSecrets, dropItemSecrets,
@@ -213,8 +214,16 @@ export const useListStore = create<ListState>()(
       updateList: (id, patch) => editList(id, (l) => ({ ...l, ...patch })),
 
       deleteList: (id) => {
+        const list = get().lists[id];
+        if (list) moveToTrash('list', list);
         dropListSecrets(id);
-        for (const i of Object.values(get().listItems)) if (i.listId === id) dropItemSecrets(i.id);
+        for (const i of Object.values(get().listItems)) {
+          if (i.listId !== id) continue;
+          // deleteList splices its items out inline below, bypassing deleteListItem — each
+          // needs its own trash entry captured here or a restore would bring the list back empty.
+          moveToTrash('listItem', i);
+          dropItemSecrets(i.id);
+        }
         set((s) => {
           const nextLists = { ...s.lists };
           delete nextLists[id];
@@ -265,6 +274,8 @@ export const useListStore = create<ListState>()(
       updateListItem: (id, patch) => editItem(id, (i) => ({ ...i, ...patch })),
 
       deleteListItem: (id) => {
+        const item = get().listItems[id];
+        if (item) moveToTrash('listItem', item);
         dropItemSecrets(id);
         set((s) => {
           const next = { ...s.listItems };
@@ -305,7 +316,9 @@ export const useListStore = create<ListState>()(
       }),
 
       deleteListType: (id) => set((s) => {
-        if (s.listTypes[id]?.isBuiltIn) return s;
+        const type = s.listTypes[id];
+        if (!type || type.isBuiltIn) return s;
+        moveToTrash('listType', type);
         const next = { ...s.listTypes };
         delete next[id];
         return { listTypes: next };

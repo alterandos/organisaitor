@@ -49,6 +49,35 @@ Surfaced 2026-09-19 when the user opened a freshly-built Tauri desktop app and f
 
 ---
 
+## Navigation granularity — Alt+Left/Right, task-level, tab-level (logged 2026-09-24, needs a decision)
+
+Requested: make back/forward navigation more granular than "which app section." Current reality, precisely: `SectionHistoryEntry` (`uiStore.ts`) captures only `{ view: AppView }` — a "stop" is a bare section name, nothing else, by deliberate original scope ("Scoped to app-switching only for now, per the request," per the code comment). Concretely today: (a) Notes tabs are not part of the history *stack* — only the single most-recent note+tab is remembered via `notesLastEditingNoteId`/`notesLastActiveTabId`, not per-visit history entries (the separate "which tab within a given note" revisit gap is fixed — see "Notes: per-note tab memory" below); (b) going back into Tasks always lands on the bare list — there is still no "last-open task" memory, anywhere (not attempted in this pass — the three sub-questions below need answering first); (c) going back into Calendar now does remember the last-edited event/reminder (its own item below, done).
+
+Three sub-questions the user raised, genuinely open, worth deciding before building:
+1. Should Notes tabs become real history stops (each tab switch is its own "back" step), or stay a single "remembered last tab" the way it works today?
+2. Should returning to Tasks restore the specific task that was last open (not just "the Tasks section")?
+3. Should history be fully granular per-item across the *whole* app (every task/note/tab visited is its own stop, mixed together), or stay per-app-section but with each section's "stop" carrying more than just its name (e.g. `{ view: 'tasks', taskId }`)?
+
+The existing `notesLastEditingNoteId` pattern is direct precedent for a cheap version of (2) — a symmetric `tasksLastEditingTaskId`. Full per-item granular history (`{view, entityId?}` instead of `{view}`) is the "do it properly" option the original code comment already left room for (an object shape, not a bare array, specifically so this could be extended later) — but it's a bigger behavior change with its own question (what does "back" mean when 3 of your last 6 stops are the same section but different tasks?). **Recommend surfacing these three options to the user for a decision before scoping the implementation.**
+
+**Answering a direct question asked alongside this**: how hard is it to add more stops to the history? Trivially — `MAX_SECTION_HISTORY` (`uiStore.ts`) is a single hardcoded constant (currently 6), read only by the two `.slice(0, MAX_SECTION_HISTORY)` calls in `setActiveView`; bumping it grows both the back and forward stacks with no other changes needed. The genuinely hard part is what a "stop" contains, covered above, not how many there are.
+
+**Separately, Alt+Left/Right was fixed 2026-09-24 to work while focus is in a text field** (see implemented-features.md) — it was previously blocked by the same `isTyping` guard that (correctly) blocks section-switch digit hotkeys, unlike Notes-zoom/dictation which already had this exact carve-out.
+
+### ~~Task list expand/collapse state resets on navigating away and back~~ — done 2026-09-24
+
+Root cause was `TaskList.tsx`'s `toggledIds` being local `useState`, not store state — `TaskList` unmounts on any section switch, so it was always empty on remount. Fixed: lifted into `uiStore.taskExpandedIds` + `toggleTaskExpanded`/`clearTaskExpanded` (`setTaskViewMode` clears it itself, replacing the old local reset-on-view-mode-change). Memory-only, not added to `partialize` — survives a same-session navigate-away-and-back, resets on reload, matching `sortField`/`sortDir`'s existing scope.
+
+### ~~Calendar: remember the last-edited event/reminder for back-nav, expiring after about 30 minutes~~ — done 2026-09-24
+
+Built: `uiStore.calendarLastEditing: { type, id, at } | null` (persisted), same "remember on leave, restore fresh on entry" shape `notesLastEditingNoteId` already established. The 30-minute expiry is checked at read time in `setActiveView` (no background timer — uiStore has no proactive-expiry mechanism to hook into); a stale memory is left alone, just not auto-reopened. Tests in `src/store/uiStore.behavior.test.ts`.
+
+### ~~Notes: per-note tab memory (revisit bug)~~ — done 2026-09-24
+
+Was distinct from, and not fixed by, the earlier 2026-09-24 tab-restoration fix (that fix closes the mount-race for re-entering Notes from elsewhere; this covers revisiting a different note *within* the same Notes session). Built: `uiStore.notesTabMemory: Record<noteId, tabId | null>` (persisted, capped at 500 entries/trimmed to 400 — same hygiene-cap shape as `recentItemsStore`), and `NoteEditor.tsx`'s "load content when the note changes" effect now looks up the new note's remembered tab (validated against its current tabs) instead of unconditionally resetting to Main on every post-mount switch.
+
+---
+
 ## Endeavour filter — carry selection across sections/apps
 
 Currently `activeCollectionIdByView` (`uiStore`) deliberately remembers a **separate** focused Endeavour per section — Tasks, Calendar, Records, and Notes each keep their own independent value, so switching sections and back restores whatever that section had (see "Endeavour focus is per-section" in CLAUDE.md's Implemented features). The user wants the opposite in practice: pick an Endeavour in Tasks, switch to Calendar, and have Calendar already be focused on that same Endeavour.
@@ -139,6 +168,28 @@ Other Lists Phase 2+ items:
 - Per-list view settings (card grid vs compact list)
 - Item archiving (soft-delete, with restore)
 - Full-text search within list items
+
+---
+
+## Suite-wide nav-column UX — focus-follows-click, hover actions, item counts (logged 2026-09-24)
+
+Three related requests about the navigation columns (Notes' notebook tree, Lists' sidebar, and by extension Sidebar/ManagePane/RecordsView's tracker sidebar), explicitly asked to be considered as one cross-suite pattern rather than fixed per-component. None are currently tracked; findings below are from a direct code audit.
+
+### ~~Focus-follows-click — the two small gaps~~ — done 2026-09-24; the suite-wide standard is still open
+
+**Done**: `ChronicleView.tsx`'s Tree panel now sets `focusedCol('tree')` on click, matching List/Editor. `ListsSection.tsx`'s sidebar (`<aside>`) and main content (`<main>`) now set `focusedArea('nav'/'content')` on click, matching parity with Chronicle's pattern.
+
+**Still open, larger**: `Sidebar`, `ManagePane`, and `RecordsView` have no keyboard row-navigation concept at all — building an actual suite-wide standard (a shared focus-tracking convention those panes could adopt) is a separate, larger piece of work, not done here.
+
+### Hover row-action menu — reposition above/below instead of covering the row; reusable component (still open — large)
+
+Every row-hover-action site (`ChronicleView`, `Sidebar`, `ListsSection`, `RecordsView`) independently hand-rolls the same `opacity: 0 → 1` on-hover CSS, and the actions grow to occupy real inline row width (up to 130px in Chronicle's tree), squeezing/covering the name — exactly the reported "too wide for the column, easy to mis-click" problem. `ManagePane` differs (always-visible, no hover-gating) — a fourth inconsistent variant, not a fix. **No shared/floating hover-menu component exists anywhere** — building one that positions above/below the row instead of growing inline is genuinely new, and per CLAUDE.md's "Pattern governance," should be recorded as an agreed pattern once designed, applied going forward, and the existing 4-5 sites logged here as the retrofit list until converted. Medium-large — not built in the 2026-09-24 pass (the smaller "full name on hover" half below was).
+
+**Done 2026-09-24 — the "expand the full name on hover" half of this ask**: `src/components/TruncatedText/TruncatedText.tsx` already did exactly this for `ChronicleView`'s tree and `NoteList`; rolled out to the remaining four sites that were missing it — `Sidebar` (Endeavours/Tags/Purposes rows), `ManagePane` (its shared `ManageRow` component, covering all three tabs in one change), `ListsSection`'s sidebar, and `RecordsView`'s tracker/routine sidebar. All already had the required truncation CSS, so this was a drop-in `<span>` → `<TruncatedText>` swap at each site.
+
+### ~~Item count badge in nav-column rows~~ — done 2026-09-24 (Notes notebook tree)
+
+Built for `ChronicleView.tsx`'s notebook tree, following the `ListsSection` precedent (a small pill badge, hidden at zero). Resolved the "direct vs. recursive" design question in favor of **direct notes only** — matches `getTopLevelNotes`' own scope (what you'd see if you opened that notebook), and is the simpler, more predictable reading. `Sidebar`'s section-header counts were pre-existing, unrelated to this change.
 
 ---
 
@@ -518,6 +569,26 @@ Nothing else needs touching — the create popover, the hover-edit affordance, t
 
 ---
 
+### ~~Editor UX — focus follow-through, code-editor-style text wrapping~~ — done 2026-09-24
+
+**Cursor focus follows a click/rename/tab-switch into the editor.** Reused the existing `focusSignal`/`editorFocusSignal` plumbing for note-open (bumped from `ChronicleView.tsx` whenever `editingNoteId` changes to a real note, skipping the very first render). Tab switches (click or `Ctrl+Tab`) and finishing a tab rename via Enter now call `editor.commands.focus('end')` directly. Product decision made: always focus at **end** of content (not a remembered cursor position) — simpler, and matches what "move on into the editor" most naturally means.
+
+**Highlight text + press a quote/bracket to surround it, like a code editor.** Built: `NoteEditor.tsx`'s Tiptap `editorProps.handleKeyDown` wraps a non-empty selection in `( ) [ ] { } " " ' ' `` ` `` `` ` `` on the matching keypress (no modifier held), re-selecting the original text nested inside the new pair. Character set: the six standard code-editor pairs, not configurable/opt-out — no reports of the "replace instead of surround" expectation being a problem in this app's actual usage (a plain-text/data-entry-heavy editor is where that expectation is strongest; this is a rich-text note editor).
+
+*(Already built, no action needed: inline code-span formatting — see below, unchanged.)*
+
+### PDF / PowerPoint side-by-side annotation note-taking (logged 2026-09-24 — large, needs its own architecture pass)
+
+The big one from the 2026-09-24 request: attach a PDF or slide deck, view it on one side with a notes pane on the other (or overlaying it), and save the result into a note (existing or new). Greenfield — zero existing infrastructure (`NoteEditor.tsx`'s only non-text embed is `ResizableImage`; no attachment/file node type, no split-pane content layout, no PDF viewer anywhere in the app) and not previously scoped anywhere in this file (the one PDF mention, "Export formats (PDF, Markdown, HTML)" above, is about exporting a note *to* PDF — unrelated).
+
+Real sub-problems that need deciding before implementation starts, not just building:
+- **Rendering**: PDF.js (mature, client-side, the standard web choice) for PDFs. PowerPoint has no good client-side renderer — realistically needs server-side conversion (e.g. to PDF or per-slide images) via an edge function, which is a meaningfully bigger lift than the PDF half alone. Consider shipping PDF-only first.
+- **Storage**: note content today is inline base64 (images) and the notes store already hit the old 5 MB localStorage ceiling once because of exactly that pattern (see "Local storage headroom" in the Pattern retrofit backlog below) — a multi-MB PDF cannot go the same route. Needs the "images as separate blobs" direction already flagged there (IndexedDB/Supabase Storage, referenced by id), done for real this time rather than deferred again.
+- **Layout**: a genuinely new UI shape — nothing in this app currently splits a content pane into "external document" + "editor" side by side (Chronicle's tree/list/editor columns are navigation, not this).
+- **Annotation anchoring**: how a note's text ties back to a location/page in the source document — the actual "annotate as you read" mechanic, and the hardest part to get right.
+
+Recommend scoping as its own multi-phase brief (`docs/agent-tasks/`) once the rendering/storage/anchoring decisions are made, not a single change.
+
 ### Design consistency across suite
 
 **Shared design system (backlog item: "Suite design system")**
@@ -706,6 +777,20 @@ UI would show blocked tasks greyed out with a lock icon.
 
 ---
 
+## Tasks — inheritance gap and rich-text parity with Notes (logged 2026-09-24)
+
+### ~~Sub-task inheritance — Endeavour gap in `AddTaskModal`, tags/purposes not inherited anywhere~~ — done 2026-09-24
+
+Was a real bug, not a from-scratch feature — see the corrected note in `docs/features/implemented-features.md`'s "Task links from notes, sub-task priority inheritance…" entry (2026-09-20), which previously overclaimed this. Fixed: `AddTaskModal.tsx` now seeds `collectionId`/`tagIds`/`selectedPurposeIds` from the parent task when opened as a subtask, each tracked with its own `*Touched` ref (mirroring the pre-existing `priorityTouched` pattern) so a user's own pick always wins; changing the "Parent task" dropdown mid-form re-seeds whichever of the four (priority, Endeavour, tags, purposes) haven't been touched yet. `services/taskCalendarLinks.ts`'s `addTaskWithCalendar` extended with the same `undefined`-means-inherit convention for `tagIds`/`purposeIds` it already had for `collectionId` (used by `TaskPane.handleAddSubtask`'s quick-add path).
+
+### Rich text (bold/italic) + Notes-style inline hyperlinks in Task and Calendar notes fields — still open, large; deliberately deferred
+
+Requested: the same formatting hotkeys Notes uses (bold/italic, etc.) in Task title/notes fields, plus Notes-style inline link creation (highlight text, `Ctrl+L`, or `Ctrl+L` with no selection for a "text + URL" pane) in Task and Calendar notes fields. Not built anywhere — Task notes (`TaskPane`, `AddTaskModal`) and Calendar notes (`CalendarEventPane`, `CalendarReminderPane`) are all plain `<textarea>`s. The existing `LinksField` component (shared by all four) is a separate flat add/edit/delete URL list below the notes field, not inline-in-text linking, and there's no highlight-select-then-link affordance or auto-linkify of pasted URLs inside the textarea itself (though `mergeNewLinks`/`extractUrls`, `utils/links.ts`, already copies plain URLs *typed* into the notes text into that flat list on save — a different, narrower thing).
+
+Large if built as true parity with Notes: `Task.notes`/`CalendarEvent.notes`/`CalendarReminder.notes` are plain strings today, both in localStorage and as Supabase text columns — swapping in a Tiptap instance (even a reduced one, bold/italic/link marks only) means those fields become rich-doc JSON, a real data-model migration across 4 components and however many Supabase columns. A lighter alternative — Markdown-style bold/italic hotkeys and inline auto-linkify applied only at the UI layer, keeping storage as plain text/Markdown — avoids the storage-format change but is a different, lesser feature than what Notes actually does. Needs a decision from the user on which trade-off they want before scoping further.
+
+---
+
 ## Projects (Collection kind = 'project')
 
 ### Milestone tasks (`kind = 'milestone'`)
@@ -740,14 +825,56 @@ layer reads from this data rather than maintaining its own event store.
 **Open decision:**
 - Whether the Calendar section stays inside the Organizer app or eventually splits into its own app package. The suite's single-deployment monorepo model keeps both paths open — if split, it becomes a new route in the same build. Recommend revisiting once the feature spec matures.
 
-### Tentative events — built (Events only); a few related ideas not pursued
+### Tentative events (and, since 2026-09-24, reminders) — built; a few related ideas not pursued
 
-**Built**: `CalendarEvent.status: 'confirmed' | 'tentative'` — see CLAUDE.md "Tentative events" for the full write-up (data model, rendering, layer filter). Scoped to Events only, per the confirmed decision — Reminders and Schedule blocks don't have this field.
+**Built**: `CalendarEvent.status` / `CalendarReminder.status: 'confirmed' | 'tentative'` — see CLAUDE.md "Tentative events" for the full write-up (data model, rendering, layer filter). Originally scoped to Events only, per a confirmed decision — **reopened and extended to Reminders 2026-09-24** at the user's explicit request (see the superseded entry below). Schedule blocks still don't have this field (they have their own separate `active`/commitment-mode mechanism instead).
 
 **Considered but not built, worth revisiting only if a real need shows up:**
 - **ICS import doesn't read the source file's own `STATUS:TENTATIVE`** — `icsParser.ts`/`CalendarImportReviewModal` import every event as `status: 'confirmed'` regardless of what the source calendar had. Wiring this up would mean parsing `STATUS` in `icsParser.ts` and mapping it onto the new field — small, but not done since it wasn't asked for.
 - **A "is this still happening?" follow-up notification for a tentative event whose date has arrived or passed** — the same shape as the separate "Waiting-task follow-up notifications" item above, but for tentative events instead of `kind: 'waiting'` tasks. Not built; flagged here since the two ideas are conceptually the same pattern (something left in an unresolved state past its due point) and could plausibly share a notification mechanism if both get built.
-- **Reminders/Schedule blocks gaining their own tentative concept later** — deliberately not built now since neither has an obvious "not confirmed yet" meaning today (see CLAUDE.md), but if that changes, the `EventStatus` type was kept as its own named alias specifically so extending or renaming it stays a small change.
+- **Schedule blocks gaining their own tentative concept** — not built, no obvious "not confirmed yet" meaning for a recurring template block (as opposed to a concrete occurrence, which already has commitment mode).
+
+### New calendar entry kind: "Deadline" (proposed 2026-09-24, not decided)
+
+Discussed, not yet decided or scoped. The distinction from a Reminder: a Reminder's whole point is to notify you *at* (or shortly before) the moment; a Deadline's point is the opposite — notifying you *at* the deadline is too late to act, so it should only ever notify you some lead time *before* it. Today there are exactly two calendar-item kinds, `event` and `reminder` (`CalDisplayItem` in `CalendarView.tsx`), no third kind.
+
+**What already exists and would need reconciling, not ignoring:**
+- `services/taskCalendarLinks.ts`'s `syncDeadlineShadow()` already auto-creates a shadow `CalendarReminder` (`reminderType: 'task'`) whenever `Task.deadline` is set — but it's a plain Reminder under the hood, so "notify before, not at" is only approximated today via the whole-day-reminder `notifyDaysBefore`/`notifyAtTime` mechanism (default 1 day before at 17:00), which is a Reminder feature, not a structurally different Deadline concept.
+- `Milestone` (Projects, BACKLOG.md "Milestone tasks" below) is a conceptually adjacent, already-considered idea — "happens to you" anchor events vs. "you complete" deadlines — worth keeping distinct in mind so a new Deadline kind doesn't collide with it.
+
+**If built**, scope is medium-large: a new `CalendarItemKind` value, a data-shape decision (own type vs. a `CalendarReminder`/kind discriminator), rendering across all ~9 per-kind render sites `CalendarView.tsx` already duplicates small checks across (month/week/day/span-pill, per the Tentative-events and Important-flag entries' own note about that convention), genuinely different notification semantics (lead-time-only, no "at" trigger), and deciding whether a Task deadline's shadow item becomes a Deadline instead of a Reminder once this exists.
+
+### ~~Reconsider: give Reminders the same "tentative" flag Events have~~ — done 2026-09-24
+
+Built: see "Tentative events (and, since 2026-09-24, reminders)" above. `CalendarReminder.status` (migration `035_reminder_tentative.sql`, **Pending — not yet run**), `calendarStore` bumped to v11, `AddCalendarItemModal`'s Tentative checkbox now shows for both kinds, `CalendarReminderPane` got its own copy of the checkbox, and `CalendarView.tsx`'s single shared `isTentativeItem()` helper now checks reminders too — so all ~9 render sites picked it up without individually touching each one. The original open question ("what does 'not confirmed yet' mean for a point-in-time nudge?") was resolved by just reusing the identical checkbox/copy Events already use, rather than inventing reminder-specific wording.
+
+### Calendar item resize (time + date) via panel drag — reusable for Schedule blocks (logged 2026-09-24)
+
+Requested: drag an event/reminder panel's vertical edge to change start/end time (15-minute snap), and drag its horizontal edge across day columns to change date without touching time — and build it so Schedule block editing (`AddScheduleModal`) can reuse the same mechanism. Not built anywhere (`CalendarEventPane`/`CalendarReminderPane`/`AddScheduleModal`/`scheduleBlocks.ts` have zero resize-handle code). Real infrastructure already exists to build on: `snapMinutes`/`yToMinutes` (`utils/timeGrid.ts`) already implement the 15-min-snap math, just for click-to-create today; `getItemEndMinutes` (`CalendarView.tsx`) is the existing "how tall is this block" function a resize handle would write back into. Large — two distinct interaction mechanics (vertical time-resize, horizontal date-drag) on the same time-grid block component, and "reusable for Schedules too" is an explicit ask for a shared hook/component rather than a one-off, meaning it should be factored out of `CalendarView.tsx`'s per-item rendering from the start. Pairs naturally with the drag-and-drop item below — both are pointer-driven manipulation of the same time-grid layout code (`weekTimeGrid`, `dayLayout`, `getItemEndMinutes`).
+
+### Calendar drag & drop — move/create events and reminders directly on the grid (logged 2026-09-24)
+
+Not built anywhere (`CalendarView.tsx` has zero `draggable`/`onDragStart`/`onDrop` — item creation today is click-only, via `handleColumnClick`/`openCreateAt`). Large/new: drag-to-move an existing item (snapping to the time grid / day cell) and drag-to-create (drag a range to set start+end) are both substantial pointer-event mechanics layered on the same time-grid positioning system item above touches. Cross-day drag needs to update `date`, not just `time`. Touch/Android handling needs real attention — this codebase has already flagged HTML5 drag-from-touch as unreliable across WebViews elsewhere (the note-editor's pill-into-text drag). Should be scoped together with the resize item above.
+
+### Reminder rendering — point-in-time, not a time-span block (logged 2026-09-24; label fix done same day)
+
+**Done**: the misleading part — a fabricated "10:00–10:30"-style range label, for a Reminder that has no real end time — is fixed. `getItemEndMinutes()` still returns a synthetic 30-minute width for anything that isn't an event or schedule (`DEFAULT_POINT_DURATION_MIN`), since the time-grid's column-stacking math needs *some* height to lay blocks out with, but the two label render sites (week/day time-grid) now call a shared `formatItemTimeLabel(item, endMin)` (`CalendarView.tsx`) that shows a single time for point-in-time kinds (`task`, `reminder`) and a real range only for `event`/`schedule` — one helper, both sites, no per-kind duplication. Task deadline pills got the same fix for free, since they went through the exact same fake-range code path.
+
+**Still open, needs a design decision**: whether a Reminder's visual *box* should also change — take only as much vertical space as its title needs (capped at some max, "1 hour" was floated as a starting guess), or skip the panel entirely for a thin line + text treatment that reads as clearly distinct from a time-blocked Event. That's a genuinely separate render path (not routing through the shared block-box CSS at all) touching the same ~9 render sites Tentative/Important had to touch individually — no data-model change, purely `CalendarView.tsx` + CSS, but needs the visual treatment decided before building.
+
+### Background / banner calendar events (logged 2026-09-24)
+
+Requested: a new lightweight calendar concept for things that are "on in the background" over a date range without being a real scheduled event — travel ("in Thailand for 10 days"), an ambient multi-day festival, etc. — rendered subtly (a dense line near the top of the covered days), not as a normal block. Not built, not previously tracked. Real infrastructure already close: `SpanSlot` (`CalendarView.tsx`) already handles multi-day `CalendarEvent` spans and renders them as `.spanPill` — but it's hard-wired to `CalendarEventId` and its CSS renders a normal colored pill, not a thin line. Two build options: (i) reuse `CalendarEvent` with a new flag (e.g. `background: true`) and give `SpanSlot`/`.spanPill` an alternate thin-line render mode — cheapest, reuses all the existing date-range/column math (`getWeekSpanSlots`); (ii) a genuinely new lightweight entity type — cleaner semantically (a travel banner isn't really an "event") but more work. Recommend prototyping (i) first. Cross-reference `Milestone.source`'s existing extensibility point for calendar-event-like non-task entities.
+
+### Calendar/Reminder create-edit panes — Location field placement + a shared field-layout pattern (mechanical part done 2026-09-24; pattern-level part still open)
+
+Two separable asks:
+1. **Mechanical — done**: Location moved out of `AddCalendarItemModal`'s collapsed "More options" into the always-visible base fields (right after Date/Time/Event type), matching `CalendarEventPane`'s edit-mode placement.
+2. **Pattern-level — still open, large**: there is no shared, documented "base fields vs. More-options" convention across the suite's create/edit panes today, despite it looking like one from the outside — `AddCalendarItemModal` and `AddTaskModal` each independently built their own expand/collapse toggle and field-ordering logic, and CLAUDE.md's "Pattern governance" / the Pattern retrofit backlog below has no row for it. If a real cross-app pattern is wanted (which field goes where, consistently, across Task/Calendar/other panes), that's new pattern-governance work: agree the rule, record it in CLAUDE.md, extract a shared `MoreOptionsSection`-style component, retrofit `AddCalendarItemModal` and `AddTaskModal` onto it, and log the retrofit in the Pattern retrofit backlog below. Worth a short design discussion with the user on field ordering before building the shared component. Not attempted in the 2026-09-24 pass — deliberately deferred as one of the "bigger" items.
+
+### ~~Time field: keyboard clear + hover-×~~ — done 2026-09-24
+
+`TimeInput.tsx`'s `Delete` now always clears the whole time (previously fully blocked by the digit-only regex guard). The *first* `Backspace` since a segment gained focus also clears the whole time (mirroring "everything's selected, Backspace deletes the selection" — focusing a segment already visually select-alls it); a later `Backspace` mid-edit still chops one character, for corrections, unchanged. Added a small hover-only `×` beside the segments (not overlapping the `▾` dropdown toggle) calling the pre-existing `clearTime()`.
 
 ### Mini-calendar toggle in the task list view
 A setting (in the Settings pane) to display a condensed calendar alongside
@@ -880,14 +1007,10 @@ a brain-dump) and have an AI agent parse it into structured tasks. The agent
 should infer titles, priorities, deadlines, and collection assignments where
 possible, then present the parsed tasks for review before adding them.
 
-### Voice → agent (partly built)
-Dictation into text fields is built (`Ctrl+D`, see CLAUDE.md "Voice dictation"). Still to do: with **nothing focused**, `Ctrl+D` should open a voice pane whose default destination is the agent (simple commands first), with recording/meeting-minutes as further options. The seam is there — a second destination for the transcript besides the focused field — but the agent interface itself (below) must be designed first.
+### Voice → agent (v1 built, paused 2026-09-24)
+Dictation into text fields is built (`Ctrl+D`, see the "Voice dictation" entry in `docs/features/implemented-features.md`). **Paused by the user 2026-09-24** — enabling Google Cloud Speech-to-Text asked for a €25 payment they didn't expect, and the AI agent command layer took priority instead. Full context, the billing question, and what changed since this was designed (the agent command layer, `src/agent/`, now exists and gives "voice → agent" a concrete destination) are in **`docs/agent-tasks/04-voice-dictation-followups.md`** — read that before touching this again, don't re-derive it here.
 
-Also open:
-- A local Whisper `SpeechEngine` — free, offline, works without Google; heavier build (C++/CMake) plus a 150–500 MB model download. `tauri-plugin-stt` wraps whisper-rs but its maturity is unvetted.
-- A Web Speech engine for the PWA; a `RECORD_AUDIO` permission and mic button for Android (no hotkeys there).
-- Spoken-command handling ("new line", "period") and custom vocabulary (Acronym entries, Endeavour names).
-- **Recordings** (lectures, meeting minutes): chunked local audio in IndexedDB, timestamped transcript, speaker labels. Where it lives is undecided and not Notes; a paid feature, audio kept local first.
+Still to do, unchanged: with **nothing focused**, `Ctrl+D` should open a voice pane whose default destination is the agent, with recording/meeting-minutes as further options. A local Whisper `SpeechEngine` (free, offline; heavier build — C++/CMake plus a 150–500 MB model; `tauri-plugin-stt` wraps whisper-rs but its maturity is unvetted) and a Web Speech engine (free, no key, but unverified in Tauri's WebView2) are the two real alternatives to Google if that's wanted. A `RECORD_AUDIO` permission and mic button for Android (no hotkeys there). Spoken-command handling ("new line", "period") and custom vocabulary (Acronym entries, Endeavour names). **Recordings** (lectures, meeting minutes): chunked local audio in IndexedDB, timestamped transcript, speaker labels — where it lives is undecided and not Notes; a paid feature, audio kept local first.
 
 ### Voice control
 Hands-free task creation and navigation via voice commands. The agent
@@ -2463,6 +2586,13 @@ $1 (Update 2026-09-20: the *delete confirmation* for all of those now uses the s
 
 `closeTopmostMobileOverlay()` (`src/store/uiStore.ts`) closes overlays by a *fixed priority list* of store flags, not by which was opened most recently, so it has the same class of inconsistency Escape used to have. Now that every overlay registers with `useEscapeClose` (`src/hooks/useEscapeClose.ts`), the back button could call a `closeTopOverlay()` exported from that module instead (and fall through to `mobileBackConsumer`/section history/minimise when the stack is empty). Needs an on-device check — Android wasn't exercised in the Escape work.
 
+## Recycling Bin — deferred follow-ups (logged 2026-09-24, built this session)
+
+The suite-wide Recycling Bin is built (see "Recycling Bin" in CLAUDE.md and `docs/features/implemented-features.md`). Two things were deliberately deferred:
+
+- **Age-based auto-purge of trash entries.** MVP keeps them indefinitely, matching the already-accepted "soft-delete tombstones are never purged" acceptance at current scale — but the local `trashStore` (IndexedDB) holds full entity bodies, not just an id, so its growth is denser than the Supabase tombstone columns. A purge (e.g. anything older than 30/90 days, with a Settings toggle) should be added once this is felt in practice.
+- **Agent-initiated deletes.** `TrashEntry.deletedBy` is already a forward-compatible union (`{ type: 'user' } | { type: 'agent'; batchId }`), but nothing produces the `agent` branch — the AI command layer's "no delete, ever" boundary (`access.ts`) is unchanged; agents still only archive. If that boundary is ever revisited (see "AI Agent Integration" → item 7, archive support), a genuine agent delete should route through `moveToTrash` with `{ type: 'agent', batchId }` so it shows up in the bin attributable to the agent, not silently as "by You".
+
 ---
 
 ## Pattern retrofit backlog
@@ -2474,7 +2604,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 | **No native popups** (`ConfirmDialog`) | `grep -rnE "window\.(confirm\|alert\|prompt)" src` | **Fully applied 2026-09-20** — zero sites. |
 | **Ctrl+Enter on every modal** | list modals/panes; each must bind Ctrl+Enter (`useCtrlEnterSubmit`, or the inline `requestSubmit` effect) | **Fully applied 2026-09-20.** Exception: `NoteTagPresetModal` (no primary action). *Optional tidy:* ~20 older modals still use the inline effect rather than `useCtrlEnterSubmit`. Five of them (`AddNoteModal`, `AddNoteTagModal`, `BulkUploadWatchlistModal`, `ListsSection`, `NoteEditor`) also trip `react-hooks/immutability` because the handler is a `const` referenced from an effect above it — moving them to the hook with a function declaration fixes both. |
 | **Escape via `useEscapeClose`** | `grep -rlE "'Escape'" src` — every hit must be a documented inline handler that calls `stopPropagation` | **Fully applied.** Android's hardware back button still uses a fixed priority list (see "Android back button should use the same overlay stack" above). |
-| **Terms from `labels.ts`** | `grep -rnE "Endeavour" src --include=*.tsx --include=*.ts` outside `labels.ts` and comments | **Endeavour fully applied 2026-09-20.** Other concept names (Purpose, Tracker, Routine, Notebook, Activity…) are still hard-coded in many strings — only Endeavour was audited. Extend `LABELS` and re-audit before renaming any of them. |
+| **Terms from `labels.ts`** | `npx vitest run src/test/patterns.test.ts -t "Endeavour"` (quoted-string hits only; see `src/test/patterns.test.ts`) | **Endeavour fully applied 2026-09-20**, but drifted again: the AI command layer (Chunk A, merged after that audit) hard-codes "Endeavour" throughout its tool descriptions and error messages — `src/agent/commands/organisation.ts`, `read.ts`, `shared.ts`, `tasks.ts` (found 2026-09-24 by the new pattern test, which exempts `src/agent/` with a pointer back to this row so it doesn't silently regress further). Not fixed here: these are AI tool-schema/error strings, not UI a person reads, and brief `03-ai-assistant-next-steps.md`'s own rules require discussing any change to agent-facing wording with the user first. Other concept names (Purpose, Tracker, Routine, Notebook, Activity…) are still hard-coded in many strings too — only Endeavour was ever audited. Extend `LABELS` and re-audit before renaming any of them. |
 | **No constant inline styles** | `grep -rnE "style=\{\{ ?[a-zA-Z]+: ?('[^']*'\|[0-9.]+)" src --include=*.tsx` | Applied 2026-09-20 except six `NoteEditor.tsx` portaled elements that carry a constant `position: 'fixed'` / `transform` alongside measured `top`/`left` (move the constants into classes). |
 | **CSS colours from variables (dark-mode safe)** | `grep -rnE "#[0-9a-fA-F]{3,8}" src --include=*.module.css` outside `var()` fallbacks | Not audited beyond spotting them. Mostly `#fff` on accent backgrounds (fine). Worth checking in dark mode: `AddTaskModal` priority chips, `CalendarView` pill text colours, `IntegrationsPane` status colours, `ListsSection` kind badges, `WatchlistView` gains/losses. |
 | **Archive + delete via `ItemActions`** | panes for user-owned items | Only Task, Calendar event and Calendar reminder are on it. Notes, notebooks, lists, list items, trackers, routines, activities, schedules and watchlist items delete through `confirmDelete` (correct wording, but no "Archive instead" and no archived state). |
@@ -2483,6 +2613,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 | **Every persisted store uses `persistStorage()`** | `grep -L persistStorage $(grep -rl "persist(" src/store)` must list nothing | **Fully applied 2026-09-21** — all 14 persisted stores; the two agent stores (2026-09-22) use it too. |
 | **Agent commands touch data only through `agent/access.ts`** | `npm test` (`boundary.test.ts`) and `npx eslint src/agent` | **Fully applied 2026-09-22** (new code). Standing rule: "Agent command layer" in CLAUDE.md. |
 | **One implementation of each create/edit rule, shared by the UI and the agent** | for calendar items: every `addEvent(`/`addReminder(` call site should build its input with `utils/calendarItemInput.ts`; for schedule blocks: `createScheduleBlock` | Applied to `AddCalendarItemModal` and `AddScheduleModal` 2026-09-22. **Remaining:** `MobileCalendarQuickAdd` builds its own event/reminder input, `CalendarEventPane` applies the end-date and notes→links rules itself on edit, and the ICS import in `IntegrationsPane` builds events directly. |
+| **Every sync mapper's `xToRow` sends an explicit `deleted_at: null`** | `npx vitest run src/test/patterns.test.ts -t "deleted_at"` | **Fully applied 2026-09-24** — all 18 mappers (17 existing + the new `trashEntryToRow`), fixed in the same change that added the Recycling Bin (see CLAUDE.md "Recycling Bin"). Without this, restoring an item previously tombstoned by another device would leave it zombie-tombstoned forever. |
 
 ### Local storage headroom (logged 2026-09-21; notes moved to IndexedDB 2026-09-22)
 

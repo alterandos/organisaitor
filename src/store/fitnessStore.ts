@@ -8,6 +8,7 @@ import type {
 import { BUILTIN_ACTIVITY_TYPE_SEEDS } from '@/config/activityTypes';
 import { now } from '@/utils/date';
 import { persistStorage } from '@/utils/persistStorage';
+import { moveToTrash } from '@/services/trashCapture';
 
 interface FitnessData {
   activities:    Record<ActivityId, Activity>;
@@ -102,6 +103,8 @@ export const useFitnessStore = create<FitnessStore>()(
 
       deleteActivity: (id) =>
         set((state) => {
+          const activity = state.activities[id];
+          if (activity) moveToTrash('activity', activity);
           const activities = { ...state.activities };
           delete activities[id];
           return { activities };
@@ -163,6 +166,7 @@ export const useFitnessStore = create<FitnessStore>()(
         set((state) => {
           const type = state.activityTypes[id];
           if (!type || type.isBuiltIn) return {};
+          moveToTrash('activityType', type);
           const activityTypes = { ...state.activityTypes };
           delete activityTypes[id];
           return { activityTypes };

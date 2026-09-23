@@ -33,6 +33,17 @@ export interface CalendarItemPrefillExtra {
 export interface SectionHistoryEntry { view: AppView }
 export const MAX_SECTION_HISTORY = 6;
 
+// notesTabMemory hygiene cap — same shape as recentItemsStore's MAX_ENTRIES/TRIM_TO: nothing
+// ever removes an entry when its note is deleted, so trimming down on write when the map gets
+// too large keeps it bounded. No per-entry timestamp here (unlike recentItemsStore), so the
+// trim just drops arbitrary entries via insertion order rather than true least-recently-used —
+// fine for a hygiene cap this generous.
+const MAX_NOTE_TAB_MEMORY = 500;
+const NOTE_TAB_MEMORY_TRIM_TO = 400;
+
+// How long calendarLastEditing stays eligible to auto-reopen when returning to Calendar.
+export const CALENDAR_LAST_EDITING_TTL_MS = 30 * 60_000;
+
 // Manage view (library administration) — left-nav tabs, extensible for future sections.
 export type ManageSection = 'endeavours' | 'purposes' | 'tags';
 
@@ -179,6 +190,11 @@ interface UIState {
   openIntegrations:  () => void;
   closeIntegrations: () => void;
 
+  // Recycling Bin (Ctrl+Shift+R, or from Account) — see src/components/RecyclingBinPane/.
+  recyclingBinOpen:  boolean;
+  openRecyclingBin:  () => void;
+  closeRecyclingBin: () => void;
+
   sortField:    SortField;
   sortDir:      SortDir;
   setSortField: (f: SortField, dir?: SortDir) => void;
@@ -200,6 +216,14 @@ interface UIState {
   taskViewMode:    TaskViewMode;
   setTaskViewMode: (mode: TaskViewMode) => void;
 
+  // Which tasks are expanded/collapsed in TaskList — lifted out of TaskList's own local
+  // state so it survives navigating away (TaskList unmounts on every section switch) and
+  // back, per the request that expanded tasks stay expanded. Meaning is inverted in
+  // 'focused' mode (see TaskList.isExpanded) same as before the lift.
+  taskExpandedIds:    string[];
+  toggleTaskExpanded: (taskId: string) => void;
+  clearTaskExpanded:  () => void;
+
   editingCalendarEventId:    string | null;
   editingCalendarReminderId: string | null;
   // The occurrence date (YYYY-MM-DD) that was clicked, for a repeating item — lets the pane offer
@@ -211,6 +235,14 @@ interface UIState {
   closeCalendarEventPane:    () => void;
   openCalendarReminderPane:  (id: string, occurrenceDate?: string) => void;
   closeCalendarReminderPane: () => void;
+
+  // Remembers the last event/reminder pane open in Calendar (same "last X" pattern as
+  // notesLastEditingNoteId) so leaving the section and coming back — including via
+  // Alt+Left/Right — reopens it, but only within CALENDAR_LAST_EDITING_TTL_MS: a memory
+  // that's gone stale (you came back an hour later, having long since moved on) should NOT
+  // reopen a pane out of nowhere. Freshness is checked where it's read (setActiveView), not
+  // by a background timer — there's no proactive-expiry mechanism in uiStore to hook into.
+  calendarLastEditing: { type: 'event' | 'reminder'; id: string; at: string } | null;
 
   // Which of Month/Week/Day CalendarView is showing — lifted out of CalendarView's own
   // local state so it survives switching to another app and back (CalendarView unmounts
@@ -311,6 +343,14 @@ interface UIState {
   // not just the same note.
   notesLastActiveTabId:    string | null;
   setNotesLastActiveTab:   (tabId: string | null) => void;
+  // Per-note "which tab was I last on" memory, keyed by noteId — distinct from
+  // notesLastActiveTabId above (which only ever remembers the single most-recently-open
+  // note+tab pair). This is what lets revisiting a DIFFERENT note within the same Notes
+  // session (without leaving the section) land back on that note's own last tab, rather than
+  // always resetting to Main. Capped (see setNoteTabMemory) — nothing ever removes an entry
+  // when its note is deleted, so left unbounded it would grow forever.
+  notesTabMemory:          Record<string, string | null>;
+  setNoteTabMemory:        (noteId: string, tabId: string | null) => void;
   showAddNote:             () => void;
   showAddNoteTag:          (parentId?: NoteTagId | null, kind?: 'area' | 'tag') => void;
   showTagPresets:          () => void;
@@ -509,6 +549,10 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   openIntegrations:  () => set({ integrationsOpen: true  }),
   closeIntegrations: () => set({ integrationsOpen: false }),
 
+  recyclingBinOpen:  false,
+  openRecyclingBin:  () => set({ recyclingBinOpen: true  }),
+  closeRecyclingBin: () => set({ recyclingBinOpen: false }),
+
   sortField: 'createdAt',
   sortDir:   'desc',
   setSortField: (f, dir) => set({ sortField: f, sortDir: dir ?? DEFAULT_SORT_DIR[f] }),
@@ -534,6 +578,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
         : mode === 'back'
         ? [{ view: s.activeView }, ...s.sectionForwardHistory].slice(0, MAX_SECTION_HISTORY)
         : s.sectionForwardHistory;
+    // Only reopen a remembered Calendar pane if it's still within the TTL — otherwise it's
+    // treated the same as no memory at all (both editing ids land on null below).
+    const freshCalendarMemory =
+      s.calendarLastEditing && Date.now() - new Date(s.calendarLastEditing.at).getTime() < CALENDAR_LAST_EDITING_TTL_MS
+        ? s.calendarLastEditing
+        : null;
     return {
       activeView: view,
       sectionHistory,
@@ -548,6 +598,23 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
         : null,
       notesLastEditingNoteId: s.activeView === 'notes' ? s.editingNoteId : s.notesLastEditingNoteId,
       noteTagViewReturn:   view === 'notes' ? s.noteTagViewReturn : null,
+      // Same "last X, remembered on leave, restored fresh on entry" shape as Notes above —
+      // except gated by CALENDAR_LAST_EDITING_TTL_MS (freshCalendarMemory), since unlike a
+      // note, reopening an event/reminder pane out of nowhere after a long absence would read
+      // as the app doing something unprompted rather than "picking up where you left off."
+      editingCalendarEventId: view === 'calendar'
+        ? (s.activeView === 'calendar' ? s.editingCalendarEventId : (freshCalendarMemory?.type === 'event' ? freshCalendarMemory.id : null))
+        : null,
+      editingCalendarReminderId: view === 'calendar'
+        ? (s.activeView === 'calendar' ? s.editingCalendarReminderId : (freshCalendarMemory?.type === 'reminder' ? freshCalendarMemory.id : null))
+        : null,
+      calendarLastEditing: s.activeView === 'calendar'
+        ? (s.editingCalendarEventId
+            ? { type: 'event' as const, id: s.editingCalendarEventId, at: new Date().toISOString() }
+            : s.editingCalendarReminderId
+            ? { type: 'reminder' as const, id: s.editingCalendarReminderId, at: new Date().toISOString() }
+            : s.calendarLastEditing)
+        : s.calendarLastEditing,
       // Endeavour/Purpose filter dropdowns are section-scoped UI, not section-scoped
       // state — close them on any section switch so they don't reopen stale later.
       endeavourPickerOpen: false,
@@ -578,10 +645,21 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   },
 
   taskViewMode:    'overview',
-  setTaskViewMode: (mode) => set({ taskViewMode: mode }),
+  setTaskViewMode: (mode) => {
+    set({ taskViewMode: mode, taskExpandedIds: [] });
+  },
+
+  taskExpandedIds: [],
+  toggleTaskExpanded: (taskId) => set((s) => ({
+    taskExpandedIds: s.taskExpandedIds.includes(taskId)
+      ? s.taskExpandedIds.filter((id) => id !== taskId)
+      : [...s.taskExpandedIds, taskId],
+  })),
+  clearTaskExpanded: () => set({ taskExpandedIds: [] }),
 
   editingCalendarEventId:    null,
   editingCalendarReminderId: null,
+  calendarLastEditing:       null,
   editingCalendarEventOccurrence:    null,
   editingCalendarReminderOccurrence: null,
   openCalendarEventPane:     (id, occurrenceDate) => set({ editingCalendarEventId: id, editingCalendarEventOccurrence: occurrenceDate ?? null }),
@@ -681,6 +759,15 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   notesLastEditingNoteId: null,
   notesLastActiveTabId:   null,
   setNotesLastActiveTab:  (tabId) => set({ notesLastActiveTabId: tabId }),
+  notesTabMemory:         {},
+  setNoteTabMemory: (noteId, tabId) => set((s) => {
+    let notesTabMemory = { ...s.notesTabMemory, [noteId]: tabId };
+    const keys = Object.keys(notesTabMemory);
+    if (keys.length > MAX_NOTE_TAB_MEMORY) {
+      notesTabMemory = Object.fromEntries(keys.slice(-NOTE_TAB_MEMORY_TRIM_TO).map((k) => [k, notesTabMemory[k]]));
+    }
+    return { notesTabMemory };
+  }),
   showAddNote:            ()   => set({ openModal: 'add-note' }),
   showAddNoteTag:         (parentId, kind = 'area') => set({ openModal: 'add-note-tag', pendingNoteTagParentId: parentId ?? null, pendingNoteTagKind: kind }),
   showTagPresets:         () => set({ openModal: 'note-tag-presets' }),
@@ -742,12 +829,14 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     activePurposeIds:         s.activePurposeIds,
     notesLastEditingNoteId:   s.notesLastEditingNoteId,
     notesLastActiveTabId:     s.notesLastActiveTabId,
+    notesTabMemory:           s.notesTabMemory,
     selectedNoteTagId:        s.selectedNoteTagId,
     listsLastActiveListId:    s.listsLastActiveListId,
     listsLastActiveTabId:     s.listsLastActiveTabId,
     activeTrackerId:          s.activeTrackerId,
     activeRoutineId:          s.activeRoutineId,
     calendarViewMode:         s.calendarViewMode,
+    calendarLastEditing:      s.calendarLastEditing,
   }),
 }));
 
@@ -773,6 +862,7 @@ export function closeTopmostMobileOverlay(): boolean {
   if (s.schedulesOpen)                                      { s.closeSchedules();         return true; }
   if (s.manageOpen)                                         { s.closeManage();            return true; }
   if (s.integrationsOpen)                                   { s.closeIntegrations();      return true; }
+  if (s.recyclingBinOpen)                                   { s.closeRecyclingBin();      return true; }
   if (s.accountOpen)                                        { s.closeAccount();           return true; }
   if (s.settingsOpen)                                       { s.closeSettings();          return true; }
   if (s.editingNoteId !== null && s.activeView !== 'notes') { s.closeNote();              return true; }
