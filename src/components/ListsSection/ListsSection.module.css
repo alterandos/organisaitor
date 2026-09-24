@@ -121,7 +121,6 @@
   user-select: none;
 }
 .sidebarItem:hover { background: var(--color-bg); }
-.sidebarItem:hover .sidebarItemActions { opacity: 1; }
 .sidebarItemActive {
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
   border-left-color: var(--color-primary);
@@ -163,14 +162,8 @@
   color: var(--color-muted);
 }
 
-.sidebarItemActions {
-  display: flex;
-  gap: 0.1rem;
-  opacity: 0;
-  transition: opacity 120ms;
-  flex-shrink: 0;
-}
-
+/* Rendered inside a portaled RowHoverActionsMenu now (see src/components/RowHoverActions),
+   not a .sidebarItemActions wrapper in the row itself. */
 .sidebarActionBtn {
   display: flex;
   align-items: center;

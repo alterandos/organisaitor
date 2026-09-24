@@ -25,8 +25,8 @@ import styles from './CalendarView.module.css';
 
 type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
-  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
-  | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; important: boolean; occurrenceDate: string }
+  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
+  | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
   | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean };
 
 interface SpanSlot {
@@ -141,6 +141,7 @@ interface TooltipState {
   y: number;
   title: string;
   notes: string | null;
+  links: string[];
   collectionName: string | null;
   collectionColor: string | null;
   time: string | null;
@@ -152,18 +153,22 @@ export function CalendarView() {
   const timezone     = useSettingsStore((s) => s.timezone);
   const effectiveZone = resolveTimezone(timezone);
   const todayIsoStr  = todayIsoInZone(effectiveZone);
-  const [todayYear, todayMonth] = todayIsoStr.split('-').map(Number);
 
-  const [year,        setYear]        = useState(todayYear);
-  const [month,       setMonth]       = useState(todayMonth - 1);
-  // Lifted into uiStore (calendarViewMode) rather than local state so it survives
-  // switching to another app and back — CalendarView unmounts on section switch.
+  // Lifted into uiStore (calendarViewMode, calendarYear/Month/SelectedDate) rather than
+  // local state so it survives switching to another app and back — CalendarView unmounts
+  // on section switch, and returning to Calendar (any path) should land back on the same
+  // month/week/day, not reset to today.
   const desktopMode    = useUIStore((s) => s.calendarViewMode);
   const setDesktopMode = useUIStore((s) => s.setCalendarViewMode);
+  const year         = useUIStore((s) => s.calendarYear);
+  const setYear      = useUIStore((s) => s.setCalendarYear);
+  const month        = useUIStore((s) => s.calendarMonth);
+  const setMonth     = useUIStore((s) => s.setCalendarMonth);
+  const selectedDate = useUIStore((s) => s.calendarSelectedDate);
+  const setSelectedDate = useUIStore((s) => s.setCalendarSelectedDate);
   const [tooltip,     setTooltip]     = useState<TooltipState | null>(null);
   const [hoveredHour, setHoveredHour] = useState<number | null>(null);
   const [dayPaneDate, setDayPaneDate] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(todayIsoStr);
 
   const tasks             = useTaskStore((s) => s.tasks);
   const collectionsRecord = useTaskStore((s) => s.collections);
@@ -266,6 +271,7 @@ export function CalendarView() {
         time: ev.startTime,
         collectionId: ev.collectionId,
         notes: ev.notes,
+        links: ev.links,
         // Birthday takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
         // event auto-created from a task's scheduledAt (see Task.calendarEventId) so the calendar
         // reads as task-linked without changing the event's click/edit behaviour.
@@ -301,6 +307,9 @@ export function CalendarView() {
       // here too would duplicate the pill.
       if (rem.reminderType === 'task') return;
       if (!layerVisibility.reminders) return;
+      // Tentative is a filter on top of the 'reminders' layer, not a separate one — same
+      // convention as events (see above).
+      if ((rem.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
       if (activeCollectionId && rem.collectionId !== activeCollectionId) return;
       const item: CalDisplayItem = {
         kind: 'reminder',
@@ -309,7 +318,9 @@ export function CalendarView() {
         time: rem.time,
         collectionId: rem.collectionId,
         notes: rem.notes,
+        links: rem.links,
         typeIcon: rem.important ? '❗' : '',
+        status: rem.status ?? 'confirmed',
         important: rem.important ?? false,
         occurrenceDate: rem.date,
       };
@@ -399,6 +410,16 @@ export function CalendarView() {
     const clamped = ((min % (24 * 60)) + 24 * 60) % (24 * 60);
     return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
   };
+
+  // Tasks (deadline pills) and Reminders are point-in-time, not time-blocked — they only get a
+  // synthetic end time (DEFAULT_POINT_DURATION_MIN, above) so the time-grid layout has *some*
+  // height to stack them with, never a real duration. Showing that as a "10:00–10:30"-style
+  // range reads as a real time block, which it isn't; a single time is accurate.
+  const isPointInTimeKind = (kind: CalDisplayItem['kind']): boolean => kind === 'task' || kind === 'reminder';
+  const formatItemTimeLabel = (item: CalDisplayItem, endMin: number): string =>
+    isPointInTimeKind(item.kind)
+      ? formatTime(item.time!, clockFormat)
+      : `${formatTime(item.time!, clockFormat)}–${formatTime(minutesToTimeStr(endMin), clockFormat)}`;
 
   const getItemLocation = (item: CalDisplayItem): string | null => {
     if (item.kind === 'event') return events[item.id]?.location || null;
@@ -548,7 +569,6 @@ export function CalendarView() {
   const pendingCalendarDate = useUIStore((s) => s.pendingCalendarDate);
   useEffect(() => {
     if (!pendingCalendarDate) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- consumes a one-shot navigation request posted to uiStore by another section, then clears it
     jumpToDate(pendingCalendarDate);
     useUIStore.getState().clearPendingCalendarDate();
   }, [pendingCalendarDate]);
@@ -723,7 +743,8 @@ export function CalendarView() {
   };
 
   const handleItemMouseEnter = (e: React.MouseEvent<HTMLButtonElement>, item: CalDisplayItem) => {
-    if (!item.notes && !item.collectionId) return;
+    const links = item.kind === 'event' || item.kind === 'reminder' ? item.links : [];
+    if (!item.notes && !links.length && !item.collectionId) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const collectionColor = item.collectionId ? (collectionsRecord[item.collectionId]?.color ?? null) : null;
     setTooltip({
@@ -731,6 +752,7 @@ export function CalendarView() {
       y: rect.top,
       title: item.title,
       notes: item.notes,
+      links,
       collectionName: item.collectionId ? (collectionsRecord[item.collectionId]?.name ?? null) : null,
       collectionColor,
       time: item.time,
@@ -762,7 +784,7 @@ export function CalendarView() {
   // see CLAUDE.md "Schedule commitment mode"). Both reuse the same visual language on
   // purpose — both mean "this is a possibility on your calendar, not yet a sure thing."
   const isTentativeItem = (item: CalDisplayItem): boolean =>
-    (item.kind === 'event' && item.status === 'tentative') || (item.kind === 'schedule' && !item.committed);
+    ((item.kind === 'event' || item.kind === 'reminder') && item.status === 'tentative') || (item.kind === 'schedule' && !item.committed);
 
   const isImportantItem = (item: CalDisplayItem): boolean =>
     (item.kind === 'event' || item.kind === 'reminder') && item.important;
@@ -1163,7 +1185,7 @@ export function CalendarView() {
                                 title=""
                               >
                                 <span className={styles.weekTimeBlockTime}>
-                                  {formatTime(item.time!, clockFormat)}–{formatTime(minutesToTimeStr(endMin), clockFormat)}
+                                  {formatItemTimeLabel(item, endMin)}
                                 </span>
                                 <span className={styles.weekTimeBlockTitle}>{item.title}</span>
                                 {getItemLocation(item) && (
@@ -1279,7 +1301,7 @@ export function CalendarView() {
                               onMouseLeave={() => setTooltip(null)}
                             >
                               <span className={styles.weekTimeBlockTime}>
-                                {formatTime(item.time!, clockFormat)}–{formatTime(minutesToTimeStr(endMin), clockFormat)}
+                                {formatItemTimeLabel(item, endMin)}
                               </span>
                               <span className={styles.weekTimeBlockTitle}>{item.title}</span>
                               {getItemLocation(item) && (
@@ -1361,6 +1383,13 @@ export function CalendarView() {
           )}
           {tooltip.notes && (
             <span className={styles.tooltipNotes}>{tooltip.notes}</span>
+          )}
+          {tooltip.links.length > 0 && (
+            <span className={styles.tooltipLinks}>
+              {tooltip.links.map((link) => (
+                <span key={link} className={styles.tooltipLink}>{link}</span>
+              ))}
+            </span>
           )}
         </div>
       )}

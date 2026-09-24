@@ -107,7 +107,8 @@ The split only stays useful if every agent follows the same structure. These rul
 - [ ] If a new persisted store was added: its key is in `PERSISTED_STORAGE_KEYS` (`src/config/backup.ts`) and it has a `version`
 - [ ] If a new pattern was defined: recorded here, applied to new code, and the retrofit audit logged in BACKLOG.md
 - [ ] Build passes (`npm run build`) and tests pass (`npm test`)
-- [ ] Feature tested end-to-end
+- [ ] **Automated tests added/updated for whatever you changed, if that area has coverage** (see "Testing" below for what's covered) — running them is your regression testing; don't also manually re-verify what they already prove
+- [ ] For anything NOT yet covered by the automated suite, verified manually (or via Playwright) instead — and consider whether it was worth turning into a permanent test rather than a one-off check
 - [ ] A future Claude reading CLAUDE.md + the docs + BACKLOG.md would understand what exists, where the code lives, how it connects, and what's not done
 
 ---
@@ -126,15 +127,25 @@ The split only stays useful if every agent follows the same structure. These rul
 
 ## Testing
 
-Full plan and status: `docs/agent-tasks/02-testing-and-engineering-hygiene.md` (Part A — what's built vs. remaining per phase; Part B — engineering hygiene items). Short version:
+**The automated suite is the regression test — prefer it over manually re-verifying by hand.** This is the whole point of having it: before this suite existed, every change was checked with a throwaway Node/Playwright script that was then deleted, so nothing stopped the same bug (timezone offset overshoot, an Escape-stack ordering bug, an encryption re-ordering race, a migration that silently dropped fields) from coming back the next time someone touched nearby code. The rule going forward:
 
-- `npm test` (`vitest run`) runs the whole suite; `npm run test:watch` for watch mode; `npm run check` runs `tsc -b && eslint . && vitest run && vite build` (currently fails on eslint's pre-existing baseline — see Part B7 — CI gates on that baseline instead of zero, `.github/workflows/ci.yml`).
-- Node environment by default; jsdom is available per-file via `// @vitest-environment jsdom` for component tests (Testing Library is installed but no component tests exist yet).
-- `src/test/setup.ts` provides a Map-backed `localStorage` and awaits `preloadIdbStorage()` (no IndexedDB in Node, so it falls back to localStorage) — every test file gets this automatically via `vitest.config.ts`'s `setupFiles`.
-- **Store migration tests** (`src/store/migrations.test.ts`) seed `localStorage` with an old-version fixture, then `vi.resetModules()` + dynamically `import()` the store module fresh so zustand's `persist` rehydrates through `migrate` for real; a few microtask ticks (`await Promise.resolve()` x3) let rehydration settle even against a synchronous storage. This is how the taskStore multi-version-skip migration bug (see "Zustand migration rule" above) was found.
-- **Mapper round-trip tests** (`src/services/sync/mappers.test.ts`) assert `rowToX(xToRow(entity))` equals `entity` for every synced entity — catches a forgotten column the moment the fixture uses it.
-- **Pattern tests** (`src/test/patterns.test.ts`) are BACKLOG.md's "Pattern retrofit backlog" turned into executable checks (native popups, Escape handling, Ctrl+Enter, Endeavour terminology, hotkey ids, `SYNC_TABLES` vs. the sync fetch list, migration grants, store-import boundaries, inline styles, persisted-store registration, zustand selector stability). **A new pattern ships with a pattern test** — add a check here in the same change that records the pattern in "Pattern governance" below.
-- Not yet built: component/hook tests (Phase 3), Playwright E2E (Phase 4), the encryption/edge-function/sync-merge test harnesses (rest of Phase 2), and most of Part B.
+1. **If the area you touched has test coverage** (check "What's covered" below, or just look for a `*.test.ts(x)` beside the file you're editing), **update that test in the same change and run it** (`npx vitest run <file>`, or `npm run check` for the full gate). That run *is* your regression testing for that area — don't also manually click through the app or write a one-off verification script to re-confirm the same thing; it burns time and tokens checking something the suite already guarantees, and produces nothing durable.
+2. **If the area has no coverage yet**, manual or Playwright verification is still genuinely necessary — but if the behavior is worth checking once, it's usually worth a permanent test (add it under the matching phase in `docs/agent-tasks/02-testing-and-engineering-hygiene.md`, in the same file-placement style as the existing tests) rather than a throwaway script that gets deleted and tells the next agent nothing.
+3. **Never mark a task "tested" on the strength of a manual check alone** if the thing you touched already has a test file — update the test instead of trusting your eyes, since the next agent won't repeat your manual check, only your test.
+
+Full plan and phase-by-phase status: `docs/agent-tasks/02-testing-and-engineering-hygiene.md` (Part A — what's built vs. remaining; Part B — engineering hygiene items). That file's Status block is the authoritative "what's covered" — the summary below is a pointer, not a substitute for it.
+
+**Running it:** `npm test` (`vitest run`) runs the whole suite; `npm run test:watch` for watch mode; `npm run check` runs `tsc -b && eslint . && vitest run && vite build` (currently fails on eslint's pre-existing baseline — see Part B7 — CI gates on that baseline instead of zero, `.github/workflows/ci.yml`, which runs the same suite on every push/PR as a backstop).
+
+**What's covered today** (653 tests, 47 files, as of 2026-09-24 — re-check the brief's Status block, this will grow): pure logic (`utils/`: timezone, dates, recurrence, ICS parsing, natural-language date/time parsing, links, hotkeys, the time grid, notebook/quick-access resolution, config template validity); store *behaviour* (task archive/restore cascades, calendar occurrence editing, schedule commitment mode, uiStore back/forward history, hotkey conflicts) and a slice of store *migrations* (`settingsStore`/`scheduleStore`/`taskStore` only — see "Store migrations are deliberately NOT all tested" below); `crossAppLinkCleanup`; the full Supabase mapper round-trip (all 17 entity types) and the sync pipeline itself (`mergeRecords`, per-table failure isolation, the `enqueue()` mutex, `customListTypes`) against a fake Supabase client; the whole encryption stack (vault lifecycle, the note/list lock-and-cache mechanism, the re-encrypt queue's ordering guarantee) against real Web Crypto; edge functions (`api/*.ts` — Bearer/401s, Strava's token-refresh window, Google Calendar's cancelled-instance skipping, speech-recognize's payload-size-not-client-claim billing); "Pattern governance" as executable checks (`src/test/patterns.test.ts`); and a representative slice of hooks/components (`useEscapeClose`, `useCtrlEnterSubmit`, `ConfirmDialog`, `TimeInput`, one full modal-prefill example in `AddCollectionModal`).
+
+**What's NOT covered yet — manual/Playwright verification is still the right call here:** almost all UI rendering and interaction beyond the components just named (no Playwright/e2e suite exists at all yet — Phase 4); most individual Add/Edit modals' prefill behavior (only `AddCollectionModal` has one, as the template to copy); `CollectionPicker`/`CrossAppRefPicker`/`ItemActionDialog`; the speech `utteranceDetector`; the offline pending-queue retry internals (`loadPending`/`pushIds`/`flushPending`/`queueLocalOnlyAndNewer` — exercised only indirectly via the sync-pipeline tests); six of the nine stores' migration fixtures (see next point).
+
+**Store migrations are deliberately NOT all tested — this was a scope decision, not an oversight.** The app hasn't shipped, so there is no installed base of old-version `localStorage` a migration test would be protecting; the three that exist (`settingsStore`, `scheduleStore`, `taskStore`) are kept because they were free and one caught a real bug, not because migrations are considered high-priority to cover. Don't read the other six stores' absence as a gap to fill reflexively — it was a conscious call, confirmed with the user 2026-09-24 and recorded in the brief.
+
+**Conventions when adding a test** (copy an existing file in the same category rather than inventing a new shape): reset a store with `useXStore.setState(useXStore.getInitialState(), true)` in `beforeEach`; use `vi.useFakeTimers()`/`vi.setSystemTime()` for anything date- or `updatedAt`-ordering-sensitive; a store-migration test seeds `localStorage` with an old-version fixture, `vi.resetModules()`, then dynamically `import()`s the store fresh so `persist` rehydrates through `migrate` for real (`src/store/migrations.test.ts`); sync/edge-function tests fake the relevant module (`@/services/supabase`, `./_lib/supabaseEdge`) with `vi.mock` + `vi.hoisted` rather than hitting a real network — see `src/services/sync/syncService.test.ts` and `api/strava-sync.test.ts` for the pattern; component/hook tests need `// @vitest-environment jsdom` at the top of the file, `@testing-library/jest-dom/vitest` imported *in that file* (not globally — most tests run in plain `node` and don't need it), `cleanup()` in `afterEach` (required once anything portals to `document.body`, e.g. `ConfirmDialog`), and `act()` around a store write that must be reflected before the next assertion. `src/test/setup.ts` provides a Map-backed `localStorage` and awaits `preloadIdbStorage()` automatically for every test via `vitest.config.ts`'s `setupFiles`.
+
+**Pattern tests** (`src/test/patterns.test.ts`) are BACKLOG.md's "Pattern retrofit backlog" turned into executable checks (native popups, Escape handling, Ctrl+Enter, Endeavour terminology, hotkey ids, `SYNC_TABLES` vs. the sync fetch list, migration grants, store-import boundaries, inline styles, persisted-store registration, the row hover-action menu). **A new pattern ships with a pattern test** — add a check here in the same change that records the pattern in "Pattern governance" below.
 
 ---
 
@@ -319,6 +330,13 @@ setActiveView(view, opts?: { mode?: 'push' | 'back' | 'forward' })  // mode defa
 sectionHistory: SectionHistoryEntry[]          // back stack, most-recent-first, capped at MAX_SECTION_HISTORY
 sectionForwardHistory: SectionHistoryEntry[]   // forward stack, same shape
 navigateBack(), navigateForward()
+// navigateBack/navigateForward check Notes' OWN note-level stack FIRST whenever
+// activeView === 'notes' (see notesHistory below) — only once that's exhausted do they fall
+// through to the section-level stacks above. This is the one place granularity differs
+// between sections: Tasks/Calendar use the coarser "remember a single last item" shape
+// (tasksLastEditingTaskId, calendarLastEditing below); Notes gets a real multi-stop stack
+// because browsing between many notes in one session is common enough that "go back several
+// notes" is worth supporting, confirmed with the user 2026-09-25.
 
 // Endeavour focus filter (CollectionFilterPicker, header) — keyed per section so each
 // of Tasks/Calendar/Records/Notes remembers its own focused Endeavour independently;
@@ -356,6 +374,7 @@ closeModal()
 // Task pane
 openTaskPane(id), closeTaskPane()
 editingTaskId: string | null
+tasksLastEditingTaskId: string | null   // last-open pane, restored on returning to Tasks (no TTL — see uiStore's own comment for why not)
 
 // TaskList expand/collapse — lifted out of TaskList's own local state so it survives
 // navigating away (TaskList unmounts on every section switch) and back. Memory-only (not
@@ -380,6 +399,15 @@ editingCalendarReminderId, openCalendarReminderPane(id), closeCalendarReminderPa
 // in setActiveView — no background timer). Not cleared when the pane is closed while still in
 // Calendar — "last edited," not "currently open."
 calendarLastEditing: { type: 'event' | 'reminder'; id: string; at: string } | null
+
+// Which date/period Calendar is showing — lifted out of CalendarView's own local state
+// (2026-09-25) so it survives leaving/re-entering the section, same reasoning as
+// calendarLastEditing above but unconditional (no TTL — this is just "where were you
+// looking," not reopening an edit UI). Month view reads year/month; week/day read
+// calendarSelectedDate. calendarViewMode (month/week/day) was already lifted earlier.
+calendarYear: number, calendarMonth: number /* 0-indexed */, calendarSelectedDate: string /* YYYY-MM-DD */
+setCalendarYear(v), setCalendarMonth(v)   // v: number | ((prev: number) => number), same overload as React's setState
+setCalendarSelectedDate(v: string)
 
 // Records
 activeTrackerId: string | null
@@ -425,8 +453,8 @@ Every new column on a persisted type needs:
 | `028` | **Applied** | `028_task_archive_reason.sql` (task archive timestamp + reason) — run against the live project, confirmed by the user 2026-09-20 ("SQL task zero two eight has been run in Supabase"). Reported by the user, not independently verified. |
 | `032` | **Applied** | `032_oauth_state.sql` (`oauth_states` nonce table + `mint_oauth_state` / `save_strava_connection` / `save_calendar_connection` functions — the OAuth `state` is now a single-use nonce instead of the user's access token) — run against the live project, confirmed by the user 2026-09-20 ("032 has been run in supabase"). Reported by the user, not independently verified. |
 | `033` | **Applied** | `033_calendar_links.sql` (`links text[]` on `calendar_events` and `calendar_reminders`). every event/reminder upsert now sends `links`, so those two tables reject writes until it is applied (sync isolates the failure per table; nothing else breaks). |
-| `034` | **Pending — not yet run** | `034_trash_items.sql` (new `trash_items` table — the suite-wide Recycling Bin; see "Recycling Bin" above). `trashStore` still works fully locally without it (IndexedDB-backed) — only cross-device sync of trash entries is blocked until this runs, isolated per-table like every other migration. |
-| `035` | **Pending — not yet run** | `035_reminder_tentative.sql` (`status text` on `calendar_reminders`, extending the Events-only "tentative" flag to Reminders too, per the request 2026-09-24). Every reminder upsert now sends `status`, so `calendar_reminders` rejects writes until this runs (sync isolates the failure per table; nothing else breaks). |
+| `034` | **Applied** | `034_trash_items.sql` (new `trash_items` table — the suite-wide Recycling Bin; see "Recycling Bin" above). `trashStore` still works fully locally without it (IndexedDB-backed) — only cross-device sync of trash entries is blocked until this runs, isolated per-table like every other migration. |
+| `035` | **Applied** | `035_reminder_tentative.sql` (`status text` on `calendar_reminders`, extending the Events-only "tentative" flag to Reminders too, per the request 2026-09-24). Every reminder upsert now sends `status`, so `calendar_reminders` rejects writes until this runs (sync isolates the failure per table; nothing else breaks). |
 
 ### Migration history
 
@@ -465,8 +493,8 @@ Every new column on a persisted type needs:
 | `031_drop_cross_app_links.sql` | Drops `cross_app_links` (created by 008, granted by 022): superseded by embedded `crossAppRefs` columns (016, 025) and never read or written by any code. Applied 2026-09-20 |
 | `032_oauth_state.sql` | New `oauth_states` table (RLS on, **no policies, no grants** — only the functions touch it) and three security-definer functions: `mint_oauth_state(p_provider)` (`grant execute` to `authenticated`; binds a random ≥244-bit nonce to `auth.uid()` + provider, 10-minute expiry, one live nonce per user+provider) and `save_strava_connection(...)` / `save_calendar_connection(...)` (`grant execute` to `anon`; called by the two OAuth callbacks with the anon key — each deletes the nonce in the statement that validates it, so it is single-use, then upserts the connection row for the nonce's user). Replaces putting the access token in the OAuth `state` URL. See "OAuth `state` nonces" in `docs/features/implemented-features.md`. Applied 2026-09-20 (confirmed by user). |
 | `033_calendar_links.sql` | `links text[] not null default '{}'` on `calendar_events` and `calendar_reminders` — same as `tasks.links`; see "Calendar links, Complete button, pane Ctrl+Enter, TimeInput Enter" in `docs/features/implemented-features.md`. Alters existing tables only, so no new grant. Applied — see "Live migration status" above. |
-| `034_trash_items.sql` | New `trash_items` table — the suite-wide Recycling Bin (see "Recycling Bin" in `docs/features/implemented-features.md`). `trashStore` works fully locally (IndexedDB-backed) without it; only cross-device sync of trash entries is blocked until run. **Pending — not yet run** |
-| `035_reminder_tentative.sql` | `status text not null default 'confirmed'` on `calendar_reminders` — same `EventStatus` (`'confirmed' \| 'tentative'`) column `calendar_events` has had since `017`, extended to Reminders 2026-09-24 (see "Tentative events" below — reopens what was a deliberate Events-only scope decision). Alters an existing table only, so no new grant. **Pending — not yet run** |
+| `034_trash_items.sql` | New `trash_items` table — the suite-wide Recycling Bin (see "Recycling Bin" in `docs/features/implemented-features.md`). `trashStore` works fully locally (IndexedDB-backed) without it; only cross-device sync of trash entries is blocked until run. Applied |
+| `035_reminder_tentative.sql` | `status text not null default 'confirmed'` on `calendar_reminders` — same `EventStatus` (`'confirmed' \| 'tentative'`) column `calendar_events` has had since `017`, extended to Reminders 2026-09-24 (see "Tentative events" below — reopens what was a deliberate Events-only scope decision). Alters an existing table only, so no new grant. Applied |
 
 ### Supabase tables (summary)
 
@@ -626,7 +654,8 @@ src/
     LinksField/              — the shared links list (clickable / edit / delete / add) used by TaskPane, CalendarEventPane and CalendarReminderPane; links typed into notes arrive via `mergeNewLinks` in the store's update action, never here
     LinkHoverPreview/        — app-wide: shows a hovered link's URL bottom-left (see "Link hover preview" pattern below)
     QuickAccessPane/         — app-wide, Ctrl+G: portaled search-and-jump overlay across Notes/Notebooks/Tasks/Lists/Endeavours/Trackers/Routines, or browse Recent/Frequent visit history (see "Suite-wide Quick Access pane" in Implemented features)
-    TruncatedText/           — wraps a CSS-ellipsis-truncated name/title; shows the full text in a floating tooltip below the row on hover, only when actually truncated. Used by ChronicleView's tree node names and NoteList's note titles
+    TruncatedText/           — wraps a CSS-ellipsis-truncated name/title; shows the full text in a floating tooltip below the row on hover, only when actually truncated. Used by ChronicleView's tree node names and NoteList's note titles, and (2026-09-24) Sidebar/ManagePane/ListsSection/RecordsView's row names
+    RowHoverActions/         — suite-wide nav-column row action menu: useRowHoverActions() (open/close state machine) + RowHoverActionsMenu (portaled floating panel) — see "Row hover-action menu" in Component patterns. Used by ChronicleView, Sidebar, ManagePane, ListsSection, RecordsView
     SettingsPane/            — settings slide-in; reads HOTKEYS[] dynamically; StorageSection.tsx = the Storage block (per-store usage + Shrink images in notes)
     ManagePane/              — library admin (Endeavours/Purposes/Tags): left-nav tabs + content, opened by clicking (not hovering) the header hamburger; archive/restore/delete rows. MANAGE_SECTIONS array in the file is the extension point for future tabs
     AccountPane/             — Supabase auth + account info
@@ -736,6 +765,24 @@ useEffect(() => {
 All three return promises, so the handler becomes `async`. Where a listener owns the keyboard while it waits (`SettingsPane`'s hotkey capture), stop listening *before* opening the dialog. If an item has a real archive concept, prefer the `ItemActions` pane pattern instead (it offers "Archive instead").
 
 **A prompt raised by what the user is typing** (e.g. the note editor's "remove the link too?") passes `focusDelayMs` (and optionally `isStale`): the dialog shows at once but takes no focus and ignores Ctrl+Enter for that long, so a stray Enter can't answer it; if `isStale()` is true when the delay ends it closes itself as cancel.
+
+### Row hover-action menu (`RowHoverActions`) — suite-wide pattern, adopted 2026-09-24
+
+Every nav-column row with per-row actions (edit/delete/…) uses this instead of growing the buttons inline within the row on hover — the old per-component convention (`opacity: 0 → 1` on `:hover`, actions eating into the row's own width) was independently hand-rolled at 4-5 sites and was exactly what made it easy to mis-click, since the buttons visually competed with the row's own name for space.
+
+**Why floating, not inline-grown:** the row's name stays full-width always; the actions appear in a small panel positioned above or below the row on hover, never narrowing it.
+
+**Two pieces** (`src/components/RowHoverActions/`), always used together:
+- **`useRowHoverActions<T>()`** (`useRowHoverActions.ts`) — the open/close state machine. Returns `{ anchorRef, open, rowHandlers, menuHandlers }`. `rowHandlers` (`onMouseEnter`/`onMouseLeave`) go on the row's own wrapper element, spread alongside `ref={anchorRef}`; opening is delayed 150ms (matches ChronicleView's pre-existing hover-expand delay, avoids flashing on a fast mouse-pass) and closing is delayed 250ms with a grace period so moving the mouse from the row to the floating menu (they aren't DOM-adjacent, so CSS `:hover` can't bridge the gap) doesn't close it first.
+- **`<RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>`** (`RowHoverActionsMenu.tsx`) — the floating panel itself, rendered as children (the row's action buttons, reusing whatever `iconBtn`-style class the component already had). Portaled to `document.body` (same "escape a narrow sidebar column / any ancestor transform" reasoning as `TruncatedText`), positioned from `anchorRef`'s `getBoundingClientRect()` in a `useEffect` (a genuine external-system read — DOM layout only exists once painted — computed once as a local value then set in a single `setPos()` call, which is why this doesn't need a `set-state-in-effect` eslint-disable the way some other position-measuring effects in this codebase do), placed below the row unless there isn't room.
+
+**Why a hook + component split, not one file:** `react-refresh/only-export-components` — a file can't export both a hook and a component and still get Fast Refresh.
+
+**Because `useRowHoverActions` is a hook, it can only be called once per row *instance*, not once per iteration of a shared parent's `.map()`.** Every row type that was previously inline JSX inside a `.map()` callback (`Sidebar`'s Endeavour/Tag/Purpose rows, `ListsSection`'s sidebar item, `RecordsView`'s tracker/routine row) was pulled out into its own small component for this reason — `SidebarCollectionRow`/`SidebarTagRow`/`SidebarPurposeRow`, `SidebarListItem`, `TrackerSidebarRow`. `ChronicleView`'s tree node and `ManagePane`'s `ManageRow` were already their own components, so no extraction was needed there.
+
+**Applied to all 5 known nav-column row sites**: `ChronicleView` (notebook tree), `Sidebar` (Endeavours/Tags/Purposes), `ManagePane` (`ManageRow`, all three tabs), `ListsSection` (sidebar), `RecordsView` (tracker/routine sidebar). `ListsSection`'s separate `.itemCard` actions (watchlist/reference item cards in the main content area — a *list item*, not a nav-column row) are deliberately **not** converted; this pattern is scoped to navigation columns.
+
+**Known gap, not yet solved: touch/mobile.** The trigger is hover-only — `onMouseEnter`/`onMouseLeave` don't fire reliably from a tap on a touch device. The pre-existing inline-growth CSS this replaced had an explicit `@media (hover: none) { opacity: 1 }` fallback (always show on touch) that this pattern doesn't have an equivalent for yet. Low risk today since these specific components (Sidebar, ManagePane, RecordsView desktop sidebar) aren't reachable from Android's `MobileNav`, but flagged here so it isn't rediscovered from scratch if that changes. See BACKLOG.md's Pattern retrofit backlog.
 
 ### Speed-dial FAB (`AddTaskButton`)
 

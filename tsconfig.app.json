@@ -25,5 +25,5 @@
     }
   },
   "include": ["src"],
-  "exclude": ["src/agent/__tests__/boundary.test.ts"]
+  "exclude": ["src/agent/__tests__/boundary.test.ts", "src/test/patterns.test.ts"]
 }

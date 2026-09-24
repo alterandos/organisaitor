@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npx tsc -b
+
+      - name: Lint (gated against the known baseline, not zero)
+        # The repo has a documented pre-existing baseline of lint errors (see CLAUDE.md
+        # "Pattern retrofit backlog" / docs/agent-tasks — currently 41, all pre-existing
+        # no-explicit-any / ban-ts-comment / no-unused-vars in a handful of files). This
+        # step fails only if that count goes UP, so new code is held to zero new errors
+        # without blocking on the pre-existing debt. Lower BASELINE as the debt is paid down.
+        run: |
+          BASELINE=41
+          COUNT=$(npx eslint . --format json | node -e "
+            let d='';
+            process.stdin.on('data', c => d += c);
+            process.stdin.on('end', () => {
+              const results = JSON.parse(d);
+              const count = results.reduce((n, r) => n + r.errorCount, 0);
+              console.log(count);
+            });
+          ")
+          echo "eslint error count: $COUNT (baseline: $BASELINE)"
+          if [ "$COUNT" -gt "$BASELINE" ]; then
+            echo "::error::eslint error count ($COUNT) is above the baseline ($BASELINE) — new lint errors were introduced."
+            npx eslint .
+            exit 1
+          fi
+
+      - name: Unit tests
+        run: npx vitest run --coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+        if: always()
+
+      - name: Build
+        run: npm run build
+
+  # Playwright E2E is not wired up yet (see docs/agent-tasks/02-testing-and-engineering-hygiene.md
+  # Part A, Phase 4 — "Not built"). This job is a placeholder for when it lands: add
+  # `@playwright/test`, an `e2e/` directory and a `test:e2e` script, then uncomment.
+  # e2e:
+  #   runs-on: ubuntu-latest
+  #   needs: check
+  #   if: github.event_name == 'pull_request'
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 22
+  #         cache: npm
+  #     - run: npm ci
+  #     - run: npx playwright install --with-deps chromium
+  #     - run: npm run build
+  #     - run: npm run test:e2e

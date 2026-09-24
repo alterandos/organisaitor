@@ -23,7 +23,7 @@ async function tokenRequest(body: Record<string, string>): Promise<StravaTokenRe
   if (!res.ok) {
     throw new Error(`Strava token request failed: ${res.status} ${await res.text()}`);
   }
-  return res.json();
+  return res.json() as Promise<StravaTokenResponse>;
 }
 
 export function exchangeStravaCode(code: string): Promise<StravaTokenResponse> {

@@ -48,21 +48,31 @@ export function AddTaskModal() {
   const [deadlineTime,  setDeadlineTime]  = useState(quickAddPrefill?.deadlineTime ?? '');
   const [scheduledAt,   setScheduledAt]   = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
-  // A sub-task starts with its parent's priority; the user's own pick always wins over that.
+  // A sub-task starts with its parent's priority, Endeavour, tags and purposes; the user's
+  // own pick always wins over that (tracked per-field via a *Touched ref, same pattern as
+  // priority already used).
+  const parentTaskInitial = pendingParentId ? useTaskStore.getState().tasks[pendingParentId as TaskId] : undefined;
+
   const [priority,      setPriority]      = useState<Priority>(
-    quickAddPrefill?.priority
-      ?? (pendingParentId ? useTaskStore.getState().tasks[pendingParentId as TaskId]?.priority : undefined)
-      ?? 'none'
+    quickAddPrefill?.priority ?? parentTaskInitial?.priority ?? 'none'
   );
   const priorityTouched = useRef(quickAddPrefill?.priority !== undefined);
 
-  // Advanced fields — pre-fill collection from active filter, or from MobileQuickAddBar's
-  // "More options…" handoff (docs/android/01-tasks-app.md §3.2) when that took place instead
+  // Advanced fields — pre-fill collection from the parent task (sub-task creation), else the
+  // active filter, or from MobileQuickAddBar's "More options…" handoff
+  // (docs/android/01-tasks-app.md §3.2) when that took place instead
   const [collectionId,       setCollectionId]       = useState<CollectionId | ''>(
-    (quickAddPrefill?.collectionId ?? activeCollectionId ?? '') as CollectionId | ''
+    (quickAddPrefill?.collectionId
+      ?? (pendingParentId ? (parentTaskInitial?.collectionId ?? '') : (activeCollectionId ?? ''))
+    ) as CollectionId | ''
   );
-  const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>([]);
-  const [pendingTags,        setPendingTags]         = useState<PendingTag[]>([]);
+  const collectionTouched = useRef(quickAddPrefill?.collectionId !== undefined);
+  const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>(parentTaskInitial?.purposeIds ?? []);
+  const purposesTouched = useRef(false);
+  const [pendingTags,        setPendingTags]         = useState<PendingTag[]>(
+    (parentTaskInitial?.tagIds ?? []).map((id) => ({ id, name: useTaskStore.getState().tags[id]?.name ?? '', isNew: false }))
+  );
+  const tagsTouched = useRef(false);
   const [tagInput,           setTagInput]            = useState('');
   const [showSuggestions,    setShowSuggestions]     = useState(false);
   const [taskKind,           setTaskKind]            = useState<TaskKind>('action');
@@ -110,6 +120,7 @@ export function AddTaskModal() {
     : [];
 
   const addExistingTag = (tag: { id: TagId; name: string }) => {
+    tagsTouched.current = true;
     setPendingTags((prev) => [...prev, { id: tag.id, name: tag.name, isNew: false }]);
     setTagInput('');
     setShowSuggestions(false);
@@ -128,6 +139,7 @@ export function AddTaskModal() {
       return;
     }
     const existing = existingTags.find((t) => t.name.toLowerCase() === raw.toLowerCase());
+    tagsTouched.current = true;
     if (existing) {
       setPendingTags((prev) => [...prev, { id: existing.id, name: existing.name, isNew: false }]);
     } else {
@@ -137,8 +149,10 @@ export function AddTaskModal() {
     setShowSuggestions(false);
   };
 
-  const removeTag = (id: TagId) =>
+  const removeTag = (id: TagId) => {
+    tagsTouched.current = true;
     setPendingTags((prev) => prev.filter((t) => t.id !== id));
+  };
 
   const addLink = () => {
     const url = linkInput.trim();
@@ -149,10 +163,12 @@ export function AddTaskModal() {
 
   const removeLink = (url: string) => setLinks((prev) => prev.filter((l) => l !== url));
 
-  const togglePurpose = (id: PurposeId) =>
+  const togglePurpose = (id: PurposeId) => {
+    purposesTouched.current = true;
     setSelectedPurposeIds((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
     );
+  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -305,7 +321,7 @@ export function AddTaskModal() {
                 <CollectionPicker
                   collections={collectionList}
                   value={collectionId || null}
-                  onChange={(id) => setCollectionId(id ?? '')}
+                  onChange={(id) => { collectionTouched.current = true; setCollectionId(id ?? ''); }}
                   noneLabel={LABELS.noCollection}
                 />
               </div>
@@ -467,7 +483,13 @@ export function AddTaskModal() {
                     onChange={(e) => {
                       const next = e.target.value as TaskId | '';
                       setParentId(next);
-                      if (!priorityTouched.current) setPriority((next && tasksRecord[next]?.priority) || 'none');
+                      const nextParent = next ? tasksRecord[next] : undefined;
+                      if (!priorityTouched.current) setPriority(nextParent?.priority || 'none');
+                      if (!collectionTouched.current) setCollectionId(nextParent?.collectionId ?? '');
+                      if (!tagsTouched.current) {
+                        setPendingTags((nextParent?.tagIds ?? []).map((id) => ({ id, name: tags[id]?.name ?? '', isNew: false })));
+                      }
+                      if (!purposesTouched.current) setSelectedPurposeIds(nextParent?.purposeIds ?? []);
                     }}
                   >
                     <option value="">None (top-level task)</option>

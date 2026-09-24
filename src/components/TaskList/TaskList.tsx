@@ -44,7 +44,6 @@ function buildSorter(
 export function TaskList() {
   const [completedOpen, setCompletedOpen] = useState(false);
   const [archivedOpen,  setArchivedOpen]  = useState(false);
-  const [toggledIds, setToggledIds]       = useState(new Set<string>());
 
   const tasksRecord         = useTaskStore((s) => s.tasks);
   const collectionsRecord   = useTaskStore((s) => s.collections);
@@ -55,23 +54,17 @@ export function TaskList() {
   const sortField          = useUIStore((s) => s.sortField);
   const sortDir            = useUIStore((s) => s.sortDir);
   const taskViewMode       = useUIStore((s) => s.taskViewMode);
-
-  const [prevTaskViewMode, setPrevTaskViewMode] = useState(taskViewMode);
-  if (prevTaskViewMode !== taskViewMode) {
-    setPrevTaskViewMode(taskViewMode);
-    setToggledIds(new Set());
-  }
+  // Lifted into uiStore (rather than local state) so it survives navigating away — TaskList
+  // unmounts on every section switch — and back, per the request that expanded tasks stay
+  // expanded. taskViewMode's own setter clears it on mode change (same reset this used to
+  // do locally).
+  const toggledIds          = useUIStore((s) => s.taskExpandedIds);
+  const toggleTaskExpanded  = useUIStore((s) => s.toggleTaskExpanded);
 
   const isExpanded = (taskId: string): boolean =>
-    taskViewMode === 'focused' ? !toggledIds.has(taskId) : toggledIds.has(taskId);
+    taskViewMode === 'focused' ? !toggledIds.includes(taskId) : toggledIds.includes(taskId);
 
-  const handleToggleExpand = (taskId: string) => {
-    setToggledIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
-      return next;
-    });
-  };
+  const handleToggleExpand = (taskId: string) => toggleTaskExpanded(taskId);
 
   const allTasks = Object.values(tasksRecord);
   // A sub-task archived on its own (parent still active) has nowhere else to appear, so it

@@ -24,7 +24,7 @@ async function tokenRequest(body: Record<string, string>): Promise<GoogleTokenRe
   if (!res.ok) {
     throw new Error(`Google token request failed: ${res.status} ${await res.text()}`);
   }
-  return res.json();
+  return res.json() as Promise<GoogleTokenResponse>;
 }
 
 export function exchangeGoogleCode(code: string, redirectUri: string): Promise<GoogleTokenResponse> {
@@ -40,8 +40,8 @@ export async function fetchGoogleAccountEmail(accessToken: string): Promise<stri
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error(`Google userinfo request failed: ${res.status}`);
-  const data = await res.json();
-  return data.email as string;
+  const data = await res.json() as { email: string };
+  return data.email;
 }
 
 // Refreshes and persists a connection's access token if it's expired or expiring within
@@ -81,8 +81,8 @@ export async function fetchGoogleCalendarList(accessToken: string): Promise<Goog
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error(`Google calendar list request failed: ${res.status}`);
-  const data = await res.json();
-  return (data.items ?? []) as GoogleCalendarListEntry[];
+  const data = await res.json() as { items?: GoogleCalendarListEntry[] };
+  return data.items ?? [];
 }
 
 export interface GoogleCalendarEvent {
@@ -127,6 +127,6 @@ export async function fetchGoogleCalendarEvents(accessToken: string, calendarId:
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   if (!res.ok) throw new Error(`Google events request failed for ${calendarId}: ${res.status}`);
-  const data = await res.json();
-  return (data.items ?? []) as GoogleCalendarEvent[];
+  const data = await res.json() as { items?: GoogleCalendarEvent[] };
+  return data.items ?? [];
 }

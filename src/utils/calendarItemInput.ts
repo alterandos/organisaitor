@@ -61,6 +61,7 @@ export interface CalendarReminderFields {
   links?:            string[];
   collectionId?:     CollectionId | null;
   repeat?:           RepeatConfig | null;
+  status?:           EventStatus;
   important?:        boolean;
   crossAppRefs?:     CrossAppRef[];
   notifyDaysBefore?: number;
@@ -76,6 +77,7 @@ export function buildCalendarReminderInput(f: CalendarReminderFields): CreateCal
     links:            mergeNewLinks(f.links ?? [], f.notes),
     collectionId:     f.collectionId || null,
     repeat:           f.repeat ?? null,
+    status:           f.status,
     important:        f.important,
     crossAppRefs:     f.crossAppRefs,
     notifyDaysBefore: f.notifyDaysBefore,

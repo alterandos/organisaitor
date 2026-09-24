@@ -175,6 +175,9 @@ div.rowMain { cursor: default; }
 
 /* ── Icon buttons (pencil / delete) ───────────────────── */
 
+/* Rendered inside a portaled RowHoverActionsMenu now (see src/components/RowHoverActions),
+   not as a .row descendant — visibility is the menu's open/close state, not a hover-opacity
+   rule on the button itself. */
 .iconBtn {
   flex-shrink: 0;
   width: 1.5rem;
@@ -189,10 +192,8 @@ div.rowMain { cursor: default; }
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+  transition: background 120ms ease, color 120ms ease;
 }
 
-.row:hover .iconBtn         { opacity: 1; }
 .iconBtn:hover              { background: var(--color-border); color: var(--color-text); }
 .deleteIconBtn:hover        { background: var(--color-danger-muted); color: var(--color-danger); }

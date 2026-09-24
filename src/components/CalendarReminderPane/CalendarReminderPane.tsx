@@ -187,6 +187,17 @@ export function CalendarReminderPane() {
             </label>
           </div>
 
+          <div className={styles.field}>
+            <label className={`${styles.label} ${styles.checkLabel}`}>
+              <input
+                type="checkbox"
+                checked={(reminder.status ?? 'confirmed') === 'tentative'}
+                onChange={(e) => updateReminder(id, { status: e.target.checked ? 'tentative' : 'confirmed' })}
+              />
+              Tentative — not confirmed yet, just a placeholder
+            </label>
+          </div>
+
           {/* ── Repeat ── */}
           <div className={styles.field}>
             <label className={`${styles.label} ${styles.checkLabel}`}>

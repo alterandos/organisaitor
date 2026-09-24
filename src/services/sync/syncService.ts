@@ -185,16 +185,22 @@ async function pushIds(userId: string, table: keyof typeof TABLE_DEFS, ids: stri
 let flushing: Promise<void> | null = null;
 function flushPending(userId: string): Promise<void> {
   if (flushing) return flushing;
-  flushing = (async () => {
-    try {
-      for (const table of Object.keys(TABLE_DEFS) as Array<keyof typeof TABLE_DEFS>) {
-        const ids = dirtyIds(table);
-        if (ids.length > 0) await pushIds(userId, table, ids);
-      }
-    } finally {
-      flushing = null;
+  // Chained as `.finally()` on the returned promise, not a try/finally *inside* the async
+  // function above: when every table's dirtyIds() is empty, the function body never reaches
+  // an `await`, so it runs to completion synchronously and the assignment below would race an
+  // inner `flushing = null` — whichever runs last wins, and it used to be the assignment,
+  // leaving `flushing` stuck pointing at an already-settled promise forever (the retry timer
+  // and "online" listener would then silently no-op for the rest of the session, since every
+  // future call saw it as truthy and returned early without re-scanning dirtyIds()). A
+  // `.finally()` callback is always deferred to a microtask, even on an already-resolved
+  // promise, so the reset can never happen before this function has returned and assigned.
+  const run = (async () => {
+    for (const table of Object.keys(TABLE_DEFS) as Array<keyof typeof TABLE_DEFS>) {
+      const ids = dirtyIds(table);
+      if (ids.length > 0) await pushIds(userId, table, ids);
     }
   })();
+  flushing = run.finally(() => { flushing = null; });
   return flushing;
 }
 

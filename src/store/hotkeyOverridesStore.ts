@@ -57,6 +57,14 @@ export function matchesHotkeyId(e: KeyboardEvent, id: string): boolean {
   return matchesBinding(e, primary) || matchesBinding(e, secondary);
 }
 
+// Primary-slot-only match — for the rare hotkey (today: action-back/action-forward) whose
+// primary binding must work even while typing in a text field but whose secondary must not
+// (Alt+Left/Right isn't a text-editing binding anywhere; Backspace, action-back's secondary,
+// must keep deleting the previous character while typing, never navigate).
+export function matchesHotkeyPrimary(e: KeyboardEvent, id: string): boolean {
+  return matchesBinding(e, getEffectiveBinding(id).primary);
+}
+
 // Every id + slot currently bound to `binding`, excluding `excludeId` (the hotkey being
 // rebound itself — pressing the same key it's already assigned to isn't a conflict).
 // Used by the Settings rebind UI to detect a collision before committing a new binding.

@@ -6,10 +6,72 @@ import { useUIStore } from '@/store/uiStore';
 import styles from './Sidebar.module.css';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
+import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
+import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import type { Collection, Tag, Purpose } from '@/types';
 
 interface Props {
   onHoverEnter: () => void;
   onHoverLeave: () => void;
+}
+
+// Each row type gets its own tiny component (rather than inline JSX inside a .map()) because
+// useRowHoverActions is a hook — it has to be called once per row instance, not once per
+// iteration of a shared parent's render (which would violate the rules of hooks whenever the
+// list's length changes between renders).
+
+function SidebarCollectionRow({ col, onEdit, onDelete }: { col: Collection; onEdit: () => void; onDelete: () => void }) {
+  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  return (
+    <div ref={anchorRef} className={styles.row} {...rowHandlers}>
+      <div className={styles.rowMain}>
+        <span className={styles.dot} style={{ background: col.color ?? 'var(--color-border)' }} />
+        <TruncatedText text={col.name} className={styles.name} />
+      </div>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+        <button className={styles.iconBtn} onClick={onEdit} aria-label={`Edit ${col.name}`} title="Edit">✎</button>
+        <button className={`${styles.iconBtn} ${styles.deleteIconBtn}`} onClick={onDelete} aria-label={`Delete ${col.name}`} title="Delete">×</button>
+      </RowHoverActionsMenu>
+    </div>
+  );
+}
+
+function SidebarTagRow({ tag, isActive, onToggle, onEdit, onDelete }: { tag: Tag; isActive: boolean; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
+  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  return (
+    <div
+      ref={anchorRef}
+      className={`${styles.row} ${isActive ? styles.rowActive : ''}`}
+      style={isActive && tag.color ? { background: tag.color + '18' } : undefined}
+      {...rowHandlers}
+    >
+      <button className={styles.rowMain} onClick={onToggle}>
+        <span className={styles.dot} style={{ background: tag.color ?? 'var(--color-border)' }} />
+        <TruncatedText text={tag.name} className={styles.name} />
+      </button>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+        <button className={styles.iconBtn} onClick={onEdit} aria-label={`Edit ${tag.name}`} title="Edit">✎</button>
+        <button className={`${styles.iconBtn} ${styles.deleteIconBtn}`} onClick={onDelete} aria-label={`Delete ${tag.name}`} title="Delete">×</button>
+      </RowHoverActionsMenu>
+    </div>
+  );
+}
+
+function SidebarPurposeRow({ purpose, onEdit, onDelete }: { purpose: Purpose; onEdit: () => void; onDelete: () => void }) {
+  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  return (
+    <div ref={anchorRef} className={styles.row} {...rowHandlers}>
+      <div className={styles.rowMain}>
+        <span className={styles.dot} style={{ background: purpose.color ?? 'var(--color-border)' }} />
+        <TruncatedText text={purpose.name} className={styles.name} />
+      </div>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+        <button className={styles.iconBtn} onClick={onEdit} aria-label={`Edit ${purpose.name}`} title="Edit">✎</button>
+        <button className={`${styles.iconBtn} ${styles.deleteIconBtn}`} onClick={onDelete} aria-label={`Delete ${purpose.name}`} title="Delete">×</button>
+      </RowHoverActionsMenu>
+    </div>
+  );
 }
 
 export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
@@ -77,27 +139,12 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
         {open && (
           <div className={styles.sectionBody}>
             {items.map((col) => (
-              <div key={col.id} className={styles.row}>
-                <div className={styles.rowMain}>
-                  <span
-                    className={styles.dot}
-                    style={{ background: col.color ?? 'var(--color-border)' }}
-                  />
-                  <span className={styles.name}>{col.name}</span>
-                </div>
-                <button
-                  className={styles.iconBtn}
-                  onClick={() => openEditCollection(col)}
-                  aria-label={`Edit ${col.name}`}
-                  title="Edit"
-                >✎</button>
-                <button
-                  className={`${styles.iconBtn} ${styles.deleteIconBtn}`}
-                  onClick={() => handleDeleteCollection(col.id as CollectionId, col.name)}
-                  aria-label={`Delete ${col.name}`}
-                  title="Delete"
-                >×</button>
-              </div>
+              <SidebarCollectionRow
+                key={col.id}
+                col={col}
+                onEdit={() => openEditCollection(col)}
+                onDelete={() => handleDeleteCollection(col.id as CollectionId, col.name)}
+              />
             ))}
           </div>
         )}
@@ -131,36 +178,16 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
             <div className={styles.sectionBody}>
               {tags.length === 0
                 ? <p className={styles.empty}>No tags yet</p>
-                : tags.map((tag) => {
-                    const isActive = activeTagIds.includes(tag.id);
-                    return (
-                      <div
-                        key={tag.id}
-                        className={`${styles.row} ${isActive ? styles.rowActive : ''}`}
-                        style={isActive && tag.color ? { background: tag.color + '18' } : undefined}
-                      >
-                        <button className={styles.rowMain} onClick={() => toggleTagFilter(tag.id)}>
-                          <span
-                            className={styles.dot}
-                            style={{ background: tag.color ?? 'var(--color-border)' }}
-                          />
-                          <span className={styles.name}>{tag.name}</span>
-                        </button>
-                        <button
-                          className={styles.iconBtn}
-                          onClick={() => openEditTag(tag)}
-                          aria-label={`Edit ${tag.name}`}
-                          title="Edit"
-                        >✎</button>
-                        <button
-                          className={`${styles.iconBtn} ${styles.deleteIconBtn}`}
-                          onClick={() => handleDeleteTag(tag.id as TagId, tag.name)}
-                          aria-label={`Delete ${tag.name}`}
-                          title="Delete"
-                        >×</button>
-                      </div>
-                    );
-                  })
+                : tags.map((tag) => (
+                    <SidebarTagRow
+                      key={tag.id}
+                      tag={tag}
+                      isActive={activeTagIds.includes(tag.id)}
+                      onToggle={() => toggleTagFilter(tag.id)}
+                      onEdit={() => openEditTag(tag)}
+                      onDelete={() => handleDeleteTag(tag.id as TagId, tag.name)}
+                    />
+                  ))
               }
             </div>
           )}
@@ -178,27 +205,12 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
               {purposes.length === 0
                 ? <p className={styles.empty}>No purposes yet</p>
                 : purposes.map((purpose) => (
-                    <div key={purpose.id} className={styles.row}>
-                      <div className={styles.rowMain}>
-                        <span
-                          className={styles.dot}
-                          style={{ background: purpose.color ?? 'var(--color-border)' }}
-                        />
-                        <span className={styles.name}>{purpose.name}</span>
-                      </div>
-                      <button
-                        className={styles.iconBtn}
-                        onClick={() => openEditPurpose(purpose)}
-                        aria-label={`Edit ${purpose.name}`}
-                        title="Edit"
-                      >✎</button>
-                      <button
-                        className={`${styles.iconBtn} ${styles.deleteIconBtn}`}
-                        onClick={() => handleDeletePurpose(purpose.id as PurposeId, purpose.name)}
-                        aria-label={`Delete ${purpose.name}`}
-                        title="Delete"
-                      >×</button>
-                    </div>
+                    <SidebarPurposeRow
+                      key={purpose.id}
+                      purpose={purpose}
+                      onEdit={() => openEditPurpose(purpose)}
+                      onDelete={() => handleDeletePurpose(purpose.id as PurposeId, purpose.name)}
+                    />
                   ))
               }
             </div>

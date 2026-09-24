@@ -572,6 +572,20 @@
   word-break: break-word;
 }
 
+.tooltipLinks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.tooltipLink {
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Day pane (overflow click) ────────────────────────── */
 
 @keyframes slideIn {

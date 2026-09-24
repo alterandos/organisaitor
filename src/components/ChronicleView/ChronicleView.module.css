@@ -259,27 +259,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
-/* Node action buttons (appear on hover) — collapsed to zero width by default so the
-   name takes the full row width; expanding on hover is what narrows the name back down. */
-.nodeActions {
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  max-width: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition: max-width 0.15s ease, opacity 0.15s ease;
+.nodeCount {
   flex-shrink: 0;
-  margin-right: 0;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--color-muted);
+  background: var(--color-bg);
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
 }
 
-.treeNode:hover .nodeActions {
-  max-width: 130px;
-  opacity: 1;
-  margin-right: 3px;
-}
+/* Node action buttons now float in a RowHoverActionsMenu (see src/components/RowHoverActions)
+   instead of growing inline here — the row no longer loses width to them. */
 
 .nodeActionBtn {
   width: 20px;

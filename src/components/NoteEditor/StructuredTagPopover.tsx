@@ -37,7 +37,8 @@ export function StructuredTagPopover({
   initialTerm, initialFields, initialCollectionId, meta,
   onSave, onCancel, onDelete,
 }: Props) {
-  const collections = useTaskStore((s) => Object.values(s.collections));
+  const collectionsById = useTaskStore((s) => s.collections);
+  const collections = Object.values(collectionsById);
   const [term, setTerm]              = useState(initialTerm);
   const [fields, setFields]          = useState(initialFields);
   const [collectionId, setCollectionId] = useState<string | null>(initialCollectionId);

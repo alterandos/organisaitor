@@ -60,6 +60,25 @@
   border-color: var(--color-primary);
 }
 
+.clearBtn {
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.6rem;
+  padding: 0 0.1rem;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.wrapper:hover .clearBtn,
+.wrapper:focus-within .clearBtn {
+  opacity: 1;
+}
+.clearBtn:hover {
+  color: var(--color-danger);
+}
+
 .dropdownToggle {
   border: none;
   background: none;

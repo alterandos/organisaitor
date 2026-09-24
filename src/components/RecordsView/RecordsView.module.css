@@ -102,16 +102,8 @@
   white-space: nowrap;
 }
 
-.trackerRowActions {
-  display: flex;
-  gap: 0.1rem;
-  padding-right: 0.5rem;
-  opacity: 0;
-  transition: opacity 120ms ease;
-  flex-shrink: 0;
-}
-.trackerItem:hover .trackerRowActions { opacity: 1; }
-
+/* Rendered inside a portaled RowHoverActionsMenu now (see src/components/RowHoverActions),
+   not a .trackerRowActions wrapper in the row itself. */
 .trackerActionBtn {
   background: none;
   border: none;
@@ -125,11 +117,6 @@
 }
 .trackerActionBtn:hover { color: var(--color-text); background: var(--color-border); }
 .trackerActionBtnDelete:hover { color: var(--color-danger); background: var(--color-danger-muted); }
-
-/* Always show on touch devices */
-@media (hover: none) {
-  .trackerRowActions { opacity: 1; }
-}
 
 .sidebarHeaderRoutines {
   border-top: 1px solid var(--color-border);

@@ -8,6 +8,9 @@ import { RoutineChecklist } from '@/components/RoutineChecklist/RoutineChecklist
 import styles from './RecordsView.module.css';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
+import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
+import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
 
 function formatFieldValue(schema: FieldSchema, value: unknown): string {
   if (value === undefined || value === null || value === '') return '—';
@@ -204,6 +207,36 @@ function RoutineDetail({ routine }: RoutineDetailProps) {
   );
 }
 
+// Its own component (not inline JSX inside the sidebar's .map()) because useRowHoverActions
+// is a hook — has to be called once per row instance, not once per iteration of a shared
+// parent's render. Shared by both the tracker and routine sidebar lists below — same row
+// shape either way.
+function TrackerSidebarRow({
+  item, active, onSelect, onEdit, onDelete, editTitle, deleteTitle,
+}: {
+  item: Collection;
+  active: boolean;
+  onSelect: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  editTitle: string;
+  deleteTitle: string;
+}) {
+  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  return (
+    <div ref={anchorRef} className={`${styles.trackerItem} ${active ? styles.trackerItemActive : ''}`} {...rowHandlers}>
+      <button className={styles.trackerSelectBtn} onClick={onSelect}>
+        {item.color && <span className={styles.trackerDot} style={{ background: item.color }} />}
+        <TruncatedText text={item.name} className={styles.trackerName} />
+      </button>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+        <button className={styles.trackerActionBtn} onClick={(e) => { e.stopPropagation(); onEdit(); }} title={editTitle}>✎</button>
+        <button className={`${styles.trackerActionBtn} ${styles.trackerActionBtnDelete}`} onClick={(e) => { e.stopPropagation(); onDelete(); }} title={deleteTitle}>✕</button>
+      </RowHoverActionsMenu>
+    </div>
+  );
+}
+
 export function RecordsView() {
   const collections        = useTaskStore((s) => s.collections);
   const deleteCollection   = useTaskStore((s) => s.deleteCollection);
@@ -260,27 +293,15 @@ export function RecordsView() {
           <ul className={styles.trackerList}>
             {trackers.map((t) => (
               <li key={t.id}>
-                <div className={`${styles.trackerItem} ${activeTrackerId === t.id ? styles.trackerItemActive : ''}`}>
-                  <button
-                    className={styles.trackerSelectBtn}
-                    onClick={() => setActiveTracker(t.id)}
-                  >
-                    {t.color && <span className={styles.trackerDot} style={{ background: t.color }} />}
-                    <span className={styles.trackerName}>{t.name}</span>
-                  </button>
-                  <div className={styles.trackerRowActions}>
-                    <button
-                      className={styles.trackerActionBtn}
-                      onClick={(e) => { e.stopPropagation(); openEditTracker(t.id); }}
-                      title="Edit tracker"
-                    >✎</button>
-                    <button
-                      className={`${styles.trackerActionBtn} ${styles.trackerActionBtnDelete}`}
-                      onClick={(e) => { e.stopPropagation(); handleDeleteTracker(t.id, t.name); }}
-                      title="Delete tracker"
-                    >✕</button>
-                  </div>
-                </div>
+                <TrackerSidebarRow
+                  item={t}
+                  active={activeTrackerId === t.id}
+                  onSelect={() => setActiveTracker(t.id)}
+                  onEdit={() => openEditTracker(t.id)}
+                  onDelete={() => handleDeleteTracker(t.id, t.name)}
+                  editTitle="Edit tracker"
+                  deleteTitle="Delete tracker"
+                />
               </li>
             ))}
           </ul>
@@ -298,27 +319,15 @@ export function RecordsView() {
           <ul className={styles.trackerList}>
             {routines.map((r) => (
               <li key={r.id}>
-                <div className={`${styles.trackerItem} ${activeRoutineId === r.id ? styles.trackerItemActive : ''}`}>
-                  <button
-                    className={styles.trackerSelectBtn}
-                    onClick={() => setActiveRoutine(r.id)}
-                  >
-                    {r.color && <span className={styles.trackerDot} style={{ background: r.color }} />}
-                    <span className={styles.trackerName}>{r.name}</span>
-                  </button>
-                  <div className={styles.trackerRowActions}>
-                    <button
-                      className={styles.trackerActionBtn}
-                      onClick={(e) => { e.stopPropagation(); openEditRoutine(r.id); }}
-                      title="Edit routine"
-                    >✎</button>
-                    <button
-                      className={`${styles.trackerActionBtn} ${styles.trackerActionBtnDelete}`}
-                      onClick={(e) => { e.stopPropagation(); handleDeleteRoutine(r.id, r.name); }}
-                      title="Delete routine"
-                    >✕</button>
-                  </div>
-                </div>
+                <TrackerSidebarRow
+                  item={r}
+                  active={activeRoutineId === r.id}
+                  onSelect={() => setActiveRoutine(r.id)}
+                  onEdit={() => openEditRoutine(r.id)}
+                  onDelete={() => handleDeleteRoutine(r.id, r.name)}
+                  editTitle="Edit routine"
+                  deleteTitle="Delete routine"
+                />
               </li>
             ))}
           </ul>

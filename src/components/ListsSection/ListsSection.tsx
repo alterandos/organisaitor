@@ -7,9 +7,12 @@ import { onVaultStatus } from '@/services/vault';
 import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { LIST_ITEM_STATUS_META } from '@/types/lists';
-import type { ListId, ListItemId, ListItemStatus, ListItem, ListFieldSchema } from '@/types/lists';
+import type { ListId, ListItemId, ListItemStatus, ListItem, ListFieldSchema, List, ListType } from '@/types/lists';
 import styles from './ListsSection.module.css';
 import { alertDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
+import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
+import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
 
 // ── Status filter (watchlist only) ────────────────────────────────────────────
 type StatusFilter = 'all' | ListItemStatus;
@@ -244,6 +247,62 @@ function ItemCard({
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Its own component (not inline JSX inside the sidebar's .map()) because useRowHoverActions
+// is a hook — has to be called once per row instance, not once per iteration of a shared
+// parent's render.
+function SidebarListItem({
+  list, listType, itemCount, isSelected, isLocked, onSelect, onEdit, onDelete, onDecrypt,
+}: {
+  list: List;
+  listType: ListType | null;
+  itemCount: number;
+  isSelected: boolean;
+  isLocked: boolean;
+  onSelect: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onDecrypt: () => void;
+}) {
+  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  return (
+    <div
+      ref={anchorRef}
+      className={`${styles.sidebarItem} ${isSelected ? styles.sidebarItemActive : ''}`}
+      onClick={onSelect}
+      style={isSelected && list.color ? { borderLeftColor: list.color } : undefined}
+      {...rowHandlers}
+    >
+      <span className={styles.sidebarItemIcon}>{list.icon ?? listType?.icon ?? '📋'}</span>
+      <div className={styles.sidebarItemInfo}>
+        <TruncatedText text={list.name} className={styles.sidebarItemName} />
+        <span className={styles.sidebarItemCount}>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
+      </div>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+        {!isLocked && (
+          <button
+            className={styles.sidebarActionBtn}
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            title="Edit list"
+          >✎</button>
+        )}
+        <button
+          className={`${styles.sidebarActionBtn} ${styles.sidebarDeleteBtn}`}
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          title="Delete list"
+        >✕</button>
+      </RowHoverActionsMenu>
+      {list.isEncrypted && (
+        <button
+          className={styles.lockBtn}
+          onClick={(e) => { e.stopPropagation(); onDecrypt(); }}
+          title="Encrypted list. Click to decrypt it"
+          aria-label="Decrypt this list"
+        >🔒</button>
+      )}
     </div>
   );
 }
@@ -511,48 +570,30 @@ export function ListsSection() {
     const listType = list.typeId ? listTypes[list.typeId] : null;
     const itemCount = Object.values(listItems).filter((i) => i.listId === list.id).length;
     const isSelected = list.id === selectedListId;
+    const isLocked = !!(rawLists[list.id as ListId] && isListLocked(rawLists[list.id as ListId]));
     return (
-      <div
+      <SidebarListItem
         key={list.id}
-        className={`${styles.sidebarItem} ${isSelected ? styles.sidebarItemActive : ''}`}
-        onClick={() => handleSelectList(list.id as ListId)}
-        style={isSelected && list.color ? { borderLeftColor: list.color } : undefined}
-      >
-        <span className={styles.sidebarItemIcon}>{list.icon ?? listType?.icon ?? '📋'}</span>
-        <div className={styles.sidebarItemInfo}>
-          <span className={styles.sidebarItemName}>{list.name}</span>
-          <span className={styles.sidebarItemCount}>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
-        </div>
-        <div className={styles.sidebarItemActions}>
-          {!(rawLists[list.id as ListId] && isListLocked(rawLists[list.id as ListId])) && (
-            <button
-              className={styles.sidebarActionBtn}
-              onClick={(e) => { e.stopPropagation(); openEditList(list.id); }}
-              title="Edit list"
-            >✎</button>
-          )}
-          <button
-            className={`${styles.sidebarActionBtn} ${styles.sidebarDeleteBtn}`}
-            onClick={(e) => { e.stopPropagation(); handleDeleteList(list.id as ListId, list.name); }}
-            title="Delete list"
-          >✕</button>
-        </div>
-        {list.isEncrypted && (
-          <button
-            className={styles.lockBtn}
-            onClick={(e) => { e.stopPropagation(); requestDecrypt('list', list.id); }}
-            title="Encrypted list. Click to decrypt it"
-            aria-label="Decrypt this list"
-          >🔒</button>
-        )}
-      </div>
+        list={list}
+        listType={listType}
+        itemCount={itemCount}
+        isSelected={isSelected}
+        isLocked={isLocked}
+        onSelect={() => handleSelectList(list.id as ListId)}
+        onEdit={() => openEditList(list.id)}
+        onDelete={() => handleDeleteList(list.id as ListId, list.name)}
+        onDecrypt={() => requestDecrypt('list', list.id)}
+      />
     );
   };
 
   return (
     <div className={styles.container}>
       {/* ── Sidebar ── */}
-      <aside className={`${styles.sidebar} ${focusedArea === 'nav' ? styles.navAreaFocused : ''}`}>
+      <aside
+        className={`${styles.sidebar} ${focusedArea === 'nav' ? styles.navAreaFocused : ''}`}
+        onClick={() => setFocusedArea('nav')}
+      >
         <div className={styles.sidebarHeader}>
           <span className={styles.sidebarTitle}>My Lists</span>
           <button className={styles.sidebarNewBtn} onClick={showAddList} title="New list">+</button>
@@ -586,7 +627,7 @@ export function ListsSection() {
       </aside>
 
       {/* ── Main area ── */}
-      <main className={styles.main}>
+      <main className={styles.main} onClick={() => setFocusedArea('content')}>
         {!selectedList ? (
           <div className={styles.emptyMain}>
             <span className={styles.emptyIcon}>📋</span>

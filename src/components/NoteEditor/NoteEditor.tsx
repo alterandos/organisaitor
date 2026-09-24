@@ -263,6 +263,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const editingNoteId       = useUIStore((s) => s.editingNoteId);
   const closeNote           = useUIStore((s) => s.closeNote);
   const setNotesLastActiveTab = useUIStore((s) => s.setNotesLastActiveTab);
+  const setNoteTabMemory     = useUIStore((s) => s.setNoteTabMemory);
   const noteTagViewReturn   = useUIStore((s) => s.noteTagViewReturn);
   const setNoteTagViewReturn = useUIStore((s) => s.setNoteTagViewReturn);
   const openNoteTagView     = useUIStore((s) => s.openNoteTagView);
@@ -696,6 +697,31 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           return true;
         },
       },
+      // Code-editor-style "surround the selection" — highlight text, press one of these
+      // characters, and it wraps the selection instead of replacing it (ProseMirror/Tiptap
+      // don't do this for prose by default). Only fires with a real, non-empty selection and
+      // no modifier held, so a plain quote/bracket keystroke with nothing selected still just
+      // types the character normally.
+      handleKeyDown(view, event) {
+        const SURROUND_PAIRS: Record<string, [string, string]> = {
+          '(': ['(', ')'], '[': ['[', ']'], '{': ['{', '}'],
+          '"': ['"', '"'], "'": ["'", "'"], '`': ['`', '`'],
+        };
+        const pair = SURROUND_PAIRS[event.key];
+        if (!pair || event.ctrlKey || event.metaKey || event.altKey) return false;
+        const { state } = view;
+        const { from, to, empty } = state.selection;
+        if (empty) return false;
+        const [open, close] = pair;
+        const selectedText = state.doc.textBetween(from, to);
+        const tr = state.tr.insertText(`${open}${selectedText}${close}`, from, to);
+        // Re-select just the original text, now nested inside the new pair — matches every
+        // code editor's convention, and lets the same keystroke be pressed again to wrap again.
+        tr.setSelection(TextSelection.create(tr.doc, from + open.length, from + open.length + selectedText.length));
+        view.dispatch(tr);
+        event.preventDefault();
+        return true;
+      },
       handleClick(view, pos, event) {
         const target = event.target as HTMLElement;
 
@@ -777,10 +803,22 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       const tabId = activeTabIdRef.current;
       if (!id) return;
       if (saveRef.current) clearTimeout(saveRef.current);
+      // Snapshot the content NOW, synchronously, at keystroke time — not inside the timeout
+      // 1500ms from now. This used to read `ed.getJSON()` live when the timer fired, which
+      // silently trusted that nothing else would change what the editor was showing in the
+      // meantime. It's the same editor instance across a note switch (setContent replaces
+      // content in place, it doesn't create a new instance), so if this timer ever survived
+      // past a switch to a different note — a real, reported case of one note's content
+      // overwriting another's, 2026-09-25, most likely triggered by rapid note-to-note
+      // navigation outrunning the flush that's supposed to cancel this timer first — it would
+      // save whatever note was CURRENTLY on screen under the ID of the note that was open when
+      // typing happened. Capturing the JSON immediately removes that failure mode entirely:
+      // the timer becomes "write this exact, already-known-correct payload," with no live
+      // reads of mutable state left for a race to land in.
+      const json = JSON.stringify(ed.getJSON());
       saveRef.current = setTimeout(() => {
         // The store decides whether this note is encrypted and, if so, re-encrypts (see
         // noteStore.editNote) — the editor just saves plaintext like it always did.
-        const json = JSON.stringify(ed.getJSON());
         if (tabId !== null) {
           useNoteStore.getState().updateNoteTabContent(id as NoteId, tabId, json);
         } else {
@@ -821,6 +859,10 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       editor.commands.setContent(parseContent(tab?.content ?? ''));
     }
     isLoadingRef.current = false;
+    // Switching tabs (click, Ctrl+Tab cycle, or a cross-app "open this tab" request) moves the
+    // cursor into the editor, same as opening a note does — a switch always means the user
+    // wants to be looking at (and likely editing) this tab's content next.
+    editor.commands.focus('end');
   };
 
   // Keep editorRef in sync so runTableCmd can access it without a dependency
@@ -874,13 +916,18 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     // editor still holds that note's content — the timer would otherwise fire after setContent
     // below and save the NEW note's content under the OLD note's id.
     if (saveRef.current && currentNoteIdRef.current && currentNoteIdRef.current !== note?.id) flushCurrentTab();
-    // Reset to Main when switching notes — except on the very first run (the initial
-    // mount), whose tab was already seeded above from notesLastActiveTabId, so coming
-    // back to Notes from another app lands on the same tab, not just the same note. On
-    // the first run this recomputes the same value activeTabId was already seeded with
-    // (a no-op set), rather than skipping the call — same "always call it once,
+    // On the very first run (the initial mount), the tab was already seeded above from
+    // notesLastActiveTabId, so coming back to Notes from another app lands on the same tab,
+    // not just the same note — this recomputes the same value activeTabId was already seeded
+    // with (a no-op set), rather than skipping the call, same "always call it once,
     // unconditionally" shape as every other assignment in this effect.
-    const nextTabId = hasRestoredTabRef.current ? null : activeTabId;
+    // On every later run — a real switch to a different note within the same Notes session —
+    // look up THIS note's own last-active tab (notesTabMemory), rather than unconditionally
+    // resetting to Main: revisiting a note should land back where you left it, the same way
+    // leaving and re-entering Notes entirely already does.
+    const rememberedTabId = note ? (useUIStore.getState().notesTabMemory[note.id] ?? null) : null;
+    const validRememberedTabId = rememberedTabId && note?.tabs?.some((t) => t.id === rememberedTabId) ? rememberedTabId : null;
+    const nextTabId = hasRestoredTabRef.current ? validRememberedTabId : activeTabId;
     hasRestoredTabRef.current = true;
     setActiveTabId(nextTabId);
     activeTabIdRef.current = nextTabId;
@@ -975,12 +1022,20 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
 
   // Mirrors the current tab into uiStore via the cleanup (not the effect body itself) —
   // same pattern as ListsSection's selectedListId/selectedTabId mirror. Cleanup fires
-  // right before activeTabId changes again, or on unmount, so it always writes "the tab
-  // that was active until just now" — never the just-mounted `null` default, which the
-  // old fire-on-every-render version did on its very first run, racing the seed above.
+  // right before activeTabId or note?.id changes again, or on unmount, so it always writes
+  // "the tab that was active until just now, for the note it belonged to" — never the
+  // just-mounted `null` default, which the old fire-on-every-render version did on its very
+  // first run, racing the seed above. note?.id is in the dependency array (not just
+  // activeTabId) so a switch between two notes that both happen to land on the same tab id
+  // (e.g. both on Main) still triggers a write for the note being left, not just the one
+  // where the tab id itself changes.
   useEffect(() => {
-    return () => setNotesLastActiveTab(activeTabId);
-  }, [activeTabId, setNotesLastActiveTab]);
+    const noteIdForThisTab = note?.id ?? null;
+    return () => {
+      setNotesLastActiveTab(activeTabId);
+      if (noteIdForThisTab) setNoteTabMemory(noteIdForThisTab, activeTabId);
+    };
+  }, [activeTabId, note?.id, setNotesLastActiveTab, setNoteTabMemory]);
 
   // Capture-phase shortcuts that must intercept before Tiptap handles the same keys
   useEffect(() => {
@@ -1679,6 +1734,10 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                         else renameNoteTab(currentNoteIdRef.current as NoteId, tabId, renameValue);
                       }
                       setRenamingTabId(null);
+                      // Enter is the deliberate "done naming" gesture — move on into the editor.
+                      // (Not done on blur too: blur can also mean "clicked straight into the
+                      // editor at a specific spot," which this would incorrectly override.)
+                      editor?.commands.focus('end');
                     }
                     if (e.key === 'Escape') setRenamingTabId(null);
                     e.stopPropagation();

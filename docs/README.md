@@ -11,7 +11,7 @@ Rules, patterns and architecture live in [`../CLAUDE.md`](../CLAUDE.md); confirm
 | [`features/not-yet-implemented.md`](features/not-yet-implemented.md) | Short list of what's unbuilt (full specs are in BACKLOG.md) |
 | [`android/`](android/) | Capacitor/Android architecture, phased plan, `implementation-status.md` |
 | [`ai/`](ai/) | The AI agent integration: `01-capability-inventory.md` (what the app can do, invariants, decisions, what is left) and `02-command-layer.md` (the built command layer: design, how to add a command, tests) |
-| [`agent-tasks/`](agent-tasks/) | Self-contained briefs a fresh agent can pick up: `01-security-and-state-safety.md` (do first), `02-testing-and-engineering-hygiene.md` (after 01), `03-ai-assistant-next-steps.md` (the AI assistant: Chunk B notes and the phases after it) |
+| [`agent-tasks/`](agent-tasks/) | Self-contained briefs a fresh agent can pick up: `01-security-and-state-safety.md` (do first), `02-testing-and-engineering-hygiene.md` (after 01), `03-ai-assistant-next-steps.md` (the AI assistant: Chunk B notes and the phases after it), `04-voice-dictation-followups.md` (paused 2026-09-24 — resume only when the user says so) |
 
 ## Adding a file
 

@@ -57,6 +57,22 @@ export function getNotebookIcon(
   return '📁';
 }
 
+// The notebook (kind='area') a note belongs to, for syncing the tree/list panels to whatever
+// note is actually being shown — e.g. uiStore.openNote() sets selectedNoteTagId from this so
+// jumping to a note NOT via its own notebook's list (Quick Access, a cross-app link,
+// Alt+Left/Right across notebooks) still leaves the tree pointing at the right place, rather
+// than whatever notebook happened to be selected before (a real, reported bug, 2026-09-25).
+// Unlike getNoteBreadcrumb below, this never falls back to an annotation tag — the result has
+// to be a real notebook id or null, since it's used to set selectedNoteTagId directly. A note
+// filed into more than one notebook (rare, but not prevented) picks whichever sorts first in
+// its own tagIds order — same ambiguity getNoteBreadcrumb already lives with.
+export function getNotePrimaryNotebookId(
+  note: { tagIds: readonly string[] },
+  noteTags: Record<string, NoteTag>,
+): string | null {
+  return note.tagIds.find((tagId) => noteTags[tagId]?.kind === 'area') ?? null;
+}
+
 // Breadcrumb string for a note's location in the notebook tree (e.g. "Notes > Exchanges >
 // Australia") — used wherever a note needs to show its context to the user without a full
 // tree UI (e.g. StructuredTagPopover's "Location" field, the cross-app note picker). Takes the

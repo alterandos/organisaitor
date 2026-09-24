@@ -49,7 +49,14 @@ function showMessage(message: string): void {
 
 function errorMessage(err: unknown): string {
   const code = err instanceof SpeechError ? err.code : 'failed';
-  return LABELS.voice.errors[code] ?? LABELS.voice.errors.failed;
+  const base = LABELS.voice.errors[code] ?? LABELS.voice.errors.failed;
+  // Google isn't set up (see docs/agent-tasks/04-voice-dictation-followups.md — paused on a
+  // billing question) — Windows' own dictation (Win+H) works in any focused field with zero
+  // setup, so point at it here rather than leave a dead end.
+  if (code === 'not-configured' && navigator.userAgent.includes('Windows')) {
+    return `${base} Try Windows' built-in dictation instead — press Win+H in this field.`;
+  }
+  return base;
 }
 
 // Plain Enter finishes dictation, same as the hotkey. Capture phase + stopImmediatePropagation so

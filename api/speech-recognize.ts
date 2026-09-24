@@ -35,7 +35,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   let body: { audio?: unknown; language?: unknown };
   try {
-    body = await req.json();
+    body = await req.json() as { audio?: unknown; language?: unknown };
   } catch {
     return json({ error: 'bad-request' }, 400);
   }

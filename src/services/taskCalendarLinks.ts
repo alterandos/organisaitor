@@ -55,14 +55,17 @@ export function syncTaskShadows(taskId: TaskId): void {
   syncDeadlineShadow(taskId);
 }
 
-// A sub-task starts on its parent's priority and Endeavour unless the caller says otherwise;
-// `null` for the Endeavour means "none", `undefined` means "inherit".
+// A sub-task starts on its parent's priority, Endeavour, tags and purposes unless the caller
+// says otherwise; for collectionId/tagIds/purposeIds, `undefined` means "inherit" and an
+// explicit value (including `null`/`[]`) always wins — same convention for all three.
 export function addTaskWithCalendar(input: CreateTaskInput): TaskId {
   const parent = input.parentId ? useTaskStore.getState().tasks[input.parentId] : undefined;
   const id = useTaskStore.getState().addTask({
     ...input,
     priority:     input.priority ?? parent?.priority,
     collectionId: input.collectionId === undefined ? parent?.collectionId : input.collectionId,
+    tagIds:       input.tagIds === undefined ? parent?.tagIds : input.tagIds,
+    purposeIds:   input.purposeIds === undefined ? parent?.purposeIds : input.purposeIds,
   });
   syncTaskShadows(id);
   return id;

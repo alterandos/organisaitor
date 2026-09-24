@@ -176,6 +176,7 @@ export function AddCalendarItemModal() {
         links,
         collectionId,
         repeat: buildRepeat(),
+        status,
         important,
         crossAppRefs,
         notifyDaysBefore: allDayNotifyDays,
@@ -297,6 +298,19 @@ export function AddCalendarItemModal() {
             </div>
           )}
 
+          {kind === 'event' && (
+            <div className={styles.field}>
+              <label className={styles.label}>Location (optional)</label>
+              <input
+                type="text"
+                className={styles.textInput}
+                placeholder="Address or link"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+            </div>
+          )}
+
           <div className={styles.field}>
             <label className={styles.label}>
               <input
@@ -352,7 +366,7 @@ export function AddCalendarItemModal() {
 
           {showAdvanced && (
             <>
-              {kind === 'event' && !isBirthday && (
+              {!isBirthday && (
                 <div className={styles.field}>
                   <label className={styles.label}>
                     <input
@@ -363,19 +377,6 @@ export function AddCalendarItemModal() {
                     />
                     Tentative — not confirmed yet, just a placeholder
                   </label>
-                </div>
-              )}
-
-              {kind === 'event' && (
-                <div className={styles.field}>
-                  <label className={styles.label}>Location (optional)</label>
-                  <input
-                    type="text"
-                    className={styles.textInput}
-                    placeholder="Address or link"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                  />
                 </div>
               )}
 

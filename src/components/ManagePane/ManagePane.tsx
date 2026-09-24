@@ -8,6 +8,9 @@ import type { Collection, Purpose, Tag, CollectionId, PurposeId, TagId } from '@
 import styles from './ManagePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
+import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
+import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
 
 // Left-nav tabs — add an entry here (+ a render branch below) to extend this view with
 // future sections (e.g. Notebooks, List types) without redesigning the layout.
@@ -27,13 +30,14 @@ interface RowProps {
 }
 
 function ManageRow({ color, name, archived, onEdit, onArchive, onDelete }: RowProps) {
+  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
   return (
-    <div className={`${styles.row} ${archived ? styles.rowArchived : ''}`}>
+    <div ref={anchorRef} className={`${styles.row} ${archived ? styles.rowArchived : ''}`} {...rowHandlers}>
       <div className={styles.rowMain}>
         {color && <span className={styles.dot} style={{ background: color }} />}
-        <span className={styles.name}>{name}</span>
+        <TruncatedText text={name} className={styles.name} />
       </div>
-      <div className={styles.rowActions}>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
         {onEdit && (
           <button className={styles.iconBtn} onClick={onEdit} title="Edit" aria-label={`Edit ${name}`}>✎</button>
         )}
@@ -43,7 +47,7 @@ function ManageRow({ color, name, archived, onEdit, onArchive, onDelete }: RowPr
           </button>
         )}
         <button className={`${styles.iconBtn} ${styles.iconBtnDelete}`} onClick={onDelete} title="Delete" aria-label={`Delete ${name}`}>✕</button>
-      </div>
+      </RowHoverActionsMenu>
     </div>
   );
 }

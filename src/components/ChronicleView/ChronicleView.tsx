@@ -10,6 +10,8 @@ import { NoteList } from './NoteList';
 import { NotebookLocationView } from './NotebookLocationView';
 import { NoteEditor } from '../NoteEditor/NoteEditor';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
+import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
+import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
 import styles from './ChronicleView.module.css';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
@@ -181,6 +183,11 @@ function NoteTagTreeNode({
   const canIndent  = myPos > 0;
   const canOutdent = tag.parentTagId !== null;
 
+  // Direct notes only (not recursive into child notebooks) — matches getTopLevelNotes' own
+  // "notes shown when you open this notebook" scope, minus the Endeavour-filter narrowing
+  // (the badge always reflects everything in the notebook, not just the current filter view).
+  const noteCount = Object.values(notes).filter((n) => n.tagIds.includes(tag.id) && !n.archivedAt).length;
+
   const hasChildren = children.length > 0;
   const isPermanentlyExpanded = expandedIds.includes(tag.id as NoteTagId);
   const isExpanded  = isPermanentlyExpanded || hoverExpanded;
@@ -212,6 +219,8 @@ function NoteTagTreeNode({
   const isDropInside = dragOverInfo?.tagId === tag.id && dragOverInfo.zone === 'inside';
   const isDropAfter  = dragOverInfo?.tagId === tag.id && dragOverInfo.zone === 'after';
 
+  const { anchorRef, open: actionsOpen, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+
   return (
     <div
       className={styles.treeNodeGroup}
@@ -219,6 +228,7 @@ function NoteTagTreeNode({
       onMouseLeave={handleMouseLeave}
     >
       <div
+        ref={anchorRef}
         className={[
           styles.treeNode,
           isSelected ? styles.treeNodeSelected : '',
@@ -229,6 +239,7 @@ function NoteTagTreeNode({
           isDropAfter ? styles.treeNodeDropAfter : '',
         ].filter(Boolean).join(' ')}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
+        {...rowHandlers}
         draggable
         onDragStart={(e) => {
           onDragStartTag(tag.id as NoteTagId);
@@ -293,9 +304,10 @@ function NoteTagTreeNode({
             className={styles.nodeName}
             style={tag.color ? { color: isSelected ? tag.color : undefined } : undefined}
           />
+          {noteCount > 0 && <span className={styles.nodeCount}>{noteCount}</span>}
         </button>
 
-        <div className={styles.nodeActions}>
+        <RowHoverActionsMenu anchorRef={anchorRef} open={actionsOpen} {...menuHandlers}>
           {canIndent && (
             <button
               className={styles.nodeActionBtn}
@@ -325,7 +337,7 @@ function NoteTagTreeNode({
             onClick={handleDelete}
             title="Delete"
           >×</button>
-        </div>
+        </RowHoverActionsMenu>
       </div>
 
       {isExpanded && hasChildren && (
@@ -449,6 +461,17 @@ export function ChronicleView() {
   const showAddNoteTag   = useUIStore((s) => s.showAddNoteTag);
   const showAddNote       = useUIStore((s) => s.showAddNote);
   const activeCollectionId = useUIStore(selectActiveCollectionId) as CollectionId | null;
+
+  // Clicking a note (NoteList) moves the cursor into the editor, same as arrow-key navigation
+  // into the editor column already does. Adjusted during render (not an effect — CLAUDE.md's
+  // "adjust state while rendering" pattern) so the very first render (opening Notes, or
+  // restoring the last-open note on load) doesn't steal focus nobody asked for: only a real
+  // change from the previously-rendered id counts as "a switch."
+  const [prevEditingNoteIdForFocus, setPrevEditingNoteIdForFocus] = useState(editingNoteId);
+  if (editingNoteId !== prevEditingNoteIdForFocus) {
+    setPrevEditingNoteIdForFocus(editingNoteId);
+    if (editingNoteId) setEditorFocusSignal((s) => s + 1);
+  }
 
   // When an Endeavour is focused (header dropdown), only show notebooks that belong to
   // it — plus their ancestors, so the tree stays navigable down to them.
@@ -582,6 +605,7 @@ export function ChronicleView() {
       <div
         className={`${styles.panel} ${styles.treePanel} ${treeCollapsed ? styles.panelCollapsed : ''} ${focusedCol === 'tree' ? styles.panelFocused : ''} ${dragCol ? styles.panelNoTransition : ''}`}
         style={!treeCollapsed ? { width: treeWidth, minWidth: MIN_PANEL_WIDTH } : undefined}
+        onClick={() => setFocusedCol('tree')}
       >
         {treeCollapsed ? (
           <button className={styles.expandStrip} onClick={() => setTreeCollapsed(false)} title="Expand notebooks">▸</button>

@@ -68,7 +68,7 @@ export default async function handler(req: Request): Promise<Response> {
     return Response.json({ error: `Strava API error: ${activitiesRes.status}` }, { status: 502 });
   }
 
-  const activities: StravaActivity[] = await activitiesRes.json();
+  const activities = await activitiesRes.json() as StravaActivity[];
 
   const mapped = activities.map((a) => ({
     type:               mapSportType(a.sport_type || a.type),

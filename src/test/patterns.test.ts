@@ -347,3 +347,21 @@ describe('pattern: zustand selectors return a stable reference', () => {
     expect(hits, describeHits(hits)).toEqual([]);
   });
 });
+
+// ── 15. Row hover-action menu — no re-hand-rolled inline-growth pattern ─────────────
+describe('pattern: nav-column row actions use RowHoverActions, not the old inline-growth CSS', () => {
+  // The pattern's own two files, and ItemCard's .itemCardActions (a list-ITEM card in
+  // ListsSection's main content area, not a nav-column row — deliberately out of scope, see
+  // CLAUDE.md "Row hover-action menu").
+  const ALLOWED = new Set([
+    'src/components/RowHoverActions/useRowHoverActions.ts',
+    'src/components/RowHoverActions/RowHoverActionsMenu.tsx',
+    'src/components/ListsSection/ListsSection.module.css',
+    'src/components/ListsSection/ListsSection.tsx',
+  ]);
+  it('no CSS class named *Actions gated by a bare :hover opacity/max-width reveal (the old per-component hand-rolled pattern this replaced)', () => {
+    const cssFiles = SOURCE_FILES.filter((f) => f.endsWith('.module.css') && !ALLOWED.has(rel(f)));
+    const hits = findMatches(cssFiles, /:hover\s+\.\w*Actions\s*\{/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});

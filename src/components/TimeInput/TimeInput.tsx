@@ -74,6 +74,12 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
   // real side effects one level up (e.g. AddCalendarItemModal re-deriving a linked end time off
   // whatever the end time has *already become*), so "harmless because idempotent" doesn't hold.
   const skipHourBlurCommitRef = useRef(false);
+  // True from focus until the first keystroke — focusing a segment visually select-alls its
+  // text (handleHourFocus/handleMinuteFocus), so the first Backspace while this is still true
+  // clears the whole time, matching "everything's selected, Backspace deletes the selection"
+  // rather than chopping one character off a value the user hasn't actually started editing.
+  const hourJustFocusedRef   = useRef(false);
+  const minuteJustFocusedRef = useRef(false);
 
   // Re-sync internal segments when the value changes externally (e.g. form reset, editing a
   // different item, a linked start/end auto-adjustment from elsewhere) or when the 12h/24h
@@ -136,15 +142,24 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
   const handleHourFocus = () => {
     hourRef.current?.select();
     if (minuteStr === '') setMinuteStr('00'); // clicking into an empty hour defaults minutes to :00
+    hourJustFocusedRef.current = true;
     setOpen(true);
   };
 
   const handleMinuteFocus = () => {
     minuteRef.current?.select();
+    minuteJustFocusedRef.current = true;
     setOpen(true);
   };
 
   const handleHourKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const wasJustFocused = hourJustFocusedRef.current;
+    hourJustFocusedRef.current = false;
+    if (e.key === 'Delete' || (e.key === 'Backspace' && wasJustFocused && hourStr !== '')) {
+      e.preventDefault();
+      clearTime();
+      return;
+    }
     if (e.key === 'Backspace') {
       const next = hourStr.slice(0, -1);
       setHourStr(next);
@@ -196,6 +211,13 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
   };
 
   const handleMinuteKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const wasJustFocused = minuteJustFocusedRef.current;
+    minuteJustFocusedRef.current = false;
+    if (e.key === 'Delete' || (e.key === 'Backspace' && wasJustFocused && minuteStr !== '')) {
+      e.preventDefault();
+      clearTime();
+      return;
+    }
     if (e.key === 'Backspace') {
       const next = minuteStr.slice(0, -1);
       setMinuteStr(next);
@@ -315,6 +337,16 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
             </button>
           ))}
         </div>
+      )}
+      {value && (
+        <button
+          type="button"
+          className={styles.clearBtn}
+          aria-label="Clear time"
+          onClick={clearTime}
+        >
+          ✕
+        </button>
       )}
       <button
         type="button"

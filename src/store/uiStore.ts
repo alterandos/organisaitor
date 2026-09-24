@@ -3,7 +3,11 @@ import { persist } from 'zustand/middleware';
 import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType } from '@/types';
 import type { Activity } from '@/types/fitness';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
+import { useNoteStore } from '@/store/noteStore';
 import { persistStorage } from '@/utils/persistStorage';
+import { todayIso } from '@/utils/date';
+import { getNotePrimaryNotebookId } from '@/utils/notes';
+import type { NoteId } from '@/types/notes';
 
 export type AppView = 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
 
@@ -43,6 +47,44 @@ const NOTE_TAB_MEMORY_TRIM_TO = 400;
 
 // How long calendarLastEditing stays eligible to auto-reopen when returning to Calendar.
 export const CALENDAR_LAST_EDITING_TTL_MS = 30 * 60_000;
+
+// Depth cap for notesHistory/notesForwardHistory — deeper than MAX_SECTION_HISTORY since
+// visiting notes happens far more often than switching app sections.
+export const MAX_NOTES_HISTORY = 20;
+
+// Shared by every place editingNoteId changes away from a real note as an ordinary user
+// action (not openNote's own back/forward-stepping, which has its own logic since only it
+// needs to know about those modes) — closeNote() and setSelectedNoteTag()'s "switching
+// notebooks closes the open note" both need this too, not just openNote's note-to-note case.
+// Found missing 2026-09-25: a user testing "visit note A, switch to a different NOTEBOOK,
+// visit note B" saw nothing pushed to notesHistory at all — switching notebooks nulls
+// editingNoteId directly (setSelectedNoteTag, below), so by the time openNote ran for note B
+// there was no longer a previous note in state for it to capture. The fix is this: capture
+// the outgoing note at the moment it's actually being left, wherever that happens, not only
+// inside openNote's own note-to-note transition.
+function pushNoteLeftFromHistory(notesHistory: { noteId: string }[], outgoingId: string | null): { noteId: string }[] {
+  return outgoingId ? [{ noteId: outgoingId }, ...notesHistory].slice(0, MAX_NOTES_HISTORY) : notesHistory;
+}
+
+// A notebook's tree row only renders if every ancestor above it is expanded (ChronicleView
+// only maps a node's children when `isExpanded`) — so jumping straight to a note whose
+// notebook is nested under a currently-collapsed parent would set selectedNoteTagId correctly
+// but leave that row invisible, looking just as "stuck" as not updating the selection at all.
+// Walks up from the notebook's PARENT (the notebook's own row doesn't need to be expanded,
+// only found) adding any collapsed ancestor.
+function expandNotebookAncestors(
+  expandedNoteTagIds: NoteTagId[],
+  notebookId: string,
+  noteTags: Record<string, { parentTagId: string | null }>,
+): NoteTagId[] {
+  const toAdd: NoteTagId[] = [];
+  let curr = noteTags[notebookId]?.parentTagId ?? null;
+  while (curr && !expandedNoteTagIds.includes(curr as NoteTagId) && !toAdd.includes(curr as NoteTagId)) {
+    toAdd.push(curr as NoteTagId);
+    curr = noteTags[curr]?.parentTagId ?? null;
+  }
+  return toAdd.length > 0 ? [...expandedNoteTagIds, ...toAdd] : expandedNoteTagIds;
+}
 
 // Manage view (library administration) — left-nav tabs, extensible for future sections.
 export type ManageSection = 'endeavours' | 'purposes' | 'tags';
@@ -90,6 +132,11 @@ interface UIState {
   manageOpen:               boolean;
   manageSection:            ManageSection;
   editingTaskId:      string | null;
+  // Same "remember on leave, restore fresh on entry" shape as notesLastEditingNoteId —
+  // returning to Tasks (any path: nav click/hotkey, or Alt+Left/Right) reopens whichever
+  // task's pane was last open. No TTL (unlike Calendar's equivalent) — a task pane reopening
+  // doesn't carry the same "surprising unprompted action" risk an event/reminder pane does.
+  tasksLastEditingTaskId: string | null;
   sidebarOpen:        boolean;
   activePurposeIds:   string[];
   activeTagIds:       string[];
@@ -250,6 +297,20 @@ interface UIState {
   calendarViewMode:    CalendarViewMode;
   setCalendarViewMode: (mode: CalendarViewMode) => void;
 
+  // Which date/period Calendar is showing — same "lifted so it survives unmount" reasoning
+  // as calendarViewMode above, added 2026-09-25 so returning to Calendar (any path) lands back
+  // on the same month/week/day, not reset to today. Month view reads year/month; week/day
+  // read calendarSelectedDate — same split CalendarView.tsx's own "Go to date" already used
+  // internally, now just persisted instead of local state. Unconditional (no TTL, unlike
+  // calendarLastEditing below) — restoring where you were looking isn't the same kind of
+  // "surprising unprompted action" reopening an edit pane out of nowhere would be.
+  calendarYear:  number;
+  calendarMonth: number;  // 0-indexed
+  calendarSelectedDate: string; // YYYY-MM-DD
+  setCalendarYear:  (value: number | ((prev: number) => number)) => void;
+  setCalendarMonth: (value: number | ((prev: number) => number)) => void;
+  setCalendarSelectedDate: (value: string) => void;
+
   // Calendar layer-visibility dropdown (checkboxes; the underlying filter values live in
   // settingsStore, persisted — this is only the panel's transient open/closed state).
 
@@ -329,11 +390,26 @@ interface UIState {
   pendingNoteTagParentId:  NoteTagId | null;
   pendingNoteTagKind:      'area' | 'tag';
   editingNoteId:           string | null;
-  // tabId (optional): open on that tab of the note — '__main__' or a NoteTab id. Consumed by NoteEditor.
-  openNote:                (id: string, tabId?: string) => void;
+  // tabId (optional): open on that tab of the note — '__main__' or a NoteTab id. Consumed by
+  // NoteEditor. `opts.mode` (default 'push') is the same push/back/forward vocabulary
+  // setActiveView uses, for notesHistory/notesForwardHistory below — 'back'/'forward' are
+  // only ever passed by navigateBack/navigateForward themselves, never by ordinary callers
+  // (clicking a note, Quick Access, a cross-app link, …), which all want the default 'push'.
+  openNote:                (id: string, tabId?: string, opts?: { mode?: 'push' | 'back' | 'forward' }) => void;
   requestedNoteTab:        { noteId: string; tabId: string } | null;
   clearRequestedNoteTab:   () => void;
   closeNote:               () => void;
+  // Notes' OWN back/forward stack, one stop per distinct note visited (never per tab switch
+  // within a note — see NoteEditor's notesTabMemory for that) — nested underneath the
+  // app-wide sectionHistory: Alt+Left/Right, while already in Notes, walks this stack first
+  // and only falls through to leaving the section once it's exhausted (confirmed with the
+  // user 2026-09-25, since a plain "remember the single last note" — the shape every other
+  // section uses — isn't enough to explain "go back through the last several notes I had
+  // open"). A stop is pushed the moment the open note changes to any different note, whether
+  // or not the editor was ever focused in it. Persists across leaving/re-entering Notes by
+  // a different path (nav click, notesLastEditingNoteId) — untouched by setActiveView.
+  notesHistory:            { noteId: string }[];
+  notesForwardHistory:     { noteId: string }[];
   // Remembers which note (if any) was open in the Notes section so switching away and
   // back restores it — separate from editingNoteId, which also drives NoteEditorPane's
   // cross-app quick-view in other sections and must still clear on section switch.
@@ -433,6 +509,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   manageOpen:               false,
   manageSection:            'endeavours',
   editingTaskId:      null,
+  tasksLastEditingTaskId: null,
   sidebarOpen:        false,
   activePurposeIds:   [],
   activeTagIds:       [],
@@ -624,21 +701,42 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       // "Linked task" chip, etc.) explicitly closes its own pane first and never itself calls
       // setActiveView, so TaskPane never had to survive a real section switch before. Without
       // this, Backspace back out of Tasks left a stale TaskPane floating over whatever section
-      // you returned to — caught via a live round-trip, not by inspection.
-      editingTaskId: null,
+      // you returned to — caught via a live round-trip, not by inspection. Landing specifically
+      // back in Tasks restores the last-open pane instead (same "remember on leave, restore
+      // fresh on entry" shape as notesLastEditingNoteId, 2026-09-25).
+      editingTaskId: view === 'tasks'
+        ? (s.activeView === 'tasks' ? s.editingTaskId : s.tasksLastEditingTaskId)
+        : null,
+      tasksLastEditingTaskId: s.activeView === 'tasks' ? s.editingTaskId : s.tasksLastEditingTaskId,
     };
   }),
 
   sectionHistory:        [],
   sectionForwardHistory: [],
   navigateBack: () => {
-    const [prev, ...rest] = get().sectionHistory;
+    const s = get();
+    // While already in Notes, walk its own note-level stack first — only once that's
+    // exhausted does Alt+Left fall through to leaving the section (see notesHistory above).
+    if (s.activeView === 'notes' && s.notesHistory.length > 0) {
+      const [prevNote, ...rest] = s.notesHistory;
+      set({ notesHistory: rest });
+      get().openNote(prevNote.noteId, undefined, { mode: 'back' });
+      return;
+    }
+    const [prev, ...rest] = s.sectionHistory;
     if (!prev) return;
     set({ sectionHistory: rest });
     get().setActiveView(prev.view, { mode: 'back' });
   },
   navigateForward: () => {
-    const [next, ...rest] = get().sectionForwardHistory;
+    const s = get();
+    if (s.activeView === 'notes' && s.notesForwardHistory.length > 0) {
+      const [nextNote, ...rest] = s.notesForwardHistory;
+      set({ notesForwardHistory: rest });
+      get().openNote(nextNote.noteId, undefined, { mode: 'forward' });
+      return;
+    }
+    const [next, ...rest] = s.sectionForwardHistory;
     if (!next) return;
     set({ sectionForwardHistory: rest });
     get().setActiveView(next.view, { mode: 'forward' });
@@ -669,6 +767,13 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   calendarViewMode:    'month',
   setCalendarViewMode: (mode) => set({ calendarViewMode: mode }),
+
+  calendarYear:  Number(todayIso().slice(0, 4)),
+  calendarMonth: Number(todayIso().slice(5, 7)) - 1,
+  calendarSelectedDate: todayIso(),
+  setCalendarYear:  (value) => set((s) => ({ calendarYear:  typeof value === 'function' ? value(s.calendarYear)  : value })),
+  setCalendarMonth: (value) => set((s) => ({ calendarMonth: typeof value === 'function' ? value(s.calendarMonth) : value })),
+  setCalendarSelectedDate: (value) => set({ calendarSelectedDate: value }),
 
 
   calendarItemDate:  null,
@@ -741,7 +846,14 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   // notebook's note would sit in the editor pane under the new notebook's list.
   setSelectedNoteTag:     (id) => {
     if (id) useRecentItemsStore.getState().recordVisit('notebook', id);
-    set((s) => ({ selectedNoteTagId: id, ...(id !== s.selectedNoteTagId ? { editingNoteId: null } : {}) }));
+    set((s) => ({
+      selectedNoteTagId: id,
+      ...(id !== s.selectedNoteTagId ? {
+        editingNoteId: null,
+        notesHistory: pushNoteLeftFromHistory(s.notesHistory, s.editingNoteId),
+        notesForwardHistory: [],
+      } : {}),
+    }));
   },
   expandedNoteTagIds:     [],
   toggleNoteTagExpanded:  (id) => set((s) => ({
@@ -752,10 +864,40 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   pendingNoteTagParentId: null,
   pendingNoteTagKind:     'area',
   editingNoteId:          null,
-  openNote:               (id, tabId) => set({ editingNoteId: id, requestedNoteTab: tabId ? { noteId: id, tabId } : null }),
+  openNote: (id, tabId, opts) => set((s) => {
+    const requestedNoteTab = tabId ? { noteId: id, tabId } : null;
+    if (id === s.editingNoteId) return { requestedNoteTab };
+    const mode = opts?.mode ?? 'push';
+    const prevId = s.editingNoteId;
+    const notesHistory = mode === 'back' ? s.notesHistory : pushNoteLeftFromHistory(s.notesHistory, prevId);
+    const notesForwardHistory =
+      mode === 'push' ? [] : mode === 'back' ? pushNoteLeftFromHistory(s.notesForwardHistory, prevId) : s.notesForwardHistory;
+
+    // Keep the notebook tree/list panels in sync with whatever note is actually being shown.
+    // Every path that opens a note funnels through here — tree click, Quick Access, cross-app
+    // links, back/forward stepping — so resolving it once here fixes all of them, including a
+    // pre-existing gap in Quick Access's note navigation that had the same symptom. Without
+    // this, jumping to a note NOT via its own notebook's list left the tree/list pointing at
+    // whatever notebook was selected before (reported 2026-09-25).
+    const { notes, noteTags } = useNoteStore.getState();
+    const note = notes[id as NoteId];
+    const notebookId = note ? getNotePrimaryNotebookId(note, noteTags) : null;
+    const selectedNoteTagId = notebookId ? (notebookId as NoteTagId) : s.selectedNoteTagId;
+    const expandedNoteTagIds = notebookId
+      ? expandNotebookAncestors(s.expandedNoteTagIds, notebookId, noteTags)
+      : s.expandedNoteTagIds;
+
+    return { editingNoteId: id, requestedNoteTab, notesHistory, notesForwardHistory, selectedNoteTagId, expandedNoteTagIds };
+  }),
+  notesHistory:           [],
+  notesForwardHistory:    [],
   requestedNoteTab:       null,
   clearRequestedNoteTab:  () => set({ requestedNoteTab: null }),
-  closeNote:              ()   => set({ editingNoteId: null }),
+  closeNote: () => set((s) => ({
+    editingNoteId: null,
+    notesHistory: pushNoteLeftFromHistory(s.notesHistory, s.editingNoteId),
+    notesForwardHistory: [],
+  })),
   notesLastEditingNoteId: null,
   notesLastActiveTabId:   null,
   setNotesLastActiveTab:  (tabId) => set({ notesLastActiveTabId: tabId }),
@@ -827,15 +969,21 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     sectionForwardHistory:    s.sectionForwardHistory,
     activeCollectionIdByView: s.activeCollectionIdByView,
     activePurposeIds:         s.activePurposeIds,
+    tasksLastEditingTaskId:   s.tasksLastEditingTaskId,
     notesLastEditingNoteId:   s.notesLastEditingNoteId,
     notesLastActiveTabId:     s.notesLastActiveTabId,
     notesTabMemory:           s.notesTabMemory,
+    notesHistory:             s.notesHistory,
+    notesForwardHistory:      s.notesForwardHistory,
     selectedNoteTagId:        s.selectedNoteTagId,
     listsLastActiveListId:    s.listsLastActiveListId,
     listsLastActiveTabId:     s.listsLastActiveTabId,
     activeTrackerId:          s.activeTrackerId,
     activeRoutineId:          s.activeRoutineId,
     calendarViewMode:         s.calendarViewMode,
+    calendarYear:             s.calendarYear,
+    calendarMonth:            s.calendarMonth,
+    calendarSelectedDate:     s.calendarSelectedDate,
     calendarLastEditing:      s.calendarLastEditing,
   }),
 }));

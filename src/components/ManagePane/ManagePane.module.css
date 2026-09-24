@@ -175,12 +175,8 @@
   white-space: nowrap;
 }
 
-.rowActions {
-  display: flex;
-  gap: 0.2rem;
-  flex-shrink: 0;
-}
-
+/* Icon buttons now render inside a portaled RowHoverActionsMenu (see
+   src/components/RowHoverActions), not a .rowActions wrapper in the row itself. */
 .iconBtn {
   border: none;
   background: transparent;

@@ -312,6 +312,7 @@ export interface CalendarReminder {
   remindAt:     string | null;
   repeat:       RepeatConfig | null;
   important:    boolean;              // flagged important — red outline + ❗ on the calendar
+  status:       EventStatus;          // 'confirmed' (default) | 'tentative' — see EventStatus. Added to Reminders 2026-09-24, reopening the earlier Events-only scope decision (see CLAUDE.md "Tentative events")
   crossAppRefs: CrossAppRef[];        // reverse cross-app links (e.g. the note(s) this reminder was created from)
   archivedAt:    string | null;       // sunset, not deleted — hidden from the calendar, restorable (same as Task)
   archiveReason: string | null;       // optional "why", captured when archiving
@@ -375,6 +376,7 @@ export interface CreateCalendarReminderInput {
   reminderType?: CalendarReminderType;
   repeat?:       RepeatConfig | null;
   important?:    boolean;
+  status?:       EventStatus;
   crossAppRefs?: CrossAppRef[];
   notifyDaysBefore?: number;
   notifyAtTime?:     string;
