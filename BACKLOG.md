@@ -90,63 +90,19 @@ Currently `activeCollectionIdByView` (`uiStore`) deliberately remembers a **sepa
 
 ---
 
-## Automatic local backup rotation (background, no cloud dependency)
+## Automatic local backup rotation (background, no cloud dependency) — Built 2026-09-25
 
-Confirmed requirement (2026-09-15), motivated by a real incident: months of desktop-only work went un-synced because the user wasn't signed in, and it turned out the existing sync-on-login logic only auto-uploads local data when the Supabase account is completely empty (see `initSync` in `src/services/sync/syncService.ts`) — otherwise it only pulls cloud data down, silently never pushing local-only work up. A local, cloud-independent safety net would have caught this regardless of whether sync itself was working. The existing Export/Restore backup (`AccountPane`/`IntegrationsPane`, `PERSISTED_STORAGE_KEYS` in `src/config/backup.ts`) already produces a complete point-in-time JSON snapshot of every persisted store — this feature automates taking that same snapshot in the background on a schedule, keeps a small rotating history of them stored locally (never touched except by the rotation's own cleanup), and needs no account/cloud connection at all.
+Confirmed requirement (2026-09-15), motivated by a real incident: months of desktop-only work went un-synced because the user wasn't signed in, and it turned out the existing sync-on-login logic only auto-uploads local data when the Supabase account is completely empty (see `initSync` in `src/services/sync/syncService.ts`) — otherwise it only pulls cloud data down, silently never pushing local-only work up. A second, independent incident (2026-09-25, a note overwritten by another note's content during rapid navigation — see "CRITICAL bug found and fixed 2026-09-25" in `docs/features/implemented-features.md`) argued for the same feature harder: unrecoverable from within the app since neither localStorage/IndexedDB nor Supabase keep revision history.
 
-**A second, independent incident now argues for the same feature, harder**: 2026-09-25, a real note's content was overwritten by a different note's content due to a since-fixed autosave race (see "CRITICAL bug found and fixed 2026-09-25" in `docs/features/implemented-features.md`) — unrecoverable from within the app, since neither localStorage/IndexedDB nor Supabase keep any revision history for note content, only the current value. A rotating local snapshot wouldn't have prevented that bug, but it would have made the loss recoverable rather than permanent. Worth weighing whether this feature, or a lighter-weight per-note revision history specifically for Notes (a different, more targeted shape — not designed here), is the better fit for that failure mode specifically.
+**Built as:** `src/utils/backupRetention.ts` (pure grandfather-thinning algorithm), `src/services/autoBackupStorage.ts` (IndexedDB storage, database `organisaitor-backups`), `src/services/autoBackup.ts` (the change-score tracker + trigger), `src/components/AutoBackupSection/` (UI in `AccountPane`). Full writeup: see "Automatic local backup rotation" in `docs/features/implemented-features.md`.
 
-### Triggers — time OR change-volume, whichever comes first
-
-Two independent conditions, either one fires a snapshot:
-- **Time-based**: a snapshot is due once more than `settingsStore.autoBackupIntervalHours` (default TBD, e.g. 24h) has elapsed since the last automatic snapshot AND at least one store has changed since then (no point snapshotting unchanged data).
-- **Change-volume-based**: a running "change score" accumulates as the user edits data, resetting to 0 each time a snapshot fires; once it crosses `settingsStore.autoBackupChangeThreshold` (default TBD), a snapshot fires immediately regardless of the time-based timer.
-
-**Feasibility: straightforward, not a hard feature.** Every persisted store already funnels every mutation through Zustand's `persist` middleware, and `syncService.ts`'s `trackChanges` already has working before/after diff logic to model this on (compares `prev`/`next` record objects key-by-key). A new module (e.g. `src/services/autoBackup.ts`) would `subscribe()` to each of the 8 persisted stores (`taskStore`, `calendarStore`, `trackerStore`, `routineStore`, `noteStore`, `listStore`, `fitnessStore`, `scheduleStore`) the same way `syncService.ts` does, and on each change add to the running score via a small per-store weight:
-- Record-shaped stores (tasks, collections, tags, purposes, events, reminders, tracker entries, list items, activities, schedule blocks): +1 point per item created/updated/deleted — the same shallow `Object.keys` diff `syncDiff` already does.
-- Free-text content (`Note.content`, a stringified Tiptap JSON): weight by **character-length delta** of the serialized string rather than a real text diff (cheap, avoids parsing rich-text JSON) — maps directly to the user's own "200 characters changed" example.
-
-One unified change score (not per-entity-type thresholds) is simpler to reason about and to expose as a single setting, with per-store weights as internal constants — worth confirming as v1 scope when this is built, since exposing 8 separate thresholds in Settings is more configurability than anyone likely wants.
-
-### What a snapshot contains
-
-Reuses `PERSISTED_STORAGE_KEYS` exactly — the same list `AccountPane`'s manual Export already uses — so this is one code path away from already-working logic, not a new backup format. Each snapshot is the same `{ exportedAt, version, ...oneKeyPerStore }` JSON shape as a manual export.
-
-### Where snapshots are stored — the one genuinely new piece, needs a platform-aware backend
-
-"Saved locally, never touched except by cleanup" rules out `localStorage` itself (already used *by* the stores being backed up, and far too small a quota — typically 5–10MB shared across everything — to also hold several full-app snapshots). Three targets depending on platform, each already-precedented elsewhere in this codebase:
-- **Desktop (Tauri)**: real filesystem via `@tauri-apps/plugin-fs` (not yet a dependency — same pattern as `plugin-opener`/`plugin-notification`, added for exactly this kind of native-capability gap). Snapshots as individual timestamped files under the app's data dir (`appDataDir()` + `/backups/*.json`).
-- **Web/PWA and Android (Capacitor webview)**: no real arbitrary filesystem without permission friction (File System Access API is Chromium-only and needs a user gesture per session — not viable for a silent background process). **IndexedDB** is the practical cross-platform answer — much larger quota than localStorage, works identically in the Vercel PWA and the Android webview. A genuinely new storage layer for this codebase (nothing uses IndexedDB today) but a standard one.
-- Implies a small storage-adapter seam (`saveSnapshot`/`listSnapshots`/`deleteSnapshot`) with a Tauri-fs implementation and an IndexedDB implementation, selected the same way `usePlatform` already detects environment elsewhere. Not user-facing — an internal implementation detail, same spirit as the `StorageAdapter` swappability CLAUDE.md's suite architecture already calls for.
-
-### Retention / rotation — tiered "grandfather" thinning
-
-Confirmed requirement: keep a small, customizable number of snapshots (default 4) spaced at increasing intervals into the past rather than evenly — the user's own numbers: ~yesterday, ~1 week, ~2 weeks, ~1 month. This is a well-known pattern (the same idea behind Time Machine's hourly→daily→weekly thinning, or tools like `rsnapshot`) and is **algorithmically simple, not a hard problem**:
-
-1. Define N target ages in days for N desired slots. For the default N=4: `[1, 7, 14, 30]` (the user's own numbers). For a different N, interpolate (e.g. geometrically between 1 day and a configurable max age) rather than hardcoding — needs a decision at build time on the exact interpolation formula, but any reasonable one satisfies "spaced increasingly further apart."
-2. After every new snapshot is taken, run a pure `selectSnapshotsToKeep(allSnapshots: {id, createdAt}[], targetAgesDays: number[]): Set<id>`: for each target age (closest-first, so two targets can't fight over the same snapshot), assign the not-yet-claimed snapshot whose actual age is nearest that target.
-3. Always force-keep the single most recent snapshot regardless of bucket math (naturally the best fit for the smallest target age anyway, but pinning it explicitly avoids an edge case where the newest snapshot is younger than every target and could otherwise lose a tie-break).
-4. Delete every snapshot not selected in steps 2–3.
-
-A pure, easily-unit-testable function — worth a standalone round-trip test before wiring it up, matching the "verify the algorithm in isolation first" approach already used successfully for `expandScheduleBlock`/timezone conversion elsewhere in this codebase, since off-by-one bucket assignment is the realistic failure mode, not the concept itself.
-
-### Settings (user-facing, per the request)
-
-New `settingsStore` fields (needs a version bump + cumulative migration, per the standing Zustand migration rule):
-- `autoBackupEnabled: boolean` (default TBD — likely `true`, since this is a safety feature, not an opt-in power feature)
-- `autoBackupIntervalHours: number` (default TBD)
-- `autoBackupChangeThreshold: number` (default TBD)
-- `autoBackupMaxCount: number` (default 4)
-- `autoBackupTargetAgesDays: number[]` (default `[1, 7, 14, 30]`; needs a UI decision — auto-regenerate this array when the count changes, vs. let advanced users edit it directly)
-
-UI location: likely a new subsection in `SettingsPane`, or folded into `AccountPane` alongside the existing manual Export/Restore — not decided yet.
-
-### Explicitly not decided yet
-
-- Exact default values for interval/threshold/weights (placeholders above — needs real-world tuning, or just a reasonable starting guess).
-- Whether automatic snapshots are ever surfaced for manual restore-from-list in the UI ("Restore from an automatic backup" picker), or stay a silent insurance policy only reached by digging into app storage.
-- Per-store weighting constants (the "+1 per item, +1 per N characters" scheme above is a reasonable starting guess, not a confirmed spec).
-- This is a safety net for data loss, not a fix for sync itself silently failing to push (the actual root cause of the incident that motivated this feature) — worth keeping those as two separate backlog concerns rather than conflating them.
+**Decisions made that narrow the design above:**
+- **Trigger is change-volume ONLY, no time-based leg** — confirmed with the user 2026-09-25, overriding this section's original "time OR change-volume" draft. A snapshot fires only once enough has actually changed; a clock interval alone never fires one.
+- **Storage is IndexedDB on every platform, including Tauri** — no `@tauri-apps/plugin-fs` dependency was added; the platform-aware storage-adapter seam this section originally proposed wasn't needed. Simpler, and IndexedDB already works identically across the Vercel PWA, Tauri's WebView2, and Android's WebView.
+- **UI lives in `AccountPane`** (both signed-in and guest branches), next to the existing manual Export/Restore — not a new `SettingsPane` subsection.
+- Settings default: `autoBackupEnabled: true`, `autoBackupChangeThreshold: 40` (clamped 5–500), `autoBackupMaxCount: 4`, `autoBackupTargetAgesDays: [1, 7, 14, 30]` (not exposed as an editable UI field in v1).
+- Automatic snapshots ARE surfaced for manual restore — `AutoBackupSection` lists them with a per-row Restore button, not a silent-only insurance policy.
+- This remains a safety net for data loss, not a fix for sync's silent local-only-data-never-pushed gap (the actual root cause of the motivating 2026-09-15 incident) — that gap is still open, tracked separately.
 
 ---
 
@@ -2611,7 +2567,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 | **No constant inline styles** | `grep -rnE "style=\{\{ ?[a-zA-Z]+: ?('[^']*'\|[0-9.]+)" src --include=*.tsx` | Applied 2026-09-20 except six `NoteEditor.tsx` portaled elements that carry a constant `position: 'fixed'` / `transform` alongside measured `top`/`left` (move the constants into classes). |
 | **CSS colours from variables (dark-mode safe)** | `grep -rnE "#[0-9a-fA-F]{3,8}" src --include=*.module.css` outside `var()` fallbacks | Not audited beyond spotting them. Mostly `#fff` on accent backgrounds (fine). Worth checking in dark mode: `AddTaskModal` priority chips, `CalendarView` pill text colours, `IntegrationsPane` status colours, `ListsSection` kind badges, `WatchlistView` gains/losses. |
 | **Archive + delete via `ItemActions`** | panes for user-owned items | Only Task, Calendar event and Calendar reminder are on it. Notes, notebooks, lists, list items, trackers, routines, activities, schedules and watchlist items delete through `confirmDelete` (correct wording, but no "Archive instead" and no archived state). |
-| **No effect-copying of item state into forms** (`react-hooks/set-state-in-effect`) | `npx eslint . \| grep -c set-state-in-effect` | **Fully applied 2026-09-20** — zero errors (was 35). Four documented `eslint-disable` sites remain, each a genuine external sync: `CalendarSidePane` (network fetch on open), `ListsSection` (consuming a one-shot request posted to uiStore by another section), `TickerChart` (fetch status), `NoteEditor` (Tiptap reload on lock/unlock). `CalendarView`'s equivalent site dropped out 2026-09-25 when `year`/`month`/`selectedDate` moved from local `useState` to uiStore actions (lifting Calendar's view position for nav-memory) — the rule doesn't flag calls into a Zustand action the way it flags a local `setState` call, so the disable comment became genuinely unused and was removed, not just left stale. Related lint debt not covered by this pattern (41 errors total, unaudited since 2026-09-20): `react-hooks/refs` x9 (`NoteEditor`, `ChronicleView` — docs/agent-tasks/02), `preserve-manual-memoization` x2, `no-explicit-any` x13, `no-unused-vars` x7, `ban-ts-comment` x4, `no-empty` x3, `no-unused-expressions` x2, `only-export-components` x1. |
+| **No effect-copying of item state into forms** (`react-hooks/set-state-in-effect`) | `npx eslint . \| grep -c set-state-in-effect` | **Fully applied 2026-09-20** — zero errors (was 35). Five documented `eslint-disable` sites remain, each a genuine external sync: `CalendarSidePane` (network fetch on open), `ListsSection` (consuming a one-shot request posted to uiStore by another section), `TickerChart` (fetch status), `NoteEditor` (Tiptap reload on lock/unlock), `AutoBackupSection` (loads the automatic-snapshot list from IndexedDB on mount, 2026-09-25). `CalendarView`'s equivalent site dropped out 2026-09-25 when `year`/`month`/`selectedDate` moved from local `useState` to uiStore actions (lifting Calendar's view position for nav-memory) — the rule doesn't flag calls into a Zustand action the way it flags a local `setState` call, so the disable comment became genuinely unused and was removed, not just left stale. Related lint debt not covered by this pattern (41 errors total, unaudited since 2026-09-20): `react-hooks/refs` x9 (`NoteEditor`, `ChronicleView` — docs/agent-tasks/02), `preserve-manual-memoization` x2, `no-explicit-any` x13, `no-unused-vars` x7, `ban-ts-comment` x4, `no-empty` x3, `no-unused-expressions` x2, `only-export-components` x1. |
 | **Every persisted store versioned** | each `persist(` has `version` + `migrate` | **Fully applied 2026-09-20.** |
 | **Every persisted store uses `persistStorage()`** | `grep -L persistStorage $(grep -rl "persist(" src/store)` must list nothing | **Fully applied 2026-09-21** — all 14 persisted stores; the two agent stores (2026-09-22) use it too. |
 | **Agent commands touch data only through `agent/access.ts`** | `npm test` (`boundary.test.ts`) and `npx eslint src/agent` | **Fully applied 2026-09-22** (new code). Standing rule: "Agent command layer" in CLAUDE.md. |

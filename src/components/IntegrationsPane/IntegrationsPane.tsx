@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
+import { useAuthStore } from '@/store/authStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { parseICS, looksLikeBirthday, type ICSEvent } from '@/utils/icsParser';
 import { resolveTimezone, rezoneWallClock } from '@/utils/timezone';
 import { CalendarImportReviewModal, type ReviewRow } from '@/components/CalendarImportReviewModal/CalendarImportReviewModal';
 import type { CollectionId } from '@/types';
-import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
-import { writePersistedValue } from '@/utils/idbStorage';
+import { downloadBackup, restoreBackupData } from '@/utils/backupExport';
 import styles from './IntegrationsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
@@ -186,21 +186,15 @@ function ExportCard() {
   const [status, setStatus] = useState<ImportStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleExport = () => {
+  const handleExport = async () => {
     try {
-      const backup: Record<string, unknown> = {};
-      for (const key of PERSISTED_STORAGE_KEYS) {
-        const val = localStorage.getItem(key);
-        if (val !== null) backup[key] = JSON.parse(val);
-      }
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      const date = new Date().toISOString().slice(0, 10);
-      a.href     = url;
-      a.download = `my-todo-backup-${date}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // Was reading localStorage.getItem(key) directly, which silently skipped every
+      // IndexedDB-backed key (notes-storage, trash-storage) — an export from this pane never
+      // included any notes or trashed items. Found and fixed 2026-09-25 while building the
+      // automatic backup feature, since it shares this same "build a snapshot" logic —
+      // downloadBackup() (utils/backupExport.ts) reads through readPersistedValue(), which is
+      // IndexedDB-aware, same as AccountPane's Export always correctly was.
+      await downloadBackup();
       setStatus('success');
     } catch {
       setErrorMsg('Export failed. Please try again.');
@@ -251,6 +245,7 @@ function RestoreCard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status,   setStatus]   = useState<ImportStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const user = useAuthStore((s) => s.user);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -260,14 +255,12 @@ function RestoreCard() {
     reader.onload = async (ev) => {
       try {
         const backup = JSON.parse(ev.target?.result as string) as Record<string, unknown>;
-        let restored = 0;
-        for (const key of PERSISTED_STORAGE_KEYS) {
-          if (key in backup) {
-            await writePersistedValue(key, JSON.stringify(backup[key]));
-            restored++;
-          }
-        }
-        if (restored === 0) throw new Error('No recognisable data found in this file.');
+        // Was reimplementing the write-each-key loop directly, which skipped rehydrating the
+        // three Supabase-synced stores and force-uploading when signed in — AccountPane's
+        // restore always did both. restoreBackupData() (utils/backupExport.ts) is the same
+        // logic AccountPane now also calls, extracted 2026-09-25 so there's one restore path
+        // instead of two that can drift apart.
+        await restoreBackupData(backup, user?.id ?? null);
         setStatus('success');
         setTimeout(() => window.location.reload(), 1200);
       } catch (err) {

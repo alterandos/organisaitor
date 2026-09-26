@@ -11,6 +11,7 @@ import { initSync, stopSync } from '@/services/sync/syncService';
 import { checkVaultStatus, resetVaultModuleState } from '@/services/vault';
 import { initNoteSecretsSync } from '@/services/noteSecretsSync';
 import { initListSecretsSync } from '@/services/listSecretsSync';
+import { initAutoBackup } from '@/services/autoBackup';
 import { DecryptPrompt } from '@/components/DecryptPrompt/DecryptPrompt';
 import { backfillTaskCalendarLinks } from '@/services/taskCalendarBackfill';
 import { syncGoogleCalendars } from '@/services/googleCalendar';
@@ -228,7 +229,7 @@ export default function App() {
   }, [isAndroid]);
 
   useNotificationChecker();
-  useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); }, []);
+  useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initAutoBackup(); }, []);
 
   const setSession = useAuthStore((s) => s.setSession);
   const authUserId = useAuthStore((s) => s.user?.id ?? null);

@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
-import { useTaskStore } from '@/store/taskStore';
-import { useCalendarStore } from '@/store/calendarStore';
-import { useTrackerStore } from '@/store/trackerStore';
 import { isSupabaseConfigured } from '@/services/supabase';
 import { requestSignOut } from '@/services/signOut';
 import { forceUpload, onSyncStatus, type SyncStatus } from '@/services/sync/syncService';
@@ -12,9 +9,8 @@ import {
   setupVault, unlockWithPassphrase, unlockWithRecoveryCode, lockVault,
   trustThisDevice, getVaultError, retryVaultCheck,
 } from '@/services/vault';
-import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
-import { downloadBackup } from '@/utils/backupExport';
-import { writePersistedValue } from '@/utils/idbStorage';
+import { downloadBackup, restoreBackupData } from '@/utils/backupExport';
+import { AutoBackupSection } from '@/components/AutoBackupSection/AutoBackupSection';
 import styles from './AccountPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
@@ -172,27 +168,9 @@ export function AccountPane() {
     try {
       const text   = await file.text();
       const backup = JSON.parse(text);
-
-      let restored = 0;
-      for (const key of PERSISTED_STORAGE_KEYS) {
-        if (key in backup) {
-          await writePersistedValue(key, JSON.stringify(backup[key]));
-          restored++;
-        }
-      }
-      if (restored === 0) throw new Error('No recognisable data found in this file.');
-
-      // Bring the Supabase-synced stores' in-memory state up to date with what was
-      // just written to localStorage, so forceUpload() (which reads live state, not
-      // localStorage) pushes the restored data instead of what was there before.
-      await Promise.all([
-        useTaskStore.persist.rehydrate(),
-        useCalendarStore.persist.rehydrate(),
-        useTrackerStore.persist.rehydrate(),
-      ]);
+      await restoreBackupData(backup, user?.id ?? null);
 
       if (user) {
-        await forceUpload(user.id);
         setSuccess('Data restored and uploaded to Supabase. Reloading…');
       } else {
         setSuccess('Data restored locally. Reloading…');
@@ -383,6 +361,7 @@ export function AccountPane() {
               hidden
               onChange={handleRestoreFile}
             />
+            <AutoBackupSection />
             <button
               className={styles.exportBtn}
               onClick={() => { closeAccount(); openRecyclingBin(); }}
@@ -453,6 +432,7 @@ export function AccountPane() {
                 hidden
                 onChange={handleRestoreFile}
               />
+              <AutoBackupSection />
               <button
                 className={styles.exportBtn}
                 onClick={() => { closeAccount(); openRecyclingBin(); }}

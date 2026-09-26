@@ -84,6 +84,17 @@ interface SettingsState {
   // ── Quick Access pane (Ctrl+G) ────────────────────────────────────────────────
   quickAccessRecentCount:    number;   // how many recent/frequent items to list; range 3–20
   setQuickAccessRecentCount: (n: number) => void;
+
+  // ── Automatic local backup (services/autoBackup.ts) ──────────────────────────
+  // Change-volume triggered only (no time-based trigger — confirmed with the user 2026-09-25:
+  // a snapshot fires once enough has changed, never just because a clock interval elapsed).
+  autoBackupEnabled:         boolean;
+  autoBackupChangeThreshold: number;    // weighted change-score that triggers a snapshot
+  autoBackupMaxCount:        number;    // how many snapshots the grandfather-thinning keeps
+  autoBackupTargetAgesDays:  number[];  // target ages (days) the thinning tries to keep one snapshot near
+  setAutoBackupEnabled:         (v: boolean) => void;
+  setAutoBackupChangeThreshold: (n: number) => void;
+  setAutoBackupMaxCount:        (n: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -140,11 +151,19 @@ export const useSettingsStore = create<SettingsState>()(
 
       quickAccessRecentCount:    8,
       setQuickAccessRecentCount: (n) => set({ quickAccessRecentCount: Math.round(Math.max(3, Math.min(20, n))) }),
+
+      autoBackupEnabled:         true,
+      autoBackupChangeThreshold: 40,
+      autoBackupMaxCount:        4,
+      autoBackupTargetAgesDays:  [1, 7, 14, 30],
+      setAutoBackupEnabled:         (v) => set({ autoBackupEnabled: v }),
+      setAutoBackupChangeThreshold: (n) => set({ autoBackupChangeThreshold: Math.round(Math.max(5, Math.min(500, n))) }),
+      setAutoBackupMaxCount:        (n) => set({ autoBackupMaxCount: Math.round(Math.max(1, Math.min(10, n))) }),
     }),
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 2,
+      version: 3,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -154,11 +173,21 @@ export const useSettingsStore = create<SettingsState>()(
       // (missing this new key) would otherwise wholesale-replace the in-code default object
       // that has it, leaving `.tentative` undefined (falsy) and hiding tentative events by
       // default for anyone who already had the store persisted before this key existed.
+      // v2 → v3: backfill the new autoBackup* fields — all brand-new top-level keys, so
+      // technically zustand's shallow persist merge already falls back to the in-code default
+      // for any of them absent from an old persisted blob; this step exists anyway, per the
+      // standing "always bump + migrate" rule, and as a defensive backstop.
       migrate: (persisted, version) => {
         const state = persisted as SettingsState;
         if (version < 1 && !state.theme) state.theme = 'system';
         if (version < 2 && state.calendarLayerVisibility && state.calendarLayerVisibility.tentative === undefined) {
           state.calendarLayerVisibility = { ...state.calendarLayerVisibility, tentative: true };
+        }
+        if (version < 3) {
+          if (state.autoBackupEnabled === undefined) state.autoBackupEnabled = true;
+          if (state.autoBackupChangeThreshold === undefined) state.autoBackupChangeThreshold = 40;
+          if (state.autoBackupMaxCount === undefined) state.autoBackupMaxCount = 4;
+          if (state.autoBackupTargetAgesDays === undefined) state.autoBackupTargetAgesDays = [1, 7, 14, 30];
         }
         return state;
       },

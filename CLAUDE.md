@@ -285,7 +285,7 @@ interface RepeatConfig {
 | `fitnessStore` | `fitness-storage` | **v3** | localStorage only | activities + activity types (Fitness app) |
 | `scheduleStore` | `todo-schedules` | **v1** | localStorage + Supabase | Schedule templates (recurring weekly timetables, Calendar section) |
 | `uiStore` | `todo-ui-session` | **v1** | localStorage (partial) + memory | all UI state (modals, panes, active section) — only navigation/session memory is persisted, see below |
-| `settingsStore` | `todo-settings` | **v2** | localStorage | user preferences |
+| `settingsStore` | `todo-settings` | **v3** | localStorage | user preferences (includes `autoBackup*` fields — see "Automatic local backup rotation" in Implemented features) |
 | `authStore` | — | — | memory only | Supabase session |
 | `recentItemsStore` | `todo-recent-items` | **v1** | localStorage only | Quick Access (Ctrl+G) recent/frequent visit history |
 | `notificationStore` | `todo-notifications` | **v1** | localStorage only | pending in-app notifications + the log of already-notified triggers |
@@ -310,7 +310,7 @@ Current taskStore v11 migrate backfills: `routineTasks: []`, `repeatConfig: null
 
 **Because of that, backup and restore must not read/write localStorage directly for a persisted key** — use `readPersistedValue(key)` / `writePersistedValue(key, value)` (`idbStorage.ts`; `backupExport.ts`, `AccountPane` and `IntegrationsPane` do). `writePersistedValue` also freezes further IndexedDB writes until the reload that restore always does, so the running app can't overwrite the restored data. To move another store to IndexedDB: use `persistStorageIdb()` and add its key to `IDB_STORAGE_KEYS`.
 
-**Also:** when adding a brand-new persisted store (not just a field on an existing one), add its `persist` `name` to `PERSISTED_STORAGE_KEYS` in `src/config/backup.ts` — that's the one list both full-app Export/Restore implementations (`AccountPane`, `IntegrationsPane`) read from. This list drifted out of sync with reality once already (Records/Routines/Notes/Lists/Portfolio/Fitness were all silently missing from backups for a while), so treat it the same as a migration: part of shipping the store, not a follow-up.
+**Also:** when adding a brand-new persisted store (not just a field on an existing one), add its `persist` `name` to `PERSISTED_STORAGE_KEYS` in `src/config/backup.ts` — that's the one list both full-app Export/Restore implementations (`AccountPane`, `IntegrationsPane`) read from. This list drifted out of sync with reality once already (Records/Routines/Notes/Lists/Portfolio/Fitness were all silently missing from backups for a while), so treat it the same as a migration: part of shipping the store, not a follow-up. **Not every localStorage key belongs in this list** — per-device bookkeeping that isn't user data (`todo-sync-pending`, and `todo-autobackup-score` used by `services/autoBackup.ts`'s change-score tracker) is deliberately excluded, the same way neither is meant to survive a restore or travel in a backup.
 
 ### uiStore — key state and actions
 
@@ -588,8 +588,11 @@ src/
   components/DecryptPrompt/  — app-wide "enter your passphrase to permanently decrypt this note/list" modal (uiStore.decryptPrompt / requestDecrypt), portaled, z-index 200; opened by every clickable 🔒
   store/noteViews.ts         — React hooks useNoteViews()/useNoteView(id)/useEntryViews(): notes/entries resolved through the cache, re-derived when the store OR the cache changes
   services/vault.ts          — client-side encryption vault: setupVault/unlockWithPassphrase/unlockWithRecoveryCode/lockVault, trustThisDevice (IndexedDB key cache), encryptField/decryptField (AES-GCM via Web Crypto) — see "Client-side encryption for Note content"
+  services/autoBackup.ts     — automatic local backup rotation (change-volume-triggered, no time-based trigger): subscribes to every persisted domain store, accumulates a weighted change score, and once it crosses settingsStore.autoBackupChangeThreshold builds+saves a snapshot via autoBackupStorage.ts and thins old ones via utils/backupRetention.ts. initAutoBackup() called once from App.tsx. See "Automatic local backup rotation" in Implemented features
+  services/autoBackupStorage.ts — IndexedDB storage for automatic snapshots, its own database (`organisaitor-backups`, deliberately separate from the notes/trash one): saveBackupSnapshot/listBackupSnapshots/getBackupSnapshot/deleteBackupSnapshot, all best-effort
   utils/
-    backupExport.ts          — downloadBackup(): exports every `PERSISTED_STORAGE_KEYS` key straight from localStorage (works without the app rendering); used by AccountPane and the ErrorBoundary fallback
+    backupRetention.ts       — selectSnapshotsToKeep(snapshots, targetAgesDays, now): pure grandfather/tiered-thinning algorithm (always keeps the newest, then claims the nearest unclaimed snapshot per target age, closest-first) — used by services/autoBackup.ts
+    backupExport.ts          — buildBackupSnapshot() (every `PERSISTED_STORAGE_KEYS` key, used by both downloadBackup() and services/autoBackup.ts) / downloadBackup(): exports straight from localStorage (works without the app rendering); used by AccountPane and the ErrorBoundary fallback. restoreBackupData(backup, userId): writes a backup object back to persisted storage + rehydrates the Supabase-synced stores + force-uploads if signed in — the one restore path AccountPane, IntegrationsPane and AutoBackupSection all call
     calendarItemInput.ts     — buildCalendarEventInput / buildCalendarReminderInput: the rules for turning what a person or an agent supplied into a stored event/reminder (used by AddCalendarItemModal and the agent commands)
     scheduleBlocks.ts        — createScheduleBlock(): the one place a ScheduleBlock's defaults live (used by AddScheduleModal and the agent commands)
     date.ts                  — todayIso(), formatDate(), timeAddMinutes(), addDaysToIso(), computeLinkedEndTime() (auto-derives a linked end time from a start time — see Timepicker rebuild in Implemented features), etc.
@@ -658,7 +661,8 @@ src/
     RowHoverActions/         — suite-wide nav-column row action menu: useRowHoverActions() (open/close state machine) + RowHoverActionsMenu (portaled floating panel) — see "Row hover-action menu" in Component patterns. Used by ChronicleView, Sidebar, ManagePane, ListsSection, RecordsView
     SettingsPane/            — settings slide-in; reads HOTKEYS[] dynamically; StorageSection.tsx = the Storage block (per-store usage + Shrink images in notes)
     ManagePane/              — library admin (Endeavours/Purposes/Tags): left-nav tabs + content, opened by clicking (not hovering) the header hamburger; archive/restore/delete rows. MANAGE_SECTIONS array in the file is the extension point for future tabs
-    AccountPane/             — Supabase auth + account info
+    AccountPane/             — Supabase auth + account info; renders AutoBackupSection (both signed-in and guest branches)
+    AutoBackupSection/       — automatic local backup UI (enable toggle, threshold, snapshot list with per-row Restore) — see services/autoBackup.ts and "Automatic local backup rotation" in Implemented features
     IntegrationsPane/        — (stub) future integrations
     RecyclingBinPane/        — suite-wide Recycling Bin: Ctrl+Shift+R or the "Recycling Bin" button in Account; filter chips by section, Restore / Delete forever per row, "Empty recycling bin" — see "Recycling Bin" above
     ColorPicker/             — reusable colour swatch picker
