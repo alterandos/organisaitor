@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { toggleTaskWithLists, linkedListIds } from '@/services/taskListLinks';
+import { LinkedChecklists } from '@/components/LinkedChecklists/LinkedChecklists';
 import type { Priority, TagId, PurposeId, TaskKind, TaskId, TimeIntensity } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -7,6 +9,7 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { deleteTaskWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import { addTaskWithCalendar, updateTaskLinked } from '@/services/taskCalendarLinks';
+import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
@@ -37,7 +40,6 @@ export function TaskPane() {
   const updateTask        = useTaskStore((s) => s.updateTask);
   const archiveTask       = useTaskStore((s) => s.archiveTask);
   const restoreTask       = useTaskStore((s) => s.restoreTask);
-  const toggleTask        = useTaskStore((s) => s.toggleTask);
 
   const task = editingTaskId ? tasksRecord[editingTaskId as TaskId] : null;
 
@@ -154,7 +156,8 @@ export function TaskPane() {
   const handleRestore = () => restoreTask(taskId);
 
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
-    if (ref.type !== 'note') return; // only 'note' targets are navigable today
+    if (ref.type === 'list') { openArtifactTarget('list', ref.id); return; }
+    if (ref.type !== 'note') return;
     useUIStore.getState().setActiveView('notes');
     useUIStore.getState().openNote(ref.id, ref.tabId);
   };
@@ -407,9 +410,9 @@ export function TaskPane() {
             <LinksField links={task.links ?? []} onChange={(next) => updateTask(taskId, { links: next })} />
           </div>
 
-          {/* ── Linked items (Notes today; Calendar/List/Tracker are stubs in the picker
-               itself — see CLAUDE.md "Cross-app linking"). Populated automatically by the
-               Notes "Create ▸ Task" flow, and manually addable/removable here. ── */}
+          {/* ── Linked items (notes and lists). Populated automatically by the Notes "Create ▸
+               Task" flow, and manually addable/removable here. A linked checklist's items show
+               below as tickable steps (LinkedChecklists — see services/taskListLinks.ts). ── */}
           <div className={styles.field}>
             <span className={styles.label}>Linked items</span>
             <CrossAppRefPicker
@@ -418,6 +421,7 @@ export function TaskPane() {
               onChange={handleCrossAppRefsChange}
               onNavigate={navigateToCrossAppRef}
             />
+            <LinkedChecklists listIds={linkedListIds(task.crossAppRefs)} />
           </div>
 
           {/* ── Sub-tasks ── */}
@@ -429,7 +433,7 @@ export function TaskPane() {
                   <li key={sub.id} className={`${styles.subtaskItem} ${sub.completed ? styles.subtaskDone : ''}`}>
                     <button
                       className={`${styles.subtaskCheck} ${sub.completed ? styles.subtaskCheckDone : ''}`}
-                      onClick={() => useTaskStore.getState().toggleTask(sub.id)}
+                      onClick={() => toggleTaskWithLists(sub.id)}
                       aria-label={sub.completed ? 'Mark incomplete' : 'Mark complete'}
                     >
                       {sub.completed && '✓'}
@@ -473,7 +477,7 @@ export function TaskPane() {
         <ItemActionFooter
           archived={task.archived}
           completed={task.completed}
-          onToggleComplete={() => toggleTask(taskId)}
+          onToggleComplete={() => toggleTaskWithLists(taskId)}
           deleteLabel="Delete task"
           onArchive={() => setDialog('archive')}
           onRestore={handleRestore}

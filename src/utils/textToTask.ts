@@ -278,15 +278,86 @@ export function inferTaskFromSelection(rawText: string, now: Date = new Date()):
 
 export interface InferredCalendarFields {
   title:     string;
-  kind:      'event' | 'reminder';
+  kind:      'event' | 'reminder' | 'deadline';
   date:      string | null;   // YYYY-MM-DD — null = no date found, caller defaults to today
-  startTime: string | null;   // HH:MM (24-hour)
+  startTime: string | null;   // HH:MM (24-hour) — for a reminder/deadline, its time
   endTime:   string | null;
   location:  string | null;   // first link found (a meeting URL reads naturally as an event's location)
   notes:     string | null;   // any further links
+  eventType: 'default' | 'birthday' | 'travel';   // events only
+  tentative: boolean;         // "maybe", "TBC", "pencil in"…
+  important: boolean;         // "urgent", "important", "!!"…
+  repeat:    { freq: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number } | null;
 }
 
-const EVENT_WORDS = /\b(meeting|appointment|lunch|dinner|breakfast|interview|class|lecture|conference|party|flight|session|workshop|webinar|seminar|catch[\s-]?up|check[\s-]?in|concert|wedding)\b/i;
+// ── Cue phrases ──
+// Each is a best guess that the modal the result opens in still shows for confirmation. The
+// *_STRIP patterns are phrases that only say WHAT KIND of thing this is ("remind me to", "the
+// deadline for … is", "TBC", "every Monday"), so they come out of the title along with the date.
+
+// Things you attend or take part in, so they occupy time.
+const EVENT_WORDS = /\b(meeting|meet(?:ing)?\s+(?:with|up)|appointment|appt|lunch|dinner|breakfast|brunch|coffee|drinks|interview|class|lecture|tutorial|lab|exam|conference|party|session|workshop|webinar|seminar|catch[\s-]?up|check[\s-]?in|concert|wedding|call|zoom|standup|stand[\s-]up|sync|1:1|one[\s-]on[\s-]one|dentist|doctor|physio|haircut|gym|training|practice|game|match|gig|movie|date night|ceremony|funeral|recital)\b/i;
+
+// Journeys: time that's booked out without being something you're "at" (CalendarEventType 'travel').
+const TRAVEL_WORDS = /\b(flights?|fly(?:ing)?\s+(?:to|from|out|home|back|into)|plane|train\s+(?:to|from|home)|bus\s+(?:to|from|home)|coach\s+(?:to|from)|ferry|drive\s+(?:to|from|home|back)|driving\s+(?:to|from|home|back)|road\s*trip|departs?|departure|departing|boarding|layover|stopover|transfer\s+to|(?:uber|taxi|cab|shuttle)\s+to|commute)\b/i;
+
+const BIRTHDAY_WORDS = /\b(birthday|b-?day|b'day)\b/i;
+
+// "by Friday", "before the 5th", "no later than 3 Oct" — when that's what introduces the date.
+const DEADLINE_DATE_CONNECTOR = /\b(?:by|before|no later than|not later than)\s+(?:the\s+)?$/i;
+// Words that mean "something is due" wherever they sit. "deadline" itself only counts when it's
+// what the sentence is about ("the deadline is…", "deadline: …", a leading "Deadline for X") —
+// "discuss the deadline tomorrow" is a meeting.
+const DEADLINE_WORDS = /\b(due|overdue|expires?|expiry|expiration|closing date|applications?\s+close|closes|cut[\s-]?off|last day (?:to|for)|final day (?:to|for)|submit|submission|hand[\s-]?in|lodge(?:ment)?|lodgment|no later than)\b/i;
+const DEADLINE_LEAD = /^\s*(?:the\s+)?(?:deadline|due date|cut[\s-]?off)\b\s*(?:for|of|to|on)?\s*(?:is\b|:|[-–])?\s*/i;
+const DEADLINE_IS = /\b(?:deadline|due date|cut[\s-]?off)\s*(?:is\b|:)\s*/i;
+// "the deadline for the grant is Friday" — only with an "is" still to come, so "discuss the
+// deadline for the report tomorrow" stays a meeting.
+const DEADLINE_FOR = /\b(?:the\s+)?(?:deadline|due date|cut[\s-]?off)\s+(?:for|of|to)\s+(?=.+?\s(?:is|are)\b)/i;
+
+const REMINDER_WORDS = /\b(remind(?:er)?|don'?t forget|do not forget|remember to|make sure (?:to|that|i)|note to self|nudge me|ping me|heads[\s-]?up)\b/i;
+const REMINDER_STRIP = /\b(?:please\s+)?(?:remind\s+me(?:\s+(?:to|that|about|of))?|reminder(?:\s+(?:to|that|about))?\s*[:\-–]?|don'?t\s+forget(?:\s+(?:to|that|about))?|do\s+not\s+forget(?:\s+(?:to|that|about))?|remember\s+to|make\s+sure\s+(?:to|that)|note\s+to\s+self\s*[:\-–]?|nudge\s+me(?:\s+(?:to|about))?|ping\s+me(?:\s+(?:to|about))?|heads[\s-]?up\s*[:\-–]?)\s*/gi;
+
+const TENTATIVE_STRIP = /\(?\b(?:maybe|possibly|perhaps|tentative(?:ly)?|provisional(?:ly)?|tbc|tbd|to be confirmed|pencil(?:l?ed)?\s+in)\b\)?\s*/gi;
+
+const IMPORTANT_WORDS = /\b(important|urgent|asap|critical|must[\s-]not[\s-]miss|don'?t miss|do not miss)\b|!!/i;
+const IMPORTANT_STRIP = /^\s*(?:important|urgent|asap)\s*[:\-–!]+\s*|!{2,}/gi;
+
+const REPEAT = /\bevery\s+(?:(other)\s+)?(?:(\d+)\s+)?(day|week|fortnight|month|year|(?:mon|tues?|wed(?:nes)?|thu(?:rs?)?|fri|sat(?:ur)?|sun)(?:day)?)s?\b|\b(daily|weekly|fortnightly|monthly|yearly|annually)\b/i;
+
+function findRepeat(text: string): { freq: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number; span: Span } | null {
+  const m = REPEAT.exec(text);
+  if (!m) return null;
+  const [, other, count, unit, adverb] = m;
+  const word = (unit ?? adverb).toLowerCase();
+  let interval = count ? parseInt(count, 10) : other ? 2 : 1;
+  let freq: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'weekly';   // "week", "weekly", or a weekday ("every Monday")
+  if (word === 'day' || word === 'daily') freq = 'daily';
+  else if (word === 'fortnight' || word === 'fortnightly') interval *= 2;
+  else if (word === 'month' || word === 'monthly') freq = 'monthly';
+  else if (word === 'year' || word === 'yearly' || word === 'annually') freq = 'yearly';
+  return { freq, interval: Math.max(1, interval), span: spanOf(m) };
+}
+
+const allSpans = (re: RegExp, text: string): Span[] =>
+  [...text.matchAll(re)]
+    .filter((m) => m[0].trim().length > 0)
+    .map((m) => ({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length }));
+
+// What's left around a lifted-out cue: "the tax return is" → "the tax return", "for the report" →
+// "the report", "Rent is due" → "Rent".
+function tidyTitle(title: string, original: string): string {
+  let t = title;
+  for (let i = 0; i < 3; i++) {
+    t = t
+      .replace(/\s+(?:is|are|was|will be|due|by|on|at|before|until|of)[\s.,:;-]*$/i, '')
+      .replace(/^(?:for|of|to|that|is|are|about)\s+/i, '')
+      .trim();
+  }
+  if (!t) return title;
+  // Lifting a leading cue out can leave the title starting lower-case ("Remind me to call Sam").
+  return /^\s*[A-Z]/.test(original) && /^[a-z]/.test(t) ? t[0].toUpperCase() + t.slice(1) : t;
+}
 
 function to24hMinutes(hour: number, minute: number, meridiem: string | undefined): number {
   if (!meridiem) return hour * 60 + minute;
@@ -348,30 +419,67 @@ function stripSpans(text: string, spans: Span[]): string {
   return cleaned || text.replace(/\s+/g, ' ').trim();
 }
 
-// Event vs reminder: a time range, or a word naming something you attend, reads as an event (it
-// occupies time); anything else reads as a reminder (a point in time to be nudged about). A best
-// guess only — the modal it opens in still has the Event/Reminder toggle.
+// Kind, in order of how explicitly the text says it:
+//   1. deadline — "the deadline for X is…", "due", "submit", "expires", or a date introduced by
+//      "by"/"before" ("pay rent by the 1st");
+//   2. reminder — "remind me", "don't forget", "remember to", "note to self"…;
+//   3. event — a time range, something you attend ("meeting", "dentist"), a journey, a birthday;
+//   4. otherwise a reminder (a point in time to be nudged about).
+// So "remind me that the deadline for the essay is Friday" is a deadline (a Deadline notifies ahead
+// of time anyway), and "remind me to book the flight" is a reminder, not a journey. A best guess
+// only — the modal it opens in still has the Event / Reminder / Deadline toggle.
 export function inferCalendarItemFromSelection(rawText: string, extraLinks: string[] = [], now: Date = new Date()): InferredCalendarFields {
   const dateMatch = inferDateMatch(rawText, now);
   const date = dateMatch?.iso ?? null;
   const range = findTimeRange(rawText);
   const timeMatch = range ? null : findTimeMatch(rawText);
-  // Everything that ends up in its own field (date, time(s), links) comes out of the title.
-  const title = stripSpans(rawText, [
+  const repeatMatch = findRepeat(rawText);
+
+  const byDate = !!dateMatch && DEADLINE_DATE_CONNECTOR.test(rawText.slice(0, dateMatch.start));
+  const deadlineLead = DEADLINE_LEAD.exec(rawText);
+  const deadlineLeadSpan = deadlineLead && deadlineLead[0].trim() ? spanOf(deadlineLead) : null;
+  const deadlineIs = deadlineLeadSpan ? null : DEADLINE_IS.exec(rawText) ?? DEADLINE_FOR.exec(rawText);
+  const isDeadline = !!deadlineLeadSpan || !!deadlineIs || DEADLINE_WORDS.test(rawText) || byDate;
+  const isReminder = REMINDER_WORDS.test(rawText);
+  const isBirthday = BIRTHDAY_WORDS.test(rawText);
+  const isTravel = TRAVEL_WORDS.test(rawText);
+  const isEvent = !!range || EVENT_WORDS.test(rawText) || isTravel || isBirthday;
+
+  const kind: InferredCalendarFields['kind'] = isDeadline ? 'deadline' : isReminder ? 'reminder' : isEvent ? 'event' : 'reminder';
+  const eventType: InferredCalendarFields['eventType'] = kind !== 'event' ? 'default' : isBirthday ? 'birthday' : isTravel ? 'travel' : 'default';
+  const tentativeSpans = allSpans(TENTATIVE_STRIP, rawText);
+
+  // Everything that ends up in its own field (date, time(s), links, repeat) and every phrase that
+  // only told us the kind comes out of the title.
+  const title = tidyTitle(stripSpans(rawText, [
     ...(dateMatch ? [dateMatch] : []),
     ...(range ? [range.span] : timeMatch ? [timeMatch] : []),
     ...findLinkSpans(rawText),
-  ]);
-  const kind = range || EVENT_WORDS.test(rawText) ? 'event' : 'reminder';
+    ...(repeatMatch ? [repeatMatch.span] : []),
+    ...(deadlineLeadSpan ? [deadlineLeadSpan] : deadlineIs ? [spanOf(deadlineIs)] : []),
+    ...allSpans(REMINDER_STRIP, rawText),
+    ...tentativeSpans,
+    ...allSpans(IMPORTANT_STRIP, rawText),
+  ]), rawText);
+
   const links = [...new Set([...extractUrls(rawText), ...extraLinks])];
+  // A birthday is all-day and comes round every year, whatever else the text says.
+  const birthday = eventType === 'birthday';
+  const repeat = birthday
+    ? { freq: 'yearly' as const, interval: 1 }
+    : repeatMatch ? { freq: repeatMatch.freq, interval: repeatMatch.interval } : null;
 
   return {
     title,
     kind,
     date,
-    startTime: range?.start ?? timeMatch?.time ?? null,
-    endTime: range?.end ?? null,
+    startTime: birthday ? null : range?.start ?? timeMatch?.time ?? null,
+    endTime: kind === 'event' && !birthday ? range?.end ?? null : null,
     location: kind === 'event' ? (links[0] ?? null) : null,
     notes: (kind === 'event' ? links.slice(1) : links).join('\n') || null,
+    eventType,
+    tentative: tentativeSpans.length > 0,
+    important: IMPORTANT_WORDS.test(rawText),
+    repeat,
   };
 }

@@ -20,6 +20,11 @@ export interface CalendarItemPrefillExtra {
   notes?:        string | null;
   location?:     string | null;
   collectionId?: string | null;
+  // Inferred from a note selection (inferCalendarItemFromSelection) — shown, not silently applied.
+  eventType?:    'default' | 'birthday' | 'travel';
+  tentative?:    boolean;
+  important?:    boolean;
+  repeat?:       { freq: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number } | null;
 }
 
 // Back/forward section-navigation history (Alt+Left / Alt+Right, Backspace remains a

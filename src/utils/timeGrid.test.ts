@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildHourLayout,
+  NIGHT_COLLAPSED_HEIGHT,
+  NIGHT_END_HOUR,
   layoutDayTimeGrid,
   markActiveHours,
   minutesToY,
@@ -35,6 +37,42 @@ describe('buildHourLayout', () => {
     expect(layout.offsets[0]).toBe(0);
     expect(layout.offsets[1]).toBe(HOUR_HEIGHT_EMPTY);
     expect(layout.offsets[2]).toBe(HOUR_HEIGHT_EMPTY * 2);
+  });
+});
+
+describe('buildHourLayout — collapseNight', () => {
+  it('folds midnight..6am into one band when nothing is scheduled there', () => {
+    const layout = buildHourLayout(new Set([9]), { collapseNight: true });
+    expect(layout.nightCollapsed).toBe(true);
+    expect(layout.heights[0]).toBe(NIGHT_COLLAPSED_HEIGHT);
+    for (let h = 1; h < NIGHT_END_HOUR; h++) expect(layout.heights[h]).toBe(0);
+    expect(layout.offsets[NIGHT_END_HOUR]).toBe(NIGHT_COLLAPSED_HEIGHT);
+    expect(layout.heights[NIGHT_END_HOUR]).toBe(HOUR_HEIGHT_EMPTY);
+  });
+
+  it('keeps every night hour when anything touches them', () => {
+    const layout = buildHourLayout(new Set([5, 9]), { collapseNight: true });
+    expect(layout.nightCollapsed).toBe(false);
+    expect(layout.heights[5]).toBe(HOUR_HEIGHT_ACTIVE);
+    expect(layout.heights[1]).toBe(HOUR_HEIGHT_EMPTY);
+  });
+
+  it('is off unless asked for (the Schedule builder keeps every hour)', () => {
+    expect(buildHourLayout(new Set([9])).nightCollapsed).toBe(false);
+  });
+
+  it('maps any night time into the band, and clicks in the band back to the night', () => {
+    const layout = buildHourLayout(new Set([9]), { collapseNight: true });
+    for (const minutes of [0, 90, 5 * 60 + 59]) {
+      const y = minutesToY(minutes, layout);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y).toBeLessThanOrEqual(NIGHT_COLLAPSED_HEIGHT);
+    }
+    // Spread proportionally across the band (1am is near its top, not at its bottom edge)…
+    expect(minutesToY(60, layout)).toBeCloseTo(NIGHT_COLLAPSED_HEIGHT / NIGHT_END_HOUR);
+    // …and the inverse, so a click or drag in the band lands on the matching night time.
+    expect(yToMinutes(NIGHT_COLLAPSED_HEIGHT / 2, layout)).toBe((NIGHT_END_HOUR * 60) / 2);
+    expect(yToMinutes(layout.offsets[9], layout)).toBe(9 * 60);
   });
 });
 

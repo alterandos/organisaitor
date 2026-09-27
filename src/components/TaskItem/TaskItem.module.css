@@ -104,6 +104,20 @@
   opacity: 1;
 }
 
+/* Linked-checklist progress pill (services/taskListLinks.ts) — same shape as the sub-task pill */
+.checklistIndicator {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  padding: 0.1rem 0.45rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 /* Sub-task progress pill — fades out when subtasks are expanded */
 .subtaskIndicator {
   flex-shrink: 0;

@@ -222,6 +222,10 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag 
         notes:        cal.notes,
         location:     cal.location,
         collectionId: noteCollectionId ?? activeCollectionId ?? null,
+        eventType:    cal.eventType,
+        tentative:    cal.tentative,
+        important:    cal.important,
+        repeat:       cal.repeat,
       });
       setShowCreateMenu(false);
       editor.commands.setTextSelection(to);

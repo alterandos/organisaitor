@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews } from '@/store/noteViews';
 import { NotePickerModal } from '@/components/NotePickerModal/NotePickerModal';
+import { ListPickerModal } from '@/components/ListPickerModal/ListPickerModal';
+import { useListViews } from '@/store/listViews';
+import { LABELS } from '@/config/labels';
 import { getNoteBreadcrumb } from '@/utils/notes';
 import { tabNameOf } from '@/utils/noteTabs';
-import type { CrossAppRef } from '@/types';
+import type { CrossAppRef, CrossAppRefType } from '@/types';
 import type { NoteId } from '@/types/notes';
 import styles from './CrossAppRefPicker.module.css';
 
@@ -17,26 +20,31 @@ interface Props {
   onNavigate?: (ref: CrossAppRef) => void;
   // Title of the item the links are being added to; its keywords drive the picker's suggestions.
   suggestFrom?: string;
+  // Which kinds of thing can be linked from here. A list's own panel links notes only (a task or
+  // calendar item links to a list from its own side).
+  types?: ('note' | 'list')[];
 }
 
-// Note is the only wired target today. The other planned targets (Calendar item, List item,
-// Tracker entry — see BACKLOG.md "Cross-app built-in tag types") need their own picker dialog
-// alongside NotePickerModal; this component stays the one generic { value; onChange; onNavigate? }
-// widget and would pick the dialog by type.
-const ICON_BY_TYPE: Record<string, string> = { note: '📝', event: '📅', listItem: '📃', trackerEntry: '📊' };
+// Notes and lists are the wired targets. The other planned ones (List item, Tracker entry — see
+// BACKLOG.md "Cross-app built-in tag types") would add their own picker dialog the same way; this
+// stays the one generic { value; onChange; onNavigate? } widget and picks the dialog by type.
+const ICON_BY_TYPE: Record<string, string> = { note: '📝', list: '📋', event: '📅', listItem: '📃', trackerEntry: '📊' };
 
 // The picker is a dialog portaled to document.body (see NotePickerModal), not a popover rendered
 // in place: this widget is embedded in forms that scroll, and an in-place dropdown there changes
 // the scroll height as it opens/closes, which once made a click land on the wrong button.
-export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom }: Props) {
-  const [open, setOpen] = useState(false);
+export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom, types = ['note', 'list'] }: Props) {
+  const [open, setOpen] = useState<CrossAppRefType | null>(null);
+  const lists = useListViews();
   // Views: an encrypted note's title is blank in the store (see services/noteSecrets.ts).
   const notesRecord = useNoteViews();
   const noteTags    = useNoteStore((s) => s.noteTags);
 
   const linkedNoteIds = new Set(value.filter((r) => r.type === 'note').map((r) => r.id));
+  const linkedListIds = new Set(value.filter((r) => r.type === 'list').map((r) => r.id));
 
   const addNote = (noteId: string, tabId?: string) => onChange([...value, { type: 'note', id: noteId, ...(tabId ? { tabId } : {}) }]);
+  const addList = (listId: string) => onChange([...value, { type: 'list', id: listId }]);
 
   const removeRef = (ref: CrossAppRef) => {
     onChange(value.filter((r) => !(r.type === ref.type && r.id === ref.id)));
@@ -47,7 +55,10 @@ export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom }: 
       <div className={styles.chips}>
         {value.map((ref) => {
           const linked = ref.type === 'note' ? notesRecord[ref.id as NoteId] : undefined;
-          const label = ref.type === 'note' ? `${linked?.isEncrypted ? '🔒 ' : ''}${linked?.title || 'Untitled'}` : ref.id;
+          const list = ref.type === 'list' ? lists[ref.id as never] : undefined;
+          const label = ref.type === 'note'
+            ? `${linked?.isEncrypted ? '🔒 ' : ''}${linked?.title || 'Untitled'}`
+            : ref.type === 'list' ? `${list?.isEncrypted ? '🔒 ' : ''}${list?.name || 'Deleted list'}` : ref.id;
           const path = linked ? getNoteBreadcrumb(linked, noteTags) : null;
           const tabName = linked ? tabNameOf(linked, ref.tabId) : null;
           const icon = ICON_BY_TYPE[ref.type] ?? '🔗';
@@ -66,10 +77,16 @@ export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom }: 
             </span>
           );
         })}
-        <button type="button" className={styles.addBtn} onClick={() => setOpen(true)}>+ Link</button>
+        {types.includes('note') && (
+          <button type="button" className={styles.addBtn} onClick={() => setOpen('note')}>{LABELS.listLinks.linkNote}</button>
+        )}
+        {types.includes('list') && (
+          <button type="button" className={styles.addBtn} onClick={() => setOpen('list')}>{LABELS.listLinks.linkList}</button>
+        )}
       </div>
 
-      {open && <NotePickerModal excludeIds={linkedNoteIds} suggestFrom={suggestFrom} onPick={addNote} onClose={() => setOpen(false)} />}
+      {open === 'note' && <NotePickerModal excludeIds={linkedNoteIds} suggestFrom={suggestFrom} onPick={addNote} onClose={() => setOpen(null)} />}
+      {open === 'list' && <ListPickerModal excludeIds={linkedListIds} onPick={addList} onClose={() => setOpen(null)} />}
     </div>
   );
 }

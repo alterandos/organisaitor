@@ -5,14 +5,22 @@ import { useListViews, useListItemViews } from '@/store/listViews';
 import { isListLocked } from '@/services/listSecrets';
 import { onVaultStatus } from '@/services/vault';
 import { useUIStore } from '@/store/uiStore';
+import { deleteListWithCleanup } from '@/services/crossAppLinkCleanup';
+import { ListLinksBar } from './ListLinksBar';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { LIST_ITEM_STATUS_META } from '@/types/lists';
-import type { ListId, ListItemId, ListItemStatus, ListItem, ListFieldSchema, List, ListType } from '@/types/lists';
+import type { ListId, ListItemId, ListItemStatus, ListItem, ListFieldSchema, List, ListType, ListKind } from '@/types/lists';
 import styles from './ListsSection.module.css';
 import { alertDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
 import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { ChecklistView } from './ChecklistView';
+import { LABELS } from '@/config/labels';
+
+// Sidebar group order. Anything that isn't a checklist or watchlist (custom types included) is Reference.
+const KIND_GROUPS: ListKind[] = ['checklist', 'watchlist', 'reference'];
+const groupOf = (l: List): ListKind => (l.kind === 'checklist' || l.kind === 'watchlist' ? l.kind : 'reference');
 
 // ── Status filter (watchlist only) ────────────────────────────────────────────
 type StatusFilter = 'all' | ListItemStatus;
@@ -321,7 +329,6 @@ export function ListsSection() {
   const openAccount    = useUIStore((s) => s.openAccount);
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
   useEffect(() => onVaultStatus((s) => setVaultUnlocked(s === 'unlocked')), []);
-  const deleteList     = useListStore((s) => s.deleteList);
   const updateList     = useListStore((s) => s.updateList);
   const updateListItem = useListStore((s) => s.updateListItem);
   const deleteListItem = useListStore((s) => s.deleteListItem);
@@ -382,13 +389,13 @@ export function ListsSection() {
   const selectedRaw  = selectedListId ? rawLists[selectedListId] : null;
   const selectedListLocked = !!selectedRaw && isListLocked(selectedRaw);
 
-  // Visual sidebar order (watchlists group, then reference group) — used both by the sidebar
-  // render below and by the arrow-key nav-area handler, so pressing ↓ always lands on whatever
-  // list actually appears next on screen.
-  const navOrder = [
-    ...allLists.filter((l) => l.kind === 'watchlist'),
-    ...allLists.filter((l) => l.kind !== 'watchlist'),
-  ];
+  // Visual sidebar order (grouped per KIND_GROUPS) — used both by the sidebar render below and
+  // by the arrow-key nav-area handler, so pressing ↓ always lands on whatever list actually
+  // appears next on screen.
+  const sidebarGroups = KIND_GROUPS
+    .map((kind) => ({ kind, lists: allLists.filter((l) => groupOf(l) === kind) }))
+    .filter((g) => g.lists.length > 0);
+  const navOrder = sidebarGroups.flatMap((g) => g.lists);
 
   // Keep a valid list selected: fall back to the first list when the selected one is deleted, and
   // pick the first one when nothing is selected yet (adjusts state during render, not in an effect).
@@ -427,6 +434,7 @@ export function ListsSection() {
     : [];
 
   const isWatchlist = selectedList?.kind === 'watchlist';
+  const isChecklist = selectedList?.kind === 'checklist';
   const hasTabs     = (selectedList?.tabs?.length ?? 0) > 0;
 
   // For reference tables: use the active tab's field schema if it has fields, else list-level schema
@@ -516,7 +524,7 @@ export function ListsSection() {
 
   const handleDeleteList = async (id: ListId, name: string) => {
     if (!(await confirmDelete('list', name, 'All its items will be deleted too.'))) return;
-    deleteList(id);
+    deleteListWithCleanup(id);
   };
 
   const handleDeleteItem = async (item: ListItem) => {
@@ -562,10 +570,6 @@ export function ListsSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingListSelectionId, lists]);
 
-  // Group sidebar lists by kind
-  const watchlists    = allLists.filter((l) => l.kind === 'watchlist');
-  const referenceLists = allLists.filter((l) => l.kind !== 'watchlist');
-
   const renderSidebarItem = (list: typeof allLists[0]) => {
     const listType = list.typeId ? listTypes[list.typeId] : null;
     const itemCount = Object.values(listItems).filter((i) => i.listId === list.id).length;
@@ -606,22 +610,14 @@ export function ListsSection() {
               <button className={styles.sidebarEmptyBtn} onClick={showAddList}>Create one</button>
             </div>
           ) : (
-            <>
-              {watchlists.length > 0 && (
-                <>
-                  {referenceLists.length > 0 && (
-                    <div className={styles.kindDivider}>Watchlists</div>
-                  )}
-                  {watchlists.map(renderSidebarItem)}
-                </>
-              )}
-              {referenceLists.length > 0 && (
-                <>
-                  <div className={styles.kindDivider}>Reference</div>
-                  {referenceLists.map(renderSidebarItem)}
-                </>
-              )}
-            </>
+            sidebarGroups.map((g) => (
+              <div key={g.kind}>
+                {sidebarGroups.length > 1 && (
+                  <div className={styles.kindDivider}>{LABELS.listKind[g.kind].many}</div>
+                )}
+                {g.lists.map(renderSidebarItem)}
+              </div>
+            ))
           )}
         </div>
       </aside>
@@ -648,6 +644,7 @@ export function ListsSection() {
                   {selectedList.description && (
                     <p className={styles.mainListDesc}>{selectedList.description}</p>
                   )}
+                  <ListLinksBar list={selectedList} />
                 </div>
               </div>
               <div className={styles.mainHeaderRight}>
@@ -803,7 +800,14 @@ export function ListsSection() {
             )}
 
             {/* Content */}
-            {isWatchlist ? (
+            {isChecklist ? (
+              <ChecklistView
+                list={selectedList}
+                items={displayedItems}
+                fieldSchema={tableFieldSchema}
+                tabId={selectedTabId !== 'all' ? selectedTabId : null}
+              />
+            ) : isWatchlist ? (
               <div className={styles.itemsGrid}>
                 {displayedItems.length === 0 && allItemsInList.length > 0 && (
                   <p className={styles.gridEmptyHint}>No items match this filter</p>

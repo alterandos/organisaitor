@@ -125,7 +125,7 @@ const taskProvider: QuickAccessProvider = {
 // encrypted list gets a 🔒 icon and an "Encrypted" subtitle (its name reads "Encrypted list" while locked).
 const listItem = (raw: List): QuickAccessItem => {
   const l = listView(raw);
-  const kindLabel = l.kind === 'watchlist' ? 'Watchlist' : 'Reference list';
+  const kindLabel = (LABELS.listKind[l.kind] ?? LABELS.listKind.reference).one;
   return {
     key: `list:${l.id}`, type: 'list', entityId: l.id, title: l.name,
     subtitle: l.isEncrypted ? `${kindLabel} · Encrypted` : kindLabel,

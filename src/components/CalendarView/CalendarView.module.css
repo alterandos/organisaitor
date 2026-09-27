@@ -509,6 +509,19 @@
 .calItemCompleted { text-decoration: line-through; opacity: 0.5; }
 .calItemPast      { text-decoration: line-through; opacity: 0.55; }
 
+/* Travel event (CalendarEvent.eventType 'travel' — a flight, a bus, a drive). Time that is booked
+   out but not something you're "at", so it reads quieter than a normal event: a pale fill and a
+   dashed outline in the event's own colour, 🧳 before the title — the same "lighter block that
+   still occupies its slot" treatment Apple Calendar and Outlook give travel time. Not the
+   `background` span (an ambient multi-day stay), and not tentative (hatched = maybe not happening).
+   background-color, not the shorthand, so a tentative hatch (background-image) still shows on top;
+   !important for the same reason as .calItemTentative — getPillStyle sets an inline background. */
+.calItemTravel {
+  background-color: color-mix(in srgb, currentColor 6%, var(--color-surface)) !important;
+  outline: 1px dashed color-mix(in srgb, currentColor 60%, transparent);
+  outline-offset: -1px;
+}
+
 /* Tentative event — "not confirmed yet" (AddCalendarItemModal/CalendarEventPane's checkbox).
    Diagonal hatch, matching Outlook's own convention for tentative time (see CLAUDE.md). The
    !important on background-image is deliberate: some render sites (spanPill, month pills
@@ -904,7 +917,31 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  border-top: 2px solid var(--color-border-strong);
 }
+
+/* The rows above the hourly grid (day header, multi-day spans, untimed items) don't scroll, so
+   they never had a scrollbar — while the grid below did, which made its day columns narrower by
+   the scrollbar's width and misaligned every column boundary. `scrollbar-gutter: stable` (only
+   honoured on an element whose overflow isn't `visible`, hence overflow-y: hidden) reserves the
+   same space on all of them, whether or not a scrollbar is actually showing. */
+.weekTimeHeaderRow,
+.weekSpanRowWrap,
+.weekUntimedRowWrap {
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+}
+
+/* Everything above the hourly grid is the "whole day" zone — tinted, and separated from the timed
+   hours by the stronger border on .weekTimeScroll/.dayTimeScroll rather than a hairline. The row
+   directly above the grid drops its own hairline so the two don't stack. */
+.weekTimeHeaderRow,
+.weekSpanRowWrap,
+.weekUntimedRowWrap,
+.dayUntimedRow { background: var(--color-surface-alt); }
+.weekViewContainer > :has(+ .weekTimeScroll),
+.dayTimeGridContainer > :has(+ .dayTimeScroll) { border-bottom: none; }
 
 .weekTimeGridInner {
   display: flex;
@@ -1144,6 +1181,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  border-top: 2px solid var(--color-border-strong);
 }
 
 .dayPaneAddBtnGrid {
@@ -1164,4 +1202,26 @@
 
 .dayTimeDayCol {
   flex: 1;
+}
+
+/* Midnight–6am folded into one band when nothing is scheduled there (see buildHourLayout's
+   collapseNight). The band is decorative — clicks still reach the column underneath. */
+.weekTimeNightBand {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--color-border) 60%, transparent) 6px 7px
+  );
+  pointer-events: none;
+}
+.weekTimeGutterNight {
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
 }

@@ -436,6 +436,8 @@ export function listToRow(l: List, userId: string) {
     tabs:         l.tabs        ?? [],
     is_encrypted:      l.isEncrypted      ?? false,
     encrypted_payload: l.encryptedPayload ?? null,
+    cross_app_refs:    l.crossAppRefs     ?? [],
+    reset_on_task_complete: l.resetOnTaskComplete ?? false,
     created_at:   l.createdAt,
     updated_at:   l.updatedAt,
     deleted_at:   null,
@@ -456,6 +458,8 @@ export function rowToList(r: Record<string, any>): List {
     tabs:        r.tabs         ?? [],
     isEncrypted:      r.is_encrypted      ?? false,
     encryptedPayload: r.encrypted_payload ?? null,
+    crossAppRefs:     r.cross_app_refs    ?? [],
+    resetOnTaskComplete: r.reset_on_task_complete ?? false,
     createdAt:   r.created_at,
     updatedAt:   r.updated_at,
   };

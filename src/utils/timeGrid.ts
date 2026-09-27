@@ -6,7 +6,9 @@
 
 export interface TimeGridEntry<T> { item: T; startMin: number; endMin: number }
 export interface TimeGridItem<T>  { item: T; top: number; height: number; col: number; totalCols: number }
-export interface HourLayout       { offsets: number[]; heights: number[]; total: number; activeHours: Set<number> }
+// nightCollapsed: hours 0..NIGHT_END_HOUR-1 are folded into one short band (hour 0 carries its
+// height, the rest are zero-height) because nothing is scheduled in them — see buildHourLayout().
+export interface HourLayout       { offsets: number[]; heights: number[]; total: number; activeHours: Set<number>; nightCollapsed: boolean }
 
 export const HOUR_HEIGHT_ACTIVE = 60;
 export const HOUR_HEIGHT_EMPTY  = 18;
@@ -17,27 +19,38 @@ export const MIN_BLOCK_HEIGHT = 20;
 // but the *reserved* slot for overlap/column-stacking purposes is capped at this — otherwise a
 // long-titled reminder could visually collide with whatever sits below it in the same column.
 export const REMINDER_MAX_HEIGHT_MIN = 60;
+export const NIGHT_END_HOUR = 6;
+export const NIGHT_COLLAPSED_HEIGHT = 34; // fits the two-line "12:00 AM / – 6:00 AM" gutter label
 
 export function timeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number);
   return h * 60 + m;
 }
 
-export function buildHourLayout(activeHours: Set<number>): HourLayout {
+// `collapseNight`: when nothing is scheduled between midnight and NIGHT_END_HOUR, those six
+// thin rows become one band. Hours 1..5 get zero height, so minutesToY() maps any time in the
+// night to within the band and yToMinutes() skips them — every consumer keeps working unchanged.
+export function buildHourLayout(activeHours: Set<number>, opts: { collapseNight?: boolean } = {}): HourLayout {
+  const nightCollapsed = !!opts.collapseNight && ![...activeHours].some((h) => h < NIGHT_END_HOUR);
   const offsets: number[] = [];
   const heights: number[] = [];
   let acc = 0;
   for (let h = 0; h < 24; h++) {
     offsets.push(acc);
-    const height = activeHours.has(h) ? HOUR_HEIGHT_ACTIVE : HOUR_HEIGHT_EMPTY;
+    const height = nightCollapsed && h < NIGHT_END_HOUR
+      ? (h === 0 ? NIGHT_COLLAPSED_HEIGHT : 0)
+      : activeHours.has(h) ? HOUR_HEIGHT_ACTIVE : HOUR_HEIGHT_EMPTY;
     heights.push(height);
     acc += height;
   }
-  return { offsets, heights, total: acc, activeHours };
+  return { offsets, heights, total: acc, activeHours, nightCollapsed };
 }
 
 export function minutesToY(minutes: number, layout: HourLayout): number {
   const clamped = Math.max(0, Math.min(24 * 60 - 1, minutes));
+  // Inside a collapsed night band the whole of midnight..NIGHT_END_HOUR is spread over the band,
+  // so e.g. the "now" line at 1am sits near its top rather than jumping to its bottom edge.
+  if (layout.nightCollapsed && clamped < NIGHT_END_HOUR * 60) return (clamped / (NIGHT_END_HOUR * 60)) * layout.heights[0];
   const h = Math.floor(clamped / 60);
   const frac = (clamped % 60) / 60;
   return layout.offsets[h] + frac * layout.heights[h];
@@ -46,6 +59,9 @@ export function minutesToY(minutes: number, layout: HourLayout): number {
 // Inverse of minutesToY — given a pixel Y within the grid, returns the minute-of-day it
 // corresponds to. Used to translate a click on the Schedule builder's grid into a start time.
 export function yToMinutes(y: number, layout: HourLayout): number {
+  if (layout.nightCollapsed && y < layout.heights[0]) {
+    return Math.round((Math.max(0, y) / layout.heights[0]) * NIGHT_END_HOUR * 60);
+  }
   for (let h = 0; h < 24; h++) {
     const top = layout.offsets[h];
     const height = layout.heights[h];

@@ -18,6 +18,7 @@
   --color-text: #1a1a2e;
   --color-muted: #6b7280;
   --color-border: #e5e7eb;
+  --color-border-strong: #c4c9d2;
 
   /* ── Semantic ── */
   --color-success: #10b981;
@@ -69,6 +70,7 @@
   --color-text: #e8e8f0;
   --color-muted: #8b8fa8;
   --color-border: #2c2c32;
+  --color-border-strong: #4a4a55;
 
   /* ── Semantic ── */
   --color-success: #34d399;

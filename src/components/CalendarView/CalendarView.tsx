@@ -13,10 +13,11 @@ import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
 import {
   buildHourLayout, minutesToY, layoutDayTimeGrid, timeToMinutes,
   yToMinutes, snapMinutes,
-  DEFAULT_EVENT_DURATION_MIN, DEFAULT_POINT_DURATION_MIN, REMINDER_MAX_HEIGHT_MIN, MIN_BLOCK_HEIGHT,
+  DEFAULT_EVENT_DURATION_MIN, DEFAULT_POINT_DURATION_MIN, REMINDER_MAX_HEIGHT_MIN, MIN_BLOCK_HEIGHT, NIGHT_END_HOUR,
   type TimeGridEntry as TimeGridEntryG,
   type HourLayout,
 } from '@/utils/timeGrid';
+import { EVENT_TYPE_ICON } from '@/config/calendarEventTypes';
 import { ScheduleOccurrencePopover } from '@/components/ScheduleOccurrencePopover/ScheduleOccurrencePopover';
 import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane';
 import { useTimeGridDrag } from '@/hooks/useTimeGridDrag';
@@ -26,7 +27,7 @@ import styles from './CalendarView.module.css';
 
 type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
-  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
+  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean }
   | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
   | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
   | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean };
@@ -43,6 +44,7 @@ interface SpanSlot {
   status:       EventStatus;
   important:    boolean;
   background:   boolean;
+  travel:       boolean;
   color:        string | null;
 }
 
@@ -122,6 +124,7 @@ function getWeekSpanSlots(weekDateStrs: string[], spanEvents: CalendarEvent[]): 
       status:       ev.status ?? 'confirmed',
       important:    ev.important ?? false,
       background:   ev.background ?? false,
+      travel:       ev.eventType === 'travel',
       color:        ev.color ?? null,
     });
   }
@@ -283,13 +286,14 @@ export function CalendarView() {
         collectionId: ev.collectionId,
         notes: ev.notes,
         links: ev.links,
-        // Birthday takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
+        // A birthday/travel icon takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
         // event auto-created from a task's scheduledAt (see Task.calendarEventId) so the calendar
         // reads as task-linked without changing the event's click/edit behaviour.
-        typeIcon: `${ev.important ? '❗' : ''}${(ev.eventType ?? 'default') === 'birthday' ? '🎉' : taskLinkedEventIds.has(ev.id) ? '🕐' : ''}`,
+        typeIcon: `${ev.important ? '❗' : ''}${EVENT_TYPE_ICON[ev.eventType ?? 'default'] || (taskLinkedEventIds.has(ev.id) ? '🕐' : '')}`,
         status: ev.status ?? 'confirmed',
         important: ev.important ?? false,
         occurrenceDate: ev.date,
+        travel: ev.eventType === 'travel',
       };
 
       if (ev.endDate && ev.endDate > ev.date) {
@@ -464,6 +468,34 @@ export function CalendarView() {
       ? formatTime(item.time!, clockFormat)
       : `${formatTime(item.time!, clockFormat)}–${formatTime(minutesToTimeStr(endMin), clockFormat)}`;
 
+  // Hour labels for a time grid's gutter (week and day views). The collapsed night band gets one
+  // two-line label, centred, instead of its hours' own.
+  const renderGutterLabels = (layout: HourLayout) => layout.offsets.map((top, h) => {
+    // Inside the collapsed band, or the NIGHT_END_HOUR label right under it (the band's own
+    // "– 06:00" already says it, and the two would overlap).
+    if (layout.heights[h] === 0 || (layout.nightCollapsed && h === NIGHT_END_HOUR)) return null;
+    const night = h === 0 && layout.nightCollapsed;
+    return (
+      <div
+        key={h}
+        className={`${styles.weekTimeGutterLabel} ${night ? styles.weekTimeGutterNight : ''} ${layout.activeHours.has(h) ? styles.weekTimeGutterLabelActive : ''} ${hoveredHour === h ? styles.weekTimeGutterLabelHovered : ''}`}
+        style={{ top: night ? layout.heights[0] / 2 : top }}
+      >
+        {night ? (
+          <>
+            <span>{formatTime('00:00', clockFormat)}</span>
+            <span>– {formatTime(`${String(NIGHT_END_HOUR).padStart(2, '0')}:00`, clockFormat)}</span>
+          </>
+        ) : (
+          <span>{formatTime(`${String(h).padStart(2, '0')}:00`, clockFormat)}</span>
+        )}
+      </div>
+    );
+  });
+
+  const renderNightBand = (layout: HourLayout) =>
+    layout.nightCollapsed && <div className={styles.weekTimeNightBand} style={{ height: layout.heights[0] }} />;
+
   const getItemLocation = (item: CalDisplayItem): string | null => {
     if (item.kind === 'event') return events[item.id]?.location || null;
     if (item.kind === 'schedule') return item.location;
@@ -539,7 +571,7 @@ export function CalendarView() {
       perDayUntimed.push(untimed);
     }
 
-    const layout = buildHourLayout(activeHours);
+    const layout = buildHourLayout(activeHours, { collapseNight: true });
     const perDayLayout = perDayEntries.map((entries) => layoutDayTimeGrid(entries, layout));
 
     return { layout, perDayLayout, perDayUntimed };
@@ -591,7 +623,7 @@ export function CalendarView() {
       for (let h = startH; h <= Math.min(23, endH); h++) activeHours.add(h);
     }
 
-    const layout = buildHourLayout(activeHours);
+    const layout = buildHourLayout(activeHours, { collapseNight: true });
     const timedLayout = layoutDayTimeGrid(timedEntries, layout);
     return { layout, timedLayout, untimed, hasAny: dayItems.length > 0 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -872,6 +904,8 @@ export function CalendarView() {
   const isTentativeItem = (item: CalDisplayItem): boolean =>
     ((item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline') && item.status === 'tentative') || (item.kind === 'schedule' && !item.committed);
 
+  const isTravelItem = (item: CalDisplayItem): boolean => item.kind === 'event' && item.travel;
+
   const isImportantItem = (item: CalDisplayItem): boolean =>
     (item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline') && item.important;
 
@@ -964,7 +998,7 @@ export function CalendarView() {
               return (
                 <button
                   key={`${item.kind}-${item.id}`}
-                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                   style={getPillStyle(item)}
                   onClick={(e) => handleItemClick(e, item)}
                 >
@@ -1066,7 +1100,7 @@ export function CalendarView() {
                         {slots.map(slot => (
                           <button
                             key={slot.eventId}
-                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.background ? styles.spanPillBackground : ''}`}
+                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.background ? styles.spanPillBackground : ''} ${slot.travel && !slot.background ? styles.calItemTravel : ''}`}
                             style={{
                               gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                               gridRow: slot.row + 1,
@@ -1113,7 +1147,7 @@ export function CalendarView() {
                               return (
                                 <button
                                   key={`${item.kind}-${item.id}`}
-                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                                   style={getPillStyle(item)}
                                   onClick={(e) => handleItemClick(e, item)}
                                   onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1175,7 +1209,7 @@ export function CalendarView() {
                     {weekViewSpanSlots.map(slot => (
                       <button
                         key={slot.eventId}
-                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.background ? styles.spanPillBackground : ''}`}
+                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.background ? styles.spanPillBackground : ''} ${slot.travel && !slot.background ? styles.calItemTravel : ''}`}
                         style={{
                           gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                           gridRow: slot.row + 1,
@@ -1213,7 +1247,7 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                               style={getPillStyle(item)}
                               onClick={(e) => handleItemClick(e, item)}
                               onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1243,15 +1277,7 @@ export function CalendarView() {
                         onMouseLeave={() => setHoveredHour(null)}
                       />
                     ))}
-                    {weekTimeGrid.layout.offsets.map((top, h) => (
-                      <div
-                        key={h}
-                        className={`${styles.weekTimeGutterLabel} ${weekTimeGrid.layout.activeHours.has(h) ? styles.weekTimeGutterLabelActive : ''} ${hoveredHour === h ? styles.weekTimeGutterLabelHovered : ''}`}
-                        style={{ top }}
-                      >
-                        <span>{formatTime(`${String(h).padStart(2, '0')}:00`, clockFormat)}</span>
-                      </div>
-                    ))}
+                    {renderGutterLabels(weekTimeGrid.layout)}
                   </div>
                   <div className={styles.weekTimeDays} ref={weekDaysContainerRef}>
                     {weekDays.map((d, i) => {
@@ -1274,6 +1300,7 @@ export function CalendarView() {
                               onMouseLeave={() => setHoveredHour(null)}
                             />
                           ))}
+                          {renderNightBand(weekTimeGrid.layout)}
                           {weekTimeGrid.layout.offsets.slice(1).map((top, h) => (
                             <div key={h} className={styles.weekTimeHourLine} style={{ top }} />
                           ))}
@@ -1299,7 +1326,7 @@ export function CalendarView() {
                             return (
                               <button
                                 key={`${item.kind}-${item.id}`}
-                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
+                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
                                 style={{
                                   top: liveTop,
                                   height: isReminder ? 'auto' : liveHeight,
@@ -1320,7 +1347,7 @@ export function CalendarView() {
                                 <span className={styles.weekTimeBlockTime}>
                                   {formatItemTimeLabel(item, resizing ? dragPreview!.endMin : endMin)}
                                 </span>
-                                <span className={styles.weekTimeBlockTitle}>{item.title}</span>
+                                <span className={styles.weekTimeBlockTitle}>{isTravelItem(item) && `${EVENT_TYPE_ICON.travel} `}{item.title}</span>
                                 {getItemLocation(item) && (
                                   <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                                 )}
@@ -1390,7 +1417,7 @@ export function CalendarView() {
                         return (
                           <button
                             key={`${item.kind}-${item.id}`}
-                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                             style={getPillStyle(item)}
                             onClick={(e) => handleItemClick(e, item)}
                             onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1416,15 +1443,7 @@ export function CalendarView() {
                             onMouseLeave={() => setHoveredHour(null)}
                           />
                         ))}
-                        {dayTimeGrid.layout.offsets.map((top, h) => (
-                          <div
-                            key={h}
-                            className={`${styles.weekTimeGutterLabel} ${dayTimeGrid.layout.activeHours.has(h) ? styles.weekTimeGutterLabelActive : ''} ${hoveredHour === h ? styles.weekTimeGutterLabelHovered : ''}`}
-                            style={{ top }}
-                          >
-                            <span>{formatTime(`${String(h).padStart(2, '0')}:00`, clockFormat)}</span>
-                          </div>
-                        ))}
+                        {renderGutterLabels(dayTimeGrid.layout)}
                       </div>
                       <div
                         className={`${styles.weekTimeDayCol} ${styles.dayTimeDayCol}`}
@@ -1440,6 +1459,7 @@ export function CalendarView() {
                             onMouseLeave={() => setHoveredHour(null)}
                           />
                         ))}
+                        {renderNightBand(dayTimeGrid.layout)}
                         {dayTimeGrid.layout.offsets.slice(1).map((top, h) => (
                           <div key={h} className={styles.weekTimeHourLine} style={{ top }} />
                         ))}
@@ -1467,7 +1487,7 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
+                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
                               style={{
                                 top: liveTop,
                                 height: isReminder ? 'auto' : liveHeight,
@@ -1487,7 +1507,7 @@ export function CalendarView() {
                               <span className={styles.weekTimeBlockTime}>
                                 {formatItemTimeLabel(item, liveEndMin)}
                               </span>
-                              <span className={styles.weekTimeBlockTitle}>{item.title}</span>
+                              <span className={styles.weekTimeBlockTitle}>{isTravelItem(item) && `${EVENT_TYPE_ICON.travel} `}{item.title}</span>
                               {getItemLocation(item) && (
                                 <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                               )}
@@ -1544,7 +1564,7 @@ export function CalendarView() {
                   return (
                     <button
                       key={`${item.kind}-${item.id}`}
-                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
                       style={getPillStyle(item)}
                       onClick={(e) => { handleItemClick(e, item); setDayPaneDate(null); }}
                     >

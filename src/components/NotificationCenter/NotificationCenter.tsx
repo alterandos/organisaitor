@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { toggleTaskWithLists } from '@/services/taskListLinks';
 import { useNotificationStore, type PendingNotification } from '@/store/notificationStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
@@ -24,7 +25,6 @@ function NotificationCard({ n }: { n: PendingNotification }) {
   const tasksRecord     = useTaskStore((s) => s.tasks);
   const updateTask      = useTaskStore((s) => s.updateTask);
   const archiveTask     = useTaskStore((s) => s.archiveTask);
-  const toggleTask      = useTaskStore((s) => s.toggleTask);
   const updateEvent     = useCalendarStore((s) => s.updateEvent);
   const updateReminder  = useCalendarStore((s) => s.updateReminder);
   const timezone        = useSettingsStore((s) => s.timezone);
@@ -59,9 +59,9 @@ function NotificationCard({ n }: { n: PendingNotification }) {
 
   const handleDone = () => {
     if (n.kind === 'task-timed' || n.kind === 'task-untimed') {
-      toggleTask(n.itemId as TaskId);
+      toggleTaskWithLists(n.itemId as TaskId);
     } else if (linkedTask) {
-      toggleTask(linkedTask.id);
+      toggleTaskWithLists(linkedTask.id);
     }
     // Events/plain reminders don't have a "complete" state — just dismiss
     dismiss();

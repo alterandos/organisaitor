@@ -33,7 +33,8 @@ const reminderFields = {
 const CALENDAR_HELP =
   'kind "event" has a start/end (a meeting, a class); kind "reminder" is a single point in time or an all-day nudge; ' +
   'kind "deadline" is something due by a date — it only ever notifies some lead time BEFORE it is due (notifyDaysBefore/notifyAtTime), never at the moment itself, even if you give it a time. ' +
-  'A birthday is an event with eventType "birthday" (no times; repeats every year).';
+  'A birthday is an event with eventType "birthday" (no times; repeats every year). ' +
+  'A journey (a flight, a train or bus, a long drive) is an event with eventType "travel": it blocks the time but shows quieter on the calendar.';
 
 export const createCalendarItem = defineCommand({
   name: 'create_calendar_item',
@@ -50,7 +51,7 @@ export const createCalendarItem = defineCommand({
     endeavourId: idStr.nullish(),
     repeat: repeatSchema.nullish(),
     important: z.boolean().optional(),
-    eventType: z.enum(['default', 'birthday']).optional().describe('Events only'),
+    eventType: z.enum(['default', 'birthday', 'travel']).optional().describe('Events only'),
     links: z.array(z.url()).max(20).optional(),
     ...eventFields,
     ...reminderFields,

@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { toggleTaskWithLists } from '@/services/taskListLinks';
 import type { CalendarDeadlineId, RepeatFreq, RepeatConfig } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -7,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
+import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteDeadlineWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
@@ -88,6 +90,7 @@ export function CalendarDeadlinePane() {
   const handleArchive = (reason: string) => { closeDialog(); archiveDeadline(id, reason); closePane(); };
 
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
+    if (ref.type === 'list') { closePane(); openArtifactTarget('list', ref.id); return; }
     if (ref.type !== 'note') return;
     closePane();
     useUIStore.getState().setActiveView('notes');
@@ -327,7 +330,7 @@ export function CalendarDeadlinePane() {
         <ItemActionFooter
           archived={!!deadline.archivedAt}
           completed={linkedTask?.completed}
-          onToggleComplete={linkedTask ? () => useTaskStore.getState().toggleTask(linkedTask.id) : undefined}
+          onToggleComplete={linkedTask ? () => toggleTaskWithLists(linkedTask.id) : undefined}
           deleteLabel={deadline.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.deadline.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreDeadline(id)}

@@ -158,7 +158,20 @@
   white-space: nowrap;
   transition: background 120ms ease, border-color 120ms ease;
 }
-.importBtn:hover { background: var(--color-surface); border-color: var(--color-primary); color: var(--color-primary); }
+.importBtn:hover:not(:disabled) { background: var(--color-surface); border-color: var(--color-primary); color: var(--color-primary); }
+.importBtn:disabled { opacity: 0.5; cursor: default; }
+
+.snapshotSelect {
+  margin-top: 0.25rem;
+  max-width: 100%;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
 
 /* ── Status message ──────────────────────────────── */
 

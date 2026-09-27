@@ -2,8 +2,9 @@ import type { CalendarEventId, CalendarReminderId, CalendarDeadlineId, TaskId } 
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore } from '@/store/uiStore';
+import { useListStore } from '@/store/listStore';
 
-// Opens the task / calendar event / calendar reminder a cross-app link points at, in its own
+// Opens the task / calendar event / reminder / deadline / list a cross-app link points at, in its own
 // section. Shared by clicking linked text in a note (ArtifactLinkMark) and clicking a "Linked
 // from" pill. Returns false if the target no longer exists or isn't a supported type.
 export function openArtifactTarget(targetType: string | null | undefined, targetId: string | null | undefined): boolean {
@@ -30,6 +31,14 @@ export function openArtifactTarget(targetType: string | null | undefined, target
     ui.setActiveView('calendar');
     ui.requestCalendarDate(reminder.date);
     ui.openCalendarReminderPane(targetId);
+    return true;
+  }
+  if (targetType === 'list') {
+    if (!useListStore.getState().lists[targetId as never]) return false;
+    // Lists opens on its remembered list (read once when the section mounts), so point that at
+    // this one before switching.
+    ui.setListsLastActive(targetId, null);
+    ui.setActiveView('lists');
     return true;
   }
   if (targetType === 'deadline') {

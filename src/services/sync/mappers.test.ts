@@ -136,6 +136,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       color: '#fff', icon: '🎬', fieldSchema: [{ id: 'f1', name: 'Director', type: 'text' }],
       tabs: [{ id: 'tab1', name: 'To watch', color: null, fieldSchema: [] }],
       isEncrypted: false, encryptedPayload: null,
+      crossAppRefs: [{ type: 'note', id: 'n1', tabId: 't2' }], resetOnTaskComplete: true,
       createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
     };
     expect(rowToList(listToRow(l, USER))).toEqual(l);

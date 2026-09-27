@@ -4,6 +4,7 @@ import type { CalendarEventType, CollectionId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { formatDate } from '@/utils/date';
+import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
 import styles from './CalendarImportReviewModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
@@ -109,8 +110,7 @@ export function CalendarImportReviewModal({ rows: initialRows, onConfirm, onCanc
                       value={r.eventType}
                       onChange={(e) => setRowType(r.key, e.target.value as CalendarEventType)}
                     >
-                      <option value="default">Event</option>
-                      <option value="birthday">Birthday</option>
+                      {PICKABLE_EVENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </td>
                 </tr>

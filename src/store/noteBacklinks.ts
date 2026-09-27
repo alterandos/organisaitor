@@ -1,10 +1,14 @@
 import { useMemo } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
+import { useListStore } from '@/store/listStore';
+import { useListViews } from '@/store/listViews';
+import { listView } from '@/services/listSecrets';
+import type { List } from '@/types/lists';
 import type { CrossAppRef } from '@/types';
 
 export interface NoteBacklink {
-  type:  'task' | 'event' | 'reminder';
+  type:  'task' | 'event' | 'reminder' | 'list';
   id:    string;
   title: string;
   done:  boolean;   // a completed task — shown struck through
@@ -14,7 +18,7 @@ export interface NoteBacklink {
 const refTo = (refs: CrossAppRef[] | undefined, noteId: string) =>
   refs?.find((r) => r.type === 'note' && r.id === noteId);
 
-// Everything that links to a note — the reverse half of every cross-app link (Task/Event/Reminder
+// Everything that links to a note — the reverse half of every cross-app link (Task/Event/Reminder/List
 // `crossAppRefs` naming this note), whichever side the link was made from. Derived on each change,
 // never stored, so it can't disagree with the items themselves: deleting or unlinking on the other
 // side updates it for free. Archived items are left out.
@@ -23,6 +27,7 @@ function collect(
   tasks: ReturnType<typeof useTaskStore.getState>['tasks'],
   events: ReturnType<typeof useCalendarStore.getState>['events'],
   reminders: ReturnType<typeof useCalendarStore.getState>['reminders'],
+  lists: List[],   // views (listView), so an encrypted list shows its name, or the locked placeholder
 ): NoteBacklink[] {
   const out: NoteBacklink[] = [];
   for (const t of Object.values(tasks)) {
@@ -37,17 +42,23 @@ function collect(
     const ref = r.archivedAt ? undefined : refTo(r.crossAppRefs, noteId);
     if (ref) out.push({ type: 'reminder', id: r.id, title: r.title, done: false, tabId: ref.tabId });
   }
+  for (const l of lists) {
+    const ref = refTo(l.crossAppRefs, noteId);
+    if (ref) out.push({ type: 'list', id: l.id, title: l.name, done: false, tabId: ref.tabId });
+  }
   return out;
 }
 
 // Same list, read once from the stores (for event handlers and timers, where a hook can't be used).
 export function getNoteBacklinks(noteId: string): NoteBacklink[] {
-  return collect(noteId, useTaskStore.getState().tasks, useCalendarStore.getState().events, useCalendarStore.getState().reminders);
+  return collect(noteId, useTaskStore.getState().tasks, useCalendarStore.getState().events, useCalendarStore.getState().reminders,
+    Object.values(useListStore.getState().lists).map(listView));
 }
 
 export function useNoteBacklinks(noteId: string | null | undefined): NoteBacklink[] {
   const tasks     = useTaskStore((s) => s.tasks);
   const events    = useCalendarStore((s) => s.events);
   const reminders = useCalendarStore((s) => s.reminders);
-  return useMemo(() => (noteId ? collect(noteId, tasks, events, reminders) : []), [noteId, tasks, events, reminders]);
+  const lists     = useListViews();
+  return useMemo(() => (noteId ? collect(noteId, tasks, events, reminders, Object.values(lists)) : []), [noteId, tasks, events, reminders, lists]);
 }

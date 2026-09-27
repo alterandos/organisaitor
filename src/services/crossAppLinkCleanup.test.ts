@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useNoteStore } from '@/store/noteStore';
+import { useListStore } from '@/store/listStore';
 import {
   deleteTaskWithCleanup, deleteEventWithCleanup, deleteReminderWithCleanup,
-  deleteNoteWithCleanup, removeCrossAppRefFromTarget, unlinkCrossAppRef,
+  deleteNoteWithCleanup, deleteListWithCleanup, removeCrossAppRefFromTarget, unlinkCrossAppRef,
 } from '@/services/crossAppLinkCleanup';
 import type { NoteId } from '@/types/notes';
 
@@ -26,6 +27,7 @@ beforeEach(() => {
   useTaskStore.setState(useTaskStore.getInitialState(), true);
   useCalendarStore.setState(useCalendarStore.getInitialState(), true);
   useNoteStore.setState(useNoteStore.getInitialState(), true);
+  useListStore.setState(useListStore.getInitialState(), true);
 });
 
 describe('deleteTaskWithCleanup', () => {
@@ -144,3 +146,49 @@ describe('removeCrossAppRefFromTarget / unlinkCrossAppRef', () => {
     expect(hasMark(useNoteStore.getState().notes[noteId].content)).toBe(false);
   });
 });
+
+describe('lists in cross-app links', () => {
+  it('deleteListWithCleanup drops every task/calendar link to the list and the note text linking it, keeping other links', () => {
+    const noteId = useNoteStore.getState().addNote({ title: 'Trip' });
+    const listId = useListStore.getState().addList({ name: 'Packing', typeId: 'lt-shopping' as never });
+    const otherList = useListStore.getState().addList({ name: 'Other', typeId: 'lt-shopping' as never });
+    useListStore.getState().updateListLinks(listId, { crossAppRefs: [{ type: 'note', id: noteId }] });
+    const taskId = useTaskStore.getState().addTask({ title: 'Pack', crossAppRefs: [{ type: 'list', id: listId }, { type: 'list', id: otherList }] });
+    const eventId = useCalendarStore.getState().addEvent({ title: 'Flight', date: '2030-01-01' });
+    useCalendarStore.getState().updateEvent(eventId, { crossAppRefs: [{ type: 'list', id: listId }] });
+    useNoteStore.getState().updateNote(noteId, { content: docWithLink('list', listId) });
+
+    deleteListWithCleanup(listId);
+
+    expect(useListStore.getState().lists[listId]).toBeUndefined();
+    expect(useTaskStore.getState().tasks[taskId].crossAppRefs).toEqual([{ type: 'list', id: otherList }]);
+    expect(useCalendarStore.getState().events[eventId].crossAppRefs).toEqual([]);
+    expect(hasMark(useNoteStore.getState().notes[noteId].content)).toBe(false);
+  });
+
+  it("deleteNoteWithCleanup drops a list's link to the note", () => {
+    const noteId = useNoteStore.getState().addNote({ title: 'Trip' });
+    const listId = useListStore.getState().addList({ name: 'Packing' });
+    useListStore.getState().updateListLinks(listId, { crossAppRefs: [{ type: 'note', id: noteId }] });
+    deleteNoteWithCleanup(noteId);
+    expect(useListStore.getState().lists[listId].crossAppRefs).toEqual([]);
+  });
+
+  it("unlinking a note from a list removes the list's ref and the note's linked text", () => {
+    const noteId = useNoteStore.getState().addNote({ title: 'Trip' });
+    const listId = useListStore.getState().addList({ name: 'Packing' });
+    useListStore.getState().updateListLinks(listId, { crossAppRefs: [{ type: 'note', id: noteId }] });
+    useNoteStore.getState().updateNote(noteId, { content: docWithLink('list', listId) });
+    unlinkCrossAppRef('list', listId, { type: 'note', id: noteId });
+    expect(useListStore.getState().lists[listId].crossAppRefs).toEqual([]);
+    expect(hasMark(useNoteStore.getState().notes[noteId].content)).toBe(false);
+  });
+
+  it('updateListLinks works on a locked encrypted list (links are plaintext)', () => {
+    const listId = useListStore.getState().addList({ name: 'Secret' });
+    useListStore.setState((s) => ({ lists: { ...s.lists, [listId]: { ...s.lists[listId], isEncrypted: true, encryptedPayload: 'cipher', name: '' } } }));
+    useListStore.getState().updateListLinks(listId, { crossAppRefs: [{ type: 'note', id: 'n1' }] });
+    expect(useListStore.getState().lists[listId].crossAppRefs).toEqual([{ type: 'note', id: 'n1' }]);
+  });
+});
+

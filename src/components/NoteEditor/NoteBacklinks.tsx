@@ -11,7 +11,7 @@ import { MAIN_TAB_ID, effectiveLinkTabId, tabNameOf } from '@/utils/noteTabs';
 import { ARTIFACT_DRAG_TYPE, insertArtifactLinkAtSelection, removeArtifactMarksFor } from './artifactLinkInsert';
 import styles from './NoteBacklinks.module.css';
 
-const ICON: Record<NoteBacklink['type'], string> = { task: '☑️', event: '📅', reminder: '⏰' };
+const ICON: Record<NoteBacklink['type'], string> = { task: '☑️', event: '📅', reminder: '⏰', list: '📋' };
 
 interface Props {
   note:        Note;

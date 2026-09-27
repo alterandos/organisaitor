@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { toggleTaskWithLists } from '@/services/taskListLinks';
 import type { CalendarReminderId, RepeatFreq, RepeatConfig } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -7,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
+import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteReminderWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
@@ -82,6 +84,7 @@ export function CalendarReminderPane() {
   const handleArchive = (reason: string) => { closeDialog(); archiveReminder(id, reason); closePane(); };
 
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
+    if (ref.type === 'list') { closePane(); openArtifactTarget('list', ref.id); return; }
     if (ref.type !== 'note') return;
     closePane();
     useUIStore.getState().setActiveView('notes');
@@ -322,7 +325,7 @@ export function CalendarReminderPane() {
         <ItemActionFooter
           archived={!!reminder.archivedAt}
           completed={linkedTask?.completed}
-          onToggleComplete={linkedTask ? () => useTaskStore.getState().toggleTask(linkedTask.id) : undefined}
+          onToggleComplete={linkedTask ? () => toggleTaskWithLists(linkedTask.id) : undefined}
           deleteLabel={reminder.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.reminder.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreReminder(id)}

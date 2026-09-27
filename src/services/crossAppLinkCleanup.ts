@@ -10,9 +10,11 @@
 import { useTaskStore } from '@/store/taskStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useCalendarStore } from '@/store/calendarStore';
+import { useListStore } from '@/store/listStore';
 import { stripArtifactLinksFromContent } from '@/utils/noteContent';
 import { noteView, isNoteLocked } from '@/services/noteSecrets';
 import type { TaskId, NoteId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, CrossAppRef, CrossAppRefType } from '@/types';
+import type { ListId } from '@/types/lists';
 
 function stripArtifactLinksFromNote(noteId: NoteId, targetType: string, targetId: string) {
   const raw = useNoteStore.getState().notes[noteId];
@@ -117,6 +119,10 @@ export function deleteNoteWithCleanup(noteId: NoteId) {
   for (const deadline of Object.values(calendar.deadlines)) {
     if (deadline.crossAppRefs?.some(isThisNote)) calendar.updateDeadline(deadline.id, { crossAppRefs: deadline.crossAppRefs.filter((r) => !isThisNote(r)) });
   }
+  const lists = useListStore.getState();
+  for (const list of Object.values(lists.lists)) {
+    if (list.crossAppRefs?.some(isThisNote)) lists.updateListLinks(list.id, { crossAppRefs: list.crossAppRefs.filter((r) => !isThisNote(r)) });
+  }
   const { structuredTagEntries, deleteStructuredTagEntry } = useNoteStore.getState();
   for (const entry of Object.values(structuredTagEntries)) {
     if (entry.noteId === noteId) deleteStructuredTagEntry(entry.id);
@@ -141,6 +147,9 @@ export function removeCrossAppRefFromTarget(targetType: CrossAppRefType, targetI
   } else if (targetType === 'deadline') {
     const deadline = useCalendarStore.getState().deadlines[targetId as CalendarDeadlineId];
     if (deadline) useCalendarStore.getState().updateDeadline(deadline.id, { crossAppRefs: keep(deadline.crossAppRefs) });
+  } else if (targetType === 'list') {
+    const list = useListStore.getState().lists[targetId as ListId];
+    if (list) useListStore.getState().updateListLinks(list.id, { crossAppRefs: keep(list.crossAppRefs) });
   }
 }
 
@@ -154,4 +163,31 @@ export function removeCrossAppRefFromTarget(targetType: CrossAppRefType, targetI
 export function unlinkCrossAppRef(targetType: CrossAppRefType, targetId: string, ref: CrossAppRef) {
   removeCrossAppRefFromTarget(targetType, targetId, ref);
   if (ref.type === 'note') stripArtifactLinksFromNote(ref.id as NoteId, targetType, targetId);
+}
+
+// Deletes a list and drops every link to it: the { type: 'list' } refs on tasks and calendar items,
+// and the linked text in any note the list linked to (its own crossAppRefs). The list and its items
+// still go to the Recycling Bin through deleteList; a restore brings them back without these links.
+export function deleteListWithCleanup(listId: ListId) {
+  const list = useListStore.getState().lists[listId];
+  if (!list) return;
+  const isThisList = (r: CrossAppRef) => r.type === 'list' && r.id === listId;
+  const tasks = useTaskStore.getState();
+  for (const task of Object.values(tasks.tasks)) {
+    if (task.crossAppRefs?.some(isThisList)) tasks.updateTask(task.id, { crossAppRefs: task.crossAppRefs.filter((r) => !isThisList(r)) });
+  }
+  const calendar = useCalendarStore.getState();
+  for (const event of Object.values(calendar.events)) {
+    if (event.crossAppRefs?.some(isThisList)) calendar.updateEvent(event.id, { crossAppRefs: event.crossAppRefs.filter((r) => !isThisList(r)) });
+  }
+  for (const reminder of Object.values(calendar.reminders)) {
+    if (reminder.crossAppRefs?.some(isThisList)) calendar.updateReminder(reminder.id, { crossAppRefs: reminder.crossAppRefs.filter((r) => !isThisList(r)) });
+  }
+  for (const deadline of Object.values(calendar.deadlines)) {
+    if (deadline.crossAppRefs?.some(isThisList)) calendar.updateDeadline(deadline.id, { crossAppRefs: deadline.crossAppRefs.filter((r) => !isThisList(r)) });
+  }
+  for (const ref of list.crossAppRefs ?? []) {
+    if (ref.type === 'note') stripArtifactLinksFromNote(ref.id as NoteId, 'list', listId);
+  }
+  useListStore.getState().deleteList(listId);
 }

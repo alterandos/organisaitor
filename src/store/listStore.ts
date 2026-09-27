@@ -20,6 +20,13 @@ import {
 
 // ── Built-in list type templates ──────────────────────────────────────────────
 const BUILTIN_LIST_TYPES: ListType[] = [
+  // ── Checklist ──────────────────────────────────────────────────────────────
+  {
+    id: 'lt-shopping' as ListTypeId,
+    name: 'Shopping', icon: '🛒', color: '#16a34a', kind: 'checklist', isBuiltIn: true,
+    defaultFields: [],
+  },
+
   // ── Watchlist ──────────────────────────────────────────────────────────────
   {
     id: 'lt-movies' as ListTypeId,
@@ -169,6 +176,12 @@ interface ListState {
   addListItem:    (input: CreateListItemInput) => ListItemId;
   updateListItem: (id: ListItemId, patch: Partial<Omit<ListItem, 'id' | 'listId' | 'createdAt'>>) => void;
   deleteListItem: (id: ListItemId) => void;
+  // Checklist lists: tick/untick an item. Checking also moves it to the bottom of the list.
+  toggleListItemChecked: (id: ListItemId) => void;
+  uncheckAllListItems:   (listId: ListId) => void;
+  // crossAppRefs / resetOnTaskComplete are plaintext even on an encrypted list, so unlike
+  // updateList this works on a LOCKED one too (deleting a note must still drop a list's link to it).
+  updateListLinks:       (id: ListId, patch: Partial<Pick<List, 'crossAppRefs' | 'resetOnTaskComplete'>>) => void;
 
   // ListType CRUD — users can add custom types; built-ins are protected
   addListType:    (type: Omit<ListType, 'id' | 'isBuiltIn'>) => ListTypeId;
@@ -204,6 +217,8 @@ export const useListStore = create<ListState>()(
           tabs:        input.tabs        ?? [],
           isEncrypted:      false,
           encryptedPayload: null,
+          crossAppRefs:     [],
+          resetOnTaskComplete: input.resetOnTaskComplete ?? false,
           createdAt:   now,
           updatedAt:   now,
         };
@@ -252,7 +267,7 @@ export const useListStore = create<ListState>()(
           data:   input.data   ?? {},
           notes:  input.notes  ?? null,
           links:  input.links  ?? [],
-          order:  input.order  ?? itemsInList.length,
+          order:  input.order  ?? Math.max(-1, ...itemsInList.map((i) => i.order)) + 1,
           isEncrypted:      false,
           encryptedPayload: null,
           createdAt: now,
@@ -282,6 +297,29 @@ export const useListStore = create<ListState>()(
           delete next[id];
           return { listItems: next };
         });
+      },
+
+      updateListLinks: (id, patch) => {
+        const raw = get().lists[id];
+        if (raw) putList(id, { ...raw, ...patch, updatedAt: now() });
+      },
+
+      // Unticks every item in a checklist, keeping their order — "ready for next time".
+      uncheckAllListItems: (listId) => {
+        for (const item of itemsOfList(listId)) {
+          if (item.status === 'done') editItem(item.id, (i) => ({ ...i, status: 'want' }));
+        }
+      },
+
+      toggleListItemChecked: (id) => {
+        const item = get().listItems[id];
+        if (!item) return;
+        if (item.status === 'done') {
+          editItem(id, (i) => ({ ...i, status: 'want' }));
+          return;
+        }
+        const maxOrder = Math.max(-1, ...itemsOfList(item.listId).map((i) => i.order));
+        editItem(id, (i) => ({ ...i, status: 'done', order: maxOrder + 1 }));
       },
 
       removeListTab: (listId, tabId) => {
@@ -327,7 +365,18 @@ export const useListStore = create<ListState>()(
     {
       name: 'lists-storage',
       storage: persistStorage(),
-      version: 5,
+      version: 6,
+      // Re-add any built-in type missing from the persisted map, so a built-in introduced after
+      // this device first saved its lists (e.g. Shopping, 2026-09-28) still appears. User edits to
+      // an existing built-in are kept.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<ListState>;
+        return {
+          ...current,
+          ...p,
+          listTypes: { ...toRecord(BUILTIN_LIST_TYPES), ...(p.listTypes ?? {}) } as Record<ListTypeId, ListType>,
+        };
+      },
       migrate: (persisted, fromVersion) => {
         let state = persisted as any;
 
@@ -390,6 +439,15 @@ export const useListStore = create<ListState>()(
             ])
           );
           state = { ...state, lists, listItems };
+        }
+
+        if (fromVersion < 6) {
+          const lists = Object.fromEntries(
+            Object.entries(state.lists ?? {}).map(([id, list]) => [
+              id, { crossAppRefs: [], resetOnTaskComplete: false, ...(list as object) },
+            ])
+          );
+          state = { ...state, lists };
         }
 
         return state;

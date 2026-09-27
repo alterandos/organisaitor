@@ -1,10 +1,13 @@
+import type { CrossAppRef } from './index';
 // ── Branded ID types ──────────────────────────────────────────────────────────
 export type ListId     = string & { readonly _brand: 'ListId'     };
 export type ListItemId = string & { readonly _brand: 'ListItemId' };
 export type ListTypeId = string & { readonly _brand: 'ListTypeId' };
 
 // ── Enumerations ──────────────────────────────────────────────────────────────
-export type ListKind = 'watchlist' | 'reference';
+// 'checklist' (shopping-list style): each item is ticked off rather than given a status. A checked
+// item is stored as status 'done' and moved to the bottom (see listStore.toggleListItemChecked).
+export type ListKind = 'watchlist' | 'reference' | 'checklist';
 
 export type ListItemStatus = 'want' | 'in-progress' | 'done';
 
@@ -65,6 +68,14 @@ export interface List {
   // list through listView(), never off the store directly.
   isEncrypted:      boolean;
   encryptedPayload: string | null;
+  // Links from this list to notes (a packing list ↔ the trip's note). Same model as
+  // Task.crossAppRefs: the list holds the ref, the note works out its "Linked from" pill from it.
+  // Links from a task or calendar item to a list live on that item instead ({ type: 'list' }).
+  // Plaintext even on an encrypted list — ids only, like tabId/status.
+  crossAppRefs: CrossAppRef[];
+  // Checklists only: when a task linked to this list is completed, untick every item so the list
+  // is ready for next time (a weekly shop). See services/taskListLinks.ts.
+  resetOnTaskComplete: boolean;
   createdAt:   string;
   updatedAt:   string;
 }
@@ -74,7 +85,7 @@ export interface ListItem {
   id:        ListItemId;
   listId:    ListId;
   title:     string;
-  status:    ListItemStatus;         // only surfaced in UI for watchlist kind
+  status:    ListItemStatus;         // watchlist: shown as-is; checklist: 'done' = checked, else unchecked
   tabId:     string | null;          // null = unassigned; shows in All
   data:      Record<string, unknown>; // keyed by ListFieldSchema.id
   notes:     string | null;
@@ -98,6 +109,7 @@ export interface CreateListInput {
   icon?:        string | null;
   fieldSchema?: ListFieldSchema[];
   tabs?:        ListTab[];
+  resetOnTaskComplete?: boolean;
 }
 
 export interface CreateListItemInput {

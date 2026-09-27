@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import { useCalendarStore } from '@/store/calendarStore';
@@ -7,7 +7,8 @@ import { parseICS, looksLikeBirthday, type ICSEvent } from '@/utils/icsParser';
 import { resolveTimezone, rezoneWallClock } from '@/utils/timezone';
 import { CalendarImportReviewModal, type ReviewRow } from '@/components/CalendarImportReviewModal/CalendarImportReviewModal';
 import type { CollectionId } from '@/types';
-import { downloadBackup, restoreBackupData } from '@/utils/backupExport';
+import { downloadBackup, downloadAutoBackupSnapshot, restoreBackupData } from '@/utils/backupExport';
+import { listBackupSnapshots, type BackupSnapshotMeta } from '@/services/autoBackupStorage';
 import styles from './IntegrationsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
@@ -239,6 +240,86 @@ function ExportCard() {
   );
 }
 
+// ── Export Automatic Snapshot ─────────────────────────────────────────────────
+
+function SnapshotExportCard() {
+  const [snapshots,  setSnapshots]  = useState<BackupSnapshotMeta[] | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [status,     setStatus]     = useState<ImportStatus>('idle');
+  const [errorMsg,   setErrorMsg]   = useState('');
+
+  useEffect(() => {
+    void listBackupSnapshots().then((list) => {
+      setSnapshots(list);
+      setSelectedId(list[0]?.id ?? null);
+    });
+  }, []);
+
+  const handleExport = async () => {
+    const snap = snapshots?.find((s) => s.id === selectedId);
+    if (!snap) return;
+    try {
+      await downloadAutoBackupSnapshot(snap.id, snap.createdAt);
+      setStatus('success');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Export failed. Please try again.');
+      setStatus('error');
+    }
+  };
+
+  const reset = () => setStatus('idle');
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardIcon} aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5"/>
+          <path d="M10 6v4l2.5 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      <div className={styles.cardBody}>
+        <span className={styles.cardName}>Export automatic snapshot</span>
+        <span className={styles.cardDesc}>
+          Download one of the automatic backups saved on this device as a JSON file — restorable with Restore below.
+        </span>
+        {snapshots === null ? (
+          <span className={styles.cardDesc}>Loading…</span>
+        ) : snapshots.length === 0 ? (
+          <span className={styles.cardDesc}>No automatic snapshots yet.</span>
+        ) : (
+          <select
+            className={styles.snapshotSelect}
+            value={selectedId ?? ''}
+            onChange={(e) => { setSelectedId(Number(e.target.value)); reset(); }}
+            aria-label="Snapshot to export"
+          >
+            {snapshots.map((s) => (
+              <option key={s.id} value={s.id}>{new Date(s.createdAt).toLocaleString()}</option>
+            ))}
+          </select>
+        )}
+        {status === 'success' && (
+          <div className={`${styles.statusMsg} ${styles.statusSuccess}`}>
+            Snapshot downloaded.
+            <button className={styles.statusDismiss} onClick={reset}>✕</button>
+          </div>
+        )}
+        {status === 'error' && (
+          <div className={`${styles.statusMsg} ${styles.statusError}`}>
+            {errorMsg}
+            <button className={styles.statusDismiss} onClick={reset}>✕</button>
+          </div>
+        )}
+      </div>
+      <div className={styles.cardAction}>
+        <button className={styles.importBtn} onClick={handleExport} disabled={selectedId === null}>
+          Export
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Restore Backup ────────────────────────────────────────────────────────────
 
 function RestoreCard() {
@@ -349,6 +430,7 @@ export function IntegrationsPane() {
             <h3 className={styles.sectionLabel}>Backup</h3>
             <div className={styles.cardStack}>
               <ExportCard />
+              <SnapshotExportCard />
               <RestoreCard />
             </div>
           </section>

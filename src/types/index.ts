@@ -24,7 +24,7 @@ export type NotifyUnit     = 'minutes' | 'hours'   | 'days';
 // never go stale. The *forward* half of the link (Note → Task) lives embedded in the
 // note's own rich-text content as an ArtifactLinkMark, not here — this field only carries
 // the reverse direction, so a Task/Event/etc. can show what note(s) it was linked from.
-export type CrossAppRefType = 'note' | 'task' | 'event' | 'reminder' | 'deadline' | 'listItem' | 'trackerEntry';
+export type CrossAppRefType = 'note' | 'task' | 'event' | 'reminder' | 'deadline' | 'list' | 'listItem' | 'trackerEntry';
 export interface CrossAppRef {
   type: CrossAppRefType;
   id:   string;
@@ -230,7 +230,11 @@ export interface CreatePurposeInput {
 // ── Calendar ───────────────────────────────────────────────────────────────────
 // CalendarItemKind is kept as a string union for easy label overrides in labels.ts.
 export type CalendarItemKind  = 'event' | 'reminder' | 'deadline';
-export type CalendarEventType = 'default' | 'birthday' | 'task';
+// 'travel' = time that's booked out but you're not "at" anything — a flight, a bus, a drive.
+// Rendered lighter than a normal event (dashed outline, 🧳) but still occupies its slot; distinct
+// from `background`, which is an ambient multi-day span ("in Vietnam this week"). Free-text
+// column (001_initial.sql), so a new value needs no migration.
+export type CalendarEventType = 'default' | 'birthday' | 'task' | 'travel';
 // A self-created event's confirmation state — 'tentative' is a placeholder the user put on
 // the calendar to be aware something might happen, not yet committed to (see CLAUDE.md
 // "Tentative events"). Named after (and worth keeping compatible with) the iCalendar spec's

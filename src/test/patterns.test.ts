@@ -247,19 +247,23 @@ describe('pattern: hotkeys.ts ids', () => {
   });
 });
 
-// ── 9. SYNC_TABLES matches the runInitSync fetch list ───────────────────────────────
-describe('pattern: SYNC_TABLES matches the runInitSync fetch order', () => {
-  it('same tables, same order', () => {
-    const syncSrc = fs.readFileSync(path.join(SRC, 'services', 'sync', 'syncService.ts'), 'utf8');
-    const syncTablesMatch = syncSrc.match(/const SYNC_TABLES = \[([\s\S]*?)\] as const/);
-    expect(syncTablesMatch).toBeTruthy();
-    const syncTables = [...syncTablesMatch![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+// ── 9. Sync load is keyed by table name, never by position ──────────────────────────
+// A hand-written fetch list destructured into positional variables drifted out of step with
+// hydrateStores on 2026-09-27 and merged every store from tracker_entries on with the next
+// table's rows. The fetch is now generated from SYNC_TABLES and handed around as a name-keyed map.
+describe('pattern: sync load is keyed by table name', () => {
+  const syncSrc = fs.readFileSync(path.join(SRC, 'services', 'sync', 'syncService.ts'), 'utf8');
+  const syncTables = [...syncSrc.match(/const SYNC_TABLES = \[([\s\S]*?)\] as const/)![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
 
-    const fetchSection = syncSrc.match(/const results = await Promise\.all\(\[([\s\S]*?)\]\);/);
-    expect(fetchSection).toBeTruthy();
-    const fetchTables = [...fetchSection![1].matchAll(/supabase\.from\('([a-z_]+)'\)\.select/g)].map((m) => m[1]);
+  it('runInitSync fetches SYNC_TABLES itself, not a separate hand-written list', () => {
+    expect(syncSrc).toMatch(/Promise\.all\(SYNC_TABLES\.map\(/);
+    expect(syncSrc).not.toMatch(/supabase\.from\('[a-z_]+'\)\.select/);
+  });
 
-    expect(fetchTables).toEqual(syncTables);
+  it('hydrateStores merges every table in SYNC_TABLES, by name', () => {
+    const body = syncSrc.match(/function hydrateStores\(remote: RemoteRows\) \{([\s\S]*?)\n\}/)![1];
+    const missing = syncTables.filter((t) => !body.includes(`remote.${t},`));
+    expect(missing, missing.join(', ')).toEqual([]);
   });
 });
 

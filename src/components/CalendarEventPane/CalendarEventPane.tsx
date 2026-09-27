@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import type { CalendarEventId, CalendarEventType, NotifyUnit, RepeatFreq, RepeatConfig } from '@/types';
+import { toggleTaskWithLists } from '@/services/taskListLinks';
+import type { CalendarEventId, NotifyUnit, RepeatFreq, RepeatConfig } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -8,6 +9,7 @@ import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
+import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteEventWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
@@ -18,14 +20,10 @@ import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
+import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
 import styles from './CalendarEventPane.module.css';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
-
-const EVENT_TYPES: { value: CalendarEventType; label: string; icon: string }[] = [
-  { value: 'default',  label: 'Event',    icon: '' },
-  { value: 'birthday', label: 'Birthday', icon: '🎉' },
-];
 
 export function CalendarEventPane() {
   const editingId         = useUIStore((s) => s.editingCalendarEventId);
@@ -98,6 +96,7 @@ export function CalendarEventPane() {
   const handleArchive = (reason: string) => { closeDialog(); archiveEvent(id, reason); closePane(); };
 
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
+    if (ref.type === 'list') { closePane(); openArtifactTarget('list', ref.id); return; }
     if (ref.type !== 'note') return;
     closePane();
     useUIStore.getState().setActiveView('notes');
@@ -273,7 +272,7 @@ export function CalendarEventPane() {
             <div className={styles.field}>
               <span className={styles.label}>Event type</span>
               <div className={styles.typeRow}>
-                {EVENT_TYPES.map((t) => (
+                {PICKABLE_EVENT_TYPES.map((t) => (
                   <button
                     key={t.value}
                     type="button"
@@ -498,7 +497,7 @@ export function CalendarEventPane() {
           archived={!!event.archivedAt}
           canArchive={!isTaskShadow}
           completed={linkedTask?.completed}
-          onToggleComplete={linkedTask ? () => useTaskStore.getState().toggleTask(linkedTask.id) : undefined}
+          onToggleComplete={linkedTask ? () => toggleTaskWithLists(linkedTask.id) : undefined}
           deleteLabel={event.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.event.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreEvent(id)}

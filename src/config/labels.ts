@@ -171,6 +171,11 @@ export const LABELS = {
     reminder: 'Reminder',
     deadline: 'Deadline',
   },
+  calendarEventType: {
+    default:  'Event',
+    birthday: 'Birthday',
+    travel:   'Travel',
+  },
 
   // Records / Trackers
   records: 'Records',
@@ -189,6 +194,37 @@ export const LABELS = {
   listItem:      'Item',
   listItemPlural:'Items',
   listType:      'List Type',
+  // Per ListKind: `one` names a single list of that kind, `many` heads its group in the sidebar
+  // and the create-list type picker.
+  listKind: {
+    checklist: { one: 'Checklist',      many: 'Checklists' },
+    watchlist: { one: 'Watchlist',      many: 'Watchlists' },
+    reference: { one: 'Reference list', many: 'Reference' },
+  },
+  checklist: {
+    addPlaceholder: 'Add an item…',
+    clearChecked:   'Clear checked',
+    uncheckAll:     'Untick all',
+    empty:          'Nothing on this list yet',
+    reusable:       'Reusable',
+    reusableHint:   'Untick everything when a linked task is completed, so the list is ready for next time.',
+  },
+
+  // Links between lists and tasks / calendar items / notes (services/taskListLinks.ts)
+  listLinks: {
+    linkList:        '+ List',
+    linkNote:        '+ Note',
+    linkedFrom:      'Linked from',
+    notesLabel:      'Notes',
+    pickerTitle:     'Link a list',
+    pickerSearch:    'Search lists…',
+    pickerEmpty:     'No lists match',
+    completeTitle:   (task: string) => `Complete “${task}”?`,
+    completeMessage: (list: string) => `Everything on ${list} is ticked off.`,
+    completeReset:   'The list will be unticked, ready for next time.',
+    completeConfirm: 'Complete task',
+    completeCancel:  'Not yet',
+  },
 
   views: {
     tasks:     'Tasks',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { nanoid } from 'nanoid';
 import { useListStore } from '@/store/listStore';
@@ -6,7 +6,8 @@ import { useListViews } from '@/store/listViews';
 import { onVaultStatus } from '@/services/vault';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
-import type { ListId, ListFieldSchema, ListFieldType, ListTypeId, ListTab } from '@/types/lists';
+import type { ListId, ListFieldSchema, ListFieldType, ListTypeId, ListTab, ListKind } from '@/types/lists';
+import { LABELS } from '@/config/labels';
 import styles from './AddListModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
@@ -21,13 +22,14 @@ const FIELD_TYPES: { value: ListFieldType; label: string }[] = [
   { value: 'url',     label: 'URL'     },
 ];
 
-const EMOJI_PRESETS = ['📋', '🎬', '📚', '📺', '🎵', '🔬', '📍', '🎮', '🍽️', '✈️', '💡', '⭐'];
+const EMOJI_PRESETS = ['📋', '🛒', '🎬', '📚', '📺', '🎵', '🔬', '📍', '🎮', '🍽️', '✈️', '💡', '⭐'];
 
 export function AddListModal() {
   const lists      = useListViews();
   const listTypes  = useListStore((s) => s.listTypes);
   const addList    = useListStore((s) => s.addList);
   const updateList = useListStore((s) => s.updateList);
+  const updateListLinks = useListStore((s) => s.updateListLinks);
   const encryptList = useListStore((s) => s.encryptList);
   const closeModal       = useUIStore((s) => s.closeModal);
   const editingListId    = useUIStore((s) => s.editingListId);
@@ -52,6 +54,7 @@ export function AddListModal() {
   const [newTabSelectOption, setNewTabSelectOption] = useState<Record<string, string>>({});
   const [expandedTabs, setExpandedTabs] = useState<Set<number>>(new Set());
   const [encryptOnCreate, setEncryptOnCreate] = useState(false);
+  const [reusable, setReusable] = useState(() => existing?.resetOnTaskComplete ?? false);
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
   useEffect(() => onVaultStatus((s) => setVaultUnlocked(s === 'unlocked')), []);
 
@@ -166,6 +169,9 @@ export function AddListModal() {
     ));
 
   // ── Submit ──────────────────────────────────────────────────────────────────
+  // A list's kind comes from its type when it's created; an existing list keeps its own.
+  const isChecklist = (existing?.kind ?? (selectedTypeId ? listTypes[selectedTypeId]?.kind : null)) === 'checklist';
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -183,6 +189,7 @@ export function AddListModal() {
         fieldSchema: validFields,
         tabs: validTabs,
       });
+      updateListLinks(editingListId as ListId, { resetOnTaskComplete: isChecklist && reusable });
     } else {
       const newId = addList({
         name: name.trim(),
@@ -192,6 +199,7 @@ export function AddListModal() {
         icon,
         fieldSchema: validFields,
         tabs: validTabs,
+        resetOnTaskComplete: isChecklist && reusable,
       });
       if (encryptOnCreate && vaultUnlocked) {
         encryptList(newId).catch((err) => {
@@ -203,9 +211,15 @@ export function AddListModal() {
     closeModal();
   };
 
-  const allTypes       = Object.values(listTypes);
-  const watchlistTypes = allTypes.filter((t) => t.kind === 'watchlist');
-  const referenceTypes = allTypes.filter((t) => t.kind !== 'watchlist');
+  // Same grouping and order as the Lists sidebar; anything not a checklist/watchlist is Reference.
+  const allTypes   = Object.values(listTypes);
+  const typeGroups = (['checklist', 'watchlist', 'reference'] as ListKind[])
+    .map((kind) => ({
+      kind,
+      label: kind === 'reference' ? 'Reference & Admin' : LABELS.listKind[kind].many,
+      types: allTypes.filter((t) => (t.kind === 'checklist' || t.kind === 'watchlist' ? t.kind : 'reference') === kind),
+    }))
+    .filter((g) => g.types.length > 0);
 
   // Helper to render a field row (reused for list-level and per-tab)
   const renderFieldRow = (
@@ -285,11 +299,11 @@ export function AddListModal() {
             <button className={styles.closeBtn} onClick={closeModal}>✕</button>
           </div>
 
-          {watchlistTypes.length > 0 && (
-            <>
-              <div className={styles.typeSectionLabel}>Watchlists</div>
+          {typeGroups.map((g) => (
+            <Fragment key={g.kind}>
+              <div className={styles.typeSectionLabel}>{g.label}</div>
               <div className={styles.typeGrid}>
-                {watchlistTypes.map((type) => (
+                {g.types.map((type) => (
                   <button
                     key={type.id}
                     className={styles.typeCard}
@@ -301,27 +315,8 @@ export function AddListModal() {
                   </button>
                 ))}
               </div>
-            </>
-          )}
-
-          {referenceTypes.length > 0 && (
-            <>
-              <div className={styles.typeSectionLabel}>Reference &amp; Admin</div>
-              <div className={styles.typeGrid}>
-                {referenceTypes.map((type) => (
-                  <button
-                    key={type.id}
-                    className={styles.typeCard}
-                    style={type.color ? { '--type-color': type.color } as React.CSSProperties : undefined}
-                    onClick={() => handleSelectType(type.id)}
-                  >
-                    <span className={styles.typeCardIcon}>{type.icon}</span>
-                    <span className={styles.typeCardName}>{type.name}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+            </Fragment>
+          ))}
 
           <div className={styles.typeSkip}>
             <button className={styles.skipBtn} onClick={() => setTypeChosen(true)}>
@@ -372,6 +367,14 @@ export function AddListModal() {
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
+
+          {isChecklist && (
+            <label className={styles.encryptRow} title={LABELS.checklist.reusableHint}>
+              <input type="checkbox" checked={reusable} onChange={(e) => setReusable(e.target.checked)} />
+              <span>↻ {LABELS.checklist.reusable}</span>
+              <span className={styles.encryptHint}>{LABELS.checklist.reusableHint}</span>
+            </label>
+          )}
 
           {/* Color */}
           <div className={styles.field}>

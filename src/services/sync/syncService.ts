@@ -212,8 +212,7 @@ function flushPending(userId: string): Promise<void> {
 // them. Only tables that loaded are considered — an unreadable table could be hiding remote data.
 // Tables whose records carry no updatedAt (tags, list types, portfolio tags/purposes) can only be
 // detected as "not there yet"; a local edit to one of those while offline still loses to the cloud.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function queueLocalOnlyAndNewer(remote: Record<string, any[] | null>) {
+function queueLocalOnlyAndNewer(remote: RemoteRows) {
   for (const table of Object.keys(TABLE_DEFS) as Array<keyof typeof TABLE_DEFS>) {
     const rows = remote[table];
     if (!rows) continue;
@@ -259,7 +258,12 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
-// Same order as the Promise.all fetch list in runInitSync — index i of one is index i of the other.
+// Every synced table. The load fetches exactly these and hands the rows around keyed by table
+// name, never by position. It used to be a hand-written Promise.all list destructured into
+// positional variables, and on 2026-09-27 a dev-server reload between the two halves of adding
+// calendar_deadlines ran one load with them shifted by one: every store from tracker_entries on
+// merged the NEXT table's rows (schedules got tracker entries, trash got investment purposes…),
+// persisted them and tried to upload them.
 const SYNC_TABLES = [
   'tasks', 'collections', 'tags', 'purposes', 'calendar_events', 'calendar_reminders', 'calendar_deadlines',
   'tracker_entries', 'schedules', 'lists', 'list_items', 'list_types',
@@ -267,6 +271,9 @@ const SYNC_TABLES = [
   'watchlist_items', 'portfolio_tags', 'investment_purposes',
   'trash_items',
 ] as const;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RemoteRows = Record<(typeof SYNC_TABLES)[number], any[] | null>;
 
 export function initSync(userId: string): Promise<void> {
   return enqueue(() => runInitSync(userId));
@@ -279,27 +286,7 @@ async function runInitSync(userId: string): Promise<void> {
   setStatus('syncing');
 
   try {
-    const results = await Promise.all([
-      supabase.from('tasks').select('*').eq('user_id', userId),
-      supabase.from('collections').select('*').eq('user_id', userId),
-      supabase.from('tags').select('*').eq('user_id', userId),
-      supabase.from('purposes').select('*').eq('user_id', userId),
-      supabase.from('calendar_events').select('*').eq('user_id', userId),
-      supabase.from('calendar_reminders').select('*').eq('user_id', userId),
-      supabase.from('calendar_deadlines').select('*').eq('user_id', userId),
-      supabase.from('tracker_entries').select('*').eq('user_id', userId),
-      supabase.from('schedules').select('*').eq('user_id', userId),
-      supabase.from('lists').select('*').eq('user_id', userId),
-      supabase.from('list_items').select('*').eq('user_id', userId),
-      supabase.from('list_types').select('*').eq('user_id', userId),
-      supabase.from('notes').select('*').eq('user_id', userId),
-      supabase.from('note_tags').select('*').eq('user_id', userId),
-      supabase.from('structured_tag_entries').select('*').eq('user_id', userId),
-      supabase.from('watchlist_items').select('*').eq('user_id', userId),
-      supabase.from('portfolio_tags').select('*').eq('user_id', userId),
-      supabase.from('investment_purposes').select('*').eq('user_id', userId),
-      supabase.from('trash_items').select('*').eq('user_id', userId),
-    ]);
+    const results = await Promise.all(SYNC_TABLES.map((t) => supabase.from(t).select('*').eq('user_id', userId)));
 
     // A table that fails to load (missing grant/migration, transient error) must not stop
     // every OTHER table from syncing — it used to (one all-or-nothing throw), which meant
@@ -312,36 +299,24 @@ async function runInitSync(userId: string): Promise<void> {
       if (results[i].error) console.error(`[sync] could not load ${name}:`, results[i].error!.message);
     }
 
-    const [
-      dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbDeadlines, dbEntries,
-      dbSchedules, dbLists, dbListItems, dbListTypes,
-      dbNotes, dbNoteTags, dbStructuredTagEntries,
-      dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
-      dbTrashItems,
-    ] = results.map((r) => (r.error ? null : r.data));
+    const remote = Object.fromEntries(SYNC_TABLES.map((t, i) => [t, results[i].error ? null : results[i].data])) as RemoteRows;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const liveCount = (rows: any[] | null) => (rows ?? []).filter((r) => !r.deleted_at).length;
     const isEmpty =
-      liveCount(dbTasks) === 0 &&
-      liveCount(dbCollections) === 0 &&
-      liveCount(dbEvents) === 0 &&
-      liveCount(dbSchedules) === 0 &&
-      liveCount(dbLists) === 0 &&
-      liveCount(dbNotes) === 0 &&
-      liveCount(dbWatchlistItems) === 0;
+      liveCount(remote.tasks) === 0 &&
+      liveCount(remote.collections) === 0 &&
+      liveCount(remote.calendar_events) === 0 &&
+      liveCount(remote.schedules) === 0 &&
+      liveCount(remote.lists) === 0 &&
+      liveCount(remote.notes) === 0 &&
+      liveCount(remote.watchlist_items) === 0;
 
     if (isEmpty && failed.length === 0) {
       await upsertAllToSupabase(userId);
     } else {
-      hydrateStores(
-        dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbDeadlines, dbEntries,
-        dbSchedules, dbLists, dbListItems, dbListTypes,
-        dbNotes, dbNoteTags, dbStructuredTagEntries,
-        dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
-        dbTrashItems,
-      );
-      queueLocalOnlyAndNewer(Object.fromEntries(SYNC_TABLES.map((t, i) => [t, results[i].error ? null : results[i].data])));
+      hydrateStores(remote);
+      queueLocalOnlyAndNewer(remote);
     }
 
     if (failed.length > 0) setStatus('error', `Could not sync: ${failed.join(', ')} (other data synced normally)`);
@@ -443,68 +418,60 @@ function mergeRecords<T>(
   return result;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function hydrateStores(...args: Array<any[] | null>) {
-  const [
-    dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbDeadlines, dbEntries,
-    dbSchedules, dbLists, dbListItems, dbListTypes,
-    dbNotes, dbNoteTags, dbStructuredTagEntries,
-    dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
-    dbTrashItems,
-  ] = args;
+function hydrateStores(remote: RemoteRows) {
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useTaskStore.setState((local) => ({
-    tasks:       mergeRecords(local.tasks,       dbTasks,       rowToTask, 'tasks'),
-    collections: mergeRecords(local.collections, dbCollections, rowToCollection, 'collections'),
-    tags:        mergeRecords(local.tags,        dbTags,        rowToTag, 'tags'),
-    purposes:    mergeRecords(local.purposes,    dbPurposes,    rowToPurpose, 'purposes'),
+    tasks:       mergeRecords(local.tasks,       remote.tasks, rowToTask, 'tasks'),
+    collections: mergeRecords(local.collections, remote.collections, rowToCollection, 'collections'),
+    tags:        mergeRecords(local.tags,        remote.tags, rowToTag, 'tags'),
+    purposes:    mergeRecords(local.purposes,    remote.purposes, rowToPurpose, 'purposes'),
   }) as Parameters<typeof useTaskStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useCalendarStore.setState((local) => ({
-    events:    mergeRecords(local.events,    dbEvents,    rowToEvent, 'calendar_events'),
-    reminders: mergeRecords(local.reminders, dbReminders, rowToReminder, 'calendar_reminders'),
-    deadlines: mergeRecords(local.deadlines, dbDeadlines, rowToDeadline, 'calendar_deadlines'),
+    events:    mergeRecords(local.events,    remote.calendar_events, rowToEvent, 'calendar_events'),
+    reminders: mergeRecords(local.reminders, remote.calendar_reminders, rowToReminder, 'calendar_reminders'),
+    deadlines: mergeRecords(local.deadlines, remote.calendar_deadlines, rowToDeadline, 'calendar_deadlines'),
   }) as Parameters<typeof useCalendarStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useTrackerStore.setState((local) => ({
-    entries: mergeRecords(local.entries, dbEntries, rowToEntry, 'tracker_entries'),
+    entries: mergeRecords(local.entries, remote.tracker_entries, rowToEntry, 'tracker_entries'),
   }) as Parameters<typeof useTrackerStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useScheduleStore.setState((local) => ({
-    schedules: mergeRecords(local.schedules, dbSchedules, rowToSchedule, 'schedules'),
+    schedules: mergeRecords(local.schedules, remote.schedules, rowToSchedule, 'schedules'),
   }) as Parameters<typeof useScheduleStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useListStore.setState((local) => ({
-    lists:     mergeRecords(local.lists,     dbLists,     rowToList, 'lists'),
-    listItems: mergeRecords(local.listItems, dbListItems, rowToListItem, 'list_items'),
+    lists:     mergeRecords(local.lists,     remote.lists, rowToList, 'lists'),
+    listItems: mergeRecords(local.listItems, remote.list_items, rowToListItem, 'list_items'),
     // Built-ins in `local.listTypes` are preserved untouched by mergeRecords (remote
     // never contains their fixed ids); only the custom entries can be added/updated/
     // tombstoned here.
-    listTypes: mergeRecords(local.listTypes, dbListTypes, rowToListType, 'list_types'),
+    listTypes: mergeRecords(local.listTypes, remote.list_types, rowToListType, 'list_types'),
   }) as Parameters<typeof useListStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useNoteStore.setState((local) => ({
-    notes:                mergeRecords(local.notes,                dbNotes,                rowToNote, 'notes'),
-    noteTags:              mergeRecords(local.noteTags,              dbNoteTags,             rowToNoteTag, 'note_tags'),
-    structuredTagEntries: mergeRecords(local.structuredTagEntries, dbStructuredTagEntries, rowToStructuredTagEntry, 'structured_tag_entries'),
+    notes:                mergeRecords(local.notes,                remote.notes, rowToNote, 'notes'),
+    noteTags:              mergeRecords(local.noteTags,              remote.note_tags, rowToNoteTag, 'note_tags'),
+    structuredTagEntries: mergeRecords(local.structuredTagEntries, remote.structured_tag_entries, rowToStructuredTagEntry, 'structured_tag_entries'),
   }) as Parameters<typeof useNoteStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   usePortfolioStore.setState((local) => ({
-    watchlistItems:     mergeRecords(local.watchlistItems,     dbWatchlistItems,     rowToWatchlistItem, 'watchlist_items'),
-    portfolioTags:      mergeRecords(local.portfolioTags,      dbPortfolioTags,      rowToPortfolioTag, 'portfolio_tags'),
-    investmentPurposes: mergeRecords(local.investmentPurposes, dbInvestmentPurposes, rowToInvestmentPurpose, 'investment_purposes'),
+    watchlistItems:     mergeRecords(local.watchlistItems,     remote.watchlist_items, rowToWatchlistItem, 'watchlist_items'),
+    portfolioTags:      mergeRecords(local.portfolioTags,      remote.portfolio_tags, rowToPortfolioTag, 'portfolio_tags'),
+    investmentPurposes: mergeRecords(local.investmentPurposes, remote.investment_purposes, rowToInvestmentPurpose, 'investment_purposes'),
   }) as Parameters<typeof usePortfolioStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useTrashStore.setState((local) => ({
-    entries: mergeRecords(local.entries, dbTrashItems, rowToTrashEntry, 'trash_items'),
+    entries: mergeRecords(local.entries, remote.trash_items, rowToTrashEntry, 'trash_items'),
   }) as Parameters<typeof useTrashStore.setState>[0]);
 }
 

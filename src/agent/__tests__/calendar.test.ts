@@ -43,6 +43,11 @@ describe('create_calendar_item: events', () => {
     expect(fails('create_calendar_item', { kind: 'event', title: 'Sam', date: FAR, eventType: 'birthday', startTime: '09:00' }).message).toMatch(/no times/);
   });
 
+  it('creates a travel event that keeps its times (it blocks the slot)', () => {
+    const { created } = ok('create_calendar_item', { kind: 'event', title: 'Flight to Hanoi', date: FAR, startTime: '08:00', endTime: '11:30', eventType: 'travel' });
+    expect(read.event(created.id)).toMatchObject({ eventType: 'travel', startTime: '08:00', endTime: '11:30', repeat: null });
+  });
+
   it('builds a repeat and demands its count or end date', () => {
     const { created } = ok('create_calendar_item', { kind: 'event', title: 'Standup', date: FAR, repeat: { freq: 'weekly', endKind: 'count', count: 4 } });
     expect(read.event(created.id)!.repeat).toMatchObject({ freq: 'weekly', interval: 1, endKind: 'count', count: 4, until: null });

@@ -183,3 +183,90 @@ describe('inferCalendarItemFromSelection', () => {
     expect(new Set(all)).toEqual(new Set(['https://a.example', 'https://c.example']));
   });
 });
+
+// TODAY is Thursday 2026-09-24, so "Friday" is 2026-09-25.
+const cal = (text: string) => inferCalendarItemFromSelection(text, [], TODAY);
+
+describe('inferCalendarItemFromSelection — kind cues', () => {
+  it.each([
+    // [text, kind, title]
+    ['Remind me to call Sam on Friday',                    'reminder', 'Call Sam'],
+    ["Don't forget to water the plants tomorrow",          'reminder', 'Water the plants'],
+    ['remember to take the bins out tonight',              'reminder', 'take the bins out'],
+    ['Note to self: book the vet tomorrow',                'reminder', 'Book the vet'],
+    ['The deadline for the tax return is 31 October',      'deadline', 'The tax return'],
+    ['Deadline: grant application Friday',                 'deadline', 'Grant application'],
+    ['Essay due Friday 5pm',                               'deadline', 'Essay'],
+    ['Rent is due on Friday',                              'deadline', 'Rent'],
+    ['Pay the electricity bill by Friday',                 'deadline', 'Pay the electricity bill'],
+    ['Submit the visa application before 3 October',      'deadline', 'Submit the visa application'],
+    ['Passport expires 12 March 2027',                     'deadline', 'Passport expires'],
+    ['Team sync 2pm-3pm tomorrow',                         'event',    'Team sync'],
+    ['Dentist Friday 10am',                                'event',    'Dentist'],
+    ['Coffee with Priya tomorrow',                         'event',    'Coffee with Priya'],
+  ])('%s → %s', (text, kind, title) => {
+    const out = cal(text);
+    expect(out.kind).toBe(kind);
+    expect(out.title).toBe(title);
+  });
+
+  it('a deadline cue beats a reminder cue ("remind me that the deadline for X is Friday")', () => {
+    const out = cal('Remind me that the deadline for the grant is Friday');
+    expect(out).toMatchObject({ kind: 'deadline', title: 'The grant', date: '2026-09-25' });
+  });
+
+  it('a reminder cue beats an event word ("remind me to book the flight" is not a journey)', () => {
+    expect(cal('Remind me to book the flight tomorrow')).toMatchObject({ kind: 'reminder', eventType: 'default', title: 'Book the flight' });
+  });
+
+  it('"discuss the deadline" in a meeting stays a meeting', () => {
+    expect(cal('Meeting to discuss the deadline tomorrow 2pm').kind).toBe('event');
+    expect(cal('Meeting to discuss the deadline for the report tomorrow').kind).toBe('event');
+  });
+
+  it('a deadline keeps its time (Deadlines have one) but no end time', () => {
+    expect(cal('Report due Friday 5pm')).toMatchObject({ kind: 'deadline', date: '2026-09-25', startTime: '17:00', endTime: null });
+  });
+});
+
+describe('inferCalendarItemFromSelection — event type, tentative, important, repeat', () => {
+  it('a journey is a travel event', () => {
+    expect(cal('Flight to Hanoi 8am Friday')).toMatchObject({ kind: 'event', eventType: 'travel', startTime: '08:00', date: '2026-09-25' });
+    expect(cal('Train to Bern 17:00-18:00 tomorrow').eventType).toBe('travel');
+  });
+
+  it('a birthday is an all-day event repeating yearly', () => {
+    expect(cal("Mum's birthday 12 March 3pm")).toMatchObject({
+      kind: 'event', eventType: 'birthday', startTime: null, endTime: null, repeat: { freq: 'yearly', interval: 1 },
+    });
+  });
+
+  it('"maybe" / "TBC" / "pencil in" mark it tentative and come out of the title', () => {
+    const out = cal('Maybe drinks with Sam Friday 6-8pm (TBC)');
+    expect(out).toMatchObject({ kind: 'event', tentative: true, title: 'Drinks with Sam', startTime: '18:00', endTime: '20:00' });
+    expect(cal('Pencil in lunch with Jo tomorrow')).toMatchObject({ tentative: true, title: 'Lunch with Jo' });
+    expect(cal('Lunch with Jo tomorrow').tentative).toBe(false);
+  });
+
+  it('"urgent" / "important" / "!!" mark it important; a leading label comes out of the title', () => {
+    expect(cal('Urgent: submit the visa form by Friday')).toMatchObject({ kind: 'deadline', important: true, title: 'Submit the visa form' });
+    expect(cal('Call the bank tomorrow !!')).toMatchObject({ important: true, title: 'Call the bank' });
+    expect(cal('Call the bank tomorrow').important).toBe(false);
+  });
+
+  it.each([
+    ['Team standup every Monday 9-9:15am', { freq: 'weekly', interval: 1 }, 'Team standup'],
+    ['Water the plants every 3 days',       { freq: 'daily', interval: 3 },  'Water the plants'],
+    ['Bins out fortnightly',                { freq: 'weekly', interval: 2 }, 'Bins out'],
+    ['Book club every other week',          { freq: 'weekly', interval: 2 }, 'Book club'],
+    ['Pay rent monthly',                    { freq: 'monthly', interval: 1 }, 'Pay rent'],
+  ])('repeat: %s', (text, repeat, title) => {
+    const out = cal(text);
+    expect(out.repeat).toEqual(repeat);
+    expect(out.title).toBe(title);
+  });
+
+  it('no cue → no extras', () => {
+    expect(cal('Pick up parcel tomorrow')).toMatchObject({ kind: 'reminder', eventType: 'default', tentative: false, important: false, repeat: null });
+  });
+});

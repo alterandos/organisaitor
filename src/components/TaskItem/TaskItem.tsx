@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { toggleTaskWithLists, checklistProgress, linkedListIds } from '@/services/taskListLinks';
+import { useListStore } from '@/store/listStore';
 import type { Priority, Task } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -30,10 +32,11 @@ interface Props {
 
 export function TaskItem({ task, collectionColor, isSubtask, expanded = false, onToggleExpand, forceDueDate = false }: Props) {
   const { isAndroid }     = usePlatform();
-  const toggleTask        = useTaskStore((s) => s.toggleTask);
   const tagsRecord        = useTaskStore((s) => s.tags);
   const collectionsRecord = useTaskStore((s) => s.collections);
   const tasksRecord       = useTaskStore((s) => s.tasks);
+  const listsRecord     = useListStore((s) => s.lists);
+  const listItemsRecord = useListStore((s) => s.listItems);
   const openTaskPane  = useUIStore((s) => s.openTaskPane);
   const activeCollectionId   = useUIStore(selectActiveCollectionId);
   const colorEnabled         = useSettingsStore((s) => s.colorEnabled);
@@ -81,7 +84,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
       if (d?.locked === 'h') {
         if (d.dx > SWIPE_ACTION_THRESHOLD) {
           hapticLight();
-          toggleTask(task.id);
+          toggleTaskWithLists(task.id);
           setSwipeX(0);
           setDeleteRevealed(false);
         } else if (d.dx < -SWIPE_ACTION_THRESHOLD) {
@@ -104,7 +107,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
     };
-  }, [isAndroid, task.id, toggleTask]);
+  }, [isAndroid, task.id]);
 
   const bgStyle: React.CSSProperties = {};
   if (collectionColor) {
@@ -123,6 +126,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
     openTaskPane(task.id);
   };
 
+  const checklist      = checklistProgress(linkedListIds(task.crossAppRefs), listsRecord, listItemsRecord);
   const subtaskIds     = task.subtaskIds ?? [];
   const hasSubtasks    = subtaskIds.length > 0;
   const subtaskTotal   = subtaskIds.length;
@@ -150,7 +154,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
       <div className={styles.itemRow}>
         <button
           className={`${styles.checkbox} ${task.completed ? styles.checkboxDone : ''}`}
-          onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }}
+          onClick={(e) => { e.stopPropagation(); toggleTaskWithLists(task.id); }}
           aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
         >
           {task.completed && <span className={styles.checkmark}>✓</span>}
@@ -186,6 +190,12 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
 
         {task.kind === 'milestone' && !task.completed && (
           <span className={styles.milestoneIndicator} title="Milestone">◆</span>
+        )}
+
+        {checklist && checklist.total > 0 && !task.completed && (
+          <span className={styles.checklistIndicator} title="Linked checklist">
+            📋 {checklist.done}/{checklist.total}
+          </span>
         )}
 
         {hasSubtasks && !task.completed && (

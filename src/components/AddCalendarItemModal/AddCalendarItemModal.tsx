@@ -17,17 +17,13 @@ import { LinksField } from '@/components/LinksField/LinksField';
 import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput } from '@/utils/calendarItemInput';
 import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
 import type { CollectionId } from '@/types';
+import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
 import styles from './AddCalendarItemModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 function todayStr(): string {
   return todayIsoInZone(resolveTimezone(useSettingsStore.getState().timezone));
 }
-
-const EVENT_TYPES: { value: CalendarEventType; label: string; icon: string }[] = [
-  { value: 'default',  label: 'Event',    icon: '' },
-  { value: 'birthday', label: 'Birthday', icon: '🎉' },
-];
 
 export function AddCalendarItemModal() {
   const closeModal         = useUIStore((s) => s.closeModal);
@@ -52,12 +48,12 @@ export function AddCalendarItemModal() {
   const [notes,             setNotes]             = useState(prefillExtra?.notes ?? '');
   const [links,             setLinks]             = useState<string[]>([]);
   const [location,          setLocation]          = useState(prefillExtra?.location ?? '');
-  const [eventType,         setEventType]         = useState<CalendarEventType>('default');
-  const [status,            setStatus]            = useState<EventStatus>('confirmed');
+  const [eventType,         setEventType]         = useState<CalendarEventType>(prefillExtra?.eventType ?? 'default');
+  const [status,            setStatus]            = useState<EventStatus>(prefillExtra?.tentative ? 'tentative' : 'confirmed');
   const [collectionId,      setCollectionId]      = useState<CollectionId | null>(
     (prefillExtra?.collectionId ?? activeCollectionId) as CollectionId | null
   );
-  const [important,         setImportant]         = useState(false);
+  const [important,         setImportant]         = useState(prefillExtra?.important ?? false);
   const [background,        setBackground]        = useState(false);
   const [color,             setColor]             = useState<string | null>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
@@ -68,13 +64,15 @@ export function AddCalendarItemModal() {
   const [notifyBeforeValue, setNotifyBeforeValue] = useState(1);
   const [notifyBeforeUnit,  setNotifyBeforeUnit]  = useState<NotifyUnit>('hours');
   const [notifyAtTime,      setNotifyAtTime]      = useState('12:00');
-  const [repeatOn,          setRepeatOn]          = useState(false);
-  const [repeatFreq,        setRepeatFreq]        = useState<RepeatFreq>('weekly');
-  const [repeatInterval,    setRepeatInterval]    = useState(1);
+  const [repeatOn,          setRepeatOn]          = useState(!!prefillExtra?.repeat);
+  const [repeatFreq,        setRepeatFreq]        = useState<RepeatFreq>(prefillExtra?.repeat?.freq ?? 'weekly');
+  const [repeatInterval,    setRepeatInterval]    = useState(prefillExtra?.repeat?.interval ?? 1);
   const [repeatEndKind,     setRepeatEndKind]     = useState<RepeatConfig['endKind']>('forever');
   const [repeatCount,       setRepeatCount]       = useState(10);
   const [repeatUntil,       setRepeatUntil]       = useState('');
-  const [formExpanded,      setFormExpanded]      = useState(false);
+  // Opened when a note selection inferred something that lives in the extra options (repeat,
+  // tentative, important), so the guess is visible rather than silently applied.
+  const [formExpanded,      setFormExpanded]      = useState(!!(prefillExtra?.repeat || prefillExtra?.tentative || prefillExtra?.important));
   const formRef = useRef<HTMLFormElement>(null);
   // Tracks whether `endTime` is still just our own auto-linked guess vs. something the user
   // actually typed into the End field — without this, typing a start time digit-by-digit (hour
@@ -310,7 +308,7 @@ export function AddCalendarItemModal() {
             <div className={styles.field}>
               <label className={styles.label}>Event type</label>
               <div className={styles.typeRow}>
-                {EVENT_TYPES.map((t) => (
+                {PICKABLE_EVENT_TYPES.map((t) => (
                   <button
                     key={t.value}
                     type="button"
@@ -408,7 +406,7 @@ export function AddCalendarItemModal() {
                 atTime={allDayNotifyAt}
                 onChange={(d, t) => { setAllDayNotifyDays(d); setAllDayNotifyAt(t); }}
               />
-              <p className={styles.repeatSmall}>A Deadline only ever notifies before it's due, never at the moment itself — this applies even if you set a Time above.</p>
+              <p className={styles.repeatSmall}>Deadline notification.</p>
             </div>
           )}
 
