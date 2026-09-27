@@ -303,6 +303,7 @@ function NoteTagTreeNode({
             text={tag.name}
             className={styles.nodeName}
             style={tag.color ? { color: isSelected ? tag.color : undefined } : undefined}
+            reveal="extend"
           />
           {noteCount > 0 && <span className={styles.nodeCount}>{noteCount}</span>}
         </button>

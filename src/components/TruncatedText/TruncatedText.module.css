@@ -14,3 +14,18 @@
   word-break: break-word;
   pointer-events: none;
 }
+
+/* reveal="extend": the full text laid exactly over the truncated one (same font, colour and row
+   background, all set inline from the measured element), running out to the right. A little
+   right padding and a soft shadow on that side mark where it spills past the row. */
+.extended {
+  position: fixed;
+  z-index: 10000;
+  padding-right: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  box-shadow: 6px 0 10px -6px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}

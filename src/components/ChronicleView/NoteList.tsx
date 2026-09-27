@@ -76,6 +76,7 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
           <TruncatedText
             text={note.title || '(Untitled)'}
             className={styles.noteTitle}
+            reveal="extend"
           />
           <div className={styles.noteTime}>{formatDate(note.updatedAt)}</div>
         </button>
