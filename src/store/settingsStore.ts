@@ -20,7 +20,7 @@ const DEFAULT_THEME: 'light' | 'dark' | 'system' =
 // 'tentative' is a cross-cutting filter on top of 'events' (a tentative event is still an
 // 'events'-layer item — hiding 'events' hides it too; this toggle only lets tentative ones
 // specifically be hidden while confirmed events keep showing). See CLAUDE.md "Tentative events".
-export type CalendarLayerKey = 'events' | 'reminders' | 'taskScheduled' | 'taskDeadlines' | 'tentative';
+export type CalendarLayerKey = 'events' | 'reminders' | 'deadlines' | 'taskScheduled' | 'taskDeadlines' | 'tentative';
 export type CalendarLayerVisibility = Record<CalendarLayerKey, boolean>;
 
 interface SettingsState {
@@ -144,7 +144,7 @@ export const useSettingsStore = create<SettingsState>()(
       setWeekendShadeColor:      (color) => set({ weekendShadeColor: color }),
       toggleStrikethroughPastDays: () => set((s) => ({ strikethroughPastDays: !s.strikethroughPastDays })),
 
-      calendarLayerVisibility: { events: true, reminders: true, taskScheduled: true, taskDeadlines: true, tentative: true },
+      calendarLayerVisibility: { events: true, reminders: true, deadlines: true, taskScheduled: true, taskDeadlines: true, tentative: true },
       toggleCalendarLayer: (layer) => set((s) => ({
         calendarLayerVisibility: { ...s.calendarLayerVisibility, [layer]: !s.calendarLayerVisibility[layer] },
       })),
@@ -163,7 +163,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 3,
+      version: 4,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -188,6 +188,12 @@ export const useSettingsStore = create<SettingsState>()(
           if (state.autoBackupChangeThreshold === undefined) state.autoBackupChangeThreshold = 40;
           if (state.autoBackupMaxCount === undefined) state.autoBackupMaxCount = 4;
           if (state.autoBackupTargetAgesDays === undefined) state.autoBackupTargetAgesDays = [1, 7, 14, 30];
+        }
+        // v3 → v4: same shallow-merge gap v1→v2 fixed for `.tentative` — an existing
+        // calendarLayerVisibility object predating the new Deadline kind (2026-09-27) would
+        // otherwise leave `.deadlines` undefined (falsy), hiding deadlines by default.
+        if (version < 4 && state.calendarLayerVisibility && state.calendarLayerVisibility.deadlines === undefined) {
+          state.calendarLayerVisibility = { ...state.calendarLayerVisibility, deadlines: true };
         }
         return state;
       },

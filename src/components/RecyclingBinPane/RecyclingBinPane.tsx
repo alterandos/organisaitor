@@ -20,6 +20,7 @@ const KIND_LABELS: Record<TrashEntry['kind'], string> = {
   purpose:            'Purpose',
   calendarEvent:      'Calendar event',
   calendarReminder:   'Calendar reminder',
+  calendarDeadline:   'Deadline',
   schedule:           'Schedule',
   trackerEntry:       LABELS.trackerEntry,
   list:               LABELS.list,

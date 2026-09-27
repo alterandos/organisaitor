@@ -6,6 +6,7 @@ import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinksField } from '@/components/LinksField/LinksField';
@@ -18,6 +19,8 @@ import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
 import styles from './CalendarEventPane.module.css';
+import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
+import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 
 const EVENT_TYPES: { value: CalendarEventType; label: string; icon: string }[] = [
   { value: 'default',  label: 'Event',    icon: '' },
@@ -50,6 +53,8 @@ export function CalendarEventPane() {
   const repeat = event?.repeat ?? null;
   const [title,          setTitle]          = useState(() => event?.title ?? '');
   const [notes,          setNotes]          = useState(() => event?.notes ?? '');
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
   const [notifyAtTime,   setNotifyAtTime]   = useState(event?.notifyAtTime ?? '12:00');
   const [repeatOn,       setRepeatOn]       = useState(!!repeat);
   const [repeatFreq,     setRepeatFreq]     = useState<RepeatFreq>(repeat?.freq ?? 'weekly');
@@ -182,8 +187,9 @@ export function CalendarEventPane() {
           />
 
           <textarea
+            ref={notesRef}
             className={styles.notesInput}
-            placeholder="Add notes..."
+            placeholder="Add notes... (Ctrl+B/I bold/italic, Ctrl+L to insert a link)"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             onBlur={saveNotes}
@@ -292,6 +298,22 @@ export function CalendarEventPane() {
               ❗ Important — highlight on the calendar
             </label>
           </div>
+
+          {event.endDate && event.endDate > event.date && (
+            <div className={styles.field}>
+              <label className={`${styles.label} ${styles.checkLabel}`}>
+                <input
+                  type="checkbox"
+                  checked={event.background ?? false}
+                  onChange={(e) => updateEvent(id, { background: e.target.checked, color: e.target.checked ? event.color : null })}
+                />
+                🧳 Background — show as a thin line instead of a normal event (e.g. travel)
+              </label>
+              {event.background && (
+                <ColorPicker palette="standard" value={event.color ?? null} onChange={(c) => updateEvent(id, { color: c })} />
+              )}
+            </div>
+          )}
 
           {(event.eventType ?? 'default') !== 'birthday' && (
             <div className={styles.field}>
@@ -496,6 +518,14 @@ export function CalendarEventPane() {
           onDelete={handleDelete}
           onArchiveInstead={() => setDialog('archive')}
           onCancel={closeDialog}
+        />
+      )}
+      {linkPrompt && (
+        <MarkdownLinkPrompt
+          anchorRect={linkPrompt.anchorRect}
+          initialText={linkPrompt.initialText}
+          onConfirm={confirmLink}
+          onCancel={cancelLink}
         />
       )}
     </>

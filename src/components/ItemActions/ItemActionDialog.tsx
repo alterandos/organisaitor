@@ -5,12 +5,13 @@ import { ArchiveIcon, TrashIcon } from './icons';
 import styles from './ItemActionDialog.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 
-export type ItemNoun = 'task' | 'event' | 'reminder';
+export type ItemNoun = 'task' | 'event' | 'reminder' | 'deadline';
 
 const HIDDEN_FROM: Record<ItemNoun, string> = {
   task:     'your task list and the calendar',
   event:    'the calendar',
   reminder: 'the calendar',
+  deadline: 'the calendar',
 };
 
 interface Props {

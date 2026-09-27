@@ -13,6 +13,10 @@ export const HOUR_HEIGHT_EMPTY  = 18;
 export const DEFAULT_EVENT_DURATION_MIN = 60;
 export const DEFAULT_POINT_DURATION_MIN = 30;
 export const MIN_BLOCK_HEIGHT = 20;
+// A Reminder's rendered box height is content-driven (see CalendarView's isReminder branch),
+// but the *reserved* slot for overlap/column-stacking purposes is capped at this — otherwise a
+// long-titled reminder could visually collide with whatever sits below it in the same column.
+export const REMINDER_MAX_HEIGHT_MIN = 60;
 
 export function timeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number);

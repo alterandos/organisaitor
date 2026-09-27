@@ -32,6 +32,17 @@
   --color-cal-past: rgba(0,0,0,0.05);
   --color-cal-other-month: rgba(0,0,0,0.03);
   --color-cal-strikethrough: rgba(0,0,0,0.55);
+  /* Tentative-event diagonal hatch (CalendarView's .calItemTentative). Light mode overlay-blends
+     a bright + a dark stripe on top of whatever colour the item already has (Outlook's own
+     convention) — works fine when the base is light. Dark mode redefines both the stripe
+     colours AND the blend mode itself (see .calItemTentative) rather than just the colours,
+     since "overlay" blends as multiply once the base colour is dark, which read as a muddy,
+     low-contrast mess in practice — dark mode uses two white-only stripes at different
+     opacities with a plain (non-blended) composite instead, so it reads as a consistent, legible
+     texture regardless of the item's own colour. */
+  --color-tentative-stripe-1: rgba(255, 255, 255, 0.55);
+  --color-tentative-stripe-2: rgba(0, 0, 0, 0.08);
+  --tentative-blend-mode: overlay;
 
   /* ── Radii ── */
   --radius-sm: 4px;
@@ -72,6 +83,9 @@
   --color-cal-past: rgba(0,0,0,0.28);
   --color-cal-other-month: rgba(0,0,0,0.20);
   --color-cal-strikethrough: rgba(255,255,255,0.22);
+  --color-tentative-stripe-1: rgba(255, 255, 255, 0.16);
+  --color-tentative-stripe-2: rgba(255, 255, 255, 0.03);
+  --tentative-blend-mode: normal;
 
   /* ── Shadows (heavier on dark) ── */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);

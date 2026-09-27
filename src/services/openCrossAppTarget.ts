@@ -1,4 +1,4 @@
-import type { CalendarEventId, CalendarReminderId, TaskId } from '@/types';
+import type { CalendarEventId, CalendarReminderId, CalendarDeadlineId, TaskId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore } from '@/store/uiStore';
@@ -30,6 +30,14 @@ export function openArtifactTarget(targetType: string | null | undefined, target
     ui.setActiveView('calendar');
     ui.requestCalendarDate(reminder.date);
     ui.openCalendarReminderPane(targetId);
+    return true;
+  }
+  if (targetType === 'deadline') {
+    const deadline = calendar.deadlines[targetId as CalendarDeadlineId];
+    if (!deadline) return false;
+    ui.setActiveView('calendar');
+    ui.requestCalendarDate(deadline.date);
+    ui.openCalendarDeadlinePane(targetId);
     return true;
   }
   return false;

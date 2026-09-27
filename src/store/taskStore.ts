@@ -307,7 +307,7 @@ export const useTaskStore = create<TaskStore>()(
     {
       name:    'todo-app-storage',
       storage: persistStorage(),
-      version: 11,
+      version: 12,
       // Cumulative: every step below whose version threshold the persisted store is behind
       // on gets applied, in order, to the same `state` — none of them return early. (A v9 ->
       // v11 upgrade, say, must also carry forward whatever a v2 -> v11 upgrade needs from the
@@ -397,6 +397,17 @@ export const useTaskStore = create<TaskStore>()(
               ...t,
               archivedAt:    t.archivedAt ?? (t.archived ? t.updatedAt : null),
               archiveReason: t.archiveReason ?? null,
+            } as Task;
+          }
+          state = { ...state, tasks: patched };
+        }
+        if (fromVersion < 12 && state.tasks) {
+          const patched: AppData['tasks'] = {} as AppData['tasks'];
+          for (const [id, task] of Object.entries(state.tasks)) {
+            const t = task as Task & { calendarDeadlineId?: unknown };
+            patched[id as TaskId] = {
+              ...t,
+              calendarDeadlineId: (t.calendarDeadlineId ?? null) as Task['calendarDeadlineId'],
             } as Task;
           }
           state = { ...state, tasks: patched };

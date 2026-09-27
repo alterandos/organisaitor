@@ -149,6 +149,15 @@ export function AddScheduleModal() {
   const updateBlockRow = (idx: number, patch: Partial<ScheduleBlock>) =>
     setBlocks((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
 
+  // Drag-to-move / drag-to-resize in the grid preview below (ScheduleWeekGridPreview's
+  // onBlockChange) — same underlying mechanism as CalendarView's week/day grids, applied here
+  // to the block *template* itself (see CLAUDE.md "Calendar drag-to-move / resize").
+  const handleBlockChange = (key: string, patch: { daysOfWeek?: number[]; startTime?: string; endTime?: string }) => {
+    const idx = blocks.findIndex((r) => r.id === key);
+    if (idx === -1) return;
+    updateBlockRow(idx, patch);
+  };
+
   const removeBlockRow = (idx: number) =>
     setBlocks((prev) => prev.filter((_, i) => i !== idx));
 
@@ -273,7 +282,7 @@ export function AddScheduleModal() {
                 <p className={styles.noFields}>No blocks yet. Click the grid below to add one — e.g. "Algorithms Lecture", Mon/Wed/Fri, 10:00–11:00 — or use "+ Add block" for manual entry.</p>
               )}
 
-              <ScheduleWeekGridPreview entries={previewEntries} onCellClick={handleGridClick} onEntryClick={expandBlockAndScroll} />
+              <ScheduleWeekGridPreview entries={previewEntries} onCellClick={handleGridClick} onEntryClick={expandBlockAndScroll} onBlockChange={handleBlockChange} />
               <p className={styles.hint}>Click anywhere on the grid to start a new block at that day and time — click an existing block to jump to editing it.</p>
 
               {blocks.map((row, idx) => (

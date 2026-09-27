@@ -11,6 +11,7 @@ import {
   purposeToRow, rowToPurpose,
   eventToRow, rowToEvent,
   reminderToRow, rowToReminder,
+  deadlineToRow, rowToDeadline,
   entryToRow, rowToEntry,
   scheduleToRow, rowToSchedule,
   listToRow, rowToList,
@@ -25,8 +26,8 @@ import {
   trashEntryToRow, rowToTrashEntry,
 } from '@/services/sync/mappers';
 import type {
-  Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, TrackerEntry, ScheduleTemplate,
-  TaskId, CollectionId, TagId, PurposeId, CalendarEventId, CalendarReminderId, TrackerEntryId, ScheduleId,
+  Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, ScheduleTemplate,
+  TaskId, CollectionId, TagId, PurposeId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, TrackerEntryId, ScheduleId,
 } from '@/types';
 import type { List, ListItem, ListType, ListId, ListItemId, ListTypeId } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry, NoteId, NoteTagId, StructuredTagEntryId } from '@/types/notes';
@@ -42,7 +43,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       title: 'Title', notes: 'notes', links: ['https://a.com'], completed: false, completedAt: null,
       collectionId: 'c1' as CollectionId, tagIds: ['tag1' as TagId], purposeIds: ['p1' as PurposeId],
       priority: 'high', deadline: '2030-02-01', deadlineTime: '09:00', scheduledAt: '2030-01-15', scheduledTime: '10:00',
-      calendarEventId: 'e1' as CalendarEventId, calendarReminderId: 'r1' as CalendarReminderId, remindAt: null,
+      calendarEventId: 'e1' as CalendarEventId, calendarReminderId: 'r1' as CalendarReminderId, calendarDeadlineId: null, remindAt: null,
       archived: false, archivedAt: null, archiveReason: null, kind: 'action', timeIntensity: 'medium',
       parentId: null, subtaskIds: ['t2' as TaskId], sortOrder: 3, crossAppRefs: [{ type: 'note', id: 'n1' }],
     };
@@ -79,7 +80,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
       notifyBeforeValue: 30, notifyBeforeUnit: 'minutes', remindAt: null, notifyAtTime: null,
       repeat: { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null },
-      status: 'confirmed', important: true, crossAppRefs: [{ type: 'note', id: 'n1' }],
+      status: 'confirmed', important: true, background: false, color: null, crossAppRefs: [{ type: 'note', id: 'n1' }],
       archivedAt: null, archiveReason: null,
       source: 'google', sourceConnectionId: 'conn1', sourceCalendarId: 'cal1', sourceEventId: 'evt1',
       sourceRaw: { raw: true },
@@ -95,6 +96,17 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       notifyDaysBefore: 1, notifyAtTime: '17:00',
     };
     expect(rowToReminder(reminderToRow(r, USER))).toEqual(r);
+  });
+
+  it('CalendarDeadline', () => {
+    const d: CalendarDeadline = {
+      id: 'd1' as CalendarDeadlineId, title: 'File taxes', date: '2030-04-15', time: '23:59', notes: null, links: [],
+      collectionId: null, deadlineType: 'default', createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
+      remindAt: null, repeat: { freq: 'yearly', interval: 1, endKind: 'forever', count: null, until: null },
+      important: true, status: 'confirmed', crossAppRefs: [], archivedAt: null, archiveReason: null,
+      notifyDaysBefore: 3, notifyAtTime: '09:00',
+    };
+    expect(rowToDeadline(deadlineToRow(d, USER))).toEqual(d);
   });
 
   it('TrackerEntry', () => {

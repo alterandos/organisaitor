@@ -384,6 +384,40 @@
 .spanPillEnd   { border-radius: 0 3px 3px 0; }
 .spanPillStart.spanPillEnd { border-radius: 3px; }
 
+/* "Background / banner" events (e.g. "Thailand for 10 days") — a subtler two-layer treatment
+   instead of a normal solid coloured pill: a thin, fully-saturated bar on top (so its own
+   colour still reads clearly at a glance) and a taller, lightly-tinted label strip below it
+   holding the title — shown on EVERY week-row segment the event's span is split across in
+   month view (not just the segment containing its actual start date), so the name is never
+   lost just because the currently-viewed week/day isn't where the span begins. Same grid
+   cell/row (.spanRow's grid-auto-rows is unchanged) so it still participates in the same
+   overlap-avoidance row-stacking as ordinary spans. */
+.spanPillBackground {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.spanPillBackgroundBar {
+  height: 4px;
+  flex-shrink: 0;
+}
+
+.spanPillBackgroundLabel {
+  flex: 1;
+  min-height: 0;
+  padding: 0 4px;
+  font-size: 0.6rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .spanPillTitle {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -462,6 +496,11 @@
   color: #047857;
 }
 
+.calItem_deadline {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
 .calItem_schedule {
   background: rgba(168, 85, 247, 0.12);
   color: #7e22ce;
@@ -478,14 +517,20 @@
    an inline style normally wins over a stylesheet rule regardless of specificity, and
    !important is the one documented way to still override it. background-blend-mode isn't
    part of the `background` shorthand, so it applies normally against whatever
-   background-color ends up set (the class's own, or an inline one). */
+   background-color ends up set (the class's own, or an inline one).
+
+   Stripe colours AND the blend mode itself both come from themed CSS variables (index.css) —
+   dark mode needed more than a colour swap: "overlay" blends as multiply once the base colour
+   is dark, which read as a muddy, low-contrast mess against dark-mode item colours (found and
+   fixed 2026-09-27), so dark mode also switches to a plain (non-blended) composite of two
+   white-only stripes instead. */
 .calItemTentative {
   background-image: repeating-linear-gradient(
     45deg,
-    rgba(255, 255, 255, 0.55) 0 6px,
-    rgba(0, 0, 0, 0.08) 6px 12px
+    var(--color-tentative-stripe-1) 0 6px,
+    var(--color-tentative-stripe-2) 6px 12px
   ) !important;
-  background-blend-mode: overlay;
+  background-blend-mode: var(--tentative-blend-mode);
 }
 
 /* Flagged important (CalendarEvent/CalendarReminder.important): a red outline drawn as an inset
@@ -917,6 +962,7 @@
   flex: 1;
   display: flex;
   min-width: 0;
+  position: relative; /* anchors the drag ghost (see weekTimeBlockGhost) at the same 0..layout.total scale as the day columns */
 }
 
 .weekTimeDayCol {
@@ -973,8 +1019,36 @@
   display: flex;
   flex-direction: column;
   z-index: 1;
+  min-height: 20px; /* matches utils/timeGrid.ts's MIN_BLOCK_HEIGHT — relevant for a Reminder's content-driven height:auto (see CalendarView.tsx's isReminder branch); a no-op for every other kind, which already reserves at least this much via layoutDayTimeGrid */
 }
 .weekTimeBlock:hover { filter: brightness(0.92); z-index: 3; }
+
+/* Drag-to-move / drag-to-resize (Events & Reminders only — see CalendarView.tsx's
+   isDraggableItem). .weekTimeBlockDraggable just signals via cursor that the block can be
+   picked up; the resize handles are thin invisible strips at the top/bottom edge, shown for
+   Events only (Reminders are point-in-time and never resize). The ghost is the block's live
+   position while a move is in progress — the original is hidden (not rendered) for that item
+   during the drag, see CalendarView.tsx. */
+.weekTimeBlockDraggable { cursor: grab; }
+.weekTimeBlockDraggable:active { cursor: grabbing; }
+
+.weekTimeBlockResizeTop,
+.weekTimeBlockResizeBottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.weekTimeBlockResizeTop    { top: 0; }
+.weekTimeBlockResizeBottom { bottom: 0; }
+
+.weekTimeBlockGhost {
+  opacity: 0.85;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  z-index: 4;
+  pointer-events: none;
+}
 
 .weekTimeBlockTime {
   overflow: hidden;

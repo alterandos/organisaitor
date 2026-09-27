@@ -13,11 +13,11 @@ beforeEach(resetStores);
 describe('taskCalendarLinks', () => {
   const make = () => addTaskWithCalendar({ title: 'Write report', deadline: '2031-10-01', deadlineTime: '17:00', scheduledAt: '2031-09-25', scheduledTime: '09:00' });
 
-  it('creates a matching event and reminder', () => {
+  it('creates a matching event and deadline', () => {
     const id = make();
     const t = T().tasks[id];
     expect(C().events[t.calendarEventId!]).toMatchObject({ title: 'Write report', date: '2031-09-25', startTime: '09:00', eventType: 'task' });
-    expect(C().reminders[t.calendarReminderId!]).toMatchObject({ title: 'Write report', date: '2031-10-01', time: '17:00', reminderType: 'task' });
+    expect(C().deadlines[t.calendarDeadlineId!]).toMatchObject({ title: 'Write report', date: '2031-10-01', time: '17:00', deadlineType: 'task' });
   });
 
   it('carries task edits to both entries', () => {
@@ -25,7 +25,7 @@ describe('taskCalendarLinks', () => {
     updateTaskLinked(id, { title: 'Report v2', scheduledAt: '2031-09-26', scheduledTime: '10:30', deadlineTime: null });
     const t = T().tasks[id];
     expect(C().events[t.calendarEventId!]).toMatchObject({ title: 'Report v2', date: '2031-09-26', startTime: '10:30' });
-    expect(C().reminders[t.calendarReminderId!]).toMatchObject({ title: 'Report v2', time: null });
+    expect(C().deadlines[t.calendarDeadlineId!]).toMatchObject({ title: 'Report v2', time: null });
   });
 
   it('carries edits made on the event back to the task, leaving event-only fields alone', () => {
@@ -33,7 +33,7 @@ describe('taskCalendarLinks', () => {
     const eventId = T().tasks[id].calendarEventId!;
     updateCalendarEventLinked(eventId, { title: 'Report v3', date: '2031-09-27', startTime: '11:00' });
     expect(T().tasks[id]).toMatchObject({ title: 'Report v3', scheduledAt: '2031-09-27', scheduledTime: '11:00' });
-    expect(C().reminders[T().tasks[id].calendarReminderId!].title).toBe('Report v3');
+    expect(C().deadlines[T().tasks[id].calendarDeadlineId!].title).toBe('Report v3');
     updateCalendarEventLinked(eventId, { location: 'Room 4', endTime: '12:00' });
     expect(T().tasks[id].title).toBe('Report v3');
     expect(C().events[eventId].location).toBe('Room 4');
@@ -43,8 +43,8 @@ describe('taskCalendarLinks', () => {
     const id = make();
     updateTaskLinked(id, { deadline: null, deadlineTime: null, scheduledAt: null, scheduledTime: null });
     expect(Object.keys(C().events)).toHaveLength(0);
-    expect(Object.keys(C().reminders)).toHaveLength(0);
-    expect(T().tasks[id]).toMatchObject({ calendarEventId: null, calendarReminderId: null });
+    expect(Object.keys(C().deadlines)).toHaveLength(0);
+    expect(T().tasks[id]).toMatchObject({ calendarEventId: null, calendarDeadlineId: null });
   });
 
   it('un-schedules the task when its scheduled event is deleted', () => {

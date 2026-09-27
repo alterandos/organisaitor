@@ -9,7 +9,7 @@ import { usePortfolioStore } from '@/store/portfolioStore';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useTrashStore } from '@/store/trashStore';
 import type { TrashEntryId, TrashableKind } from '@/types/trash';
-import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, ScheduleTemplate, TrackerEntry } from '@/types';
+import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, ScheduleTemplate, TrackerEntry } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
@@ -46,6 +46,10 @@ const RESTORE_TARGETS: { [K in TrashableKind]: RestoreTarget } = {
   calendarReminder: {
     has: (id) => id in useCalendarStore.getState().reminders,
     put: (r) => useCalendarStore.setState((s) => ({ reminders: { ...s.reminders, [(r as CalendarReminder).id]: r as CalendarReminder } })),
+  },
+  calendarDeadline: {
+    has: (id) => id in useCalendarStore.getState().deadlines,
+    put: (d) => useCalendarStore.setState((s) => ({ deadlines: { ...s.deadlines, [(d as CalendarDeadline).id]: d as CalendarDeadline } })),
   },
   schedule: {
     has: (id) => id in useScheduleStore.getState().schedules,

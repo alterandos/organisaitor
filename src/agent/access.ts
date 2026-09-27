@@ -15,8 +15,8 @@ import { AgentError } from '@/agent/errors';
 import { newTagId } from '@/utils/id';
 import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import type {
-  CalendarEvent, CalendarEventId, CalendarReminder, CalendarReminderId, Collection, CollectionId,
-  CreateCalendarEventInput, CreateCalendarReminderInput, CreateCollectionInput, CreatePurposeInput,
+  CalendarEvent, CalendarEventId, CalendarReminder, CalendarReminderId, CalendarDeadline, CalendarDeadlineId, Collection, CollectionId,
+  CreateCalendarEventInput, CreateCalendarReminderInput, CreateCalendarDeadlineInput, CreateCollectionInput, CreatePurposeInput,
   CreateScheduleInput, CreateTaskInput, Purpose, PurposeId, ScheduleId, ScheduleTemplate, Tag, TagId,
   Task, TaskId,
 } from '@/types';
@@ -27,7 +27,8 @@ const tasksState = () => useTaskStore.getState();
 
 export type CalendarItemRef =
   | { kind: 'event';    item: CalendarEvent }
-  | { kind: 'reminder'; item: CalendarReminder };
+  | { kind: 'reminder'; item: CalendarReminder }
+  | { kind: 'deadline'; item: CalendarDeadline };
 
 export const read = {
   timezone: (): string => resolveTimezone(useSettingsStore.getState().timezone),
@@ -40,11 +41,15 @@ export const read = {
   event:     (id: string): CalendarEvent | undefined => cal().events[id as CalendarEventId],
   reminders: (): CalendarReminder[] => Object.values(cal().reminders),
   reminder:  (id: string): CalendarReminder | undefined => cal().reminders[id as CalendarReminderId],
+  deadlines: (): CalendarDeadline[] => Object.values(cal().deadlines),
+  deadline:  (id: string): CalendarDeadline | undefined => cal().deadlines[id as CalendarDeadlineId],
   calendarItem: (id: string): CalendarItemRef | undefined => {
     const item = read.event(id);
     if (item) return { kind: 'event', item };
     const reminder = read.reminder(id);
-    return reminder ? { kind: 'reminder', item: reminder } : undefined;
+    if (reminder) return { kind: 'reminder', item: reminder };
+    const deadline = read.deadline(id);
+    return deadline ? { kind: 'deadline', item: deadline } : undefined;
   },
 
   schedules: (): ScheduleTemplate[] => Object.values(sched().schedules),
@@ -65,6 +70,8 @@ export const read = {
 
 type EventChanges = Partial<Omit<CalendarEvent, 'id' | 'createdAt'>>;
 type ReminderChanges = Partial<Omit<CalendarReminder, 'id' | 'createdAt'>>;
+type DeadlineChanges = Partial<Omit<CalendarDeadline, 'id' | 'createdAt'>>;
+type CalendarItemKindForAgent = 'event' | 'reminder' | 'deadline';
 
 export const write = {
   createTask:   (input: CreateTaskInput): TaskId => addTaskWithCalendar(input),
@@ -75,27 +82,41 @@ export const write = {
 
   createEvent:      (input: CreateCalendarEventInput): CalendarEventId => cal().addEvent(input),
   createReminder:   (input: CreateCalendarReminderInput): CalendarReminderId => cal().addReminder(input),
+  createDeadline:   (input: CreateCalendarDeadlineInput): CalendarDeadlineId => cal().addDeadline(input),
   updateEvent:      (id: string, changes: EventChanges): void => updateCalendarEventLinked(id as CalendarEventId, changes),
   updateReminder:   (id: string, changes: ReminderChanges): void => cal().updateReminder(id as CalendarReminderId, changes),
+  updateDeadline:   (id: string, changes: DeadlineChanges): void => cal().updateDeadline(id as CalendarDeadlineId, changes),
   archiveEvent:     (id: string, reason?: string | null): void => cal().archiveEvent(id as CalendarEventId, reason),
   restoreEvent:     (id: string): void => cal().restoreEvent(id as CalendarEventId),
   archiveReminder:  (id: string, reason?: string | null): void => cal().archiveReminder(id as CalendarReminderId, reason),
   restoreReminder:  (id: string): void => cal().restoreReminder(id as CalendarReminderId),
+  archiveDeadline:  (id: string, reason?: string | null): void => cal().archiveDeadline(id as CalendarDeadlineId, reason),
+  restoreDeadline:  (id: string): void => cal().restoreDeadline(id as CalendarDeadlineId),
 
-  skipOccurrence: (kind: 'event' | 'reminder', id: string, date: string): void =>
-    kind === 'event' ? cal().skipEventOccurrence(id as CalendarEventId, date) : cal().skipReminderOccurrence(id as CalendarReminderId, date),
+  skipOccurrence: (kind: CalendarItemKindForAgent, id: string, date: string): void => {
+    if (kind === 'event') cal().skipEventOccurrence(id as CalendarEventId, date);
+    else if (kind === 'reminder') cal().skipReminderOccurrence(id as CalendarReminderId, date);
+    else cal().skipDeadlineOccurrence(id as CalendarDeadlineId, date);
+  },
   // The store deletes the whole series when asked to end it on or before its first date. That is a
   // delete, so it is refused here rather than left to a command remembering to check.
-  endSeriesBefore: (kind: 'event' | 'reminder', id: string, date: string): void => {
-    const first = kind === 'event' ? read.event(id)?.date : read.reminder(id)?.date;
+  endSeriesBefore: (kind: CalendarItemKindForAgent, id: string, date: string): void => {
+    const first = kind === 'event' ? read.event(id)?.date : kind === 'reminder' ? read.reminder(id)?.date : read.deadline(id)?.date;
     if (first !== undefined && date <= first) throw new AgentError('refused', 'That would end the series before its first date, which deletes it. Archive it instead.');
     if (kind === 'event') cal().endEventSeriesBefore(id as CalendarEventId, date);
-    else cal().endReminderSeriesBefore(id as CalendarReminderId, date);
+    else if (kind === 'reminder') cal().endReminderSeriesBefore(id as CalendarReminderId, date);
+    else cal().endDeadlineSeriesBefore(id as CalendarDeadlineId, date);
   },
-  detachOccurrence: (kind: 'event' | 'reminder', id: string, date: string): string | null =>
-    kind === 'event' ? cal().detachEventOccurrence(id as CalendarEventId, date) : cal().detachReminderOccurrence(id as CalendarReminderId, date),
-  splitSeries: (kind: 'event' | 'reminder', id: string, date: string): string | null =>
-    kind === 'event' ? cal().splitEventSeries(id as CalendarEventId, date) : cal().splitReminderSeries(id as CalendarReminderId, date),
+  detachOccurrence: (kind: CalendarItemKindForAgent, id: string, date: string): string | null => {
+    if (kind === 'event') return cal().detachEventOccurrence(id as CalendarEventId, date);
+    if (kind === 'reminder') return cal().detachReminderOccurrence(id as CalendarReminderId, date);
+    return cal().detachDeadlineOccurrence(id as CalendarDeadlineId, date);
+  },
+  splitSeries: (kind: CalendarItemKindForAgent, id: string, date: string): string | null => {
+    if (kind === 'event') return cal().splitEventSeries(id as CalendarEventId, date);
+    if (kind === 'reminder') return cal().splitReminderSeries(id as CalendarReminderId, date);
+    return cal().splitDeadlineSeries(id as CalendarDeadlineId, date);
+  },
 
   createSchedule:  (input: CreateScheduleInput): ScheduleId => sched().addSchedule(input),
   updateSchedule:  (id: string, changes: Partial<Omit<ScheduleTemplate, 'id' | 'createdAt'>>): void => sched().updateSchedule(id as ScheduleId, changes),

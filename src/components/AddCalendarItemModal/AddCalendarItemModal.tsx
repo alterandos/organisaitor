@@ -8,10 +8,13 @@ import { LABELS } from '@/config/labels';
 import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date';
 import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
+import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
 import { LinksField } from '@/components/LinksField/LinksField';
-import { buildCalendarEventInput, buildCalendarReminderInput } from '@/utils/calendarItemInput';
+import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput } from '@/utils/calendarItemInput';
 import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
 import type { CollectionId } from '@/types';
 import styles from './AddCalendarItemModal.module.css';
@@ -36,6 +39,7 @@ export function AddCalendarItemModal() {
   const activeCollectionId = useUIStore(selectActiveCollectionId);
   const addEvent           = useCalendarStore((s) => s.addEvent);
   const addReminder        = useCalendarStore((s) => s.addReminder);
+  const addDeadline        = useCalendarStore((s) => s.addDeadline);
   const collectionsRecord  = useTaskStore((s) => s.collections);
 
   const [kind,              setKind]              = useState<CalendarItemKind>(prefillKind ?? 'event');
@@ -54,6 +58,10 @@ export function AddCalendarItemModal() {
     (prefillExtra?.collectionId ?? activeCollectionId) as CollectionId | null
   );
   const [important,         setImportant]         = useState(false);
+  const [background,        setBackground]        = useState(false);
+  const [color,             setColor]             = useState<string | null>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
   const [allDayNotifyDays,  setAllDayNotifyDays]  = useState(DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE);
   const [allDayNotifyAt,    setAllDayNotifyAt]    = useState(DEFAULT_ALLDAY_NOTIFY_AT_TIME);
   const [notifyBeforeOn,    setNotifyBeforeOn]    = useState(false);
@@ -164,10 +172,12 @@ export function AddCalendarItemModal() {
         repeat: buildRepeat(),
         status,
         important,
+        background: endDate && endDate > date ? background : false,
+        color: endDate && endDate > date && background ? color : null,
         crossAppRefs,
       }));
       if (pending) useUIStore.getState().resolveArtifactLink(eventId, 'event');
-    } else {
+    } else if (kind === 'reminder') {
       const reminderId = addReminder(buildCalendarReminderInput({
         title,
         date,
@@ -183,12 +193,28 @@ export function AddCalendarItemModal() {
         notifyAtTime:     allDayNotifyAt,
       }));
       if (pending) useUIStore.getState().resolveArtifactLink(reminderId, 'reminder');
+    } else {
+      const deadlineId = addDeadline(buildCalendarDeadlineInput({
+        title,
+        date,
+        time,
+        notes,
+        links,
+        collectionId,
+        repeat: buildRepeat(),
+        status,
+        important,
+        crossAppRefs,
+        notifyDaysBefore: allDayNotifyDays,
+        notifyAtTime:     allDayNotifyAt,
+      }));
+      if (pending) useUIStore.getState().resolveArtifactLink(deadlineId, 'deadline');
     }
     closeModal();
   };
 
   const isBirthday = kind === 'event' && eventType === 'birthday';
-  const showAdvanced = kind === 'reminder' || formExpanded;
+  const showAdvanced = kind === 'reminder' || kind === 'deadline' || formExpanded;
 
   return (
     <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
@@ -200,7 +226,7 @@ export function AddCalendarItemModal() {
 
         {/* Type toggle */}
         <div className={styles.kindToggle}>
-          {(['event', 'reminder'] as CalendarItemKind[]).map((k) => (
+          {(['event', 'reminder', 'deadline'] as CalendarItemKind[]).map((k) => (
             <button
               key={k}
               type="button"
@@ -215,15 +241,16 @@ export function AddCalendarItemModal() {
         <form ref={formRef} onSubmit={handleSubmit}>
           <input
             className={styles.titleInput}
-            placeholder={kind === 'event' ? 'Event title' : 'Reminder title'}
+            placeholder={kind === 'event' ? 'Event title' : kind === 'reminder' ? 'Reminder title' : 'Deadline title'}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
           />
 
           <textarea
+            ref={notesRef}
             className={styles.notes}
-            placeholder="Notes (optional)"
+            placeholder="Notes (optional) — Ctrl+B/I bold/italic, Ctrl+L to insert a link"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
@@ -323,6 +350,23 @@ export function AddCalendarItemModal() {
             </label>
           </div>
 
+          {kind === 'event' && endDate && endDate > date && (
+            <div className={styles.field}>
+              <label className={styles.label}>
+                <input
+                  type="checkbox"
+                  checked={background}
+                  onChange={(e) => setBackground(e.target.checked)}
+                  className={styles.checkboxInput}
+                />
+                🧳 Background — show as a thin line instead of a normal event (e.g. travel)
+              </label>
+              {background && (
+                <ColorPicker palette="standard" value={color} onChange={setColor} />
+              )}
+            </div>
+          )}
+
           {isBirthday && (
             <div className={styles.field}>
               <label className={styles.label}>Notify at</label>
@@ -334,7 +378,7 @@ export function AddCalendarItemModal() {
             </div>
           )}
 
-          {kind === 'reminder' && (
+          {(kind === 'reminder' || kind === 'deadline') && (
             <div className={styles.field}>
               <label className={styles.label}>Time (optional)</label>
               <TimeInput
@@ -353,6 +397,18 @@ export function AddCalendarItemModal() {
                 atTime={allDayNotifyAt}
                 onChange={(d, t) => { setAllDayNotifyDays(d); setAllDayNotifyAt(t); }}
               />
+            </div>
+          )}
+
+          {kind === 'deadline' && (
+            <div className={styles.field}>
+              <label className={styles.label}>Notify me</label>
+              <AllDayNotifyField
+                daysBefore={allDayNotifyDays}
+                atTime={allDayNotifyAt}
+                onChange={(d, t) => { setAllDayNotifyDays(d); setAllDayNotifyAt(t); }}
+              />
+              <p className={styles.repeatSmall}>A Deadline only ever notifies before it's due, never at the moment itself — this applies even if you set a Time above.</p>
             </div>
           )}
 
@@ -510,6 +566,14 @@ export function AddCalendarItemModal() {
           </div>
         </form>
       </div>
+      {linkPrompt && (
+        <MarkdownLinkPrompt
+          anchorRect={linkPrompt.anchorRect}
+          initialText={linkPrompt.initialText}
+          onConfirm={confirmLink}
+          onCancel={cancelLink}
+        />
+      )}
     </div>
   );
 }

@@ -15,6 +15,8 @@ import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
 import type { CrossAppRef } from '@/types';
 import styles from './TaskPane.module.css';
+import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
+import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 
 const PRIORITY_OPTIONS: { value: Priority; label: string; color: string }[] = [
   { value: 'low',    label: 'Low',    color: '#22c55e' },
@@ -47,6 +49,7 @@ export function TaskPane() {
   const [subtaskInput,   setSubtaskInput]   = useState('');
   const tagInputRef  = useRef<HTMLInputElement>(null);
   const notesRef     = useRef<HTMLTextAreaElement>(null);
+  const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
 
   // Notes field grows with content up to 40% of the window height, then scrolls.
   useEffect(() => {
@@ -192,7 +195,7 @@ export function TaskPane() {
           <textarea
             ref={notesRef}
             className={styles.notesInput}
-            placeholder="Add notes..."
+            placeholder="Add notes... (Ctrl+B/I bold/italic, Ctrl+L to insert a link)"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             onBlur={saveNotes}
@@ -490,6 +493,14 @@ export function TaskPane() {
           onDelete={handleDelete}
           onArchiveInstead={() => setDialog('archive')}
           onCancel={closeDialog}
+        />
+      )}
+      {linkPrompt && (
+        <MarkdownLinkPrompt
+          anchorRect={linkPrompt.anchorRect}
+          initialText={linkPrompt.initialText}
+          onConfirm={confirmLink}
+          onCancel={cancelLink}
         />
       )}
     </>

@@ -3,7 +3,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import styles from './RecurrenceScopeBar.module.css';
 
 interface Props {
-  kind:           'event' | 'reminder';
+  kind:           'event' | 'reminder' | 'deadline';
   id:             string;
   baseDate:       string;
   repeat:         RepeatConfig;
@@ -12,11 +12,11 @@ interface Props {
   onSwitch:       (newId: string) => void;
 }
 
-// Shown at the top of an event/reminder pane when the item repeats — the same "this occurrence /
-// this and following / all" choice mainstream calendar apps offer. The pane's own fields keep
-// editing the whole series; the buttons here either act on one occurrence directly (delete) or
-// split it out first and switch the pane over to the split-off copy (edit), so everything
-// below keeps its live-edit behaviour unchanged.
+// Shown at the top of an event/reminder/deadline pane when the item repeats — the same "this
+// occurrence / this and following / all" choice mainstream calendar apps offer. The pane's own
+// fields keep editing the whole series; the buttons here either act on one occurrence directly
+// (delete) or split it out first and switch the pane over to the split-off copy (edit), so
+// everything below keeps its live-edit behaviour unchanged.
 export function RecurrenceScopeBar({ kind, id, baseDate, repeat, occurrenceDate, onClose, onSwitch }: Props) {
   const store = useCalendarStore.getState;
   const occ = occurrenceDate ?? baseDate;
@@ -25,28 +25,32 @@ export function RecurrenceScopeBar({ kind, id, baseDate, repeat, occurrenceDate,
   const skippedCount = repeat.exceptions?.length ?? 0;
 
   const editOnlyThis = () => {
-    const newId = kind === 'event'
-      ? store().detachEventOccurrence(id as never, occ)
-      : store().detachReminderOccurrence(id as never, occ);
+    const newId =
+      kind === 'event'    ? store().detachEventOccurrence(id as never, occ) :
+      kind === 'reminder' ? store().detachReminderOccurrence(id as never, occ) :
+      store().detachDeadlineOccurrence(id as never, occ);
     if (newId) onSwitch(newId);
   };
 
   const editThisAndFollowing = () => {
-    const newId = kind === 'event'
-      ? store().splitEventSeries(id as never, occ)
-      : store().splitReminderSeries(id as never, occ);
+    const newId =
+      kind === 'event'    ? store().splitEventSeries(id as never, occ) :
+      kind === 'reminder' ? store().splitReminderSeries(id as never, occ) :
+      store().splitDeadlineSeries(id as never, occ);
     if (newId) onSwitch(newId);
   };
 
   const deleteOnlyThis = () => {
     if (kind === 'event') store().skipEventOccurrence(id as never, occ);
-    else store().skipReminderOccurrence(id as never, occ);
+    else if (kind === 'reminder') store().skipReminderOccurrence(id as never, occ);
+    else store().skipDeadlineOccurrence(id as never, occ);
     onClose();
   };
 
   const deleteThisAndFollowing = () => {
     if (kind === 'event') store().endEventSeriesBefore(id as never, occ);
-    else store().endReminderSeriesBefore(id as never, occ);
+    else if (kind === 'reminder') store().endReminderSeriesBefore(id as never, occ);
+    else store().endDeadlineSeriesBefore(id as never, occ);
     onClose();
   };
 

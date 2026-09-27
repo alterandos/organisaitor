@@ -18,9 +18,9 @@ describe('create_task', () => {
     const { created } = ok('create_task', { title: 'Report', deadline: FAR, deadlineTime: '17:00', scheduledAt: addDays(FAR, -2), scheduledTime: '09:30' });
     const task = read.task(created.id)!;
     expect(read.events()[0]).toMatchObject({ title: 'Report', date: addDays(FAR, -2), startTime: '09:30', eventType: 'task' });
-    expect(read.reminders()[0]).toMatchObject({ title: 'Report', date: FAR, time: '17:00', reminderType: 'task' });
+    expect(read.deadlines()[0]).toMatchObject({ title: 'Report', date: FAR, time: '17:00', deadlineType: 'task' });
     expect(task.calendarEventId).toBe(read.events()[0].id);
-    expect(task.calendarReminderId).toBe(read.reminders()[0].id);
+    expect(task.calendarDeadlineId).toBe(read.deadlines()[0].id);
   });
 
   it('rejects a time without a date', () => {
@@ -85,11 +85,11 @@ describe('update_task', () => {
     const { created } = ok('create_task', { title: 'Slides', deadline: FAR, scheduledAt: FAR, scheduledTime: '10:00' });
     ok('update_task', { id: created.id, title: 'Slides v2', deadline: addDays(FAR, 1), scheduledTime: '11:00' });
     expect(read.events()[0]).toMatchObject({ title: 'Slides v2', startTime: '11:00' });
-    expect(read.reminders()[0]).toMatchObject({ title: 'Slides v2', date: addDays(FAR, 1) });
+    expect(read.deadlines()[0]).toMatchObject({ title: 'Slides v2', date: addDays(FAR, 1) });
     ok('update_task', { id: created.id, deadline: null, scheduledAt: null });
     expect(read.events()).toHaveLength(0);
-    expect(read.reminders()).toHaveLength(0);
-    expect(read.task(created.id)).toMatchObject({ deadline: null, deadlineTime: null, scheduledAt: null, scheduledTime: null, calendarEventId: null });
+    expect(read.deadlines()).toHaveLength(0);
+    expect(read.task(created.id)).toMatchObject({ deadline: null, deadlineTime: null, scheduledAt: null, scheduledTime: null, calendarEventId: null, calendarDeadlineId: null });
   });
 
   it('will not add a time without a date', () => {

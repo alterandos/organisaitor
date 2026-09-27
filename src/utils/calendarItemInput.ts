@@ -1,5 +1,5 @@
 import type {
-  CalendarEventType, CollectionId, CreateCalendarEventInput, CreateCalendarReminderInput,
+  CalendarEventType, CollectionId, CreateCalendarEventInput, CreateCalendarReminderInput, CreateCalendarDeadlineInput,
   CrossAppRef, EventStatus, NotifyUnit, RepeatConfig,
 } from '@/types';
 import { mergeNewLinks } from '@/utils/links';
@@ -23,6 +23,8 @@ export interface CalendarEventFields {
   repeat?:            RepeatConfig | null;
   status?:            EventStatus;
   important?:         boolean;
+  background?:        boolean;
+  color?:             string | null;
   crossAppRefs?:      CrossAppRef[];
 }
 
@@ -49,6 +51,8 @@ export function buildCalendarEventInput(f: CalendarEventFields): CreateCalendarE
     repeat:            birthday ? (f.repeat ?? BIRTHDAY_REPEAT) : (f.repeat ?? null),
     status:            f.status,
     important:         f.important,
+    background:        f.background,
+    color:             f.color,
     crossAppRefs:      f.crossAppRefs,
   };
 }
@@ -69,6 +73,38 @@ export interface CalendarReminderFields {
 }
 
 export function buildCalendarReminderInput(f: CalendarReminderFields): CreateCalendarReminderInput {
+  return {
+    title:            f.title,
+    date:             f.date,
+    time:             f.time || null,
+    notes:            f.notes || null,
+    links:            mergeNewLinks(f.links ?? [], f.notes),
+    collectionId:     f.collectionId || null,
+    repeat:           f.repeat ?? null,
+    status:           f.status,
+    important:        f.important,
+    crossAppRefs:     f.crossAppRefs,
+    notifyDaysBefore: f.notifyDaysBefore,
+    notifyAtTime:     f.notifyAtTime,
+  };
+}
+
+export interface CalendarDeadlineFields {
+  title:             string;
+  date:              string;
+  time?:             string | null;
+  notes?:            string | null;
+  links?:            string[];
+  collectionId?:     CollectionId | null;
+  repeat?:           RepeatConfig | null;
+  status?:           EventStatus;
+  important?:        boolean;
+  crossAppRefs?:     CrossAppRef[];
+  notifyDaysBefore?: number;
+  notifyAtTime?:     string;
+}
+
+export function buildCalendarDeadlineInput(f: CalendarDeadlineFields): CreateCalendarDeadlineInput {
   return {
     title:            f.title,
     date:             f.date,

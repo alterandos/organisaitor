@@ -76,6 +76,23 @@ describe('create_calendar_item: reminders', () => {
   });
 });
 
+describe('create_calendar_item: deadlines', () => {
+  it('creates a deadline with the default notification', () => {
+    const { created } = ok('create_calendar_item', { kind: 'deadline', title: 'File taxes', date: FAR });
+    expect(read.deadline(created.id)).toMatchObject({ time: null, notifyDaysBefore: 1, notifyAtTime: '17:00', deadlineType: 'default' });
+  });
+
+  it('keeps the lead-time notification even when a Time is given — a deadline never notifies "at" the moment', () => {
+    const { created } = ok('create_calendar_item', { kind: 'deadline', title: 'Submit report', date: FAR, time: '23:59', notifyDaysBefore: 2, notifyAtTime: '09:00' });
+    expect(read.deadline(created.id)).toMatchObject({ time: '23:59', notifyDaysBefore: 2, notifyAtTime: '09:00' });
+  });
+
+  it('refuses event-only fields', () => {
+    expect(fails('create_calendar_item', { kind: 'deadline', title: 'x', date: FAR, location: 'here' }).message).toMatch(/no location/);
+    expect(fails('create_calendar_item', { kind: 'deadline', title: 'x', date: FAR, endTime: '10:00' }).message).toMatch(/no endTime/);
+  });
+});
+
 describe('update_calendar_item', () => {
   it('changes an event and clears a field with null', () => {
     const { created } = ok('create_calendar_item', { kind: 'event', title: 'A', date: FAR, startTime: '09:00', endTime: '10:00', location: 'Room 1' });
@@ -103,14 +120,14 @@ describe('update_calendar_item', () => {
     expect(read.event(eventId)!.location).toBe('Library');
   });
 
-  it('will not repeat, retype, or archive a task-owned event; nor edit a deadline reminder', () => {
+  it('will not repeat, retype, or archive a task-owned event; nor edit a task-owned deadline', () => {
     ok('create_task', { title: 'Essay', scheduledAt: FAR, deadline: FAR });
     const eventId = read.events()[0].id;
-    const reminderId = read.reminders()[0].id;
+    const deadlineId = read.deadlines()[0].id;
     expect(fails('update_calendar_item', { id: eventId, repeat: { freq: 'daily' } }).code).toBe('refused');
-    expect(fails('update_calendar_item', { id: reminderId, title: 'x' }).code).toBe('refused');
+    expect(fails('update_calendar_item', { id: deadlineId, title: 'x' }).code).toBe('refused');
     expect(fails('archive_item', { type: 'calendar_item', id: eventId }).code).toBe('refused');
-    expect(fails('archive_item', { type: 'calendar_item', id: reminderId }).code).toBe('refused');
+    expect(fails('archive_item', { type: 'calendar_item', id: deadlineId }).code).toBe('refused');
   });
 
   it('refuses an archived item and an unknown id', () => {
@@ -120,6 +137,12 @@ describe('update_calendar_item', () => {
     expect(fails('update_calendar_item', { id: 'ghost', title: 'x' }).code).toBe('not_found');
     ok('restore_item', { type: 'calendar_item', id: created.id });
     ok('update_calendar_item', { id: created.id, title: 'x' });
+  });
+
+  it('changes a plain (non-task) deadline and clears a field with null', () => {
+    const { created } = ok('create_calendar_item', { kind: 'deadline', title: 'Renew passport', date: FAR, notes: 'bring photo' });
+    ok('update_calendar_item', { id: created.id, title: 'Renew passport ASAP', notes: null, notifyDaysBefore: 5 });
+    expect(read.deadline(created.id)).toMatchObject({ title: 'Renew passport ASAP', notes: null, notifyDaysBefore: 5 });
   });
 });
 
@@ -170,5 +193,11 @@ describe('edit_occurrence', () => {
     const { created } = ok('create_calendar_item', { kind: 'reminder', title: 'Water plants', date: FAR, repeat: { freq: 'daily' } });
     ok('edit_occurrence', { id: created.id, date: addDays(FAR, 2), action: 'skip' });
     expect(read.reminder(created.id)!.repeat!.exceptions).toEqual([addDays(FAR, 2)]);
+  });
+
+  it('works on a repeating deadline too', () => {
+    const { created } = ok('create_calendar_item', { kind: 'deadline', title: 'Pay rent', date: FAR, repeat: { freq: 'monthly' } });
+    ok('edit_occurrence', { id: created.id, date: addDays(FAR, 30), action: 'skip' });
+    expect(read.deadline(created.id)!.repeat!.exceptions).toEqual([addDays(FAR, 30)]);
   });
 });

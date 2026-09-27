@@ -25,6 +25,7 @@ const TRACKED: Tracked[] = [
   { kind: 'tag',       read: () => useTaskStore.getState().tags,        write: (r) => useTaskStore.setState({ tags: r as never }) },
   { kind: 'event',     read: () => useCalendarStore.getState().events,    write: (r) => useCalendarStore.setState({ events: r as never }) },
   { kind: 'reminder',  read: () => useCalendarStore.getState().reminders, write: (r) => useCalendarStore.setState({ reminders: r as never }) },
+  { kind: 'deadline',  read: () => useCalendarStore.getState().deadlines, write: (r) => useCalendarStore.setState({ deadlines: r as never }) },
   { kind: 'schedule',  read: () => useScheduleStore.getState().schedules, write: (r) => useScheduleStore.setState({ schedules: r as never }) },
 ];
 

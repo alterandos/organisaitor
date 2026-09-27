@@ -169,6 +169,7 @@ export const LABELS = {
   calendarItemKind: {
     event:    'Event',
     reminder: 'Reminder',
+    deadline: 'Deadline',
   },
 
   // Records / Trackers

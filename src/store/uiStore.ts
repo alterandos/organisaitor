@@ -273,23 +273,27 @@ interface UIState {
 
   editingCalendarEventId:    string | null;
   editingCalendarReminderId: string | null;
+  editingCalendarDeadlineId: string | null;
   // The occurrence date (YYYY-MM-DD) that was clicked, for a repeating item — lets the pane offer
   // "this occurrence only / this and following / all" (RecurrenceScopeBar). null when opened
   // from somewhere with no specific occurrence in mind.
   editingCalendarEventOccurrence:    string | null;
   editingCalendarReminderOccurrence: string | null;
+  editingCalendarDeadlineOccurrence: string | null;
   openCalendarEventPane:     (id: string, occurrenceDate?: string) => void;
   closeCalendarEventPane:    () => void;
   openCalendarReminderPane:  (id: string, occurrenceDate?: string) => void;
   closeCalendarReminderPane: () => void;
+  openCalendarDeadlinePane:  (id: string, occurrenceDate?: string) => void;
+  closeCalendarDeadlinePane: () => void;
 
-  // Remembers the last event/reminder pane open in Calendar (same "last X" pattern as
+  // Remembers the last event/reminder/deadline pane open in Calendar (same "last X" pattern as
   // notesLastEditingNoteId) so leaving the section and coming back — including via
   // Alt+Left/Right — reopens it, but only within CALENDAR_LAST_EDITING_TTL_MS: a memory
   // that's gone stale (you came back an hour later, having long since moved on) should NOT
   // reopen a pane out of nowhere. Freshness is checked where it's read (setActiveView), not
   // by a background timer — there's no proactive-expiry mechanism in uiStore to hook into.
-  calendarLastEditing: { type: 'event' | 'reminder'; id: string; at: string } | null;
+  calendarLastEditing: { type: 'event' | 'reminder' | 'deadline'; id: string; at: string } | null;
 
   // Which of Month/Week/Day CalendarView is showing — lifted out of CalendarView's own
   // local state so it survives switching to another app and back (CalendarView unmounts
@@ -685,11 +689,16 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       editingCalendarReminderId: view === 'calendar'
         ? (s.activeView === 'calendar' ? s.editingCalendarReminderId : (freshCalendarMemory?.type === 'reminder' ? freshCalendarMemory.id : null))
         : null,
+      editingCalendarDeadlineId: view === 'calendar'
+        ? (s.activeView === 'calendar' ? s.editingCalendarDeadlineId : (freshCalendarMemory?.type === 'deadline' ? freshCalendarMemory.id : null))
+        : null,
       calendarLastEditing: s.activeView === 'calendar'
         ? (s.editingCalendarEventId
             ? { type: 'event' as const, id: s.editingCalendarEventId, at: new Date().toISOString() }
             : s.editingCalendarReminderId
             ? { type: 'reminder' as const, id: s.editingCalendarReminderId, at: new Date().toISOString() }
+            : s.editingCalendarDeadlineId
+            ? { type: 'deadline' as const, id: s.editingCalendarDeadlineId, at: new Date().toISOString() }
             : s.calendarLastEditing)
         : s.calendarLastEditing,
       // Endeavour/Purpose filter dropdowns are section-scoped UI, not section-scoped
@@ -757,13 +766,17 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   editingCalendarEventId:    null,
   editingCalendarReminderId: null,
+  editingCalendarDeadlineId: null,
   calendarLastEditing:       null,
   editingCalendarEventOccurrence:    null,
   editingCalendarReminderOccurrence: null,
+  editingCalendarDeadlineOccurrence: null,
   openCalendarEventPane:     (id, occurrenceDate) => set({ editingCalendarEventId: id, editingCalendarEventOccurrence: occurrenceDate ?? null }),
   closeCalendarEventPane:    ()   => set({ editingCalendarEventId: null, editingCalendarEventOccurrence: null }),
   openCalendarReminderPane:  (id, occurrenceDate) => set({ editingCalendarReminderId: id, editingCalendarReminderOccurrence: occurrenceDate ?? null }),
   closeCalendarReminderPane: ()   => set({ editingCalendarReminderId: null, editingCalendarReminderOccurrence: null }),
+  openCalendarDeadlinePane:  (id, occurrenceDate) => set({ editingCalendarDeadlineId: id, editingCalendarDeadlineOccurrence: occurrenceDate ?? null }),
+  closeCalendarDeadlinePane: ()   => set({ editingCalendarDeadlineId: null, editingCalendarDeadlineOccurrence: null }),
 
   calendarViewMode:    'month',
   setCalendarViewMode: (mode) => set({ calendarViewMode: mode }),
@@ -1002,6 +1015,7 @@ export function closeTopmostMobileOverlay(): boolean {
   if (s.editingTaskId !== null)                             { s.closeTaskPane();          return true; }
   if (s.editingCalendarEventId !== null)                    { s.closeCalendarEventPane(); return true; }
   if (s.editingCalendarReminderId !== null)                 { s.closeCalendarReminderPane(); return true; }
+  if (s.editingCalendarDeadlineId !== null)                 { s.closeCalendarDeadlinePane(); return true; }
   if (s.editTrackerOpen)                                    { s.closeEditTracker();       return true; }
   if (s.editRoutineOpen)                                    { s.closeEditRoutine();       return true; }
   if (s.editActivityTypeOpen)                               { s.closeEditActivityType();  return true; }

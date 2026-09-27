@@ -7,7 +7,7 @@ import { useListStore } from '@/store/listStore';
 import { useNoteStore } from '@/store/noteStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useTrashStore } from '@/store/trashStore';
-import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, TrackerEntry, ScheduleTemplate } from '@/types';
+import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, ScheduleTemplate } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
@@ -19,6 +19,7 @@ import {
   purposeToRow,    rowToPurpose,
   eventToRow,      rowToEvent,
   reminderToRow,   rowToReminder,
+  deadlineToRow,   rowToDeadline,
   entryToRow,      rowToEntry,
   scheduleToRow,   rowToSchedule,
   listToRow,       rowToList,
@@ -57,6 +58,7 @@ const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
   purposes:               { get: () => useTaskStore.getState().purposes,               toRow: (i, u) => purposeToRow(i as Purpose, u) },
   calendar_events:        { get: () => useCalendarStore.getState().events,             toRow: (i, u) => eventToRow(i as CalendarEvent, u) },
   calendar_reminders:     { get: () => useCalendarStore.getState().reminders,          toRow: (i, u) => reminderToRow(i as CalendarReminder, u) },
+  calendar_deadlines:     { get: () => useCalendarStore.getState().deadlines,          toRow: (i, u) => deadlineToRow(i as CalendarDeadline, u) },
   tracker_entries:        { get: () => useTrackerStore.getState().entries,             toRow: (i, u) => entryToRow(i as TrackerEntry, u) },
   schedules:              { get: () => useScheduleStore.getState().schedules,          toRow: (i, u) => scheduleToRow(i as ScheduleTemplate, u) },
   lists:                  { get: () => useListStore.getState().lists,                  toRow: (i, u) => listToRow(i as List, u) },
@@ -259,7 +261,7 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
 
 // Same order as the Promise.all fetch list in runInitSync — index i of one is index i of the other.
 const SYNC_TABLES = [
-  'tasks', 'collections', 'tags', 'purposes', 'calendar_events', 'calendar_reminders',
+  'tasks', 'collections', 'tags', 'purposes', 'calendar_events', 'calendar_reminders', 'calendar_deadlines',
   'tracker_entries', 'schedules', 'lists', 'list_items', 'list_types',
   'notes', 'note_tags', 'structured_tag_entries',
   'watchlist_items', 'portfolio_tags', 'investment_purposes',
@@ -284,6 +286,7 @@ async function runInitSync(userId: string): Promise<void> {
       supabase.from('purposes').select('*').eq('user_id', userId),
       supabase.from('calendar_events').select('*').eq('user_id', userId),
       supabase.from('calendar_reminders').select('*').eq('user_id', userId),
+      supabase.from('calendar_deadlines').select('*').eq('user_id', userId),
       supabase.from('tracker_entries').select('*').eq('user_id', userId),
       supabase.from('schedules').select('*').eq('user_id', userId),
       supabase.from('lists').select('*').eq('user_id', userId),
@@ -310,7 +313,7 @@ async function runInitSync(userId: string): Promise<void> {
     }
 
     const [
-      dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries,
+      dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbDeadlines, dbEntries,
       dbSchedules, dbLists, dbListItems, dbListTypes,
       dbNotes, dbNoteTags, dbStructuredTagEntries,
       dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
@@ -332,7 +335,7 @@ async function runInitSync(userId: string): Promise<void> {
       await upsertAllToSupabase(userId);
     } else {
       hydrateStores(
-        dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries,
+        dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbDeadlines, dbEntries,
         dbSchedules, dbLists, dbListItems, dbListTypes,
         dbNotes, dbNoteTags, dbStructuredTagEntries,
         dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
@@ -365,7 +368,7 @@ export function stopSync(): void {
 
 export type UploadCounts = {
   tasks: number; collections: number; tags: number; purposes: number;
-  events: number; reminders: number; entries: number;
+  events: number; reminders: number; deadlines: number; entries: number;
   schedules: number; lists: number; listItems: number; listTypes: number;
   notes: number; noteTags: number; structuredTagEntries: number;
   watchlistItems: number; portfolioTags: number; investmentPurposes: number;
@@ -443,7 +446,7 @@ function mergeRecords<T>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function hydrateStores(...args: Array<any[] | null>) {
   const [
-    dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbEntries,
+    dbTasks, dbCollections, dbTags, dbPurposes, dbEvents, dbReminders, dbDeadlines, dbEntries,
     dbSchedules, dbLists, dbListItems, dbListTypes,
     dbNotes, dbNoteTags, dbStructuredTagEntries,
     dbWatchlistItems, dbPortfolioTags, dbInvestmentPurposes,
@@ -462,6 +465,7 @@ function hydrateStores(...args: Array<any[] | null>) {
   useCalendarStore.setState((local) => ({
     events:    mergeRecords(local.events,    dbEvents,    rowToEvent, 'calendar_events'),
     reminders: mergeRecords(local.reminders, dbReminders, rowToReminder, 'calendar_reminders'),
+    deadlines: mergeRecords(local.deadlines, dbDeadlines, rowToDeadline, 'calendar_deadlines'),
   }) as Parameters<typeof useCalendarStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
@@ -509,7 +513,7 @@ function hydrateStores(...args: Array<any[] | null>) {
 
 async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const { tasks, collections, tags, purposes } = useTaskStore.getState();
-  const { events, reminders } = useCalendarStore.getState();
+  const { events, reminders, deadlines } = useCalendarStore.getState();
   const { entries } = useTrackerStore.getState();
   const { schedules } = useScheduleStore.getState();
   const { lists, listItems, listTypes } = useListStore.getState();
@@ -523,6 +527,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const allPurposes    = Object.values(purposes);
   const allEvents      = Object.values(events);
   const allReminders   = Object.values(reminders);
+  const allDeadlines   = Object.values(deadlines);
   const allEntries     = Object.values(entries);
   const allSchedules   = Object.values(schedules);
   const allLists       = Object.values(lists);
@@ -543,6 +548,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     allPurposes.length    > 0 ? supabase.from('purposes').upsert(allPurposes.map((p) => purposeToRow(p, userId)))      : null,
     allEvents.length      > 0 ? supabase.from('calendar_events').upsert(allEvents.map((e) => eventToRow(e, userId)))   : null,
     allReminders.length   > 0 ? supabase.from('calendar_reminders').upsert(allReminders.map((r) => reminderToRow(r, userId))) : null,
+    allDeadlines.length   > 0 ? supabase.from('calendar_deadlines').upsert(allDeadlines.map((d) => deadlineToRow(d, userId))) : null,
     allEntries.length     > 0 ? supabase.from('tracker_entries').upsert(allEntries.map((e) => entryToRow(e, userId)))  : null,
     allSchedules.length   > 0 ? supabase.from('schedules').upsert(allSchedules.map((s) => scheduleToRow(s, userId)))   : null,
     allLists.length       > 0 ? supabase.from('lists').upsert(allLists.map((l) => listToRow(l, userId)))               : null,
@@ -563,6 +569,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   return {
     tasks: allTasks.length, collections: allCollections.length, tags: allTags.length,
     purposes: allPurposes.length, events: allEvents.length, reminders: allReminders.length,
+    deadlines: allDeadlines.length,
     entries: allEntries.length, schedules: allSchedules.length, lists: allLists.length,
     listItems: allListItems.length, listTypes: allListTypes.length,
     notes: allNotes.length, noteTags: allNoteTags.length, structuredTagEntries: allStructuredTagEntries.length,
@@ -614,6 +621,7 @@ function setupSubscriptions(userId: string): void {
     ]),
     watch(userId, useCalendarStore, [
       { prop: 'events', table: 'calendar_events' }, { prop: 'reminders', table: 'calendar_reminders' },
+      { prop: 'deadlines', table: 'calendar_deadlines' },
     ]),
     watch(userId, useTrackerStore,  [{ prop: 'entries', table: 'tracker_entries' }]),
     watch(userId, useScheduleStore, [{ prop: 'schedules', table: 'schedules' }]),

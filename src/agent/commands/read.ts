@@ -7,7 +7,7 @@ import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
 import { expandScheduleBlock, blocksMayConflict } from '@/utils/scheduleOccurrences';
 import { createScheduleBlock } from '@/utils/scheduleBlocks';
 import {
-  assertBlockTimes, compact, dateStr, daysOfWeek, endeavourSummary, eventDetail, eventSummary, idStr,
+  assertBlockTimes, compact, dateStr, daysOfWeek, deadlineDetail, deadlineSummary, endeavourSummary, eventDetail, eventSummary, idStr,
   reminderDetail, reminderSummary, requireCalendarItem, requireEndeavour, requireSchedule, requireTask,
   scheduleSummary, taskDetail, taskSummary, timeStr, uniqueSorted, blockSummary,
 } from './shared';
@@ -84,6 +84,10 @@ export const search = defineCommand({
         if (r.reminderType === 'task') continue;
         consider(r.title, [r.notes], () => reminderSummary(r), !!r.archivedAt);
       }
+      for (const d of read.deadlines()) {
+        if (d.deadlineType === 'task') continue;
+        consider(d.title, [d.notes], () => deadlineSummary(d), !!d.archivedAt);
+      }
     }
     if (wanted.has('schedule')) {
       for (const s of read.schedules()) {
@@ -98,7 +102,7 @@ export const search = defineCommand({
     const results = hits.slice(0, input.limit).map((h) => h.hit);
     for (const r of results) {
       const id = String(r.id);
-      const kind = r.type === 'task' ? 'task' : r.type === 'schedule' ? 'schedule' : r.type === 'endeavour' ? 'endeavour' : r.kind === 'reminder' ? 'reminder' : 'event';
+      const kind = r.type === 'task' ? 'task' : r.type === 'schedule' ? 'schedule' : r.type === 'endeavour' ? 'endeavour' : r.kind === 'reminder' ? 'reminder' : r.kind === 'deadline' ? 'deadline' : 'event';
       ctx.seen(kind, id);
     }
     return { total: hits.length, results };
@@ -185,7 +189,9 @@ export const get = defineCommand({
     if (input.type === 'calendar_item') {
       const ref = requireCalendarItem(input.id);
       ctx.seen(ref.kind, ref.item.id);
-      return ref.kind === 'event' ? eventDetail(ref.item) : reminderDetail(ref.item);
+      if (ref.kind === 'event') return eventDetail(ref.item);
+      if (ref.kind === 'reminder') return reminderDetail(ref.item);
+      return deadlineDetail(ref.item);
     }
     if (input.type === 'schedule') {
       const schedule = requireSchedule(input.id);
@@ -251,6 +257,17 @@ export const getCalendarRange = defineCommand({
         if (d < input.from || d > input.to) continue;
         ctx.seen('reminder', r.id);
         rows.push({ date: d, sortTime: r.time ?? '', item: { ...reminderSummary(r), date: d } });
+      }
+    }
+
+    for (const d of read.deadlines()) {
+      if (d.archivedAt || d.deadlineType === 'task' || !inScope(d.collectionId)) continue;
+      const dates = [d.date, ...(d.repeat ? expandRepeat(d.date, d.repeat, input.from, input.to) : [])]
+        .filter((dt) => !(dt === d.date && isOccurrenceSkipped(d.repeat, dt)));
+      for (const dt of dates) {
+        if (dt < input.from || dt > input.to) continue;
+        ctx.seen('deadline', d.id);
+        rows.push({ date: dt, sortTime: d.time ?? '', item: { ...deadlineSummary(d), date: dt } });
       }
     }
 

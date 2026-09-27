@@ -3,7 +3,7 @@
 
 export type RiskTier = 'read' | 'create' | 'modify' | 'archive';
 
-export type EntityKind = 'task' | 'event' | 'reminder' | 'schedule' | 'endeavour' | 'purpose' | 'tag';
+export type EntityKind = 'task' | 'event' | 'reminder' | 'deadline' | 'schedule' | 'endeavour' | 'purpose' | 'tag';
 
 export interface EntityRef { kind: EntityKind; id: string }
 

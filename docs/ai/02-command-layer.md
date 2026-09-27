@@ -61,10 +61,10 @@ To make a new store undoable, add it to `TRACKED` in `batch.ts` (and `EntityKind
 Behaviours worth knowing:
 - Dates `YYYY-MM-DD`, times 24-hour `HH:MM`, in the account timezone (`get_context` reports it). "Today" is `todayIsoInZone`, not the machine's clock.
 - A sub-task (`create_task` with `parentId`) inherits the parent's priority and Endeavour unless given; depth is one level.
-- Items that belong to a task (its deadline reminder, its scheduled event) can't be edited or archived on their own: the commands say to change the task. `update_calendar_item` on a task's scheduled event flows title/date/start time back to the task (`updateCalendarEventLinked`).
+- Items that belong to a task (its shadow deadline, its scheduled event) can't be edited or archived on their own: the commands say to change the task. `update_calendar_item` on a task's scheduled event flows title/date/start time back to the task (`updateCalendarEventLinked`).
 - `create_*` for Endeavours/Purposes/Tags refuses a duplicate name and returns the existing id in the message.
 - `edit_occurrence` `end_series_before` a series' first date is refused (it would delete the series).
-- `get_calendar_range` (≤ 92 days) expands repeats and schedule occurrences and shows task deadlines from the tasks themselves (the reminder that carries a deadline is skipped). It does not apply the calendar's Layers visibility setting.
+- `get_calendar_range` (≤ 92 days) expands repeats and schedule occurrences and shows task deadlines from the tasks themselves (the shadow Deadline that carries a task's deadline is skipped, same as the shadow Event that carries its scheduled date). It does not apply the calendar's Layers visibility setting.
 - Read output is compact on purpose (nulls and empty lists dropped) because it is sent to a model.
 
 ## Adding a command
@@ -80,7 +80,7 @@ Behaviours worth knowing:
 
 ## Tests
 
-`npm test` (Vitest, Node environment, `src/test/setup.ts` supplies a Map-backed `localStorage` and calls `preloadIdbStorage`). 128 tests, roughly:
+`npm test` (Vitest, Node environment, `src/test/setup.ts` supplies a Map-backed `localStorage` and calls `preloadIdbStorage`). 116 tests, roughly:
 - `framework.test.ts` — tool definitions, validation, tier gating, review, rollback, read-only guard, audit log, undo batches (incl. edited-since and shared batches)
 - `tasks.test.ts`, `calendar.test.ts`, `schedules.test.ts`, `reads.test.ts` — each command against the real stores
 - `boundary.test.ts` — the lint rule really rejects a store/service import in `commands/**` (runs ESLint via its Node API)
@@ -103,7 +103,7 @@ __agent.tools()   // the JSON Schemas a model would be given
 
 - **No model, chat UI, review screen or agent manual yet** (later phases in the inventory). No provider has seen the generated JSON Schemas.
 - **Notes, Lists, Records, Fitness, Portfolio** have no commands. Notes is Chunk B (headless content module, editor reload on external change, note commands, encrypted content excluded at `access.ts`); nothing encrypted exists in the current commands' reach, so the planted-secrets test arrives with Chunk B.
-- **Undo covers only the tracked stores** (tasks, Endeavours, Purposes, Tags, events, reminders, schedules). Restoring/removing goes straight to the stores, without `crossAppLinkCleanup`; fine while agent-made items carry no cross-app links, but revisit when notes arrive.
+- **Undo covers only the tracked stores** (tasks, Endeavours, Purposes, Tags, events, reminders, deadlines, schedules). Restoring/removing goes straight to the stores, without `crossAppLinkCleanup`; fine while agent-made items carry no cross-app links, but revisit when notes arrive.
 - **Snapshots live in localStorage** (`agent-batches`, capped at 50 batches of full "before" records). If storage gets tight, this store and `agent-log` are the ones to shrink or move to IndexedDB. Both are cleared on sign-out (`clearLocalData.ts`) since they hold copies of the account's records.
 - **Attribution is local only.** "Created by the agent" is answerable from the audit log on this device; showing it on other devices needs the small synced table agreed in the inventory (a Supabase migration, not written).
 - **`get_calendar_range` re-combines** events, reminders, deadlines and schedule blocks itself (using the shared `expandRepeat`/`expandScheduleBlock`) instead of reusing `CalendarView`'s inline builder, which is coupled to the UI. If the calendar's own rules change, check this too.

@@ -1,6 +1,6 @@
 import type {
   Task, Collection, Tag, Purpose,
-  CalendarEvent, CalendarReminder, TrackerEntry,
+  CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry,
   ScheduleTemplate,
 } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
@@ -29,6 +29,7 @@ export function taskToRow(t: Task, userId: string) {
     scheduled_time:    t.scheduledTime     ?? null,
     calendar_event_id: t.calendarEventId   ?? null,
     calendar_reminder_id: t.calendarReminderId ?? null,
+    calendar_deadline_id: t.calendarDeadlineId ?? null,
     remind_at:         t.remindAt          ?? null,
     archived:       t.archived       ?? false,
     archived_at:    t.archivedAt     ?? null,
@@ -69,6 +70,7 @@ export function rowToTask(r: Record<string, any>): Task {
     scheduledTime:   r.scheduled_time     ?? null,
     calendarEventId: r.calendar_event_id  ?? null,
     calendarReminderId: r.calendar_reminder_id ?? null,
+    calendarDeadlineId: r.calendar_deadline_id ?? null,
     remindAt:        r.remind_at          ?? null,
     archived:      r.archived      ?? false,
     archivedAt:    r.archived_at   ?? null,
@@ -225,6 +227,8 @@ export function eventToRow(e: CalendarEvent, userId: string) {
     repeat:              e.repeat,
     status:              e.status,
     important:           e.important,
+    background:          e.background ?? false,
+    color:               e.color ?? null,
     cross_app_refs:      e.crossAppRefs ?? [],
     archived_at:         e.archivedAt ?? null,
     archive_reason:      e.archiveReason ?? null,
@@ -260,6 +264,8 @@ export function rowToEvent(r: Record<string, any>): CalendarEvent {
     repeat:             r.repeat              ?? null,
     status:             r.status              ?? 'confirmed',
     important:          r.important           ?? false,
+    background:         r.background          ?? false,
+    color:              r.color               ?? null,
     crossAppRefs:       r.cross_app_refs      ?? [],
     archivedAt:         r.archived_at         ?? null,
     archiveReason:      r.archive_reason      ?? null,
@@ -312,6 +318,59 @@ export function rowToReminder(r: Record<string, any>): CalendarReminder {
     links:        r.links         ?? [],
     collectionId: r.collection_id ?? null,
     reminderType: r.reminder_type ?? 'default',
+    remindAt:     r.remind_at     ?? null,
+    repeat:       r.repeat        ?? null,
+    important:    r.important     ?? false,
+    status:       r.status        ?? 'confirmed',
+    notifyDaysBefore: r.notify_days_before ?? 1,
+    notifyAtTime:     r.notify_at_time     ?? '17:00',
+    crossAppRefs: r.cross_app_refs ?? [],
+    archivedAt:    r.archived_at    ?? null,
+    archiveReason: r.archive_reason ?? null,
+    createdAt:    r.created_at,
+    updatedAt:    r.updated_at,
+  };
+}
+
+// ── CalendarDeadline ────────────────────────────────────────────
+
+export function deadlineToRow(d: CalendarDeadline, userId: string) {
+  return {
+    id:            d.id,
+    user_id:       userId,
+    title:         d.title,
+    date:          d.date,
+    time:          d.time,
+    notes:         d.notes,
+    links:         d.links ?? [],
+    collection_id: d.collectionId,
+    deadline_type: d.deadlineType ?? 'default',
+    remind_at:     d.remindAt,
+    repeat:        d.repeat,
+    important:     d.important,
+    status:        d.status ?? 'confirmed',
+    notify_days_before: d.notifyDaysBefore ?? 1,
+    notify_at_time:     d.notifyAtTime ?? '17:00',
+    cross_app_refs: d.crossAppRefs ?? [],
+    archived_at:    d.archivedAt ?? null,
+    archive_reason: d.archiveReason ?? null,
+    created_at:    d.createdAt,
+    updated_at:    d.updatedAt,
+    deleted_at:    null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToDeadline(r: Record<string, any>): CalendarDeadline {
+  return {
+    id:           r.id,
+    title:        r.title,
+    date:         r.date,
+    time:         r.time          ?? null,
+    notes:        r.notes         ?? null,
+    links:        r.links         ?? [],
+    collectionId: r.collection_id ?? null,
+    deadlineType: r.deadline_type ?? 'default',
     remindAt:     r.remind_at     ?? null,
     repeat:       r.repeat        ?? null,
     important:    r.important     ?? false,

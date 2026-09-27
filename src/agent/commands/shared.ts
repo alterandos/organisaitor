@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AgentError } from '@/agent/errors';
 import { read } from '@/agent/access';
-import type { CalendarEvent, CalendarReminder, Collection, RepeatConfig, ScheduleBlock, ScheduleTemplate, Task } from '@/types';
+import type { CalendarEvent, CalendarReminder, CalendarDeadline, Collection, RepeatConfig, ScheduleBlock, ScheduleTemplate, Task } from '@/types';
 
 // ── Input primitives ─────────────────────────────────────────────────────────────────────────
 
@@ -204,6 +204,40 @@ export function reminderDetail(r: CalendarReminder) {
       archiveReason: r.archiveReason,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
+    }),
+  };
+}
+
+export function deadlineSummary(d: CalendarDeadline) {
+  const linkedTask = d.deadlineType === 'task' ? read.tasks().find((t) => t.calendarDeadlineId === d.id) : undefined;
+  return compact({
+    id: d.id,
+    kind: 'deadline',
+    title: d.title,
+    date: d.date,
+    time: d.time,
+    type: d.deadlineType === 'default' ? null : d.deadlineType,
+    important: d.important ? true : null,
+    repeat: repeatText(d.repeat),
+    endeavour: d.collectionId ? named(read.endeavour(d.collectionId)) : null,
+    linkedTaskId: linkedTask?.id,
+    archived: d.archivedAt ? true : null,
+  });
+}
+
+export function deadlineDetail(d: CalendarDeadline) {
+  return {
+    ...deadlineSummary(d),
+    ...compact({
+      notes: d.notes,
+      links: d.links,
+      // Unlike a Reminder, these always apply — a Deadline never notifies "at" its time even
+      // when one is set (see CalendarDeadline's own doc comment in types/index.ts).
+      notifyDaysBefore: d.notifyDaysBefore,
+      notifyAtTime: d.notifyAtTime,
+      archiveReason: d.archiveReason,
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
     }),
   };
 }

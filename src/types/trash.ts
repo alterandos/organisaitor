@@ -6,7 +6,7 @@ export type TrashEntryId = string & { readonly _brand: 'TrashEntryId' };
 // and RESTORE_TARGETS — every kind here must have an entry in both).
 export type TrashableKind =
   | 'task' | 'collection' | 'tag' | 'purpose'
-  | 'calendarEvent' | 'calendarReminder' | 'schedule' | 'trackerEntry'
+  | 'calendarEvent' | 'calendarReminder' | 'calendarDeadline' | 'schedule' | 'trackerEntry'
   | 'list' | 'listItem' | 'listType'
   | 'note' | 'noteTag' | 'structuredTagEntry'
   | 'watchlistItem' | 'portfolioTag' | 'investmentPurpose'

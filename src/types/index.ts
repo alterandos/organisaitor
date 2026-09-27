@@ -5,6 +5,7 @@ export type CollectionId       = string & { readonly _brand: 'CollectionId'     
 export type PurposeId          = string & { readonly _brand: 'PurposeId'          };
 export type CalendarEventId    = string & { readonly _brand: 'CalendarEventId'    };
 export type CalendarReminderId = string & { readonly _brand: 'CalendarReminderId' };
+export type CalendarDeadlineId = string & { readonly _brand: 'CalendarDeadlineId' };
 export type TrackerEntryId     = string & { readonly _brand: 'TrackerEntryId'     };
 export type ScheduleId         = string & { readonly _brand: 'ScheduleId'         };
 
@@ -23,7 +24,7 @@ export type NotifyUnit     = 'minutes' | 'hours'   | 'days';
 // never go stale. The *forward* half of the link (Note → Task) lives embedded in the
 // note's own rich-text content as an ArtifactLinkMark, not here — this field only carries
 // the reverse direction, so a Task/Event/etc. can show what note(s) it was linked from.
-export type CrossAppRefType = 'note' | 'task' | 'event' | 'reminder' | 'listItem' | 'trackerEntry';
+export type CrossAppRefType = 'note' | 'task' | 'event' | 'reminder' | 'deadline' | 'listItem' | 'trackerEntry';
 export interface CrossAppRef {
   type: CrossAppRefType;
   id:   string;
@@ -160,7 +161,8 @@ export interface Task {
   scheduledAt:   string | null;        // ISO date 'YYYY-MM-DD' — day user plans to do the task
   scheduledTime: string | null;        // 'HH:MM' (24-hour), optional companion to scheduledAt
   calendarEventId: CalendarEventId | null; // auto-created event when scheduledAt is set
-  calendarReminderId: CalendarReminderId | null; // auto-created reminder when deadline is set
+  calendarReminderId: CalendarReminderId | null; // legacy — auto-created reminder when deadline is set; superseded by calendarDeadlineId 2026-09-27 (see "Deadline calendar kind"), kept on the type for any not-yet-migrated data, expected null for every task going forward
+  calendarDeadlineId: CalendarDeadlineId | null; // auto-created Deadline (calendar) when deadline is set — see "Deadline calendar kind"
   remindAt:      string | null;
   archived:     boolean;
   archivedAt:    string | null;        // when it was archived; null while active
@@ -193,6 +195,7 @@ export interface CreateTaskInput {
   scheduledTime?:   string | null;
   calendarEventId?: CalendarEventId | null;
   calendarReminderId?: CalendarReminderId | null;
+  calendarDeadlineId?: CalendarDeadlineId | null;
   collectionId?:   CollectionId | null;
   tagIds?:         TagId[];
   purposeIds?:     PurposeId[];
@@ -226,7 +229,7 @@ export interface CreatePurposeInput {
 
 // ── Calendar ───────────────────────────────────────────────────────────────────
 // CalendarItemKind is kept as a string union for easy label overrides in labels.ts.
-export type CalendarItemKind  = 'event' | 'reminder';
+export type CalendarItemKind  = 'event' | 'reminder' | 'deadline';
 export type CalendarEventType = 'default' | 'birthday' | 'task';
 // A self-created event's confirmation state — 'tentative' is a placeholder the user put on
 // the calendar to be aware something might happen, not yet committed to (see CLAUDE.md
@@ -245,6 +248,11 @@ export type CalendarReminderType = 'default' | 'task';
 // reminders-derived kind:'reminder' render pass in CalendarView.tsx (the deadline still renders
 // as its own kind:'task' pill, synthesized directly from the Task, unchanged) — this row exists
 // for sync/layer-filtering/notification purposes, not to be shown a second time.
+export type CalendarDeadlineType = 'default' | 'task';
+// Same 'task' meaning as CalendarReminderType above, now for the Deadline kind specifically —
+// since 2026-09-27 a task's deadline shadow is a CalendarDeadline, not a CalendarReminder (see
+// "Deadline calendar kind" in Implemented features); existing task-deadline shadow Reminders
+// were migrated to Deadlines by services/taskDeadlineMigration.ts, run once.
 export type RepeatFreq        = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export interface RepeatConfig {
@@ -282,6 +290,8 @@ export interface CalendarEvent {
   repeat:             RepeatConfig | null;
   status:             EventStatus;      // 'confirmed' (default) | 'tentative' — see EventStatus
   important:          boolean;          // flagged important — red outline + ❗ on the calendar
+  background:         boolean;          // "on in the background" over its date range (travel, an ambient multi-day thing) — renders as a thin line near the top of its covered days instead of a normal coloured pill; multi-day only in practice (see "Background / banner calendar events")
+  color:              string | null;    // explicit colour override for the span-pill rendering (background events specifically) — takes priority over the Endeavour's own colour; null = fall back to collectionId's colour, then the default tint
   crossAppRefs:       CrossAppRef[];    // reverse cross-app links (e.g. the note(s) this event was created from)
   archivedAt:         string | null;    // sunset, not deleted — hidden from the calendar, restorable (same as Task)
   archiveReason:      string | null;    // optional "why", captured when archiving
@@ -339,6 +349,8 @@ export interface CreateCalendarEventInput {
   repeat?:            RepeatConfig | null;
   status?:            EventStatus;
   important?:         boolean;
+  background?:        boolean;
+  color?:             string | null;
   crossAppRefs?:      CrossAppRef[];
   source?:             string | null;
   sourceConnectionId?: string | null;
@@ -374,6 +386,51 @@ export interface CreateCalendarReminderInput {
   links?:       string[];
   collectionId?: CollectionId | null;
   reminderType?: CalendarReminderType;
+  repeat?:       RepeatConfig | null;
+  important?:    boolean;
+  status?:       EventStatus;
+  crossAppRefs?: CrossAppRef[];
+  notifyDaysBefore?: number;
+  notifyAtTime?:     string;
+}
+
+// A point-in-time deadline, structurally close to CalendarReminder (same field shapes,
+// same repeat/tentative/important machinery) with one deliberate semantic difference: it
+// ALWAYS notifies only via lead time (notifyDaysBefore/notifyAtTime), even when `time` is set —
+// unlike a timed Reminder, where notifyDaysBefore/notifyAtTime is ignored in favour of
+// notifying "at" the time itself once `time` is set. `time` here is purely informational (e.g.
+// "due at 5pm"), never a notification trigger — preserving the whole reason a Deadline is a
+// distinct kind from a Reminder ("notify before, never at the moment").
+export interface CalendarDeadline {
+  id:           CalendarDeadlineId;
+  title:        string;
+  date:         string;               // YYYY-MM-DD
+  time:         string | null;        // HH:MM (24-hour) — informational only, see above
+  notes:        string | null;
+  links:        string[];
+  collectionId: CollectionId | null;
+  deadlineType: CalendarDeadlineType;  // 'default' | 'task' — see CalendarDeadlineType
+  createdAt:    string;
+  updatedAt:    string;
+  remindAt:     string | null;
+  repeat:       RepeatConfig | null;
+  important:    boolean;
+  status:       EventStatus;
+  crossAppRefs: CrossAppRef[];
+  archivedAt:    string | null;
+  archiveReason: string | null;
+  notifyDaysBefore: number;
+  notifyAtTime:     string;
+}
+
+export interface CreateCalendarDeadlineInput {
+  title:        string;
+  date:         string;
+  time?:        string | null;
+  notes?:       string | null;
+  links?:       string[];
+  collectionId?: CollectionId | null;
+  deadlineType?: CalendarDeadlineType;
   repeat?:       RepeatConfig | null;
   important?:    boolean;
   status?:       EventStatus;

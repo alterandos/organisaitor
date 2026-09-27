@@ -5,7 +5,7 @@ import { useTrashStore } from '@/store/trashStore';
 import type { TrashEntry, TrashEntryId, TrashableKind, DeletedBy } from '@/types/trash';
 import type {
   Task, Collection, Tag, Purpose,
-  CalendarEvent, CalendarReminder, ScheduleTemplate, TrackerEntry,
+  CalendarEvent, CalendarReminder, CalendarDeadline, ScheduleTemplate, TrackerEntry,
 } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
@@ -22,7 +22,7 @@ import type { Activity, ActivityType } from '@/types/fitness';
 
 interface EntityMap {
   task: Task; collection: Collection; tag: Tag; purpose: Purpose;
-  calendarEvent: CalendarEvent; calendarReminder: CalendarReminder; schedule: ScheduleTemplate; trackerEntry: TrackerEntry;
+  calendarEvent: CalendarEvent; calendarReminder: CalendarReminder; calendarDeadline: CalendarDeadline; schedule: ScheduleTemplate; trackerEntry: TrackerEntry;
   list: List; listItem: ListItem; listType: ListType;
   note: Note; noteTag: NoteTag; structuredTagEntry: StructuredTagEntry;
   watchlistItem: WatchlistItem; portfolioTag: PortfolioTag; investmentPurpose: InvestmentPurpose;
@@ -61,6 +61,10 @@ const RESOLVERS: { [K in TrashableKind]: (e: EntityMap[K]) => ResolvedContext } 
   }),
   calendarReminder: (r) => ({
     title: r.title, contextLine: formatDate(r.date),
+    sourceApp: 'organizer', sourceSection: 'Calendar',
+  }),
+  calendarDeadline: (d) => ({
+    title: d.title, contextLine: formatDate(d.date),
     sourceApp: 'organizer', sourceSection: 'Calendar',
   }),
   schedule: (s) => ({ title: s.name, contextLine: 'Schedule', sourceApp: 'organizer', sourceSection: 'Calendar' }),

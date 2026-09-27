@@ -1,10 +1,12 @@
-// A task's deadline and scheduled date each have a shadow calendar entry: a CalendarReminder
-// (reminderType 'task') for the deadline and a CalendarEvent (eventType 'task') for the scheduled
-// day. The task is the source of truth for the fields they share — title, date, time — and this
-// is the one place that keeps the two sides matching. Every UI path that creates or edits a
-// task's title/dates, or edits a task-linked event, goes through here instead of touching the
-// shadows itself. Lives outside the stores for the same reason crossAppLinkCleanup does: it needs
-// both taskStore and calendarStore.
+// A task's deadline and scheduled date each have a shadow calendar entry: a CalendarDeadline
+// (deadlineType 'task', since 2026-09-27 — see "Deadline calendar kind"; previously a
+// CalendarReminder with reminderType 'task', see services/taskDeadlineMigration.ts for the
+// one-time conversion of existing shadows) for the deadline and a CalendarEvent (eventType
+// 'task') for the scheduled day. The task is the source of truth for the fields they share —
+// title, date, time — and this is the one place that keeps the two sides matching. Every UI
+// path that creates or edits a task's title/dates, or edits a task-linked event, goes through
+// here instead of touching the shadows itself. Lives outside the stores for the same reason
+// crossAppLinkCleanup does: it needs both taskStore and calendarStore.
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import type { CalendarEvent, CalendarEventId, CreateTaskInput, Task, TaskId } from '@/types';
@@ -35,18 +37,18 @@ export function syncDeadlineShadow(taskId: TaskId): void {
   const task = useTaskStore.getState().tasks[taskId];
   if (!task) return;
   const cal = useCalendarStore.getState();
-  const reminder = task.calendarReminderId ? cal.reminders[task.calendarReminderId] : undefined;
+  const deadline = task.calendarDeadlineId ? cal.deadlines[task.calendarDeadlineId] : undefined;
 
   if (task.deadline) {
-    if (!reminder) {
-      const id = cal.addReminder({ title: task.title, date: task.deadline, time: task.deadlineTime, reminderType: 'task' });
-      useTaskStore.getState().updateTask(taskId, { calendarReminderId: id });
-    } else if (reminder.title !== task.title || reminder.date !== task.deadline || (reminder.time ?? null) !== (task.deadlineTime ?? null)) {
-      cal.updateReminder(reminder.id, { title: task.title, date: task.deadline, time: task.deadlineTime ?? null });
+    if (!deadline) {
+      const id = cal.addDeadline({ title: task.title, date: task.deadline, time: task.deadlineTime, deadlineType: 'task' });
+      useTaskStore.getState().updateTask(taskId, { calendarDeadlineId: id });
+    } else if (deadline.title !== task.title || deadline.date !== task.deadline || (deadline.time ?? null) !== (task.deadlineTime ?? null)) {
+      cal.updateDeadline(deadline.id, { title: task.title, date: task.deadline, time: task.deadlineTime ?? null });
     }
-  } else if (task.calendarReminderId) {
-    if (reminder) cal.deleteReminder(reminder.id);
-    useTaskStore.getState().updateTask(taskId, { calendarReminderId: null });
+  } else if (task.calendarDeadlineId) {
+    if (deadline) cal.deleteDeadline(deadline.id);
+    useTaskStore.getState().updateTask(taskId, { calendarDeadlineId: null });
   }
 }
 

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import type { TaskId, CalendarEventId, CalendarReminderId, CollectionId, CalendarEvent, ScheduleId, EventStatus } from '@/types';
+import type { TaskId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, CollectionId, CalendarEvent, ScheduleId, EventStatus } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
@@ -13,12 +13,13 @@ import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
 import {
   buildHourLayout, minutesToY, layoutDayTimeGrid, timeToMinutes,
   yToMinutes, snapMinutes,
-  DEFAULT_EVENT_DURATION_MIN, DEFAULT_POINT_DURATION_MIN,
+  DEFAULT_EVENT_DURATION_MIN, DEFAULT_POINT_DURATION_MIN, REMINDER_MAX_HEIGHT_MIN, MIN_BLOCK_HEIGHT,
   type TimeGridEntry as TimeGridEntryG,
   type HourLayout,
 } from '@/utils/timeGrid';
 import { ScheduleOccurrencePopover } from '@/components/ScheduleOccurrencePopover/ScheduleOccurrencePopover';
 import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane';
+import { useTimeGridDrag } from '@/hooks/useTimeGridDrag';
 import styles from './CalendarView.module.css';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -27,6 +28,7 @@ type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
   | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
   | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
+  | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
   | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean };
 
 interface SpanSlot {
@@ -40,6 +42,8 @@ interface SpanSlot {
   collectionId: CollectionId | null;
   status:       EventStatus;
   important:    boolean;
+  background:   boolean;
+  color:        string | null;
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -68,7 +72,7 @@ function buildCalendarDays(year: number, month: number): { date: Date; isCurrent
 }
 
 function sortItems(items: CalDisplayItem[]): CalDisplayItem[] {
-  const kindOrder = { event: 0, schedule: 1, task: 2, reminder: 3 } as const;
+  const kindOrder = { event: 0, schedule: 1, task: 2, deadline: 3, reminder: 4 } as const;
   return [...items].sort((a, b) => {
     if (a.kind !== b.kind) return kindOrder[a.kind] - kindOrder[b.kind];
     if (!a.time && b.time) return 1;
@@ -117,6 +121,8 @@ function getWeekSpanSlots(weekDateStrs: string[], spanEvents: CalendarEvent[]): 
       collectionId: ev.collectionId,
       status:       ev.status ?? 'confirmed',
       important:    ev.important ?? false,
+      background:   ev.background ?? false,
+      color:        ev.color ?? null,
     });
   }
 
@@ -174,6 +180,9 @@ export function CalendarView() {
   const collectionsRecord = useTaskStore((s) => s.collections);
   const events            = useCalendarStore((s) => s.events);
   const reminders         = useCalendarStore((s) => s.reminders);
+  const deadlines         = useCalendarStore((s) => s.deadlines);
+  const updateEvent       = useCalendarStore((s) => s.updateEvent);
+  const updateReminder    = useCalendarStore((s) => s.updateReminder);
   const schedules         = useScheduleStore((s) => s.schedules);
   const [occurrencePopover, setOccurrencePopover] = useState<{ item: Extract<CalDisplayItem, { kind: 'schedule' }>; x: number; y: number } | null>(null);
 
@@ -181,6 +190,7 @@ export function CalendarView() {
   const openTaskPane             = useUIStore((s) => s.openTaskPane);
   const openCalendarEventPane    = useUIStore((s) => s.openCalendarEventPane);
   const openCalendarReminderPane = useUIStore((s) => s.openCalendarReminderPane);
+  const openCalendarDeadlinePane = useUIStore((s) => s.openCalendarDeadlinePane);
   const showAddCalendarItem      = useUIStore((s) => s.showAddCalendarItem);
   const showCalendarQuickAdd     = useUIStore((s) => s.showCalendarQuickAdd);
   const openSchedules            = useUIStore((s) => s.openSchedules);
@@ -190,6 +200,7 @@ export function CalendarView() {
   const editingTaskId            = useUIStore((s) => s.editingTaskId);
   const editingCalendarEventId    = useUIStore((s) => s.editingCalendarEventId);
   const editingCalendarReminderId = useUIStore((s) => s.editingCalendarReminderId);
+  const editingCalendarDeadlineId = useUIStore((s) => s.editingCalendarDeadlineId);
 
   const shadePastDays         = useSettingsStore((s) => s.shadePastDays);
   const shadeWeekends         = useSettingsStore((s) => s.shadeWeekends);
@@ -330,6 +341,34 @@ export function CalendarView() {
       }
     });
 
+    Object.values(deadlines).forEach((dl) => {
+      if (dl.archivedAt) return;
+      // Same exclusion as task-deadline-derived reminders above, now for deadlineType:'task' —
+      // the task's own deadline still renders as its dedicated kind:'task' pill; this row
+      // exists only for sync + notification purposes.
+      if (dl.deadlineType === 'task') return;
+      if (!layerVisibility.deadlines) return;
+      if ((dl.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
+      if (activeCollectionId && dl.collectionId !== activeCollectionId) return;
+      const item: CalDisplayItem = {
+        kind: 'deadline',
+        id: dl.id,
+        title: dl.title,
+        time: dl.time,
+        collectionId: dl.collectionId,
+        notes: dl.notes,
+        links: dl.links,
+        typeIcon: dl.important ? '❗' : '🚩',
+        status: dl.status ?? 'confirmed',
+        important: dl.important ?? false,
+        occurrenceDate: dl.date,
+      };
+      if (!isOccurrenceSkipped(dl.repeat, dl.date)) push(dl.date, item);
+      if (dl.repeat) {
+        for (const d of expandRepeat(dl.date, dl.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d });
+      }
+    });
+
     Object.values(schedules).forEach((schedule) => {
       if (!schedule.active) return;
       if (activeCollectionId && schedule.collectionId !== activeCollectionId) return;
@@ -365,7 +404,7 @@ export function CalendarView() {
 
     map.forEach((list, date) => map.set(date, sortItems(list)));
     return map;
-  }, [tasks, events, reminders, schedules, activeCollectionId, days, layerVisibility]);
+  }, [tasks, events, reminders, deadlines, schedules, activeCollectionId, days, layerVisibility]);
 
   // ── Mobile week strip & desktop week view ─────────────────────────────────
   const weekDays = useMemo(() => {
@@ -403,6 +442,10 @@ export function CalendarView() {
       const explicitEnd = timeToMinutes(item.endTime);
       return explicitEnd > startMin ? explicitEnd : startMin + DEFAULT_EVENT_DURATION_MIN;
     }
+    // Reminders reserve a full REMINDER_MAX_HEIGHT_MIN slot for column-overlap purposes even
+    // though their rendered box only takes as much of it as their title actually needs (capped
+    // at this same max) — see the isReminder branch in the block renderers below.
+    if (item.kind === 'reminder' || item.kind === 'deadline') return startMin + REMINDER_MAX_HEIGHT_MIN;
     return startMin + DEFAULT_POINT_DURATION_MIN;
   };
 
@@ -415,7 +458,7 @@ export function CalendarView() {
   // synthetic end time (DEFAULT_POINT_DURATION_MIN, above) so the time-grid layout has *some*
   // height to stack them with, never a real duration. Showing that as a "10:00–10:30"-style
   // range reads as a real time block, which it isn't; a single time is accurate.
-  const isPointInTimeKind = (kind: CalDisplayItem['kind']): boolean => kind === 'task' || kind === 'reminder';
+  const isPointInTimeKind = (kind: CalDisplayItem['kind']): boolean => kind === 'task' || kind === 'reminder' || kind === 'deadline';
   const formatItemTimeLabel = (item: CalDisplayItem, endMin: number): string =>
     isPointInTimeKind(item.kind)
       ? formatTime(item.time!, clockFormat)
@@ -426,6 +469,48 @@ export function CalendarView() {
     if (item.kind === 'schedule') return item.location;
     return null;
   };
+
+  // ── Drag-to-move / drag-to-resize (Events & Reminders only) ─────────────────
+  // Deliberately excludes: Tasks (deadline pills — a different entity with its own
+  // scheduling model, not part of this pass), repeating Events/Reminders (dragging one
+  // rendered occurrence would need the same this-occurrence/this-and-following choice
+  // RecurrenceScopeBar already offers on open, which a drag gesture has no natural moment to
+  // ask — deferred rather than guessing a default), and Schedule occurrences (computed from a
+  // template, not a stored per-occurrence record — moving one would need a new per-occurrence
+  // override concept that doesn't exist yet; the *template* itself is draggable in
+  // ScheduleWeekGridPreview instead). Reminders never resize (point-in-time, no real
+  // duration) — only move.
+  const itemKey = (kind: 'event' | 'reminder', id: string): string => `${kind}-${id}`;
+  const isDraggableItem = (item: CalDisplayItem): item is Extract<CalDisplayItem, { kind: 'event' | 'reminder' }> => {
+    if (item.kind === 'event') return !events[item.id]?.repeat;
+    if (item.kind === 'reminder') return !reminders[item.id]?.repeat;
+    return false;
+  };
+  const findDraggableItem = (dateStrs: string[], key: string): CalDisplayItem | null => {
+    for (const dateStr of dateStrs) {
+      const found = (itemsByDate.get(dateStr) ?? []).find((it) => (it.kind === 'event' || it.kind === 'reminder') && itemKey(it.kind, it.id) === key);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  const weekDaysContainerRef = useRef<HTMLDivElement>(null);
+  const dayColContainerRef   = useRef<HTMLDivElement>(null);
+
+  const handleDragCommit = (key: string, result: { startMin: number; endMin: number; colIndex: number }) => {
+    const sep = key.indexOf('-');
+    const kind = key.slice(0, sep) as 'event' | 'reminder';
+    const id = key.slice(sep + 1);
+    const dateStr = desktopMode === 'week' ? weekViewDateStrs[result.colIndex] : selectedDate;
+    const time = minutesToTimeStr(result.startMin);
+    if (kind === 'event') {
+      updateEvent(id as CalendarEventId, { date: dateStr, startTime: time, endTime: minutesToTimeStr(result.endMin) });
+    } else {
+      updateReminder(id as CalendarReminderId, { date: dateStr, time });
+    }
+  };
+
+  const { preview: dragPreview, startMove: startDragMove, startResize: startDragResize, consumeSuppressedClick } = useTimeGridDrag(handleDragCommit);
 
   const weekTimeGrid = useMemo(() => {
     const perDayEntries: TimeGridEntry[][] = [];
@@ -676,7 +761,7 @@ export function CalendarView() {
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
         || (e.target as HTMLElement)?.isContentEditable;
       if (isTyping) return;
-      if (openModal || editingTaskId || editingCalendarEventId || editingCalendarReminderId || dayPaneDate) return;
+      if (openModal || editingTaskId || editingCalendarEventId || editingCalendarReminderId || editingCalendarDeadlineId || dayPaneDate) return;
 
       if (e.key.toLowerCase() === 'o' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
@@ -706,7 +791,7 @@ export function CalendarView() {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desktopMode, year, month, selectedDate, openModal, editingTaskId, editingCalendarEventId, editingCalendarReminderId, dayPaneDate, toggleSchedules]);
+  }, [desktopMode, year, month, selectedDate, openModal, editingTaskId, editingCalendarEventId, editingCalendarReminderId, editingCalendarDeadlineId, dayPaneDate, toggleSchedules]);
 
   const todayStr = todayIsoStr;
 
@@ -716,6 +801,7 @@ export function CalendarView() {
     if (item.kind === 'task')     openTaskPane(item.id);
     if (item.kind === 'event')    openCalendarEventPane(item.id, item.occurrenceDate);
     if (item.kind === 'reminder') openCalendarReminderPane(item.id, item.occurrenceDate);
+    if (item.kind === 'deadline') openCalendarDeadlinePane(item.id, item.occurrenceDate);
     if (item.kind === 'schedule') {
       const rect = e.currentTarget.getBoundingClientRect();
       setOccurrencePopover({ item, x: rect.left, y: rect.bottom + 4 });
@@ -743,7 +829,7 @@ export function CalendarView() {
   };
 
   const handleItemMouseEnter = (e: React.MouseEvent<HTMLButtonElement>, item: CalDisplayItem) => {
-    const links = item.kind === 'event' || item.kind === 'reminder' ? item.links : [];
+    const links = item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline' ? item.links : [];
     if (!item.notes && !links.length && !item.collectionId) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const collectionColor = item.collectionId ? (collectionsRecord[item.collectionId]?.color ?? null) : null;
@@ -784,10 +870,10 @@ export function CalendarView() {
   // see CLAUDE.md "Schedule commitment mode"). Both reuse the same visual language on
   // purpose — both mean "this is a possibility on your calendar, not yet a sure thing."
   const isTentativeItem = (item: CalDisplayItem): boolean =>
-    ((item.kind === 'event' || item.kind === 'reminder') && item.status === 'tentative') || (item.kind === 'schedule' && !item.committed);
+    ((item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline') && item.status === 'tentative') || (item.kind === 'schedule' && !item.committed);
 
   const isImportantItem = (item: CalDisplayItem): boolean =>
-    (item.kind === 'event' || item.kind === 'reminder') && item.important;
+    (item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline') && item.important;
 
   const getPillStyle = (item: CalDisplayItem): React.CSSProperties => {
     // A Schedule's own colour takes priority — it's the whole point of the "layer" model that
@@ -809,6 +895,13 @@ export function CalendarView() {
     }
     return {};
   };
+
+  // Background/banner pills (see "Background / banner calendar events") pick their own colour
+  // directly rather than going through getSpanPillStyle's collection-driven background+text
+  // colour swap — an explicit `color` on the event wins, falling back to its Endeavour's
+  // colour, then the same default tint every other span pill uses.
+  const resolveSpanColor = (slot: SpanSlot): string =>
+    slot.color ?? (slot.collectionId ? collectionsRecord[slot.collectionId]?.color : null) ?? 'var(--color-primary)';
 
   const isPastItem = (dateStr: string, time: string | null): boolean => {
     if (dateStr < todayStr) return true;
@@ -973,15 +1066,28 @@ export function CalendarView() {
                         {slots.map(slot => (
                           <button
                             key={slot.eventId}
-                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''}`}
+                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.background ? styles.spanPillBackground : ''}`}
                             style={{
                               gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                               gridRow: slot.row + 1,
-                              ...getSpanPillStyle(slot),
+                              ...(slot.background ? {} : getSpanPillStyle(slot)),
                             }}
+                            title={slot.background ? slot.title : undefined}
                             onClick={(e) => { e.stopPropagation(); openCalendarEventPane(slot.eventId); }}
                           >
-                            {slot.isStart && <span className={styles.spanPillTitle}>{slot.title}</span>}
+                            {slot.background ? (
+                              <>
+                                <span className={styles.spanPillBackgroundBar} style={{ background: resolveSpanColor(slot) }} />
+                                <span
+                                  className={styles.spanPillBackgroundLabel}
+                                  style={{ background: `color-mix(in srgb, ${resolveSpanColor(slot)} 18%, var(--color-surface))`, color: resolveSpanColor(slot) }}
+                                >
+                                  {slot.title}
+                                </span>
+                              </>
+                            ) : (
+                              slot.isStart && <span className={styles.spanPillTitle}>{slot.title}</span>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -1069,15 +1175,28 @@ export function CalendarView() {
                     {weekViewSpanSlots.map(slot => (
                       <button
                         key={slot.eventId}
-                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''}`}
+                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.background ? styles.spanPillBackground : ''}`}
                         style={{
                           gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                           gridRow: slot.row + 1,
-                          ...getSpanPillStyle(slot),
+                          ...(slot.background ? {} : getSpanPillStyle(slot)),
                         }}
+                        title={slot.background ? slot.title : undefined}
                         onClick={() => openCalendarEventPane(slot.eventId)}
                       >
-                        {slot.isStart && <span className={styles.spanPillTitle}>{slot.title}</span>}
+                        {slot.background ? (
+                          <>
+                            <span className={styles.spanPillBackgroundBar} style={{ background: resolveSpanColor(slot) }} />
+                            <span
+                              className={styles.spanPillBackgroundLabel}
+                              style={{ background: `color-mix(in srgb, ${resolveSpanColor(slot)} 18%, var(--color-surface))`, color: resolveSpanColor(slot) }}
+                            >
+                              {slot.title}
+                            </span>
+                          </>
+                        ) : (
+                          slot.isStart && <span className={styles.spanPillTitle}>{slot.title}</span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -1134,7 +1253,7 @@ export function CalendarView() {
                       </div>
                     ))}
                   </div>
-                  <div className={styles.weekTimeDays}>
+                  <div className={styles.weekTimeDays} ref={weekDaysContainerRef}>
                     {weekDays.map((d, i) => {
                       const dateStr    = weekViewDateStrs[i];
                       const isToday    = dateStr === todayStr;
@@ -1169,35 +1288,83 @@ export function CalendarView() {
                             const widthPct  = 100 / totalCols;
                             const startMin  = timeToMinutes(item.time!);
                             const endMin    = getItemEndMinutes(item, startMin);
+                            const draggable = isDraggableItem(item);
+                            const dragKey   = draggable ? itemKey(item.kind, item.id) : null;
+                            const resizing  = !!dragKey && dragPreview?.key === dragKey && dragPreview.mode !== 'move';
+                            const moving    = !!dragKey && dragPreview?.key === dragKey && dragPreview.mode === 'move';
+                            if (moving) return null; // rendered as the floating ghost instead, below
+                            const liveTop    = resizing ? minutesToY(dragPreview!.startMin, weekTimeGrid.layout) : top;
+                            const liveHeight = resizing ? Math.max(minutesToY(dragPreview!.endMin, weekTimeGrid.layout) - liveTop, MIN_BLOCK_HEIGHT) : height;
+                            const isReminder = item.kind === 'reminder' || item.kind === 'deadline';
                             return (
                               <button
                                 key={`${item.kind}-${item.id}`}
-                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
                                 style={{
-                                  top, height,
+                                  top: liveTop,
+                                  height: isReminder ? 'auto' : liveHeight,
+                                  maxHeight: isReminder ? liveHeight : undefined,
                                   left:  `${col * widthPct}%`,
                                   width: `calc(${widthPct}% - 2px)`,
                                   ...getPillStyle(item),
                                 }}
-                                onClick={(e) => handleItemClick(e, item)}
+                                onPointerDown={dragKey ? (e) => startDragMove(e, {
+                                  key: dragKey, startMin, endMin, colIndex: i,
+                                  layout: weekTimeGrid.layout, columnsRef: weekDaysContainerRef, columnCount: 7,
+                                }) : undefined}
+                                onClick={(e) => { if (dragKey && consumeSuppressedClick(dragKey)) return; handleItemClick(e, item); }}
                                 onMouseEnter={(e) => handleItemMouseEnter(e, item)}
                                 onMouseLeave={() => setTooltip(null)}
                                 title=""
                               >
                                 <span className={styles.weekTimeBlockTime}>
-                                  {formatItemTimeLabel(item, endMin)}
+                                  {formatItemTimeLabel(item, resizing ? dragPreview!.endMin : endMin)}
                                 </span>
                                 <span className={styles.weekTimeBlockTitle}>{item.title}</span>
                                 {getItemLocation(item) && (
                                   <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                                 )}
                                 {item.notes && <span className={styles.weekTimeBlockNotes}>{item.notes}</span>}
+                                {item.kind === 'event' && dragKey && (
+                                  <>
+                                    <span
+                                      className={styles.weekTimeBlockResizeTop}
+                                      onPointerDown={(e) => { e.stopPropagation(); startDragResize(e, 'start', {
+                                        key: dragKey, startMin, endMin, colIndex: i,
+                                        layout: weekTimeGrid.layout, columnsRef: weekDaysContainerRef, columnCount: 7,
+                                      }); }}
+                                    />
+                                    <span
+                                      className={styles.weekTimeBlockResizeBottom}
+                                      onPointerDown={(e) => { e.stopPropagation(); startDragResize(e, 'end', {
+                                        key: dragKey, startMin, endMin, colIndex: i,
+                                        layout: weekTimeGrid.layout, columnsRef: weekDaysContainerRef, columnCount: 7,
+                                      }); }}
+                                    />
+                                  </>
+                                )}
                               </button>
                             );
                           })}
                         </div>
                       );
                     })}
+                    {dragPreview?.mode === 'move' && (() => {
+                      const dragged = findDraggableItem(weekViewDateStrs, dragPreview.key);
+                      if (!dragged) return null;
+                      const ghostTop    = minutesToY(dragPreview.startMin, weekTimeGrid.layout);
+                      const ghostHeight = Math.max(minutesToY(dragPreview.endMin, weekTimeGrid.layout) - ghostTop, MIN_BLOCK_HEIGHT);
+                      const widthPct = 100 / 7;
+                      return (
+                        <div
+                          className={`${styles.weekTimeBlock} ${styles[`calItem_${dragged.kind}`]} ${styles.weekTimeBlockGhost}`}
+                          style={{ top: ghostTop, height: ghostHeight, left: `${dragPreview.colIndex * widthPct}%`, width: `calc(${widthPct}% - 2px)`, ...getPillStyle(dragged) }}
+                        >
+                          <span className={styles.weekTimeBlockTime}>{formatItemTimeLabel(dragged, dragPreview.endMin)}</span>
+                          <span className={styles.weekTimeBlockTitle}>{dragged.title}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1262,6 +1429,7 @@ export function CalendarView() {
                       <div
                         className={`${styles.weekTimeDayCol} ${styles.dayTimeDayCol}`}
                         onClick={(e) => handleColumnClick(e, selectedDate, dayTimeGrid.layout)}
+                        ref={dayColContainerRef}
                       >
                         {dayTimeGrid.layout.offsets.map((top, h) => (
                           <div
@@ -1286,28 +1454,62 @@ export function CalendarView() {
                           const widthPct  = 100 / totalCols;
                           const startMin  = timeToMinutes(item.time!);
                           const endMin    = getItemEndMinutes(item, startMin);
+                          const draggable = isDraggableItem(item);
+                          const dragKey   = draggable ? itemKey(item.kind, item.id) : null;
+                          const dragging  = !!dragKey && dragPreview?.key === dragKey;
+                          // Day view has one column, so a "move" never needs a floating ghost the
+                          // way week view's cross-day move does — it's just another in-place
+                          // top/height tweak, identical to resize.
+                          const liveTop    = dragging ? minutesToY(dragPreview!.startMin, dayTimeGrid.layout) : top;
+                          const liveHeight = dragging ? Math.max(minutesToY(dragPreview!.endMin, dayTimeGrid.layout) - liveTop, MIN_BLOCK_HEIGHT) : height;
+                          const liveEndMin = dragging ? dragPreview!.endMin : endMin;
+                          const isReminder = item.kind === 'reminder' || item.kind === 'deadline';
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
                               style={{
-                                top, height,
+                                top: liveTop,
+                                height: isReminder ? 'auto' : liveHeight,
+                                maxHeight: isReminder ? liveHeight : undefined,
                                 left:  `${col * widthPct}%`,
                                 width: `calc(${widthPct}% - 2px)`,
                                 ...getPillStyle(item),
                               }}
-                              onClick={(e) => handleItemClick(e, item)}
+                              onPointerDown={dragKey ? (e) => startDragMove(e, {
+                                key: dragKey, startMin, endMin, colIndex: 0,
+                                layout: dayTimeGrid.layout, columnsRef: dayColContainerRef, columnCount: 1,
+                              }) : undefined}
+                              onClick={(e) => { if (dragKey && consumeSuppressedClick(dragKey)) return; handleItemClick(e, item); }}
                               onMouseEnter={(e) => handleItemMouseEnter(e, item)}
                               onMouseLeave={() => setTooltip(null)}
                             >
                               <span className={styles.weekTimeBlockTime}>
-                                {formatItemTimeLabel(item, endMin)}
+                                {formatItemTimeLabel(item, liveEndMin)}
                               </span>
                               <span className={styles.weekTimeBlockTitle}>{item.title}</span>
                               {getItemLocation(item) && (
                                 <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                               )}
                               {item.notes && <span className={styles.weekTimeBlockNotes}>{item.notes}</span>}
+                              {item.kind === 'event' && dragKey && (
+                                <>
+                                  <span
+                                    className={styles.weekTimeBlockResizeTop}
+                                    onPointerDown={(e) => { e.stopPropagation(); startDragResize(e, 'start', {
+                                      key: dragKey, startMin, endMin, colIndex: 0,
+                                      layout: dayTimeGrid.layout, columnsRef: dayColContainerRef, columnCount: 1,
+                                    }); }}
+                                  />
+                                  <span
+                                    className={styles.weekTimeBlockResizeBottom}
+                                    onPointerDown={(e) => { e.stopPropagation(); startDragResize(e, 'end', {
+                                      key: dragKey, startMin, endMin, colIndex: 0,
+                                      layout: dayTimeGrid.layout, columnsRef: dayColContainerRef, columnCount: 1,
+                                    }); }}
+                                  />
+                                </>
+                              )}
                             </button>
                           );
                         })}

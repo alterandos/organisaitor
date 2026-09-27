@@ -2,11 +2,11 @@ import { z } from 'zod';
 import { defineCommand } from '@/agent/types';
 import { read, write } from '@/agent/access';
 import { AgentError } from '@/agent/errors';
-import { buildCalendarEventInput, buildCalendarReminderInput } from '@/utils/calendarItemInput';
+import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput } from '@/utils/calendarItemInput';
 import { mergeNewLinks } from '@/utils/links';
-import type { CalendarEvent, CalendarReminder, NotifyUnit } from '@/types';
+import type { CalendarEvent, CalendarReminder, CalendarDeadline, NotifyUnit } from '@/types';
 import {
-  assertTimeOrder, dateStr, eventDetail, idStr, reminderDetail, repeatSchema, requireCalendarItem, requireEndeavour,
+  assertTimeOrder, dateStr, deadlineDetail, eventDetail, idStr, reminderDetail, repeatSchema, requireCalendarItem, requireEndeavour,
   timeStr, toRepeatConfig,
 } from './shared';
 
@@ -31,18 +31,19 @@ const reminderFields = {
 };
 
 const CALENDAR_HELP =
-  'kind "event" has a start/end (a meeting, a class); kind "reminder" is a single point in time or an all-day nudge. ' +
+  'kind "event" has a start/end (a meeting, a class); kind "reminder" is a single point in time or an all-day nudge; ' +
+  'kind "deadline" is something due by a date — it only ever notifies some lead time BEFORE it is due (notifyDaysBefore/notifyAtTime), never at the moment itself, even if you give it a time. ' +
   'A birthday is an event with eventType "birthday" (no times; repeats every year).';
 
 export const createCalendarItem = defineCommand({
   name: 'create_calendar_item',
   description:
-    `Add an event or a reminder to the calendar. ${CALENDAR_HELP} Check get_calendar_range for the day first if timing matters, ` +
+    `Add an event, a reminder or a deadline to the calendar. ${CALENDAR_HELP} Check get_calendar_range for the day first if timing matters, ` +
     'and search to avoid a duplicate. For work the user needs to do, create a task instead.',
   tier: 'create',
   approval: 'auto',
   input: z.object({
-    kind: z.enum(['event', 'reminder']),
+    kind: z.enum(['event', 'reminder', 'deadline']),
     title: z.string().trim().min(1).max(300),
     date: dateStr,
     notes: z.string().max(10_000).optional(),
@@ -58,16 +59,25 @@ export const createCalendarItem = defineCommand({
     if (input.endeavourId) requireEndeavour(input.endeavourId);
     const repeat = input.repeat ? toRepeatConfig(input.repeat) : null;
 
-    if (input.kind === 'reminder') {
+    if (input.kind === 'reminder' || input.kind === 'deadline') {
       const stray = (['endDate', 'startTime', 'endTime', 'location', 'tentative', 'notifyBefore', 'eventType'] as const).filter((k) => input[k] != null);
-      if (stray.length) throw new AgentError('invalid', `A reminder has no ${stray.join(', ')}. Use kind "event" for those, or "time" for a reminder's time.`);
-      const id = write.createReminder(buildCalendarReminderInput({
+      if (stray.length) throw new AgentError('invalid', `A ${input.kind} has no ${stray.join(', ')}. Use kind "event" for those, or "time" for a ${input.kind}'s time.`);
+      if (input.kind === 'reminder') {
+        const id = write.createReminder(buildCalendarReminderInput({
+          title: input.title, date: input.date, time: input.time, notes: input.notes, links: input.links,
+          collectionId: (input.endeavourId ?? null) as never, repeat, important: input.important,
+          notifyDaysBefore: input.notifyDaysBefore, notifyAtTime: input.notifyAtTime,
+        }));
+        ctx.seen('reminder', id);
+        return { created: reminderDetail(read.reminder(id) as CalendarReminder) };
+      }
+      const id = write.createDeadline(buildCalendarDeadlineInput({
         title: input.title, date: input.date, time: input.time, notes: input.notes, links: input.links,
         collectionId: (input.endeavourId ?? null) as never, repeat, important: input.important,
         notifyDaysBefore: input.notifyDaysBefore, notifyAtTime: input.notifyAtTime,
       }));
-      ctx.seen('reminder', id);
-      return { created: reminderDetail(read.reminder(id) as CalendarReminder) };
+      ctx.seen('deadline', id);
+      return { created: deadlineDetail(read.deadline(id) as CalendarDeadline) };
     }
 
     if (input.time != null) throw new AgentError('invalid', 'An event uses startTime/endTime, not "time".');
@@ -91,9 +101,9 @@ export const createCalendarItem = defineCommand({
 export const updateCalendarItem = defineCommand({
   name: 'update_calendar_item',
   description:
-    'Change fields of an existing event or reminder (find its id with get_calendar_range or search). Only the fields you pass change; ' +
+    'Change fields of an existing event, reminder or deadline (find its id with get_calendar_range or search). Only the fields you pass change; ' +
     'null clears a nullable field. This changes the whole series if it repeats — use edit_occurrence for a single date. ' +
-    'Items that belong to a task (a task deadline reminder, or the event for a scheduled task) follow the task: change those through update_task.',
+    'Items that belong to a task (a task\'s deadline, or the event for a scheduled task) follow the task: change those through update_task.',
   tier: 'modify',
   approval: 'auto',
   input: z.object({
@@ -113,12 +123,13 @@ export const updateCalendarItem = defineCommand({
     if (input.endeavourId) requireEndeavour(input.endeavourId);
     const repeat = input.repeat === undefined ? undefined : input.repeat === null ? null : toRepeatConfig(input.repeat);
 
-    if (ref.kind === 'reminder') {
+    if (ref.kind === 'reminder' || ref.kind === 'deadline') {
       const r = ref.item;
-      if (r.reminderType === 'task') throw new AgentError('refused', 'This reminder is a task deadline. Change the task\'s deadline with update_task.');
+      const isTaskShadow = ref.kind === 'reminder' ? (r as CalendarReminder).reminderType === 'task' : (r as CalendarDeadline).deadlineType === 'task';
+      if (isTaskShadow) throw new AgentError('refused', `This ${ref.kind} is a task deadline. Change the task's deadline with update_task.`);
       const stray = (['endDate', 'startTime', 'endTime', 'location', 'tentative', 'notifyBefore'] as const).filter((k) => input[k] != null);
-      if (stray.length) throw new AgentError('invalid', `A reminder has no ${stray.join(', ')}.`);
-      const changes: Partial<Omit<CalendarReminder, 'id' | 'createdAt'>> = {};
+      if (stray.length) throw new AgentError('invalid', `A ${ref.kind} has no ${stray.join(', ')}.`);
+      const changes: Partial<Omit<CalendarReminder | CalendarDeadline, 'id' | 'createdAt'>> = {};
       if (input.title !== undefined) changes.title = input.title;
       if (input.date !== undefined) changes.date = input.date;
       if (input.notes !== undefined) { changes.notes = input.notes || null; changes.links = mergeNewLinks(r.links, input.notes, r.notes); }
@@ -129,9 +140,14 @@ export const updateCalendarItem = defineCommand({
       if (input.notifyDaysBefore !== undefined) changes.notifyDaysBefore = input.notifyDaysBefore;
       if (input.notifyAtTime !== undefined) changes.notifyAtTime = input.notifyAtTime;
       if (Object.keys(changes).length === 0) throw new AgentError('invalid', 'Nothing to change: pass at least one field besides id.');
-      write.updateReminder(r.id, changes);
-      ctx.seen('reminder', r.id);
-      return { updated: reminderDetail(read.reminder(r.id) as CalendarReminder) };
+      if (ref.kind === 'reminder') {
+        write.updateReminder(r.id, changes);
+        ctx.seen('reminder', r.id);
+        return { updated: reminderDetail(read.reminder(r.id) as CalendarReminder) };
+      }
+      write.updateDeadline(r.id, changes);
+      ctx.seen('deadline', r.id);
+      return { updated: deadlineDetail(read.deadline(r.id) as CalendarDeadline) };
     }
 
     const e = ref.item;
@@ -187,7 +203,10 @@ export const editOccurrence = defineCommand({
   run: (input, ctx) => {
     const ref = requireCalendarItem(input.id);
     if (!ref.item.repeat) throw new AgentError('invalid', 'That item does not repeat, so there is no occurrence to edit.');
-    if (ref.kind === 'event' ? ref.item.eventType === 'task' : ref.item.reminderType === 'task') {
+    const belongsToTask = ref.kind === 'event' ? ref.item.eventType === 'task'
+      : ref.kind === 'reminder' ? ref.item.reminderType === 'task'
+      : ref.item.deadlineType === 'task';
+    if (belongsToTask) {
       throw new AgentError('refused', 'This item belongs to a task, which does not repeat.');
     }
     if (input.date < ref.item.date) throw new AgentError('invalid', `The series starts on ${ref.item.date}; ${input.date} is before that.`);

@@ -5,10 +5,13 @@ import type {
   CalendarEventId,
   CalendarReminder,
   CalendarReminderId,
+  CalendarDeadline,
+  CalendarDeadlineId,
   CreateCalendarEventInput,
   CreateCalendarReminderInput,
+  CreateCalendarDeadlineInput,
 } from '@/types';
-import { newCalendarEventId, newCalendarReminderId } from '@/utils/id';
+import { newCalendarEventId, newCalendarReminderId, newCalendarDeadlineId } from '@/utils/id';
 import { now } from '@/utils/date';
 import { deriveNotifyBefore } from '@/utils/googleReminders';
 import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
@@ -26,6 +29,7 @@ function sourceKey(connectionId: string, calendarId: string, eventId: string): s
 interface CalendarState {
   events:    Record<CalendarEventId,    CalendarEvent>;
   reminders: Record<CalendarReminderId, CalendarReminder>;
+  deadlines: Record<CalendarDeadlineId, CalendarDeadline>;
 
   addEvent:    (input: CreateCalendarEventInput)    => CalendarEventId;
   updateEvent: (id: CalendarEventId, changes: Partial<Omit<CalendarEvent,    'id' | 'createdAt'>>) => void;
@@ -38,6 +42,12 @@ interface CalendarState {
   deleteReminder: (id: CalendarReminderId)                => void;
   archiveReminder: (id: CalendarReminderId, reason?: string | null) => void;
   restoreReminder: (id: CalendarReminderId) => void;
+
+  addDeadline:    (input: CreateCalendarDeadlineInput)    => CalendarDeadlineId;
+  updateDeadline: (id: CalendarDeadlineId, changes: Partial<Omit<CalendarDeadline, 'id' | 'createdAt'>>) => void;
+  deleteDeadline: (id: CalendarDeadlineId)                => void;
+  archiveDeadline: (id: CalendarDeadlineId, reason?: string | null) => void;
+  restoreDeadline: (id: CalendarDeadlineId) => void;
 
   // Individual-occurrence editing for repeating items (see src/utils/recurrence.ts). "skip" =
   // delete just this date; "endBefore" = delete this date and everything after; "detach" =
@@ -53,6 +63,10 @@ interface CalendarState {
   endReminderSeriesBefore:   (id: CalendarReminderId, date: string) => void;
   detachReminderOccurrence:  (id: CalendarReminderId, date: string) => CalendarReminderId | null;
   splitReminderSeries:       (id: CalendarReminderId, date: string) => CalendarReminderId | null;
+  skipDeadlineOccurrence:    (id: CalendarDeadlineId, date: string) => void;
+  endDeadlineSeriesBefore:   (id: CalendarDeadlineId, date: string) => void;
+  detachDeadlineOccurrence:  (id: CalendarDeadlineId, date: string) => CalendarDeadlineId | null;
+  splitDeadlineSeries:       (id: CalendarDeadlineId, date: string) => CalendarDeadlineId | null;
 
   // External calendar sync (see CLAUDE.md "External calendar sync — built (Google, Phase
   // 1)"). Local-only, deliberately NOT part of the Supabase-synced entity rows — a plain
@@ -71,6 +85,7 @@ export const useCalendarStore = create<CalendarState>()(
     (set, get) => ({
       events:    {},
       reminders: {},
+      deadlines: {},
 
       addEvent: (input) => {
         const id  = newCalendarEventId();
@@ -96,6 +111,8 @@ export const useCalendarStore = create<CalendarState>()(
           repeat:            input.repeat             ?? null,
           status:            input.status             ?? 'confirmed',
           important:         input.important         ?? false,
+          background:        input.background        ?? false,
+          color:             input.color              ?? null,
           crossAppRefs:      input.crossAppRefs      ?? [],
           archivedAt:        null,
           archiveReason:     null,
@@ -194,6 +211,62 @@ export const useCalendarStore = create<CalendarState>()(
         return { reminders: rest as Record<CalendarReminderId, CalendarReminder> };
       }),
 
+      addDeadline: (input) => {
+        const id = newCalendarDeadlineId();
+        const ts = now();
+        const deadline: CalendarDeadline = {
+          id,
+          title:        input.title.trim(),
+          date:         input.date,
+          time:         input.time         ?? null,
+          notes:        input.notes        ?? null,
+          links:        input.links ?? mergeNewLinks([], input.notes),
+          collectionId: input.collectionId ?? null,
+          deadlineType: input.deadlineType ?? 'default',
+          createdAt:    ts,
+          updatedAt:    ts,
+          remindAt:     null,
+          repeat:       input.repeat ?? null,
+          important:    input.important ?? false,
+          status:       input.status ?? 'confirmed',
+          crossAppRefs: input.crossAppRefs ?? [],
+          archivedAt:    null,
+          archiveReason: null,
+          notifyDaysBefore: input.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE,
+          notifyAtTime:     input.notifyAtTime     ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
+        };
+        set((s) => ({ deadlines: { ...s.deadlines, [id]: deadline } }));
+        return id;
+      },
+
+      updateDeadline: (id, changes) => set((s) => {
+        const deadline = s.deadlines[id];
+        if (!deadline) return {};
+        const patch = changes.notes !== undefined
+          ? { ...changes, links: mergeNewLinks(changes.links ?? deadline.links ?? [], changes.notes, deadline.notes) }
+          : changes;
+        return { deadlines: { ...s.deadlines, [id]: { ...deadline, ...patch, updatedAt: now() } } };
+      }),
+
+      archiveDeadline: (id, reason) => set((s) => {
+        const deadline = s.deadlines[id];
+        if (!deadline || deadline.archivedAt) return {};
+        const ts = now();
+        return { deadlines: { ...s.deadlines, [id]: { ...deadline, archivedAt: ts, archiveReason: reason?.trim() || null, updatedAt: ts } } };
+      }),
+
+      restoreDeadline: (id) => set((s) => {
+        const deadline = s.deadlines[id];
+        if (!deadline?.archivedAt) return {};
+        return { deadlines: { ...s.deadlines, [id]: { ...deadline, archivedAt: null, archiveReason: null, updatedAt: now() } } };
+      }),
+
+      deleteDeadline: (id) => set((s) => {
+        const { [id]: removed, ...rest } = s.deadlines;
+        if (removed) moveToTrash('calendarDeadline', removed);
+        return { deadlines: rest as Record<CalendarDeadlineId, CalendarDeadline> };
+      }),
+
       skipEventOccurrence: (id, date) => {
         const ev = get().events[id];
         if (ev?.repeat) get().updateEvent(id, { repeat: withException(ev.repeat, date) });
@@ -248,6 +321,33 @@ export const useCalendarStore = create<CalendarState>()(
         return get().addReminder({ ...rem, date, crossAppRefs: [], repeat: tail });
       },
 
+      skipDeadlineOccurrence: (id, date) => {
+        const dl = get().deadlines[id];
+        if (dl?.repeat) get().updateDeadline(id, { repeat: withException(dl.repeat, date) });
+      },
+
+      endDeadlineSeriesBefore: (id, date) => {
+        const dl = get().deadlines[id];
+        if (!dl?.repeat) return;
+        if (date <= dl.date) get().deleteDeadline(id);
+        else get().updateDeadline(id, { repeat: endedBefore(dl.repeat, date) });
+      },
+
+      detachDeadlineOccurrence: (id, date) => {
+        const dl = get().deadlines[id];
+        if (!dl?.repeat) return null;
+        get().updateDeadline(id, { repeat: withException(dl.repeat, date) });
+        return get().addDeadline({ ...dl, date, crossAppRefs: [], repeat: null });
+      },
+
+      splitDeadlineSeries: (id, date) => {
+        const dl = get().deadlines[id];
+        if (!dl?.repeat || date <= dl.date) return null;
+        const tail = tailOf(dl.date, dl.repeat, date);
+        get().updateDeadline(id, { repeat: endedBefore(dl.repeat, date) });
+        return get().addDeadline({ ...dl, date, crossAppRefs: [], repeat: tail });
+      },
+
       importedSourceKeys: [],
       upsertSyncedEvent: (input) => {
         const key = sourceKey(input.sourceConnectionId, input.sourceCalendarId, input.sourceEventId);
@@ -270,7 +370,7 @@ export const useCalendarStore = create<CalendarState>()(
     {
       name: 'todo-calendar',
       storage: persistStorage(),
-      version: 11,
+      version: 14,
       migrate(state: any, version: number) {
         if (version < 2) {
           const events = state.events ?? {};
@@ -327,6 +427,19 @@ export const useCalendarStore = create<CalendarState>()(
         }
         if (version < 11) {
           Object.values(state.reminders ?? {}).forEach((rem: any) => { if (rem.status === undefined) rem.status = 'confirmed'; });
+        }
+        if (version < 12) {
+          Object.values(state.events ?? {}).forEach((ev: any) => { if (ev.background === undefined) ev.background = false; });
+        }
+        if (version < 13) {
+          Object.values(state.events ?? {}).forEach((ev: any) => { if (ev.color === undefined) ev.color = null; });
+        }
+        if (version < 14) {
+          // New top-level record slice, not just a new field — a store that has never seen
+          // this key needs it defaulted the same way a brand-new persisted store would (see
+          // CLAUDE.md "Unversioned stores"), just as a version-gated step within an existing
+          // store rather than the store's very first version.
+          if (state.deadlines === undefined) state.deadlines = {};
         }
         return state as CalendarState;
       },

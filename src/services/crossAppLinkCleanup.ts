@@ -12,7 +12,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { stripArtifactLinksFromContent } from '@/utils/noteContent';
 import { noteView, isNoteLocked } from '@/services/noteSecrets';
-import type { TaskId, NoteId, CalendarEventId, CalendarReminderId, CrossAppRef, CrossAppRefType } from '@/types';
+import type { TaskId, NoteId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, CrossAppRef, CrossAppRefType } from '@/types';
 
 function stripArtifactLinksFromNote(noteId: NoteId, targetType: string, targetId: string) {
   const raw = useNoteStore.getState().notes[noteId];
@@ -45,7 +45,11 @@ export function deleteTaskWithCleanup(taskId: TaskId) {
   for (const subId of [...(task.subtaskIds ?? [])]) deleteTaskWithCleanup(subId);
 
   if (task.calendarEventId) useCalendarStore.getState().deleteEvent(task.calendarEventId);
+  // calendarReminderId is legacy (pre-2026-09-27 task-deadline shadows) — kept as a cleanup
+  // fallback for any task whose shadow hasn't been migrated to calendarDeadlineId yet (see
+  // services/taskDeadlineMigration.ts); every task going forward only ever has the latter.
   if (task.calendarReminderId) useCalendarStore.getState().deleteReminder(task.calendarReminderId);
+  if (task.calendarDeadlineId) useCalendarStore.getState().deleteDeadline(task.calendarDeadlineId);
 
   for (const ref of task.crossAppRefs ?? []) {
     if (ref.type === 'note') stripArtifactLinksFromNote(ref.id as NoteId, 'task', taskId);
@@ -79,6 +83,15 @@ export function deleteReminderWithCleanup(reminderId: CalendarReminderId) {
   useCalendarStore.getState().deleteReminder(reminderId);
 }
 
+export function deleteDeadlineWithCleanup(deadlineId: CalendarDeadlineId) {
+  const deadline = useCalendarStore.getState().deadlines[deadlineId];
+  if (!deadline) return;
+  for (const ref of deadline.crossAppRefs ?? []) {
+    if (ref.type === 'note') stripArtifactLinksFromNote(ref.id as NoteId, 'deadline', deadlineId);
+  }
+  useCalendarStore.getState().deleteDeadline(deadlineId);
+}
+
 // Deletes a note and strips any dangling reverse reference to it (e.g. a Task's
 // crossAppRefs entry pointing at this note). The note's own outgoing ArtifactLinkMarks
 // disappear along with its content — nothing to clean up on that side. Any StructuredTagEntry
@@ -101,6 +114,9 @@ export function deleteNoteWithCleanup(noteId: NoteId) {
   for (const reminder of Object.values(calendar.reminders)) {
     if (reminder.crossAppRefs?.some(isThisNote)) calendar.updateReminder(reminder.id, { crossAppRefs: reminder.crossAppRefs.filter((r) => !isThisNote(r)) });
   }
+  for (const deadline of Object.values(calendar.deadlines)) {
+    if (deadline.crossAppRefs?.some(isThisNote)) calendar.updateDeadline(deadline.id, { crossAppRefs: deadline.crossAppRefs.filter((r) => !isThisNote(r)) });
+  }
   const { structuredTagEntries, deleteStructuredTagEntry } = useNoteStore.getState();
   for (const entry of Object.values(structuredTagEntries)) {
     if (entry.noteId === noteId) deleteStructuredTagEntry(entry.id);
@@ -122,6 +138,9 @@ export function removeCrossAppRefFromTarget(targetType: CrossAppRefType, targetI
   } else if (targetType === 'reminder') {
     const reminder = useCalendarStore.getState().reminders[targetId as CalendarReminderId];
     if (reminder) useCalendarStore.getState().updateReminder(reminder.id, { crossAppRefs: keep(reminder.crossAppRefs) });
+  } else if (targetType === 'deadline') {
+    const deadline = useCalendarStore.getState().deadlines[targetId as CalendarDeadlineId];
+    if (deadline) useCalendarStore.getState().updateDeadline(deadline.id, { crossAppRefs: keep(deadline.crossAppRefs) });
   }
 }
 

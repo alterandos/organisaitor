@@ -113,12 +113,12 @@ describe('undo batches', () => {
     if (r.status !== 'done') throw new Error('expected done');
     expect(read.tasks()).toHaveLength(1);
     expect(read.events()).toHaveLength(1);
-    expect(read.reminders()).toHaveLength(1);
+    expect(read.deadlines()).toHaveLength(1);
     const result = revertBatch(r.batchId!);
     expect(result).toMatchObject({ reverted: 3, skipped: [] });
     expect(read.tasks()).toHaveLength(0);
     expect(read.events()).toHaveLength(0);
-    expect(read.reminders()).toHaveLength(0);
+    expect(read.deadlines()).toHaveLength(0);
   });
 
   it('restores a modified item to how it was, with a fresh updatedAt', () => {

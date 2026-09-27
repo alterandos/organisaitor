@@ -40,13 +40,26 @@ describe('settingsStore migration', () => {
     expect(state.calendarLayerVisibility.reminders).toBe(false);
   });
 
-  it('v0 -> v2 (unversioned legacy store) ends up with every current field', async () => {
+  it('v3 -> v4 backfills calendarLayerVisibility.deadlines to true (missing key must not read as hidden)', async () => {
+    seed(
+      'todo-settings',
+      { theme: 'dark', calendarLayerVisibility: { events: true, reminders: true, taskScheduled: true, taskDeadlines: true, tentative: true } },
+      3
+    );
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    const state = useSettingsStore.getState();
+    expect(state.calendarLayerVisibility.deadlines).toBe(true);
+    expect(state.theme).toBe('dark');
+  });
+
+  it('v0 -> v4 (unversioned legacy store) ends up with every current field', async () => {
     seed('todo-settings', { clockFormat: '12h' }, 0);
     const { useSettingsStore } = await import('@/store/settingsStore');
     await flush();
     const state = useSettingsStore.getState();
     expect(state.clockFormat).toBe('12h');
-    expect(state.calendarLayerVisibility).toMatchObject({ events: true, tentative: true });
+    expect(state.calendarLayerVisibility).toMatchObject({ events: true, tentative: true, deadlines: true });
   });
 
   it('a fresh install with no persisted state at all gets the full default shape', async () => {
@@ -132,7 +145,7 @@ describe('taskStore migration', () => {
     vi.resetModules();
   });
 
-  it('v9 -> v11 (single-step gap, as CLAUDE.md documents) backfills crossAppRefs and archivedAt/archiveReason', async () => {
+  it('v9 -> v12 (multi-step gap, as CLAUDE.md documents) backfills crossAppRefs, archivedAt/archiveReason and calendarDeadlineId', async () => {
     seed(
       'todo-app-storage',
       {
@@ -147,10 +160,11 @@ describe('taskStore migration', () => {
     expect(t.crossAppRefs).toEqual([]);
     expect(t.archivedAt).toBeNull();
     expect(t.archiveReason).toBeNull();
+    expect(t.calendarDeadlineId).toBeNull();
   });
 
   it(
-    'a store several versions behind (v2) receives EVERY applicable patch on the way to v11, ' +
+    'a store several versions behind (v2) receives EVERY applicable patch on the way to v12, ' +
       'not just the first one — regression test for a real bug found 2026-09-24: each ' +
       '`if (fromVersion < N)` branch used to `return` immediately, so a store that skipped ' +
       'several app versions in one load (e.g. was not opened for months) silently ended up ' +
@@ -185,6 +199,7 @@ describe('taskStore migration', () => {
       expect(t.crossAppRefs).toEqual([]);
       expect(t.archivedAt).toBeNull();
       expect(t.archiveReason).toBeNull();
+      expect(t.calendarDeadlineId).toBeNull();
     }
   );
 });

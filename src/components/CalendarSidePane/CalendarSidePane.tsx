@@ -24,6 +24,7 @@ import { alertDialog, confirmDialog, confirmDelete } from '@/components/ConfirmD
 const LAYERS: { key: CalendarLayerKey; label: string }[] = [
   { key: 'events',        label: 'Events'           },
   { key: 'reminders',     label: 'Reminders'        },
+  { key: 'deadlines',     label: 'Deadlines'        },
   { key: 'taskScheduled', label: 'Task scheduled'   },
   { key: 'taskDeadlines', label: 'Task deadlines'   },
   { key: 'tentative',     label: 'Tentative events' },

@@ -92,7 +92,7 @@ export const restoreItem = defineCommand({
 
 function setArchived(
   type: z.infer<typeof ARCHIVABLE>, id: string, archive: boolean, reason: string | undefined,
-  seen: (kind: 'task' | 'event' | 'reminder' | 'endeavour' | 'purpose', id: string) => void,
+  seen: (kind: 'task' | 'event' | 'reminder' | 'deadline' | 'endeavour' | 'purpose', id: string) => void,
 ) {
   const now = new Date().toISOString();
   if (type === 'task') {
@@ -104,12 +104,16 @@ function setArchived(
   }
   if (type === 'calendar_item') {
     const ref = requireCalendarItem(id);
-    if (ref.kind === 'event' ? ref.item.eventType === 'task' : ref.item.reminderType === 'task') {
+    const belongsToTask = ref.kind === 'event' ? ref.item.eventType === 'task'
+      : ref.kind === 'reminder' ? ref.item.reminderType === 'task'
+      : ref.item.deadlineType === 'task';
+    if (belongsToTask) {
       throw new AgentError('refused', 'This item belongs to a task. Archive or restore the task instead.');
     }
     if (!!ref.item.archivedAt === archive) return { unchanged: true };
     if (ref.kind === 'event') { if (archive) write.archiveEvent(id, reason); else write.restoreEvent(id); }
-    else if (archive) write.archiveReminder(id, reason); else write.restoreReminder(id);
+    else if (ref.kind === 'reminder') { if (archive) write.archiveReminder(id, reason); else write.restoreReminder(id); }
+    else if (archive) write.archiveDeadline(id, reason); else write.restoreDeadline(id);
     seen(ref.kind, id);
     return { id, archived: archive };
   }

@@ -12,6 +12,7 @@ import { checkVaultStatus, resetVaultModuleState } from '@/services/vault';
 import { initNoteSecretsSync } from '@/services/noteSecretsSync';
 import { initListSecretsSync } from '@/services/listSecretsSync';
 import { initAutoBackup } from '@/services/autoBackup';
+import { migrateTaskDeadlineShadows } from '@/services/taskDeadlineMigration';
 import { DecryptPrompt } from '@/components/DecryptPrompt/DecryptPrompt';
 import { backfillTaskCalendarLinks } from '@/services/taskCalendarBackfill';
 import { syncGoogleCalendars } from '@/services/googleCalendar';
@@ -50,6 +51,7 @@ import { SettingsPane } from '@/components/SettingsPane/SettingsPane';
 import { ManagePane } from '@/components/ManagePane/ManagePane';
 import { CalendarEventPane } from '@/components/CalendarEventPane/CalendarEventPane';
 import { CalendarReminderPane } from '@/components/CalendarReminderPane/CalendarReminderPane';
+import { CalendarDeadlinePane } from '@/components/CalendarDeadlinePane/CalendarDeadlinePane';
 import { AddTaskModal } from '@/components/AddTaskModal/AddTaskModal';
 import { AddCollectionModal } from '@/components/AddCollectionModal/AddCollectionModal';
 import { AddPurposeModal } from '@/components/AddPurposeModal/AddPurposeModal';
@@ -121,6 +123,7 @@ export default function App() {
   const activeView                 = useUIStore((s) => s.activeView);
   const editingCalendarEventId     = useUIStore((s) => s.editingCalendarEventId);
   const editingCalendarReminderId  = useUIStore((s) => s.editingCalendarReminderId);
+  const editingCalendarDeadlineId  = useUIStore((s) => s.editingCalendarDeadlineId);
   const integrationsOpen           = useUIStore((s) => s.integrationsOpen);
   const recyclingBinOpen           = useUIStore((s) => s.recyclingBinOpen);
   const openRecyclingBin           = useUIStore((s) => s.openRecyclingBin);
@@ -229,7 +232,7 @@ export default function App() {
   }, [isAndroid]);
 
   useNotificationChecker();
-  useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initAutoBackup(); }, []);
+  useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initAutoBackup(); migrateTaskDeadlineShadows(); }, []);
 
   const setSession = useAuthStore((s) => s.setSession);
   const authUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -597,6 +600,7 @@ export default function App() {
         {recyclingBinOpen          && <RecyclingBinPane />}
         {editingCalendarEventId    && <CalendarEventPane key={editingCalendarEventId} />}
         {editingCalendarReminderId && <CalendarReminderPane key={editingCalendarReminderId} />}
+        {editingCalendarDeadlineId && <CalendarDeadlinePane key={editingCalendarDeadlineId} />}
 
         {openModal === 'add-task'            && <AddTaskModal />}
         {openModal === 'add-collection'      && <AddCollectionModal key={editingCollection?.id ?? 'new'} />}

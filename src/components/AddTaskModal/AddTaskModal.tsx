@@ -11,6 +11,8 @@ import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import styles from './AddTaskModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
+import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 
 type PendingTag = { id: TagId; name: string; isNew: boolean };
 
@@ -44,6 +46,8 @@ export function AddTaskModal() {
 
   const [title,         setTitle]         = useState(quickAddPrefill?.title ?? '');
   const [notes,         setNotes]         = useState('');
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
   const [deadline,      setDeadline]      = useState(quickAddPrefill?.deadline ?? '');
   const [deadlineTime,  setDeadlineTime]  = useState(quickAddPrefill?.deadlineTime ?? '');
   const [scheduledAt,   setScheduledAt]   = useState('');
@@ -234,8 +238,9 @@ export function AddTaskModal() {
           />
 
           <textarea
+            ref={notesRef}
             className={styles.notes}
-            placeholder="Notes (optional)"
+            placeholder="Notes (optional) — Ctrl+B/I bold/italic, Ctrl+L to insert a link"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
@@ -514,6 +519,14 @@ export function AddTaskModal() {
           </div>
         </form>
       </div>
+      {linkPrompt && (
+        <MarkdownLinkPrompt
+          anchorRect={linkPrompt.anchorRect}
+          initialText={linkPrompt.initialText}
+          onConfirm={confirmLink}
+          onCancel={cancelLink}
+        />
+      )}
     </div>
   );
 }
