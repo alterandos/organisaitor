@@ -1,8 +1,8 @@
 # Android Build — Architecture & Foundation
 
-**Status:** Phase 0/1 planning document. Nothing described here is built yet — no Capacitor
-dependency is installed, no `android/` directory exists, no entitlement/billing code exists.
-This is the design that subsequent build phases implement against.
+**Status:** Track A is built except step 8 (launcher icons); Track B (entitlements, billing,
+ads) is not built. What exists is in `implementation-status.md`; what's missing against desktop
+is in `10-gap-analysis.md`; the rules for building it are in `11-design-and-coding-patterns.md`.
 
 **Scope of this document:** the shared substrate every Android app (Tasks, Calendar, Records,
 Lists, Notes, Portfolio, Fitness) sits on — process model, multi-entry-point launcher icons,

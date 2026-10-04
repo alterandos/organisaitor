@@ -1,6 +1,7 @@
 # Android Build — Phase 1: Tasks App
 
-**Status:** Planning document. Nothing described here is built. Implements against the
+**Status:** Built (see `implementation-status.md` Phase 1). Gaps opened since by desktop work
+are in `10-gap-analysis.md` §B. Implements against the
 foundation in `docs/android/00-architecture.md` — read that first, especially ADR-8 (shared
 data layer, not shared UI) and ADR-3/§4 (entry points), before this file.
 

@@ -1,6 +1,8 @@
 # Android — touch support for drag-and-drop features
 
-## Status: needs investigation + implementation (this is active work, not a maybe)
+## Status: approach decided 2026-10-04: Option B (hand-rolled), not built
+
+The user chose **Option B** (D10 in `10-gap-analysis.md`): one hand-rolled long-press-then-drag hook, `useTouchDrag` (`11-design-and-coding-patterns.md` §7), shared by note tabs, list tabs, the Chronicle tree and the calendar's long-press block pickup (D3). Option A (a polyfill) was rejected because its position translation is risky for the tree's before/inside/after zones. The "confirm with the user" steps below are therefore done; built as workstream W4.
 
 Three features added to the web/desktop build (commit `abfe2b9`, "Added List tab
 drag-and-drop reordering, Chronicle tree drag-and-drop nesting, some Notes nav-column

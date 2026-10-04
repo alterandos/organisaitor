@@ -1,6 +1,6 @@
 # Android Build — Phase 3: Records App
 
-**Status:** Planning document. Nothing described here is built. Implements against the
+**Status:** Not built. **On hold since 2026-10-04.** New phone-design proposals (R1–R8) and open questions (Q1–Q3) are in `10-gap-analysis.md` §D-hold; resume there, then rewrite this file. Implements against the
 foundation in `docs/android/00-architecture.md` and follows the same reuse-vs-new methodology
 established in `docs/android/01-tasks-app.md` (ADR-8) — read both first, plus
 `docs/android/02-calendar-app.md` for the sibling pattern this document mirrors.

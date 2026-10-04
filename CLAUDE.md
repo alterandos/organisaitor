@@ -53,7 +53,7 @@ The suite is extended to Android via **Capacitor**, wrapping this same codebase 
 | `docs/features/implemented-features.md` | Running log of built features: what, why, files, integration points, bugs found and how |
 | `docs/features/fitness.md`, `schedules.md`, `external-calendar-sync.md`, `overview.md` | The big self-contained features |
 | `docs/features/not-yet-implemented.md` | Short summary list (full specs are in BACKLOG.md) |
-| `docs/android/` | Android/Capacitor architecture, phased plan, and `implementation-status.md` |
+| `docs/android/` | Android/Capacitor architecture, phased plan, and `implementation-status.md`; `05-notifications.md` (notifications/reminders design), `10-gap-analysis.md` (desktop→Android gaps, decisions, workstreams) and `11-design-and-coding-patterns.md` (Android design and coding rules — read before any Android work) |
 | `docs/agent-tasks/` | Self-contained briefs for follow-up work an agent can pick up cold |
 | `docs/ai/` | The AI agent integration: `01-capability-inventory.md` (what the app can do, invariants, decisions, what is left) and `02-command-layer.md` (the built command layer: design, how to add a command, tests) |
 | `BACKLOG.md` | Confirmed-but-unbuilt requirements, and the **Pattern retrofit backlog** |
@@ -109,6 +109,7 @@ The split only stays useful if every agent follows the same structure. These rul
 - [ ] If a new persisted store was added: its key is in `PERSISTED_STORAGE_KEYS` (`src/config/backup.ts`) and it has a `version`
 - [ ] If a new pattern was defined: recorded here, applied to new code, and the retrofit audit logged in BACKLOG.md
 - [ ] Build passes (`npm run build`) and tests pass (`npm test`)
+- [ ] **Android parity** (decided 2026-10-04): for a user-facing change, either it works on Android as-is, or it was built for Android in the same change, or an Android follow-up is logged in `docs/android/10-gap-analysis.md` (give the ID). A new hover, drag or hotkey affordance names its touch path (`docs/android/11-design-and-coding-patterns.md` §5–6)
 - [ ] **Automated tests added/updated for whatever you changed, if that area has coverage** (see "Testing" below for what's covered) — running them is your regression testing; don't also manually re-verify what they already prove
 - [ ] For anything NOT yet covered by the automated suite, verified manually (or via Playwright) instead — and consider whether it was worth turning into a permanent test rather than a one-off check
 - [ ] A future Claude reading CLAUDE.md + the docs + BACKLOG.md would understand what exists, where the code lives, how it connects, and what's not done

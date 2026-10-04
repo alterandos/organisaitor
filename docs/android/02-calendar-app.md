@@ -1,6 +1,7 @@
 # Android Build — Phase 2: Calendar App
 
-**Status:** Planning document. Nothing described here is built. Implements against the
+**Status:** Built (see `implementation-status.md` Phase 2). Gaps opened since by desktop work
+are in `10-gap-analysis.md` §C. Implements against the
 foundation in `docs/android/00-architecture.md` and follows the same reuse-vs-new methodology
 established in `docs/android/01-tasks-app.md` (ADR-8) — read both first.
 

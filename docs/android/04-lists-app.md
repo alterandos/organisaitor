@@ -1,6 +1,6 @@
 # Android Build — Phase 4: Lists App
 
-**Status:** Planning document. Nothing described here is built. Implements against the
+**Status:** Not built. Predates checklists; additions are in `10-gap-analysis.md` §E. Implements against the
 foundation in `docs/android/00-architecture.md` and follows the same reuse-vs-new methodology
 established in `docs/android/01-tasks-app.md` (ADR-8) — read that first, plus
 `docs/android/03-records-app.md` specifically, since Lists shares its exact sidebar+detail
