@@ -5,6 +5,7 @@ import { getActivityType } from '@/utils/fitnessActivityTypes';
 import { formatDistance, formatDuration, formatSpeed } from '@/utils/fitnessFormat';
 import { formatDate } from '@/utils/date';
 import { getStravaConnectUrl, checkStravaStatus, syncStrava, type StravaStatus } from '@/services/strava';
+import { openOAuthFlow } from '@/services/oauthState';
 import type { Activity, ActivityId, ActivityType } from '@/types/fitness';
 import styles from './FitnessSection.module.css';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
@@ -36,7 +37,7 @@ function StravaConnect() {
         setMessage('Sign in first to connect Strava.');
         return;
       }
-      window.location.href = url;
+      if (await openOAuthFlow('strava', url)) setStatus(await checkStravaStatus());
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Could not start the Strava connection.');
     }

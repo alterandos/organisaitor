@@ -63,6 +63,28 @@ Closes all four gaps that session's web/desktop work left on Android: an Android
 - **File manifest**: modified — `MobileQuickAddBar.tsx`, `App.tsx` (`backButton` handler), `CalendarLayersPicker.tsx`/`.module.css`, `CalendarView.tsx` (one call-site prop), `CalendarView.module.css` (`.weekTimeBlockTitle` flex-shrink fix). No new files.
 - **Still only emulator-verified, not real-device** — same carve-out as every other phase: haptics, real edge-gesture navigation, and anything requiring a real Play Billing/OEM launcher aren't exercised by this pass.
 
+### W1 — platform services (2026-10-04)
+
+Brief `docs/agent-tasks/05-android-w1-platform-services.md` (gaps A1, A2, A7, A9). Feature entry: "Android W1: platform services" in `docs/features/implemented-features.md`.
+
+- **`/api/*`**: `apiFetch()` has an Android branch through `CapacitorHttp` against `PRODUCTION_API_ORIGIN`, adapted into a `Response`. `CapacitorHttp` is not enabled globally.
+- **OAuth return**: `organisaitor://` scheme (intent-filter on `MainActivity`), `services/android/deepLinks.ts` (the one router), `services/android/oauthReturn.ts` (`oauth-done`), `openOAuthFlow()` in `services/oauthState.ts` (in-app browser on Android), `oauthRedirectOrigin()`, callbacks via `api/_lib/oauthReturn.ts`, migration `041_oauth_state_client.sql` (**pending until the user runs it**; the app falls back without it).
+- **Files**: `utils/saveFile.ts` (cache + share sheet), `@capacitor/filesystem` + `@capacitor/share` installed and synced.
+- **Keyboard**: no change needed; `enterKeyHint="done"` on both quick-add titles.
+- **File manifest**: new — `src/utils/saveFile.ts` (+test), `src/utils/apiFetch.test.ts`, `src/services/android/deepLinks.ts` (+test), `src/services/android/oauthReturn.ts`, `api/_lib/oauthReturn.ts`, `api/oauth-callbacks.test.ts`, `supabase/migrations/041_oauth_state_client.sql`. Modified — `src/utils/apiFetch.ts`, `src/utils/backupExport.ts`, `src/services/oauthState.ts`, `src/services/strava.ts`, `src/services/googleCalendar.ts`, `api/strava-oauth-callback.ts`, `api/google-calendar-oauth-callback.ts`, `FitnessSection.tsx` and `CalendarSidePane.tsx` (connect handlers only), `ErrorBoundary.tsx` (async export error), `MobileQuickAddBar.tsx` / `MobileCalendarQuickAdd.tsx` (`enterKeyHint` only), `src/App.tsx` (one effect + two imports), `src/config/labels.ts` (`oauthReturn`), `src/test/patterns.test.ts` (one check), `AndroidManifest.xml`, `package.json`.
+
+**Verified on the Pixel 8 API 35 emulator (CDP + adb), as a guest (no account):**
+- Portfolio → Add Ticker: "MSFT" lists MSFT / MSFT.TO / MSFT.NE (`/api/ticker-search`); choosing one fills the name (`/api/ticker-quote`).
+- Backup export (the real bundled `downloadBackup()`, called over CDP because guests have no Export button on Android, gap I7): the share sheet opens with `organisaitor-backup-<date>.json`; the cached file parses as JSON with the persisted keys; dismissing the sheet resolves cleanly.
+- Account → "Restore from backup (JSON)": a real tap opens the system picker (DocumentsUI). Didn't restore.
+- `adb shell am start -d organisaitor://oauth-done?…`: app running → Calendar + side pane + "Google Calendar connected" toast; app force-stopped → cold start into Fitness with one "Strava connection failed / access_denied" toast (duplicate guard held).
+- Full round trip with a local stand-in (`10.0.2.2:8787`): `Browser.open` → "Allow" (POST → 302 → page from the real `oauthReturn()`) → the page's script opened `organisaitor://oauth-done` with no extra tap → app foreground, toast shown, Custom Tab removed from the task. (On the very first run Chrome's first-run screen made the tab open in its own task, which then stayed behind hidden; with first-run done it lives in the app's task and is closed.)
+- Keyboard up (`innerHeight` 840 → 527): the Tasks bar and its chips, the calendar quick-add sheet, and AddTaskModal's bottom field (links, after expanding More options) all stay visible above it. The Done (✓) key shows after the `enterKeyHint` change.
+
+**Not verified:** real Google Calendar / Strava connect, calendar listing and sync on Android (needs migration 041 run, this branch's callbacks deployed to Vercel, a signed-in account and provider credentials); ICS import (pane unreachable, I7); voice dictation over `apiFetch` (paused feature); Tauri; a real device.
+
+**Environment note (2026-10-04):** Android Studio's bundled JBR is now **Java 25**, which Gradle 8.14 rejects ("Unsupported class file major version 69"). Build with a JDK 21 instead, e.g. `JAVA_HOME=~/.jdks/jbr-21.0.11 ./gradlew assembleDebug`. A git worktree needs its own (gitignored) `android/local.properties` and `.env.local` copied in before building, or the APK has no Supabase config.
+
 ### Not built yet (see `docs/android/` for specs)
 
 - Multi-entry-point launcher icons (architecture doc §4, Track A step 8) — deliberately deferred, not required for Phases 1–4.

@@ -13,6 +13,7 @@ import {
   getGoogleCalendarConnectUrl, fetchGoogleCalendarConnections,
   setGoogleCalendarEnabled, disconnectGoogleCalendar, syncGoogleCalendars,
 } from '@/services/googleCalendar';
+import { openOAuthFlow } from '@/services/oauthState';
 import type { ScheduleId, ScheduleTemplate, CalendarConnection } from '@/types';
 import styles from './CalendarSidePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -282,7 +283,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
   const handleConnect = async () => {
     try {
       const url = await getGoogleCalendarConnectUrl();
-      if (url) window.location.href = url;
+      if (url && await openOAuthFlow('google-calendar', url)) reloadConnections();
     } catch (e) {
       await alertDialog(e instanceof Error ? e.message : 'Could not start the Google Calendar connection.');
     }

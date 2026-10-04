@@ -1,5 +1,6 @@
 import { exchangeStravaCode } from './_lib/strava';
 import { getAnonClient } from './_lib/supabaseEdge';
+import { discardState, oauthReturn, parseSaveResult } from './_lib/oauthReturn';
 
 export const config = { runtime: 'edge' };
 
@@ -7,7 +8,9 @@ export const config = { runtime: 'edge' };
 // navigation, not a fetch — so there's no Authorization header). `state` is a single-use,
 // 10-minute nonce minted by the signed-in client (mint_oauth_state, migration 032) — never a
 // credential. save_strava_connection consumes it and writes the row for the user it was
-// minted for; a reused, expired or wrong-provider state is rejected there.
+// minted for; a reused, expired or wrong-provider state is rejected there. Where the user goes
+// next (the web app, or back into the Android app) depends on where the flow started — see
+// _lib/oauthReturn.ts and migration 041.
 export default async function handler(req: Request): Promise<Response> {
   const url   = new URL(req.url);
   const code  = url.searchParams.get('code');
@@ -15,7 +18,7 @@ export default async function handler(req: Request): Promise<Response> {
   const authError = url.searchParams.get('error');
   const origin = url.origin;
 
-  const fail = (reason: string) => Response.redirect(`${origin}/?strava=error&reason=${encodeURIComponent(reason)}`, 302);
+  const fail = async (reason: string) => oauthReturn(origin, await discardState(state), 'strava', 'error', reason);
 
   if (authError) return fail(authError);
   if (!code || !state) return fail('missing_params');
@@ -33,9 +36,10 @@ export default async function handler(req: Request): Promise<Response> {
     });
 
     if (error) return fail(error.message);
-    if (data !== 'ok') return fail(String(data));
+    const result = parseSaveResult(data);
+    if (!result.ok) return fail(result.reason);
 
-    return Response.redirect(`${origin}/?strava=connected`, 302);
+    return oauthReturn(origin, result.client, 'strava', 'connected');
   } catch (e) {
     return fail(e instanceof Error ? e.message : String(e));
   }

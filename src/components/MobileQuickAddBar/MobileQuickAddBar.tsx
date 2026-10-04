@@ -79,6 +79,7 @@ export function MobileQuickAddBar() {
           ref={inputRef}
           className={styles.input}
           placeholder="Add a task…"
+          enterKeyHint="done"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}

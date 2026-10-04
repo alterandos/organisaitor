@@ -2,7 +2,7 @@ import { supabase } from '@/services/supabase';
 import { mintOAuthState } from '@/services/oauthState';
 import { useFitnessStore } from '@/store/fitnessStore';
 import type { ActivityTypeId } from '@/types/fitness';
-import { apiFetch } from '@/utils/apiFetch';
+import { apiFetch, oauthRedirectOrigin } from '@/utils/apiFetch';
 
 export interface StravaStatus {
   connected:   boolean;
@@ -38,7 +38,7 @@ export async function getStravaConnectUrl(): Promise<string | null> {
   const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID as string | undefined;
   if (!clientId) return null;
 
-  const redirectUri = `${window.location.origin}/api/strava-oauth-callback`;
+  const redirectUri = `${oauthRedirectOrigin()}/api/strava-oauth-callback`;
   const params = new URLSearchParams({
     client_id:        clientId,
     redirect_uri:      redirectUri,

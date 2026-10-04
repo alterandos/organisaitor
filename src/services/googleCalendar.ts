@@ -5,7 +5,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { resolveTimezone, utcToZonedTime } from '@/utils/timezone';
 import { addDaysToIso } from '@/utils/date';
 import { deriveNotifyBefore, type GoogleEventReminders, type GoogleCalendarMeta } from '@/utils/googleReminders';
-import { apiFetch } from '@/utils/apiFetch';
+import { apiFetch, oauthRedirectOrigin } from '@/utils/apiFetch';
 import type { CalendarConnection, CalendarConnectionCalendar, CreateCalendarEventInput } from '@/types';
 
 interface RawGoogleEvent {
@@ -38,7 +38,7 @@ export async function getGoogleCalendarConnectUrl(): Promise<string | null> {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
   if (!clientId) return null;
 
-  const redirectUri = `${window.location.origin}/api/google-calendar-oauth-callback`;
+  const redirectUri = `${oauthRedirectOrigin()}/api/google-calendar-oauth-callback`;
   const params = new URLSearchParams({
     client_id:     clientId,
     redirect_uri:  redirectUri,
