@@ -369,3 +369,44 @@ describe('pattern: nav-column row actions use RowHoverActions, not the old inlin
     expect(hits, describeHits(hits)).toEqual([]);
   });
 });
+
+describe('pattern: the UI completes tasks through toggleTaskCompletion', () => {
+  // services/taskCompletion.ts is where "waiting on other tasks?" is asked and the Completed toast
+  // (+ Follow-up / Undo) is shown. A component calling the lower layers directly would silently
+  // skip both. The lower layers stay callable from services (and agent/access.ts, by design).
+  it('no component calls toggleTaskWithLists or the store toggleTask directly', () => {
+    const componentFiles = SOURCE_FILES.filter((f) => rel(f).startsWith('src/components/'));
+    const hits = findMatches(componentFiles, /toggleTaskWithLists\(|\.toggleTask\(|useTaskStore\(\(s\) => s\.toggleTask\)/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: toasts go through showToast and the one ToastHost', () => {
+  it('<ToastHost /> is mounted exactly once, in App.tsx (showToast shows nothing without it)', () => {
+    const hits = findMatches(TSX_FILES, /<ToastHost\s*\/>/);
+    expect(hits.map((h) => h.file)).toEqual(['src/App.tsx']);
+  });
+});
+
+describe('pattern: "link a …" pickers suggest by keywords', () => {
+  // Every picker orders its list the same way — keyword suggestions from the item being linked
+  // from, then recent (utils/suggestRank.ts; NotePickerModal has the tab-aware original).
+  const pickers = SOURCE_FILES.filter((f) => /PickerModal\.tsx$/.test(f));
+
+  it('every *PickerModal takes suggestFrom and ranks through utils/suggestRank (NotePickerModal: its own tab-aware ranking)', () => {
+    const bad = pickers.filter((f) => {
+      const src = fs.readFileSync(f, 'utf8');
+      if (!src.includes('suggestFrom')) return true;
+      return !rel(f).endsWith('NotePickerModal.tsx') && !src.includes("from '@/utils/suggestRank'");
+    });
+    expect(bad.map(rel)).toEqual([]);
+  });
+
+  it('every place that opens a *PickerModal passes suggestFrom', () => {
+    const hits = findMatches(TSX_FILES, /<\w+PickerModal\b/).filter((h) => {
+      const lines = linesOf(path.join(ROOT, h.file));
+      return !lines.slice(h.line - 1, h.line + 6).join('\n').includes('suggestFrom');
+    });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});

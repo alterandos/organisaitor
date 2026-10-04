@@ -36,6 +36,21 @@ export interface CrossAppRef {
 }
 export type TimeIntensity  = 'low' | 'medium' | 'high'; // extensible — add more as needed
 
+// A typed link from one item to another, with an optional reason ("needs the referral letter").
+// Stored once, on the item that owns it (Task.itemLinks — "this task <kind> target"); the other
+// side is derived at render time (utils/taskLinks.ts), so the two can never disagree. The kinds,
+// their labels and what they mean (e.g. whether they block) live in ONE registry,
+// config/itemLinkKinds.ts. Task-to-task only today — targetType is there so other item types can
+// use the same shape later.
+export type ItemLinkKind = 'dependsOn' | 'followUpOf' | 'related';
+export interface ItemLink {
+  kind:       ItemLinkKind;
+  targetType: 'task';
+  targetId:   string;
+  reason:     string | null;
+  createdAt:  string;
+}
+
 // ── Routine types ───────────────────────────────────────────────────────────────
 export interface RoutineTask {
   id:    string;
@@ -173,6 +188,7 @@ export interface Task {
   subtaskIds:    TaskId[];
   sortOrder:     number;
   crossAppRefs:  CrossAppRef[];        // reverse cross-app links (e.g. the note(s) this task was created from)
+  itemLinks:     ItemLink[];           // links this task owns to other tasks (depends on / follow-up of / related) — see ItemLink
 }
 
 // ── Persisted application data ─────────────────────────────────────────────────
@@ -204,6 +220,7 @@ export interface CreateTaskInput {
   timeIntensity?:   TimeIntensity | null;
   parentId?:        TaskId | null;
   crossAppRefs?:    CrossAppRef[];
+  itemLinks?:       ItemLink[];
 }
 
 export interface CreateCollectionInput {

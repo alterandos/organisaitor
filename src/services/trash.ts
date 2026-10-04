@@ -8,6 +8,8 @@ import { useNoteStore } from '@/store/noteStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useTrashStore } from '@/store/trashStore';
+import { useOverviewStore } from '@/store/overviewStore';
+import type { Overview } from '@/types/overview';
 import type { TrashEntryId, TrashableKind } from '@/types/trash';
 import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, ScheduleTemplate, TrackerEntry } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
@@ -102,6 +104,10 @@ const RESTORE_TARGETS: { [K in TrashableKind]: RestoreTarget } = {
   activityType: {
     has: (id) => id in useFitnessStore.getState().activityTypes,
     put: (t) => useFitnessStore.setState((s) => ({ activityTypes: { ...s.activityTypes, [(t as ActivityType).id]: t as ActivityType } })),
+  },
+  overview: {
+    has: (id) => id in useOverviewStore.getState().overviews,
+    put: (o) => useOverviewStore.setState((s) => ({ overviews: { ...s.overviews, [(o as Overview).id]: o as Overview } })),
   },
 };
 

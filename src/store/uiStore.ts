@@ -9,7 +9,10 @@ import { todayIso } from '@/utils/date';
 import { getNotePrimaryNotebookId } from '@/utils/notes';
 import type { NoteId } from '@/types/notes';
 
-export type AppView = 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
+export type AppView = 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
+
+// What the Overview section is showing: an Endeavour's automatic Overview, or a saved one.
+export type OverviewSelection = { kind: 'endeavour' | 'saved'; id: string } | null;
 
 export type CalendarViewMode = 'month' | 'week' | 'day';
 
@@ -108,6 +111,7 @@ export type ModalType =
   | 'add-investment-purpose'
   | 'bulk-upload-watchlist'
   | 'add-list'
+  | 'add-overview'
   | 'add-list-item'
   | 'add-note'
   | 'add-note-tag'
@@ -153,6 +157,10 @@ interface UIState {
 
   showAddTask:       () => void;
   showAddSubtask:    (parentId?: string) => void;
+  // New task as a follow-up of `originTaskId` (task links): AddTaskModal seeds Endeavour/tags/
+  // purposes from it the way it does from a parent, and links the new task `followUpOf` it.
+  showAddFollowUp:   (originTaskId: string) => void;
+  pendingFollowUpOf: string | null;
   // MobileQuickAddBar's "More options…" escape hatch (docs/android/01-tasks-app.md §3.2), and
   // the Notes "Create ▸ Task" flow (FloatingToolbar) — both open the full AddTaskModal
   // pre-filled rather than duplicating its fields in a bespoke form.
@@ -381,6 +389,15 @@ interface UIState {
   listsLastActiveTabId:  string | null;
   setListsLastActive:    (listId: string | null, tabId: string | null) => void;
 
+  // Overview — persisted, so the section reopens on what it last showed.
+  overviewSelection:     OverviewSelection;
+  setOverviewSelection:  (sel: OverviewSelection) => void;
+  // Jump to an Endeavour's automatic Overview from anywhere (e.g. the Endeavour's row menu).
+  openEndeavourOverview: (collectionId: string) => void;
+  editingOverviewId:     string | null;   // null with openModal 'add-overview' = creating one
+  showAddOverview:       () => void;
+  openEditOverview:      (id: string) => void;
+
   // Portfolio
   showAddWatchlistItem:      () => void;
   showAddPortfolioTag:       () => void;
@@ -530,10 +547,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   taskModalAdvanced:  false,
   pendingParentId:    null,
 
-  showAddTask:       () => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, quickAddPrefill: null }),
-  showAddSubtask:    (parentId) => set({ openModal: 'add-task', taskModalAdvanced: true, pendingParentId: parentId ?? null, quickAddPrefill: null }),
+  showAddTask:       () => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, pendingFollowUpOf: null, quickAddPrefill: null }),
+  showAddSubtask:    (parentId) => set({ openModal: 'add-task', taskModalAdvanced: true, pendingParentId: parentId ?? null, pendingFollowUpOf: null, quickAddPrefill: null }),
+  pendingFollowUpOf: null,
+  showAddFollowUp:   (originTaskId) => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, pendingFollowUpOf: originTaskId, quickAddPrefill: null }),
   quickAddPrefill:        null,
-  showAddTaskWithPrefill: (prefill) => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, quickAddPrefill: prefill }),
+  showAddTaskWithPrefill: (prefill) => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, pendingFollowUpOf: null, quickAddPrefill: prefill }),
 
   pendingArtifactLink:      null,
   setPendingArtifactLink:   (link) => set({ pendingArtifactLink: link }),
@@ -566,6 +585,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     openModal: null,
     taskModalAdvanced: false,
     pendingParentId: null,
+    pendingFollowUpOf: null,
+    editingOverviewId: null,
     quickAddPrefill: null,
     editingTag: null,
     editingPurpose: null,
@@ -847,6 +868,15 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   listsLastActiveListId: null,
   listsLastActiveTabId:  null,
   setListsLastActive:    (listId, tabId) => set({ listsLastActiveListId: listId, listsLastActiveTabId: tabId }),
+  overviewSelection:     null,
+  setOverviewSelection:  (sel) => set({ overviewSelection: sel }),
+  openEndeavourOverview: (collectionId) => {
+    set({ overviewSelection: { kind: 'endeavour', id: collectionId } });
+    get().setActiveView('overview');
+  },
+  editingOverviewId:     null,
+  showAddOverview:       () => set({ openModal: 'add-overview', editingOverviewId: null }),
+  openEditOverview:      (id) => set({ openModal: 'add-overview', editingOverviewId: id }),
 
   // Portfolio
   showAddWatchlistItem:     () => set({ openModal: 'add-watchlist-item', editingWatchlistItemId: null }),
@@ -864,8 +894,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   // notebook's note would sit in the editor pane under the new notebook's list.
   setSelectedNoteTag:     (id) => {
     if (id) useRecentItemsStore.getState().recordVisit('notebook', id);
+    // Selecting a notebook keeps the path to it open: one reached by hovering its parents open
+    // (ChronicleView's hover-expand) would otherwise collapse out of sight as soon as the mouse
+    // left the tree (reported 2026-10-01).
     set((s) => ({
       selectedNoteTagId: id,
+      ...(id ? { expandedNoteTagIds: expandNotebookAncestors(s.expandedNoteTagIds, id, useNoteStore.getState().noteTags) } : {}),
       ...(id !== s.selectedNoteTagId ? {
         editingNoteId: null,
         notesHistory: pushNoteLeftFromHistory(s.notesHistory, s.editingNoteId),
@@ -980,7 +1014,13 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 }), {
   name:    'todo-ui-session',
   storage: persistStorage(),
-  version: 1,
+  version: 2,
+  // v1 → v2: overviewSelection (Overview section, 2026-10-01).
+  migrate: (persisted, fromVersion) => {
+    const state = (persisted ?? {}) as Record<string, unknown>;
+    if (fromVersion < 2 && state.overviewSelection === undefined) state.overviewSelection = null;
+    return state as never;
+  },
   partialize: (s) => ({
     activeView:               s.activeView,
     sectionHistory:           s.sectionHistory,
@@ -996,6 +1036,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     selectedNoteTagId:        s.selectedNoteTagId,
     listsLastActiveListId:    s.listsLastActiveListId,
     listsLastActiveTabId:     s.listsLastActiveTabId,
+    overviewSelection:        s.overviewSelection,
     activeTrackerId:          s.activeTrackerId,
     activeRoutineId:          s.activeRoutineId,
     calendarViewMode:         s.calendarViewMode,

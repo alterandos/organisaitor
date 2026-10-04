@@ -1,23 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useListStore } from '@/store/listStore';
 import { useListViews } from '@/store/listViews';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
+import { rankSearch, rankSuggestions, type RankField } from '@/utils/suggestRank';
 import type { List } from '@/types/lists';
 // Same look as the note picker, so the two "link a …" dialogs read as one family.
 import styles from '@/components/NotePickerModal/NotePickerModal.module.css';
 
 interface Props {
   excludeIds: ReadonlySet<string>;
+  // Title of the item being linked from: its keywords order the list while the search is empty.
+  suggestFrom?: string;
   onPick:     (listId: string) => void;
   onClose:    () => void;
 }
 
 // The "link a list" search dialog (CrossAppRefPicker's + List). Portaled for the same reason as
-// NotePickerModal: it opens from forms that scroll. Checklists first (they're the ones a task can
-// tick off), then by name.
-export function ListPickerModal({ excludeIds, onPick, onClose }: Props) {
+// NotePickerModal: it opens from forms that scroll. Ordered like every picker (utils/suggestRank.ts):
+// suggestions from the linking item's title (a list's name, description and item titles are
+// searched), then the rest — checklists first (the ones a task can tick off), most recent first.
+export function ListPickerModal({ excludeIds, suggestFrom, onPick, onClose }: Props) {
   const lists = useListViews();
   const items = useListStore((s) => s.listItems);
   const [query, setQuery] = useState('');
@@ -36,12 +40,20 @@ export function ListPickerModal({ excludeIds, onPick, onClose }: Props) {
     return out;
   }, [items]);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return Object.values(lists)
-      .filter((l) => !excludeIds.has(l.id) && (!q || l.name.toLowerCase().includes(q)))
-      .sort((a, b) => Number(b.kind === 'checklist') - Number(a.kind === 'checklist') || a.name.localeCompare(b.name));
-  }, [lists, excludeIds, query]);
+  const { results, suggested, keywords } = useMemo(() => {
+    const itemTitles: Record<string, string[]> = {};
+    for (const i of Object.values(items)) (itemTitles[i.listId] ??= []).push(i.title);
+    const candidates = Object.values(lists).filter((l) => !excludeIds.has(l.id));
+    const fieldsOf = (l: List): RankField[] => [
+      { text: l.name, weight: 3 },
+      { text: l.description ?? '', weight: 1 },
+      { text: (itemTitles[l.id] ?? []).join(' | '), weight: 1, counted: true },
+    ];
+    const recencyOf = (l: List) => new Date(l.updatedAt).getTime() + (l.kind === 'checklist' ? 1e13 : 0);
+    if (query.trim()) return { results: rankSearch(candidates, fieldsOf, recencyOf, query), suggested: 0, keywords: [] as string[] };
+    const r = rankSuggestions(candidates, fieldsOf, recencyOf, suggestFrom);
+    return { results: r.items, suggested: r.suggested, keywords: r.keywords };
+  }, [lists, items, excludeIds, query, suggestFrom]);
 
   const lastIndex = Math.max(0, results.length - 1);
   if (highlightIndex > lastIndex) setHighlight(lastIndex);
@@ -105,8 +117,10 @@ export function ListPickerModal({ excludeIds, onPick, onClose }: Props) {
               ? `${LABELS.listKind.checklist.one} · ${c.done}/${c.total} ticked`
               : `${LABELS.listKind[l.kind].one} · ${c.total} item${c.total !== 1 ? 's' : ''}`;
             return (
+              <Fragment key={l.id}>
+              {suggested > 0 && i === 0 && <div className={styles.sectionLabel}>{LABELS.pickers.suggestedFrom(keywords)}</div>}
+              {suggested > 0 && i === suggested && <div className={styles.sectionLabel}>{LABELS.pickers.recent}</div>}
               <div
-                key={l.id}
                 data-active={active || undefined}
                 className={`${styles.result} ${active ? styles.resultActive : ''}`}
                 onMouseEnter={() => setHighlight(i)}
@@ -118,6 +132,7 @@ export function ListPickerModal({ excludeIds, onPick, onClose }: Props) {
                   <span className={styles.resultPath}>{meta}</span>
                 </button>
               </div>
+              </Fragment>
             );
           })}
         </div>

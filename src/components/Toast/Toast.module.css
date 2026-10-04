@@ -1,0 +1,82 @@
+/* z-index 1050: above every modal/pane tier (≤1000) so it's visible whatever is open, below the
+   confirm dialog (1100), which may be answering something the toast offered. Inverted colours
+   (text colour as background) read as a toast in both themes. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(560px, calc(100vw - 2rem));
+  padding: 0.6rem 0.6rem 0.6rem 1rem;
+  background: var(--color-text);
+  color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.875rem;
+  animation: toastIn 0.18s ease-out;
+}
+
+/* Clear of the Android bottom tab bar. */
+@media (max-width: 519px) {
+  .toast { bottom: calc(5rem + env(safe-area-inset-bottom)); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 0.5rem); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.message {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail {
+  opacity: 0.8;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: var(--radius-md);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.action:hover { background: rgba(127, 127, 127, 0.25); }
+
+.close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.7;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.35rem;
+}
+
+.close:hover { opacity: 1; }

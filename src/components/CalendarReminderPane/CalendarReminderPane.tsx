@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { toggleTaskWithLists } from '@/services/taskListLinks';
+import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import type { CalendarReminderId, RepeatFreq, RepeatConfig } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -325,7 +325,8 @@ export function CalendarReminderPane() {
         <ItemActionFooter
           archived={!!reminder.archivedAt}
           completed={linkedTask?.completed}
-          onToggleComplete={linkedTask ? () => toggleTaskWithLists(linkedTask.id) : undefined}
+          onToggleComplete={linkedTask ? () => void toggleTaskCompletion(linkedTask.id) : undefined}
+          completeOptions={linkedTask ? taskCompletionOptions(linkedTask.id) : []}
           deleteLabel={reminder.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.reminder.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreReminder(id)}

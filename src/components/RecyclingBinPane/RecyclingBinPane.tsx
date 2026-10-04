@@ -34,6 +34,7 @@ const KIND_LABELS: Record<TrashEntry['kind'], string> = {
   investmentPurpose:  LABELS.investmentPurpose,
   activity:           LABELS.activity,
   activityType:       'Activity type',
+  overview:           LABELS.overview.savedOne,
 };
 
 export function RecyclingBinPane() {

@@ -34,6 +34,7 @@ export interface HotkeyDef {
 
 export const HOTKEYS: HotkeyDef[] = [
   // Navigation — order matches top-to-bottom sidebar position
+  { id: 'nav-overview',  group: 'Navigation', primary: '0',                      action: 'Overview section (Ctrl+0 is left to the browser’s zoom reset)', customizable: true },
   { id: 'nav-tasks',     group: 'Navigation', primary: '1', secondary: 'Ctrl+1', action: 'Tasks section',     customizable: true },
   { id: 'nav-calendar',  group: 'Navigation', primary: '2', secondary: 'Ctrl+2', action: 'Calendar section',  customizable: true },
   { id: 'nav-records',   group: 'Navigation', primary: '3', secondary: 'Ctrl+3', action: 'Records section',   customizable: true },
@@ -67,6 +68,7 @@ export const HOTKEYS: HotkeyDef[] = [
 
   // Calendar
   { id: 'calendar-toggle-side-pane', group: 'Calendar', primary: 'O', action: 'Toggle the Calendar side pane (Go to date / Layers / Schedules / Imported calendars)' },
+  { id: 'calendar-today',   group: 'Calendar', primary: 'T', action: 'Go to today (in the current month, week or day view)' },
   { id: 'calendar-period',  group: 'Calendar', primary: '←/→', secondary: 'PgUp/PgDn', action: 'Previous/next period (month, week, or day — matches current view)' },
   { id: 'calendar-view',    group: 'Calendar', primary: 'Tab', secondary: 'Shift+Tab', action: 'Cycle Month → Week → Day view (Shift+Tab cycles in reverse)' },
 
@@ -78,7 +80,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'notes-cycle-tabs',    group: 'Notes', primary: 'Ctrl+Tab / Ctrl+PgDn', secondary: 'Ctrl+Shift+Tab / Ctrl+PgUp', action: 'Cycle between this note\'s tabs, reverse with Shift (editor focused)' },
   { id: 'notes-new-tab',       group: 'Notes', primary: 'Ctrl+T',         action: 'New tab — prompts for a name (editor focused)' },
   { id: 'notes-focus-toggle',  group: 'Notes', primary: 'Ctrl+`',        action: 'Move focus between navigation columns and editor' },
-  { id: 'notes-heading-level', group: 'Notes', primary: 'Ctrl+H', action: 'Then press 1–5 to make the paragraph that heading level, or 0 for plain text' },
+  { id: 'notes-heading-level', group: 'Notes', primary: 'Ctrl+H', action: 'Then press 1–5 to make the paragraph that heading level, 0 for plain text (clears all formatting), or H for the Title of the tab' },
   { id: 'notes-link',          group: 'Notes', primary: 'Ctrl+L',        action: 'Turn selection into a link, or open "New link" pane if nothing selected' },
   { id: 'notes-create-menu',   group: 'Notes', primary: 'Ctrl+Q',        action: 'Open "Create ▸" menu for the selection (Task/Calendar/List/Tracker) — 1-4 picks, Esc cancels' },
   { id: 'notes-link-select',   group: 'Notes', primary: 'Ctrl+click',    action: 'Select a link\'s text instead of opening it (editor focused)' },

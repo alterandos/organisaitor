@@ -34,7 +34,7 @@ Summary list only — full specs are in `BACKLOG.md`.
 - Tasks section toggle: tasks / routines / both (routines move below tasks in "both" mode)
 - Records reminder schedules (configurable push/calendar notifications)
 - Waiting-task follow-up notifications
-- Task dependency / blocking (blockedBy: TaskId[])
+- ~~Task dependency / blocking (blockedBy: TaskId[])~~ — built 2026-10-01 as "Task links". Next: recurring tasks (BACKLOG.md "Task links — follow-ons")
 - Project completion flow (prompt when all tasks done)
 - Milestone tasks (kind='milestone' on calendar surface)
 - Mini-calendar toggle in task list

@@ -35,6 +35,8 @@ import { CalendarView } from '@/components/CalendarView/CalendarView';
 import { RecordsView } from '@/components/RecordsView/RecordsView';
 import { NotesSection } from '@/components/NotesSection/NotesSection';
 import { ListsSection } from '@/components/ListsSection/ListsSection';
+import { OverviewSection } from '@/components/OverviewSection/OverviewSection';
+import { AddOverviewModal } from '@/components/AddOverviewModal/AddOverviewModal';
 import { ErrorBoundary } from '@/components/ErrorBoundary/ErrorBoundary';
 import { LABELS } from '@/config/labels';
 import { AddActivityModal } from '@/components/AddActivityModal/AddActivityModal';
@@ -69,6 +71,7 @@ import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
 import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog/ConfirmDialog';
+import { ToastHost } from '@/components/Toast/Toast';
 import { toggleDictation } from '@/services/speech/dictation';
 import { AddNoteModal } from '@/components/AddNoteModal/AddNoteModal';
 import { AddNoteTagModal } from '@/components/AddNoteTagModal/AddNoteTagModal';
@@ -136,6 +139,7 @@ export default function App() {
   const editingEntryId               = useUIStore((s) => s.editingEntryId);
   const pendingTrackerId             = useUIStore((s) => s.pendingTrackerId);
   const editingListId                = useUIStore((s) => s.editingListId);
+  const editingOverviewId            = useUIStore((s) => s.editingOverviewId);
   const editingListItemId            = useUIStore((s) => s.editingListItemId);
   const editingActivity              = useUIStore((s) => s.editingActivity);
   const editingSchedule              = useUIStore((s) => s.editingSchedule);
@@ -391,6 +395,7 @@ export default function App() {
         return;
       }
 
+      if (matchesHotkeyId(e, 'nav-overview'))  { e.preventDefault(); setActiveView('overview');  return; }
       if (matchesHotkeyId(e, 'nav-tasks'))     { e.preventDefault(); setActiveView('tasks');     return; }
       if (matchesHotkeyId(e, 'nav-calendar'))  { e.preventDefault(); setActiveView('calendar');  return; }
       if (matchesHotkeyId(e, 'nav-records'))   { e.preventDefault(); setActiveView('records');   return; }
@@ -418,7 +423,7 @@ export default function App() {
       }
 
       if (matchesHotkeyId(e, 'action-endeavour')) {
-        if (activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness') { e.preventDefault(); toggleEndeavourPicker(); }
+        if (activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness' && activeView !== 'overview') { e.preventDefault(); toggleEndeavourPicker(); }
         return;
       }
 
@@ -447,7 +452,8 @@ export default function App() {
       if (isNewItem) {
         e.preventDefault();
         const { showAddTask, showAddCalendarItem, showAddTracker, showAddEntry, showAddWatchlistItem, showAddList, showAddListItem, showAddNote, showAddActivity, activeTrackerId: tid, activeRoutineId: rid, activeListId: lid } = useUIStore.getState();
-        if (activeView === 'calendar') showAddCalendarItem();
+        if (activeView === 'overview') useUIStore.getState().showAddOverview();
+        else if (activeView === 'calendar') showAddCalendarItem();
         else if (activeView === 'portfolio') showAddWatchlistItem();
         else if (activeView === 'lists') { if (lid) showAddListItem(lid); else showAddList(); }
         else if (activeView === 'notes') showAddNote();
@@ -514,7 +520,8 @@ export default function App() {
               )
             )}
             <h1 className={styles.heading}>
-              {activeView === 'calendar'  ? 'Calendar'
+              {activeView === 'overview'  ? LABELS.views.overview
+               : activeView === 'calendar'  ? 'Calendar'
                : activeView === 'records'   ? 'Records'
                : activeView === 'lists'     ? 'Lists'
                : activeView === 'portfolio' ? 'Portfolio'
@@ -525,7 +532,7 @@ export default function App() {
           </div>
           <div className={styles.headerRight}>
             {activeView === 'tasks' && <PurposeFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />}
-            {activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness' && (
+            {activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness' && activeView !== 'overview' && (
               <CollectionFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />
             )}
             <NotificationCenter />
@@ -577,6 +584,7 @@ export default function App() {
           </>
         )}
 
+        {activeView === 'overview'  && <OverviewSection />}
         {activeView === 'calendar'  && <CalendarView />}
         {activeView === 'records'   && <RecordsView />}
         {activeView === 'lists'     && <ListsSection />}
@@ -615,6 +623,7 @@ export default function App() {
         {openModal === 'add-investment-purpose'  && <AddInvestmentPurposeModal />}
         {openModal === 'bulk-upload-watchlist'   && <BulkUploadWatchlistModal />}
         {openModal === 'add-list'               && <AddListModal key={editingListId ?? 'new'} />}
+        {openModal === 'add-overview'           && <AddOverviewModal key={editingOverviewId ?? 'new'} />}
         {openModal === 'add-list-item'          && <AddListItemModal key={editingListItemId ?? 'new'} />}
         {openModal === 'add-note'               && <AddNoteModal />}
         {openModal === 'add-note-tag'           && <AddNoteTagModal />}
@@ -630,6 +639,7 @@ export default function App() {
         <LinkHoverPreview />
         <VoiceIndicator />
         <ConfirmDialogHost />
+        <ToastHost />
         {quickAccessOpen && <QuickAccessPane />}
         {decryptPrompt && <DecryptPrompt />}
         {isAndroid && <MobileNav />}

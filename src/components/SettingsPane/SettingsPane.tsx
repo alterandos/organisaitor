@@ -183,6 +183,8 @@ export function SettingsPane() {
   const toggleColor             = useSettingsStore((s) => s.toggleColor);
   const togglePriorityColor     = useSettingsStore((s) => s.togglePriorityColor);
   const toggleAlwaysShowDueDate = useSettingsStore((s) => s.toggleAlwaysShowDueDate);
+  const hideBlockedTasks        = useSettingsStore((s) => s.hideBlockedTasks);
+  const toggleHideBlockedTasks  = useSettingsStore((s) => s.toggleHideBlockedTasks);
 
   const shadePastDays              = useSettingsStore((s) => s.shadePastDays);
   const shadeWeekends              = useSettingsStore((s) => s.shadeWeekends);
@@ -311,6 +313,13 @@ export function SettingsPane() {
                 desc="Display due dates on task cards without needing to hover"
               >
                 <Toggle on={alwaysShowDueDate} onToggle={toggleAlwaysShowDueDate} label="Toggle always show due date" />
+              </SettingRow>
+
+              <SettingRow
+                name="Move blocked tasks out of the list"
+                desc="Tasks waiting on another task go in a collapsed group at the bottom, instead of staying in place greyed out"
+              >
+                <Toggle on={hideBlockedTasks} onToggle={toggleHideBlockedTasks} label="Toggle moving blocked tasks out of the list" />
               </SettingRow>
             </section>
           )}

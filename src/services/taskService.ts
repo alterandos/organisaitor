@@ -35,5 +35,6 @@ export function createTask(input: CreateTaskInput, sortOrder: number): Task {
     subtaskIds:   [],
     sortOrder,
     crossAppRefs: input.crossAppRefs ?? [],
+    itemLinks:    input.itemLinks ?? [],
   };
 }

@@ -1,4 +1,4 @@
-import type { CrossAppRef } from './index';
+import type { CollectionId, CrossAppRef } from './index';
 // ── Branded ID types ──────────────────────────────────────────────────────────
 export type ListId     = string & { readonly _brand: 'ListId'     };
 export type ListItemId = string & { readonly _brand: 'ListItemId' };
@@ -76,6 +76,10 @@ export interface List {
   // Checklists only: when a task linked to this list is completed, untick every item so the list
   // is ready for next time (a weekly shop). See services/taskListLinks.ts.
   resetOnTaskComplete: boolean;
+  // The Endeavour this list belongs to (items inherit it — list-level only, confirmed with the user
+  // 2026-10-01). Lets a list take part in "everything for this Endeavour" (Overview). Plaintext even
+  // on an encrypted list, like a note's collectionId.
+  collectionId: CollectionId | null;
   createdAt:   string;
   updatedAt:   string;
 }
@@ -110,6 +114,7 @@ export interface CreateListInput {
   fieldSchema?: ListFieldSchema[];
   tabs?:        ListTab[];
   resetOnTaskComplete?: boolean;
+  collectionId?: CollectionId | null;
 }
 
 export interface CreateListItemInput {

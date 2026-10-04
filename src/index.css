@@ -44,6 +44,8 @@
   --color-tentative-stripe-1: rgba(255, 255, 255, 0.55);
   --color-tentative-stripe-2: rgba(0, 0, 0, 0.08);
   --tentative-blend-mode: overlay;
+  --color-blocked-wash:   rgba(110, 110, 120, 0.10);
+  --color-blocked-stripe: rgba(110, 110, 120, 0.16);
 
   /* ── Radii ── */
   --radius-sm: 4px;
@@ -88,6 +90,8 @@
   --color-tentative-stripe-1: rgba(255, 255, 255, 0.16);
   --color-tentative-stripe-2: rgba(255, 255, 255, 0.03);
   --tentative-blend-mode: normal;
+  --color-blocked-wash:   rgba(255, 255, 255, 0.04);
+  --color-blocked-stripe: rgba(255, 255, 255, 0.07);
 
   /* ── Shadows (heavier on dark) ── */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);

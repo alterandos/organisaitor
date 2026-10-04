@@ -53,12 +53,13 @@ describe('settingsStore migration', () => {
     expect(state.theme).toBe('dark');
   });
 
-  it('v0 -> v4 (unversioned legacy store) ends up with every current field', async () => {
+  it('v0 -> v5 (unversioned legacy store) ends up with every current field', async () => {
     seed('todo-settings', { clockFormat: '12h' }, 0);
     const { useSettingsStore } = await import('@/store/settingsStore');
     await flush();
     const state = useSettingsStore.getState();
     expect(state.clockFormat).toBe('12h');
+    expect(state.hideBlockedTasks).toBe(false);
     expect(state.calendarLayerVisibility).toMatchObject({ events: true, tentative: true, deadlines: true });
   });
 
@@ -145,7 +146,7 @@ describe('taskStore migration', () => {
     vi.resetModules();
   });
 
-  it('v9 -> v12 (multi-step gap, as CLAUDE.md documents) backfills crossAppRefs, archivedAt/archiveReason and calendarDeadlineId', async () => {
+  it('v9 -> v13 (multi-step gap, as CLAUDE.md documents) backfills crossAppRefs, archivedAt/archiveReason, calendarDeadlineId and itemLinks', async () => {
     seed(
       'todo-app-storage',
       {
@@ -161,10 +162,11 @@ describe('taskStore migration', () => {
     expect(t.archivedAt).toBeNull();
     expect(t.archiveReason).toBeNull();
     expect(t.calendarDeadlineId).toBeNull();
+    expect(t.itemLinks).toEqual([]);
   });
 
   it(
-    'a store several versions behind (v2) receives EVERY applicable patch on the way to v12, ' +
+    'a store several versions behind (v2) receives EVERY applicable patch on the way to v13, ' +
       'not just the first one — regression test for a real bug found 2026-09-24: each ' +
       '`if (fromVersion < N)` branch used to `return` immediately, so a store that skipped ' +
       'several app versions in one load (e.g. was not opened for months) silently ended up ' +
@@ -200,6 +202,7 @@ describe('taskStore migration', () => {
       expect(t.archivedAt).toBeNull();
       expect(t.archiveReason).toBeNull();
       expect(t.calendarDeadlineId).toBeNull();
+      expect(t.itemLinks).toEqual([]);
     }
   );
 });

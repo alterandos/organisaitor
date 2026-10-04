@@ -62,6 +62,9 @@ export function MobileMoreSheet() {
           <div className={styles.handle} />
         </div>
 
+        <button className={styles.item} onClick={() => go(() => setActiveView('overview'))}>
+          {LABELS.views.overview}
+        </button>
         <button className={styles.item} onClick={() => go(() => setActiveView('notes'))}>
           {LABELS.views.notes}
         </button>

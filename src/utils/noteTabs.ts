@@ -26,3 +26,21 @@ export function tabNameOf(note: NoteWithTabs, tabId: string | undefined): string
   if (tabId === MAIN_TAB_ID) return note.mainTabName || 'Main';
   return note.tabs.find((t) => t.id === tabId)?.name ?? null;
 }
+
+// The tab to show and the content that belongs to it, always as a pair. The editor saves whatever
+// it is showing under whichever tab it thinks is active, so loading one tab's content while another
+// tab is marked active overwrites that tab (reported 2026-09-30: Alt+Left/Right restored a note's
+// last tab but loaded its main content, and the next save wrote main over that tab). A tab that no
+// longer exists resolves to the main tab (null), content included.
+export function resolveNoteTab(note: Pick<Note, 'tabs' | 'content'>, tabId: string | null): { tabId: string | null; content: string } {
+  const tab = tabId ? note.tabs.find((t) => t.id === tabId) : undefined;
+  return tab ? { tabId: tab.id, content: tab.content } : { tabId: null, content: note.content };
+}
+
+// What a new Title starts as (the Title is independent of the tab name afterwards). A tab's own
+// name; for the Main tab — usually just called "Main" — the note's title, unless the Main tab has
+// been given a name of its own.
+export function titlePrefillFor(note: Pick<Note, 'title' | 'tabs' | 'mainTabName'>, tabId: string | null): string {
+  if (tabId) return note.tabs.find((t) => t.id === tabId)?.name ?? '';
+  return note.mainTabName && note.mainTabName !== 'Main' ? note.mainTabName : note.title;
+}

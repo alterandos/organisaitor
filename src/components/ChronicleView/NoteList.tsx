@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { formatDate } from '@/utils/date';
@@ -40,6 +41,12 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
   const outdentNote      = useNoteStore((s) => s.outdentNote);
 
   const isActive = editingNoteId === note.id;
+  const rowRef = useRef<HTMLDivElement>(null);
+  // Same as the notebook tree: a note opened from elsewhere (back/forward, Quick Access, a link)
+  // may be far down a long list.
+  useEffect(() => {
+    if (isActive) rowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [isActive]);
   const myPos    = siblings.findIndex((n) => n.id === note.id);
   const canIndent  = indent === 0 && myPos > 0;
   const canOutdent = note.parentId !== null;
@@ -61,6 +68,7 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
   return (
     <>
       <div
+        ref={rowRef}
         className={`${styles.noteItem} ${isActive ? styles.noteItemActive : ''}`}
         style={{ borderLeftColor: note.color ?? '#e5e7eb', paddingLeft: `${4 + indent * 20}px` }}
       >

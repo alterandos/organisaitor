@@ -86,7 +86,7 @@ export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom, ty
       </div>
 
       {open === 'note' && <NotePickerModal excludeIds={linkedNoteIds} suggestFrom={suggestFrom} onPick={addNote} onClose={() => setOpen(null)} />}
-      {open === 'list' && <ListPickerModal excludeIds={linkedListIds} onPick={addList} onClose={() => setOpen(null)} />}
+      {open === 'list' && <ListPickerModal excludeIds={linkedListIds} suggestFrom={suggestFrom} onPick={addList} onClose={() => setOpen(null)} />}
     </div>
   );
 }

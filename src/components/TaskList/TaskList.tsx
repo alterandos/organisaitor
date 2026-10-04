@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import type { PurposeId, TagId, Task, Collection } from '@/types';
+import type { PurposeId, TagId, Task, TaskId, Collection } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import type { SortField, SortDir } from '@/store/uiStore';
 import { TaskItem } from '@/components/TaskItem/TaskItem';
+import { useSettingsStore } from '@/store/settingsStore';
+import { isBlocked } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
 import styles from './TaskList.module.css';
 
@@ -44,6 +46,8 @@ function buildSorter(
 export function TaskList() {
   const [completedOpen, setCompletedOpen] = useState(false);
   const [archivedOpen,  setArchivedOpen]  = useState(false);
+  const [blockedOpen,   setBlockedOpen]   = useState(false);
+  const hideBlockedTasks = useSettingsStore((s) => s.hideBlockedTasks);
 
   const tasksRecord         = useTaskStore((s) => s.tasks);
   const collectionsRecord   = useTaskStore((s) => s.collections);
@@ -61,8 +65,16 @@ export function TaskList() {
   const toggledIds          = useUIStore((s) => s.taskExpandedIds);
   const toggleTaskExpanded  = useUIStore((s) => s.toggleTaskExpanded);
 
+  // The task open in the pane (possibly opened from elsewhere — a task link, Overview) must be
+  // visible: its parent chain is shown expanded and its group (Completed / Archived / Waiting) open.
+  // Derived, not stored, so closing the pane puts everything back as the user left it.
+  const editingTaskId = useUIStore((s) => s.editingTaskId);
+  const openChain = new Set<string>();
+  for (let t = editingTaskId ? tasksRecord[editingTaskId as TaskId] : undefined; t?.parentId; t = tasksRecord[t.parentId]) openChain.add(t.parentId);
+  const openRootId = editingTaskId ? ([...openChain].find((id) => !tasksRecord[id as TaskId]?.parentId) ?? editingTaskId) : null;
+
   const isExpanded = (taskId: string): boolean =>
-    taskViewMode === 'focused' ? !toggledIds.includes(taskId) : toggledIds.includes(taskId);
+    openChain.has(taskId) || (taskViewMode === 'focused' ? !toggledIds.includes(taskId) : toggledIds.includes(taskId));
 
   const handleToggleExpand = (taskId: string) => toggleTaskExpanded(taskId);
 
@@ -99,7 +111,11 @@ export function TaskList() {
     : byPurpose;
 
   const sorter    = buildSorter(sortField, sortDir, collectionsRecord);
-  const active    = tasks.filter((t) => !t.archived && !t.completed).sort(sorter);
+  const open      = tasks.filter((t) => !t.archived && !t.completed).sort(sorter);
+  // Tasks waiting on another task stay in place (greyed out by TaskItem) unless the setting moves
+  // them into their own collapsed group.
+  const blocked   = hideBlockedTasks ? open.filter((t) => isBlocked(t, tasksRecord)) : [];
+  const active    = hideBlockedTasks ? open.filter((t) => !blocked.includes(t)) : open;
   const completed = tasks.filter((t) => !t.archived &&  t.completed).sort(sorter);
   const archived  = tasks.filter((t) =>  t.archived).sort(sorter);
 
@@ -154,6 +170,18 @@ export function TaskList() {
   return (
     <div className={styles.list}>
       {active.map((task) => renderTaskGroup(task))}
+      {blocked.length > 0 && (
+        <>
+          <button
+            className={styles.sectionToggle}
+            onClick={() => setBlockedOpen((o) => !o)}
+          >
+            <span className={`${styles.chevron} ${blockedOpen ? styles.chevronOpen : ''}`}>▸</span>
+            ⛓ {LABELS.taskLinks.blockedGroup} ({blocked.length})
+          </button>
+          {(blockedOpen || blocked.some((t) => t.id === openRootId)) && blocked.map((task) => renderTaskGroup(task))}
+        </>
+      )}
       {completed.length > 0 && (
         <>
           <button
@@ -163,7 +191,7 @@ export function TaskList() {
             <span className={`${styles.chevron} ${completedOpen ? styles.chevronOpen : ''}`}>▸</span>
             Completed ({completed.length})
           </button>
-          {completedOpen && completed.map((task) => renderTaskGroup(task))}
+          {(completedOpen || completed.some((t) => t.id === openRootId)) && completed.map((task) => renderTaskGroup(task))}
         </>
       )}
       {archived.length > 0 && (
@@ -175,7 +203,7 @@ export function TaskList() {
             <span className={`${styles.chevron} ${archivedOpen ? styles.chevronOpen : ''}`}>▸</span>
             {LABELS.itemActions.archivedGroup} ({archived.length})
           </button>
-          {archivedOpen && archived.map((task) => renderTaskGroup(task))}
+          {(archivedOpen || archived.some((t) => t.id === openRootId)) && archived.map((task) => renderTaskGroup(task))}
         </>
       )}
     </div>

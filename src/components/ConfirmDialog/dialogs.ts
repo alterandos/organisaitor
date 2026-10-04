@@ -1,5 +1,5 @@
 import { LABELS } from '@/config/labels';
-import { useDialogStore } from '@/store/dialogStore';
+import { useDialogStore, type DialogResult } from '@/store/dialogStore';
 
 let nextId = 1;
 
@@ -16,6 +16,12 @@ export interface ConfirmOptions {
 }
 
 export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
+  return choiceDialog(opts).then((r) => r === 'confirm');
+}
+
+// A confirm with a third, secondary choice (e.g. "Complete anyway" vs "Complete all"): resolves
+// 'confirm' (the primary button, Ctrl+Enter), 'alternate' (the extra button) or 'cancel'.
+export function choiceDialog(opts: ConfirmOptions & { alternateLabel?: string }): Promise<DialogResult> {
   return new Promise((resolve) => {
     useDialogStore.getState().enqueue({
       id:           nextId++,
@@ -27,6 +33,7 @@ export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
       destructive:  opts.destructive ?? false,
       confirmLabel: opts.confirmLabel ?? LABELS.dialogs.confirm,
       cancelLabel:  opts.cancelLabel ?? LABELS.dialogs.cancel,
+      alternateLabel: opts.alternateLabel,
       focusDelayMs: opts.focusDelayMs ?? 0,
       isStale:      opts.isStale,
       resolve,

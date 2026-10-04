@@ -729,11 +729,30 @@ be surfaced in-app (and eventually as a system/push notification).
 
 ## Workflow & Task Dependencies
 
-### Task contingency / sequencing
+### ~~Task contingency / sequencing~~ — built 2026-10-01 as "Task links"
 Some sub-tasks are only actionable after a predecessor is complete
 (e.g. "book specialist" requires "get referral" to be done first).
 Implement a dependency model: a task can list `blockedBy: TaskId[]`.
 UI would show blocked tasks greyed out with a lock icon.
+
+**Built** as part of "Task links" (see `docs/features/implemented-features.md`): `Task.itemLinks` with kinds Waiting on / Follow-up of / Related, each with an optional reason. Blocked tasks are greyed with a 🔒 count, or moved into a collapsed group by a setting. Completing a blocked task asks (complete anyway / complete the whole chain), and completing shows a toast with what it unlocked, + Follow-up and Undo.
+
+### Overview — next steps (logged 2026-10-01; step 1 built, see `docs/features/overview.md`)
+Agreed with the user in the design conversation of 2026-10-01. Order confirmed.
+- **Step 2 — Notes → Create ▸ List item** (the existing disabled stub in `FloatingToolbar`'s Create menu). Pick the list and pre-fill fields from the selection (dates, numbers, percentages — reuse `utils/textToTask.ts`'s inference). The passage gets an `ArtifactLinkMark` (`targetType: 'listItem'`), and the list item needs its own `crossAppRefs` (new field + migration) so it shows "Linked from" the note. This replaces the earlier "note record types" idea: a list with typed fields *is* the record type.
+- **Step 2 — List date fields on the Calendar**: a per-field flag on `ListFieldSchema` (default on), rendered as a calendar layer. A Lists feature, so it works for any list with dates, not just ones filled from notes.
+- **Step 3**: "Save this note as a template" (user templates beside the built-in `NOTE_TEMPLATES`); Notes → Create ▸ Tracker entry; an Overview embedded as a live block inside a note; more display styles (timeline, board); editing simple properties inline from an Overview (click through for everything else).
+- **Idea (user, 2026-10-01, spitballing — not agreed): a list feeding Records.** E.g. an "Exercises" list whose items become a routine's steps, with Records logging whether that day's list was done. Note: Routines (Records) already are "a checklist of steps, ticked daily, each completion logged as a tracker entry" — so the likely shape is "a routine's steps come from a list" rather than a new mechanism. Discuss before building.
+- **Not in step 1**: the header Endeavour picker isn't used in Overview (it has its own); portfolio watchlist items and fitness activities have no source yet (add-on apps — add sources when wanted); no agent commands read Overviews; Overview on Android is reachable only from the More sheet; the row hover menu (✎/✕) has the same touch gap as every `RowHoverActions` site.
+
+### Task links — follow-ons (logged 2026-10-01)
+- **Recurring tasks — NEXT, user asked to be reminded at the start of the next session.** A task that repeats like a recurring reminder. Each new instance probably links automatically to the calendar Reminder/Deadline it creates. Design it on top of the `ItemLink` shape (a new link kind in `config/itemLinkKinds.ts`, e.g. "instance of") rather than a parallel mechanism. Not started; needs a design conversation first.
+- **Agent commands for task links**: agents can't see or create links yet. Needs `access.ts` read/write (store actions `addItemLink`/`removeItemLink` already hold the rules), a `get_task` field for blockers, and a decision on whether an agent completing a blocked task should be refused or noted.
+- **Link an existing task as a follow-up / "unlocks" from this side**: today "+ Follow-up" always creates a new task, and "unlocks" can only be made from the other task ("+ Waiting on…" there).
+- **Ticking the last linked-checklist item** (`taskListLinks.toggleChecklistItemWithTasks`) completes the task through `toggleTaskWithLists` after its own confirm: no blocker prompt, no toast. Route it through `taskCompletion` (mind the import direction: taskCompletion imports taskListLinks).
+- **Calendar shadows of a blocked task** (its deadline/scheduled entries) show no lock.
+- **User-defined link kinds** ("duplicate of", "part of"): the registry is ready for more entries; making them user-editable means storing kinds as data.
+- **Links from other item types** (event ↔ task "because of", note ↔ task with a reason, list item ↔ task): same `ItemLink` shape, `targetType` widened.
 
 ---
 
@@ -2565,6 +2584,9 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **Pickers suggest by keywords** (`utils/suggestRank.ts`, 2026-10-01) | `src/test/patterns.test.ts` "\"link a …\" pickers suggest by keywords" | **Fully applied 2026-10-01** — NotePickerModal (its own tab-aware ranking), TaskPickerModal, ListPickerModal; every opener passes `suggestFrom`. |
+| **Toasts via `showToast()` + one `ToastHost`** (2026-10-01) | `src/test/patterns.test.ts` "toasts go through showToast and the one ToastHost" | **Fully applied 2026-10-01** — no toast existed before. |
+| **Task completion via `toggleTaskCompletion()`** (2026-10-01) | `src/test/patterns.test.ts` "the UI completes tasks through toggleTaskCompletion" | **Fully applied 2026-10-01** in components. Deliberate exception: `taskListLinks.toggleChecklistItemWithTasks` (see "Task links — follow-ons"). |
 | **No native popups** (`ConfirmDialog`) | `grep -rnE "window\.(confirm\|alert\|prompt)" src` | **Fully applied 2026-09-20** — zero sites. |
 | **Ctrl+Enter on every modal** | list modals/panes; each must bind Ctrl+Enter (`useCtrlEnterSubmit`, or the inline `requestSubmit` effect) | **Fully applied 2026-09-20.** Exception: `NoteTagPresetModal` (no primary action). *Optional tidy:* ~20 older modals still use the inline effect rather than `useCtrlEnterSubmit`. Five of them (`AddNoteModal`, `AddNoteTagModal`, `BulkUploadWatchlistModal`, `ListsSection`, `NoteEditor`) also trip `react-hooks/immutability` because the handler is a `const` referenced from an effect above it — moving them to the hook with a function declaration fixes both. |
 | **Escape via `useEscapeClose`** | `grep -rlE "'Escape'" src` — every hit must be a documented inline handler that calls `stopPropagation` | **Fully applied.** Android's hardware back button still uses a fixed priority list (see "Android back button should use the same overlay stack" above). |

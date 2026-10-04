@@ -14,6 +14,12 @@ interface Props {
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   children: React.ReactNode;
+  // 'end' (default): right edges line up, the menu extends left — for actions at a row's end.
+  // 'start': left edges line up — for a trigger at the left of its row (a task's checkbox).
+  align?: 'start' | 'end';
+  // For a taller menu (a vertical list of labelled options) so "is there room below" is right.
+  estimatedHeight?: number;
+  className?: string;
 }
 
 // Rough estimate, not a measured value — these menus are always a short row of icon buttons
@@ -21,7 +27,7 @@ interface Props {
 // enough without a two-pass measure-then-position render.
 const ESTIMATED_MENU_HEIGHT = 40;
 
-export function RowHoverActionsMenu({ anchorRef, open, onMouseEnter, onMouseLeave, children }: Props) {
+export function RowHoverActionsMenu({ anchorRef, open, onMouseEnter, onMouseLeave, children, align = 'end', estimatedHeight = ESTIMATED_MENU_HEIGHT, className }: Props) {
   const [pos, setPos] = useState<{ left: number; top: number; placement: 'above' | 'below' } | null>(null);
 
   // A genuine external-system read (DOM layout via getBoundingClientRect, which only exists
@@ -36,21 +42,21 @@ export function RowHoverActionsMenu({ anchorRef, open, onMouseEnter, onMouseLeav
       const rect = el.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
       const placement: 'above' | 'below' =
-        spaceBelow >= ESTIMATED_MENU_HEIGHT + 4 || rect.top < ESTIMATED_MENU_HEIGHT + 4 ? 'below' : 'above';
-      return { left: rect.right, top: placement === 'below' ? rect.bottom + 4 : rect.top - 4, placement };
+        spaceBelow >= estimatedHeight + 4 || rect.top < estimatedHeight + 4 ? 'below' : 'above';
+      return { left: align === 'start' ? rect.left : rect.right, top: placement === 'below' ? rect.bottom + 4 : rect.top - 4, placement };
     })() : null;
     setPos(next);
-  }, [open, anchorRef]);
+  }, [open, anchorRef, align, estimatedHeight]);
 
   if (!open || !pos) return null;
 
   return createPortal(
     <div
-      className={styles.menu}
+      className={`${styles.menu} ${className ?? ''}`}
       style={{
         left: pos.left,
         top: pos.top,
-        transform: `translate(-100%, ${pos.placement === 'above' ? '-100%' : '0'})`,
+        transform: `translate(${align === 'start' ? '0' : '-100%'}, ${pos.placement === 'above' ? '-100%' : '0'})`,
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}

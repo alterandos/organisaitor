@@ -1,0 +1,119 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.groupLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.other {
+  flex: 0 1 auto;
+  max-width: 55%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.other:hover { border-color: var(--color-primary); }
+
+.otherDone {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+.check {
+  color: var(--color-success-text);
+  margin-right: 0.3rem;
+}
+
+.reason {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.4rem;
+  outline: none;
+}
+
+.reason:hover { border-color: var(--color-border); }
+.reason:focus { border-color: var(--color-primary); background: var(--color-bg); }
+.reason::placeholder { color: var(--color-muted); font-style: italic; }
+
+.remove {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.row:hover .remove, .remove:focus-visible { opacity: 1; }
+.remove:hover { color: var(--color-danger); }
+
+@media (hover: none) {
+  .remove { opacity: 1; }
+}
+
+.adds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.addBtn {
+  background: none;
+  border: 1px dashed var(--color-border);
+  border-radius: 99px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.addBtn:hover { border-color: var(--color-primary); color: var(--color-primary); }

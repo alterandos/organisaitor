@@ -49,6 +49,10 @@ interface SettingsState {
   colorEnabled:            boolean;
   priorityColorEnabled:    boolean;
   alwaysShowDueDate:       boolean;
+  // Tasks waiting on another task (utils/taskLinks.ts isBlocked): false = greyed out in place,
+  // true = moved out of the list into a collapsed "Waiting on other tasks" group.
+  hideBlockedTasks:        boolean;
+  toggleHideBlockedTasks:  () => void;
   toggleColor:             () => void;
   togglePriorityColor:     () => void;
   toggleAlwaysShowDueDate: () => void;
@@ -131,6 +135,8 @@ export const useSettingsStore = create<SettingsState>()(
       colorEnabled:            true,
       priorityColorEnabled:    true,
       alwaysShowDueDate:       false,
+      hideBlockedTasks:        false,
+      toggleHideBlockedTasks:  () => set((s) => ({ hideBlockedTasks: !s.hideBlockedTasks })),
       toggleColor:             () => set((s) => ({ colorEnabled:         !s.colorEnabled         })),
       togglePriorityColor:     () => set((s) => ({ priorityColorEnabled: !s.priorityColorEnabled })),
       toggleAlwaysShowDueDate: () => set((s) => ({ alwaysShowDueDate:    !s.alwaysShowDueDate    })),
@@ -163,7 +169,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 4,
+      version: 5,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -195,6 +201,8 @@ export const useSettingsStore = create<SettingsState>()(
         if (version < 4 && state.calendarLayerVisibility && state.calendarLayerVisibility.deadlines === undefined) {
           state.calendarLayerVisibility = { ...state.calendarLayerVisibility, deadlines: true };
         }
+        // v4 → v5: hideBlockedTasks (task links, 2026-10-01) — default greyed in place.
+        if (version < 5 && state.hideBlockedTasks === undefined) state.hideBlockedTasks = false;
         return state;
       },
     }

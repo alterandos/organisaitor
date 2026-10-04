@@ -7,6 +7,7 @@ import type { AppView } from '@/store/uiStore';
 export type AppTier = 'core' | 'addon';
 
 export const APP_TIERS: Record<AppView, AppTier> = {
+  overview:  'core',
   tasks:     'core',
   calendar:  'core',
   records:   'core',

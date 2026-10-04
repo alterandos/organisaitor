@@ -10,7 +10,8 @@ export type TrashableKind =
   | 'list' | 'listItem' | 'listType'
   | 'note' | 'noteTag' | 'structuredTagEntry'
   | 'watchlistItem' | 'portfolioTag' | 'investmentPurpose'
-  | 'activity' | 'activityType';
+  | 'activity' | 'activityType'
+  | 'overview';
 
 // Agents can't delete anything today (see access.ts's "no delete, ever" boundary) — this
 // union exists so a trash entry can distinguish who deleted it once they can, without a
@@ -20,7 +21,7 @@ export type DeletedBy = { type: 'user' } | { type: 'agent'; batchId: string };
 export interface TrashEntry {
   id:            TrashEntryId;
   kind:          TrashableKind;
-  sourceApp:     'organizer' | 'notes' | 'portfolio' | 'fitness';
+  sourceApp:     'organizer' | 'notes' | 'portfolio' | 'fitness' | 'suite';
   sourceSection: string;    // 'Tasks' | 'Calendar' | 'Records' | 'Lists' | 'Notes' | 'Portfolio' | 'Fitness'
   title:         string;    // resolved at delete time — never re-derived later (a parent Endeavour may itself be trashed)
   contextLine:   string;    // subtype + dates, also resolved at delete time

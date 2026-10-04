@@ -13,7 +13,7 @@ import type { List, ListItem } from '@/types/lists';
 function list(overrides: Partial<List> = {}): List {
   return {
     id: 'l1' as never, name: '', description: null, typeId: null, kind: 'reference', color: null, icon: null,
-    fieldSchema: [], tabs: [], isEncrypted: true, encryptedPayload: 'cipher-v1', crossAppRefs: [], resetOnTaskComplete: false,
+    fieldSchema: [], tabs: [], isEncrypted: true, encryptedPayload: 'cipher-v1', crossAppRefs: [], resetOnTaskComplete: false, collectionId: null,
     createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z', ...overrides,
   };
 }

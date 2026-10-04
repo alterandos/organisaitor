@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { toggleTaskWithLists, checklistProgress, linkedListIds } from '@/services/taskListLinks';
+import { checklistProgress, linkedListIds } from '@/services/taskListLinks';
+import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
+import { HoverOptions } from '@/components/HoverOptions/HoverOptions';
 import { useListStore } from '@/store/listStore';
 import type { Priority, Task } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
@@ -10,6 +12,8 @@ import { hapticLight } from '@/utils/haptics';
 import { formatDeadline, isOverdue } from '@/utils/date';
 import { hexToRgba } from '@/utils/color';
 import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
+import { openBlockers } from '@/utils/taskLinks';
+import { LABELS } from '@/config/labels';
 import styles from './TaskItem.module.css';
 
 const SWIPE_ACTION_THRESHOLD = 70;
@@ -38,6 +42,9 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   const listsRecord     = useListStore((s) => s.lists);
   const listItemsRecord = useListStore((s) => s.listItems);
   const openTaskPane  = useUIStore((s) => s.openTaskPane);
+  // The task open in the pane is marked in the list and scrolled to — including when it was opened
+  // from somewhere else (a task link, a notification, Overview). TaskList makes sure it's rendered.
+  const isOpen        = useUIStore((s) => s.editingTaskId === task.id);
   const activeCollectionId   = useUIStore(selectActiveCollectionId);
   const colorEnabled         = useSettingsStore((s) => s.colorEnabled);
   const priorityColorEnabled = useSettingsStore((s) => s.priorityColorEnabled);
@@ -84,7 +91,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
       if (d?.locked === 'h') {
         if (d.dx > SWIPE_ACTION_THRESHOLD) {
           hapticLight();
-          toggleTaskWithLists(task.id);
+          void toggleTaskCompletion(task.id);
           setSwipeX(0);
           setDeleteRevealed(false);
         } else if (d.dx < -SWIPE_ACTION_THRESHOLD) {
@@ -109,6 +116,13 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
     };
   }, [isAndroid, task.id]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    // After the parent's sub-task reveal (220ms) has opened, or the row isn't where it ends up yet.
+    const timer = setTimeout(() => rowRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 260);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
+
   const bgStyle: React.CSSProperties = {};
   if (collectionColor) {
     bgStyle.borderLeftColor = collectionColor;
@@ -126,6 +140,8 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
     openTaskPane(task.id);
   };
 
+  // Waiting on another task (task links): shaded grey (itemBlocked), with a count naming what it waits on.
+  const blockers       = task.completed || task.archived ? [] : openBlockers(task, tasksRecord);
   const checklist      = checklistProgress(linkedListIds(task.crossAppRefs), listsRecord, listItemsRecord);
   const subtaskIds     = task.subtaskIds ?? [];
   const hasSubtasks    = subtaskIds.length > 0;
@@ -146,19 +162,21 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   const itemEl = (
     <div
       ref={rowRef}
-      className={`${styles.item} ${task.completed || task.archived ? styles.itemDone : ''} ${isSubtask ? styles.subtask : ''} ${expanded ? styles.itemExpanded : ''}`}
+      className={`${styles.item} ${task.completed || task.archived ? styles.itemDone : ''} ${blockers.length > 0 ? styles.itemBlocked : ''} ${isOpen ? styles.itemOpen : ''} ${isSubtask ? styles.subtask : ''} ${expanded ? styles.itemExpanded : ''}`}
       style={itemStyle}
       onClick={(e) => { if (deleteRevealed) { setSwipeX(0); setDeleteRevealed(false); return; } handleRowClick(e); }}
     >
       {/* ── Main row ── */}
       <div className={styles.itemRow}>
-        <button
-          className={`${styles.checkbox} ${task.completed ? styles.checkboxDone : ''}`}
-          onClick={(e) => { e.stopPropagation(); toggleTaskWithLists(task.id); }}
-          aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
-        >
-          {task.completed && <span className={styles.checkmark}>✓</span>}
-        </button>
+        <HoverOptions options={isAndroid ? [] : taskCompletionOptions(task.id)}>
+          <button
+            className={`${styles.checkbox} ${task.completed ? styles.checkboxDone : ''}`}
+            onClick={(e) => { e.stopPropagation(); void toggleTaskCompletion(task.id); }}
+            aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
+          >
+            {task.completed && <span className={styles.checkmark}>✓</span>}
+          </button>
+        </HoverOptions>
 
         <span className={`${styles.title} ${task.completed ? styles.titleDone : ''}`}>
           {task.title}
@@ -186,6 +204,12 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
 
         {task.kind === 'waiting' && !task.completed && (
           <span className={styles.indicator} style={showDueDate ? { opacity: 1 } : undefined} title="Waiting task">⏳</span>
+        )}
+
+        {blockers.length > 0 && (
+          <span className={styles.blockedIndicator} title={LABELS.taskLinks.blockedTitle(blockers.map((b) => b.title))}>
+            {LABELS.taskLinks.blockedPill(blockers.length)}
+          </span>
         )}
 
         {task.kind === 'milestone' && !task.completed && (

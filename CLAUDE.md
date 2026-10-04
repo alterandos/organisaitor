@@ -31,6 +31,8 @@ What is shared today: **Supabase auth** (one session, one project, per-domain ta
 
 There is **no** typed event bus and **no** multi-package monorepo. Earlier drafts of this file described both as the plan (`packages/notes/`, `emit('create-task')`, a shared design-system package, route-based app switching). They remain possible future directions (BACKLOG.md), not current architecture — don't build on them as if they existed.
 
+**Overview is the suite-level read layer** (`src/overview/`, section `'overview'`): each app contributes a *source* to `OVERVIEW_SOURCES` that maps its items onto one common row (What / When / Status / Where / Endeavour), and an Overview is a saved question over those rows (or an Endeavour's automatic one). **A new app, or a new kind of item that should appear in "everything for X", adds a source there** — one entry, its key in `OverviewSourceKey`, its label in `LABELS.overview.sources`, and (if it can be opened) a case in `overview/open.ts`. Sources are pure functions over a snapshot; only `useOverviewSnapshot` subscribes to stores and only `open.ts` touches uiStore. Detail: `docs/features/overview.md`.
+
 **Implication for new work:** keep each app's domain logic inside its own store and component folders, and let apps talk through the shared entities and `services/crossAppLinkCleanup.ts` (the one module allowed to import several domain stores), not by importing each other's stores directly.
 
 ### Android build (Capacitor) — Track A + Phases 1–2 built and verified on-device
@@ -49,7 +51,7 @@ The suite is extended to Android via **Capacitor**, wrapping this same codebase 
 |------|-------|
 | `CLAUDE.md` (this file) | Overview and terminology, type system, stores, Supabase sync and live migration status, file structure, component patterns, hotkey rules, coding conventions, **pattern governance** |
 | `docs/features/implemented-features.md` | Running log of built features: what, why, files, integration points, bugs found and how |
-| `docs/features/fitness.md`, `schedules.md`, `external-calendar-sync.md` | The big self-contained features |
+| `docs/features/fitness.md`, `schedules.md`, `external-calendar-sync.md`, `overview.md` | The big self-contained features |
 | `docs/features/not-yet-implemented.md` | Short summary list (full specs are in BACKLOG.md) |
 | `docs/android/` | Android/Capacitor architecture, phased plan, and `implementation-status.md` |
 | `docs/agent-tasks/` | Self-contained briefs for follow-up work an agent can pick up cold |
@@ -137,7 +139,7 @@ Full plan and phase-by-phase status: `docs/agent-tasks/02-testing-and-engineerin
 
 **Running it:** `npm test` (`vitest run`) runs the whole suite; `npm run test:watch` for watch mode; `npm run check` runs `tsc -b && eslint . && vitest run && vite build` (currently fails on eslint's pre-existing baseline — see Part B7 — CI gates on that baseline instead of zero, `.github/workflows/ci.yml`, which runs the same suite on every push/PR as a backstop).
 
-**What's covered today** (653 tests, 47 files, as of 2026-09-24 — re-check the brief's Status block, this will grow): pure logic (`utils/`: timezone, dates, recurrence, ICS parsing, natural-language date/time parsing, links, hotkeys, the time grid, notebook/quick-access resolution, config template validity); store *behaviour* (task archive/restore cascades, calendar occurrence editing, schedule commitment mode, uiStore back/forward history, hotkey conflicts) and a slice of store *migrations* (`settingsStore`/`scheduleStore`/`taskStore` only — see "Store migrations are deliberately NOT all tested" below); `crossAppLinkCleanup`; the full Supabase mapper round-trip (all 17 entity types) and the sync pipeline itself (`mergeRecords`, per-table failure isolation, the `enqueue()` mutex, `customListTypes`) against a fake Supabase client; the whole encryption stack (vault lifecycle, the note/list lock-and-cache mechanism, the re-encrypt queue's ordering guarantee) against real Web Crypto; edge functions (`api/*.ts` — Bearer/401s, Strava's token-refresh window, Google Calendar's cancelled-instance skipping, speech-recognize's payload-size-not-client-claim billing); "Pattern governance" as executable checks (`src/test/patterns.test.ts`); and a representative slice of hooks/components (`useEscapeClose`, `useCtrlEnterSubmit`, `ConfirmDialog`, `TimeInput`, one full modal-prefill example in `AddCollectionModal`).
+**What's covered today** (653 tests, 47 files, as of 2026-09-24 — re-check the brief's Status block, this will grow): pure logic (`utils/`: timezone, dates, recurrence, ICS parsing, natural-language date/time parsing, links, hotkeys, the time grid, notebook/quick-access resolution, config template validity); store *behaviour* (task archive/restore cascades, calendar occurrence editing, schedule commitment mode, uiStore back/forward history, hotkey conflicts) and a slice of store *migrations* (`settingsStore`/`scheduleStore`/`taskStore` only — see "Store migrations are deliberately NOT all tested" below); `crossAppLinkCleanup`; the full Supabase mapper round-trip (all 17 entity types) and the sync pipeline itself (`mergeRecords`, per-table failure isolation, the `enqueue()` mutex, `customListTypes`) against a fake Supabase client; the whole encryption stack (vault lifecycle, the note/list lock-and-cache mechanism, the re-encrypt queue's ordering guarantee) against real Web Crypto; edge functions (`api/*.ts` — Bearer/401s, Strava's token-refresh window, Google Calendar's cancelled-instance skipping, speech-recognize's payload-size-not-client-claim billing); "Pattern governance" as executable checks (`src/test/patterns.test.ts`); and a representative slice of hooks/components (`useEscapeClose`, `useCtrlEnterSubmit`, `ConfirmDialog`, `TimeInput`, one full modal-prefill example in `AddCollectionModal`, and `NoteEditor`'s tab restore on note switch — the template for mounting the real Tiptap editor in jsdom).
 
 **What's NOT covered yet — manual/Playwright verification is still the right call here:** almost all UI rendering and interaction beyond the components just named (no Playwright/e2e suite exists at all yet — Phase 4); most individual Add/Edit modals' prefill behavior (only `AddCollectionModal` has one, as the template to copy); `CollectionPicker`/`CrossAppRefPicker`/`ItemActionDialog`; the speech `utteranceDetector`; the offline pending-queue retry internals (`loadPending`/`pushIds`/`flushPending`/`queueLocalOnlyAndNewer` — exercised only indirectly via the sync-pipeline tests); six of the nine stores' migration fixtures (see next point).
 
@@ -155,6 +157,7 @@ Nav order matches hotkey order (top to bottom in sidebar):
 
 | Section | Key | Nav hotkey | App |
 |---------|-----|------------|-----|
+| Overview | `'overview'` | `0` (no `Ctrl+0` — that's the browser's zoom reset) | Suite |
 | Tasks | `'tasks'` | `1` / `Ctrl+1` | Organizer |
 | Calendar | `'calendar'` | `2` / `Ctrl+2` | Organizer |
 | Records | `'records'` | `3` / `Ctrl+3` | Organizer |
@@ -163,7 +166,7 @@ Nav order matches hotkey order (top to bottom in sidebar):
 | Portfolio | `'portfolio'` | `6` / `Ctrl+6` | Portfolio app |
 | Fitness | `'fitness'` | `7` / `Ctrl+7` | Fitness app |
 
-Portfolio and Fitness appear below the `<hr>` divider in the NavSidebar (the "extras" group); all others are in `CORE_NAV_ITEMS`.
+Overview sits at the very top of the NavSidebar, above a divider, because it gathers from every app (it is deliberately *not* in `CORE_NAV_ITEMS`, which MobileNav's tab bar also reads; on Android it's in the More sheet). Portfolio and Fitness appear below the lower `<hr>` divider (the "extras" group); all others are in `CORE_NAV_ITEMS`.
 
 ---
 
@@ -198,7 +201,19 @@ All collections also carry `collectionId: CollectionId | null` — meaningful fo
 
 ### Task
 
-Key fields beyond the obvious: `kind: TaskKind` (`'action' | 'waiting' | 'milestone'`), `timeIntensity: TimeIntensity | null` (`'low' | 'medium' | 'high'`), `parentId: TaskId | null`, `subtaskIds: TaskId[]`, `links: string[]`, `completedAt: string | null`, `scheduledAt: string | null` (YYYY-MM-DD day user plans to work on it — distinct from deadline), `scheduledTime: string | null` (HH:MM 24-hour), `calendarEventId: CalendarEventId | null` (auto-created CalendarEvent when scheduledAt is set; kept in sync on edits; deleted when task is deleted or scheduledAt cleared), `archived: boolean` + `archivedAt: string | null` + `archiveReason: string | null` (see "Task archiving" in Implemented features — the reason is its own field, deliberately not appended to `notes`).
+Key fields beyond the obvious: `kind: TaskKind` (`'action' | 'waiting' | 'milestone'`), `timeIntensity: TimeIntensity | null` (`'low' | 'medium' | 'high'`), `parentId: TaskId | null`, `subtaskIds: TaskId[]`, `links: string[]`, `completedAt: string | null`, `scheduledAt: string | null` (YYYY-MM-DD day user plans to work on it — distinct from deadline), `scheduledTime: string | null` (HH:MM 24-hour), `calendarEventId: CalendarEventId | null` (auto-created CalendarEvent when scheduledAt is set; kept in sync on edits; deleted when task is deleted or scheduledAt cleared), `archived: boolean` + `archivedAt: string | null` + `archiveReason: string | null` (see "Task archiving" in Implemented features — the reason is its own field, deliberately not appended to `notes`), `itemLinks: ItemLink[]` (links this task owns to other tasks — see "ItemLink" below).
+
+### ItemLink (task links)
+
+```typescript
+type ItemLinkKind = 'dependsOn' | 'followUpOf' | 'related';
+interface ItemLink { kind: ItemLinkKind; targetType: 'task'; targetId: string; reason: string | null; createdAt: string; }
+```
+
+A typed link with an optional reason, **stored once, on the owning task** ("owner `<kind>` target"). The other side is derived at render time (`utils/taskLinks.ts` `taskRelations`), the same way the note "Linked from" bar derives backlinks, so the two can never disagree. What each kind means (its labels, icon, whether it `blocks`, whether it's `symmetric`) lives in ONE registry, `config/itemLinkKinds.ts`. A new kind is one entry there, plus its labels in `LABELS.taskLinks.kinds` and the `ItemLinkKind` union. `targetType` exists so other item types (events, notes, list items, and recurring tasks, next) can reuse the shape.
+- **Rules live in `utils/taskLinks.ts`** and nowhere else. `isBlocked`/`openBlockers`: waiting on an unresolved task, where resolved = completed **or archived**. `canAddLink`: no self-links, duplicates or loops; the store's `addItemLink` refuses anything else and returns why. `unlockedBy`, `openBlockersDeep`.
+- **A link to a missing (deleted) task is ignored, not cleaned up.** Restoring that task from the Recycling Bin brings its links back.
+- **`followUpOf` blocks too**: a follow-up created before its origin is done waits for it.
 
 ### RoutineTask (lightweight template, NOT a full Task)
 
@@ -275,22 +290,24 @@ interface RepeatConfig {
 
 | Store | Persist key | Version | Persisted to | Purpose |
 |-------|------------|---------|-------------|---------|
-| `taskStore` | `todo-app-storage` | **v12** | localStorage + Supabase | tasks, collections, tags, purposes |
+| `taskStore` | `todo-app-storage` | **v13** | localStorage + Supabase | tasks, collections, tags, purposes |
 | `calendarStore` | `todo-calendar` | **v14** | localStorage + Supabase | calendar events, reminders, deadlines |
 | `trackerStore` | `todo-tracker` | **v1** | localStorage + Supabase | tracker entries |
 | `routineStore` | `todo-routines` | **v1** | localStorage only | daily routine instances (transient) |
 | `noteStore` | `notes-storage` | **v12** | **IndexedDB** (not localStorage — see below) + Supabase | notes, note tags, structured tag entries |
-| `listStore` | `lists-storage` | **v6** | localStorage + Supabase | lists, list items, list types (custom types only) |
+| `listStore` | `lists-storage` | **v7** | localStorage + Supabase | lists, list items, list types (custom types only) |
 | `portfolioStore` | `todo-portfolio` | **v7** | localStorage + Supabase | watchlist items, portfolio tags, investment purposes (Portfolio app) — `columnConfig` (table display prefs) stays local-only |
 | `fitnessStore` | `fitness-storage` | **v3** | localStorage only | activities + activity types (Fitness app) |
 | `scheduleStore` | `todo-schedules` | **v1** | localStorage + Supabase | Schedule templates (recurring weekly timetables, Calendar section) |
-| `uiStore` | `todo-ui-session` | **v1** | localStorage (partial) + memory | all UI state (modals, panes, active section) — only navigation/session memory is persisted, see below |
-| `settingsStore` | `todo-settings` | **v4** | localStorage | user preferences (includes `autoBackup*` fields — see "Automatic local backup rotation" in Implemented features) |
+| `uiStore` | `todo-ui-session` | **v2** | localStorage (partial) + memory | all UI state (modals, panes, active section) — only navigation/session memory is persisted, see below |
+| `settingsStore` | `todo-settings` | **v5** | localStorage | user preferences (includes `autoBackup*` fields — see "Automatic local backup rotation" in Implemented features — and `hideBlockedTasks`, v5) |
 | `authStore` | — | — | memory only | Supabase session |
 | `recentItemsStore` | `todo-recent-items` | **v1** | localStorage only | Quick Access (Ctrl+G) recent/frequent visit history |
 | `notificationStore` | `todo-notifications` | **v1** | localStorage only | pending in-app notifications + the log of already-notified triggers |
 | `hotkeyOverridesStore` | `todo-hotkey-overrides` | **v1** | localStorage only | user-rebound keyboard shortcuts (see "Hotkeys rule") |
-| `dialogStore` | — | — | memory only | queue behind `confirmDialog()` / `alertDialog()` (see "Confirmations and alerts") |
+| `dialogStore` | — | — | memory only | queue behind `confirmDialog()` / `choiceDialog()` / `alertDialog()` (see "Confirmations and alerts") |
+| `overviewStore` | `overviews-storage` | **v1** | localStorage + Supabase | saved (custom) Overviews — definitions only; rows are computed live (see "Overview") |
+| `toastStore` | — | — | memory only | the one toast currently showing, behind `showToast()` (see "Toasts") |
 | `voiceStore` | — | — | memory only | voice-dictation status and level for `VoiceIndicator` |
 | `agentLogStore` | `agent-log` | **v1** | localStorage only | audit log of every agent command (reads as ids only); capped at 2000 entries; cleared on sign-out |
 | `agentBatchStore` | `agent-batches` | **v1** | localStorage only | before-snapshots so an agent's changes can be undone; capped at 50 batches; cleared on sign-out |
@@ -300,7 +317,7 @@ interface RepeatConfig {
 
 When adding fields to a persisted store's shape: **bump `version`** and write a **cumulative `migrate` function** that backfills defaults for every prior version. Never write non-cumulative migrations.
 
-Current taskStore v12 migrate backfills: `routineTasks: []`, `repeatConfig: null`, `fieldSchema: []`, `tagIds: []` on collections (v5); `scheduledAt: null`, `scheduledTime: null`, `calendarEventId: null` on tasks (v6); `collectionId: null` on collections (v7); `archivedAt: null` on both collections and purposes (v8); `calendarReminderId: null` on tasks (v9); `crossAppRefs: []` on tasks (v10); `archivedAt` (from `updatedAt` for already-archived tasks, else `null`) + `archiveReason: null` on tasks (v11); `calendarDeadlineId: null` on tasks (v12, "Deadline calendar kind" 2026-09-27). Each `if (fromVersion < N)` step **reassigns `state` and falls through** rather than returning — this matters because `migrate` is called once per load with whatever version is on disk, so a store that skipped several app versions in one load (not opened for months) must still receive every intervening step, not just the first applicable one. **Bug found and fixed 2026-09-24:** every step used to `return` immediately after applying its own patch, so a store more than one version behind silently skipped every later step (a v2 store jumping straight to v11 got only the v5 collections patch and the v11 wrapper's own fields, missing v6/v7/v8/v9/v10 entirely) — caught by `src/store/migrations.test.ts`'s "v2 -> v11" fixture; see BACKLOG.md. Follow the fall-through pattern for v12+ — never `return` from inside an individual version step again.
+Current taskStore v12 migrate backfills: `routineTasks: []`, `repeatConfig: null`, `fieldSchema: []`, `tagIds: []` on collections (v5); `scheduledAt: null`, `scheduledTime: null`, `calendarEventId: null` on tasks (v6); `collectionId: null` on collections (v7); `archivedAt: null` on both collections and purposes (v8); `calendarReminderId: null` on tasks (v9); `crossAppRefs: []` on tasks (v10); `archivedAt` (from `updatedAt` for already-archived tasks, else `null`) + `archiveReason: null` on tasks (v11); `calendarDeadlineId: null` on tasks (v12, "Deadline calendar kind" 2026-09-27); `itemLinks: []` on tasks (v13, "Task links" 2026-10-01). Each `if (fromVersion < N)` step **reassigns `state` and falls through** rather than returning — this matters because `migrate` is called once per load with whatever version is on disk, so a store that skipped several app versions in one load (not opened for months) must still receive every intervening step, not just the first applicable one. **Bug found and fixed 2026-09-24:** every step used to `return` immediately after applying its own patch, so a store more than one version behind silently skipped every later step (a v2 store jumping straight to v11 got only the v5 collections patch and the v11 wrapper's own fields, missing v6/v7/v8/v9/v10 entirely) — caught by `src/store/migrations.test.ts`'s "v2 -> v11" fixture; see BACKLOG.md. Follow the fall-through pattern for v12+ — never `return` from inside an individual version step again.
 
 **Unversioned stores:** persisted data with no `version` arrives as v0. The first time such a store's shape changes, give it `version: 1` and a `migrate` that backfills the new fields (`scheduleStore` did exactly this) — a `version` with no `migrate` makes zustand discard the stored state. Every persisted store now has a version.
 
@@ -458,6 +475,8 @@ Every new column on a persisted type needs:
 | `036` | **Applied** | `036_calendar_event_background.sql` (`background boolean` + `color text` on `calendar_events` — "Background / banner calendar events", 2026-09-27). Every event upsert now sends both columns, so `calendar_events` rejects writes until this runs (sync isolates the failure per table; nothing else breaks). |
 | `037` | **Applied** | `037_calendar_deadlines.sql` (new `calendar_deadlines` table + `tasks.calendar_deadline_id` — "Deadline calendar kind", 2026-09-27). `calendar_deadlines` sync (a new entry in `SYNC_TABLES`) fails entirely until this runs; isolated per-table like every other migration. |
 | `038` | **Applied** | `038_list_links.sql` (`cross_app_refs jsonb` + `reset_on_task_complete boolean` on `lists` — "Lists: links from tasks, calendar items and notes", 2026-09-28). Every list upsert now sends both columns, so `lists` rejects writes until this runs (sync isolates the failure per table; nothing else breaks). |
+| `039` | **Applied** | `039_task_item_links.sql` (`item_links jsonb` on `tasks` — "Task links", 2026-10-01). Every task upsert now sends `item_links`, so `tasks` rejects writes until this runs (sync isolates the failure per table; the change stays queued locally and syncs once it's applied). |
+| `040` | **Applied** | `040_overviews.sql` (new `overviews` table + `lists.collection_id` — "Overview", 2026-10-01). Until it runs: saved Overviews don't sync (they still work locally), and every list upsert (which now sends `collection_id`) is rejected, so list changes stay queued locally. Sync isolates both per table; nothing else breaks. |
 
 ### Migration history
 
@@ -501,6 +520,8 @@ Every new column on a persisted type needs:
 | `036_calendar_event_background.sql` | `background boolean not null default false` + `color text` on `calendar_events` — "Background / banner calendar events" (see `docs/features/implemented-features.md`). Alters an existing table only, so no new grant. **Applied** |
 | `037_calendar_deadlines.sql` | New `calendar_deadlines` table (full current `calendar_reminders` shape — links/important/status/notify-lead-time/cross_app_refs/archived) + `tasks.calendar_deadline_id text` — "Deadline calendar kind" (see `docs/features/implemented-features.md`). Includes its own grant (new table). **Applied** |
 | `038_list_links.sql` | `cross_app_refs jsonb not null default '[]'` + `reset_on_task_complete boolean not null default false` on `lists` — a list's own links to notes, and the checklist "reusable" flag ("Lists: links from tasks, calendar items and notes"). Links *to* a list from a task/event/reminder/deadline use those tables' existing `cross_app_refs`. Alters an existing table only, so no new grant. **Applied** |
+| `039_task_item_links.sql` | `item_links jsonb not null default '[]'` on `tasks` — task links (depends on / follow-up of / related, each with an optional reason; see "Task links" in `docs/features/implemented-features.md`). Alters an existing table only, so no new grant. **Pending — not yet run** |
+| `040_overviews.sql` | New `overviews` table (saved Overviews: `name`, `icon`, and the whole query as one `definition jsonb`, so a new query option never needs a migration) + `collection_id text` on `lists` (a list's Endeavour, list-level only). Includes its own grant (new table). See `docs/features/overview.md`. **Pending — not yet run** |
 
 ### Supabase tables (summary)
 
@@ -514,7 +535,8 @@ Every new column on a persisted type needs:
 - **tracker_entries** — TrackerEntry; `data jsonb`, RLS on `user_id`
 - **fitness_strava_connection** — one row per user: `athlete_id`, `access_token`, `refresh_token`, `expires_at`, `scope`; RLS on `user_id`; never read client-side directly, only through `api/strava-status.ts` / `api/strava-sync.ts`
 - **schedules** — mirrors `ScheduleTemplate`; `blocks jsonb` (the full `ScheduleBlock[]`, same "commit the whole array on save" pattern as `collections.field_schema`)
-- **lists** — mirrors `List`; `field_schema jsonb`, `tabs jsonb`, `cross_app_refs jsonb` + `reset_on_task_complete boolean` (since `038`)
+- **lists** — mirrors `List`; `field_schema jsonb`, `tabs jsonb`, `cross_app_refs jsonb` + `reset_on_task_complete boolean` (since `038`), `collection_id text` (since `040` — the list's Endeavour, plaintext even on an encrypted list)
+- **overviews** — mirrors `Overview` (since `040`); `definition jsonb` holds the whole query (sources, Endeavour, status, dates, search, sort, grouping)
 - **list_items** — mirrors `ListItem`; `data jsonb`, `sort_order integer` (the domain field is named `order`, renamed at the DB boundary only — `order` is a SQL reserved word)
 - **list_types** — mirrors `ListType`, but **only rows for custom (non-built-in) types are ever written here** — built-ins have fixed ids (`lt-movies`, `lt-credentials`, …) and are always re-seeded locally by `listStore.ts` (its persist `merge` re-adds any built-in missing from saved state, so a new built-in just goes in `BUILTIN_LIST_TYPES` — no version bump), same as Fitness's `BUILTIN_ACTIVITY_TYPE_SEEDS`. No `created_at`/`updated_at` (the domain `ListType` interface has neither, same as `Tag`) — merges fall back to remote-wins, tombstone-aware, same as `tags`
 - **notes** / **note_tags** / **structured_tag_entries** — mirror `Note` / `NoteTag` / `StructuredTagEntry`; `notes` includes `is_encrypted boolean` (see "Client-side encryption for Note content" below — when true, `content` holds a JSON envelope, not raw Tiptap doc JSON, opaque to this table)
@@ -542,6 +564,8 @@ src/
   App.tsx                    — root: hotkey handler, modal routing, section switcher
   types/index.ts             — all TypeScript interfaces and unions
   types/agent.ts             — agent command-layer types (RiskTier, EntityKind, AgentLogEntry, AgentBatch); not re-exported from index.ts
+  types/overview.ts          — Overview types (OverviewQuery, Overview, OverviewRow, OverviewSourceKey); not re-exported from index.ts — see "Overview"
+  overview/                  — the Overview engine (see "Overview"): sources.ts (OVERVIEW_SOURCES — THE registry, one entry per app/item kind, pure functions over a store snapshot), engine.ts (runOverview: filter/sort/group; endeavourOverviewQuery), useOverviewSnapshot.ts (the React hook that builds the snapshot, encrypted notes/lists resolved through their views), open.ts (openOverviewRow — jump to a row's source)
   types/trash.ts             — Recycling Bin types (TrashEntry, TrashableKind, DeletedBy); not re-exported from index.ts — see "Recycling Bin" above
   agent/                     — the AI agent command layer (see "Agent command layer" below and docs/ai/02-command-layer.md): access.ts (THE boundary: what an agent can read and do), commands/*.ts, run.ts (runCommand), registry.ts (toolDefinitions), batch.ts (snapshot/diff/revert), errors.ts, devHandle.ts (dev-only console handle)
   test/                      — Vitest setup (Map-backed localStorage) and helpers
@@ -568,7 +592,9 @@ src/
     settingsStore.ts         — user preferences
     authStore.ts             — Supabase session
     recentItemsStore.ts      — Quick Access (Ctrl+G) recent/frequent visit history, keyed by `${QuickAccessTargetType}:${entityId}`
-    dialogStore.ts           — queue of pending confirm/alert requests (memory-only) behind `confirmDialog()` / `alertDialog()` in components/ConfirmDialog/dialogs.ts
+    dialogStore.ts           — queue of pending confirm/alert requests (memory-only) behind `confirmDialog()` / `choiceDialog()` / `alertDialog()` in components/ConfirmDialog/dialogs.ts
+    overviewStore.ts         — saved Overviews (persisted `overviews-storage`, synced `overviews`); deleteOverview goes to the Recycling Bin
+    toastStore.ts            — the one toast showing (memory-only) behind `showToast()` in components/Toast/showToast.ts — see "Toasts"
     hotkeyOverridesStore.ts  — user-rebound hotkeys (persisted `todo-hotkey-overrides`); `matchesHotkeyId`, `findConflicts`
     notificationStore.ts     — pending in-app notifications + already-notified log (persisted `todo-notifications`)
     voiceStore.ts            — voice dictation status/level for VoiceIndicator (memory-only, written by services/speech/dictation.ts)
@@ -583,7 +609,10 @@ src/
   services/strava.ts         — client-side Strava wrapper: getStravaConnectUrl(), checkStravaStatus(), syncStrava() (calls api/strava-* edge functions, upserts results into fitnessStore)
   services/googleCalendar.ts — client-side Google Calendar sync wrapper: getGoogleCalendarConnectUrl(), fetchGoogleCalendarConnections(), setGoogleCalendarEnabled(), disconnectGoogleCalendar(), syncGoogleCalendars() (calls api/google-calendar-* edge functions, maps + upserts results into calendarStore via upsertSyncedEvent) — see "External calendar sync"
   services/crossAppLinkCleanup.ts — deleteTaskWithCleanup/deleteNoteWithCleanup/removeCrossAppRefFromTarget: keeps cross-app links (Task.crossAppRefs, Notes' ArtifactLinkMark) from going dead when either side is deleted; the one module allowed to import both taskStore and noteStore (they must never import each other directly) — see "Cross-app linking"
-  services/taskListLinks.ts — a task's linked lists: checklistProgress() (the "📋 3/7" pill), toggleTaskWithLists() (THE way UI completes a task — also unticks a linked checklist marked reusable), toggleChecklistItemWithTasks() (THE way UI ticks a checklist item — offers to complete the linked task when the last one is ticked). Agents don't use it (no list access) — see "Lists: links from tasks, calendar items and notes" in Implemented features
+  services/taskCompletion.ts — toggleTaskCompletion(taskId): THE way the UI completes or reopens a task. Asks before completing one that's waiting on other tasks (complete anyway / complete the whole chain upstream, via choiceDialog), then toggles through taskListLinks and shows the Completed toast (what it unlocked, + Follow-up, Undo). Agents toggle directly (agent/access.ts) — no dialog, no toast. Enforced by a pattern test
+  config/itemLinkKinds.ts   — ITEM_LINK_KINDS: THE registry of task-link kinds (Waiting on / Follow-up of / Related — icon, labels, blocks, symmetric); see "ItemLink" in Type system
+  utils/taskLinks.ts        — the task-link rules, pure: taskRelations (both directions), openBlockers/isBlocked/openBlockersDeep, unlockedBy, canAddLink (self/duplicate/loop), makeItemLink
+  services/taskListLinks.ts — a task's linked lists: checklistProgress() (the "📋 3/7" pill), toggleTaskWithLists() (toggles a task and unticks a linked checklist marked reusable — the UI calls it through services/taskCompletion.ts, never directly), toggleChecklistItemWithTasks() (THE way UI ticks a checklist item — offers to complete the linked task when the last one is ticked). Agents don't use it (no list access) — see "Lists: links from tasks, calendar items and notes" in Implemented features
   services/taskCalendarLinks.ts — keeps a task's shadow CalendarDeadline (deadline date) and event (scheduled date) matching the task, and flows edits made on the event back — the one place that logic lives (see "Task ⇄ calendar shadow entries" in Implemented features); like crossAppLinkCleanup it may import both taskStore and calendarStore
   services/taskDeadlineMigration.ts — migrateTaskDeadlineShadows(), called once from App.tsx's startup effect: converts any pre-2026-09-27 task shadow that's still a `CalendarReminder` with `reminderType: 'task'` into a `CalendarDeadline` with `deadlineType: 'task'` and repoints the owning task's `calendarDeadlineId`. State-driven (looks for legacy shadows still present, not a run-once flag), so it's naturally idempotent — see "Deadline calendar kind" in Implemented features
   services/trashCapture.ts  — moveToTrash(kind, entity): the write half of the Recycling Bin, called from inside every store's own delete* action. Deliberately imports NO domain store (only trashStore) so every domain store can import it without an import cycle — see "Recycling Bin" above
@@ -594,7 +623,14 @@ src/
   services/listSecretsSync.ts — keeps those caches in step with the vault (decrypt on unlock/sync pull, wipe on lock)
   store/listViews.ts         — React hooks useListViews()/useListView(id)/useListItemViews(): lists/items resolved through the cache
   components/ErrorBoundary/ — class ErrorBoundary: `scope="app"` (around <App /> in main.tsx: full-page fallback with Reload + Export backup + collapsed Details) and `scope="section"` (around the section switcher in App.tsx, keyed by `activeView` so navigating away resets it: "Reload this section", nav keeps working). A **new section must render inside that section boundary**; copy is `LABELS.errorBoundary`
-  components/ConfirmDialog/ — THE replacement for window.confirm()/alert(): `dialogs.ts` (`confirmDelete`, `confirmDialog`, `alertDialog`) + `ConfirmDialogHost`, mounted once in App.tsx (see "Confirmations and alerts")
+  components/ConfirmDialog/ — THE replacement for window.confirm()/alert(): `dialogs.ts` (`confirmDelete`, `confirmDialog`, `choiceDialog`, `alertDialog`) + `ConfirmDialogHost`, mounted once in App.tsx (see "Confirmations and alerts")
+  components/OverviewSection/ — the Overview section: sidebar (Endeavours → their automatic Overview; My overviews with RowHoverActions edit/delete; + New overview) + grouped table (row click opens the item in its app)
+  components/AddOverviewModal/ — create/edit a saved Overview (sources, Endeavour, open/all, dates + window, title search, sort, group)
+  utils/suggestRank.ts      — rankSuggestions/rankSearch: THE ordering for every "link a …" picker (see "Pickers suggest by keywords")
+  components/HoverOptions/  — HoverOptions: hovering a button offers labelled alternatives to its plain click (the RowHoverActions machinery, `align`-able, vertical list). Used for a task's Complete (TaskItem checkbox, ItemActionFooter's `completeOptions`)
+  components/Toast/         — `showToast()` (showToast.ts) + `ToastHost` (Toast.tsx), mounted once in App.tsx — see "Toasts"
+  components/TaskLinks/     — TaskLinksField: TaskPane's "Task links" section (grouped both-direction rows with editable reasons; + Waiting on… / + Follow-up / + Related…)
+  components/TaskPickerModal/ — the "link a task" search dialog (portaled, shares NotePickerModal's CSS module like ListPickerModal)
   components/DecryptPrompt/  — app-wide "enter your passphrase to permanently decrypt this note/list" modal (uiStore.decryptPrompt / requestDecrypt), portaled, z-index 200; opened by every clickable 🔒
   store/noteViews.ts         — React hooks useNoteViews()/useNoteView(id)/useEntryViews(): notes/entries resolved through the cache, re-derived when the store OR the cache changes
   services/vault.ts          — client-side encryption vault: setupVault/unlockWithPassphrase/unlockWithRecoveryCode/lockVault, trustThisDevice (IndexedDB key cache), encryptField/decryptField (AES-GCM via Web Crypto) — see "Client-side encryption for Note content"
@@ -782,11 +818,38 @@ useEffect(() => {
 
 - `await confirmDelete(noun, itemName, detail?)` — "delete permanently". Red button, Cancel focused, "This cannot be undone." — the standard from "Archive and delete look and behave the same everywhere". `noun` is lower-case (`'tracker'`; use `LABELS.collection.toLowerCase()` for Endeavours); `detail` says what else goes with it.
 - `await confirmDialog({ title, message?, itemName?, confirmLabel?, destructive?, irreversible? })` — any other yes/no (disconnect an account, change the timezone, remove a field that holds data).
+- `await choiceDialog({ ...confirmDialog options, alternateLabel })` — a confirm with a third, secondary button; resolves `'confirm'` (primary, Ctrl+Enter), `'alternate'` or `'cancel'`. Used by the blocked-task prompt ("Complete anyway" / "Complete all N"). Put the choice that affects the least on the primary button.
 - `await alertDialog(message)` — an error the user needs to see.
 
-All three return promises, so the handler becomes `async`. Where a listener owns the keyboard while it waits (`SettingsPane`'s hotkey capture), stop listening *before* opening the dialog. If an item has a real archive concept, prefer the `ItemActions` pane pattern instead (it offers "Archive instead").
+All of them return promises, so the handler becomes `async`. Where a listener owns the keyboard while it waits (`SettingsPane`'s hotkey capture), stop listening *before* opening the dialog. If an item has a real archive concept, prefer the `ItemActions` pane pattern instead (it offers "Archive instead").
 
 **A prompt raised by what the user is typing** (e.g. the note editor's "remove the link too?") passes `focusDelayMs` (and optionally `isStale`): the dialog shows at once but takes no focus and ignores Ctrl+Enter for that long, so a stray Enter can't answer it; if `isStale()` is true when the delay ends it closes itself as cancel.
+
+### Toasts — `showToast()`, one `ToastHost` (suite-wide pattern, adopted 2026-10-01)
+
+**To tell the user something happened, with an optional quick follow-on action, use `showToast({ message, detail?, actions?, durationMs? })`** (`src/components/Toast/showToast.ts`). Example: "Completed “X” · + Follow-up · Undo". `<ToastHost />` is mounted once in `App.tsx` (a pattern test checks this).
+- A toast is **non-blocking and dismisses itself** (7 s by default, held open while hovered).
+- One at a time: a new toast replaces the current one.
+- It's portaled at z-index 1050 (above every modal/pane tier, below the confirm dialog).
+- It's deliberately **not** in the Escape stack: nothing is waiting on it.
+- **Use it for** results the user may want to act on right away (Undo, a natural next step).
+- **Don't use it for** anything that needs an answer (that's `confirmDialog`/`choiceDialog`) or errors the user must see (`alertDialog`).
+- Before this there was no toast anywhere, so there is nothing to retrofit.
+
+### Task completion — `toggleTaskCompletion()` (adopted 2026-10-01)
+
+**Every UI path that completes or reopens a task calls `toggleTaskCompletion(taskId)`** (`services/taskCompletion.ts`): the checkbox, swipe, pane footers (task and calendar), sub-task rows and notifications. Never call `toggleTaskWithLists` or the store's `toggleTask` from a component. The service is where "it's still waiting on other tasks" is asked and the Completed toast is shown, so a component that skips it silently loses both. A pattern test fails on a direct call under `src/components/`.
+- **Hovering Complete** offers the alternatives up front (`taskCompletionOptions(taskId)` → `HoverOptions`, on the TaskItem checkbox and every pane footer's Complete via `ItemActionFooter`'s `completeOptions`): *Complete + add follow-up*, *Complete, with the N it's waiting on* (only when blocked), *Add a follow-up (keep this open)*. They are `toggleTaskCompletion(taskId, { thenFollowUp | withBlockers })` / `showAddFollowUp` — add a new completion variant there, not in a component. Desktop only (no hover on Android).
+- Exception: `taskListLinks.toggleChecklistItemWithTasks` (ticking the last checklist item) completes the linked task through `toggleTaskWithLists`, after its own confirm. It doesn't ask about blockers or show the toast (BACKLOG.md).
+
+### Pickers suggest by keywords — `utils/suggestRank.ts` (suite-wide pattern, adopted 2026-10-01)
+
+**Every "link a …" picker orders its list the same way**, so linking feels identical whatever you're linking to. The pattern came from `NotePickerModal`; the user asked for it to be applied everywhere.
+- **Empty search box**: suggestions from the item being linked *from* (`suggestFrom`, its title), under a "Suggested from “…”" label. The title is reduced to keywords (`extractKeywords`, stop-words dropped, `stemForMatch`). Each keyword is looked for in every candidate's weighted fields (title 3, a container's name 2, body text 1 with log-capped hit counts), and rarer keywords count for more (idf). The rest follows under "Recent", most recent first.
+- **Typed search**: every word must match some field, ranked by the fields hit.
+- **Use `rankSuggestions` / `rankSearch` (`src/utils/suggestRank.ts`)** with the picker's own fields. `NotePickerModal` keeps its tab-aware original of the same scoring, since it also picks the best tab.
+- **Every place that opens a picker passes `suggestFrom`.** Two pattern tests check both halves.
+- **Applied to**: `NotePickerModal`, `TaskPickerModal` (title, Endeavour, parent, notes), `ListPickerModal` (name, description, item titles; checklists ahead in the recent tail).
 
 ### Row hover-action menu (`RowHoverActions`) — suite-wide pattern, adopted 2026-09-24
 
@@ -837,6 +900,7 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 
 | Primary | Secondary | Action |
 |---------|-----------|--------|
+| `0` | — | Overview section (`nav-overview`, customizable) |
 | `1` | `Ctrl+1` | Tasks section |
 | `2` | `Ctrl+2` | Calendar section |
 | `3` | `Ctrl+3` | Records section |
@@ -861,6 +925,7 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 | `Delete` | `Ctrl+Shift+D` | Delete the open task / event / reminder — always opens the permanent-delete confirmation (item panes only, via `useItemActions`). Plain `Delete` is ignored while typing in a field, where it deletes a character |
 | `Ctrl+Enter` | — | Confirm the archive dialog (Esc cancels); focus starts in the optional reason box |
 | `O` | — | Toggle the Calendar side pane — Go to date / Layers / Schedules / Imported calendars (Calendar section only, local to `CalendarView.tsx`) |
+| `T` | — | Go to today in whichever view is showing — month, week or day (Calendar section only, local to `CalendarView.tsx`) |
 | `←`/`→` | `PgUp`/`PgDn` | Previous/next period — month, week, or day, matching the current view (Calendar section only, local to `CalendarView.tsx`) |
 | `Tab` | `Shift+Tab` | Cycle Month → Week → Day view; Shift+Tab cycles in reverse (Calendar section only, local to `CalendarView.tsx`; suppressed while any calendar modal/pane is open so normal focus-tabbing still works there) |
 | `→` | — | Expand selected notebook (Notes section only) |
@@ -870,7 +935,7 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 | `Ctrl+T` | — | New tab, prompting for a name (Notes editor focused, local to `NoteEditor.tsx`) |
 | `` Ctrl+` `` | — | Move keyboard focus between the tree/list nav columns and the editor (Notes section only; previously `Ctrl+Tab`, moved once `Ctrl+Tab` became the tab-cycle key above — see "Notes/Lists keyboard nav" below) |
 | `Ctrl+L` | — | Turn the selection into a link (opens a URL popover); with no selection, opens a "New link" pane (text + URL) instead (Notes editor) |
-| `Ctrl+H` | — | Then press `1`–`5` to turn the current paragraph into that heading level, or `0` for plain text (Notes editor, local to `NoteEditor.tsx`) |
+| `Ctrl+H` | — | Then press `1`–`5` to turn the current paragraph into that heading level, `0` for plain text (also strips all formatting except links/tags — `extensions/normalText.ts`), or `H` to go to the tab's Title, creating it at the top from the tab name if there isn't one (Notes editor, local to `NoteEditor.tsx`) |
 | `Ctrl+Q` | — | On a Notes selection: open the "Create ▸" menu (Task/Calendar item/List item/Tracker entry — Task is wired, the rest are stubs); 1-4 picks, Esc cancels (Notes editor) |
 | `Ctrl+click` | — | On a link in the Notes editor: select its text instead of opening it (plain click opens) |
 | `Ctrl+−` | — | Zoom out in Notes editor (without Shift) |
@@ -987,7 +1052,7 @@ Reading an encrypted note: **always through `noteView()` / `useNoteView()`** —
 ### How it works
 
 - **CSS variables**: All colors live as `--color-*` custom properties in `src/index.css`. The `:root` block defines light mode values; `[data-theme="dark"]` on `<html>` overrides them with dark equivalents.
-- **New semantic variables added**: `--color-surface-alt`, `--color-primary-subtle`, `--color-primary-border`, `--color-danger`, `--color-danger-muted`, `--color-warning`, `--color-warning-muted`, `--color-success-muted`, `--color-success-text`, `--shadow-lg`, `--color-border-strong` (2026-09-28 — the divider between a time grid's whole-day zone and its hours), `--color-tentative-stripe-1`/`-2` + `--tentative-blend-mode` (2026-09-27 — see "Fixed: tentative-event hatch unreadable in dark mode" in Implemented features; not just a colour swap, dark mode also switches the blend mode itself)
+- **New semantic variables added**: `--color-surface-alt`, `--color-primary-subtle`, `--color-primary-border`, `--color-danger`, `--color-danger-muted`, `--color-warning`, `--color-warning-muted`, `--color-success-muted`, `--color-success-text`, `--shadow-lg`, `--color-border-strong` (2026-09-28 — the divider between a time grid's whole-day zone and its hours), `--color-blocked-wash`/`--color-blocked-stripe` (2026-10-01 — the hatched overlay on a task waiting on another task, TaskItem `.itemBlocked::after`), `--color-tentative-stripe-1`/`-2` + `--tentative-blend-mode` (2026-09-27 — see "Fixed: tentative-event hatch unreadable in dark mode" in Implemented features; not just a colour swap, dark mode also switches the blend mode itself)
 - **FOUC prevention**: Inline `<script>` in `index.html` `<head>` reads `localStorage['todo-settings'].state.theme` synchronously and sets `data-theme` before React hydrates.
 - **Theme effect** (`src/App.tsx`): `useEffect` reads `theme` from `settingsStore`; for `'system'` mode it attaches a `matchMedia('prefers-color-scheme: dark')` listener that updates `data-theme` on OS changes; for explicit `'light'`/`'dark'` it sets `data-theme` directly.
 - **settingsStore** (`src/store/settingsStore.ts`): Added `theme: 'light' | 'dark' | 'system'` (default `'system'`) and `setTheme` action.

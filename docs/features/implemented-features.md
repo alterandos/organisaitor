@@ -739,3 +739,128 @@ Three tiers were identified, cheapest first:
   - **Scope**: note titles (`NoteList`) and, at the user's request the same day, notebook names in the Chronicle tree (`ChronicleView`). The tree's actions live in the floating `RowHoverActions` menu below the row, so the extended name doesn't cover them. Sidebar, ManagePane, Lists and Records rows keep the tooltip; switching one is `reveal="extend"` at its call site.
   - **Verified**: headless Chromium against `vite preview`, light and dark, with a seeded long-titled note and a long notebook name. Both render in place over the row and past their column. A short title is unaffected, and the notebook's floating action menu stays visible below the extended name. No page errors. No automated test (UI hover behaviour; no Playwright suite yet).
 
+
+- [x] **Fixed: moving between notes overwrote a tab with the note's Main content** (2026-09-30).
+  - **Bug** (reported by the user as serious data loss): Alt+Left/Right to a note whose remembered tab (`uiStore.notesTabMemory`) wasn't Main showed tab 2 as active, but the editor held the note's **Main** content. The next save wrote Main over tab 2. Saves come from typing, clicking another tab (`switchTab` always flushes the open tab first), a cross-app "open this tab" request (it switches tabs the same way) and leaving the note. The same happened on any in-session note switch that restored a remembered tab, not only back/forward.
+  - **Cause**: `NoteEditor`'s note-load effect restored the remembered tab id but always called `setContent(note.content)`. That mismatch dated from "revisiting a note lands back on its last tab". It didn't show on first mount (returning to Notes from another section) only because the lock/unlock effect runs on mount too and happened to reload the right tab.
+  - **Fix**: `resolveNoteTab(note, tabId)` in `utils/noteTabs.ts` returns the tab id and its content **as a pair**. A missing tab resolves to Main for both the id and the content. All four places that load a tab into the editor now use it: the note-load effect, `switchTab`, the lock/unlock reload, and the requested-tab path (via `switchTab`). Now the editor can't mark one tab active while showing another tab's content.
+  - **Verified**: `components/NoteEditor/NoteEditor.test.tsx` (new, jsdom and real Tiptap) covers two cases: back-navigating to a note on its remembered tab 2 and then clicking Main leaves both tabs' stored content intact, and first mount on a remembered tab shows that tab's content. The first case **fails on the pre-fix code** (checked). `utils/noteTabs.test.ts` covers the pairing and the fallback.
+  - **Not recoverable by this fix**: tabs already overwritten before it. Their earlier content may still be in an automatic local backup snapshot (Account → automatic backups) or a manual export.
+  - **Follow-up, same day: the per-note tab memory itself was unreliable.** After the fix above, the user reported that notes reopened on Main. `notesTabMemory`/`notesLastActiveTabId` used to be written by an effect *cleanup* (when the note or tab changed, it recorded the previous pair). That meant:
+    - For the whole time a note was open, its memory held Main. React ran the cleanup of the render that had just opened the note, which still had the previous note's tab.
+    - A reload or app restart while on that note forgot the tab, since `uiStore` persists that value.
+    - During each switch it also briefly recorded the new note with the previous note's tab.
+
+    Before the fix above, the restored tab *highlight* hid this. Now `NoteEditor`'s `setTabFor(noteId, tabId)` is the only way the active tab changes. It sets the state, the ref and both memory fields together, at the moment the tab becomes active. The leave-time mirror effect is gone.
+    - **Verified**: headless Chromium against the dev server. Open A → tab 2 → B → Alt+Left, Alt+Right, Alt+Left, then reload and reopen A. The memory is correct at every step and A reopens on tab 2 with tab 2's content. `NoteEditor.test.tsx` gained the real-flow case: tab clicked, the app writes the memory itself, Alt+Left/Right. It also asserts the memory while the note is still open.
+
+- [x] **Calendar `T` = today; Notes tree scrolls to the open note; new tab focuses its name; "Normal" clears all formatting** (2026-10-01).
+  - **Calendar `T`**: jumps to today in whichever view is showing (month, week or day). It calls the Today button's own `goToday`. The handler sits in `CalendarView.tsx`'s component-local keydown effect beside `O`/`Tab`/arrows, with the same guards (not while typing, not while a calendar modal/pane is open). `hotkeys.ts` id `calendar-today`.
+  - **Notes tree follows the open note**: `uiStore.openNote` already selected the note's notebook and expanded its ancestors. In a long tree the row was simply off-screen, so it looked as if nothing had happened (checked in headless Chromium with a notebook nested 3 deep under 25 others). The tree row (`ChronicleView`'s node, via its existing `anchorRef`) and the note row (`NoteList`'s `NoteRow`) now `scrollIntoView({ block: 'nearest' })` when they become selected/active. 'nearest' leaves an already-visible row where it is.
+    - **Follow-up, same day: the fix above wasn't the reported problem.** The user meant that a notebook reached by *hovering* its parents open (ChronicleView's hover-expand), then clicked, collapsed out of sight as soon as the mouse left the tree. `setSelectedNoteTag` expanded nothing, and only opening a note expanded the path. `setSelectedNoteTag` now also runs `expandNotebookAncestors`, so selecting a notebook keeps the path to it open. Reproduced and confirmed in headless Chromium (hover University → Biology, click Genetics, move away: the path used to collapse and now stays). Test: `uiStore.behavior.test.ts` "setSelectedNoteTag — keeps the path to the selected notebook open". The scroll-into-view above stays; it's still useful in a long tree.
+  - **New tab → name box → editor**: `handleAddTab` and Ctrl+T already opened the tab's rename box, but `switchTab` then focused the editor. Tiptap applies focus a frame late, so the editor took focus back from the box. `switchTab(tabId, { focusEditor: false })` is now used for a brand-new tab. Enter in the name box already moved into the editor.
+  - **"Normal" clears formatting**: `extensions/normalText.ts`'s `setNormalText(editor)` is used by both Ctrl+H 0 and the style dropdown's Normal. It makes the block a paragraph *and* removes every formatting mark: bold, italic, underline, strike, code, colour/text style, super/subscript, and any formatting mark added later, since it's a keep-list, not a remove-list. It also clears the stored marks, so the next typed text is plain.
+    - Scope: the selection, or with nothing selected the whole paragraph.
+    - **Kept on purpose**: links, annotation tags (`noteTag`) and cross-app links (`artifactLink`). They carry meaning rather than style, and stripping a cross-app link would also raise the "remove the link too?" prompt.
+  - **Verified**: `extensions/normalText.test.ts` (real Tiptap in jsdom: heading → paragraph with every mark gone, meaning-marks kept, selection-only scope). The scroll and tab-focus behaviour was checked in headless Chromium against the dev server (the focused element after "+", Enter and Ctrl+T; screenshots of the tree), not in the automated suite.
+
+- [x] **Notes: a Title for each tab; the style dropdown follows the cursor** (2026-10-01).
+  - **What**: each tab can have one **Title**: a line above Heading 1, larger and never numbered. Add it with **Ctrl+H then H** (first shipped as Ctrl+H then T, changed the same day at the user's request because T reads as "new tab", Ctrl+T) or **Title** in the style dropdown. It is inserted as the tab's first line, starting as the tab's name. If the tab already has one, either action jumps to it instead.
+    - The Main tab's Title starts as the **note's** title, unless the Main tab has been renamed (`titlePrefillFor` in `utils/noteTabs.ts`).
+    - After that the Title and the tab name are independent.
+    - Enter in the Title continues in an ordinary paragraph.
+  - **Decisions** (asked and confirmed by the user 2026-10-01; the alternatives are kept for the record):
+    - Prefill once and then stay independent — rejected: always synced both ways, and synced until the title is first edited.
+    - Always the top line, added by an action rather than by converting any line — rejected: any line, one per tab.
+    - Main tab uses the note title — rejected: always the tab name.
+  - **How**: `extensions/NoteTitle.ts` is its own node (`noteTitle`, rendered as `div[data-note-title]`), not a heading level. That way it picks up none of H1's numbering (`HeadingNumbering` counts only `heading`), the Academic/Highlight heading styles, or the table of contents.
+    - The `insertOrFocusNoteTitle(prefill)` command inserts it at the first block of the first section, or selects the existing one.
+    - An `appendTransaction` plugin keeps "one, at the top" whatever else happens: a Title arriving anywhere else (paste from another tab, drag, split) becomes Heading 1.
+    - Enter is handled by the node itself: a direct `tr.split` into a paragraph. Chaining `splitBlock().setParagraph()` hit a stale-position RangeError in Tiptap.
+  - **Dropdown fix (pre-existing bug, found while building this)**: the style dropdown never followed the cursor. It showed whatever it had at the last re-render, e.g. "Normal" inside a Heading 2, because `NoteEditor` doesn't re-render on selection-only changes. The dropdown's value and the columns picker's active count are now read through Tiptap's `useEditorState`.
+  - **Verified**: `extensions/NoteTitle.test.ts` (real Tiptap with the section schema) covers the insert with prefill, one-per-tab, Enter → paragraph, a stray Title → Heading 1, and not being numbered. `utils/noteTabs.test.ts` covers `titlePrefillFor`. Headless Chromium against the dev server: Ctrl+H then the Title key on an extra tab and the dropdown's Title on Main both saved the right prefill, and the dropdown read `2` / `p` / `title` as the cursor moved.
+  - **Not built**: the Title isn't shown in the table of contents or used as the tab's label anywhere else.
+
+
+- [x] **Task links: waiting on / follow-up of / related, with reasons; blocked tasks; completion toast** (2026-10-01).
+  - **What**: a task can be linked to another task with a type and an optional reason, and chained.
+    - **Waiting on** (`dependsOn`): the task is *blocked*, greyed out with a count in the list (restyled the same day: light grey fill + grey outline, no padlock — see the "hover Complete" entry), until everything it waits on is completed or archived. The other task reads it as "Unlocks".
+    - **Follow-up of** (`followUpOf`): where a task came from; the other task reads it as "Led to". A follow-up created before its origin is done waits for it too.
+    - **Related**: a plain connection, reads the same from both ends.
+  - **Completing a task** goes through `services/taskCompletion.ts` `toggleTaskCompletion`, which every UI path now uses (checkbox, swipe, task and calendar pane footers, sub-task rows, notifications).
+    - A blocked task asks first: **Complete anyway** (primary, Ctrl+Enter; only this task) or **Complete all N**, which completes the whole chain upstream, furthest first.
+    - Every completion shows a toast: "Completed “X” (+N)", what it **unlocked**, **+ Follow-up** and **Undo** (reopens everything that action completed).
+  - **Requirements**: the user's request for task-to-task links with a reason, chaining ("rely on one or more finishing") and "completing one launches a new one". Merged with BACKLOG.md's "Task contingency / sequencing" (`blockedBy`, greyed with a lock icon), now built.
+  - **Decisions (confirmed with the user 2026-10-01)**:
+    - One generic link with a type and reason, stored on one side and derived on the other, with the kinds in ONE registry (`config/itemLinkKinds.ts`) and `targetType` so other item types can reuse it.
+    - Blocked tasks stay greyed in place by default. A Settings → Display toggle ("Move blocked tasks out of the list", `settingsStore.hideBlockedTasks`, v5) instead puts them in a collapsed "🔒 Waiting on other tasks" group. The user asked for both with a setting.
+    - Completing a blocked task is allowed with a warning, plus the option to complete the blockers too.
+    - Planned follow-ups are real tasks that wait on their origin, not "recipes" created later.
+    - The completion prompt is a non-blocking toast, not a question each time.
+    - Archived counts as done.
+    - The three kinds are fixed for now; user-defined kinds are later.
+  - **Decisions (mine)**:
+    - `followUpOf` blocks, rather than a follow-up carrying both `followUpOf` and `dependsOn`: one link, the right meaning.
+    - A link to a deleted task is ignored rather than cleaned up, so a Recycling Bin restore brings it back.
+    - The primary button of the blocked prompt is the one that affects the least (this task only).
+    - The follow-up inherits Endeavour, tags and purposes like a sub-task does, but not priority.
+  - **Files**:
+    - Types: `ItemLink`/`ItemLinkKind`, `Task.itemLinks` (`types/index.ts`), `taskStore` v13 (`addItemLink`/`updateItemLinkReason`/`removeItemLink`).
+    - Rules and config: `config/itemLinkKinds.ts`, `utils/taskLinks.ts` (all rules, pure), `services/taskCompletion.ts`.
+    - Components: `components/TaskLinks/TaskLinksField.tsx` (TaskPane's "Task links" section: grouped rows, click to open, inline reason, remove; + Waiting on… / + Follow-up / + Related…) and `components/TaskPickerModal/`.
+    - `AddTaskModal`: `uiStore.showAddFollowUp`/`pendingFollowUpOf` drive the "↳ Follow-up of" banner and link. `TaskItem`: 🔒 pill and dimmed title. `TaskList`: the optional blocked group.
+    - Sync: migration `039_task_item_links.sql`, the `item_links` mapper, and `LABELS.taskLinks`.
+  - **New suite-wide pieces** (recorded in CLAUDE.md "Component patterns"):
+    - **Toasts**: `showToast()` + one `ToastHost`; the app had no toast before.
+    - **`choiceDialog`**: a confirm with a third button (`dialogStore` results are now `'confirm' | 'alternate' | 'cancel'`).
+    - **"Task completion — `toggleTaskCompletion()`"**: the one completion path.
+    - Pattern tests for the last two.
+  - **Verified**:
+    - `utils/taskLinks.test.ts`: blocking incl. archived-as-done and follow-ups, missing targets ignored, deep blockers, unlock detection, self/duplicate/symmetric/loop refusal, both-direction relations.
+    - `services/taskCompletion.test.ts`: prompt, cancel/anyway/all, Undo, unlocked detail, reopen.
+    - `ConfirmDialog.test.tsx` (choiceDialog), `mappers.test.ts` (item_links round trip), `migrations.test.ts` (taskStore v13, settingsStore v5), `patterns.test.ts`.
+    - Headless Chromium against the dev server: add a "Waiting on" link from the pane with a reason, the blocked pill in the list, the three-button prompt, "Complete all 2", the toast, and + Follow-up → the new task saved with a `followUpOf` link.
+  - **Not built** (BACKLOG.md "Task links — follow-ons"): agent commands for links (agents can't see or make links; an agent completing a blocked task is simply allowed); linking an *existing* task as a follow-up or "unlocks" from this side; ticking the last linked-checklist item completes the task without the blocker prompt or toast; calendar shadows of a blocked task show no lock; user-defined link kinds; links from other item types (events, notes, list items) using the same `ItemLink` shape; recurring tasks (next session).
+  - **Migration `039` is Pending**: until the user runs it, task upserts fail for the `tasks` table only; changes stay queued locally and sync once it's applied.
+
+- [x] **Overview — everything, from every app, for a question** (2026-10-01). A new top-level section (top of the nav, above a divider, hotkey `0`). Each app contributes a source to one registry (tasks, events, reminders, deadlines, notes, lists, list items, tracker entries), all mapped onto one row: What / When / Status / Endeavour.
+  - **Views**: every Endeavour gets an automatic "Everything for X" Overview. The user can save their own Overviews (sources, Endeavour, open/all, date window, title search, sort, grouping), which sync.
+  - **Lists** gained a list-level Endeavour.
+  - **Full write-up**: [`overview.md`](overview.md) (model, source mapping table, architecture rules, decisions, files, plan).
+  - **Migration `040`** (new `overviews` table + `lists.collection_id`) is **Pending** until the user runs it.
+  - **Verified**: `src/overview/engine.test.ts` and `mappers.test.ts`, and headless Chromium against the dev server (see "Manual check" in `overview.md`'s Verified section, filled in below).
+  - **Fixed alongside**: sign-out's `clearSyncedLocalData` now also clears calendar deadlines.
+
+- [x] **Tasks: hover Complete for "complete + follow-up" and more; a task's own parent/sub-tasks can't be linked** (2026-10-01).
+  - **Hover options on Complete**: at the user's request, the choices the Completed toast offers afterwards can now be made up front. Hovering the task checkbox (TaskItem) or any pane footer's Complete button (task pane, and the event/reminder/deadline panes of a task's own calendar entries) shows:
+    - **Complete + add follow-up**: completes, then opens the follow-up form. The toast then offers only Undo.
+    - **Complete, with the N it's waiting on**: only when blocked; completes the chain without the prompt.
+    - **Add a follow-up (keep this open)**.
+
+    Plain click is unchanged.
+  - **How**:
+    - `services/taskCompletion.ts` gained `taskCompletionOptions(taskId)` (empty for a completed or archived task) and `toggleTaskCompletion(taskId, { thenFollowUp, withBlockers })`.
+    - The new generic `components/HoverOptions/` wraps the button.
+    - `ItemActionFooter` takes `completeOptions`.
+    - `RowHoverActionsMenu` gained `align` (`'start'` for a trigger at a row's left edge), `estimatedHeight` and `className`, all defaulting to the old behaviour.
+    - Desktop only: Android has no hover and keeps swipe-to-complete.
+    - Picking "Complete + add follow-up" on a blocked task still asks the usual waiting-on question.
+  - **Hierarchy links refused** (user request, same day): a task's ancestors and its whole sub-task tree are already connected to it, so `canAddLink` returns `'hierarchy'` for them (`utils/taskLinks.ts` `hierarchyIds`, the one place the rule lives), and `TaskLinksField` leaves them out of the picker.
+  - **Verified**:
+    - `taskCompletion.test.ts`: the option labels, "with blockers" skipping the prompt, "then follow-up" opening the form with the toast offering only Undo.
+    - `taskLinks.test.ts`: ancestors and descendants refused, siblings fine.
+    - Headless Chromium: the hover menu appears under the checkbox, and "Complete + add follow-up" on a blocked task raises the waiting-on prompt.
+
+- [x] **Tasks: the open task is highlighted in the list; keyword-suggested pickers everywhere; blocked tasks restyled** (2026-10-01).
+  - **Open task highlighted** (user report: clicking a linked task opened its pane but the list didn't show where it was):
+    - `TaskItem` outlines the task open in the pane (`uiStore.editingTaskId`) and scrolls it into view. The scroll is delayed 260 ms, after the parent's 220 ms sub-task reveal, or it stops short.
+    - `TaskList` derives, never stores, what must be shown for it: its parent chain is expanded, and its Completed / Archived / "Waiting on other tasks" group is open. Closing the pane puts the list back as it was.
+    - Works however the task was opened: task links, Overview, notifications.
+  - **Pickers suggest by keywords** (user request, made a suite-wide pattern): `utils/suggestRank.ts` (`rankSuggestions`/`rankSearch`) generalises `NotePickerModal`'s ordering. `TaskPickerModal` (suggestFrom = the linking task's title) and `ListPickerModal` (suggestFrom = the task/event/reminder/deadline title, via `CrossAppRefPicker`) use it, with "Suggested from “…”" / "Recent" labels (`LABELS.pickers`). Recorded in CLAUDE.md "Pickers suggest by keywords", with two pattern tests.
+  - **Blocked tasks restyled** (user request): no padlock, since 🔒 means "encrypted" in this app.
+    - The row gets a grey wash with diagonal stripes laid *over* it (a `::after` overlay; tokens `--color-blocked-wash`/`--color-blocked-stripe`, redefined for dark mode), plus a grey outline (`--color-border-strong`) on the top, right and bottom only. The first version was a plain grey fill under the tint, which the user found too hard to tell apart; the overlay, the same hatching idea as tentative calendar items, reads clearly on tinted rows too.
+    - The Endeavour tint (an inline background-color) and the priority gradient (a background-image) still show over the fill, and the left edge keeps the Endeavour colour.
+    - The pill reads "waits on N".
+    - The "Waiting on" link kind and the blocked group use ⛓.
+  - **Verified**: `utils/suggestRank.test.ts` (suggestions first by weight and rarity, recency tail, stems, typed search needs every word), and the pattern tests. Headless Chromium: a blocker that's a sub-task under a collapsed parent is revealed and outlined; a blocked task with an Endeavour and high priority keeps both colourings under the grey outline; the Related picker for "Book specialist" suggests "Book exam room".
+

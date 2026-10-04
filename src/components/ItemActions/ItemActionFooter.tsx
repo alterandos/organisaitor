@@ -1,5 +1,6 @@
 import { LABELS } from '@/config/labels';
 import { ArchiveIcon, CheckCircleIcon, RestoreIcon, TrashIcon } from './icons';
+import { HoverOptions, type HoverOption } from '@/components/HoverOptions/HoverOptions';
 import styles from './ItemActions.module.css';
 
 interface Props {
@@ -13,24 +14,29 @@ interface Props {
   // Complete / Mark incomplete toggle first in the row. Omit `onToggleComplete` for the rest.
   completed?:        boolean;
   onToggleComplete?: () => void;
+  // Alternatives offered on hovering Complete (a task's: services/taskCompletion.ts
+  // taskCompletionOptions). Omit, or pass [], for none.
+  completeOptions?:  HoverOption[];
 }
 
 // The one archive/restore + delete footer every item pane uses (Task, Calendar event, Calendar
 // reminder — and any future app's detail pane). Pair it with useItemActions for the dialogs and
 // hotkeys, and ItemActionDialog for the confirmations.
-export function ItemActionFooter({ archived, canArchive = true, deleteLabel, onArchive, onRestore, onDelete, completed = false, onToggleComplete }: Props) {
+export function ItemActionFooter({ archived, canArchive = true, deleteLabel, onArchive, onRestore, onDelete, completed = false, onToggleComplete, completeOptions = [] }: Props) {
   const L = LABELS.itemActions;
   return (
     <footer className={styles.footer}>
       {onToggleComplete && (
-        <button
-          type="button"
-          className={`${styles.actionBtn} ${completed ? styles.completedBtn : ''}`}
-          onClick={onToggleComplete}
-          aria-pressed={completed}
-        >
-          <CheckCircleIcon /> {completed ? L.reopen : L.complete}
-        </button>
+        <HoverOptions options={completeOptions}>
+          <button
+            type="button"
+            className={`${styles.actionBtn} ${completed ? styles.completedBtn : ''}`}
+            onClick={onToggleComplete}
+            aria-pressed={completed}
+          >
+            <CheckCircleIcon /> {completed ? L.reopen : L.complete}
+          </button>
+        </HoverOptions>
       )}
       {archived ? (
         <button type="button" className={styles.actionBtn} onClick={onRestore} title={`${L.restore} (Ctrl+Shift+A)`}>

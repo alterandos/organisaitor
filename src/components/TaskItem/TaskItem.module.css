@@ -20,6 +20,38 @@
   opacity: 0.6;
 }
 
+/* The task open in the pane. */
+.itemOpen {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* Waiting on another task (task links): a grey wash with diagonal stripes laid OVER the row (so it
+   reads clearly even on an Endeavour-tinted row, which stays visible through it — user request
+   2026-10-01), plus a grey outline on top/right/bottom (the left edge keeps the Endeavour colour).
+   Same hatching idea as tentative calendar items. No padlock — that means "encrypted" here. */
+.itemBlocked {
+  position: relative;
+  border-top-color: var(--color-border-strong);
+  border-right-color: var(--color-border-strong);
+  border-bottom-color: var(--color-border-strong);
+}
+
+.itemBlocked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(135deg, var(--color-blocked-stripe) 0 6px, transparent 6px 12px),
+    var(--color-blocked-wash);
+}
+
+.itemBlocked .title {
+  opacity: 0.7;
+}
+
 /* ── Subtask indent ───────────────────────────────────── */
 
 .subtask {
@@ -105,6 +137,19 @@
 }
 
 /* Linked-checklist progress pill (services/taskListLinks.ts) — same shape as the sub-task pill */
+.blockedIndicator {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: 99px;
+  padding: 0.1rem 0.45rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .checklistIndicator {
   flex-shrink: 0;
   font-size: 0.72rem;

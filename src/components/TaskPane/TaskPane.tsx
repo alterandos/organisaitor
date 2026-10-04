@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { toggleTaskWithLists, linkedListIds } from '@/services/taskListLinks';
+import { linkedListIds } from '@/services/taskListLinks';
+import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import { LinkedChecklists } from '@/components/LinkedChecklists/LinkedChecklists';
+import { TaskLinksField } from '@/components/TaskLinks/TaskLinksField';
 import type { Priority, TagId, PurposeId, TaskKind, TaskId, TimeIntensity } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -424,6 +426,13 @@ export function TaskPane() {
             <LinkedChecklists listIds={linkedListIds(task.crossAppRefs)} />
           </div>
 
+          {/* ── Task links: waiting on / follow-ups / related (services/taskCompletion.ts,
+               utils/taskLinks.ts) ── */}
+          <div className={styles.field}>
+            <span className={styles.label}>{LABELS.taskLinks.heading}</span>
+            <TaskLinksField task={task} />
+          </div>
+
           {/* ── Sub-tasks ── */}
           <div className={styles.field}>
             <span className={styles.label}>Sub-tasks</span>
@@ -433,7 +442,7 @@ export function TaskPane() {
                   <li key={sub.id} className={`${styles.subtaskItem} ${sub.completed ? styles.subtaskDone : ''}`}>
                     <button
                       className={`${styles.subtaskCheck} ${sub.completed ? styles.subtaskCheckDone : ''}`}
-                      onClick={() => toggleTaskWithLists(sub.id)}
+                      onClick={() => void toggleTaskCompletion(sub.id)}
                       aria-label={sub.completed ? 'Mark incomplete' : 'Mark complete'}
                     >
                       {sub.completed && '✓'}
@@ -477,7 +486,8 @@ export function TaskPane() {
         <ItemActionFooter
           archived={task.archived}
           completed={task.completed}
-          onToggleComplete={() => toggleTaskWithLists(taskId)}
+          onToggleComplete={() => void toggleTaskCompletion(taskId)}
+          completeOptions={taskCompletionOptions(taskId)}
           deleteLabel="Delete task"
           onArchive={() => setDialog('archive')}
           onRestore={handleRestore}

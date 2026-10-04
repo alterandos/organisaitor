@@ -68,6 +68,16 @@ export const CORE_NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNo
   },
 ];
 
+// Overview sits above every app (it gathers from all of them), with a divider under it — the
+// user's call, 2026-10-01. Not in CORE_NAV_ITEMS, which MobileNav's tab bar also reads.
+const OverviewIcon = (
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+    <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="1.6"/>
+    <path d="M11 3v8l5.5 5.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M11 11H3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  </svg>
+);
+
 const PortfolioIcon = (
   <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
     <rect x="3"  y="12" width="4" height="7"  rx="1" stroke="currentColor" strokeWidth="1.6"/>
@@ -98,6 +108,17 @@ export function NavSidebar() {
 
   return (
     <nav className={styles.sidebar} aria-label="App navigation">
+      <button
+        className={`${styles.navBtn} ${activeView === 'overview' ? styles.navBtnActive : ''}`}
+        onClick={() => setActiveView('overview')}
+        title={LABELS.views.overview}
+        aria-label={LABELS.views.overview}
+        aria-current={activeView === 'overview' ? 'page' : undefined}
+      >
+        {OverviewIcon}
+      </button>
+      <hr className={styles.sectionDivider} aria-hidden="true" />
+
       {CORE_NAV_ITEMS.map((item) => (
         <button
           key={item.view}

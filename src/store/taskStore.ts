@@ -4,8 +4,9 @@ import type {
   AppData, Task, TaskId, TagId, Tag,
   CollectionId, Collection, Purpose, PurposeId,
   CreateTaskInput, CreateCollectionInput, CreatePurposeInput,
-  FieldSchema, RoutineTask,
+  FieldSchema, RoutineTask, ItemLinkKind,
 } from '@/types';
+import { canAddLink, makeItemLink, type LinkCheck } from '@/utils/taskLinks';
 import { newCollectionId, newPurposeId } from '@/utils/id';
 import { createTask } from '@/services/taskService';
 import { now } from '@/utils/date';
@@ -30,6 +31,12 @@ export interface TaskActions {
   deleteTask:  (id: TaskId) => void;
   archiveTask: (id: TaskId, reason?: string | null) => void;
   restoreTask: (id: TaskId) => void;
+
+  // Task links (Task.itemLinks). addItemLink refuses anything canAddLink doesn't return 'ok' for
+  // and says why; the link is stored on `ownerId` ("owner <kind> target").
+  addItemLink:          (ownerId: TaskId, kind: ItemLinkKind, targetId: TaskId, reason?: string | null) => LinkCheck;
+  updateItemLinkReason: (ownerId: TaskId, kind: ItemLinkKind, targetId: TaskId, reason: string | null) => void;
+  removeItemLink:       (ownerId: TaskId, kind: ItemLinkKind, targetId: TaskId) => void;
 
   // Tags
   addTag:    (tag: Tag) => void;
@@ -135,6 +142,34 @@ export const useTaskStore = create<TaskStore>()(
             if (sub?.archived && sub.archivedAt === task.archivedAt) tasks[subId] = { ...sub, ...clear };
           }
           return { tasks };
+        }),
+
+      addItemLink: (ownerId, kind, targetId, reason = null) => {
+        const check = canAddLink(ownerId, kind, targetId, get().tasks);
+        if (check !== 'ok') return check;
+        set((state) => {
+          const owner = state.tasks[ownerId];
+          const ts = now();
+          return { tasks: { ...state.tasks, [ownerId]: { ...owner, itemLinks: [...(owner.itemLinks ?? []), makeItemLink(kind, targetId, reason, ts)], updatedAt: ts } } };
+        });
+        return 'ok';
+      },
+
+      updateItemLinkReason: (ownerId, kind, targetId, reason) =>
+        set((state) => {
+          const owner = state.tasks[ownerId];
+          if (!owner) return {};
+          const itemLinks = (owner.itemLinks ?? []).map((l) =>
+            l.kind === kind && l.targetId === targetId ? { ...l, reason: reason?.trim() || null } : l);
+          return { tasks: { ...state.tasks, [ownerId]: { ...owner, itemLinks, updatedAt: now() } } };
+        }),
+
+      removeItemLink: (ownerId, kind, targetId) =>
+        set((state) => {
+          const owner = state.tasks[ownerId];
+          if (!owner) return {};
+          const itemLinks = (owner.itemLinks ?? []).filter((l) => !(l.kind === kind && l.targetId === targetId));
+          return { tasks: { ...state.tasks, [ownerId]: { ...owner, itemLinks, updatedAt: now() } } };
         }),
 
       deleteTask: (id) =>
@@ -307,7 +342,7 @@ export const useTaskStore = create<TaskStore>()(
     {
       name:    'todo-app-storage',
       storage: persistStorage(),
-      version: 12,
+      version: 13,
       // Cumulative: every step below whose version threshold the persisted store is behind
       // on gets applied, in order, to the same `state` — none of them return early. (A v9 ->
       // v11 upgrade, say, must also carry forward whatever a v2 -> v11 upgrade needs from the
@@ -409,6 +444,14 @@ export const useTaskStore = create<TaskStore>()(
               ...t,
               calendarDeadlineId: (t.calendarDeadlineId ?? null) as Task['calendarDeadlineId'],
             } as Task;
+          }
+          state = { ...state, tasks: patched };
+        }
+        if (fromVersion < 13 && state.tasks) {
+          const patched: AppData['tasks'] = {} as AppData['tasks'];
+          for (const [id, task] of Object.entries(state.tasks)) {
+            const t = task as Task & { itemLinks?: unknown };
+            patched[id as TaskId] = { ...t, itemLinks: (t.itemLinks ?? []) as Task['itemLinks'] } as Task;
           }
           state = { ...state, tasks: patched };
         }

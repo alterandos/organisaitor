@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useEditor, EditorContent, getMarkRange } from '@tiptap/react';
+import { useEditor, useEditorState, EditorContent, getMarkRange } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -29,7 +29,9 @@ import { getNoteBacklinks } from '@/store/noteBacklinks';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
 import { collectArtifactTargets } from '@/utils/noteContent';
-import { linkTabIdFor, MAIN_TAB_ID } from '@/utils/noteTabs';
+import { linkTabIdFor, MAIN_TAB_ID, resolveNoteTab, titlePrefillFor } from '@/utils/noteTabs';
+import { setNormalText } from './extensions/normalText';
+import { NoteTitle } from './extensions/NoteTitle';
 import { LABELS } from '@/config/labels';
 import { compressImageBlob } from '@/utils/imageCompress';
 import { FloatingToolbar } from './FloatingToolbar';
@@ -262,8 +264,6 @@ interface NoteEditorProps {
 export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const editingNoteId       = useUIStore((s) => s.editingNoteId);
   const closeNote           = useUIStore((s) => s.closeNote);
-  const setNotesLastActiveTab = useUIStore((s) => s.setNotesLastActiveTab);
-  const setNoteTabMemory     = useUIStore((s) => s.setNoteTabMemory);
   const noteTagViewReturn   = useUIStore((s) => s.noteTagViewReturn);
   const setNoteTagViewReturn = useUIStore((s) => s.setNoteTagViewReturn);
   const openNoteTagView     = useUIStore((s) => s.openNoteTagView);
@@ -318,11 +318,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // Seeded once from uiStore's last-active note+tab (notesLastEditingNoteId/
   // notesLastActiveTabId) so switching to another app and back restores the same tab —
   // same "seed the state directly, don't restore-after-the-fact" pattern ListsSection.tsx
-  // uses for selectedListId/selectedTabId. An earlier version of this restored the tab via
-  // a *separate* effect after mounting with plain `null`, which raced against the mirror
-  // effect below (that effect fired on every render, including the very first one with the
-  // not-yet-restored `null`, so it could clobber notesLastActiveTabId back to null before
-  // the restore effect ever ran) — seeding directly here removes that race by construction.
+  // uses for selectedListId/selectedTabId. Every later change goes through setTabFor.
   const [activeTabId, setActiveTabId] = useState<string | null>(() => {
     const s = useUIStore.getState();
     if (!editingNoteId || s.notesLastEditingNoteId !== editingNoteId || !s.notesLastActiveTabId) return null;
@@ -653,6 +649,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       TableHeader,
       TableCell,
       HeadingNumbering,
+      NoteTitle,
     ],
     content: '',
     editorProps: {
@@ -843,26 +840,43 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     }
   };
 
-  const switchTab = (tabId: string | null) => {
-    flushCurrentTab();
+  // THE way the active tab changes: state, ref and uiStore's per-note memory together. The memory
+  // is written here, when the tab becomes active, not when the note is left — the old leave-time
+  // mirror (an effect cleanup) briefly recorded the note being opened with the previous note's tab
+  // and, while a note was open, held Main for it, so a reload or a restart forgot the tab.
+  const setTabFor = (noteId: string | null, tabId: string | null) => {
     setActiveTabId(tabId);
     activeTabIdRef.current = tabId;
+    if (!noteId) return;
+    const ui = useUIStore.getState();
+    ui.setNotesLastActiveTab(tabId);
+    if ((ui.notesTabMemory[noteId] ?? null) !== tabId) ui.setNoteTabMemory(noteId, tabId);
+  };
+
+  const switchTab = (requestedTabId: string | null, opts?: { focusEditor?: boolean }) => {
+    flushCurrentTab();
     const id = currentNoteIdRef.current;
-    if (!id || !editor) return;
     const latestNote = viewOf(id);
-    if (!latestNote) return;
+    const { tabId, content } = latestNote ? resolveNoteTab(latestNote, requestedTabId) : { tabId: requestedTabId, content: '' };
+    setTabFor(latestNote ? id : null, tabId);
+    if (!latestNote || !editor) return;
     isLoadingRef.current = true;
-    if (tabId === null) {
-      editor.commands.setContent(parseContent(latestNote.content));
-    } else {
-      const tab = latestNote.tabs.find((t) => t.id === tabId);
-      editor.commands.setContent(parseContent(tab?.content ?? ''));
-    }
+    editor.commands.setContent(parseContent(content));
     isLoadingRef.current = false;
     // Switching tabs (click, Ctrl+Tab cycle, or a cross-app "open this tab" request) moves the
     // cursor into the editor, same as opening a note does — a switch always means the user
-    // wants to be looking at (and likely editing) this tab's content next.
-    editor.commands.focus('end');
+    // wants to be looking at (and likely editing) this tab's content next. A brand-new tab opts
+    // out: its name box takes focus first, and Enter there moves into the editor. (Tiptap applies
+    // focus a frame late, so focusing here would steal it back from the name box.)
+    if (opts?.focusEditor !== false) editor.commands.focus('end');
+  };
+
+  // Title (Ctrl+H then H, or the style dropdown): one per tab, at the top, starting as the tab's
+  // name — see extensions/NoteTitle.ts and titlePrefillFor.
+  const insertTitle = () => {
+    const n = viewOf(currentNoteIdRef.current);
+    if (!n || !editor) return;
+    editor.chain().focus().insertOrFocusNoteTitle(titlePrefillFor(n, activeTabIdRef.current)).run();
   };
 
   // Keep editorRef in sync so runTableCmd can access it without a dependency
@@ -925,12 +939,14 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     // look up THIS note's own last-active tab (notesTabMemory), rather than unconditionally
     // resetting to Main: revisiting a note should land back where you left it, the same way
     // leaving and re-entering Notes entirely already does.
+    // The tab and the content loaded below come from one resolveNoteTab call so they can't
+    // disagree — they once did (main content loaded under a restored tab 2, and the next save
+    // wrote main over tab 2; see resolveNoteTab).
     const rememberedTabId = note ? (useUIStore.getState().notesTabMemory[note.id] ?? null) : null;
-    const validRememberedTabId = rememberedTabId && note?.tabs?.some((t) => t.id === rememberedTabId) ? rememberedTabId : null;
-    const nextTabId = hasRestoredTabRef.current ? validRememberedTabId : activeTabId;
+    const wantedTabId = hasRestoredTabRef.current ? rememberedTabId : activeTabId;
+    const { tabId: nextTabId, content: nextContent } = note ? resolveNoteTab(note, wantedTabId) : { tabId: null, content: '' };
     hasRestoredTabRef.current = true;
-    setActiveTabId(nextTabId);
-    activeTabIdRef.current = nextTabId;
+    setTabFor(note?.id ?? null, nextTabId);
     setRenamingTabId(null);
     if (!note) {
       currentNoteIdRef.current = null;
@@ -952,21 +968,21 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     isLoadingRef.current = true;
     // A locked note's view has blank content — keep the editor empty (it's hidden behind the
     // lock placeholder anyway) rather than ever parsing anything derived from ciphertext.
-    editor.commands.setContent(noteLocked ? '' : parseContent(note.content));
+    editor.commands.setContent(noteLocked ? '' : parseContent(nextContent));
     isLoadingRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.id, editor]);
 
   // Something asked to open this note on a particular tab (a link that names one — see
   // CrossAppRef.tabId). Declared after the load effect above so that, when the request also
-  // switched notes, the note has already been loaded on its main tab. A tab that no longer exists
-  // simply leaves the note on its main tab.
+  // switched notes, the note has already been loaded (on its remembered tab). A tab that no longer
+  // exists leaves the note on the tab it loaded on.
   const requestedNoteTab = useUIStore((s) => s.requestedNoteTab);
   useEffect(() => {
     if (!editor || !note || !requestedNoteTab || requestedNoteTab.noteId !== note.id) return;
     const { tabId } = requestedNoteTab;
     useUIStore.getState().clearRequestedNoteTab();
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- consumes a one-shot request from another part of the app and reloads the editor (an external system) onto that tab
+    // Consumes a one-shot request from another part of the app and reloads the editor (an external system) onto that tab.
     if (tabId === MAIN_TAB_ID) switchTab(null);
     else if (note.tabs.some((t) => t.id === tabId)) switchTab(tabId);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- switchTab is a per-render closure over refs; the request itself is the trigger
@@ -983,12 +999,11 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     if (noteLocked) {
       editor.commands.setContent('');
     } else {
-      const tabId = activeTabIdRef.current;
-      const tab = tabId ? note.tabs.find((t) => t.id === tabId) : null;
-      editor.commands.setContent(parseContent(tab ? tab.content : note.content));
+      const { tabId, content } = resolveNoteTab(note, activeTabIdRef.current);
+      if (tabId !== activeTabIdRef.current) setTabFor(note.id, tabId);
+      editor.commands.setContent(parseContent(content));
     }
     isLoadingRef.current = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reloads the Tiptap editor (an external system) on lock/unlock; the title/abstract inputs mirror the same reload
     setTitle(note.title);
     setAbstract(note.abstract ?? null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1019,23 +1034,6 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     if (!focusSignal) return;
     editor?.commands.focus('end');
   }, [focusSignal, editor]);
-
-  // Mirrors the current tab into uiStore via the cleanup (not the effect body itself) —
-  // same pattern as ListsSection's selectedListId/selectedTabId mirror. Cleanup fires
-  // right before activeTabId or note?.id changes again, or on unmount, so it always writes
-  // "the tab that was active until just now, for the note it belonged to" — never the
-  // just-mounted `null` default, which the old fire-on-every-render version did on its very
-  // first run, racing the seed above. note?.id is in the dependency array (not just
-  // activeTabId) so a switch between two notes that both happen to land on the same tab id
-  // (e.g. both on Main) still triggers a write for the note being left, not just the one
-  // where the tab id itself changes.
-  useEffect(() => {
-    const noteIdForThisTab = note?.id ?? null;
-    return () => {
-      setNotesLastActiveTab(activeTabId);
-      if (noteIdForThisTab) setNoteTabMemory(noteIdForThisTab, activeTabId);
-    };
-  }, [activeTabId, note?.id, setNotesLastActiveTab, setNoteTabMemory]);
 
   // Capture-phase shortcuts that must intercept before Tiptap handles the same keys
   useEffect(() => {
@@ -1068,7 +1066,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         if (!currentNote) return;
         const defaultName = `Tab ${currentNote.tabs.length + 1}`;
         const newTabId = addNoteTab(id as NoteId, defaultName);
-        switchTab(newTabId);
+        switchTab(newTabId, { focusEditor: false });
         setRenamingTabId(newTabId);
         setRenameValue(defaultName);
         return;
@@ -1118,7 +1116,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       // Digit after Ctrl+H
       if (awaitingHeadingRef.current) {
         awaitingHeadingRef.current = false;
-        if (e.key === '0') { e.preventDefault(); editor.chain().focus().setParagraph().run(); return; }
+        if (e.key === '0') { e.preventDefault(); setNormalText(editor); return; }
+        if (e.key.toLowerCase() === 'h') { e.preventDefault(); insertTitle(); return; }
         if (['1','2','3','4','5'].includes(e.key)) {
           e.preventDefault();
           editor.chain().focus().setHeading({ level: parseInt(e.key) as 1|2|3|4|5 }).run();
@@ -1265,7 +1264,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     const tabCount = (note?.tabs.length ?? 0) + 1;
     const defaultName = `Tab ${tabCount}`;
     const newTabId = addNoteTab(id as NoteId, defaultName);
-    switchTab(newTabId);
+    switchTab(newTabId, { focusEditor: false });
     setRenamingTabId(newTabId);
     setRenameValue(defaultName);
   };
@@ -1314,15 +1313,22 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     });
   };
 
-  // Current heading level for the dropdown
-  const currentHeadingValue = editor
-    ? (([1, 2, 3, 4, 5].find((l) => editor.isActive('heading', { level: l }))?.toString()) ?? 'p')
-    : 'p';
-
-  // Current section's column count, for highlighting the active option in the picker
-  const currentSectionColumns = editor
-    ? (Array.from({ length: MAX_SECTION_COLUMNS }, (_, i) => i + 1).find((n) => editor.isActive('section', { columns: n })) ?? 1)
-    : 1;
+  // The block style under the cursor (for the dropdown) and the current section's column count
+  // (for the columns picker). Read through useEditorState: this component doesn't re-render when
+  // only the selection moves, so reading editor.isActive() during render left the dropdown stuck
+  // on whatever it showed at the last re-render ("Normal" inside a heading, found 2026-10-01).
+  const cursorFormat = useEditorState({
+    editor,
+    selector: ({ editor: ed }) => ({
+      heading: !ed ? 'p'
+        : ed.isActive('noteTitle') ? 'title'
+        : ([1, 2, 3, 4, 5].find((l) => ed.isActive('heading', { level: l }))?.toString() ?? 'p'),
+      columns: !ed ? 1
+        : (Array.from({ length: MAX_SECTION_COLUMNS }, (_, i) => i + 1).find((n) => ed.isActive('section', { columns: n })) ?? 1),
+    }),
+  });
+  const currentHeadingValue   = cursorFormat?.heading ?? 'p';
+  const currentSectionColumns = cursorFormat?.columns ?? 1;
 
   const handleHeadingChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
@@ -1332,8 +1338,10 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       e.target.value = currentHeadingValue;
       return;
     }
-    if (val === 'p') {
-      editor?.chain().focus().setParagraph().run();
+    if (val === 'title') {
+      insertTitle();
+    } else if (val === 'p') {
+      if (editor) setNormalText(editor);
     } else {
       editor?.chain().focus().setHeading({ level: parseInt(val) as 1 | 2 | 3 | 4 | 5 }).run();
     }
@@ -1393,6 +1401,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             onChange={handleHeadingChange}
             title="Paragraph / heading style"
           >
+            <option value="title">Title</option>
             <option value="p">Normal</option>
             <option value="1">Heading 1</option>
             <option value="2">Heading 2</option>

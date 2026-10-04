@@ -315,3 +315,19 @@ describe('openNote — keeps the notebook tree in sync with whatever note is act
     expect(useUIStore.getState().selectedNoteTagId).toBe(notebookA);
   });
 });
+
+describe('setSelectedNoteTag — keeps the path to the selected notebook open', () => {
+  // Reported 2026-10-01: a notebook reached by hovering its parents open collapsed out of sight
+  // as soon as the mouse left the tree, because selecting it didn't expand anything.
+  it('selecting a nested notebook expands every ancestor, and leaves other expansions alone', () => {
+    const add = useNoteStore.getState().addNoteTag;
+    const uni = add({ name: 'University', kind: 'area' });
+    const bio = add({ name: 'Biology', kind: 'area', parentTagId: uni });
+    const genetics = add({ name: 'Genetics', kind: 'area', parentTagId: bio });
+    const other = add({ name: 'Other', kind: 'area' });
+    useUIStore.setState({ expandedNoteTagIds: [other] });
+
+    useUIStore.getState().setSelectedNoteTag(genetics);
+    expect([...useUIStore.getState().expandedNoteTagIds].sort()).toEqual([bio, other, uni].sort());
+  });
+});

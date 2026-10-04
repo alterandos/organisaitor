@@ -4,6 +4,8 @@ import { useTaskStore } from '@/store/taskStore';
 import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { newTagId } from '@/utils/id';
+import { makeItemLink } from '@/utils/taskLinks';
+import { now } from '@/utils/date';
 import { LABELS } from '@/config/labels';
 import type { Priority, TagId, PurposeId, CollectionId, TaskKind, TaskId, CrossAppRef } from '@/types';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
@@ -27,6 +29,7 @@ export function AddTaskModal() {
   const taskModalAdvanced  = useUIStore((s) => s.taskModalAdvanced);
   const activeCollectionId = useUIStore(selectActiveCollectionId);
   const pendingParentId    = useUIStore((s) => s.pendingParentId);
+  const pendingFollowUpOf  = useUIStore((s) => s.pendingFollowUpOf);
   const quickAddPrefill    = useUIStore((s) => s.quickAddPrefill);
   const closeModal         = useUIStore((s) => s.closeModal);
 
@@ -56,6 +59,10 @@ export function AddTaskModal() {
   // own pick always wins over that (tracked per-field via a *Touched ref, same pattern as
   // priority already used).
   const parentTaskInitial = pendingParentId ? useTaskStore.getState().tasks[pendingParentId as TaskId] : undefined;
+  // A follow-up (task links) starts with the Endeavour, tags and purposes of the task it came
+  // from, the same way a sub-task does from its parent — but not its priority.
+  const followUpOrigin = pendingFollowUpOf ? useTaskStore.getState().tasks[pendingFollowUpOf as TaskId] : undefined;
+  const seedTask = parentTaskInitial ?? followUpOrigin;
 
   const [priority,      setPriority]      = useState<Priority>(
     quickAddPrefill?.priority ?? parentTaskInitial?.priority ?? 'none'
@@ -67,14 +74,14 @@ export function AddTaskModal() {
   // (docs/android/01-tasks-app.md §3.2) when that took place instead
   const [collectionId,       setCollectionId]       = useState<CollectionId | ''>(
     (quickAddPrefill?.collectionId
-      ?? (pendingParentId ? (parentTaskInitial?.collectionId ?? '') : (activeCollectionId ?? ''))
+      ?? (seedTask ? (seedTask.collectionId ?? '') : (activeCollectionId ?? ''))
     ) as CollectionId | ''
   );
   const collectionTouched = useRef(quickAddPrefill?.collectionId !== undefined);
-  const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>(parentTaskInitial?.purposeIds ?? []);
+  const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>(seedTask?.purposeIds ?? []);
   const purposesTouched = useRef(false);
   const [pendingTags,        setPendingTags]         = useState<PendingTag[]>(
-    (parentTaskInitial?.tagIds ?? []).map((id) => ({ id, name: useTaskStore.getState().tags[id]?.name ?? '', isNew: false }))
+    (seedTask?.tagIds ?? []).map((id) => ({ id, name: useTaskStore.getState().tags[id]?.name ?? '', isNew: false }))
   );
   const tagsTouched = useRef(false);
   const [tagInput,           setTagInput]            = useState('');
@@ -213,6 +220,7 @@ export function AddTaskModal() {
       kind:         taskKind,
       parentId:     parentId ? parentId as TaskId : null,
       crossAppRefs,
+      itemLinks:    followUpOrigin ? [makeItemLink('followUpOf', followUpOrigin.id, null, now())] : undefined,
     });
 
     if (pendingArtifactLink) useUIStore.getState().resolveArtifactLink(taskId);
@@ -226,6 +234,7 @@ export function AddTaskModal() {
           <span className={styles.title}>New Task</span>
           <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">✕</button>
         </div>
+        {followUpOrigin && <div className={styles.followUpBanner}>↳ {LABELS.taskLinks.followUpBanner(followUpOrigin.title)}</div>}
 
         <form ref={formRef} onSubmit={handleSubmit}>
           {/* ── Basic fields ── */}

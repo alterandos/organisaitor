@@ -23,7 +23,7 @@ import {
   watchlistItemToRow, rowToWatchlistItem,
   portfolioTagToRow, rowToPortfolioTag,
   investmentPurposeToRow, rowToInvestmentPurpose,
-  trashEntryToRow, rowToTrashEntry,
+  trashEntryToRow, overviewToRow, rowToOverview, rowToTrashEntry,
 } from '@/services/sync/mappers';
 import type {
   Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, ScheduleTemplate,
@@ -33,6 +33,7 @@ import type { List, ListItem, ListType, ListId, ListItemId, ListTypeId } from '@
 import type { Note, NoteTag, StructuredTagEntry, NoteId, NoteTagId, StructuredTagEntryId } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose, WatchlistItemId, PortfolioTagId, InvestmentPurposeId } from '@/types/portfolio';
 import type { TrashEntry, TrashEntryId } from '@/types/trash';
+import type { Overview, OverviewId } from '@/types/overview';
 
 const USER = 'user-1';
 
@@ -46,6 +47,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       calendarEventId: 'e1' as CalendarEventId, calendarReminderId: 'r1' as CalendarReminderId, calendarDeadlineId: null, remindAt: null,
       archived: false, archivedAt: null, archiveReason: null, kind: 'action', timeIntensity: 'medium',
       parentId: null, subtaskIds: ['t2' as TaskId], sortOrder: 3, crossAppRefs: [{ type: 'note', id: 'n1' }],
+      itemLinks: [{ kind: 'dependsOn', targetType: 'task', targetId: 't0', reason: 'needs the referral', createdAt: '2026-10-01T00:00:00.000Z' }],
     };
     expect(rowToTask(taskToRow(t, USER))).toEqual(t);
   });
@@ -130,13 +132,23 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     expect(rowToSchedule(scheduleToRow(s, USER))).toEqual(s);
   });
 
+  it('Overview (query folded into one definition blob)', () => {
+    const o: Overview = {
+      id: 'o1' as OverviewId, name: 'Due soon', icon: '⏳',
+      sources: ['task', 'listItem'], collectionId: 'c1' as CollectionId, status: 'all', when: 'upcoming', windowDays: 14,
+      search: 'exam', sort: 'when-desc', groupBy: 'month',
+      createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-02T00:00:00.000Z',
+    };
+    expect(rowToOverview(overviewToRow(o, USER))).toEqual(o);
+  });
+
   it('List', () => {
     const l: List = {
       id: 'l1' as ListId, name: 'Movies', description: null, typeId: 'lt-movies' as never, kind: 'watchlist',
       color: '#fff', icon: '🎬', fieldSchema: [{ id: 'f1', name: 'Director', type: 'text' }],
       tabs: [{ id: 'tab1', name: 'To watch', color: null, fieldSchema: [] }],
       isEncrypted: false, encryptedPayload: null,
-      crossAppRefs: [{ type: 'note', id: 'n1', tabId: 't2' }], resetOnTaskComplete: true,
+      crossAppRefs: [{ type: 'note', id: 'n1', tabId: 't2' }], resetOnTaskComplete: true, collectionId: 'c1' as never,
       createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
     };
     expect(rowToList(listToRow(l, USER))).toEqual(l);

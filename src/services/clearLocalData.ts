@@ -2,6 +2,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useScheduleStore } from '@/store/scheduleStore';
+import { useOverviewStore } from '@/store/overviewStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
@@ -28,10 +29,11 @@ export function clearSyncedLocalData(): void {
   useTaskStore.setState({ tasks: task.tasks, collections: task.collections, tags: task.tags, purposes: task.purposes });
 
   const calendar = useCalendarStore.getInitialState();
-  useCalendarStore.setState({ events: calendar.events, reminders: calendar.reminders });
+  useCalendarStore.setState({ events: calendar.events, reminders: calendar.reminders, deadlines: calendar.deadlines });
 
   useTrackerStore.setState({ entries: useTrackerStore.getInitialState().entries });
   useScheduleStore.setState({ schedules: useScheduleStore.getInitialState().schedules });
+  useOverviewStore.setState({ overviews: useOverviewStore.getInitialState().overviews });
 
   const note = useNoteStore.getInitialState();
   useNoteStore.setState({ notes: note.notes, noteTags: note.noteTags, structuredTagEntries: note.structuredTagEntries });

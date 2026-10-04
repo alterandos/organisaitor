@@ -30,6 +30,12 @@ function SidebarCollectionRow({ col, onEdit, onDelete }: { col: Collection; onEd
         <TruncatedText text={col.name} className={styles.name} />
       </div>
       <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+        <button
+          className={styles.iconBtn}
+          onClick={() => useUIStore.getState().openEndeavourOverview(col.id)}
+          aria-label={LABELS.overview.endeavourTitle(col.name)}
+          title={LABELS.overview.endeavourTitle(col.name)}
+        >◔</button>
         <button className={styles.iconBtn} onClick={onEdit} aria-label={`Edit ${col.name}`} title="Edit">✎</button>
         <button className={`${styles.iconBtn} ${styles.deleteIconBtn}`} onClick={onDelete} aria-label={`Delete ${col.name}`} title="Delete">×</button>
       </RowHoverActionsMenu>

@@ -220,6 +220,11 @@ function NoteTagTreeNode({
   const isDropAfter  = dragOverInfo?.tagId === tag.id && dragOverInfo.zone === 'after';
 
   const { anchorRef, open: actionsOpen, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  // Opening a note selects its notebook and expands the ancestors (uiStore.openNote), but in a long
+  // tree the row can still be off-screen — bring it into view. 'nearest' leaves a visible row alone.
+  useEffect(() => {
+    if (isSelected) anchorRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [isSelected, anchorRef]);
 
   return (
     <div

@@ -8,6 +8,7 @@ Rules, patterns and architecture live in [`../CLAUDE.md`](../CLAUDE.md); confirm
 | [`features/fitness.md`](features/fitness.md) | Fitness app, Strava integration, and the add-on app architecture |
 | [`features/schedules.md`](features/schedules.md) | Calendar Schedules — recurring weekly timetables, commitment mode |
 | [`features/external-calendar-sync.md`](features/external-calendar-sync.md) | Google Calendar sync (Phase 1, read-only ingest) |
+| [`features/overview.md`](features/overview.md) | Overview — the suite-level section: everything from every app for a question (sources, engine, saved Overviews, Endeavour Overview) |
 | [`features/not-yet-implemented.md`](features/not-yet-implemented.md) | Short list of what's unbuilt (full specs are in BACKLOG.md) |
 | [`android/`](android/) | Capacitor/Android architecture, phased plan, `implementation-status.md` |
 | [`ai/`](ai/) | The AI agent integration: `01-capability-inventory.md` (what the app can do, invariants, decisions, what is left) and `02-command-layer.md` (the built command layer: design, how to add a command, tests) |

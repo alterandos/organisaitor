@@ -150,6 +150,16 @@ export function AddTaskButton() {
 
   const dialClass = `${styles.speedDial} ${open ? styles.speedDialOpen : ''}`;
 
+  if (activeView === 'overview') {
+    return (
+      <div className={dialClass} ref={ref}>
+        <button className={styles.fab} onClick={() => useUIStore.getState().showAddOverview()} aria-label={LABELS.overview.newTitle}>
+          <span className={styles.fabIcon}>+</span>
+        </button>
+      </div>
+    );
+  }
+
   if (activeView === 'lists') {
     const listsOpts = activeListId ? LISTS_OPTIONS : LISTS_OPTIONS.filter((o) => o.type !== 'list-item');
     return (

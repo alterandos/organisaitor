@@ -6,6 +6,9 @@ import { useListViews } from '@/store/listViews';
 import { onVaultStatus } from '@/services/vault';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { useTaskStore } from '@/store/taskStore';
+import type { CollectionId } from '@/types';
 import type { ListId, ListFieldSchema, ListFieldType, ListTypeId, ListTab, ListKind } from '@/types/lists';
 import { LABELS } from '@/config/labels';
 import styles from './AddListModal.module.css';
@@ -55,6 +58,9 @@ export function AddListModal() {
   const [expandedTabs, setExpandedTabs] = useState<Set<number>>(new Set());
   const [encryptOnCreate, setEncryptOnCreate] = useState(false);
   const [reusable, setReusable] = useState(() => existing?.resetOnTaskComplete ?? false);
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(() => existing?.collectionId ?? null);
+  const collections = useTaskStore((s) => s.collections);
+  const endeavourOptions = Object.values(collections).filter((c) => c.kind === 'project' || c.kind === 'list');
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
   useEffect(() => onVaultStatus((s) => setVaultUnlocked(s === 'unlocked')), []);
 
@@ -189,7 +195,7 @@ export function AddListModal() {
         fieldSchema: validFields,
         tabs: validTabs,
       });
-      updateListLinks(editingListId as ListId, { resetOnTaskComplete: isChecklist && reusable });
+      updateListLinks(editingListId as ListId, { resetOnTaskComplete: isChecklist && reusable, collectionId });
     } else {
       const newId = addList({
         name: name.trim(),
@@ -200,6 +206,7 @@ export function AddListModal() {
         fieldSchema: validFields,
         tabs: validTabs,
         resetOnTaskComplete: isChecklist && reusable,
+        collectionId,
       });
       if (encryptOnCreate && vaultUnlocked) {
         encryptList(newId).catch((err) => {
@@ -374,6 +381,19 @@ export function AddListModal() {
               <span>↻ {LABELS.checklist.reusable}</span>
               <span className={styles.encryptHint}>{LABELS.checklist.reusableHint}</span>
             </label>
+          )}
+
+          {/* Endeavour — lets the list and its items show in that Endeavour's Overview */}
+          {endeavourOptions.length > 0 && (
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}>{LABELS.collection}</label>
+              <CollectionPicker
+                collections={endeavourOptions}
+                value={collectionId}
+                onChange={setCollectionId}
+                noneLabel={LABELS.noCollection}
+              />
+            </div>
           )}
 
           {/* Color */}

@@ -7,6 +7,7 @@ import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
 import type { TrashEntry, TrashEntryId, TrashableKind, DeletedBy } from '@/types/trash';
+import type { Overview } from '@/types/overview';
 
 // ── Task ────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ export function taskToRow(t: Task, userId: string) {
     subtask_ids:    t.subtaskIds     ?? [],
     sort_order:     t.sortOrder      ?? 0,
     cross_app_refs: t.crossAppRefs   ?? [],
+    item_links:     t.itemLinks      ?? [],
     created_at:     t.createdAt,
     updated_at:     t.updatedAt,
     // Explicit null on every live upsert (not merely omitted) so a row previously
@@ -81,6 +83,7 @@ export function rowToTask(r: Record<string, any>): Task {
     subtaskIds:    r.subtask_ids   ?? [],
     sortOrder:     r.sort_order    ?? 0,
     crossAppRefs:  r.cross_app_refs ?? [],
+    itemLinks:     r.item_links    ?? [],
     createdAt:     r.created_at,
     updatedAt:     r.updated_at,
   };
@@ -422,6 +425,44 @@ export function rowToSchedule(r: Record<string, any>): ScheduleTemplate {
 
 // ── List ────────────────────────────────────────────────────────
 
+export function overviewToRow(o: Overview, userId: string) {
+  return {
+    id:         o.id,
+    user_id:    userId,
+    name:       o.name,
+    icon:       o.icon ?? null,
+    // The query (sources, filters, sort, grouping) as one blob, so a new query option never needs
+    // a migration.
+    definition: {
+      sources: o.sources, collectionId: o.collectionId, status: o.status, when: o.when,
+      windowDays: o.windowDays, search: o.search, sort: o.sort, groupBy: o.groupBy,
+    },
+    created_at: o.createdAt,
+    updated_at: o.updatedAt,
+    deleted_at: null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToOverview(r: Record<string, any>): Overview {
+  const d = r.definition ?? {};
+  return {
+    id:           r.id,
+    name:         r.name,
+    icon:         r.icon ?? null,
+    sources:      d.sources ?? [],
+    collectionId: d.collectionId ?? null,
+    status:       d.status ?? 'open',
+    when:         d.when ?? 'any',
+    windowDays:   d.windowDays ?? null,
+    search:       d.search ?? '',
+    sort:         d.sort ?? 'when-asc',
+    groupBy:      d.groupBy ?? 'none',
+    createdAt:    r.created_at,
+    updatedAt:    r.updated_at,
+  };
+}
+
 export function listToRow(l: List, userId: string) {
   return {
     id:           l.id,
@@ -438,6 +479,7 @@ export function listToRow(l: List, userId: string) {
     encrypted_payload: l.encryptedPayload ?? null,
     cross_app_refs:    l.crossAppRefs     ?? [],
     reset_on_task_complete: l.resetOnTaskComplete ?? false,
+    collection_id: l.collectionId ?? null,
     created_at:   l.createdAt,
     updated_at:   l.updatedAt,
     deleted_at:   null,
@@ -460,6 +502,7 @@ export function rowToList(r: Record<string, any>): List {
     encryptedPayload: r.encrypted_payload ?? null,
     crossAppRefs:     r.cross_app_refs    ?? [],
     resetOnTaskComplete: r.reset_on_task_complete ?? false,
+    collectionId: r.collection_id ?? null,
     createdAt:   r.created_at,
     updatedAt:   r.updated_at,
   };

@@ -181,7 +181,9 @@ interface ListState {
   uncheckAllListItems:   (listId: ListId) => void;
   // crossAppRefs / resetOnTaskComplete are plaintext even on an encrypted list, so unlike
   // updateList this works on a LOCKED one too (deleting a note must still drop a list's link to it).
-  updateListLinks:       (id: ListId, patch: Partial<Pick<List, 'crossAppRefs' | 'resetOnTaskComplete'>>) => void;
+  // Plaintext metadata that sits outside an encrypted list's secrets (links, the reusable flag,
+  // the Endeavour) — written straight to the record, never through the re-encrypt path.
+  updateListLinks:       (id: ListId, patch: Partial<Pick<List, 'crossAppRefs' | 'resetOnTaskComplete' | 'collectionId'>>) => void;
 
   // ListType CRUD — users can add custom types; built-ins are protected
   addListType:    (type: Omit<ListType, 'id' | 'isBuiltIn'>) => ListTypeId;
@@ -219,6 +221,7 @@ export const useListStore = create<ListState>()(
           encryptedPayload: null,
           crossAppRefs:     [],
           resetOnTaskComplete: input.resetOnTaskComplete ?? false,
+          collectionId: input.collectionId ?? null,
           createdAt:   now,
           updatedAt:   now,
         };
@@ -365,7 +368,7 @@ export const useListStore = create<ListState>()(
     {
       name: 'lists-storage',
       storage: persistStorage(),
-      version: 6,
+      version: 7,
       // Re-add any built-in type missing from the persisted map, so a built-in introduced after
       // this device first saved its lists (e.g. Shopping, 2026-09-28) still appears. User edits to
       // an existing built-in are kept.
@@ -446,6 +449,14 @@ export const useListStore = create<ListState>()(
             Object.entries(state.lists ?? {}).map(([id, list]) => [
               id, { crossAppRefs: [], resetOnTaskComplete: false, ...(list as object) },
             ])
+          );
+          state = { ...state, lists };
+        }
+
+        // v7: a list's Endeavour (Overview, 2026-10-01).
+        if (fromVersion < 7) {
+          const lists = Object.fromEntries(
+            Object.entries(state.lists ?? {}).map(([id, list]) => [id, { collectionId: null, ...(list as object) }])
           );
           state = { ...state, lists };
         }

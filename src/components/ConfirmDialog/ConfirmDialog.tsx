@@ -9,8 +9,8 @@ function Dialog({ request }: { request: DialogRequest }) {
   const settle    = useDialogStore((s) => s.settle);
   const focusRef  = useRef<HTMLButtonElement>(null);
   const isAlert   = request.kind === 'alert';
-  const cancel    = () => settle(request.id, false);
-  const confirm   = () => settle(request.id, true);
+  const cancel    = () => settle(request.id, 'cancel');
+  const confirm   = () => settle(request.id, 'confirm');
   const confirmRef = useRef(confirm);
   useEffect(() => { confirmRef.current = confirm; });
 
@@ -25,7 +25,7 @@ function Dialog({ request }: { request: DialogRequest }) {
   useEffect(() => {
     if (request.focusDelayMs === 0) { focusRef.current?.focus(); return; }
     const timer = setTimeout(() => {
-      if (request.isStale?.()) { settle(request.id, false); return; }
+      if (request.isStale?.()) { settle(request.id, 'cancel'); return; }
       armedRef.current = true;
       focusRef.current?.focus();
     }, request.focusDelayMs);
@@ -77,6 +77,11 @@ function Dialog({ request }: { request: DialogRequest }) {
               onClick={cancel}
             >
               {request.cancelLabel}
+            </button>
+          )}
+          {request.alternateLabel && (
+            <button type="button" className={styles.cancelBtn} onClick={() => settle(request.id, 'alternate')}>
+              {request.alternateLabel}
             </button>
           )}
           <button

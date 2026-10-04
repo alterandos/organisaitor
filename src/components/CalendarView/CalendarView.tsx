@@ -780,7 +780,7 @@ export function CalendarView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAndroid, desktopMode, year, month, selectedDate]);
 
-  // O toggles CalendarSidePane; ← / → / PgUp / PgDn navigate to the previous/next period for
+  // O toggles CalendarSidePane; T jumps to today in whichever view is showing; ← / → / PgUp / PgDn navigate to the previous/next period for
   // the current view (month/week/day); Tab cycles Month → Week → Day → Month. Scoped to this
   // component (not App.tsx's central handler) since it only makes sense while the Calendar
   // section is mounted — same precedent as ChronicleView's own arrow-key handling in the Notes
@@ -798,6 +798,12 @@ export function CalendarView() {
       if (e.key.toLowerCase() === 'o' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
         toggleSchedules();
+        return;
+      }
+
+      if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        goToday();
         return;
       }
 
@@ -823,7 +829,7 @@ export function CalendarView() {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desktopMode, year, month, selectedDate, openModal, editingTaskId, editingCalendarEventId, editingCalendarReminderId, editingCalendarDeadlineId, dayPaneDate, toggleSchedules]);
+  }, [desktopMode, year, month, selectedDate, effectiveZone, openModal, editingTaskId, editingCalendarEventId, editingCalendarReminderId, editingCalendarDeadlineId, dayPaneDate, toggleSchedules]);
 
   const todayStr = todayIsoStr;
 

@@ -39,6 +39,12 @@
 
 .title { font-size: 1rem; font-weight: 600; }
 
+.followUpBanner {
+  margin: -0.5rem 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
 .closeBtn {
   background: none;
   border: none;

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConfirmDialogHost } from './ConfirmDialog';
-import { confirmDialog, confirmDelete, alertDialog } from './dialogs';
+import { confirmDialog, confirmDelete, alertDialog, choiceDialog } from './dialogs';
 import { useDialogStore } from '@/store/dialogStore';
 
 beforeEach(() => {
@@ -35,6 +35,18 @@ describe('ConfirmDialog', () => {
     const resultPromise = confirmDialog({ title: 'Proceed?' });
     await user.click(await screen.findByRole('button', { name: /^Confirm/ }));
     expect(await resultPromise).toBe(true);
+  });
+
+  it('choiceDialog shows a third button and resolves which of the three was chosen', async () => {
+    const user = userEvent.setup();
+    render(<ConfirmDialogHost />);
+    const alt = choiceDialog({ title: 'Complete?', confirmLabel: 'Complete anyway', alternateLabel: 'Complete all 3' });
+    await user.click(await screen.findByRole('button', { name: 'Complete all 3' }));
+    expect(await alt).toBe('alternate');
+
+    const primary = choiceDialog({ title: 'Complete?', confirmLabel: 'Complete anyway', alternateLabel: 'Complete all 3' });
+    await user.click(await screen.findByRole('button', { name: /^Complete anyway/ }));
+    expect(await primary).toBe('confirm');
   });
 
   it('a destructive dialog (confirmDelete) focuses Cancel, not the red Confirm button', async () => {
