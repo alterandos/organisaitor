@@ -36,7 +36,7 @@ When a Proposed rule is signed off, change its tag, apply it to new code, and lo
 
 ## 4. Navigation and back
 
-### 4.1 Back button = the Escape stack (Proposed; fixes gap A3)
+### 4.1 Back button = the Escape stack (Adopted 2026-10-04, W2; fixed gap A3)
 
 The hardware or gesture back button does, in order:
 1. **Close the newest overlay**: `closeTopOverlay()` exported from `src/hooks/useEscapeClose.ts`, the same stack Escape uses. Everything that registers `useEscapeClose` (dialogs, pickers, sheets, panes, menus) closes newest-first, with no flag list to maintain. `closeTopmostMobileOverlay()` is deleted.
@@ -83,19 +83,19 @@ Anything revealed on hover on desktop has a touch path on Android:
 - **`LinkHoverPreview`**, calendar hover cards: n/a; the tap target already opens the item. Recorded as deliberate.
 - New hover affordances must name their touch path in the same change.
 
-### 6.2 Hotkeys (Decided 2026-10-04: D13; pattern test to be added with the `touch` field)
+### 6.2 Hotkeys (Decided 2026-10-04: D13; built in W2 with its pattern test)
 Every `HotkeyDef` in `config/hotkeys.ts` gets `touch: string`, either the touch path ("Header search icon") or `'n/a: <why>'`. A pattern test fails on a hotkey without one. This keeps the gap from regrowing as desktop adds hotkeys. The Settings hotkey table hides on Android unless a hardware keyboard is present.
 
-## 7. Shared mobile primitives (Proposed)
+## 7. Shared mobile primitives (Adopted where built, 2026-10-04; the rest Proposed)
 
 Build once (workstream W2), then use everywhere. Never copy sheet or gesture code into a component again.
 
 | Primitive | Location | Purpose |
 |-----------|----------|---------|
-| `BottomSheet` | `components/BottomSheet/` | Portaled sheet: backdrop tap, drag-down to dismiss, `useEscapeClose` (so back closes it), max-height 85vh, grabber, safe-area padding. Replaces the copies in the filter pickers and `MobileMoreSheet`. |
-| `ActionSheet` | `components/ActionSheet/` | `BottomSheet` with a list of `{ label, icon, onSelect, destructive? }`. What long-press opens (D1, decided). |
-| `useLongPress` | `hooks/useLongPress.ts` | Long-press with movement tolerance; cancels the click; haptic; can hand over to drag. |
-| `useSwipeRow` | `hooks/useSwipeRow.ts` | Swipe-right action and swipe-left reveal, axis lock, edge exclusion. `TaskItem`'s inline version moves here. |
+| `BottomSheet` | `src/components/BottomSheet/BottomSheet.tsx` (**Adopted**) | Portaled sheet: backdrop tap, drag-down to dismiss, `useEscapeClose` (so back closes it), max-height 85vh, grabber, safe-area padding. Replaces the copies in the filter pickers and `MobileMoreSheet`. |
+| `ActionSheet` | `src/components/ActionSheet/ActionSheet.tsx` + `ActionSheetButton.tsx` (**Adopted**) | `BottomSheet` with a list of `{ label, icon, onSelect, destructive? }`. What long-press opens (D1, decided). |
+| `useLongPress` | `src/hooks/useLongPress.ts` (**Adopted**) | Long-press with movement tolerance; cancels the click; haptic. Handing over to drag is still to come with `useTouchDrag` (W4). |
+| `useSwipeRow` | `src/hooks/useSwipeRow.ts` (**Adopted**) | Swipe-right action and swipe-left reveal, axis lock, edge exclusion. `TaskItem`'s inline version moves here. |
 | `useTouchDrag` | `hooks/useTouchDrag.ts` | (D3 + D10, decided) Long-press-then-drag with `elementFromPoint` hit-testing, a callback per zone model (left/right, before/inside/after, time grid). Decision D10. |
 | `useMasterDetail` | `hooks/useMasterDetail.ts` | §4.2. |
 | `saveFile` | `utils/saveFile.ts` | §12.2. |
