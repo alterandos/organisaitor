@@ -6,6 +6,7 @@ import { LABELS } from '@/config/labels';
 import type { CollectionId } from '@/types';
 import styles from './CollectionFilterPicker.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 
 interface Props {
   // 'dropdown' (default) is desktop's positioned-dropdown chrome, unchanged. 'sheet' renders
@@ -34,7 +35,8 @@ export function CollectionFilterPicker({ variant = 'dropdown' }: Props) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open, closeEndeavourPicker]);
 
-  useEscapeClose(closeEndeavourPicker, open);
+  // The sheet registers its own Escape/back entry (BottomSheet).
+  useEscapeClose(closeEndeavourPicker, open && variant === 'dropdown');
 
   const ordered = getOrderedEndeavours(collectionsRecord);
   if (ordered.length === 0) return null;
@@ -110,12 +112,9 @@ export function CollectionFilterPicker({ variant = 'dropdown' }: Props) {
           ▽
         </button>
         {open && (
-          <div className={styles.sheetOverlay} onMouseDown={(e) => { if (e.target === e.currentTarget) closeEndeavourPicker(); }}>
-            <div className={styles.sheetPanel} ref={ref}>
-              <div className={styles.sheetHeader}>{LABELS.collectionPlural}</div>
-              <div className={styles.sheetList} role="listbox">{listContent}</div>
-            </div>
-          </div>
+          <BottomSheet onClose={closeEndeavourPicker} title={LABELS.collectionPlural}>
+            <div className={styles.sheetList} role="listbox">{listContent}</div>
+          </BottomSheet>
         )}
       </>
     );

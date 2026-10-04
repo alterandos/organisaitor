@@ -56,6 +56,7 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --color-backdrop: rgba(0, 0, 0, 0.45);
 }
 
 [data-theme="dark"] {
@@ -97,6 +98,7 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.32);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.48);
+  --color-backdrop: rgba(0, 0, 0, 0.6);
 }
 
 body {

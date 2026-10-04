@@ -29,3 +29,15 @@
   box-shadow: 6px 0 10px -6px rgba(0, 0, 0, 0.25);
   pointer-events: none;
 }
+
+/* Android: two lines, then an ellipsis, instead of one line plus a hover reveal. The class is
+   doubled to outrank the site's own one-line ellipsis rule (often `.row .name`). */
+:global(.platform-android) .text.text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}

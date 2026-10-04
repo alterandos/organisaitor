@@ -118,6 +118,29 @@ export const LABELS = {
     archiveInstead:    'Archive instead',
   },
 
+  // A row's own actions (components/RowHoverActions/RowAction): the hover tooltip on desktop,
+  // the visible label in the long-press sheet on Android.
+  rowActions: {
+    edit:       'Edit',
+    delete:     'Delete',
+    archive:    'Archive',
+    restore:    'Restore',
+    addSection: 'Add section',
+    indent:     'Make sub-section of the one above',
+    outdent:    'Move up one level',
+    editThing:   (noun: string) => `Edit ${noun.toLowerCase()}`,
+    deleteThing: (noun: string) => `Delete ${noun.toLowerCase()}`,
+  },
+
+  // Swipe-left on a row (Android, docs/android/11 §9): act at once, offer Undo.
+  swipeActions: {
+    archive:       'Archive',
+    delete:        'Delete',
+    archivedToast: (title: string) => `Archived “${title}”`,
+    deletedToast:  (title: string) => `Deleted “${title}”`,
+    undo:          'Undo',
+  },
+
   // Suite-wide Recycling Bin — see src/services/trash.ts, src/services/trashCapture.ts,
   // src/components/RecyclingBinPane/.
   recyclingBin: {

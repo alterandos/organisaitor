@@ -1,9 +1,14 @@
+/* The bar's height, read by whatever must sit above it (the toast, MobileQuickAddBar). */
+:global(.platform-android) {
+  --mobile-nav-h: 56px;
+}
+
 .bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 56px;
+  height: var(--mobile-nav-h, 56px);
   padding-bottom: env(safe-area-inset-bottom);
   display: flex;
   align-items: stretch;

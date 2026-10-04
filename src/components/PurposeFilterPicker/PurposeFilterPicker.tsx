@@ -3,6 +3,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import styles from './PurposeFilterPicker.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 
 interface Props {
   // See CollectionFilterPicker's identical prop for the rationale — same treatment applied
@@ -29,7 +30,8 @@ export function PurposeFilterPicker({ variant = 'dropdown' }: Props) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open, closePurposePicker]);
 
-  useEscapeClose(closePurposePicker, open);
+  // The sheet registers its own Escape/back entry (BottomSheet).
+  useEscapeClose(closePurposePicker, open && variant === 'dropdown');
 
   const purposes = Object.values(purposesRecord).filter((p) => !p.archivedAt);
   if (purposes.length === 0) return null;
@@ -73,12 +75,9 @@ export function PurposeFilterPicker({ variant = 'dropdown' }: Props) {
           ◎
         </button>
         {open && (
-          <div className={styles.sheetOverlay} onMouseDown={(e) => { if (e.target === e.currentTarget) closePurposePicker(); }}>
-            <div className={styles.sheetPanel} ref={ref}>
-              <div className={styles.sheetHeader}>Purposes</div>
-              <div className={styles.sheetList} role="listbox" aria-multiselectable="true">{listContent}</div>
-            </div>
-          </div>
+          <BottomSheet onClose={closePurposePicker} title="Purposes">
+            <div className={styles.sheetList} role="listbox" aria-multiselectable="true">{listContent}</div>
+          </BottomSheet>
         )}
       </>
     );

@@ -392,20 +392,30 @@
   border-radius: var(--radius-md);
 }
 
-.swipeDeleteAction {
+.swipeActions {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  width: 88px;
+  display: flex;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+.swipeActionsShown { opacity: 1; }
+.swipeActionsLive  { pointer-events: auto; }
+
+.swipeArchiveAction,
+.swipeDeleteAction {
+  width: 80px;
   border: none;
-  background: var(--color-danger, #ef4444);
   color: #fff;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 140ms ease;
 }
+.swipeArchiveAction { background: var(--color-muted); }
+.swipeDeleteAction  { background: var(--color-danger); }
 
 .swipeWrapper .item {
   position: relative;

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Priority, CollectionId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
@@ -41,6 +41,18 @@ export function MobileQuickAddBar() {
   const inputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
+  // Publishes the bar's height (it grows when the chip row appears) as --quick-add-h, so the
+  // toast can sit above it (docs/android/11 §3, bottom stack order).
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => root.style.setProperty('--quick-add-h', `${el.offsetHeight}px`));
+    observer.observe(el);
+    return () => { observer.disconnect(); root.style.removeProperty('--quick-add-h'); };
+  }, []);
+
   const collectionsRecord = useTaskStore((s) => s.collections);
   const activeCollectionId = useUIStore(selectActiveCollectionId);
   const showAddTaskWithPrefill = useUIStore((s) => s.showAddTaskWithPrefill);
@@ -72,7 +84,7 @@ export function MobileQuickAddBar() {
   };
 
   return (
-    <div className={styles.bar}>
+    <div className={styles.bar} ref={barRef}>
       <div className={styles.inputRow}>
         <span className={styles.icon} aria-hidden="true">+</span>
         <input

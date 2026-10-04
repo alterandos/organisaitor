@@ -11,6 +11,7 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
 import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowAction } from '@/components/RowHoverActions/RowAction';
 
 // Left-nav tabs — add an entry here (+ a render branch below) to extend this view with
 // future sections (e.g. Notebooks, List types) without redesigning the layout.
@@ -37,16 +38,19 @@ function ManageRow({ color, name, archived, onEdit, onArchive, onDelete }: RowPr
         {color && <span className={styles.dot} style={{ background: color }} />}
         <TruncatedText text={name} className={styles.name} />
       </div>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} title={name} {...menuHandlers}>
         {onEdit && (
-          <button className={styles.iconBtn} onClick={onEdit} title="Edit" aria-label={`Edit ${name}`}>✎</button>
+          <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
         )}
         {onArchive && (
-          <button className={styles.iconBtn} onClick={onArchive} title={archived ? 'Restore' : 'Archive'} aria-label={`${archived ? 'Restore' : 'Archive'} ${name}`}>
-            {archived ? '↺' : '⊘'}
-          </button>
+          <RowAction
+            className={styles.iconBtn}
+            icon={archived ? '↺' : '⊘'}
+            label={archived ? LABELS.rowActions.restore : LABELS.rowActions.archive}
+            onClick={onArchive}
+          />
         )}
-        <button className={`${styles.iconBtn} ${styles.iconBtnDelete}`} onClick={onDelete} title="Delete" aria-label={`Delete ${name}`}>✕</button>
+        <RowAction className={`${styles.iconBtn} ${styles.iconBtnDelete}`} icon="✕" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowHoverActionsMenu>
     </div>
   );

@@ -15,6 +15,7 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
 import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowAction } from '@/components/RowHoverActions/RowAction';
 import type { CollectionId } from '@/types';
 import type { Overview, OverviewId, OverviewQuery, OverviewRow } from '@/types/overview';
 import styles from './OverviewSection.module.css';
@@ -46,16 +47,17 @@ function SavedRow({ overview, active }: { overview: Overview; active: boolean })
         <span className={styles.navIcon}>{overview.icon ?? '📊'}</span>
         <TruncatedText text={overview.name} className={styles.navName} />
       </button>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
-        <button className={styles.actionBtn} onClick={(e) => { e.stopPropagation(); openEdit(overview.id); }} title={L.edit}>✎</button>
-        <button
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} title={overview.name} {...menuHandlers}>
+        <RowAction className={styles.actionBtn} icon="✎" label={L.edit} onClick={() => openEdit(overview.id)} />
+        <RowAction
           className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
-          onClick={async (e) => {
-            e.stopPropagation();
+          icon="✕"
+          label={LABELS.rowActions.delete}
+          destructive
+          onClick={async () => {
             if (await confirmDelete(L.deleteNoun, overview.name)) deleteOverview(overview.id);
           }}
-          title="Delete"
-        >✕</button>
+        />
       </RowHoverActionsMenu>
     </div>
   );

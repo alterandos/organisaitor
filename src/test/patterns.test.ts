@@ -408,3 +408,56 @@ describe('pattern: "link a …" pickers suggest by keywords', () => {
     expect(hits, describeHits(hits)).toEqual([]);
   });
 });
+
+// ── Android mobile primitives (docs/android/11-design-and-coding-patterns.md §6–7) ─────
+describe('pattern: bottom sheets are BottomSheet, not hand-rolled', () => {
+  it('no sheetOverlay / sheetPanel CSS class outside components/BottomSheet/', () => {
+    const cssFiles = walk(SRC, ['.css']).filter((f) => !rel(f).startsWith('src/components/BottomSheet/'));
+    const hits = findMatches(cssFiles, /\.sheet(Overlay|Panel)\b/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: row actions are RowAction, so the Android long-press sheet can label them', () => {
+  // HoverOptions' menu holds text options, not icon actions, and on Android shows an ActionSheet.
+  const EXEMPT = new Set(['src/components/HoverOptions/HoverOptions.tsx']);
+  it('no raw <button> inside a <RowHoverActionsMenu>', () => {
+    const bad: string[] = [];
+    for (const file of TSX_FILES) {
+      if (EXEMPT.has(rel(file))) continue;
+      const src = fs.readFileSync(file, 'utf8');
+      for (const m of src.matchAll(/<RowHoverActionsMenu[\s\S]*?<\/RowHoverActionsMenu>/g)) {
+        if (/<button\b/.test(m[0])) bad.push(`${rel(file)}: ${m[0].split('\n')[0].trim()}`);
+      }
+    }
+    expect(bad, bad.join('\n')).toEqual([]);
+  });
+});
+
+describe('pattern: every hotkey names its touch path (decision D13)', () => {
+  it("every HOTKEYS entry has a non-empty touch: the path, or 'n/a: <why>'", () => {
+    const src = fs.readFileSync(path.join(SRC, 'config', 'hotkeys.ts'), 'utf8');
+    const defs = [...src.matchAll(/^\s*\{\s*id:\s*'([^']+)'.*$/gm)].map((m) => ({ id: m[1], touch: /touch:\s*'((?:[^'\\]|\\.)*)'/.exec(m[0])?.[1] ?? '' }));
+    expect(defs.length).toBeGreaterThan(40);
+    // An n/a must say why: "n/a: …" (or "n/a for now: …").
+    const bad = defs.filter((h) => !h.touch.trim() || (/^n\/a\b/i.test(h.touch) && !/^n\/a[^:]*: \S/.test(h.touch)));
+    expect(bad.map((h) => h.id)).toEqual([]);
+  });
+});
+
+describe('pattern: services/trash.ts stays out of stores and trashCapture.ts (import cycle)', () => {
+  it('no store and not trashCapture.ts imports services/trash', () => {
+    const hits = findMatches(
+      SOURCE_FILES.filter((f) => rel(f).startsWith('src/store/') || rel(f) === 'src/services/trashCapture.ts'),
+      /from '@\/services\/trash'/,
+    );
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: the Android back button is the Escape stack', () => {
+  it('no fixed overlay list: closeTopmostMobileOverlay is gone, and App.tsx calls closeTopOverlay', () => {
+    expect(findMatches(SOURCE_FILES, /closeTopmostMobileOverlay/)).toEqual([]);
+    expect(fs.readFileSync(path.join(SRC, 'App.tsx'), 'utf8')).toMatch(/closeTopOverlay\(\)/);
+  });
+});

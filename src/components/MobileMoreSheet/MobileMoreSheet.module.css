@@ -1,38 +1,4 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 31;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.sheet {
-  background: var(--color-surface);
-  width: 100%;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 0 0.5rem calc(0.75rem + env(safe-area-inset-bottom));
-  box-shadow: 0 -4px 28px rgba(0, 0, 0, 0.14);
-  max-height: 80vh;
-  overflow-y: auto;
-  transition: transform 180ms ease;
-}
-
-.handleArea {
-  display: flex;
-  justify-content: center;
-  padding: 0.6rem 0 0.4rem;
-  touch-action: none;
-}
-
-.handle {
-  width: 36px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--color-border);
-}
-
+/* The sheet chrome (overlay, grabber, drag-to-dismiss) is BottomSheet's. */
 .item {
   display: block;
   width: 100%;

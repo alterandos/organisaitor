@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { usePlatform } from '@/hooks/usePlatform';
+import { useLongPress } from '@/hooks/useLongPress';
 
 // Suite-wide "row action menu" pattern: hovering a nav-column row (a notebook, a list, an
 // Endeavour, a tracker, …) floats its action buttons (edit/delete/…) in a small panel above
@@ -13,18 +15,23 @@ import { useEffect, useRef, useState } from 'react';
 // menu → close, after a grace-period delay so moving the mouse from the row to the menu (they
 // aren't DOM-adjacent, so CSS :hover can't bridge the gap) doesn't close it first. Cancelling
 // that close timer is what keeps it open across the gap.
+//
+// Android has no hover: a long-press on the row opens the same actions in a bottom sheet
+// (RowHoverActionsMenu renders them there), and the hover handlers do nothing, because a tap's
+// emulated mouseenter would otherwise open the sheet on every tap.
 
 interface UseRowHoverActionsResult<T extends HTMLElement> {
   anchorRef: React.RefObject<T | null>;
   open: boolean;
   rowHandlers: { onMouseEnter: () => void; onMouseLeave: () => void };
-  menuHandlers: { onMouseEnter: () => void; onMouseLeave: () => void };
+  menuHandlers: { onMouseEnter: () => void; onMouseLeave: () => void; onClose: () => void };
 }
 
 const OPEN_DELAY_MS  = 150; // matches ChronicleView's existing hover-expand delay
 const CLOSE_DELAY_MS = 250; // long enough to cross the row→menu gap at a normal mouse speed
 
 export function useRowHoverActions<T extends HTMLElement = HTMLDivElement>(): UseRowHoverActionsResult<T> {
+  const { isAndroid } = usePlatform();
   const anchorRef = useRef<T>(null);
   const [open, setOpen] = useState(false);
   const openTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,6 +43,7 @@ export function useRowHoverActions<T extends HTMLElement = HTMLDivElement>(): Us
   };
 
   useEffect(() => clearTimers, []);
+  useLongPress(anchorRef, () => setOpen(true), isAndroid);
 
   const scheduleOpen = () => {
     clearTimers();
@@ -49,10 +57,13 @@ export function useRowHoverActions<T extends HTMLElement = HTMLDivElement>(): Us
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
   };
 
+  const noop = () => {};
+  const close = () => { clearTimers(); setOpen(false); };
+
   return {
     anchorRef,
     open,
-    rowHandlers:  { onMouseEnter: scheduleOpen, onMouseLeave: scheduleClose },
-    menuHandlers: { onMouseEnter: cancelClose,  onMouseLeave: scheduleClose },
+    rowHandlers:  isAndroid ? { onMouseEnter: noop, onMouseLeave: noop } : { onMouseEnter: scheduleOpen, onMouseLeave: scheduleClose },
+    menuHandlers: { onMouseEnter: cancelClose, onMouseLeave: scheduleClose, onClose: close },
   };
 }
