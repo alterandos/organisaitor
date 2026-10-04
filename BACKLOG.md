@@ -974,11 +974,11 @@ should come first since they cover the large majority of real users.
 
 ---
 
-## Desktop (Tauri) API access — built for Tauri (2026-09-19); Android equivalent still open
+## Desktop (Tauri) and Android API access — built (Tauri 2026-09-19, Android 2026-10-04)
 
-~~Desktop (Tauri) and Android builds can't reach `/api/*`~~ — **the Tauri half is now built, see CLAUDE.md's "Desktop (Tauri) API access" entry.** `src/utils/apiFetch.ts` routes every `/api/*` call through `@tauri-apps/plugin-http`'s native fetch (bypassing CORS entirely) against the production Vercel URL when running under Tauri; `src-tauri/capabilities/default.json`'s `http:default` scope was widened to allow it. Verified with a real `npm run tauri build` release installer.
+~~Desktop (Tauri) and Android builds can't reach `/api/*`~~ — **built for both.** `src/utils/apiFetch.ts` routes every `/api/*` call to the production Vercel URL through a native HTTP client: `@tauri-apps/plugin-http` under Tauri (with `src-tauri/capabilities/default.json`'s `http:default` scope widened; verified with a real `npm run tauri build` release installer), and `CapacitorHttp` under Android (called directly, not enabled globally, so Supabase's own fetch is untouched; verified on the emulator). A pattern test forbids a bare `fetch('/api…`. See "Desktop (Tauri) API access" and "Android W1: platform services" in `docs/features/implemented-features.md`.
 
-**Still open — Android/Capacitor.** `capacitor.config.ts` has the identical "static files, no backend" shape (`webDir: 'dist'`, no `server.url`), so the same relative-`/api/*`-call problem applies there too — not investigated or fixed yet. Would need the Capacitor equivalent of `@tauri-apps/plugin-http` (likely `@capacitor/http`'s native fetch override, or a manually-registered CORS allowlist since Android's WebView CORS behavior differs from Tauri's) plus extending `apiFetch()`'s platform branch. Revisit when Android Fitness/Strava/Calendar-sync work is picked up.
+OAuth connect in the packaged apps: the `redirect_uri` now uses the production origin under Tauri and Android (`oauthRedirectOrigin()`); on Android the flow runs in the in-app browser and returns through `organisaitor://oauth-done` (migration 041). **Still open for Tauri:** the connect button still navigates the Tauri window itself to the provider, so after connecting the window ends up on the web app at the Vercel origin (separate storage) rather than back in the desktop app. Opening the flow in the system browser (`openExternalLink`) and refreshing status on focus would fix it; not built, not tested.
 
 ---
 
@@ -2569,8 +2569,8 @@ $1 (Update 2026-09-20: the *delete confirmation* for all of those now uses the s
 
 Full design, signed off by the user 2026-10-04: `docs/android/05-notifications.md`. Two parts land on desktop too, not just Android:
 - **Shared trigger engine** (`services/notifications/plan.ts`), used by the desktop poller and the Android scheduler. Its first step fixes a live bug: **Deadlines never notify** (no `deadlines` loop in `useNotificationChecker`; task shadows became `CalendarDeadline`s on 2026-09-27), and `NotificationCenter`'s `linkedTask` lookup still uses `calendarReminderId`.
-- **"Done" on a Reminder or standalone Deadline**: `doneDates: string[]` per occurrence, struck through on the calendar, no further notifications. Migration 041, `calendarStore` v15.
-- **Tracker/routine "Remind me"** (`Collection.reminder`, migration 042, `taskStore` v14), skipped when today is already logged.
+- **"Done" on a Reminder or standalone Deadline**: `doneDates: string[]` per occurrence, struck through on the calendar, no further notifications. Migration 042 (041 is taken by W1's OAuth migration), `calendarStore` v15.
+- **Tracker/routine "Remind me"** (`Collection.reminder`, migration 043, `taskStore` v14), skipped when today is already logged.
 
 ## Android back button should use the same overlay stack as Escape — built 2026-10-04 (W2)
 
@@ -2591,6 +2591,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **`/api/*` via `apiFetch()`; files via `saveFile()`** (Android W1, 2026-10-04) | `src/test/patterns.test.ts` "/api/* calls go through apiFetch"; for files, `grep -rn "\.download =" src` (only `utils/saveFile.ts`) | **Fully applied 2026-10-04** — every `/api/*` caller already used `apiFetch`; the only downloads (`backupExport.ts`) now call `saveFile`. No test for `saveFile` yet (grep only). |
 | **Pickers suggest by keywords** (`utils/suggestRank.ts`, 2026-10-01) | `src/test/patterns.test.ts` "\"link a …\" pickers suggest by keywords" | **Fully applied 2026-10-01** — NotePickerModal (its own tab-aware ranking), TaskPickerModal, ListPickerModal; every opener passes `suggestFrom`. |
 | **Toasts via `showToast()` + one `ToastHost`** (2026-10-01) | `src/test/patterns.test.ts` "toasts go through showToast and the one ToastHost" | **Fully applied 2026-10-01** — no toast existed before. |
 | **Task completion via `toggleTaskCompletion()`** (2026-10-01) | `src/test/patterns.test.ts` "the UI completes tasks through toggleTaskCompletion" | **Fully applied 2026-10-01** in components. Deliberate exception: `taskListLinks.toggleChecklistItemWithTasks` (see "Task links — follow-ons"). |

@@ -5,6 +5,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { forceUpload } from '@/services/sync/syncService';
 import { getBackupSnapshot } from '@/services/autoBackupStorage';
+import { saveFile } from '@/utils/saveFile';
 
 // Reads the persisted values straight from where they are stored — localStorage, or IndexedDB for
 // the notes (readPersistedValue) — not from the stores, so it still works when the app can't
@@ -21,21 +22,13 @@ export async function buildBackupSnapshot(): Promise<Record<string, unknown>> {
   return backup;
 }
 
-function downloadBackupFile(backup: unknown, filename: string) {
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+function downloadBackupFile(backup: unknown, filename: string): Promise<void> {
+  return saveFile(filename, new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
 }
 
 export async function downloadBackup() {
   const backup = await buildBackupSnapshot();
-  downloadBackupFile(backup, `organisaitor-backup-${new Date().toISOString().split('T')[0]}.json`);
+  await downloadBackupFile(backup, `organisaitor-backup-${new Date().toISOString().split('T')[0]}.json`);
 }
 
 // Downloads one automatic snapshot (services/autoBackupStorage.ts) as the same JSON file a
@@ -45,7 +38,7 @@ export async function downloadAutoBackupSnapshot(id: number, createdAt: string) 
   const raw = await getBackupSnapshot(id);
   if (!raw) throw new Error('This snapshot could not be read.');
   const stamp = createdAt.slice(0, 19).replace('T', '_').replace(/:/g, '-');
-  downloadBackupFile(JSON.parse(raw), `organisaitor-autobackup-${stamp}.json`);
+  await downloadBackupFile(JSON.parse(raw), `organisaitor-autobackup-${stamp}.json`);
 }
 
 // Writes every recognised key from a backup object (a manual Export/Restore file, or an

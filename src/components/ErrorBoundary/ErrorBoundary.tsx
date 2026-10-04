@@ -31,13 +31,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private exportBackup = () => {
-    try {
-      downloadBackup();
-      this.setState({ backupFailed: false });
-    } catch (err) {
-      console.error('[ErrorBoundary] backup export failed:', err);
-      this.setState({ backupFailed: true });
-    }
+    downloadBackup().then(
+      () => this.setState({ backupFailed: false }),
+      (err) => {
+        console.error('[ErrorBoundary] backup export failed:', err);
+        this.setState({ backupFailed: true });
+      },
+    );
   };
 
   private reset = () => this.setState({ error: null, componentStack: '', backupFailed: false });

@@ -188,6 +188,13 @@ export const LABELS = {
     unsavedConfirm: 'Sign out and discard',
   },
 
+  // Returning to the Android app from a provider's sign-in page (services/oauthState.ts)
+  oauthReturn: {
+    provider:  { strava: 'Strava', 'google-calendar': 'Google Calendar' },
+    connected: (provider: string) => `${provider} connected`,
+    failed:    (provider: string) => `${provider} connection failed`,
+  },
+
   // Calendar
   calendarItemKind: {
     event:    'Event',

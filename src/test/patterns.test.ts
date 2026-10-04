@@ -379,6 +379,16 @@ describe('pattern: the UI completes tasks through toggleTaskCompletion', () => {
   });
 });
 
+describe('pattern: /api/* calls go through apiFetch', () => {
+  // A relative /api/ fetch only works in the browser PWA: the packaged apps (Tauri, Android) have
+  // no backend at their own origin, and apiFetch is what routes them to the production deployment.
+  it("no fetch('/api… outside utils/apiFetch.ts", () => {
+    const files = SOURCE_FILES.filter((f) => rel(f) !== 'src/utils/apiFetch.ts');
+    const hits = findMatches(files, /\bfetch\(\s*['"`]\/api\//, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
 describe('pattern: toasts go through showToast and the one ToastHost', () => {
   it('<ToastHost /> is mounted exactly once, in App.tsx (showToast shows nothing without it)', () => {
     const hits = findMatches(TSX_FILES, /<ToastHost\s*\/>/);

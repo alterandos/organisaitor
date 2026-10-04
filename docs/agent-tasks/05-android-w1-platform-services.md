@@ -1,6 +1,6 @@
 # 05 — Android W1: platform services (network, OAuth return, file export, keyboard)
 
-Status: Not started
+Status: Done 2026-10-04 — built on branch `android/w1-platform-services` (not merged). Migration `041` written, **pending until the user runs it**. Real Google/Strava connect not verified end to end (see `docs/android/implementation-status.md` "W1 — platform services").
 
 Makes the parts of the app that talk to the outside world work in the Android build: `/api/*` calls, Strava/Google sign-in coming back to the app, saving files, and the soft keyboard. Workstream **W1** in `docs/android/10-gap-analysis.md` (gaps A1, A2, A7, A9).
 

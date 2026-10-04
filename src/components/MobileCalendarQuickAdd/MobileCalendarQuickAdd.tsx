@@ -88,6 +88,7 @@ export function MobileCalendarQuickAdd() {
           ref={inputRef}
           className={styles.titleInput}
           placeholder={kind === 'event' ? 'Event title…' : 'Reminder title…'}
+          enterKeyHint="done"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}

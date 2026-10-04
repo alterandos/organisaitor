@@ -10,6 +10,8 @@ import { useAuthStore } from '@/store/authStore';
 import { initSync, stopSync } from '@/services/sync/syncService';
 import { checkVaultStatus, resetVaultModuleState } from '@/services/vault';
 import { initNoteSecretsSync } from '@/services/noteSecretsSync';
+import { startDeepLinks } from '@/services/android/deepLinks';
+import { registerOAuthReturn } from '@/services/android/oauthReturn';
 import { initListSecretsSync } from '@/services/listSecretsSync';
 import { initAutoBackup } from '@/services/autoBackup';
 import { migrateTaskDeadlineShadows } from '@/services/taskDeadlineMigration';
@@ -306,6 +308,16 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Android: organisaitor:// links opening the app (services/android/deepLinks.ts) — today the
+  // Android equivalent of the two ?strava / ?googleCalendar returns above. Routes are registered
+  // before the listener starts so a link that cold-started the app finds its route.
+  useEffect(() => {
+    if (!isAndroid) return;
+    const unregisterOAuth = registerOAuthReturn();
+    const stop = startDeepLinks();
+    return () => { stop(); unregisterOAuth(); };
+  }, [isAndroid]);
 
   // Syncs connected Google calendars while the app is open — on load/sign-in, then every
   // 15 minutes. No server-side cron: this app has no service-role Supabase credential

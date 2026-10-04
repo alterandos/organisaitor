@@ -67,7 +67,7 @@ Act without opening the app; each action goes through the same service as the UI
 - **Snooze** opens Android's action-reply chooser: **10 min · 1 hour · This evening · Tomorrow morning**. "This evening" and "Tomorrow morning" use two new settings, defaulting to 18:00 and 09:00. Snooze writes the item's existing `remindAt`, so it syncs and desktop respects it too.
 - **Done** on a Reminder or standalone Deadline (decided 2026-10-04): it marks that **occurrence** as actioned. The item stays where it is; on the calendar it renders **struck through and muted**, and it sends no more notifications or snoozes for that occurrence. Done again undoes it.
   - **Today:** Done on a plain Reminder only removes the card from the bell panel; the item has no done state. Done on a task-deadline card completes the task, but that lookup still goes through `calendarReminderId` and is broken by the same Deadline bug (§1).
-  - **New field, desktop and Android:** `doneDates: string[]` (occurrence dates actioned) on `CalendarReminder` and `CalendarDeadline`. It's per occurrence, so a repeating reminder is struck through for this week only; same idea as Schedule's `committedDates`. Needs `calendarStore` v15 with a cumulative migrate, migration `041` (`done_dates jsonb not null default '[]'` on `calendar_reminders` and `calendar_deadlines`, no new table), the mappers, and agent-layer exposure via the shared store action.
+  - **New field, desktop and Android:** `doneDates: string[]` (occurrence dates actioned) on `CalendarReminder` and `CalendarDeadline`. It's per occurrence, so a repeating reminder is struck through for this week only; same idea as Schedule's `committedDates`. Needs `calendarStore` v15 with a cumulative migrate, migration `042` (`done_dates jsonb not null default '[]'` on `calendar_reminders` and `calendar_deadlines`, no new table), the mappers, and agent-layer exposure via the shared store action.
   - **Where Done appears:** the notification action, the bell panel, the Reminder/Deadline pane footer ("Mark done" / "Not done"), and the long-press action sheet on a calendar item.
   - Task-linked Deadlines keep using the task's own completion (already shown on the calendar).
   - Events have no Done; they just happen.
@@ -80,7 +80,7 @@ Tapping goes through the D5 deep-link listener (`organisaitor://open/<kind>/<id>
 
 ### N7. Record-tracking prompts (new, for desktop too)
 Trackers and routines get an optional **"Remind me"**: a time plus days of the week (default: the routine's own `repeatConfig.daysOfWeek`, or every day).
-- **New field** on `Collection` (tracker/routine kinds): `reminder: { time: string; days: number[] } | null`. That means `taskStore` v14 with a cumulative migrate, a Supabase column `collections.reminder jsonb` (migration 042), and a mapper update. It's synced, and desktop's poller fires it too.
+- **New field** on `Collection` (tracker/routine kinds): `reminder: { time: string; days: number[] } | null`. That means `taskStore` v14 with a cumulative migrate, a Supabase column `collections.reminder jsonb` (migration 043), and a mapper update. It's synced, and desktop's poller fires it too.
 - **Skipped automatically** if today is already logged (a routine instance completed, or a tracker entry exists for today), so the prompt only comes when it's still needed.
 - **Log ✓ from the notification** for one-tap shapes: a single-boolean tracker, or a routine whose steps you tick all at once. Rating or multi-field trackers open straight into the quick-log (Records W5).
 - Edited in `EditTrackerPane`/`EditRoutinePane` on every platform.
@@ -105,8 +105,8 @@ Server push (FCM), so completing on one device clears the other's alarms. A home
 2. Install `@capacitor/local-notifications`; channels (N3); scheduler + reconcile (N2); permission flow (N5).
 3. Deep-link routing (N6, shared with W1's OAuth return).
 4. Actions + snooze (N4).
-5. Reminder/Deadline "done" (`doneDates`, migration 041, calendar strikethrough, pane + bell + action sheet), desktop and Android.
-6. N7 (schema, migration 042, pane UI on desktop and Android, Log ✓ action). Coordinate with Records W5.
+5. Reminder/Deadline "done" (`doneDates`, migration 042, calendar strikethrough, pane + bell + action sheet), desktop and Android.
+6. N7 (schema, migration 043, pane UI on desktop and Android, Log ✓ action). Coordinate with Records W5.
 7. Settings section (N9). Real-device test: Pixel plus one aggressive-battery OEM if available.
 
 ## 5. Acceptance (emulator via CDP, then a real device)
