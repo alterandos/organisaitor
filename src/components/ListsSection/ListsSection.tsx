@@ -290,7 +290,7 @@ function SidebarListItem({
         <TruncatedText text={list.name} className={styles.sidebarItemName} />
         <span className={styles.sidebarItemCount}>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
       </div>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} title={list.name} {...menuHandlers}>
         {!isLocked && (
           <RowAction className={styles.sidebarActionBtn} icon="✎" label={LABELS.rowActions.editThing(LABELS.list)} onClick={onEdit} />
         )}
