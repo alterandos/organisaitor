@@ -28,7 +28,7 @@ describe('setActiveView — back/forward history (browser semantics)', () => {
     useUIStore.getState().setActiveView('calendar');
     useUIStore.getState().setActiveView('notes');
 
-    useUIStore.getState().navigateBack();
+    expect(useUIStore.getState().navigateBack()).toBe(true);
     expect(useUIStore.getState().activeView).toBe('calendar');
     expect(useUIStore.getState().sectionHistory).toEqual([{ view: 'tasks' }]);
     expect(useUIStore.getState().sectionForwardHistory).toEqual([{ view: 'notes' }]);
@@ -51,9 +51,9 @@ describe('setActiveView — back/forward history (browser semantics)', () => {
     expect(useUIStore.getState().sectionForwardHistory).toEqual([]);
   });
 
-  it('navigateBack/navigateForward on an empty stack does nothing', () => {
+  it('navigateBack/navigateForward on an empty stack does nothing — navigateBack reports false', () => {
     const before = useUIStore.getState().activeView;
-    useUIStore.getState().navigateBack();
+    expect(useUIStore.getState().navigateBack()).toBe(false);
     expect(useUIStore.getState().activeView).toBe(before);
     useUIStore.getState().navigateForward();
     expect(useUIStore.getState().activeView).toBe(before);
@@ -154,6 +154,17 @@ describe("openNote / navigateBack / navigateForward — Notes' own note-level st
     expect(useUIStore.getState().editingNoteId).toBe('note1');
     expect(useUIStore.getState().notesHistory).toEqual([]);
     expect(useUIStore.getState().notesForwardHistory).toEqual([{ noteId: 'note2' }, { noteId: 'note3' }]);
+  });
+
+  it('navigateBack reports true for a note-level step even with no section history (Android back must not minimise then)', () => {
+    const s = useUIStore.getState();
+    s.setActiveView('notes');
+    useUIStore.setState({ sectionHistory: [] });
+    s.openNote('note1');
+    s.openNote('note2');
+    expect(useUIStore.getState().navigateBack()).toBe(true);
+    expect(useUIStore.getState().editingNoteId).toBe('note1');
+    expect(useUIStore.getState().navigateBack()).toBe(false);
   });
 
   it('navigateForward retraces the same path back', () => {

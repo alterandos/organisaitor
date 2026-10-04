@@ -270,7 +270,9 @@ interface UIState {
   // comment above for why a plain 'push' isn't reused for these.
   sectionHistory:        SectionHistoryEntry[];
   sectionForwardHistory: SectionHistoryEntry[];
-  navigateBack:    () => void;
+  // navigateBack returns whether it moved (a note or a section), so the Android back
+  // button knows when to minimise instead.
+  navigateBack:    () => boolean;
   navigateForward: () => void;
 
   taskViewMode:    TaskViewMode;
@@ -476,9 +478,9 @@ interface UIState {
   // Android back-button handling (docs/android/00-architecture.md §5d). A screen with its
   // own back-relevant navigation (a master-detail detail view, e.g. Records/Lists) registers
   // itself as the sole consumer on mount and clears it on unmount. The global back-button
-  // listener checks, in order: (1) is a modal/pane open per existing uiStore state — close it;
-  // (2) is mobileBackConsumer set — call it, handled if it returns true; (3) neither — fall
-  // through to system back/minimize. Only one master-detail screen is ever visible at a time,
+  // listener (App.tsx) checks, in order: (1) closeTopOverlay() — the Escape stack, newest
+  // overlay first; (2) mobileBackConsumer, handled if it returns true; (3) navigateBack();
+  // (4) minimise. Only one master-detail screen is ever visible at a time,
   // so a single slot (not a stack) is sufficient.
   mobileBackConsumer:         (() => boolean) | null;
   registerMobileBackConsumer: (fn: (() => boolean) | null) => void;
@@ -756,12 +758,13 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       const [prevNote, ...rest] = s.notesHistory;
       set({ notesHistory: rest });
       get().openNote(prevNote.noteId, undefined, { mode: 'back' });
-      return;
+      return true;
     }
     const [prev, ...rest] = s.sectionHistory;
-    if (!prev) return;
+    if (!prev) return false;
     set({ sectionHistory: rest });
     get().setActiveView(prev.view, { mode: 'back' });
+    return true;
   },
   navigateForward: () => {
     const s = get();
@@ -1046,37 +1049,6 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     calendarLastEditing:      s.calendarLastEditing,
   }),
 }));
-
-// Android back-button priority list (docs/android/00-architecture.md §5d step 1: "is a
-// modal/pane open per existing uiStore state — close it"). Checked most-commonly-nested-on-
-// top first — this is a fixed priority order, not a real stack, which the architecture doc
-// treats as acceptable since only one of these is ever meaningfully "on top" in practice.
-// Returns true if something was closed (caller should treat the back press as handled).
-export function closeTopmostMobileOverlay(): boolean {
-  const s = useUIStore.getState();
-  if (s.decryptPrompt)                                      { s.closeDecryptPrompt();     return true; }
-  if (s.quickAccessOpen)                                    { s.closeQuickAccess();       return true; }
-  if (s.openModal !== null)                                { s.closeModal();             return true; }
-  if (s.calendarQuickAddOpen)                               { s.closeCalendarQuickAdd();  return true; }
-  if (s.editingTaskId !== null)                             { s.closeTaskPane();          return true; }
-  if (s.editingCalendarEventId !== null)                    { s.closeCalendarEventPane(); return true; }
-  if (s.editingCalendarReminderId !== null)                 { s.closeCalendarReminderPane(); return true; }
-  if (s.editingCalendarDeadlineId !== null)                 { s.closeCalendarDeadlinePane(); return true; }
-  if (s.editTrackerOpen)                                    { s.closeEditTracker();       return true; }
-  if (s.editRoutineOpen)                                    { s.closeEditRoutine();       return true; }
-  if (s.editActivityTypeOpen)                               { s.closeEditActivityType();  return true; }
-  if (s.editNoteTagOpen)                                    { s.closeEditNoteTag();       return true; }
-  if (s.noteTagViewActive)                                  { s.closeNoteTagView();       return true; }
-  if (s.schedulesOpen)                                      { s.closeSchedules();         return true; }
-  if (s.manageOpen)                                         { s.closeManage();            return true; }
-  if (s.integrationsOpen)                                   { s.closeIntegrations();      return true; }
-  if (s.recyclingBinOpen)                                   { s.closeRecyclingBin();      return true; }
-  if (s.accountOpen)                                        { s.closeAccount();           return true; }
-  if (s.settingsOpen)                                       { s.closeSettings();          return true; }
-  if (s.editingNoteId !== null && s.activeView !== 'notes') { s.closeNote();              return true; }
-  if (s.mobileMoreSheetOpen)                                { s.closeMobileMoreSheet();   return true; }
-  return false;
-}
 
 // The focused Endeavour for whichever section is currently active. Sections that don't
 // show the Endeavour picker (Lists, Portfolio) simply never populate their entry.

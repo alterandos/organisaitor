@@ -111,8 +111,6 @@ describe('pattern: Escape handling goes through useEscapeClose', () => {
     'src/utils/hotkeyBinding.ts',
     'src/store/hotkeyOverridesStore.ts', // KEY_TOKEN_TO_EVENT_KEY maps the 'Esc' token name, not a handler
     'src/config/hotkeys.ts',            // the 'Esc' hotkey definition/label, not a handler
-    'src/store/uiStore.ts',             // closeTopmostMobileOverlay: Android hardware back button — its own
-                                          // documented priority list (CLAUDE.md "not covered" note), not Escape-key text
   ]);
   // CLAUDE.md's one deliberate exception: a capture-phase listener that owns all keys for a
   // moment and consumes Escape itself before the stack ever sees it (SettingsPane's
