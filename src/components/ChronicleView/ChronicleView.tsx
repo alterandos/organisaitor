@@ -12,6 +12,7 @@ import { NoteEditor } from '../NoteEditor/NoteEditor';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
 import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowAction } from '@/components/RowHoverActions/RowAction';
 import styles from './ChronicleView.module.css';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
@@ -203,8 +204,7 @@ function NoteTagTreeNode({
     setHoverExpanded(false);
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = async () => {
     if (!(await confirmDelete('notebook', tag.name, 'All its contents will be deleted too.'))) return;
     deleteNoteTag(tag.id as NoteTagId);
     if (isSelected) setSelected(null);
@@ -313,36 +313,16 @@ function NoteTagTreeNode({
           {noteCount > 0 && <span className={styles.nodeCount}>{noteCount}</span>}
         </button>
 
-        <RowHoverActionsMenu anchorRef={anchorRef} open={actionsOpen} {...menuHandlers}>
+        <RowHoverActionsMenu anchorRef={anchorRef} open={actionsOpen} title={tag.name} {...menuHandlers}>
           {canIndent && (
-            <button
-              className={styles.nodeActionBtn}
-              onClick={(e) => { e.stopPropagation(); indentNoteTag(tag.id as NoteTagId); }}
-              title="Make sub-section of the one above"
-            >↳</button>
+            <RowAction className={styles.nodeActionBtn} icon="↳" label={LABELS.rowActions.indent} onClick={() => indentNoteTag(tag.id as NoteTagId)} />
           )}
           {canOutdent && (
-            <button
-              className={styles.nodeActionBtn}
-              onClick={(e) => { e.stopPropagation(); outdentNoteTag(tag.id as NoteTagId); }}
-              title="Move up one level"
-            >↰</button>
+            <RowAction className={styles.nodeActionBtn} icon="↰" label={LABELS.rowActions.outdent} onClick={() => outdentNoteTag(tag.id as NoteTagId)} />
           )}
-          <button
-            className={styles.nodeActionBtn}
-            onClick={(e) => { e.stopPropagation(); showAddNoteTag(tag.id as NoteTagId); }}
-            title="Add section"
-          >+</button>
-          <button
-            className={styles.nodeActionBtn}
-            onClick={(e) => { e.stopPropagation(); openEditNoteTag(tag.id); }}
-            title="Edit"
-          >✎</button>
-          <button
-            className={`${styles.nodeActionBtn} ${styles.nodeActionDelete}`}
-            onClick={handleDelete}
-            title="Delete"
-          >×</button>
+          <RowAction className={styles.nodeActionBtn} icon="+" label={LABELS.rowActions.addSection} onClick={() => showAddNoteTag(tag.id as NoteTagId)} />
+          <RowAction className={styles.nodeActionBtn} icon="✎" label={LABELS.rowActions.edit} onClick={() => openEditNoteTag(tag.id)} />
+          <RowAction className={`${styles.nodeActionBtn} ${styles.nodeActionDelete}`} icon="×" label={LABELS.rowActions.delete} onClick={handleDelete} destructive />
         </RowHoverActionsMenu>
       </div>
 

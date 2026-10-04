@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
-import { useEscapeClose } from './useEscapeClose';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, renderHook } from '@testing-library/react';
+import { closeTopOverlay, useEscapeClose } from './useEscapeClose';
 
 const pressEscape = () => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 };
 
 describe('useEscapeClose', () => {
+  afterEach(cleanup); // unmount every overlay so each test starts with an empty stack
+
   it('a single registered overlay closes on Escape', () => {
     const onClose = vi.fn();
     renderHook(() => useEscapeClose(onClose));
@@ -88,6 +90,21 @@ describe('useEscapeClose', () => {
     renderHook(() => useEscapeClose(onClose));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closeTopOverlay (the Android back button) closes the newest overlay only, then the next, and reports false once empty', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const r1 = renderHook(() => useEscapeClose(first));
+    const r2 = renderHook(() => useEscapeClose(second));
+    expect(closeTopOverlay()).toBe(true);
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(first).not.toHaveBeenCalled();
+    r2.unmount(); // what closing it does in the app
+    expect(closeTopOverlay()).toBe(true);
+    expect(first).toHaveBeenCalledTimes(1);
+    r1.unmount();
+    expect(closeTopOverlay()).toBe(false);
   });
 
   it('with nothing registered, Escape does nothing (no throw)', () => {

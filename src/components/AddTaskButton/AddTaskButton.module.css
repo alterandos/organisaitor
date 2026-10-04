@@ -7,6 +7,9 @@
   align-items: flex-end;
   gap: 0.7rem;
   z-index: 20;
+  /* The column is as tall as the hidden options; only the + and the shown options take touches,
+     not the empty box over the list's bottom-right rows. */
+  pointer-events: none;
 }
 
 /* ── Secondary options ──────────────────────────────── */
@@ -22,18 +25,30 @@
   transition: opacity 170ms ease, transform 170ms ease;
 }
 
-.speedDial:hover .optionRow,
 .speedDialOpen .optionRow {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0) scale(1);
 }
 
-/* stagger: row closest to FAB (first in DOM) appears last */
-.speedDial:hover .optionRow:nth-child(1) { transition-delay:  90ms; }
-.speedDial:hover .optionRow:nth-child(2) { transition-delay:  60ms; }
-.speedDial:hover .optionRow:nth-child(3) { transition-delay:  30ms; }
-.speedDial:hover .optionRow:nth-child(4) { transition-delay:   0ms; }
+/* Hover-to-open only where there is a real hover. On a touch screen :hover sticks to the last
+   tapped spot, which left the options open over the list, swallowing taps and swipes (found on
+   the Android emulator 2026-10-04); a tap on the + toggles them instead. */
+@media (hover: hover) {
+  .speedDial:hover .optionRow {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
+
+  /* stagger: row closest to FAB (first in DOM) appears last */
+  .speedDial:hover .optionRow:nth-child(1) { transition-delay:  90ms; }
+  .speedDial:hover .optionRow:nth-child(2) { transition-delay:  60ms; }
+  .speedDial:hover .optionRow:nth-child(3) { transition-delay:  30ms; }
+  .speedDial:hover .optionRow:nth-child(4) { transition-delay:   0ms; }
+
+  .speedDial:hover .fabIcon { transform: rotate(45deg); }
+}
 
 .optionLabel {
   background: rgba(15, 15, 20, 0.72);
@@ -73,6 +88,7 @@
 /* ── Main FAB ───────────────────────────────────────── */
 
 .fab {
+  pointer-events: auto;
   width: 3.5rem;
   height: 3.5rem;
   border-radius: 50%;
@@ -100,7 +116,6 @@
   transition: transform 220ms ease;
 }
 
-.speedDial:hover .fabIcon,
 .speedDialOpen .fabIcon {
   transform: rotate(45deg);
 }

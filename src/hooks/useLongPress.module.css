@@ -1,0 +1,7 @@
+/* Android's own long-press behaviour (text selection, the link/image callout) would fight the
+   action sheet a long-press opens. */
+:global(.platform-android) .target {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

@@ -15,6 +15,7 @@ import { alertDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
 import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowAction } from '@/components/RowHoverActions/RowAction';
 import { ChecklistView } from './ChecklistView';
 import { LABELS } from '@/config/labels';
 
@@ -289,19 +290,17 @@ function SidebarListItem({
         <TruncatedText text={list.name} className={styles.sidebarItemName} />
         <span className={styles.sidebarItemCount}>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
       </div>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} title={list.name} {...menuHandlers}>
         {!isLocked && (
-          <button
-            className={styles.sidebarActionBtn}
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            title="Edit list"
-          >✎</button>
+          <RowAction className={styles.sidebarActionBtn} icon="✎" label={LABELS.rowActions.editThing(LABELS.list)} onClick={onEdit} />
         )}
-        <button
+        <RowAction
           className={`${styles.sidebarActionBtn} ${styles.sidebarDeleteBtn}`}
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          title="Delete list"
-        >✕</button>
+          icon="✕"
+          label={LABELS.rowActions.deleteThing(LABELS.list)}
+          onClick={onDelete}
+          destructive
+        />
       </RowHoverActionsMenu>
       {list.isEncrypted && (
         <button

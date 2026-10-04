@@ -10,3 +10,10 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
 }
+
+
+/* Android: the long-press sheet's list of actions (rows are ActionSheetButton). */
+.sheetActions {
+  display: flex;
+  flex-direction: column;
+}

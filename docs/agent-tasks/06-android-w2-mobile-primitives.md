@@ -1,6 +1,6 @@
 # 06 — Android W2: mobile primitives, back button, touch paths for hover actions
 
-Status: Not started
+Status: Done 2026-10-04 — built on branch `android/w2-mobile-primitives`, verified on the emulator and desktop (details and what wasn't verified: "Android W2 — mobile primitives" in `docs/features/implemented-features.md`).
 
 Builds the shared touch building blocks every later Android workstream uses, and with them closes the "you can't do X on a phone" gaps: the back button closing the wrong thing, edit/archive/delete reachable only on hover, swipe-to-delete ignoring the Recycling Bin. Workstream **W2** in `docs/android/10-gap-analysis.md` (gaps A3, A4, A5, A8, A10, B1, B2, I1 and decision D13's hotkey field).
 

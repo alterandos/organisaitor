@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePlatform } from '@/hooks/usePlatform';
 import styles from './TruncatedText.module.css';
 
 interface Props {
@@ -33,7 +34,10 @@ function rowBackground(el: HTMLElement): string {
 // full text on hover. Either way the revealed text ignores the pointer (pointer-events: none) and
 // shows only while the pointer is over the text itself, so moving towards a row's own hover
 // buttons (NoteList's ↳/✎/✕ sit right of the title) hides it before the pointer gets there.
+// Android has no hover (a tap's emulated mouseenter would pop the reveal up), so there the text
+// wraps to two lines instead (docs/android/11 §6.1).
 export function TruncatedText({ text, className, style, reveal = 'tooltip' }: Props) {
+  const { isAndroid } = usePlatform();
   const ref = useRef<HTMLSpanElement>(null);
   const [tooltip, setTooltip] = useState<{ left: number; top: number } | null>(null);
   const [extended, setExtended] = useState<Extended | null>(null);
@@ -42,7 +46,7 @@ export function TruncatedText({ text, className, style, reveal = 'tooltip' }: Pr
 
   const handleEnter = () => {
     const el = ref.current;
-    if (!el || el.scrollWidth <= el.clientWidth) return; // not actually truncated — nothing to reveal
+    if (isAndroid || !el || el.scrollWidth <= el.clientWidth) return; // not actually truncated — nothing to reveal
     const rect = el.getBoundingClientRect();
     if (reveal === 'extend') {
       const cs = getComputedStyle(el);
@@ -62,7 +66,7 @@ export function TruncatedText({ text, className, style, reveal = 'tooltip' }: Pr
 
   return (
     <>
-      <span ref={ref} className={className} style={style} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+      <span ref={ref} className={`${className ?? ''} ${styles.text}`} style={style} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
         {text}
       </span>
       {tooltip && createPortal(

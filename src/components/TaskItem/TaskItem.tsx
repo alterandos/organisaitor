@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { checklistProgress, linkedListIds } from '@/services/taskListLinks';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import { HoverOptions } from '@/components/HoverOptions/HoverOptions';
@@ -8,16 +8,17 @@ import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { usePlatform } from '@/hooks/usePlatform';
-import { hapticLight } from '@/utils/haptics';
+import { hapticLight, hapticWarning } from '@/utils/haptics';
+import { useSwipeRow } from '@/hooks/useSwipeRow';
+import { archiveTaskWithUndo, deleteTaskWithUndo } from '@/services/undoableActions';
 import { formatDeadline, isOverdue } from '@/utils/date';
 import { hexToRgba } from '@/utils/color';
-import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
 import { openBlockers } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
 import styles from './TaskItem.module.css';
 
-const SWIPE_ACTION_THRESHOLD = 70;
-const SWIPE_DELETE_REVEAL    = 88;
+// Two 80px actions (Archive, Delete) behind the row on a left swipe.
+const SWIPE_LEFT_REVEAL = 160;
 
 const PRIORITY_GRADIENT: Partial<Record<Priority, string>> = {
   low:    'linear-gradient(to left, rgba(34,197,94,0.4),    transparent 24%)',
@@ -52,69 +53,14 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   const clockFormat          = useSettingsStore((s) => s.clockFormat);
   const timezone             = useSettingsStore((s) => s.timezone);
 
-  // Android-only swipe gestures (no desktop equivalent): swipe right toggles complete,
-  // swipe left reveals a delete action (tap to confirm — never auto-delete on release).
-  // Native (non-passive) listeners are required, not React's onTouchMove, since React
-  // attaches touch handlers as passive — e.preventDefault() there is a silent no-op and
-  // the list would keep scrolling underneath a horizontal drag.
+  // Android swipes (docs/android/11 §9): right completes; left slides the row open on Archive
+  // and Delete, which act at once with an Undo toast (decision D2).
   const rowRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ startX: number; startY: number; dx: number; locked: 'h' | 'v' | null } | null>(null);
-  const [swipeX, setSwipeX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [deleteRevealed, setDeleteRevealed] = useState(false);
-
-  useEffect(() => {
-    if (!isAndroid) return;
-    const el = rowRef.current;
-    if (!el) return;
-
-    const onTouchStart = (e: TouchEvent) => {
-      dragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, dx: 0, locked: null };
-      setIsDragging(true);
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      const d = dragRef.current;
-      if (!d) return;
-      const dx = e.touches[0].clientX - d.startX;
-      const dy = e.touches[0].clientY - d.startY;
-      if (d.locked === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-        d.locked = Math.abs(dx) > Math.abs(dy) * 2 ? 'h' : 'v';
-      }
-      if (d.locked === 'h') {
-        e.preventDefault();
-        d.dx = dx;
-        setSwipeX(dx);
-      }
-    };
-    const onTouchEnd = () => {
-      const d = dragRef.current;
-      if (d?.locked === 'h') {
-        if (d.dx > SWIPE_ACTION_THRESHOLD) {
-          hapticLight();
-          void toggleTaskCompletion(task.id);
-          setSwipeX(0);
-          setDeleteRevealed(false);
-        } else if (d.dx < -SWIPE_ACTION_THRESHOLD) {
-          setSwipeX(-SWIPE_DELETE_REVEAL);
-          setDeleteRevealed(true);
-        } else {
-          setSwipeX(0);
-          setDeleteRevealed(false);
-        }
-      }
-      dragRef.current = null;
-      setIsDragging(false);
-    };
-
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd);
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [isAndroid, task.id]);
+  const swipe = useSwipeRow(rowRef, {
+    enabled:      isAndroid,
+    onSwipeRight: () => { hapticLight(); void toggleTaskCompletion(task.id); },
+    leftRevealPx: SWIPE_LEFT_REVEAL,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -155,8 +101,8 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   const canExpand      = (hasDetails || hasSubtasks) && !!onToggleExpand;
   const showDueDate    = alwaysShowDueDate || forceDueDate || task.kind === 'milestone';
 
-  const itemStyle = swipeX
-    ? { ...bgStyle, transform: `translateX(${swipeX}px)`, transition: isDragging ? 'none' : undefined }
+  const itemStyle = swipe.offsetX
+    ? { ...bgStyle, transform: `translateX(${swipe.offsetX}px)`, transition: swipe.dragging ? 'none' : undefined }
     : bgStyle;
 
   const itemEl = (
@@ -164,11 +110,11 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
       ref={rowRef}
       className={`${styles.item} ${task.completed || task.archived ? styles.itemDone : ''} ${blockers.length > 0 ? styles.itemBlocked : ''} ${isOpen ? styles.itemOpen : ''} ${isSubtask ? styles.subtask : ''} ${expanded ? styles.itemExpanded : ''}`}
       style={itemStyle}
-      onClick={(e) => { if (deleteRevealed) { setSwipeX(0); setDeleteRevealed(false); return; } handleRowClick(e); }}
+      onClick={(e) => { if (swipe.revealed) { swipe.close(); return; } handleRowClick(e); }}
     >
       {/* ── Main row ── */}
       <div className={styles.itemRow}>
-        <HoverOptions options={isAndroid ? [] : taskCompletionOptions(task.id)}>
+        <HoverOptions options={taskCompletionOptions(task.id)}>
           <button
             className={`${styles.checkbox} ${task.completed ? styles.checkboxDone : ''}`}
             onClick={(e) => { e.stopPropagation(); void toggleTaskCompletion(task.id); }}
@@ -308,17 +254,20 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
 
   return (
     <div className={styles.swipeWrapper}>
-      <button
-        className={styles.swipeDeleteAction}
-        style={{ opacity: deleteRevealed ? 1 : 0, pointerEvents: deleteRevealed ? 'auto' : 'none' }}
-        onClick={(e) => {
-          e.stopPropagation();
-          deleteTaskWithCleanup(task.id);
-        }}
-        aria-label="Delete task"
-      >
-        Delete
-      </button>
+      <div className={`${styles.swipeActions} ${swipe.offsetX < 0 ? styles.swipeActionsShown : ''} ${swipe.revealed ? styles.swipeActionsLive : ''}`}>
+        <button
+          className={styles.swipeArchiveAction}
+          onClick={(e) => { e.stopPropagation(); swipe.close(); archiveTaskWithUndo(task.id); }}
+        >
+          {LABELS.swipeActions.archive}
+        </button>
+        <button
+          className={styles.swipeDeleteAction}
+          onClick={(e) => { e.stopPropagation(); hapticWarning(); deleteTaskWithUndo(task.id); }}
+        >
+          {LABELS.swipeActions.delete}
+        </button>
+      </div>
       {itemEl}
     </div>
   );

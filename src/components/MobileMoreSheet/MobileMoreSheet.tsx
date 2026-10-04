@@ -1,11 +1,8 @@
-import { useRef, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { isAppEnabled } from '@/config/apps';
 import styles from './MobileMoreSheet.module.css';
-import { useEscapeClose } from '@/hooks/useEscapeClose';
-
-const DISMISS_THRESHOLD_PX = 80;
+import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 
 // Android-only bottom sheet for the overflow of MobileNav's 4-tab bar. Notes/Portfolio/
 // Fitness live here regardless of monetization tier (docs/android/00-architecture.md §5b) —
@@ -20,77 +17,40 @@ export function MobileMoreSheet() {
   const openSettings    = useUIStore((s) => s.openSettings);
   const openAccount     = useUIStore((s) => s.openAccount);
 
-  const [dragY, setDragY] = useState(0);
-  const dragStateRef = useRef<{ startY: number; dragging: boolean } | null>(null);
-
-  useEscapeClose(close, isOpen);
-
   if (!isOpen) return null;
 
   const go = (fn: () => void) => { fn(); close(); };
 
-  const handleHandleTouchStart = (e: React.TouchEvent) => {
-    dragStateRef.current = { startY: e.touches[0].clientY, dragging: true };
-  };
-  const handleHandleTouchMove = (e: React.TouchEvent) => {
-    const state = dragStateRef.current;
-    if (!state?.dragging) return;
-    const dy = e.touches[0].clientY - state.startY;
-    if (dy > 0) setDragY(dy);
-  };
-  const handleHandleTouchEnd = () => {
-    if (dragY > DISMISS_THRESHOLD_PX) close();
-    else setDragY(0);
-    dragStateRef.current = null;
-  };
-
   return (
-    <div
-      className={styles.overlay}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}
-    >
-      <div
-        className={styles.sheet}
-        style={dragY ? { transform: `translateY(${dragY}px)`, transition: 'none' } : undefined}
-      >
-        <div
-          className={styles.handleArea}
-          onTouchStart={handleHandleTouchStart}
-          onTouchMove={handleHandleTouchMove}
-          onTouchEnd={handleHandleTouchEnd}
-        >
-          <div className={styles.handle} />
-        </div>
+    <BottomSheet onClose={close} ariaLabel="More">
+      <button className={styles.item} onClick={() => go(() => setActiveView('overview'))}>
+        {LABELS.views.overview}
+      </button>
+      <button className={styles.item} onClick={() => go(() => setActiveView('notes'))}>
+        {LABELS.views.notes}
+      </button>
+      {isAppEnabled('portfolio') && (
+        <button className={styles.item} onClick={() => go(() => setActiveView('portfolio'))}>
+          {LABELS.views.portfolio}
+        </button>
+      )}
+      {isAppEnabled('fitness') && (
+        <button className={styles.item} onClick={() => go(() => setActiveView('fitness'))}>
+          {LABELS.views.fitness}
+        </button>
+      )}
 
-        <button className={styles.item} onClick={() => go(() => setActiveView('overview'))}>
-          {LABELS.views.overview}
-        </button>
-        <button className={styles.item} onClick={() => go(() => setActiveView('notes'))}>
-          {LABELS.views.notes}
-        </button>
-        {isAppEnabled('portfolio') && (
-          <button className={styles.item} onClick={() => go(() => setActiveView('portfolio'))}>
-            {LABELS.views.portfolio}
-          </button>
-        )}
-        {isAppEnabled('fitness') && (
-          <button className={styles.item} onClick={() => go(() => setActiveView('fitness'))}>
-            {LABELS.views.fitness}
-          </button>
-        )}
+      <div className={styles.divider} />
 
-        <div className={styles.divider} />
-
-        <button className={styles.item} onClick={() => go(() => openManage())}>
-          Manage Library
-        </button>
-        <button className={styles.item} onClick={() => go(openSettings)}>
-          Settings
-        </button>
-        <button className={styles.item} onClick={() => go(openAccount)}>
-          Account
-        </button>
-      </div>
-    </div>
+      <button className={styles.item} onClick={() => go(() => openManage())}>
+        Manage Library
+      </button>
+      <button className={styles.item} onClick={() => go(openSettings)}>
+        Settings
+      </button>
+      <button className={styles.item} onClick={() => go(openAccount)}>
+        Account
+      </button>
+    </BottomSheet>
   );
 }

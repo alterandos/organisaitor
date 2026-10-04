@@ -20,9 +20,15 @@
   animation: toastIn 0.18s ease-out;
 }
 
-/* Clear of the Android bottom tab bar. */
+/* Clear of the narrow-browser bottom nav bar. */
 @media (max-width: 519px) {
   .toast { bottom: calc(5rem + env(safe-area-inset-bottom)); }
+}
+
+/* Android: above MobileNav and, in Tasks, MobileQuickAddBar. Each bar publishes its own height
+   (--mobile-nav-h in MobileNav's CSS, --quick-add-h measured by MobileQuickAddBar while shown). */
+:global(.platform-android) .toast {
+  bottom: calc(var(--mobile-nav-h, 0px) + var(--quick-add-h, 0px) + 0.75rem + env(safe-area-inset-bottom));
 }
 
 @keyframes toastIn {

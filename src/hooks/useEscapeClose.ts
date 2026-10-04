@@ -33,6 +33,15 @@ function onKeyDown(e: KeyboardEvent) {
   top.handler.current();
 }
 
+// The Android back button (App.tsx) uses the same stack: back closes exactly what Escape would.
+// Returns whether there was an overlay to close.
+export function closeTopOverlay(): boolean {
+  const top = stack[stack.length - 1];
+  if (!top) return false;
+  top.handler.current();
+  return true;
+}
+
 // Installed at module load — before any component mounts — so it runs ahead of listeners that
 // components add to `document` later.
 if (typeof document !== 'undefined') document.addEventListener('keydown', onKeyDown);

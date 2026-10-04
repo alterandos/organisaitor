@@ -80,7 +80,8 @@ import { EditNoteMetaModal } from '@/components/EditNoteMetaModal/EditNoteMetaMo
 import { NoteEditorPane } from '@/components/NoteEditorPane/NoteEditorPane';
 import { useNotificationChecker } from '@/hooks/useNotificationChecker';
 import { useTaskStore } from '@/store/taskStore';
-import { useUIStore, selectActiveCollectionId, closeTopmostMobileOverlay } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
+import { closeTopOverlay } from '@/hooks/useEscapeClose';
 import { useSettingsStore } from '@/store/settingsStore';
 import { hexToRgba } from '@/utils/color';
 import { getOrderedEndeavours } from '@/utils/collections';
@@ -201,10 +202,11 @@ export default function App() {
   useEffect(() => {
     if (!isAndroid) return;
     const handle = CapApp.addListener('backButton', () => {
-      if (closeTopmostMobileOverlay()) return;
-      const { mobileBackConsumer, sectionHistory, navigateBack } = useUIStore.getState();
+      // Back = Escape: the newest overlay first, then the screen's own back, then history.
+      if (closeTopOverlay()) return;
+      const { mobileBackConsumer, navigateBack } = useUIStore.getState();
       if (mobileBackConsumer?.()) return;
-      if (sectionHistory.length > 0) { navigateBack(); return; }
+      if (navigateBack()) return;
       void CapApp.minimizeApp();
     });
     return () => { void handle.then((l) => l.remove()); };

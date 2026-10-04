@@ -9,6 +9,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
 import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowAction } from '@/components/RowHoverActions/RowAction';
 import type { Collection, Tag, Purpose } from '@/types';
 
 interface Props {
@@ -30,14 +31,14 @@ function SidebarCollectionRow({ col, onEdit, onDelete }: { col: Collection; onEd
         <TruncatedText text={col.name} className={styles.name} />
       </div>
       <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
-        <button
+        <RowAction
           className={styles.iconBtn}
+          icon="◔"
+          label={LABELS.overview.endeavourTitle(col.name)}
           onClick={() => useUIStore.getState().openEndeavourOverview(col.id)}
-          aria-label={LABELS.overview.endeavourTitle(col.name)}
-          title={LABELS.overview.endeavourTitle(col.name)}
-        >◔</button>
-        <button className={styles.iconBtn} onClick={onEdit} aria-label={`Edit ${col.name}`} title="Edit">✎</button>
-        <button className={`${styles.iconBtn} ${styles.deleteIconBtn}`} onClick={onDelete} aria-label={`Delete ${col.name}`} title="Delete">×</button>
+        />
+        <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
+        <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon="×" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowHoverActionsMenu>
     </div>
   );
@@ -57,8 +58,8 @@ function SidebarTagRow({ tag, isActive, onToggle, onEdit, onDelete }: { tag: Tag
         <TruncatedText text={tag.name} className={styles.name} />
       </button>
       <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
-        <button className={styles.iconBtn} onClick={onEdit} aria-label={`Edit ${tag.name}`} title="Edit">✎</button>
-        <button className={`${styles.iconBtn} ${styles.deleteIconBtn}`} onClick={onDelete} aria-label={`Delete ${tag.name}`} title="Delete">×</button>
+        <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
+        <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon="×" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowHoverActionsMenu>
     </div>
   );
@@ -73,8 +74,8 @@ function SidebarPurposeRow({ purpose, onEdit, onDelete }: { purpose: Purpose; on
         <TruncatedText text={purpose.name} className={styles.name} />
       </div>
       <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
-        <button className={styles.iconBtn} onClick={onEdit} aria-label={`Edit ${purpose.name}`} title="Edit">✎</button>
-        <button className={`${styles.iconBtn} ${styles.deleteIconBtn}`} onClick={onDelete} aria-label={`Delete ${purpose.name}`} title="Delete">×</button>
+        <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
+        <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon="×" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowHoverActionsMenu>
     </div>
   );

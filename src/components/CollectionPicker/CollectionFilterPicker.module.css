@@ -148,36 +148,5 @@
 }
 .sheetTriggerActive { color: var(--color-primary); }
 
-.sheetOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 31;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.sheetPanel {
-  background: var(--color-surface);
-  width: 100%;
-  max-height: 70vh;
-  overflow-y: auto;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  box-shadow: 0 -4px 28px rgba(0, 0, 0, 0.14);
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.sheetHeader {
-  padding: 1rem 1rem 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-muted);
-}
-
-.sheetList {
-  padding: 0 0.5rem 0.5rem;
-}
-.sheetList .item { min-height: 44px; font-size: 0.95rem; }
+/* Inside a BottomSheet (which supplies the overlay, grabber, title and 44px rows). */
+.sheetList .item { font-size: 0.95rem; }

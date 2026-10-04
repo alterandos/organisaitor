@@ -1,0 +1,69 @@
+/* z-index 1020: a sheet can open from inside any pane or modal (≤1000), so it sits above them,
+   and below the toast (1050) and the confirm dialog (1100) that an action in it may raise. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1020;
+  background: var(--color-backdrop);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-lg);
+  padding-bottom: env(safe-area-inset-bottom);
+  transition: transform 180ms ease;
+  animation: sheetIn 180ms ease-out;
+}
+
+@keyframes sheetIn {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.grabberArea {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0.6rem 0 0.4rem;
+  touch-action: none;
+}
+
+.grabber {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-border);
+}
+
+.title {
+  flex-shrink: 0;
+  padding: 0.25rem 1rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.body {
+  overflow-y: auto;
+  padding: 0 0.5rem 0.75rem;
+}
+
+/* Rows inside a sheet are at least 44px tall (docs/android/11 §10.1). */
+.body :where(button, [role='option'], a) {
+  min-height: 44px;
+}

@@ -19,8 +19,9 @@ import type { Activity, ActivityType } from '@/types/fitness';
 
 // The restore half of the suite-wide Recycling Bin (see services/trashCapture.ts for the
 // write half, called from the stores). This file imports every domain store to write a
-// restored snapshot back — it is imported ONLY by RecyclingBinPane, never by a store, so
-// there's no import cycle (a domain store never needs to know how to restore anything).
+// restored snapshot back, so it is never imported by a store or by trashCapture.ts (that would
+// be an import cycle; a domain store never needs to know how to restore anything). UI and
+// services may use it: RecyclingBinPane, and the Undo of a swipe-delete (services/undoableActions.ts).
 
 interface RestoreTarget { has: (id: string) => boolean; put: (snapshot: unknown) => void }
 
@@ -148,6 +149,22 @@ export function restoreFromTrash(entryId: TrashEntryId): boolean {
 
   useTrashStore.getState().removeEntry(entryId);
   return true;
+}
+
+// Runs a delete and returns the ids of the Recycling Bin entries it created, oldest first. A
+// cascade makes several (a task's sub-tasks and its calendar entries go with it), and an Undo
+// has to bring back all of them, not just the item the user deleted.
+export function trashedBy(run: () => void): TrashEntryId[] {
+  const before = new Set(Object.keys(useTrashStore.getState().entries));
+  run();
+  return (Object.keys(useTrashStore.getState().entries) as TrashEntryId[]).filter((id) => !before.has(id));
+}
+
+// Restores what trashedBy reported, newest first: a cascade trashes children before their
+// parent, so the parent is back before its sub-tasks look for it (restoreFromTrash re-attaches
+// a sub-task only if its parent exists).
+export function restoreAllFromTrash(entryIds: TrashEntryId[]): void {
+  for (const id of [...entryIds].reverse()) restoreFromTrash(id);
 }
 
 // The entity is already gone from its domain store (it was removed at delete time) — this

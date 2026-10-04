@@ -11,6 +11,7 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
 import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowAction } from '@/components/RowHoverActions/RowAction';
 
 function formatFieldValue(schema: FieldSchema, value: unknown): string {
   if (value === undefined || value === null || value === '') return '—';
@@ -229,9 +230,9 @@ function TrackerSidebarRow({
         {item.color && <span className={styles.trackerDot} style={{ background: item.color }} />}
         <TruncatedText text={item.name} className={styles.trackerName} />
       </button>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
-        <button className={styles.trackerActionBtn} onClick={(e) => { e.stopPropagation(); onEdit(); }} title={editTitle}>✎</button>
-        <button className={`${styles.trackerActionBtn} ${styles.trackerActionBtnDelete}`} onClick={(e) => { e.stopPropagation(); onDelete(); }} title={deleteTitle}>✕</button>
+      <RowHoverActionsMenu anchorRef={anchorRef} open={open} title={item.name} {...menuHandlers}>
+        <RowAction className={styles.trackerActionBtn} icon="✎" label={editTitle} onClick={onEdit} />
+        <RowAction className={`${styles.trackerActionBtn} ${styles.trackerActionBtnDelete}`} icon="✕" label={deleteTitle} onClick={onDelete} destructive />
       </RowHoverActionsMenu>
     </div>
   );
@@ -299,8 +300,8 @@ export function RecordsView() {
                   onSelect={() => setActiveTracker(t.id)}
                   onEdit={() => openEditTracker(t.id)}
                   onDelete={() => handleDeleteTracker(t.id, t.name)}
-                  editTitle="Edit tracker"
-                  deleteTitle="Delete tracker"
+                  editTitle={LABELS.rowActions.editThing(LABELS.tracker)}
+                  deleteTitle={LABELS.rowActions.deleteThing(LABELS.tracker)}
                 />
               </li>
             ))}
@@ -325,8 +326,8 @@ export function RecordsView() {
                   onSelect={() => setActiveRoutine(r.id)}
                   onEdit={() => openEditRoutine(r.id)}
                   onDelete={() => handleDeleteRoutine(r.id, r.name)}
-                  editTitle="Edit routine"
-                  deleteTitle="Delete routine"
+                  editTitle={LABELS.rowActions.editThing(LABELS.routine)}
+                  deleteTitle={LABELS.rowActions.deleteThing(LABELS.routine)}
                 />
               </li>
             ))}
