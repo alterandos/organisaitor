@@ -6,6 +6,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import type { TaskId, CalendarEventId, CalendarReminderId } from '@/types';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { zonedTimeToUtc, resolveTimezone } from '@/utils/timezone';
 import styles from './NotificationCenter.module.css';
 
@@ -182,6 +183,8 @@ export function NotificationCenter() {
   const clearAll  = useNotificationStore((s) => s.clearAll);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEscapeClose(() => setOpen(false), open);
 
   // Close on outside click
   useEffect(() => {

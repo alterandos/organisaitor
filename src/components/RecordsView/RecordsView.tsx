@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useRoutineStore } from '@/store/routineStore';
@@ -9,8 +10,7 @@ import styles from './RecordsView.module.css';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
-import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
-import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 
 function formatFieldValue(schema: FieldSchema, value: unknown): string {
@@ -208,9 +208,9 @@ function RoutineDetail({ routine }: RoutineDetailProps) {
   );
 }
 
-// Its own component (not inline JSX inside the sidebar's .map()) because useRowHoverActions
-// is a hook — has to be called once per row instance, not once per iteration of a shared
-// parent's render. Shared by both the tracker and routine sidebar lists below — same row
+// Its own component (not inline JSX inside the sidebar's .map()) because it holds
+// a ref for its RowOptionsMenu — a hook, called once per row instance, not once per iteration
+// of a shared parent's render. Shared by both the tracker and routine sidebar lists below — same row
 // shape either way.
 function TrackerSidebarRow({
   item, active, onSelect, onEdit, onDelete, editTitle, deleteTitle,
@@ -223,17 +223,16 @@ function TrackerSidebarRow({
   editTitle: string;
   deleteTitle: string;
 }) {
-  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   return (
-    <div ref={anchorRef} className={`${styles.trackerItem} ${active ? styles.trackerItemActive : ''}`} {...rowHandlers}>
-      <button className={styles.trackerSelectBtn} onClick={onSelect}>
-        {item.color && <span className={styles.trackerDot} style={{ background: item.color }} />}
-        <TruncatedText text={item.name} className={styles.trackerName} />
-      </button>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} title={item.name} {...menuHandlers}>
+    <div ref={rowRef} className={`${styles.trackerItem} ${active ? styles.trackerItemActive : ''}`}>
+      <RowOptionsMenu rowRef={rowRef} title={item.name} icon={item.color && <span className={styles.trackerDot} style={{ background: item.color }} />}>
         <RowAction className={styles.trackerActionBtn} icon="✎" label={editTitle} onClick={onEdit} />
         <RowAction className={`${styles.trackerActionBtn} ${styles.trackerActionBtnDelete}`} icon="✕" label={deleteTitle} onClick={onDelete} destructive />
-      </RowHoverActionsMenu>
+      </RowOptionsMenu>
+      <button className={styles.trackerSelectBtn} onClick={onSelect}>
+        <TruncatedText text={item.name} className={styles.trackerName} />
+      </button>
     </div>
   );
 }

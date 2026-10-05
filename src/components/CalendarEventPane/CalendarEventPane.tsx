@@ -466,11 +466,6 @@ export function CalendarEventPane() {
           </div>
 
           <div className={styles.field}>
-            <span className={styles.label}>Links</span>
-            <LinksField links={event.links ?? []} onChange={(next) => updateEvent(id, { links: next })} />
-          </div>
-
-          <div className={styles.field}>
             <span className={styles.label}>Linked items</span>
             <CrossAppRefPicker
               value={event.crossAppRefs ?? []}

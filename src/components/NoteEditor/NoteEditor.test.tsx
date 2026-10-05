@@ -30,6 +30,7 @@ const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMR
 Range.prototype.getClientRects = noRects;
 Range.prototype.getBoundingClientRect = () => new DOMRect();
 Element.prototype.getClientRects = noRects;
+document.elementFromPoint = () => null;
 
 const editorText = () => document.querySelector('.ProseMirror')?.textContent ?? '';
 const stored = (id: string) => useNoteStore.getState().notes[id as NoteId];
@@ -103,5 +104,79 @@ describe('NoteEditor tab restore on note switch', () => {
     await userEvent.click(screen.getByText('Main'));
     expect(stored('note-a').tabs[0].content).toContain('TAB2-A');
     expect(stored('note-a').content).toContain('MAIN-A');
+  });
+});
+
+// Ctrl+H then H puts the cursor in the tab's Title, creating it from the tab's name (the note's title, on Main). Reported broken
+// 2026-10-05: with Ctrl still held for the H, the second press read as a fresh Ctrl+H and did nothing.
+describe('NoteEditor Ctrl+H, H inserts the Title', () => {
+  const titleText = () => document.querySelector('[data-note-title]')?.textContent ?? null;
+
+  async function openFocused() {
+    useUIStore.setState({ activeView: 'notes', editingNoteId: 'note-b' });
+    render(<StrictMode><NoteEditor /></StrictMode>);
+    await userEvent.click(document.querySelector('.ProseMirror') as HTMLElement);
+  }
+
+  it('Ctrl held for both presses', async () => {
+    await openFocused();
+    await userEvent.keyboard('{Control>}hh{/Control}');
+    expect(titleText()).toBe('note-b');
+  });
+
+  it('Ctrl released before the H', async () => {
+    await openFocused();
+    await userEvent.keyboard('{Control>}h{/Control}h');
+    expect(titleText()).toBe('note-b');
+  });
+});
+
+// Paste as plain text (Ctrl+Shift+V, 2026-10-05): ProseMirror's own Shift-paste, which our
+// handlePaste must not turn back into a table.
+describe('NoteEditor paste as plain text', () => {
+  function paste(data: Record<string, string>) {
+    const pm = document.querySelector('.ProseMirror') as HTMLElement;
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', {
+      value: { getData: (type: string) => data[type] ?? '', types: Object.keys(data), files: [] },
+    });
+    act(() => { pm.dispatchEvent(event); });
+  }
+  const pressCtrlShiftV = () => {
+    const pm = document.querySelector('.ProseMirror') as HTMLElement;
+    act(() => { pm.dispatchEvent(new KeyboardEvent('keydown', { key: 'V', ctrlKey: true, shiftKey: true, bubbles: true })); });
+  };
+  const html = '<p>Hello <strong>bold</strong> <a href="https://x.test">link</a></p>';
+
+  async function openFocused() {
+    useUIStore.setState({ activeView: 'notes', editingNoteId: 'note-b' });
+    render(<StrictMode><NoteEditor /></StrictMode>);
+    await userEvent.click(document.querySelector('.ProseMirror') as HTMLElement);
+  }
+
+  it('a normal paste keeps the source formatting', async () => {
+    await openFocused();
+    paste({ 'text/html': html, 'text/plain': 'Hello bold link' });
+    expect(document.querySelector('.ProseMirror strong')).not.toBeNull();
+    expect(document.querySelector('.ProseMirror a[href]')).not.toBeNull();
+  });
+
+  it('Ctrl+Shift+V pastes the text only', async () => {
+    await openFocused();
+    pressCtrlShiftV();
+    paste({ 'text/html': html, 'text/plain': 'Hello bold link' });
+    expect(editorText()).toContain('Hello bold link');
+    expect(document.querySelector('.ProseMirror strong')).toBeNull();
+    expect(document.querySelector('.ProseMirror a[href]')).toBeNull();
+  });
+
+  it('tab-separated text becomes a table on a normal paste, but stays text on Ctrl+Shift+V', async () => {
+    const tsv = 'a\tb\nc\td';
+    await openFocused();
+    pressCtrlShiftV();
+    paste({ 'text/plain': tsv });
+    expect(document.querySelector('.ProseMirror table')).toBeNull();
+    paste({ 'text/plain': tsv });
+    expect(document.querySelector('.ProseMirror table')).not.toBeNull();
   });
 });

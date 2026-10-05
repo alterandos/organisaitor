@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { usePlatform } from '@/hooks/usePlatform';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { todayIso } from '@/utils/date';
 import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
@@ -83,6 +84,8 @@ export function AddTaskButton() {
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEscapeClose(() => setOpen(false), open);
 
   useEffect(() => {
     if (!open) return;

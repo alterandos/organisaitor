@@ -10,6 +10,7 @@ import type { NoteTagId, CollectionId } from '@/types';
 import styles from './AddNoteModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { CreateKindSwitcher } from '@/components/CreateKindSwitcher/CreateKindSwitcher';
 
 export function AddNoteModal() {
   const closeModal        = useUIStore((s) => s.closeModal);
@@ -23,7 +24,7 @@ export function AddNoteModal() {
   const collectionsRecord = useTaskStore((s) => s.collections);
   const allCollections = Object.values(collectionsRecord);
 
-  const [title, setTitle]             = useState('');
+  const [title, setTitle]             = useState(() => useUIStore.getState().createDraft ?? '');
   const [selectedTagIds, setSelectedTagIds] = useState<NoteTagId[]>(() => selectedNoteTagId ? [selectedNoteTagId] : []);
   const [showTagPicker, setShowTagPicker]   = useState(false);
   const [tagPickerPath, setTagPickerPath]   = useState<NoteTagId[]>([]);
@@ -88,6 +89,7 @@ export function AddNoteModal() {
   return (
     <div className={styles.overlay} onClick={closeModal}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <CreateKindSwitcher current="note" draft={title} />
         <div className={styles.header}>
           <h2>Add Note</h2>
           <button className={styles.closeBtn} onClick={closeModal}>✕</button>

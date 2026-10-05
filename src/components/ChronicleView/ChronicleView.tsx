@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import type { RefObject } from 'react';
 import { useNoteStore } from '@/store/noteStore';
-import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId, type NotesColumn } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon } from '@/utils/notes';
 import type { NoteTagId, CollectionId } from '@/types';
@@ -10,8 +10,7 @@ import { NoteList } from './NoteList';
 import { NotebookLocationView } from './NotebookLocationView';
 import { NoteEditor } from '../NoteEditor/NoteEditor';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
-import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
-import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import styles from './ChronicleView.module.css';
 import { LABELS } from '@/config/labels';
@@ -19,8 +18,8 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 
 // ── Column order — extend here to add new panels in future ────────────────
 
-const COLUMNS = ['tree', 'list', 'editor'] as const;
-type ColId = (typeof COLUMNS)[number];
+const COLUMNS: readonly NotesColumn[] = ['tree', 'list', 'editor'];
+type ColId = NotesColumn;
 
 // ── Panel resize (drag the divider between panels) ─────────────────────────
 
@@ -219,12 +218,12 @@ function NoteTagTreeNode({
   const isDropInside = dragOverInfo?.tagId === tag.id && dragOverInfo.zone === 'inside';
   const isDropAfter  = dragOverInfo?.tagId === tag.id && dragOverInfo.zone === 'after';
 
-  const { anchorRef, open: actionsOpen, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   // Opening a note selects its notebook and expands the ancestors (uiStore.openNote), but in a long
   // tree the row can still be off-screen — bring it into view. 'nearest' leaves a visible row alone.
   useEffect(() => {
-    if (isSelected) anchorRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [isSelected, anchorRef]);
+    if (isSelected) rowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [isSelected]);
 
   return (
     <div
@@ -233,7 +232,7 @@ function NoteTagTreeNode({
       onMouseLeave={handleMouseLeave}
     >
       <div
-        ref={anchorRef}
+        ref={rowRef}
         className={[
           styles.treeNode,
           isSelected ? styles.treeNodeSelected : '',
@@ -244,7 +243,6 @@ function NoteTagTreeNode({
           isDropAfter ? styles.treeNodeDropAfter : '',
         ].filter(Boolean).join(' ')}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
-        {...rowHandlers}
         draggable
         onDragStart={(e) => {
           onDragStartTag(tag.id as NoteTagId);
@@ -296,24 +294,7 @@ function NoteTagTreeNode({
             : <span className={styles.togglePlaceholder} />}
         </button>
 
-        <button
-          className={styles.nodeContent}
-          onClick={() => {
-            setSelected(tag.id as NoteTagId);
-            if (hasChildren && !isPermanentlyExpanded) toggleExpanded(tag.id as NoteTagId);
-          }}
-        >
-          <span className={styles.nodeIcon}>{getNotebookIcon(tag, noteTags, notes)}</span>
-          <TruncatedText
-            text={tag.name}
-            className={styles.nodeName}
-            style={tag.color ? { color: isSelected ? tag.color : undefined } : undefined}
-            reveal="extend"
-          />
-          {noteCount > 0 && <span className={styles.nodeCount}>{noteCount}</span>}
-        </button>
-
-        <RowHoverActionsMenu anchorRef={anchorRef} open={actionsOpen} title={tag.name} {...menuHandlers}>
+        <RowOptionsMenu rowRef={rowRef} title={tag.name} icon={<span className={styles.nodeIcon}>{getNotebookIcon(tag, noteTags, notes)}</span>}>
           {canIndent && (
             <RowAction className={styles.nodeActionBtn} icon="↳" label={LABELS.rowActions.indent} onClick={() => indentNoteTag(tag.id as NoteTagId)} />
           )}
@@ -323,7 +304,23 @@ function NoteTagTreeNode({
           <RowAction className={styles.nodeActionBtn} icon="+" label={LABELS.rowActions.addSection} onClick={() => showAddNoteTag(tag.id as NoteTagId)} />
           <RowAction className={styles.nodeActionBtn} icon="✎" label={LABELS.rowActions.edit} onClick={() => openEditNoteTag(tag.id)} />
           <RowAction className={`${styles.nodeActionBtn} ${styles.nodeActionDelete}`} icon="×" label={LABELS.rowActions.delete} onClick={handleDelete} destructive />
-        </RowHoverActionsMenu>
+        </RowOptionsMenu>
+        <button
+          className={styles.nodeContent}
+          onClick={() => {
+            setSelected(tag.id as NoteTagId);
+            if (hasChildren && !isPermanentlyExpanded) toggleExpanded(tag.id as NoteTagId);
+          }}
+        >
+          <TruncatedText
+            text={tag.name}
+            className={styles.nodeName}
+            style={tag.color ? { color: isSelected ? tag.color : undefined } : undefined}
+            reveal="extend"
+          />
+          {noteCount > 0 && <span className={styles.nodeCount}>{noteCount}</span>}
+        </button>
+
       </div>
 
       {isExpanded && hasChildren && (
@@ -430,10 +427,10 @@ export function ChronicleView() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keyboard navigation — which column has focus
-  const [focusedCol, setFocusedCol] = useState<ColId>('tree');
-  const focusedColRef = useRef<ColId>('tree');
-  focusedColRef.current = focusedCol;
+  // Keyboard navigation — which column has focus. In uiStore so N/Space can create the right
+  // thing for the column you're in (a notebook in the tree, a note elsewhere).
+  const focusedCol    = useUIStore((s) => s.notesFocusedColumn);
+  const setFocusedCol = useUIStore((s) => s.setNotesFocusedColumn);
 
   // Signal to focus the Tiptap editor (incremented each time we enter the editor column)
   const [editorFocusSignal, setEditorFocusSignal] = useState(0);
@@ -453,11 +450,25 @@ export function ChronicleView() {
   // "adjust state while rendering" pattern) so the very first render (opening Notes, or
   // restoring the last-open note on load) doesn't steal focus nobody asked for: only a real
   // change from the previously-rendered id counts as "a switch."
+  // Except a note opened by the arrow keys (Up/Down in the notes column, or Right from the tree
+  // seeding the first note): the keyboard stays in the nav columns until Right (or Ctrl+`) is
+  // pressed again, so Up/Down keep moving through the notes (asked for 2026-10-05).
+  const [kbOpenedNoteId, setKbOpenedNoteId] = useState<string | null>(null);
   const [prevEditingNoteIdForFocus, setPrevEditingNoteIdForFocus] = useState(editingNoteId);
   if (editingNoteId !== prevEditingNoteIdForFocus) {
     setPrevEditingNoteIdForFocus(editingNoteId);
-    if (editingNoteId) setEditorFocusSignal((s) => s + 1);
+    if (editingNoteId && editingNoteId !== kbOpenedNoteId) setEditorFocusSignal((s) => s + 1);
+    else if (kbOpenedNoteId) setKbOpenedNoteId(null);
   }
+  // Opening a note by keyboard also zeroes the focus signal: NoteEditor focuses on any non-zero
+  // signal when it mounts (no note was open before), and a stale count would do exactly that.
+  const openNoteFromKeyboard = (id: string) => {
+    setKbOpenedNoteId(id);
+    setEditorFocusSignal(0);
+    useUIStore.getState().openNote(id);
+  };
+  const openNoteFromKeyboardRef = useRef(openNoteFromKeyboard);
+  useEffect(() => { openNoteFromKeyboardRef.current = openNoteFromKeyboard; });
 
   // When an Endeavour is focused (header dropdown), only show notebooks that belong to
   // it — plus their ancestors, so the tree stays navigable down to them.
@@ -479,7 +490,7 @@ export function ChronicleView() {
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.contentEditable === 'true')) return;
 
-      const col = focusedColRef.current;
+      const col = uiState.notesFocusedColumn;
       const noteState = useNoteStore.getState();
       const activeCollection = selectActiveCollectionId(uiState) as CollectionId | null;
       const visible = activeCollection ? getVisibleNoteTagIds(noteState.noteTags, activeCollection) : null;
@@ -491,7 +502,7 @@ export function ChronicleView() {
         if (col !== 'editor') {
           lastNavColRef.current = col as Exclude<ColId, 'editor'>;
           setEditorFocusSignal((s) => s + 1);
-          setFocusedCol('editor');
+          uiState.setNotesFocusedColumn('editor');
         }
         return;
       }
@@ -517,7 +528,7 @@ export function ChronicleView() {
           const idx = ns.findIndex((n) => n.id === uiState.editingNoteId);
           // If nothing is selected yet, start at the appropriate end
           const startIdx = idx === -1 ? (dir === 1 ? 0 : ns.length - 1) : Math.max(0, Math.min(ns.length - 1, idx + dir));
-          uiState.openNote(ns[startIdx].id);
+          openNoteFromKeyboardRef.current(ns[startIdx].id);
         }
         // editor column: arrow keys belong to Tiptap, don't intercept
         return;
@@ -544,7 +555,7 @@ export function ChronicleView() {
           }
           // Seed the list with the first note if nothing is open
           const ns = getTopLevelNotes(noteState.notes, noteState.noteTags, tagId, activeCollection);
-          if (ns.length > 0 && !uiState.editingNoteId) uiState.openNote(ns[0].id);
+          if (ns.length > 0 && !uiState.editingNoteId) openNoteFromKeyboardRef.current(ns[0].id);
         }
 
         const nextCol = COLUMNS[colIdx + 1];
@@ -555,7 +566,7 @@ export function ChronicleView() {
             // Signal NoteEditor to grab keyboard focus
             setEditorFocusSignal((s) => s + 1);
           }
-          setFocusedCol(nextCol);
+          uiState.setNotesFocusedColumn(nextCol);
         }
         return;
       }
@@ -575,14 +586,14 @@ export function ChronicleView() {
         }
 
         const prevCol = COLUMNS[colIdx - 1];
-        if (prevCol) setFocusedCol(prevCol);
+        if (prevCol) uiState.setNotesFocusedColumn(prevCol);
         return;
       }
     };
 
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []); // empty deps — all state read via getState(), focusedCol via ref
+  }, []); // empty deps — all state (focused column included) read via getState()
 
   return (
     <div className={styles.container}>

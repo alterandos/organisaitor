@@ -12,7 +12,23 @@ import { getStructuredTagType } from '@/config/structuredTagTypes';
 import styles from './FloatingToolbar.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 
+// What the toolbar can be asked to open from outside its own hotkeys (NoteEditor's right-click
+// menu): the same functions Ctrl+L and Ctrl+Q call.
+export interface FloatingToolbarActions {
+  openLinkInput:  () => void;
+  openCreateMenu: () => void;
+}
+
+// Where the toolbar sits for the current selection (above its middle), or null if there's no box.
+function selectionAnchor(): { top: number; left: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const rect = sel.getRangeAt(0).getBoundingClientRect();
+  return rect.width ? { top: rect.top - 50, left: rect.left + rect.width / 2 } : null;
+}
+
 interface Props {
+  actionsRef?: React.MutableRefObject<FloatingToolbarActions | null>;
   editor: Editor;
   noteId: string;
   // The tab the selection is in, in CrossAppRef.tabId form (undefined for a note without extra tabs).
@@ -62,7 +78,7 @@ const CREATE_MENU_OPTIONS: CreateMenuOption[] = [
   { type: 'trackerEntry',label: 'Tracker entry',    icon: '📊', enabled: false },
 ];
 
-export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag }: Props) {
+export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag, actionsRef }: Props) {
   const [pos, setPos]           = useState<ToolbarPos | null>(null);
   const [showTags, setShowTags] = useState(false);
   const [search, setSearch]     = useState('');
@@ -139,43 +155,49 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag 
   // Ctrl+L (selection non-empty): turn the selected text into a link. The
   // no-selection case is handled separately in NoteEditor (there's no text run to
   // anchor this floating toolbar to, so it uses its own small "New link" pane instead).
+  const openLinkInput = useCallback(() => {
+    const anchor = selectionAnchor();
+    if (anchor) setPos(anchor);
+    setLinkUrl((editor.getAttributes('link').href as string) ?? '');
+    setShowLinkInput(true);
+  }, [editor]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'l') return;
       if (!editor.isFocused || editor.state.selection.empty) return;
       e.preventDefault();
       e.stopPropagation();
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const rect = sel.getRangeAt(0).getBoundingClientRect();
-        if (rect.width) setPos({ top: rect.top - 50, left: rect.left + rect.width / 2 });
-      }
-      setLinkUrl((editor.getAttributes('link').href as string) ?? '');
-      setShowLinkInput(true);
+      openLinkInput();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [editor]);
+  }, [editor, openLinkInput]);
 
   // Ctrl+Q (selection non-empty): open the "Create ▸" menu directly, same target as
   // clicking the "+ Create" button below.
+  const openCreateMenu = useCallback(() => {
+    const anchor = selectionAnchor();
+    if (anchor) setPos(anchor);
+    setStubMessage(null);
+    setShowCreateMenu(true);
+  }, []);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'q') return;
       if (!editor.isFocused || editor.state.selection.empty) return;
       e.preventDefault();
       e.stopPropagation();
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const rect = sel.getRangeAt(0).getBoundingClientRect();
-        if (rect.width) setPos({ top: rect.top - 50, left: rect.left + rect.width / 2 });
-      }
-      setStubMessage(null);
-      setShowCreateMenu(true);
+      openCreateMenu();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [editor]);
+  }, [editor, openCreateMenu]);
+
+  useEffect(() => {
+    if (!actionsRef) return;
+    actionsRef.current = { openLinkInput, openCreateMenu };
+    return () => { actionsRef.current = null; };
+  }, [actionsRef, openLinkInput, openCreateMenu]);
 
   // Selecting "Task" from the create menu: run inference, hand the request off to the real
   // AddTaskModal (pre-filled) rather than a bespoke inline form — see CLAUDE.md "Cross-app
@@ -345,11 +367,6 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag 
   const fmt = (fn: () => void) => { editor.chain().focus(); fn(); };
 
   const hasLink = editor.isActive('link');
-
-  const openLinkInput = () => {
-    setLinkUrl((editor.getAttributes('link').href as string) ?? '');
-    setShowLinkInput(true);
-  };
 
   const applyLink = () => {
     const url = normalizeLinkUrl(linkUrl);

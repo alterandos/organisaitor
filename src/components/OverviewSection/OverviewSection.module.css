@@ -43,6 +43,7 @@
 
 .navItem {
   display: flex;
+  padding-left: 0.75rem; /* the RowOptionsMenu icon slot sits here, where the icon used to */
   align-items: center;
   width: 100%;
   transition: background 100ms ease;
@@ -56,7 +57,7 @@
   gap: 0.55rem;
   flex: 1;
   min-width: 0;
-  padding: 0.45rem 0.5rem 0.45rem 1rem;
+  padding: 0.45rem 0.5rem 0.45rem 0.35rem;
   background: none;
   border: none;
   cursor: pointer;

@@ -16,17 +16,29 @@ interface Props {
 interface Extended {
   left: number; top: number; height: number; maxWidth: number;
   font: string; color: string; letterSpacing: string; background: string;
+  // The row's own background continued past its right edge, full row height, behind the text.
+  rowTail: { left: number; top: number; width: number; height: number } | null;
 }
 
 // The nearest ancestor background that isn't transparent — what the extended text must sit on so
-// it looks like part of the row (the hover/active tint included).
-function rowBackground(el: HTMLElement): string {
+// it looks like part of the row (the hover/active tint included) — and the element that paints it.
+function rowBackground(el: HTMLElement): { color: string; node: HTMLElement | null } {
   for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+    // The pointer has only just arrived, so a row's hover tint may still be fading in (NoteList's
+    // rows transition their background): finish that transition now and read the end colour.
+    const transition = node.style.transition;
+    node.style.transition = 'none';
     const bg = getComputedStyle(node).backgroundColor;
-    if (bg && bg !== 'transparent' && !/rgba\(.*,\s*0\)$/.test(bg)) return bg;
+    node.style.transition = transition;
+    if (bg && bg !== 'transparent' && !/rgba\(.*,\s*0\)$/.test(bg)) return { color: bg, node };
   }
-  return 'var(--color-surface)';
+  return { color: 'var(--color-surface)', node: null };
 }
+
+// A row taller than this many text lines isn't a row (it's the column or the page behind it).
+const MAX_ROW_LINES = 4;
+// Overlaps the row's rounded right corners so the tail joins it without a notch.
+const TAIL_OVERLAP_PX = 4;
 
 // Wraps a name/title that may be CSS-ellipsis-truncated (the wrapping span must already have
 // overflow:hidden/text-overflow:ellipsis/white-space:nowrap — this component doesn't add that
@@ -50,11 +62,18 @@ export function TruncatedText({ text, className, style, reveal = 'tooltip' }: Pr
     const rect = el.getBoundingClientRect();
     if (reveal === 'extend') {
       const cs = getComputedStyle(el);
+      const maxWidth = window.innerWidth - rect.left - 8;
+      const bg = rowBackground(el);
+      const rowRect = bg.node && bg.node !== el ? bg.node.getBoundingClientRect() : null;
+      // scrollWidth is the full text's width; the 8px matches .extended's right padding.
+      const textRight = rect.left + Math.min(el.scrollWidth + 8, maxWidth);
+      const rowTail = rowRect && rowRect.height <= rect.height * MAX_ROW_LINES && textRight > rowRect.right
+        ? { left: rowRect.right - TAIL_OVERLAP_PX, top: rowRect.top, width: textRight - rowRect.right + TAIL_OVERLAP_PX, height: rowRect.height }
+        : null;
       setExtended({
-        left: rect.left, top: rect.top, height: rect.height,
-        maxWidth: window.innerWidth - rect.left - 8,
+        left: rect.left, top: rect.top, height: rect.height, maxWidth,
         font: cs.font, color: cs.color, letterSpacing: cs.letterSpacing,
-        background: rowBackground(el),
+        background: bg.color, rowTail,
       });
       return;
     }
@@ -75,9 +94,16 @@ export function TruncatedText({ text, className, style, reveal = 'tooltip' }: Pr
         </div>,
         document.body
       )}
+      {extended?.rowTail && createPortal(
+        <div
+          className={styles.rowTail}
+          style={{ ...extended.rowTail, background: extended.background }}
+        />,
+        document.body
+      )}
       {extended && createPortal(
         <div
-          className={styles.extended}
+          className={`${styles.extended} ${extended.rowTail ? styles.extendedOnTail : ''}`}
           style={{
             left: extended.left, top: extended.top, height: extended.height, lineHeight: `${extended.height}px`,
             maxWidth: extended.maxWidth, font: extended.font, color: extended.color,

@@ -10,6 +10,8 @@ import { getNotePrimaryNotebookId } from '@/utils/notes';
 import type { NoteId } from '@/types/notes';
 
 export type AppView = 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
+// Notes' three columns (ChronicleView). Which one has keyboard focus decides what N/Space creates.
+export type NotesColumn = 'tree' | 'list' | 'editor';
 
 // What the Overview section is showing: an Endeavour's automatic Overview, or a saved one.
 export type OverviewSelection = { kind: 'endeavour' | 'saved'; id: string } | null;
@@ -196,6 +198,10 @@ interface UIState {
   openEditActivity:  (activity: Activity) => void;
   closeEditActivity: () => void;
   closeModal:        () => void;
+  // What was typed in a creation pane when the user switched it to another kind (CreateKindSwitcher):
+  // the next creation pane starts with it as its name/title. Cleared by closeModal.
+  createDraft:       string | null;
+  setCreateDraft:    (draft: string | null) => void;
 
   // Activity type customisation (slide-in pane, mirrors EditTrackerPane)
   editActivityTypeOpen:   boolean;
@@ -417,6 +423,10 @@ interface UIState {
   toggleNoteTagExpanded:   (id: NoteTagId) => void;
   pendingNoteTagParentId:  NoteTagId | null;
   pendingNoteTagKind:      'area' | 'tag';
+  // Which Notes column has keyboard focus (arrow-key navigation in ChronicleView). Memory-only;
+  // back to 'tree' each time Notes is entered, as when it was ChronicleView's own state.
+  notesFocusedColumn:      NotesColumn;
+  setNotesFocusedColumn:   (col: NotesColumn) => void;
   editingNoteId:           string | null;
   // tabId (optional): open on that tab of the note — '__main__' or a NoteTab id. Consumed by
   // NoteEditor. `opts.mode` (default 'push') is the same push/back/forward vocabulary
@@ -580,11 +590,14 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeSchedules:    () => set({ schedulesOpen: false }),
   toggleSchedules:   () => set((s) => ({ schedulesOpen: !s.schedulesOpen })),
   showAddSchedule:   () => set({ openModal: 'add-schedule', editingSchedule: null }),
-  openEditSchedule:  (schedule) => set({ openModal: 'add-schedule', editingSchedule: schedule }),
+  openEditSchedule:  (schedule) => { useRecentItemsStore.getState().recordVisit('schedule', schedule.id); set({ openModal: 'add-schedule', editingSchedule: schedule }); },
   closeEditSchedule: ()         => set({ openModal: null,           editingSchedule: null      }),
 
+  createDraft:       null,
+  setCreateDraft:    (draft) => set({ createDraft: draft }),
   closeModal:        () => set({
     openModal: null,
+    createDraft: null,
     taskModalAdvanced: false,
     pendingParentId: null,
     pendingFollowUpOf: null,
@@ -707,6 +720,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
         : null,
       notesLastEditingNoteId: s.activeView === 'notes' ? s.editingNoteId : s.notesLastEditingNoteId,
       noteTagViewReturn:   view === 'notes' ? s.noteTagViewReturn : null,
+      notesFocusedColumn:  'tree' as const,
       // Same "last X, remembered on leave, restored fresh on entry" shape as Notes above —
       // except gated by CALENDAR_LAST_EDITING_TTL_MS (freshCalendarMemory), since unlike a
       // note, reopening an event/reminder pane out of nowhere after a long absence would read
@@ -918,6 +932,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   })),
   pendingNoteTagParentId: null,
   pendingNoteTagKind:     'area',
+  notesFocusedColumn:     'tree',
+  setNotesFocusedColumn:  (col) => set({ notesFocusedColumn: col }),
   editingNoteId:          null,
   openNote: (id, tabId, opts) => set((s) => {
     const requestedNoteTab = tabId ? { noteId: id, tabId } : null;

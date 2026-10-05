@@ -427,6 +427,14 @@ calendarYear: number, calendarMonth: number /* 0-indexed */, calendarSelectedDat
 setCalendarYear(v), setCalendarMonth(v)   // v: number | ((prev: number) => number), same overload as React's setState
 setCalendarSelectedDate(v: string)
 
+// Notes: which column has keyboard focus (ChronicleView's arrow-key navigation), back to 'tree'
+// on entering Notes; decides what N/Space creates. Memory-only.
+notesFocusedColumn: 'tree' | 'list' | 'editor', setNotesFocusedColumn(col)
+
+// Text carried from one creation pane to the next when CreateKindSwitcher switches kind.
+// Cleared by closeModal.
+createDraft: string | null, setCreateDraft(draft)
+
 // Records
 activeTrackerId: string | null
 setActiveTracker(id)
@@ -568,6 +576,7 @@ src/
   types/index.ts             — all TypeScript interfaces and unions
   types/agent.ts             — agent command-layer types (RiskTier, EntityKind, AgentLogEntry, AgentBatch); not re-exported from index.ts
   types/overview.ts          — Overview types (OverviewQuery, Overview, OverviewRow, OverviewSourceKey); not re-exported from index.ts — see "Overview"
+  contextMenu/               — right-click menus (see "Right-click menus"): types.ts (item / scope / provider / context), registry.ts (registerContextMenuProvider, scopes by element, resolveContextMenu), useContextMenuScope.ts
   overview/                  — the Overview engine (see "Overview"): sources.ts (OVERVIEW_SOURCES — THE registry, one entry per app/item kind, pure functions over a store snapshot), engine.ts (runOverview: filter/sort/group; endeavourOverviewQuery), useOverviewSnapshot.ts (the React hook that builds the snapshot, encrypted notes/lists resolved through their views), open.ts (openOverviewRow — jump to a row's source)
   types/trash.ts             — Recycling Bin types (TrashEntry, TrashableKind, DeletedBy); not re-exported from index.ts — see "Recycling Bin" above
   agent/                     — the AI agent command layer (see "Agent command layer" below and docs/ai/02-command-layer.md): access.ts (THE boundary: what an agent can read and do), commands/*.ts, run.ts (runCommand), registry.ts (toolDefinitions), batch.ts (snapshot/diff/revert), errors.ts, devHandle.ts (dev-only console handle)
@@ -582,6 +591,7 @@ src/
     structuredTagTypes.ts    — STRUCTURED_TAG_TYPES[]: registry of built-in tags that carry their own separate StructuredTagEntry data (Acronym today); each entry pairs a typeKey (matching BuiltinTag.typeKey) with a field schema and an optional non-AI infer() — see "Structured tag entries" in Implemented features for the extensibility design
     apps.ts                  — APP_TIERS (core vs addon nav sections) + isAppEnabled(view): single gating point for add-on app availability (Portfolio, Fitness today; no real entitlement backend yet — always returns true)
     calendarEventTypes.ts    — PICKABLE_EVENT_TYPES (Event/Birthday/Travel, with icons — the one list AddCalendarItemModal, CalendarEventPane and the import review offer) + EVENT_TYPE_ICON; names come from LABELS.calendarEventType
+    createKinds.ts           — CREATE_KINDS: every kind of thing a creation pane's switcher can switch to, grouped by section (see "Creation panes: the switcher")
     backup.ts                — PERSISTED_STORAGE_KEYS: every localStorage key any store persists to (single source of truth for full-app Export/Restore in AccountPane and IntegrationsPane — add a key here when a new persisted store is added, nowhere else)
   store/
     taskStore.ts             — tasks, collections, tags, purposes
@@ -605,6 +615,7 @@ src/
   services/sync/
     syncService.ts           — Supabase push/pull
     mappers.ts               — xToRow / rowToX for every entity
+  services/newItem.ts       — openNewItem(view): THE N/Space/Ctrl+N routing, section by section (Notes: by focused column) — see "New-item hotkey"
   services/signOut.ts       — requestSignOut(): THE way to sign out — confirms (and says what stays on the device), locks the vault, force-uploads and only wipes if that succeeded (else warns, user can cancel), then authStore.signOut(). Never call authStore.signOut() directly from UI
   services/clearLocalData.ts — clearSyncedLocalData(): empties every CLOUD-SYNCED store + the account-specific selection ids (each reset from its own getInitialState()). Local-only stores (fitness, routine instances, settings, hotkeys, portfolio columnConfig) are deliberately left; add a store here in the same change that gives it cloud sync
   services/shrinkNoteImages.ts — shrinkNoteImages(): recompresses every large inline image in every note and tab (skips locked encrypted notes; closes the open note first so the editor can't autosave its old copy over the result); Settings → Storage's button
@@ -675,7 +686,7 @@ src/
     scheduleOccurrences.ts   — expandScheduleBlock() (turns one ScheduleBlock into concrete occurrence dates, honouring interval/anchor/exceptions), blocksMayConflict() + countTemplateConflicts() (the schedule manager's "N potential conflicts" hint)
     recurrence.ts            — repeating calendar items: expandRepeat (honours RepeatConfig.exceptions), isOccurrenceSkipped, withException / endedBefore / tailOf (the "this one / this and following" operations) — see "Calendar: editing individual occurrences"
     timezone.ts              — account-wide timezone: resolveTimezone, zonedTimeToUtc, utcToZonedTime, rezoneWallClock, todayIsoInZone, listTimezones
-    quickAccess.ts           — Quick Access (Ctrl+G) provider registry: one QuickAccessProvider per destination type (note/notebook/task/list/endeavour/tracker/routine) with list()/resolve()/navigate(); searchQuickAccessItems(), resolveRecentItems(), navigateToQuickAccessItem() — extension point for new destination types (see Implemented features)
+    quickAccess.ts           — Quick Access (Ctrl+G) provider registry: one QuickAccessProvider per destination type (note/notebook/task/list/endeavour/tracker/routine/schedule) with list()/resolve()/navigate(); searchQuickAccessItems(), resolveRecentItems(), navigateToQuickAccessItem() — extension point for new destination types (see Implemented features)
   services/timezoneMigration.ts — rezoneAllCalendarData(fromZone, toZone): re-stamps every stored wall-clock date+time when the timezone setting changes
   hooks/
     useCtrlEnterSubmit.ts    — THE Ctrl+Enter rule for form-less modals/panes: `useCtrlEnterSubmit(onSubmit, active?)` (see "Ctrl+Enter — universal submit rule")
@@ -718,9 +729,9 @@ src/
     TimeInput/               — segmented hour/minute/AM-PM combobox respecting settingsStore.clockFormat (not a native <input type="time">, see Clock format setting below and the Timepicker rebuild entry in Implemented features), plus a quick-pick dropdown of half-hour times
     LinksField/              — the shared links list (clickable / edit / delete / add) used by TaskPane, CalendarEventPane and CalendarReminderPane; links typed into notes arrive via `mergeNewLinks` in the store's update action, never here
     LinkHoverPreview/        — app-wide: shows a hovered link's URL bottom-left (see "Link hover preview" pattern below)
-    QuickAccessPane/         — app-wide, Ctrl+G: portaled search-and-jump overlay across Notes/Notebooks/Tasks/Lists/Endeavours/Trackers/Routines, or browse Recent/Frequent visit history (see "Suite-wide Quick Access pane" in Implemented features)
+    QuickAccessPane/         — app-wide, Ctrl+G: portaled search-and-jump overlay across Notes/Notebooks/Tasks/Lists/Endeavours/Trackers/Routines/Schedules, or browse Recent/Frequent visit history (see "Suite-wide Quick Access pane" in Implemented features)
     TruncatedText/           — wraps a CSS-ellipsis-truncated name/title; on hover, only when actually truncated, reveals the full text: `reveal="tooltip"` (default) in a floating box below the row, `reveal="extend"` drawn in place over the row and running out to the right (Notes: NoteList's note titles and ChronicleView's notebook names, 2026-09-28). Tooltip users: (2026-09-24) Sidebar/ManagePane/ListsSection/RecordsView's row names
-    RowHoverActions/         — suite-wide nav-column row action menu: useRowHoverActions() (open/close state machine; long-press on Android) + RowHoverActionsMenu (portaled floating panel; a BottomSheet on Android) + RowAction (one labelled action) — see "Row hover-action menu" in Component patterns. Used by ChronicleView, Sidebar, ManagePane, ListsSection, RecordsView, OverviewSection
+    RowHoverActions/         — suite-wide nav-column row actions: RowOptionsMenu (the row's leading icon slot, which becomes a "⋯" on row hover; hovering it drops the actions down as a narrow column; long-press the row on Android) + RowAction (one labelled action), built on useRowHoverActions() (open/close state machine, shared with HoverOptions) + RowHoverActionsMenu (portaled floating panel; a BottomSheet on Android) — see "Row options menu" in Component patterns. Used by ChronicleView, Sidebar, ManagePane, ListsSection, RecordsView, OverviewSection
     SettingsPane/            — settings slide-in; reads HOTKEYS[] dynamically; StorageSection.tsx = the Storage block (per-store usage + Shrink images in notes)
     ManagePane/              — library admin (Endeavours/Purposes/Tags): left-nav tabs + content, opened by clicking (not hovering) the header hamburger; archive/restore/delete rows. MANAGE_SECTIONS array in the file is the extension point for future tabs
     AccountPane/             — Supabase auth + account info; renders AutoBackupSection (both signed-in and guest branches)
@@ -740,14 +751,18 @@ src/
       extensions/ResizableImage.ts   — custom NodeView: resizable image with drag handle
       extensions/HeadingNumbering.ts — ProseMirror plugin: computes hierarchical heading numbers, sets data-heading-number
       extensions/Section.ts          — custom Document (content: 'section+') + Section node (content: 'block+', columns/locked attrs) + ColumnBlock/Column nodes (locked-columns layout); commands setSectionColumns / insertSectionBreak / toggleSectionLocked
+      extensions/DuplicateLine.ts    — Alt+Shift+↓: duplicateLineDown copies the current line (textblock, or its whole list item) or the selected lines below
       extensions/ArtifactLinkMark.ts — Mark (targetType/targetId attrs) marking a span of note text as the source of a cross-app entity created from it via FloatingToolbar's "Create ▸" menu (Ctrl+Q); see "Cross-app linking" in Implemented features
       extensions/NoteTagMark.ts      — Mark (tagId/color/typeKey/structuredEntryId attrs) for annotation tags; structuredEntryId links a tagged passage to its StructuredTagEntry (see "Structured tag entries")
+      contextMenu.ts         — the editor's right-click providers (clipboard, link/create, Style ▸, select all) on the `note-editor` scope; NoteEditorMenuApi is what NoteEditor hands them
       builtinTags.ts         — 8 built-in annotation tag definitions (Important/Concept/Definition/Example/Question/Reference/Learn Later/Acronym) — typeKey drives both Learn Later's future create-task action and Acronym's structured-tag-entry behaviour
       NoteBacklinks.tsx      — the "Linked from" bar under a note's title: single pill / "🔗 N" chip + list, each pill openable, draggable into the text, or insertable at the cursor (derived from other items' crossAppRefs via store/noteBacklinks.ts — nothing stored); artifactLinkInsert.ts holds the insert/drop helpers
     StructuredTagPopover.tsx — create/edit popover shared by every structured tag type (Acronym today): compact term+field preview with Enter-to-accept, "More options" expands in place to show every field + Endeavour + (edit mode) location/timestamps
     NoteEditorPane/          — slide-in pane wrapping NoteEditor for non-Notes sections
     AddNoteModal/            — quick-add note (Ctrl+Space) with hierarchical tag picker
-    AddNoteTagModal/         — create notebook (area) or custom annotation tag
+    ContextMenu/             — ContextMenuHost (THE contextmenu listener, mounted once in App.tsx) + ContextMenu (the menu: sections, submenus, keyboard); content comes from src/contextMenu/
+    CreateKindSwitcher/      — the Note / Notebook / Tag (…) strip at the top of a creation pane; kinds from config/createKinds.ts
+    AddNoteTagModal/         — create notebook (area) or custom annotation tag; a notebook's "Inside" picker (starts at where it was opened from, can move anywhere in the tree or to the top level)
     EditNoteTagModal/        — edit notebook/tag name, icon, color; field schema editor for annotation tags
     EditNoteMetaModal/       — edit note metadata: tagIds (notebooks + annotation tags), accent color, pinned
     NoteTagPresetModal/      — install curated annotation tag packs; detects already-installed via presetKey
@@ -862,23 +877,39 @@ All of them return promises, so the handler becomes `async`. Where a listener ow
 - **Every place that opens a picker passes `suggestFrom`.** Two pattern tests check both halves.
 - **Applied to**: `NotePickerModal`, `TaskPickerModal` (title, Endeavour, parent, notes), `ListPickerModal` (name, description, item titles; checklists ahead in the recent tail).
 
-### Row hover-action menu (`RowHoverActions`) — suite-wide pattern, adopted 2026-09-24
+### Row options menu (`RowOptionsMenu`) — suite-wide pattern, adopted 2026-09-24, changed 2026-10-05
 
-Every nav-column row with per-row actions (edit/delete/…) uses this instead of growing the buttons inline within the row on hover — the old per-component convention (`opacity: 0 → 1` on `:hover`, actions eating into the row's own width) was independently hand-rolled at 4-5 sites and was exactly what made it easy to mis-click, since the buttons visually competed with the row's own name for space.
+Every nav-column row with per-row actions (edit/delete/…) uses **`<RowOptionsMenu rowRef={rowRef} title={name} icon={…}>`** (`src/components/RowHoverActions/RowOptionsMenu.tsx`), with `RowAction` children. It goes **as the row's first direct child, in place of the row's leading icon** (the icon is passed as `icon`). Never grow buttons inline in the row on hover: the old per-site convention (`opacity: 0 → 1` on `:hover`, actions eating into the row's width) was hand-rolled at 4-5 sites and easy to mis-click.
 
-**Why floating, not inline-grown:** the row's name stays full-width always; the actions appear in a small panel positioned above or below the row on hover, never narrowing it.
+**How it behaves:**
+- The slot is a fixed 22px icon slot at the start of every row. A row without an icon still gets the (empty) slot, so its title moves right and every title in a column lines up.
+- While the row is hovered, the icon becomes a "⋯".
+- Hovering the "⋯" (150 ms) or clicking it drops the actions down as a single column of 22px icon buttons centred under it. That column is no wider than the slot, so it covers only the icon slots of the rows below, never a row's title. It opens upwards when there's no room below.
 
-**Two pieces** (`src/components/RowHoverActions/`), always used together:
-- **`useRowHoverActions<T>()`** (`useRowHoverActions.ts`) — the open/close state machine. Returns `{ anchorRef, open, rowHandlers, menuHandlers }`. `rowHandlers` (`onMouseEnter`/`onMouseLeave`) go on the row's own wrapper element, spread alongside `ref={anchorRef}`; opening is delayed 150ms (matches ChronicleView's pre-existing hover-expand delay, avoids flashing on a fast mouse-pass) and closing is delayed 250ms with a grace period so moving the mouse from the row to the floating menu (they aren't DOM-adjacent, so CSS `:hover` can't bridge the gap) doesn't close it first.
-- **`<RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>`** (`RowHoverActionsMenu.tsx`) — the floating panel itself, rendered as children (the row's action buttons, reusing whatever `iconBtn`-style class the component already had). Portaled to `document.body` (same "escape a narrow sidebar column / any ancestor transform" reasoning as `TruncatedText`), positioned from `anchorRef`'s `getBoundingClientRect()` in a `useEffect` (a genuine external-system read — DOM layout only exists once painted — computed once as a local value then set in a single `setPos()` call, which is why this doesn't need a `set-state-in-effect` eslint-disable the way some other position-measuring effects in this codebase do), placed below the row unless there isn't room.
+**History and why:**
+- 2026-09-24: the actions floated below the row whenever the row was hovered.
+- 2026-10-05: they moved to a "⋯" at the row's right end, expanding to the right.
+- Later the same day, at the user's request: the "⋯" moved to the left, in place of the icon, as a dropdown.
 
-**Why a hook + component split, not one file:** `react-refresh/only-export-components` — a file can't export both a hook and a component and still get Fast Refresh.
+The user's rules: **hovering a row must never open its actions, only the "⋯" does, and the menu must not cover any title text.** One known exception: a section heading directly below a row (e.g. Manage's "LISTS") starts in the icon column, so the dropdown covers its first letter or two.
 
-**Because `useRowHoverActions` is a hook, it can only be called once per row *instance*, not once per iteration of a shared parent's `.map()`.** Every row type that was previously inline JSX inside a `.map()` callback (`Sidebar`'s Endeavour/Tag/Purpose rows, `ListsSection`'s sidebar item, `RecordsView`'s tracker/routine row) was pulled out into its own small component for this reason — `SidebarCollectionRow`/`SidebarTagRow`/`SidebarPurposeRow`, `SidebarListItem`, `TrackerSidebarRow`. `ChronicleView`'s tree node and `ManagePane`'s `ManageRow` were already their own components, so no extraction was needed there.
+**Pieces** (`src/components/RowHoverActions/`):
+- **`RowOptionsMenu`**: the slot, the "⋯", the hook and the menu. The site supplies `rowRef` (for the Android long-press), `title`, `icon` and the actions.
+- **`useRowHoverActions<T>({ longPressRef? })`**: the open/close state machine shared with `HoverOptions`. Opening is delayed 150 ms; closing is delayed 250 ms so the mouse can cross into the portaled menu. It also returns `openNow` for a click.
+- **`RowHoverActionsMenu`**: the floating panel, portaled to `document.body` (escapes a narrow column or an ancestor transform, same as `TruncatedText`), positioned from the anchor's `getBoundingClientRect()` in an effect. `align='dropdown'` is the row options placement. `'start'`/`'end'` (below the anchor, else above) belong to `HoverOptions`.
 
-**Applied to all 5 known nav-column row sites**: `ChronicleView` (notebook tree), `Sidebar` (Endeavours/Tags/Purposes), `ManagePane` (`ManageRow`, all three tabs), `ListsSection` (sidebar), `RecordsView` (tracker/routine sidebar). `ListsSection`'s separate `.itemCard` actions (watchlist/reference item cards in the main content area — a *list item*, not a nav-column row) are deliberately **not** converted; this pattern is scoped to navigation columns.
+Sites import only `RowOptionsMenu` and `RowAction`. A pattern test fails if anything other than `RowOptionsMenu` and `HoverOptions` uses the hook or the menu directly. **Layout at a site:** the slot sits where the icon used to, so the row's own left padding has to provide the inset the icon used to get from its button's padding (`RecordsView`'s `.trackerItem`, `OverviewSection`'s `.navItem`, `Sidebar`'s `.row`).
 
-**Touch (Android), solved 2026-10-04 (decision D1):** `useRowHoverActions` attaches `useLongPress` to the row on Android and makes the hover handlers no-ops (a tap's emulated `mouseenter` would otherwise open it); `RowHoverActionsMenu` then renders the same children in a `BottomSheet` titled with its `title` prop (pass the row's name). **Every child is a `RowAction`** (`RowAction.tsx`: `icon`, `label` from `LABELS`, `onClick`, `className` for the desktop button, `destructive`): on desktop it is the icon button with `label` as its tooltip; in the sheet it reads a context (`rowActionsContext.ts`) and renders as a labelled `ActionSheetButton` that closes the sheet before acting. `RowAction` always stops propagation, because React bubbles a portal's clicks into the row. A raw `<button>` inside a `RowHoverActionsMenu` is a pattern-test failure (HoverOptions exempt: its options are already text, and on Android it opens an `ActionSheet`).
+**A row holds a `useRef`, and hooks run once per row *instance*,** so every row that used to be inline JSX inside a `.map()` is its own small component: `SidebarCollectionRow`/`SidebarTagRow`/`SidebarPurposeRow`, `SidebarListItem`, `TrackerSidebarRow`, `ManageRow`, `SavedRow`. `ChronicleView`'s tree node already was one.
+
+**Applied to all 7 nav-column row sites** (the icon each takes over in brackets): `ChronicleView` (notebook tree: the notebook icon), `Sidebar` (Endeavours/Tags/Purposes: the colour dot), `ManagePane` (`ManageRow`: the colour dot, or nothing), `ListsSection` (sidebar: the list's emoji), `RecordsView` (tracker/routine sidebar: the colour dot, or nothing), `OverviewSection` (saved Overviews: the Overview's icon). Two kinds of row are deliberately **not** converted, because neither is a nav-column row: `ListsSection`'s `.itemCard` actions (list items in the main content area) and `NoteList`'s note rows (their inline `.noteActions`).
+
+**Touch (Android, decision D1, 2026-10-04):** the slot shows the icon and no "⋯" (tapping the icon does nothing, so tap the row's name to select it). A long-press on `rowRef` (`useLongPress`) opens the same children in a `BottomSheet` titled with `title`. **Every child is a `RowAction`** (`RowAction.tsx`: `icon`, `label` from `LABELS`, `onClick`, `className` for the desktop button, `destructive`):
+- On desktop it is the icon button, with `label` as its tooltip.
+- In the sheet it reads a context (`rowActionsContext.ts`) and renders as a labelled `ActionSheetButton` that closes the sheet before acting.
+- `RowAction` always stops propagation, because React bubbles a portal's clicks into the row.
+
+A raw `<button>` inside a `RowOptionsMenu`/`RowHoverActionsMenu` is a pattern-test failure. `HoverOptions` is exempt: its options are already text, and on Android it opens an `ActionSheet`.
 
 ### Bottom sheets and touch gestures (Android) — adopted 2026-10-04
 
@@ -890,6 +921,59 @@ Phone UI is built from shared primitives (`docs/android/11-design-and-coding-pat
 - **Swipe-left / action-sheet deletes act at once with an Undo toast** (D2) through `services/undoableActions.ts`; pane footers keep `ItemActionDialog`; irreversible actions always confirm.
 - **Anything on a hover must also work without one.** Use `@media (hover: hover)` for CSS `:hover` that *opens* something: on a touch screen `:hover` sticks to the last tapped spot (found 2026-10-04: the + speed dial stayed open over the task list).
 - **Bottom chrome publishes its height**: `--mobile-nav-h` (MobileNav's CSS) and `--quick-add-h` (measured by MobileQuickAddBar while shown). Anything that must sit above the bars (the toast) offsets by them.
+
+### Right-click menus (`src/contextMenu/`) — suite-wide pattern, adopted 2026-10-06
+
+**What a right-click shows is decided entirely by where it lands**: the section, then every *scope* between the clicked element and the page. The user's brief: flexibility and future-proofing come first. So the menu is plain data, assembled at click time from declarations, and no component builds a menu or listens for `contextmenu` itself (pattern test).
+
+**The model** (`src/contextMenu/types.ts`):
+- **`ContextMenuItem`**: `{ id, label, icon?, shortcut?, disabled?, destructive?, run?, submenu? }`. `submenu` is sections of items. A section is an array of items; the menu draws dividers between sections.
+- **Scope**: what an element declares about itself with **`useContextMenuScope(ref | element, () => ({ kind, data?, items?, propagate? }))`**. `kind` is what providers attach to; `data` is what they need (an id, an API object); `items` are the element's own entries. Called at right-click time, so it always sees current state.
+- **Provider**: **`registerContextMenuProvider({ id, kind, order?, when?, items })`** (`registry.ts`). It adds one section to every scope of one kind, from anywhere, so a feature extends an existing place without touching it. Keyed by id, so re-registering (HMR) replaces it.
+- **Resolution** (`resolveContextMenu`), walking the scopes innermost first:
+  - Each scope contributes its own `items` (order 0), then its providers' sections in `order` (default 100).
+  - The first scope that contributes anything ends the walk, unless it sets `propagate: true`.
+  - After the declared scopes come two implicit ones, `section` (data: the `AppView`) and `app`, for section-wide and app-wide menus.
+  - **Nothing contributed = no custom menu: the browser's own shows.**
+
+**Host and menu:**
+- **`ContextMenuHost`** (`components/ContextMenu/`, mounted once in App.tsx) is THE one `contextmenu` listener.
+- It leaves the browser's menu alone for:
+  - **Shift+right-click**, anywhere: the way back to spellcheck, as agreed with the user.
+  - Text inputs and textareas.
+  - Android, where long-press already opens the row sheet or the system text menu.
+- The keyboard's Menu key opens the menu under the focused element.
+- **`ContextMenu`** renders sections and submenus as stacked panels, z-index 1080. It **never takes focus**: presses on it are `preventDefault`-ed, so the note editor keeps its selection, and Cut/Copy (`execCommand`) act on it.
+- Keyboard: arrows, Home/End, Enter, → / ← for submenus, all caught on the document in the capture phase while it is open. Escape goes through `useEscapeClose`, one registration per panel, so it closes the innermost submenu first.
+- It closes on a press outside it, a scroll, a resize or the window losing focus. Choosing an item closes the menu, then runs the item.
+
+**Where it's used today:**
+- **`row`** — every `RowOptionsMenu`: the row's `RowAction` children become its right-click items (`rowActionItems`), so a row declares its actions once for the ⋯ dropdown, the Android sheet and the right-click menu.
+- **`note-row`** — `NoteList` rows: Open, Edit details, make sub-note / move up a level, Delete.
+- **`note-editor`** — the editing surface (`EditorContent`'s `innerRef`); its data is `NoteEditorMenuApi`. Providers in `components/NoteEditor/contextMenu.ts`:
+  - Cut / Copy / Paste / Paste as plain text.
+  - Link… / Create from selection….
+  - Style ▸ (Title, Heading 1–5, Normal text).
+  - Select all.
+  - Paste from the menu reads the clipboard (`navigator.clipboard`), which needs the browser's permission; a refusal explains Ctrl+V / Ctrl+Shift+V.
+
+**Adding to it:**
+- A new place: call `useContextMenuScope` with a new `kind`.
+- New entries for an existing place: register a provider for that kind.
+- A new item behaviour (a checkbox, a radio group, an item visible only with a modifier): add a field to `ContextMenuItem` and handle it in `ContextMenu`.
+- **Never** add an `onContextMenu` or a `contextmenu` listener anywhere else.
+- **An action that also has a hotkey** is one function both call. `FloatingToolbar` exposes `openLinkInput` / `openCreateMenu` through `actionsRef` for this; never synthesise a keystroke.
+- Item labels come from `LABELS.contextMenu`.
+
+### Creation panes: the "what are you creating?" switcher (`CreateKindSwitcher`) — adopted 2026-10-05
+
+A creation pane opens with a strip of every kind of thing its section can create, the open one highlighted. Notes shows Note / Notebook / Tag. Choosing another kind closes this pane and opens that kind's pane, **keeping what was typed**: the text travels in `uiStore.createDraft` and the next pane's lazy `useState` reads it as its starting name/title; `closeModal` clears it.
+- **The registry is `config/createKinds.ts` (`CREATE_KINDS`)**: `{ id, section, label (LABELS.createKinds), icon, open }`. `open` uses the section's current context, as the rest of the app does: a notebook from Notes goes inside the selected notebook.
+- **Adding a creatable thing** means one entry there, plus `<CreateKindSwitcher current="<id>" draft={…} />` as the first child of its pane's `.modal`, plus reading `createDraft` in its first text field's initial state. The switcher renders nothing for a section with one kind.
+- **A pane that serves two kinds through uiStore state** must be keyed by that state at its mount, so switching remounts it with fresh state: `AddNoteTagModal`, keyed by `pendingNoteTagKind`.
+- **Pattern test:** every `CREATE_KINDS` id must be named by some pane that renders the switcher.
+- **Applied to:** Notes (`AddNoteModal`, `AddNoteTagModal` for notebooks and annotation tags). Other sections' panes are in BACKLOG.md's Pattern retrofit backlog.
+- **Android:** the chips are ordinary tap targets.
 
 ### Speed-dial FAB (`AddTaskButton`)
 
@@ -943,7 +1027,7 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 | `M` | `Ctrl+M` | Open/close the Manage view (Endeavours / Purposes / Tags) |
 | `Alt+Left` | `Backspace` | Go back to the previous app section (up to 6 deep) — `uiStore.sectionHistory`/`navigateBack()` |
 | `Alt+Right` | — | Go forward to the next app section, after going back — `uiStore.sectionForwardHistory`/`navigateForward()` |
-| `Ctrl+G` | — | Open/close Quick Access — search or browse recent/frequent items across Notes, Notebooks, Tasks, Lists, Endeavours, Trackers, Routines |
+| `Ctrl+G` | — | Open/close Quick Access — search or browse recent/frequent items across Notes, Notebooks, Tasks, Lists, Endeavours, Trackers, Routines, Schedules |
 | `Ctrl+D` | — | Dictate into the focused text field; press again (or plain `Enter`) to finish, `Esc` cancels (`action-dictate`, customizable; handled before the `isTyping` guard in `App.tsx`) |
 | `Ctrl+Shift+A` | — | Archive the open task / calendar event / reminder — or Restore it if already archived (item panes only, via `useItemActions`) |
 | `Delete` | `Ctrl+Shift+D` | Delete the open task / event / reminder — always opens the permanent-delete confirmation (item panes only, via `useItemActions`). Plain `Delete` is ignored while typing in a field, where it deletes a character |
@@ -952,14 +1036,16 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 | `T` | — | Go to today in whichever view is showing — month, week or day (Calendar section only, local to `CalendarView.tsx`) |
 | `←`/`→` | `PgUp`/`PgDn` | Previous/next period — month, week, or day, matching the current view (Calendar section only, local to `CalendarView.tsx`) |
 | `Tab` | `Shift+Tab` | Cycle Month → Week → Day view; Shift+Tab cycles in reverse (Calendar section only, local to `CalendarView.tsx`; suppressed while any calendar modal/pane is open so normal focus-tabbing still works there) |
-| `→` | — | Expand selected notebook (Notes section only) |
+| `→` | — | Expand selected notebook, then move to the next column: tree → notes → editor (Notes section only). Opening a note with the arrow keys leaves focus in the notes column, so `↑`/`↓` keep moving through notes until `→` (or `` Ctrl+` ``) enters the editor; clicking a note still goes straight into the editor |
 | `←` | — | Collapse selected notebook (Notes section only) |
 | `PgUp`/`PgDn` | — | Navigate the tree/list column, same as ↑/↓ (Notes section only) |
 | `Ctrl+Tab` | `Ctrl+PgUp`/`Ctrl+PgDn` | Cycle between the open note's tabs, `Ctrl+Shift+Tab`/`Ctrl+PgUp` reverses (Notes editor focused, local to `NoteEditor.tsx`) |
 | `Ctrl+T` | — | New tab, prompting for a name (Notes editor focused, local to `NoteEditor.tsx`) |
 | `` Ctrl+` `` | — | Move keyboard focus between the tree/list nav columns and the editor (Notes section only; previously `Ctrl+Tab`, moved once `Ctrl+Tab` became the tab-cycle key above — see "Notes/Lists keyboard nav" below) |
 | `Ctrl+L` | — | Turn the selection into a link (opens a URL popover); with no selection, opens a "New link" pane (text + URL) instead (Notes editor) |
-| `Ctrl+H` | — | Then press `1`–`5` to turn the current paragraph into that heading level, `0` for plain text (also strips all formatting except links/tags — `extensions/normalText.ts`), or `H` to go to the tab's Title, creating it at the top from the tab name if there isn't one (Notes editor, local to `NoteEditor.tsx`) |
+| `Ctrl+H` | — | Then press `1`–`5` to turn the current paragraph into that heading level, `0` for plain text (also strips all formatting except links/tags — `extensions/normalText.ts`), or `H` to go to the tab's Title, creating it at the top from the tab name if there isn't one; Ctrl may stay held for the second key (Notes editor, local to `NoteEditor.tsx`) |
+| `Ctrl+Shift+V` | — | Paste as plain text: no formatting, links or images from the source (Notes editor; ProseMirror's own Shift-paste, which `handlePaste` steps aside for) |
+| `Alt+Shift+↓` | — | Insert a copy of the current line (paragraph, heading, list item) or the selected lines below it (Notes editor, `extensions/DuplicateLine.ts`) |
 | `Ctrl+Q` | — | On a Notes selection: open the "Create ▸" menu (Task/Calendar item/List item/Tracker entry — Task is wired, the rest are stubs); 1-4 picks, Esc cancels (Notes editor) |
 | `Ctrl+click` | — | On a link in the Notes editor: select its text instead of opening it (plain click opens) |
 | `Ctrl+−` | — | Zoom out in Notes editor (without Shift) |
@@ -972,11 +1058,16 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 
 ### New-item hotkey (N / Space / Ctrl+N) — section-aware behaviour
 
+The routing lives in **`services/newItem.ts` `openNewItem(view)`** (App.tsx's handler just calls it; tested in `newItem.test.ts`). Change the rule there, not in App.tsx.
+
+- Overview → `showAddOverview()`
 - Tasks section → `showAddTask()`
 - Calendar section → `showAddCalendarItem()`
-- Records section + tracker selected → `showAddEntry(activeTrackerId)`
-- Records section + no tracker → `showAddTracker()`
-- Lists section → `showAddList()`
+- Records section + tracker (or routine) selected → `showAddEntry(id)`
+- Records section + nothing selected → `showAddTracker()`
+- Lists section → `showAddListItem(activeListId)` if a list is open, else `showAddList()`
+- Portfolio → `showAddWatchlistItem()`
+- Notes → follows the focused column (`uiStore.notesFocusedColumn`). In the Chronicle tree it is `showAddNoteTag(selectedNoteTagId, 'area')`: a notebook inside the selected one. In the notes column (or, via Ctrl+N, the editor) it is `showAddNote()`.
 - Fitness section → `showAddActivity()`
 
 ---
@@ -1013,7 +1104,7 @@ All user-facing strings that might be renamed are in `src/config/labels.ts`. "Co
 - **Endeavours and Purposes can be archived (sunset), not just deleted.** `archivedAt: string | null`. When adding a new entity type that gets its own edit modal and can meaningfully go stale (as opposed to cross-cutting labels like Tags), consider whether it needs the same Archive/Restore treatment rather than only hard delete. Any new "pick one of these" selector for Endeavours/Purposes must filter archived ones out (existing ones already do — see `CollectionPicker`, `getOrderedEndeavours`).
 - **Archive and delete look and behave the same everywhere.** Any pane for a user-owned item (task, calendar event/reminder today; notes, list items, portfolio items… later) gets its footer from `ItemActionFooter`, its dialogs from `ItemActionDialog`, its dialog/hotkey/Escape logic from `useItemActions`, and its archived banner from `ArchivedBanner` (all in `src/components/ItemActions/`) — never a bespoke footer. Delete always asks for confirmation and says it can't be undone; archive is reversible, takes an optional reason (`archivedAt` + `archiveReason` on the entity), and hides the item from views while keeping it findable and restorable. Icons: trash for delete, lidded box for archive, the same box with an up-arrow for restore — always next to a text label. Copy lives in `LABELS.itemActions`.
 - **Every modal and slide-in pane binds Ctrl+Enter to its primary action** (`useCtrlEnterSubmit`, or `requestSubmit()` for a form) — except a modal with no single primary action. See "Ctrl+Enter — universal submit rule".
-- **Every modal and slide-in pane closes on Escape — and Escape closes only the newest overlay.** Use `useEscapeClose` (see "Escape key — universal close rule"); never a bespoke document listener. An audit (see Implemented features) found five that silently didn't close at all, and a later one found ~35 independent listeners that closed the wrong layer when overlays stacked. When adding a new modal or pane, call the hook rather than copying an older component's `useEffect`.
+- **Every modal, slide-in pane, dropdown and panel closes on Escape — and Escape closes only the newest overlay.** Anything that closes on an outside click is an overlay too (pattern test; the notifications panel and the speed dial missed it until 2026-10-05). Use `useEscapeClose` (see "Escape key — universal close rule"); never a bespoke document listener. An audit (see Implemented features) found five that silently didn't close at all, and a later one found ~35 independent listeners that closed the wrong layer when overlays stacked. When adding a new modal or pane, call the hook rather than copying an older component's `useEffect`.
 
 ---
 
@@ -1052,7 +1143,7 @@ Not bugs in normal use; recorded so they aren't rediscovered from scratch.
 - **Soft-delete tombstones are never purged** (`deleted_at` rows stay forever). Fine at current scale; add a scheduled purge of rows older than ~90 days once any table grows.
 - **`calendar_events.notify_before_value` is `integer`** but `CalendarEventPane` feeds it a free-typed number, so typing `1.5` would fail sync (see migration 023's note). Clamp/round the input, or widen the column.
 - **The other stores still live in localStorage (about 5 MB for the whole site).** Notes moved to IndexedDB (see "Zustand migration rule"), so pasted images no longer count against it, but every save still re-serialises a whole store (opening a note writes `lastViewedAt`, which rewrites *all* notes — now a database write rather than a localStorage one) and images are still inline base64 in note content, which also inflates every Supabase sync of a note. Pasted images are scaled to 1600 px / WebP on the way in (`utils/imageCompress.ts`) and Settings → Storage can shrink existing ones (`services/shrinkNoteImages.ts`). Remaining ideas are in BACKLOG.md "Local storage headroom".
-- **Modal z-index tiers are ad hoc** (28 / 30 / 100 / 102 / 110 / 1000 for modals; 400 Quick Access; 500 voice indicator; 1020 BottomSheet; 1050 toast; 1100 confirm dialog; 10000 link preview). It only matters when one overlay opens over another: a modal opened *from inside a pane* needs a tier above the pane's 100/101 (use 102), and anything that can be summoned from anywhere sits above the modals. `AddListModal`, `AddListItemModal` and `EditNoteTagModal` are at 100, the same tier as the panes, but nothing opens them from inside a pane today. Centralising these as `--z-*` tokens is optional tidying (docs/agent-tasks/02).
+- **Modal z-index tiers are ad hoc** (28 / 30 / 100 / 102 / 110 / 1000 for modals; 400 Quick Access; 500 voice indicator; 1020 BottomSheet; 1050 toast; 1080 right-click menu; 1100 confirm dialog; 10000 link preview). It only matters when one overlay opens over another: a modal opened *from inside a pane* needs a tier above the pane's 100/101 (use 102), and anything that can be summoned from anywhere sits above the modals. `AddListModal`, `AddListItemModal` and `EditNoteTagModal` are at 100, the same tier as the panes, but nothing opens them from inside a pane today. Centralising these as `--z-*` tokens is optional tidying (docs/agent-tasks/02).
 
 ---
 
@@ -1076,7 +1167,7 @@ Reading an encrypted note: **always through `noteView()` / `useNoteView()`** —
 ### How it works
 
 - **CSS variables**: All colors live as `--color-*` custom properties in `src/index.css`. The `:root` block defines light mode values; `[data-theme="dark"]` on `<html>` overrides them with dark equivalents.
-- **New semantic variables added**: `--color-surface-alt`, `--color-primary-subtle`, `--color-primary-border`, `--color-danger`, `--color-danger-muted`, `--color-warning`, `--color-warning-muted`, `--color-success-muted`, `--color-success-text`, `--shadow-lg`, `--color-border-strong` (2026-09-28 — the divider between a time grid's whole-day zone and its hours), `--color-backdrop` (2026-10-04 — the dimmed layer behind a BottomSheet), `--color-blocked-wash`/`--color-blocked-stripe` (2026-10-01 — the hatched overlay on a task waiting on another task, TaskItem `.itemBlocked::after`), `--color-tentative-stripe-1`/`-2` + `--tentative-blend-mode` (2026-09-27 — see "Fixed: tentative-event hatch unreadable in dark mode" in Implemented features; not just a colour swap, dark mode also switches the blend mode itself)
+- **New semantic variables added**: `--color-surface-alt`, `--color-primary-subtle`, `--color-primary-border`, `--color-danger`, `--color-danger-muted`, `--color-warning`, `--color-warning-muted`, `--color-success-muted`, `--color-success-text`, `--shadow-lg`, `--color-border-strong` (2026-09-28 — the divider between a time grid's whole-day zone and its hours), `--color-backdrop` (2026-10-04 — the dimmed layer behind a BottomSheet), `--color-overscroll` (2026-10-06 — the greyed room below the end of a note, NoteEditor `.editorWrap::after`; light grey in light mode, a dark grey lighter than the editor in dark), `--color-blocked-wash`/`--color-blocked-stripe` (2026-10-01 — the hatched overlay on a task waiting on another task, TaskItem `.itemBlocked::after`), `--color-tentative-stripe-1`/`-2` + `--tentative-blend-mode` (2026-09-27 — see "Fixed: tentative-event hatch unreadable in dark mode" in Implemented features; not just a colour swap, dark mode also switches the blend mode itself)
 - **FOUC prevention**: Inline `<script>` in `index.html` `<head>` reads `localStorage['todo-settings'].state.theme` synchronously and sets `data-theme` before React hydrates.
 - **Theme effect** (`src/App.tsx`): `useEffect` reads `theme` from `settingsStore`; for `'system'` mode it attaches a `matchMedia('prefers-color-scheme: dark')` listener that updates `data-theme` on OS changes; for explicit `'light'`/`'dark'` it sets `data-theme` directly.
 - **settingsStore** (`src/store/settingsStore.ts`): Added `theme: 'light' | 'dark' | 'system'` (default `'system'`) and `setTheme` action.

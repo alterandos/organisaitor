@@ -1,0 +1,88 @@
+/* Placed by ContextMenu's layout effect once measured; hidden until then so it never flashes
+   in the wrong spot. z-index: above modals, panes and the toast (1050), below the confirm dialog
+   (1100) that one of its items may open. */
+.menu {
+  position: fixed;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  z-index: 1080;
+  min-width: 210px;
+  max-width: 320px;
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  user-select: none;
+}
+
+.section + .section {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.38rem 0.6rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.itemActive {
+  background: var(--color-surface-alt);
+}
+
+.itemDisabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.itemDestructive {
+  color: var(--color-danger);
+}
+
+.icon {
+  width: 1.1rem;
+  flex-shrink: 0;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--color-muted);
+}
+
+.itemDestructive .icon {
+  color: inherit;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut {
+  flex-shrink: 0;
+  padding-left: 1rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--color-muted);
+  font-size: 0.7rem;
+}

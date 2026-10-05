@@ -74,8 +74,10 @@ import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
 import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog/ConfirmDialog';
 import { ToastHost } from '@/components/Toast/Toast';
+import { ContextMenuHost } from '@/components/ContextMenu/ContextMenuHost';
 import { toggleDictation } from '@/services/speech/dictation';
 import { AddNoteModal } from '@/components/AddNoteModal/AddNoteModal';
+import { openNewItem } from '@/services/newItem';
 import { AddNoteTagModal } from '@/components/AddNoteTagModal/AddNoteTagModal';
 import { NoteTagPresetModal } from '@/components/NoteTagPresetModal/NoteTagPresetModal';
 import { EditNoteMetaModal } from '@/components/EditNoteMetaModal/EditNoteMetaModal';
@@ -113,6 +115,7 @@ export default function App() {
   const closeAccount               = useUIStore((s) => s.closeAccount);
   const accountOpen                = useUIStore((s) => s.accountOpen);
   const openModal                  = useUIStore((s) => s.openModal);
+  const pendingNoteTagKind         = useUIStore((s) => s.pendingNoteTagKind);
   const editingTaskId              = useUIStore((s) => s.editingTaskId);
   const activeCollectionId         = useUIStore(selectActiveCollectionId);
   const endeavourPickerOpen        = useUIStore((s) => s.endeavourPickerOpen);
@@ -465,18 +468,7 @@ export default function App() {
                      || (e.key.toUpperCase() === 'N' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey);
       if (isNewItem) {
         e.preventDefault();
-        const { showAddTask, showAddCalendarItem, showAddTracker, showAddEntry, showAddWatchlistItem, showAddList, showAddListItem, showAddNote, showAddActivity, activeTrackerId: tid, activeRoutineId: rid, activeListId: lid } = useUIStore.getState();
-        if (activeView === 'overview') useUIStore.getState().showAddOverview();
-        else if (activeView === 'calendar') showAddCalendarItem();
-        else if (activeView === 'portfolio') showAddWatchlistItem();
-        else if (activeView === 'lists') { if (lid) showAddListItem(lid); else showAddList(); }
-        else if (activeView === 'notes') showAddNote();
-        else if (activeView === 'fitness') showAddActivity();
-        else if (activeView === 'records') {
-          if (tid) showAddEntry(tid);
-          else if (rid) showAddEntry(rid);
-          else showAddTracker();
-        } else showAddTask();
+        openNewItem(activeView);
       }
     };
     document.addEventListener('keydown', handler);
@@ -640,7 +632,7 @@ export default function App() {
         {openModal === 'add-overview'           && <AddOverviewModal key={editingOverviewId ?? 'new'} />}
         {openModal === 'add-list-item'          && <AddListItemModal key={editingListItemId ?? 'new'} />}
         {openModal === 'add-note'               && <AddNoteModal />}
-        {openModal === 'add-note-tag'           && <AddNoteTagModal />}
+        {openModal === 'add-note-tag'           && <AddNoteTagModal key={pendingNoteTagKind} />}
         {openModal === 'note-tag-presets'       && <NoteTagPresetModal />}
         {openModal === 'edit-note-meta'         && <EditNoteMetaModal />}
         {openModal === 'add-activity'           && <AddActivityModal key={editingActivity?.id ?? 'new'} />}
@@ -654,6 +646,7 @@ export default function App() {
         <VoiceIndicator />
         <ConfirmDialogHost />
         <ToastHost />
+        <ContextMenuHost />
         {quickAccessOpen && <QuickAccessPane />}
         {decryptPrompt && <DecryptPrompt />}
         {isAndroid && <MobileNav />}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useOverviewStore } from '@/store/overviewStore';
 import { useUIStore } from '@/store/uiStore';
@@ -13,8 +13,7 @@ import { todayIsoInZone, resolveTimezone } from '@/utils/timezone';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
-import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
-import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import type { CollectionId } from '@/types';
 import type { Overview, OverviewId, OverviewQuery, OverviewRow } from '@/types/overview';
@@ -37,17 +36,13 @@ function describeQuery(q: OverviewQuery, endeavourName: string | null): string {
 }
 
 function SavedRow({ overview, active }: { overview: Overview; active: boolean }) {
-  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   const setSelection = useUIStore((s) => s.setOverviewSelection);
   const openEdit = useUIStore((s) => s.openEditOverview);
   const deleteOverview = useOverviewStore((s) => s.deleteOverview);
   return (
-    <div ref={anchorRef} className={`${styles.navItem} ${active ? styles.navItemActive : ''}`} {...rowHandlers}>
-      <button className={styles.navBtn} onClick={() => setSelection({ kind: 'saved', id: overview.id })}>
-        <span className={styles.navIcon}>{overview.icon ?? '📊'}</span>
-        <TruncatedText text={overview.name} className={styles.navName} />
-      </button>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} title={overview.name} {...menuHandlers}>
+    <div ref={rowRef} className={`${styles.navItem} ${active ? styles.navItemActive : ''}`}>
+      <RowOptionsMenu rowRef={rowRef} title={overview.name} icon={<span className={styles.navIcon}>{overview.icon ?? '📊'}</span>}>
         <RowAction className={styles.actionBtn} icon="✎" label={L.edit} onClick={() => openEdit(overview.id)} />
         <RowAction
           className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
@@ -58,7 +53,10 @@ function SavedRow({ overview, active }: { overview: Overview; active: boolean })
             if (await confirmDelete(L.deleteNoun, overview.name)) deleteOverview(overview.id);
           }}
         />
-      </RowHoverActionsMenu>
+      </RowOptionsMenu>
+      <button className={styles.navBtn} onClick={() => setSelection({ kind: 'saved', id: overview.id })}>
+        <TruncatedText text={overview.name} className={styles.navName} />
+      </button>
     </div>
   );
 }

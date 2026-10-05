@@ -5,10 +5,12 @@ import { useTaskStore } from '@/store/taskStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { LABELS } from '@/config/labels';
 import type { CollectionId } from '@/types';
+import type { NoteTag, NoteTagId } from '@/types/notes';
 import { BUILTIN_TAGS } from '../NoteEditor/builtinTags';
 import styles from './AddNoteTagModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { CreateKindSwitcher } from '@/components/CreateKindSwitcher/CreateKindSwitcher';
 
 const PRESET_COLORS = [
   '#5b6ee1', '#2563eb', '#7c3aed', '#db2777',
@@ -29,6 +31,21 @@ function getDepth(tagId: string | null, noteTags: Record<string, { parentTagId: 
 
 const LEVEL_LABELS = ['Notebook', 'Page', 'Sub-page', 'Section'];
 
+// Every notebook, in tree order, with its depth: the "Inside" picker's list.
+function flattenNotebooks(noteTags: Record<string, NoteTag>, parentId: string | null = null, depth = 0): { tag: NoteTag; depth: number }[] {
+  return Object.values(noteTags)
+    .filter((t) => t.kind === 'area' && t.parentTagId === parentId)
+    .sort((a, b) => a.order - b.order)
+    .flatMap((t) => [{ tag: t, depth }, ...flattenNotebooks(noteTags, t.id, depth + 1)]);
+}
+
+// "University › Biology": where the new notebook will sit.
+function notebookPath(id: string, noteTags: Record<string, NoteTag>): string {
+  const names: string[] = [];
+  for (let t: NoteTag | undefined = noteTags[id]; t; t = t.parentTagId ? noteTags[t.parentTagId] : undefined) names.unshift(t.name);
+  return names.join(' › ');
+}
+
 export function AddNoteTagModal() {
   const closeModal             = useUIStore((s) => s.closeModal);
   const pendingNoteTagParentId = useUIStore((s) => s.pendingNoteTagParentId);
@@ -39,17 +56,24 @@ export function AddNoteTagModal() {
   const collectionsRecord = useTaskStore((s) => s.collections);
   const allCollections    = Object.values(collectionsRecord);
 
-  const [name, setName]         = useState('');
+  const [name, setName]         = useState(() => useUIStore.getState().createDraft ?? '');
+  // Starts as wherever the pane was opened from (the selected notebook, or a row's "+"); the
+  // "Inside" picker changes it, or clears it for a top-level notebook.
+  const [parentId, setParentId] = useState<NoteTagId | null>(pendingNoteTagParentId);
+  const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [icon, setIcon]         = useState('');
   const [color, setColor]       = useState<string | null>(null);
   const [typeKey, setTypeKey]   = useState<string>('');
 
   const isTag     = pendingNoteTagKind === 'tag';
-  const parentTag = pendingNoteTagParentId ? noteTags[pendingNoteTagParentId] : null;
-  const depth     = getDepth(pendingNoteTagParentId, noteTags);
+  const parentTag = parentId ? noteTags[parentId] : null;
+  const depth     = getDepth(parentId, noteTags);
   const levelLabel = isTag ? 'Tag' : LEVEL_LABELS[Math.min(depth, LEVEL_LABELS.length - 1)];
 
-  const [collectionId, setCollectionId] = useState<CollectionId | null>(parentTag?.collectionId ?? null);
+  // undefined = follow the parent notebook's Endeavour (also after the parent changes); anything
+  // else is the user's own pick.
+  const [pickedCollectionId, setCollectionId] = useState<CollectionId | null | undefined>(undefined);
+  const collectionId = pickedCollectionId !== undefined ? pickedCollectionId : (parentTag?.collectionId ?? null);
 
   // Pre-fill icon/color when type is chosen
   const handleTypeChange = (key: string) => {
@@ -70,7 +94,7 @@ export function AddNoteTagModal() {
       kind: pendingNoteTagKind,
       icon: icon.trim() || null,
       color,
-      parentTagId: isTag ? null : (pendingNoteTagParentId ?? null),
+      parentTagId: isTag ? null : parentId,
       tagTypeId: typeKey || null,
       collectionId: isTag ? null : collectionId,
     });
@@ -82,14 +106,62 @@ export function AddNoteTagModal() {
   return (
     <div className={styles.overlay} onClick={closeModal}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <CreateKindSwitcher current={isTag ? 'note-tag' : 'notebook'} draft={name} />
         <div className={styles.header}>
           <h2>New {levelLabel}</h2>
           <button className={styles.closeBtn} onClick={closeModal}>✕</button>
         </div>
 
         <div className={styles.body}>
-          {!isTag && parentTag && (
-            <p className={styles.context}>Inside <strong>{parentTag.name}</strong></p>
+          {!isTag && (
+            <div
+              className={styles.field}
+              onKeyDown={(e) => { if (e.key === 'Escape' && parentPickerOpen) { e.stopPropagation(); setParentPickerOpen(false); } }}
+            >
+              <span className={styles.label}>{LABELS.notebookParent.label}</span>
+              <div className={styles.parentRow}>
+                <button
+                  type="button"
+                  className={styles.parentBtn}
+                  onClick={() => setParentPickerOpen((o) => !o)}
+                  title={LABELS.notebookParent.change}
+                  aria-expanded={parentPickerOpen}
+                >
+                  <span className={styles.parentName}>{parentId ? notebookPath(parentId, noteTags) : LABELS.notebookParent.topLevel}</span>
+                  <span aria-hidden="true">▾</span>
+                </button>
+                {parentId && (
+                  <button
+                    type="button"
+                    className={styles.parentClear}
+                    onClick={() => { setParentId(null); setParentPickerOpen(false); }}
+                    title={LABELS.notebookParent.makeTopLevel}
+                    aria-label={LABELS.notebookParent.makeTopLevel}
+                  >✕</button>
+                )}
+              </div>
+              {parentPickerOpen && (
+                <div className={styles.parentList}>
+                  <button
+                    type="button"
+                    className={`${styles.parentOption} ${parentId === null ? styles.parentOptionActive : ''}`}
+                    onClick={() => { setParentId(null); setParentPickerOpen(false); }}
+                  >{LABELS.notebookParent.topLevel}</button>
+                  {flattenNotebooks(noteTags).map(({ tag, depth: d }) => (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      className={`${styles.parentOption} ${parentId === tag.id ? styles.parentOptionActive : ''}`}
+                      style={{ paddingLeft: `${0.6 + d}rem` }}
+                      onClick={() => { setParentId(tag.id as NoteTagId); setParentPickerOpen(false); }}
+                    >
+                      <span className={styles.parentOptionIcon}>{tag.icon ?? '📁'}</span>
+                      {tag.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           <div className={styles.field}>

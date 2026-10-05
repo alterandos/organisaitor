@@ -140,6 +140,18 @@ describe('pattern: Escape handling goes through useEscapeClose', () => {
 });
 
 // ── 4 & 5. Overlay/modal conventions ────────────────────────────────────────────────
+describe('pattern: anything that closes on an outside click also closes on Escape', () => {
+  // A dropdown/panel with an outside-click listener is an overlay too. The notifications panel
+  // (NotificationCenter) and the speed dial had the listener but not the Escape registration (found 2026-10-05).
+  it("every component with a document mousedown listener calls useEscapeClose", () => {
+    const bad = TSX_FILES.filter((f) => {
+      const src = fs.readFileSync(f, 'utf8');
+      return src.includes("addEventListener('mousedown'") && !/useEscapeClose\(/.test(src);
+    });
+    expect(bad.map(rel)).toEqual([]);
+  });
+});
+
 describe('pattern: overlay components call useEscapeClose', () => {
   // A component "renders an overlay" if its module references styles.overlay (the CSS-module
   // convention documented in CLAUDE.md's "Modals" section).
@@ -366,6 +378,65 @@ describe('pattern: nav-column row actions use RowHoverActions, not the old inlin
     const hits = findMatches(cssFiles, /:hover\s+\.\w*Actions\s*\{/);
     expect(hits, describeHits(hits)).toEqual([]);
   });
+
+  // Rows open their actions from a "⋯" button (RowOptionsMenu), never on a hover of the whole
+  // row (decided 2026-10-05). The hover machinery itself is only used by RowOptionsMenu and by
+  // HoverOptions (a button offering alternatives to its click).
+  it('only RowOptionsMenu and HoverOptions use useRowHoverActions / RowHoverActionsMenu', () => {
+    const OWNERS = new Set([
+      'src/components/RowHoverActions/RowOptionsMenu.tsx',
+      'src/components/RowHoverActions/RowHoverActionsMenu.tsx',
+      'src/components/RowHoverActions/useRowHoverActions.ts',
+      'src/components/HoverOptions/HoverOptions.tsx',
+    ]);
+    const hits = findMatches(SOURCE_FILES.filter((f) => !OWNERS.has(rel(f))), /\b(useRowHoverActions|RowHoverActionsMenu)\b/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('no pane renders the same field twice', () => {
+  // A merge once left CalendarEventPane with two Links fields (found 2026-10-05: every link showed twice).
+  it('each component renders <LinksField> and <CrossAppRefPicker> at most once', () => {
+    const bad = TSX_FILES.filter((f) => {
+      const src = fs.readFileSync(f, 'utf8');
+      return (src.match(/<LinksField\b/g) ?? []).length > 1 || (src.match(/<CrossAppRefPicker\b/g) ?? []).length > 1;
+    });
+    expect(bad.map(rel)).toEqual([]);
+  });
+});
+
+describe('pattern: creation panes switch kinds through config/createKinds.ts', () => {
+  // Every registered kind must have a pane that shows the switcher (naming its id), or choosing it
+  // from a sibling's switcher would land in a pane with no way back.
+  it('every CREATE_KINDS id is named by some <CreateKindSwitcher> pane', () => {
+    const registry = fs.readFileSync(path.join(SRC, 'config', 'createKinds.ts'), 'utf8');
+    const ids = [...registry.matchAll(/^\s*id:\s*'([^']+)'/gm)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThan(0);
+    const panes = TSX_FILES.map((f) => fs.readFileSync(f, 'utf8')).filter((src) => src.includes('<CreateKindSwitcher'));
+    const missing = ids.filter((id) => !panes.some((src) => src.includes(`'${id}'`) || src.includes(`"${id}"`)));
+    expect(missing).toEqual([]);
+  });
+});
+
+describe('pattern: right-click menus go through the context-menu registry', () => {
+  // One listener (ContextMenuHost) decides every right-click from the scopes and providers in
+  // src/contextMenu/. A component handling contextmenu itself would fight it. The exceptions only
+  // ever suppress the event: the menu itself, BottomSheet and useLongPress (Android long-press).
+  const ALLOWED = new Set([
+    'src/components/ContextMenu/ContextMenuHost.tsx',
+    'src/components/ContextMenu/ContextMenu.tsx',
+    'src/components/BottomSheet/BottomSheet.tsx',
+    'src/hooks/useLongPress.ts',
+  ]);
+  it('no other file listens for contextmenu', () => {
+    const hits = findMatches(SOURCE_FILES.filter((f) => !ALLOWED.has(rel(f))), /onContextMenu\b|['"]contextmenu['"]/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  it('<ContextMenuHost /> is mounted exactly once, in App.tsx', () => {
+    const hits = findMatches(TSX_FILES, /<ContextMenuHost\s*\/>/);
+    expect(hits.map((h) => h.file)).toEqual(['src/App.tsx']);
+  });
 });
 
 describe('pattern: the UI completes tasks through toggleTaskCompletion', () => {
@@ -431,12 +502,12 @@ describe('pattern: bottom sheets are BottomSheet, not hand-rolled', () => {
 describe('pattern: row actions are RowAction, so the Android long-press sheet can label them', () => {
   // HoverOptions' menu holds text options, not icon actions, and on Android shows an ActionSheet.
   const EXEMPT = new Set(['src/components/HoverOptions/HoverOptions.tsx']);
-  it('no raw <button> inside a <RowHoverActionsMenu>', () => {
+  it('no raw <button> inside a <RowHoverActionsMenu> or <RowOptionsMenu>', () => {
     const bad: string[] = [];
     for (const file of TSX_FILES) {
       if (EXEMPT.has(rel(file))) continue;
       const src = fs.readFileSync(file, 'utf8');
-      for (const m of src.matchAll(/<RowHoverActionsMenu[\s\S]*?<\/RowHoverActionsMenu>/g)) {
+      for (const m of src.matchAll(/<(RowHoverActionsMenu|RowOptionsMenu)\b[\s\S]*?<\/\1>/g)) {
         if (/<button\b/.test(m[0])) bad.push(`${rel(file)}: ${m[0].split('\n')[0].trim()}`);
       }
     }
@@ -469,5 +540,18 @@ describe('pattern: the Android back button is the Escape stack', () => {
   it('no fixed overlay list: closeTopmostMobileOverlay is gone, and App.tsx calls closeTopOverlay', () => {
     expect(findMatches(SOURCE_FILES, /closeTopmostMobileOverlay/)).toEqual([]);
     expect(fs.readFileSync(path.join(SRC, 'App.tsx'), 'utf8')).toMatch(/closeTopOverlay\(\)/);
+  });
+});
+
+// Backup restore must reload every store syncService uploads before force-uploading, or the upload
+// sends the pre-restore state over the restored data (notes/lists/… did exactly that until
+// 2026-10-05). A new synced store goes in restoreBackupData's rehydrate list too.
+describe('backup restore rehydrates every synced store', () => {
+  it('restoreBackupData rehydrates each store syncService.ts imports', () => {
+    const sync = fs.readFileSync(path.join(SRC, 'services', 'sync', 'syncService.ts'), 'utf8');
+    const backup = fs.readFileSync(path.join(SRC, 'utils', 'backupExport.ts'), 'utf8');
+    const synced = [...sync.matchAll(/import \{ (use\w+Store) \} from '@\/store\/\w+'/g)].map((m) => m[1]);
+    expect(synced.length).toBeGreaterThan(5);
+    for (const store of synced) expect(backup, store).toContain(`${store}.persist.rehydrate()`);
   });
 });

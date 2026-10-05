@@ -943,6 +943,21 @@
 .weekViewContainer > :has(+ .weekTimeScroll),
 .dayTimeGridContainer > :has(+ .dayTimeScroll) { border-bottom: none; }
 
+/* Android: a phone's week view has ~50px day columns, so an unclamped whole-day title wrapped a
+   letter or two per line and pushed the hourly grid off the screen. Titles clamp to two lines (tap
+   opens the item) and each whole-day row is capped, scrolling within itself when it holds more. */
+:global(.platform-android) .weekViewItem .calItemTitle {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+:global(.platform-android) .weekSpanRowWrap { max-height: 4.5rem; overflow-y: auto; }
+:global(.platform-android) .weekUntimedRowWrap,
+:global(.platform-android) .dayUntimedRow { max-height: 7.5rem; overflow-y: auto; }
+
 .weekTimeGridInner {
   display: flex;
   position: relative;

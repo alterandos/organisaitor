@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useTaskStore } from '@/store/taskStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
+import { useScheduleStore } from '@/store/scheduleStore';
 import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem } from '@/utils/quickAccess';
@@ -113,5 +114,32 @@ describe('navigateToQuickAccessItem', () => {
 
   it('an unknown provider type is a harmless no-op', () => {
     expect(() => navigateToQuickAccessItem({ key: 'x', type: 'nope' as never, entityId: 'x', title: '', subtitle: '', icon: '' })).not.toThrow();
+  });
+});
+
+describe('schedules in Quick Access', () => {
+  beforeEach(() => {
+    useScheduleStore.setState(useScheduleStore.getInitialState(), true);
+  });
+
+  it('a schedule is searchable by name', () => {
+    useScheduleStore.getState().addSchedule({ name: 'Uni timetable' });
+    expect(searchQuickAccessItems('timetable').some((r) => r.type === 'schedule' && r.title === 'Uni timetable')).toBe(true);
+  });
+
+  it('a schedule item opens Calendar, the side pane and the schedule editor, and is recorded as a visit', () => {
+    const id = useScheduleStore.getState().addSchedule({ name: 'Gym' });
+    navigateToQuickAccessItem({ key: `schedule:${id}`, type: 'schedule', entityId: id, title: 'Gym', subtitle: '', icon: '' });
+    const ui = useUIStore.getState();
+    expect(ui.activeView).toBe('calendar');
+    expect(ui.schedulesOpen).toBe(true);
+    expect(ui.openModal).toBe('add-schedule');
+    expect(ui.editingSchedule?.id).toBe(id);
+    expect(useRecentItemsStore.getState().items[`schedule:${id}`]).toBeDefined();
+  });
+
+  it('a deleted schedule resolves as stale', () => {
+    const { stale } = resolveRecentItems([{ type: 'schedule', entityId: 'gone', lastVisitedAt: new Date().toISOString(), visitCount: 1 }]);
+    expect(stale).toHaveLength(1);
   });
 });

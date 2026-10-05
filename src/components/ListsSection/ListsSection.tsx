@@ -13,8 +13,7 @@ import type { ListId, ListItemId, ListItemStatus, ListItem, ListFieldSchema, Lis
 import styles from './ListsSection.module.css';
 import { alertDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
-import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
-import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import { ChecklistView } from './ChecklistView';
 import { LABELS } from '@/config/labels';
@@ -260,9 +259,9 @@ function ItemCard({
   );
 }
 
-// Its own component (not inline JSX inside the sidebar's .map()) because useRowHoverActions
-// is a hook — has to be called once per row instance, not once per iteration of a shared
-// parent's render.
+// Its own component (not inline JSX inside the sidebar's .map()) because it holds
+// a ref for its RowOptionsMenu — a hook, called once per row instance, not once per iteration
+// of a shared parent's render.
 function SidebarListItem({
   list, listType, itemCount, isSelected, isLocked, onSelect, onEdit, onDelete, onDecrypt,
 }: {
@@ -276,21 +275,15 @@ function SidebarListItem({
   onDelete: () => void;
   onDecrypt: () => void;
 }) {
-  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   return (
     <div
-      ref={anchorRef}
+      ref={rowRef}
       className={`${styles.sidebarItem} ${isSelected ? styles.sidebarItemActive : ''}`}
       onClick={onSelect}
       style={isSelected && list.color ? { borderLeftColor: list.color } : undefined}
-      {...rowHandlers}
     >
-      <span className={styles.sidebarItemIcon}>{list.icon ?? listType?.icon ?? '📋'}</span>
-      <div className={styles.sidebarItemInfo}>
-        <TruncatedText text={list.name} className={styles.sidebarItemName} />
-        <span className={styles.sidebarItemCount}>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
-      </div>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} title={list.name} {...menuHandlers}>
+      <RowOptionsMenu rowRef={rowRef} title={list.name} icon={<span className={styles.sidebarItemIcon}>{list.icon ?? listType?.icon ?? '📋'}</span>}>
         {!isLocked && (
           <RowAction className={styles.sidebarActionBtn} icon="✎" label={LABELS.rowActions.editThing(LABELS.list)} onClick={onEdit} />
         )}
@@ -301,7 +294,11 @@ function SidebarListItem({
           onClick={onDelete}
           destructive
         />
-      </RowHoverActionsMenu>
+      </RowOptionsMenu>
+      <div className={styles.sidebarItemInfo}>
+        <TruncatedText text={list.name} className={styles.sidebarItemName} />
+        <span className={styles.sidebarItemCount}>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
+      </div>
       {list.isEncrypted && (
         <button
           className={styles.lockBtn}

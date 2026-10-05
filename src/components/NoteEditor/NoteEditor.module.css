@@ -479,6 +479,17 @@
   min-width: 0;
 }
 
+/* Room to scroll past the end of the note: 80% of the visible height, so the last lines can be
+   brought up to mid-screen, clear of the + button. Greyed (--color-overscroll, light or dark) so
+   it reads as outside the page, not more of it. flex-basis % resolves against .editorWrap's own
+   height (it is a sized column flex container). */
+.editorWrap::after {
+  content: '';
+  flex: 0 0 80%;
+  background: var(--color-overscroll);
+  border-top: 1px solid var(--color-border-strong);
+}
+
 .lockBadge {
   flex-shrink: 0;
   font-size: 0.95rem;

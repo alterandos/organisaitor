@@ -57,6 +57,7 @@
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
   --color-backdrop: rgba(0, 0, 0, 0.45);
+  --color-overscroll: #e8e9ed; /* past the end of a note (NoteEditor .editorWrap::after) */
 }
 
 [data-theme="dark"] {
@@ -99,6 +100,7 @@
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.32);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.48);
   --color-backdrop: rgba(0, 0, 0, 0.6);
+  --color-overscroll: #2e2e33;
 }
 
 body {

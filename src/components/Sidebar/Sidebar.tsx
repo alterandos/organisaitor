@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { TagId, PurposeId, CollectionId } from '@/types';
 import { LABELS } from '@/config/labels';
 import { useTaskStore } from '@/store/taskStore';
@@ -7,8 +7,7 @@ import styles from './Sidebar.module.css';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
-import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
-import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import type { Collection, Tag, Purpose } from '@/types';
 
@@ -18,19 +17,14 @@ interface Props {
 }
 
 // Each row type gets its own tiny component (rather than inline JSX inside a .map()) because
-// useRowHoverActions is a hook — it has to be called once per row instance, not once per
-// iteration of a shared parent's render (which would violate the rules of hooks whenever the
-// list's length changes between renders).
+// each row holds its own ref (useRef is a hook — once per row instance, not once per iteration
+// of a shared parent's render, which would break the rules of hooks when the list's length changes).
 
 function SidebarCollectionRow({ col, onEdit, onDelete }: { col: Collection; onEdit: () => void; onDelete: () => void }) {
-  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   return (
-    <div ref={anchorRef} className={styles.row} {...rowHandlers}>
-      <div className={styles.rowMain}>
-        <span className={styles.dot} style={{ background: col.color ?? 'var(--color-border)' }} />
-        <TruncatedText text={col.name} className={styles.name} />
-      </div>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+    <div ref={rowRef} className={styles.row}>
+      <RowOptionsMenu rowRef={rowRef} title={col.name} icon={<span className={styles.dot} style={{ background: col.color ?? 'var(--color-border)' }} />}>
         <RowAction
           className={styles.iconBtn}
           icon="◔"
@@ -39,44 +33,44 @@ function SidebarCollectionRow({ col, onEdit, onDelete }: { col: Collection; onEd
         />
         <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
         <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon="×" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
-      </RowHoverActionsMenu>
+      </RowOptionsMenu>
+      <div className={styles.rowMain}>
+        <TruncatedText text={col.name} className={styles.name} />
+      </div>
     </div>
   );
 }
 
 function SidebarTagRow({ tag, isActive, onToggle, onEdit, onDelete }: { tag: Tag; isActive: boolean; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
-  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   return (
     <div
-      ref={anchorRef}
+      ref={rowRef}
       className={`${styles.row} ${isActive ? styles.rowActive : ''}`}
       style={isActive && tag.color ? { background: tag.color + '18' } : undefined}
-      {...rowHandlers}
     >
-      <button className={styles.rowMain} onClick={onToggle}>
-        <span className={styles.dot} style={{ background: tag.color ?? 'var(--color-border)' }} />
-        <TruncatedText text={tag.name} className={styles.name} />
-      </button>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+      <RowOptionsMenu rowRef={rowRef} title={tag.name} icon={<span className={styles.dot} style={{ background: tag.color ?? 'var(--color-border)' }} />}>
         <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
         <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon="×" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
-      </RowHoverActionsMenu>
+      </RowOptionsMenu>
+      <button className={styles.rowMain} onClick={onToggle}>
+        <TruncatedText text={tag.name} className={styles.name} />
+      </button>
     </div>
   );
 }
 
 function SidebarPurposeRow({ purpose, onEdit, onDelete }: { purpose: Purpose; onEdit: () => void; onDelete: () => void }) {
-  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   return (
-    <div ref={anchorRef} className={styles.row} {...rowHandlers}>
-      <div className={styles.rowMain}>
-        <span className={styles.dot} style={{ background: purpose.color ?? 'var(--color-border)' }} />
-        <TruncatedText text={purpose.name} className={styles.name} />
-      </div>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} {...menuHandlers}>
+    <div ref={rowRef} className={styles.row}>
+      <RowOptionsMenu rowRef={rowRef} title={purpose.name} icon={<span className={styles.dot} style={{ background: purpose.color ?? 'var(--color-border)' }} />}>
         <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
         <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon="×" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
-      </RowHoverActionsMenu>
+      </RowOptionsMenu>
+      <div className={styles.rowMain}>
+        <TruncatedText text={purpose.name} className={styles.name} />
+      </div>
     </div>
   );
 }

@@ -70,16 +70,6 @@
   gap: 1rem;
 }
 
-.context {
-  font-size: 0.875rem;
-  color: var(--color-muted);
-  margin: 0;
-  padding: 0.5rem 0.75rem;
-  background: var(--color-surface-alt);
-  border-radius: 6px;
-  border-left: 3px solid var(--color-border);
-}
-
 .row {
   display: flex;
   gap: 1rem;
@@ -212,4 +202,93 @@
 
 .btnSecondary:hover {
   background: var(--color-surface-alt);
+}
+
+/* The "Inside" picker: where a new notebook goes. */
+.parentRow {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.parentBtn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.parentBtn:hover {
+  border-color: var(--color-primary-border);
+}
+
+.parentName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parentClear {
+  flex-shrink: 0;
+  width: 2.1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.parentClear:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.parentList {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+
+.parentOption {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.parentOption:hover {
+  background: var(--color-surface-alt);
+}
+
+.parentOptionActive {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.parentOptionIcon {
+  flex-shrink: 0;
 }

@@ -15,6 +15,7 @@
 import { useTaskStore } from '@/store/taskStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
+import { useScheduleStore } from '@/store/scheduleStore';
 import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore, type QuickAccessTargetType, type RecentItemEntry } from '@/store/recentItemsStore';
 import { getNotebookIcon, getNoteBreadcrumb } from '@/utils/notes';
@@ -24,7 +25,7 @@ import { listView } from '@/services/listSecrets';
 import type { List } from '@/types/lists';
 import type { Note, NoteId, NoteTagId } from '@/types/notes';
 import type { ListId } from '@/types/lists';
-import type { TaskId, CollectionId } from '@/types';
+import type { TaskId, CollectionId, ScheduleId, ScheduleTemplate } from '@/types';
 
 export interface QuickAccessItem {
   key:      string;   // `${type}:${entityId}` — stable across search and recent-history renders
@@ -198,8 +199,34 @@ const routineProvider: QuickAccessProvider = {
   },
 };
 
+const scheduleItem = (s: ScheduleTemplate): QuickAccessItem => ({
+  key: `schedule:${s.id}`, type: 'schedule', entityId: s.id, title: s.name,
+  subtitle: s.active ? LABELS.schedule : `${LABELS.schedule} · ${LABELS.quickAccessScheduleHidden}`,
+  icon: '🗓',
+});
+
+// Opens the Calendar with its side pane (where schedules are listed) and the schedule's
+// editor on top, so Escape closes the editor and leaves you in the schedule list.
+const scheduleProvider: QuickAccessProvider = {
+  type: 'schedule',
+  typeLabel: LABELS.schedule,
+  list: () => Object.values(useScheduleStore.getState().schedules).map(scheduleItem),
+  resolve: (id) => {
+    const s = useScheduleStore.getState().schedules[id as ScheduleId];
+    return s ? scheduleItem(s) : null;
+  },
+  navigate: (id) => {
+    const s = useScheduleStore.getState().schedules[id as ScheduleId];
+    if (!s) return;
+    const ui = useUIStore.getState();
+    ui.setActiveView('calendar');
+    ui.openSchedules();
+    ui.openEditSchedule(s);
+  },
+};
+
 const PROVIDERS: QuickAccessProvider[] = [
-  noteProvider, notebookProvider, taskProvider, listProvider, endeavourProvider, trackerProvider, routineProvider,
+  noteProvider, notebookProvider, taskProvider, listProvider, endeavourProvider, trackerProvider, routineProvider, scheduleProvider,
 ];
 
 const providerByType: Record<QuickAccessTargetType, QuickAccessProvider> = Object.fromEntries(
@@ -241,7 +268,7 @@ export function pruneStaleRecentEntries(stale: RecentItemEntry[]): void {
 
 // Visit tracking itself lives at each destination's own natural "open" point (noteStore's
 // touchNote, uiStore's openTaskPane/setSelectedNoteTag/setActiveTracker/setActiveRoutine/
-// setActiveCollection, ListsSection's handleSelectList) rather than here — that way "recent"/
+// setActiveCollection/openEditSchedule, ListsSection's handleSelectList) rather than here — that way "recent"/
 // "frequent" reflects everywhere those destinations get opened from (sidebar clicks,
 // cross-app links, hotkeys), not just visits made through this pane.
 export function navigateToQuickAccessItem(item: QuickAccessItem): void {

@@ -47,7 +47,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'nav-portfolio', group: 'Navigation', primary: '6', secondary: 'Ctrl+6', action: 'Portfolio section', customizable: true, touch: 'More tab → Portfolio' },
   { id: 'nav-fitness',   group: 'Navigation', primary: '7', secondary: 'Ctrl+7', action: 'Fitness section',   customizable: true, touch: 'More tab → Fitness' },
   // Actions
-  { id: 'action-new-item',  group: 'Actions', primary: 'N', secondary: 'Space',  action: 'New item (task / event / entry) — Ctrl+N also works', customizable: true, touch: 'The + button, or the section’s quick-add bar' },
+  { id: 'action-new-item',  group: 'Actions', primary: 'N', secondary: 'Space',  action: 'New item for where you are (task / event / entry; in Notes, a notebook from the Chronicle column, a note from the notes column) — Ctrl+N also works', customizable: true, touch: 'The + button, or the section’s quick-add bar' },
   { id: 'action-settings',  group: 'Actions', primary: 'S',                      action: 'Toggle settings',                  customizable: true, touch: 'More tab → Settings' },
   { id: 'action-account',   group: 'Actions', primary: 'A',                      action: 'Toggle account',                   customizable: true, touch: 'More tab → Account' },
   { id: 'action-escape',    group: 'Actions', primary: 'Esc',                   action: 'Close panel / modal',              protected: true, touch: 'Back button / gesture (closes the newest overlay first)' },
@@ -80,6 +80,8 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'notes-new-tab',       group: 'Notes', primary: 'Ctrl+T',         action: 'New tab — prompts for a name (editor focused)', touch: 'The + at the end of the tab bar' },
   { id: 'notes-focus-toggle',  group: 'Notes', primary: 'Ctrl+`',        action: 'Move focus between navigation columns and editor', touch: 'n/a: no keyboard focus on touch; tap where you want to be' },
   { id: 'notes-heading-level', group: 'Notes', primary: 'Ctrl+H', action: 'Then press 1–5 to make the paragraph that heading level, 0 for plain text (clears all formatting), or H for the Title of the tab', touch: 'n/a for now: W7’s collapsed editing toolbar (D11)' },
+  { id: 'notes-duplicate-line', group: 'Notes', primary: 'Alt+Shift+↓', action: 'Insert a copy of the current line (or the selected lines) below it (editor focused)', touch: 'n/a for now: W7’s collapsed editing toolbar (D11)' },
+  { id: 'notes-paste-plain', group: 'Notes', primary: 'Ctrl+Shift+V', action: 'Paste as plain text: no formatting, links or images from the source; the text takes the formatting where it lands (editor focused)', touch: 'Long-press in the text, then the system menu’s Paste as plain text (where the keyboard offers it)' },
   { id: 'notes-link',          group: 'Notes', primary: 'Ctrl+L',        action: 'Turn selection into a link, or open "New link" pane if nothing selected', touch: 'n/a for now: W7’s collapsed editing toolbar (D11)' },
   { id: 'notes-create-menu',   group: 'Notes', primary: 'Ctrl+Q',        action: 'Open "Create ▸" menu for the selection (Task/Calendar/List/Tracker) — 1-4 picks, Esc cancels', touch: 'n/a for now: W7’s collapsed editing toolbar (D11)' },
   { id: 'notes-link-select',   group: 'Notes', primary: 'Ctrl+click',    action: 'Select a link\'s text instead of opening it (editor focused)', touch: 'Long-press the link text (system text selection)' },

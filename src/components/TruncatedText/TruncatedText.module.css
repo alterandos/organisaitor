@@ -30,6 +30,21 @@
   pointer-events: none;
 }
 
+/* A row taller than the text (a note row: title + date) gets its background continued past its
+   right edge behind the extended text, so the whole row reads as wider, not just the title line.
+   The tail carries the edge shadow then, not the text. */
+.rowTail {
+  position: fixed;
+  z-index: 10000;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  box-shadow: 6px 0 10px -6px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.extended.extendedOnTail {
+  box-shadow: none;
+}
+
 /* Android: two lines, then an ellipsis, instead of one line plus a hover reveal. The class is
    doubled to outrank the site's own one-line ellipsis rule (often `.row .name`). */
 :global(.platform-android) .text.text {

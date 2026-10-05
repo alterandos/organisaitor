@@ -10,7 +10,8 @@ export const LABELS = {
   noCollection:     `No ${COLLECTION}`,
   addToCollection:  `Add to ${COLLECTION}:`,
   noneInCollection: (things: string) => `No ${things} in this ${COLLECTION}`,
-  quickAccessPlaceholder: `Jump to a note, task, list, tracker, routine, or ${COLLECTION}…`,
+  quickAccessPlaceholder: `Jump to a note, task, list, tracker, routine, schedule, or ${COLLECTION}…`,
+  quickAccessScheduleHidden: 'Hidden',
   collectionFilterHint:  `Expand ${COLLECTION} filter`,
   collectionKind: {
     project: 'Project',
@@ -120,6 +121,39 @@ export const LABELS = {
 
   // A row's own actions (components/RowHoverActions/RowAction): the hover tooltip on desktop,
   // the visible label in the long-press sheet on Android.
+  // Right-click menus (src/contextMenu/, CLAUDE.md "Right-click menus").
+  contextMenu: {
+    cut:          'Cut',
+    copy:         'Copy',
+    paste:        'Paste',
+    pastePlain:   'Paste as plain text',
+    selectAll:    'Select all',
+    link:         'Link…',
+    createFrom:   'Create from selection…',
+    style:        'Style',
+    title:        'Title',
+    heading:      (level: number) => `Heading ${level}`,
+    normalText:   'Normal text',
+    clipboardBlocked: 'The clipboard couldn’t be read here (the browser may have blocked access). Use Ctrl+V, or Ctrl+Shift+V for plain text.',
+    openNote:     'Open',
+    noteDetails:  'Edit details',
+  },
+
+  // The "what are you creating?" switcher at the top of a creation pane (config/createKinds.ts),
+  // and the New notebook pane's parent picker.
+  createKinds: {
+    switcherAria: 'What to create',
+    note:         'Note',
+    notebook:     'Notebook',
+    noteTag:      'Tag',
+  },
+  notebookParent: {
+    label:       'Inside',
+    topLevel:    'Top level (no parent)',
+    change:      'Change where this notebook goes',
+    makeTopLevel: 'Make it a top-level notebook',
+  },
+
   rowActions: {
     edit:       'Edit',
     delete:     'Delete',
@@ -127,9 +161,11 @@ export const LABELS = {
     restore:    'Restore',
     addSection: 'Add section',
     indent:     'Make sub-section of the one above',
+    indentNote: 'Make sub-note of the one above',
     outdent:    'Move up one level',
     editThing:   (noun: string) => `Edit ${noun.toLowerCase()}`,
     deleteThing: (noun: string) => `Delete ${noun.toLowerCase()}`,
+    options:     (name: string) => `Options for “${name}”`,
   },
 
   // Swipe-left on a row (Android, docs/android/11 §9): act at once, offer Undo.
@@ -217,6 +253,9 @@ export const LABELS = {
   // Routines
   routine: 'Routine',
   routinePlural: 'Routines',
+
+  // Schedules (recurring weekly timetables, Calendar section)
+  schedule: 'Schedule',
 
   // Lists
   list:          'List',

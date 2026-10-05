@@ -24,7 +24,8 @@ import { NoteBacklinks } from './NoteBacklinks';
 import { handleArtifactDrop } from './artifactLinkInsert';
 import { RemoveMarkStep } from '@tiptap/pm/transform';
 import type { Transaction } from '@tiptap/pm/state';
-import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
+import { confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { usePlatform } from '@/hooks/usePlatform';
 import { getNoteBacklinks } from '@/store/noteBacklinks';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
@@ -32,9 +33,13 @@ import { collectArtifactTargets } from '@/utils/noteContent';
 import { linkTabIdFor, MAIN_TAB_ID, resolveNoteTab, titlePrefillFor } from '@/utils/noteTabs';
 import { setNormalText } from './extensions/normalText';
 import { NoteTitle } from './extensions/NoteTitle';
+import { DuplicateLine } from './extensions/DuplicateLine';
 import { LABELS } from '@/config/labels';
 import { compressImageBlob } from '@/utils/imageCompress';
-import { FloatingToolbar } from './FloatingToolbar';
+import { FloatingToolbar, type FloatingToolbarActions } from './FloatingToolbar';
+import './contextMenu';
+import type { NoteEditorMenuApi } from './contextMenu';
+import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { NoteTOC } from './NoteTOC';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { openExternalLink, normalizeLinkUrl } from '@/utils/links';
@@ -216,7 +221,7 @@ function insertTableFromData(
   data: TableData,
 ) {
   const { schema } = view.state;
-  const { table, table_row: tableRow, table_header: tableHeader, table_cell: tableCell } = schema.nodes;
+  const { table, tableRow, tableHeader, tableCell } = schema.nodes;
   if (!table || !tableRow || !tableHeader || !tableCell) return false;
 
   const rows = data.map((rowData, rowIdx) => {
@@ -262,6 +267,7 @@ interface NoteEditorProps {
 }
 
 export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
+  const { isAndroid }       = usePlatform();
   const editingNoteId       = useUIStore((s) => s.editingNoteId);
   const closeNote           = useUIStore((s) => s.closeNote);
   const noteTagViewReturn   = useUIStore((s) => s.noteTagViewReturn);
@@ -365,6 +371,14 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // ── "New link" pane — Ctrl+L with no selection (nothing to anchor the
   // selection-based FloatingToolbar link popover to) ─────────────────────────
   const [newLinkPane, setNewLinkPane] = useState<{ top: number; left: number } | null>(null);
+  // The "New link" pane (text + URL) at the cursor: Ctrl+L with nothing selected, or the
+  // right-click menu's Link….
+  function openNewLinkPane(ed: NonNullable<typeof editor>) {
+    const coords = ed.view.coordsAtPos(ed.state.selection.from);
+    setNewLinkText('');
+    setNewLinkUrl('');
+    setNewLinkPane({ top: coords.bottom + 6, left: coords.left });
+  }
   const [newLinkText, setNewLinkText] = useState('');
   const [newLinkUrl, setNewLinkUrl]   = useState('');
 
@@ -629,6 +643,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     return () => el.removeEventListener('wheel', onWheel);
   }, [onWheel]);
 
+  // Set by the editor's keydown for Ctrl+Shift+V, read (and cleared) by the paste that follows.
+  const plainPasteRef = useRef(false);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ document: false, link: { openOnClick: false, HTMLAttributes: { class: styles.link } } }),
@@ -650,6 +666,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       TableCell,
       HeadingNumbering,
       NoteTitle,
+      DuplicateLine,
     ],
     content: '',
     editorProps: {
@@ -700,6 +717,10 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       // no modifier held, so a plain quote/bracket keystroke with nothing selected still just
       // types the character normally.
       handleKeyDown(view, event) {
+        // Ctrl+Shift+V: ProseMirror itself pastes as plain text while Shift is held (no formatting,
+        // links or images from the source; the text takes the formatting where it lands). Noted
+        // here so handlePaste below doesn't undo that by turning the text into a table or an image.
+        plainPasteRef.current = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v';
         const SURROUND_PAIRS: Record<string, [string, string]> = {
           '(': ['(', ')'], '[': ['[', ']'], '{': ['{', '}'],
           '"': ['"', '"'], "'": ["'", "'"], '`': ['`', '`'],
@@ -759,6 +780,9 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         return handleArtifactDrop(view, event);
       },
       handlePaste(view, event) {
+        // Paste as plain text (Ctrl+Shift+V): leave it to ProseMirror's own plain-text paste.
+        if (plainPasteRef.current) { plainPasteRef.current = false; return false; }
+
         // Image paste
         const files = event.clipboardData?.files;
         if (files && files.length > 0) {
@@ -878,6 +902,61 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     if (!n || !editor) return;
     editor.chain().focus().insertOrFocusNoteTitle(titlePrefillFor(n, activeTabIdRef.current)).run();
   };
+
+  // ── Right-click menu (./contextMenu.ts) ──────────────────────────────────────────────────
+  // The editing surface is a `note-editor` scope; its data is what the menu's items need from
+  // here. Shift+right-click still gives the browser's own menu (spellcheck).
+  const toolbarActionsRef = useRef<FloatingToolbarActions | null>(null);
+  const editorContentRef  = useRef<HTMLDivElement | null>(null);
+
+  // The menu's Paste / Paste as plain text. Reading the clipboard from a click (rather than a
+  // paste event) needs the browser's permission, so a refusal says how to paste instead.
+  // Goes through ProseMirror's own paste (pasteHTML / pasteText) so it behaves like Ctrl+V /
+  // Ctrl+Shift+V: an image is shrunk and inserted, table-shaped text becomes a table.
+  async function pasteFromClipboard(plain: boolean) {
+    if (!editor) return;
+    const view = editor.view;
+    try {
+      if (plain) {
+        const text = await navigator.clipboard.readText();
+        if (text) view.pasteText(text);
+        return;
+      }
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith('image/'));
+        if (!imageType) continue;
+        const src = await compressImageBlob(await item.getType(imageType));
+        const node = view.state.schema.nodes.image?.create({ src });
+        if (node) view.dispatch(view.state.tr.replaceSelectionWith(node));
+        return;
+      }
+      const htmlItem = items.find((i) => i.types.includes('text/html'));
+      if (htmlItem) { view.pasteHTML(await (await htmlItem.getType('text/html')).text()); return; }
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      const table = detectAndParseTable(text);
+      if (table) insertTableFromData(view, table);
+      else view.pasteText(text);
+    } catch {
+      void alertDialog(LABELS.contextMenu.clipboardBlocked);
+    }
+  }
+
+  useContextMenuScope(editorContentRef, () => ({
+    kind: 'note-editor',
+    data: {
+      editor: editor!,
+      paste: pasteFromClipboard,
+      openLink: () => {
+        if (!editor) return;
+        if (editor.state.selection.empty) openNewLinkPane(editor);
+        else toolbarActionsRef.current?.openLinkInput();
+      },
+      openCreate: () => toolbarActionsRef.current?.openCreateMenu(),
+      insertTitle,
+    } satisfies NoteEditorMenuApi,
+  }), !!editor && !noteLocked);
 
   // Keep editorRef in sync so runTableCmd can access it without a dependency
   editorRef.current = editor;
@@ -1107,8 +1186,10 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       if (!editor.isFocused) { awaitingHeadingRef.current = false; return; }
 
       // Ctrl+H → enter heading-number sequence
+      // A second Ctrl+H (Ctrl still held for the "H" step) is the Title step, not a restart.
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'h') {
         e.preventDefault();
+        if (awaitingHeadingRef.current) { awaitingHeadingRef.current = false; insertTitle(); return; }
         awaitingHeadingRef.current = true;
         return;
       }
@@ -1161,10 +1242,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       // With a selection, this is handled by FloatingToolbar's own Ctrl+L instead.
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'l' && editor.state.selection.empty) {
         e.preventDefault();
-        const coords = editor.view.coordsAtPos(editor.state.selection.from);
-        setNewLinkText('');
-        setNewLinkUrl('');
-        setNewLinkPane({ top: coords.bottom + 6, left: coords.left });
+        openNewLinkPane(editor);
         return;
       }
 
@@ -1269,10 +1347,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     setRenameValue(defaultName);
   };
 
-  const handleRemoveTab = (e: React.MouseEvent, tabId: string) => {
+  // Deleting a tab is permanent (it doesn't go to the Recycling Bin), so it always confirms.
+  const handleRemoveTab = async (e: React.MouseEvent, tabId: string, tabName: string) => {
     e.stopPropagation();
     const id = currentNoteIdRef.current;
     if (!id) return;
+    if (!(await confirmDelete('tab', tabName, 'Everything on this tab is deleted with it.'))) return;
+    if (currentNoteIdRef.current !== id) return;
     if (activeTabId === tabId) switchTab(null);
     removeNoteTab(id as NoteId, tabId);
   };
@@ -1756,11 +1837,12 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
               ) : (
                 <span className={styles.tabName}>{tabName}</span>
               )}
-              {!isMain && (
+              {/* Android: Notes on a phone is read-first, so tabs can't be deleted there (2026-10-05). */}
+              {!isMain && !isAndroid && (
                 <button
                   className={styles.tabClose}
-                  onClick={(e) => handleRemoveTab(e, tabId)}
-                  title="Close tab"
+                  onClick={(e) => void handleRemoveTab(e, tabId, tabName)}
+                  title="Delete tab"
                 >×</button>
               )}
             </div>
@@ -1884,8 +1966,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             </div>
           ) : (
             <>
-              {editor && <FloatingToolbar editor={editor} noteId={note.id} getLinkTabId={() => linkTabIdFor(viewOf(currentNoteIdRef.current), activeTabIdRef.current)} onStructuredTag={openStructuredTagCreate} />}
-              <EditorContent editor={editor} className={styles.editor} />
+              {editor && <FloatingToolbar actionsRef={toolbarActionsRef} editor={editor} noteId={note.id} getLinkTabId={() => linkTabIdFor(viewOf(currentNoteIdRef.current), activeTabIdRef.current)} onStructuredTag={openStructuredTagCreate} />}
+              <EditorContent editor={editor} innerRef={editorContentRef} className={styles.editor} />
             </>
           )}
         </div>

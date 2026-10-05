@@ -500,7 +500,7 @@ packages/notes/
 - Spaced repetition for definitions/flashcards
 
 **Phase 4: Advanced**
-- Auto-selected note templates by tag type or area (manual template picker in AddNoteModal already implemented — see CLAUDE.md "Note templates"); user-defined custom templates (beyond the built-in six)
+- Auto-selected note templates by tag type or area (manual template picker in AddNoteModal already implemented — see CLAUDE.md "Note templates"); user-defined custom templates (beyond the built-in six) — **now requested, see "Custom note and tab templates" below**
 - Nested/folding sections within a note
 - Collaborative notes (shared editing, comments)
 - Export formats (PDF, Markdown, HTML)
@@ -536,6 +536,40 @@ Nothing else needs touching — the create popover, the hover-edit affordance, t
 **Highlight text + press a quote/bracket to surround it, like a code editor.** Built: `NoteEditor.tsx`'s Tiptap `editorProps.handleKeyDown` wraps a non-empty selection in `( ) [ ] { } " " ' ' `` ` `` `` ` `` on the matching keypress (no modifier held), re-selecting the original text nested inside the new pair. Character set: the six standard code-editor pairs, not configurable/opt-out — no reports of the "replace instead of surround" expectation being a problem in this app's actual usage (a plain-text/data-entry-heavy editor is where that expectation is strongest; this is a rich-text note editor).
 
 *(Already built, no action needed: inline code-span formatting — see below, unchanged.)*
+
+### Right-click menus — built 2026-10-06 (rows, note rows, the Notes editor); next places
+
+Built: see CLAUDE.md "Right-click menus" and the 2026-10-06 entry in `docs/features/implemented-features.md`. Places that have no right-click menu yet: each is one `useContextMenuScope` (or one provider), nothing else.
+- **Tasks:** TaskItem rows (complete / archive / delete / open / add sub-task / add follow-up). The actions exist in `services/taskCompletion.ts` and `services/undoableActions.ts`.
+- **Calendar:** events, reminders and deadlines on the grid (open / archive / delete / duplicate); an empty slot (new event here).
+- **Notes:**
+  - Note tabs (rename / delete / reorder; "Save tab as template" once templates exist).
+  - Annotation tags in text (edit / remove).
+  - Links (open / edit / copy / remove).
+  - Tables (the table commands).
+- **Lists:** items (edit / tick / delete).
+- **Records:** entries.
+- **Overview:** rows (open in its app).
+- **Section-wide menus** (a `section` provider, e.g. "New notebook" on empty Chronicle space).
+- Possible menu features as needs arise: checkable items, a header row naming the item, items revealed while holding a modifier.
+
+### Custom note and tab templates (requested 2026-10-05, design proposed, not built; request text was cut off)
+
+**The use case.** Each subject is a notebook. Inside it, a "Lectures" note gets one new tab per lecture. Setting up that note, and each lecture tab, is repeated per lecture and per subject. The user suggested reusable custom templates, shown in the new-note pane next to the built-in six, carrying every field a note has (notebook tags, annotation tags, Endeavour). Created from wherever you are, they would inherit that place's tags and Endeavour, and "New note template" would join the + speed dial. The request ends mid-sentence ("But in particular, …"), so ask what came next before building.
+
+**Proposed design (awaiting the user's answers):**
+- **One `NoteTemplate` entity, two scopes.** `scope: 'note'` is a whole note: title pattern, main-tab content, optional tabs (each with name and content), tags, Endeavour, colour. `scope: 'tab'` is one tab's name pattern and content. The lecture case is mostly a *tab* template.
+- **Name patterns** with a few tokens, e.g. `Lecture {n} — {date}`. `{n}` is the next number among the note's tabs; `{date}` is today.
+- **Making one:** "Save as template" from a note's menu (and from a tab's right-click menu) captures what's there. "New note template" in the speed dial starts empty, prefilled with the current notebook and Endeavour.
+- **Using one:**
+  - AddNoteModal shows a "My templates" group above the built-ins. Choosing one prefills tags and Endeavour, still editable.
+  - A tab template is used from the tab bar's + (a menu: Blank tab / each tab template), or from `Ctrl+T`.
+  - A note could name its default tab template, so + on "Lectures" makes the next lecture tab directly.
+- **Storage:** a new persisted, synced store or a `noteTemplates` record in `noteStore`. A new Supabase table means a migration with its own grant. Encrypted notes can't become templates in v1 (the template would be plaintext).
+- **Open questions:**
+  - What came after "But in particular,"?
+  - Is a per-note default tab template wanted?
+  - Should a template be editable after creation in its own editor, or only re-saved from a note?
 
 ### PDF / PowerPoint side-by-side annotation note-taking (logged 2026-09-24 — large, needs its own architecture pass)
 
@@ -2565,6 +2599,13 @@ Complete dark mode first (steps 1–6) — it benefits desktop immediately and i
 
 $1 (Update 2026-09-20: the *delete confirmation* for all of those now uses the shared `confirmDelete` dialog, so the wording and keyboard behaviour match — what they still lack is the archive half.)
 
+## Backup restore across two devices — open decision (logged 2026-10-05)
+
+`restoreBackupData` now uploads the restored data for every synced store (fixed 2026-10-05; see "Fixes from the first phone test" in `docs/features/implemented-features.md`). One gap remains: restored records keep their **old `updatedAt`**. Another signed-in device holding a newer copy will see "local is newer" on its next load (`queueLocalOnlyAndNewer`) and push it back, undoing the restore for those records. The same happens if restore is done while that device has unsynced edits.
+- **Option A (recommended):** on restore, stamp every restored record's `updatedAt` with the restore time, so the restore wins on every device. Cost: "last edited" dates and sorts show the restore time.
+- **Option B:** keep dates; tell the user to restore on each device, or to sign out the others first.
+- Records without `updatedAt` (tags, list types, portfolio tags/purposes) already merge remote-wins, so they follow the restore.
+
 ## Notifications rebuild + "done" on Reminders/Deadlines — designed 2026-10-04, not built
 
 Full design, signed off by the user 2026-10-04: `docs/android/05-notifications.md`. Two parts land on desktop too, not just Android:
@@ -2608,7 +2649,9 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 | **Agent commands touch data only through `agent/access.ts`** | `npm test` (`boundary.test.ts`) and `npx eslint src/agent` | **Fully applied 2026-09-22** (new code). Standing rule: "Agent command layer" in CLAUDE.md. |
 | **One implementation of each create/edit rule, shared by the UI and the agent** | for calendar items: every `addEvent(`/`addReminder(` call site should build its input with `utils/calendarItemInput.ts`; for schedule blocks: `createScheduleBlock` | Applied to `AddCalendarItemModal` and `AddScheduleModal` 2026-09-22. **Remaining:** `MobileCalendarQuickAdd` builds its own event/reminder input, `CalendarEventPane` applies the end-date and notes→links rules itself on edit, and the ICS import in `IntegrationsPane` builds events directly. |
 | **Every sync mapper's `xToRow` sends an explicit `deleted_at: null`** | `npx vitest run src/test/patterns.test.ts -t "deleted_at"` | **Fully applied 2026-09-24** — all 18 mappers (17 existing + the new `trashEntryToRow`), fixed in the same change that added the Recycling Bin (see CLAUDE.md "Recycling Bin"). Without this, restoring an item previously tombstoned by another device would leave it zombie-tombstoned forever. |
-| **Row hover-action menu (`RowHoverActions`), not inline-growth CSS** | `npx vitest run src/test/patterns.test.ts -t "RowHoverActions"` | **Fully applied to all 5 known nav-column sites 2026-09-24** (see CLAUDE.md "Row hover-action menu"). **Known gap, not fixed**: the pattern is hover-only, with no touch/tap fallback — the old inline-growth CSS it replaced had one (`@media (hover: none)`). **Now a real problem**: Manage (via More), Records, Lists and Notes are all reachable on Android, so their row actions are unreachable there. Fix decided 2026-10-04 (D1): long-press opens the same items in an `ActionSheet` — see the next row. |
+| **Right-click menus only through `src/contextMenu/`** (scopes + providers; adopted 2026-10-06, CLAUDE.md "Right-click menus") | `npx vitest run src/test/patterns.test.ts -t "right-click"` | **Fully applied 2026-10-06**: nothing else listens for `contextmenu` (the exceptions only suppress it: BottomSheet, useLongPress, the menu itself). Coverage of places is a feature list, not a retrofit — see "Right-click menus — next places". |
+| **Creation panes show the "what are you creating?" switcher** (`CreateKindSwitcher` + `config/createKinds.ts`, adopted 2026-10-05; CLAUDE.md "Creation panes: the switcher") | `npx vitest run src/test/patterns.test.ts -t "createKinds"` (registered kinds have a pane); `grep -L "CreateKindSwitcher" src/components/Add*Modal/*.tsx` lists the panes without it | **Applied to Notes only** (`AddNoteModal`, `AddNoteTagModal`). Not yet: Records (`AddTrackerModal` / `AddEntryModal` / `AddRoutineModal`), Lists (`AddListModal` / `AddListItemModal`), Portfolio (`AddWatchlistItemModal` / `AddPortfolioTagModal` / `AddInvestmentPurposeModal`), Fitness (`AddActivityModal` / `EditActivityTypeModal`), Tasks (`AddTaskModal`, also `AddCollectionModal` / `AddPurposeModal` / `AddTagModal`?), Calendar (`AddCalendarItemModal` already switches event/reminder/deadline inside itself; decide whether those become registry kinds), Overview. Also: the speed dial (`AddTaskButton`) keeps its own per-section option lists; it could read `CREATE_KINDS` instead. Each pane joining also reads `uiStore.createDraft` for its first field. |
+| **Row hover-action menu (`RowHoverActions`), not inline-growth CSS** — **changed 2026-10-05 to `RowOptionsMenu`** (the row's leading icon becomes a ⋯ on hover; hovering the ⋯ drops the actions down in the icon column; hovering the row opens nothing) | `npx vitest run src/test/patterns.test.ts -t "RowHoverActions\|RowOptionsMenu"` | **2026-10-05: fully applied to all 7 row sites** (Chronicle, Sidebar ×3, Manage, Lists, Records, Overview); a pattern test keeps the hook/menu private to `RowOptionsMenu` and `HoverOptions`. **Fully applied to all 5 known nav-column sites 2026-09-24** (see CLAUDE.md "Row hover-action menu"). **Known gap, not fixed**: the pattern is hover-only, with no touch/tap fallback — the old inline-growth CSS it replaced had one (`@media (hover: none)`). **Now a real problem**: Manage (via More), Records, Lists and Notes are all reachable on Android, so their row actions are unreachable there. Fix decided 2026-10-04 (D1): long-press opens the same items in an `ActionSheet` — see the next row. |
 | **Android: every hover affordance has a touch path** (long-press → `ActionSheet`, D1, decided 2026-10-04 — `docs/android/11-design-and-coding-patterns.md` §6.1) | `grep -rlE "useRowHoverActions\|HoverOptions" src/components` — each site must work via long-press on Android (once the shared change lands, all do) | **Fully applied 2026-10-04 (W2)** for `RowHoverActions` and `HoverOptions`: `useRowHoverActions` adds long-press on Android and `RowHoverActionsMenu` shows the actions in a `BottomSheet`; every site's actions are `RowAction`s with a label from `LABELS` (pattern test: no raw `<button>` inside a `<RowHoverActionsMenu>`). `TruncatedText` wraps to two lines on Android. Still hover-only, by decision or later workstream: `LinkHoverPreview` and calendar hover cards (n/a: a tap opens the item), NoteList's inline note-row actions (W7). Also fixed: AddTaskButton's speed dial opened on sticky `:hover` after a tap and its empty column swallowed taps on the list. |
 | **Android: every hotkey records its touch path** (`HotkeyDef.touch`, D13, decided 2026-10-04 — patterns doc §6.2) | pattern test to add with the field: every `HOTKEYS` entry has a non-empty `touch` | **Fully applied 2026-10-04 (W2).** `touch: string` is required on `HotkeyDef`; every entry has the path or `'n/a: <why>'`. Pattern test: "every hotkey names its touch path". |
 | **Android: phone sheets use `BottomSheet` / `ActionSheet`** (adopted 2026-10-04, W2 — CLAUDE.md "Bottom sheets") | pattern test: no `.sheetOverlay`/`.sheetPanel` class outside `components/BottomSheet/`; manually, `grep -rln "align-items: flex-end" src --include=*.css` and check each phone sheet | **Partly applied.** Migrated: `CollectionFilterPicker`/`PurposeFilterPicker` `'sheet'` variants, `MobileMoreSheet`. Still hand-rolled: `MobileCalendarQuickAdd` (its own overlay/grabber; move it with gap C1 in W3) and `CalendarSidePane`'s Android full-screen sheet. Not in scope: `AccountPane`/`RecyclingBinPane` (the general modal's narrow-screen bottom-sheet layout, not a phone sheet). |

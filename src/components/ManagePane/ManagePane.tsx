@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import type { ManageSection } from '@/store/uiStore';
@@ -9,8 +9,7 @@ import styles from './ManagePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
-import { useRowHoverActions } from '@/components/RowHoverActions/useRowHoverActions';
-import { RowHoverActionsMenu } from '@/components/RowHoverActions/RowHoverActionsMenu';
+import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 
 // Left-nav tabs — add an entry here (+ a render branch below) to extend this view with
@@ -31,14 +30,10 @@ interface RowProps {
 }
 
 function ManageRow({ color, name, archived, onEdit, onArchive, onDelete }: RowProps) {
-  const { anchorRef, open, rowHandlers, menuHandlers } = useRowHoverActions<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   return (
-    <div ref={anchorRef} className={`${styles.row} ${archived ? styles.rowArchived : ''}`} {...rowHandlers}>
-      <div className={styles.rowMain}>
-        {color && <span className={styles.dot} style={{ background: color }} />}
-        <TruncatedText text={name} className={styles.name} />
-      </div>
-      <RowHoverActionsMenu anchorRef={anchorRef} open={open} title={name} {...menuHandlers}>
+    <div ref={rowRef} className={`${styles.row} ${archived ? styles.rowArchived : ''}`}>
+      <RowOptionsMenu rowRef={rowRef} title={name} icon={color && <span className={styles.dot} style={{ background: color }} />}>
         {onEdit && (
           <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
         )}
@@ -51,7 +46,10 @@ function ManageRow({ color, name, archived, onEdit, onArchive, onDelete }: RowPr
           />
         )}
         <RowAction className={`${styles.iconBtn} ${styles.iconBtnDelete}`} icon="✕" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
-      </RowHoverActionsMenu>
+      </RowOptionsMenu>
+      <div className={styles.rowMain}>
+        <TruncatedText text={name} className={styles.name} />
+      </div>
     </div>
   );
 }

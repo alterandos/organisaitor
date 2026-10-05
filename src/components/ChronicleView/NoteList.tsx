@@ -12,6 +12,7 @@ import type { Note } from '@/types/notes';
 import styles from './NoteList.module.css';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 
 interface NoteListProps {
   tagId: NoteTagId;
@@ -58,12 +59,26 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
     ? NOTE_TEMPLATES.find((t) => t.id === note.templateId)
     : undefined;
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const deleteNote = async () => {
     if (!(await confirmDelete('note', `${note.title || 'Untitled'}${locked ? ' (encrypted)' : ''}`))) return;
-    if (editingNoteId === note.id) useUIStore.getState().closeNote();
+    if (useUIStore.getState().editingNoteId === note.id) useUIStore.getState().closeNote();
     deleteNoteWithCleanup(note.id);
   };
+  const handleDelete = (e: React.MouseEvent) => { e.stopPropagation(); void deleteNote(); };
+
+  // Right-click: the same actions as the row's buttons, plus Open (a `note-row` scope, see
+  // CLAUDE.md "Right-click menus"; another feature can add to it with a `note-row` provider).
+  useContextMenuScope(rowRef, () => ({
+    kind: 'note-row',
+    data: { noteId: note.id },
+    items: () => [
+      { id: 'open', label: LABELS.contextMenu.openNote, icon: '📝', run: () => openNote(note.id) },
+      { id: 'details', label: LABELS.contextMenu.noteDetails, icon: '✎', run: () => showEditNoteMeta(note.id) },
+      ...(canIndent ? [{ id: 'indent', label: LABELS.rowActions.indentNote, icon: '↳', run: () => indentNote(note.id as NoteId, siblings[myPos - 1].id as NoteId) }] : []),
+      ...(canOutdent ? [{ id: 'outdent', label: LABELS.rowActions.outdent, icon: '↰', run: () => outdentNote(note.id as NoteId) }] : []),
+      { id: 'delete', label: LABELS.rowActions.delete, icon: '×', destructive: true, run: deleteNote },
+    ],
+  }));
 
   return (
     <>
@@ -96,7 +111,7 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
             <button
               className={styles.noteActionBtn}
               onClick={(e) => { e.stopPropagation(); indentNote(note.id as NoteId, siblings[myPos - 1].id as NoteId); }}
-              title="Make sub-note of the one above"
+              title={LABELS.rowActions.indentNote}
             >↳</button>
           )}
           {canOutdent && (
