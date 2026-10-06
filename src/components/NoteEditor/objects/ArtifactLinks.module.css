@@ -1,0 +1,323 @@
+/* Linked text in notes, drawn by artifactGroups.ts as one inline pane:
+   [paneHead: icon KIND] [paneText: the note's own text] [paneTail: when · flags · buttons].
+   Three kinds of inline piece share one outline: the head closes it on the left, the tail on the
+   right, the text pieces carry only top and bottom. All three keep the text's font size (an inline
+   box's border follows its own font), so their borders line up; only their contents are smaller.
+   The expanded card is ArtifactCard.module.css. Theme tokens only. */
+
+.paneHead,
+.paneText,
+.paneTail {
+  --pane-edge: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--color-success) 9%, var(--color-surface));
+  border: 1px solid var(--pane-edge);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.paneHead {
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  padding: 1px 5px 1px 6px;
+  margin-left: 1px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.paneText {
+  border-left: none;
+  border-right: none;
+  padding: 1px 0;
+}
+
+.paneTail {
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  padding: 1px 3px 1px 7px;
+  margin-right: 1px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* The icon slot: the kind's icon, or — while the pane is hovered, or once it's done — the done
+   checkbox in its place. Both take the same width, so nothing moves when they swap. */
+.paneIcon,
+.paneDone {
+  display: inline-block;
+  min-width: 1.15em;
+  text-align: center;
+  font-style: normal;
+}
+
+.paneDone {
+  display: none;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.paneDone:hover {
+  color: var(--color-success);
+}
+
+[data-can-done][data-hover] .paneIcon,
+[data-done] .paneIcon {
+  display: none;
+}
+
+[data-can-done][data-hover] .paneDone,
+[data-done] .paneDone {
+  display: inline-block;
+}
+
+[data-done] .paneDone {
+  color: var(--color-success);
+}
+
+.paneKind {
+  margin-left: 4px;
+  color: var(--color-muted);
+  font-size: 0.68em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: 0.12em;
+}
+
+.paneWhen,
+.paneState {
+  color: var(--color-muted);
+  font-size: 0.82em;
+  margin-right: 4px;
+}
+
+.paneFlag {
+  font-size: 0.82em;
+  margin-right: 3px;
+}
+
+.paneBtn {
+  padding: 0 3px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.82em;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.paneBtn:hover {
+  background: color-mix(in srgb, var(--color-success) 22%, transparent);
+  color: var(--color-text);
+}
+
+/* Live state of the item */
+/* Done (ticked) and past (an event that has ended): faded, the way calendar and to-do apps show
+   what's behind you — not struck through. Under the mouse it comes back to full strength, to work
+   with. Overdue stays at full strength (above): it still needs doing. */
+.paneHead,
+.paneText,
+.paneTail,
+.paneBlock {
+  transition: opacity 0.15s;
+}
+
+[data-artifact-state="done"].paneHead,
+[data-artifact-state="done"].paneText,
+[data-artifact-state="done"].paneTail,
+[data-artifact-state="past"].paneHead,
+[data-artifact-state="past"].paneText,
+[data-artifact-state="past"].paneTail {
+  opacity: 0.55;
+}
+
+[data-artifact-state][data-hover] {
+  opacity: 1;
+}
+
+.paneTail[data-artifact-state="overdue"] .paneWhen,
+.paneTail[data-artifact-state="overdue"] .paneState {
+  color: var(--color-warning);
+}
+
+[data-artifact-state="archived"].paneHead,
+[data-artifact-state="archived"].paneText,
+[data-artifact-state="archived"].paneTail,
+[data-artifact-state="missing"].paneHead,
+[data-artifact-state="missing"].paneText,
+[data-artifact-state="missing"].paneTail {
+  --pane-edge: var(--color-border);
+  background: var(--color-surface-alt);
+  opacity: 0.75;
+}
+
+.paneTail {
+  cursor: pointer;
+}
+
+/* The date and time: click to edit. */
+.paneEditable {
+  cursor: text;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.paneEditable + .paneEditable {
+  margin-left: 3px;
+}
+
+.paneEditable:hover {
+  background: color-mix(in srgb, var(--color-success) 22%, transparent);
+  color: var(--color-text);
+}
+
+.paneGhost {
+  opacity: 0.7;
+}
+
+.paneInput {
+  padding: 0 4px;
+  border: 1px solid var(--color-primary);
+  border-radius: 3px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1em;
+  outline: none;
+}
+
+.paneInputInvalid {
+  border-color: var(--color-danger);
+}
+
+.paneChevron {
+  padding: 0 3px;
+  color: var(--color-muted);
+  font-size: 0.82em;
+}
+
+/* ── Expanded: the paragraph holding the link IS the pane ─────────────────
+   Its first line (head, text, tail) is the heading; the body widget sits inside the same
+   paragraph, under it. The pieces drop their own outline — the paragraph has it. */
+.paneBlock {
+  --pane-edge: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 3px 8px 0;
+  border: 1px solid var(--pane-edge);
+  background: color-mix(in srgb, var(--color-success) 9%, var(--color-surface));
+}
+
+.paneBlockOnly {
+  width: fit-content;
+  min-width: 300px;
+  margin: 6px 0 !important;
+  border-radius: 8px;
+}
+
+.paneBlockFirst {
+  margin: 6px 0 0 !important;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+
+.paneBlockMiddle {
+  margin: 0 !important;
+  border-top: none;
+  border-bottom: none;
+}
+
+.paneBlockLast {
+  margin: 0 0 6px !important;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+}
+
+.paneBlock .paneHead,
+.paneBlock .paneText,
+.paneBlock .paneTail {
+  border-color: transparent;
+  background: none;
+}
+
+.paneBlock .paneHead {
+  padding-left: 0;
+}
+
+/* The body: inside the paragraph, as a block of its own under the heading line. */
+.paneBody {
+  display: block;
+  margin: 0 -8px;
+  border-radius: 0 0 7px 7px;
+  white-space: normal;
+  user-select: none;
+}
+
+/* An option shown in the top bar (Important, when expanded): a click turns it off. */
+.paneFlagOn {
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.paneFlagOn:hover {
+  background: var(--color-danger-muted);
+}
+
+/* ProseMirror puts a filler line break (and an image separator) after a widget that ends a
+   paragraph, which would add an empty line under the body. The body ends the pane. (ProseMirror's
+   own stylesheet forces the separator inline with !important, hence the !important here.) */
+.paneBlock > :global(.ProseMirror-trailingBreak),
+.paneBlock > :global(img.ProseMirror-separator) {
+  display: none !important;
+}
+
+/* The title is the note's own text: it highlights under the mouse like the date and time, to say
+   "click to change me". */
+.paneText {
+  cursor: text;
+}
+
+.paneText:hover,
+.paneBlock .paneText:hover {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-success) 20%, transparent);
+}
+
+/* ↗ and the chevron: at the end of the inline pane; at the right edge of an expanded one. */
+.paneActions {
+  white-space: nowrap;
+}
+
+.paneBlock .paneActions {
+  float: right;
+  margin-left: 16px;
+}
+
+/* Expanded: the whole box fades for done / past (its pieces don't fade again inside it), and its
+   own empty space — around the top bar's pieces — collapses it on a click. */
+.paneBlock {
+  cursor: pointer;
+}
+
+.paneBlock[data-artifact-state="done"],
+.paneBlock[data-artifact-state="past"] {
+  opacity: 0.6;
+}
+
+.paneBlock:hover {
+  opacity: 1;
+}
+
+.paneBlock .paneHead,
+.paneBlock .paneText,
+.paneBlock .paneTail {
+  opacity: 1;
+}
+
+/* Important, before the title. */
+.paneImportant {
+  margin-left: 4px;
+}

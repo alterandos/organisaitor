@@ -115,11 +115,11 @@ describe('pattern: Escape handling goes through useEscapeClose', () => {
   // CLAUDE.md's one deliberate exception: a capture-phase listener that owns all keys for a
   // moment and consumes Escape itself before the stack ever sees it (SettingsPane's
   // hotkey-rebind capture).
-  const CAPTURE_EXCEPTIONS = new Set(['src/components/SettingsPane/SettingsPane.tsx:110']);
+  const CAPTURE_EXCEPTIONS = new Set(['src/components/SettingsPane/SettingsPane.tsx:84']);
   // A handler that deliberately does nothing to Escape (explicit early-return, letting it
   // bubble untouched to the Escape stack) rather than consuming it — not a stopPropagation
   // case at all, so it can't be found by scanning for that call.
-  const PASS_THROUGH_EXCEPTIONS = new Set(['src/components/NoteEditor/NoteBacklinks.tsx:57']);
+  const PASS_THROUGH_EXCEPTIONS = new Set(['src/components/NoteEditor/NoteBacklinks.tsx:58']);
 
   it("every source hit of the literal 'Escape' either lives in the mechanism itself, or is an inline handler that calls stopPropagation (within a few lines), or a documented exception", () => {
     const bad: string[] = [];
@@ -553,5 +553,50 @@ describe('backup restore rehydrates every synced store', () => {
     const synced = [...sync.matchAll(/import \{ (use\w+Store) \} from '@\/store\/\w+'/g)].map((m) => m[1]);
     expect(synced.length).toBeGreaterThan(5);
     for (const store of synced) expect(backup, store).toContain(`${store}.persist.rehydrate()`);
+  });
+});
+
+// Notifications (CLAUDE.md "Notifications — one set of rules"): WHEN something notifies is decided by
+// services/notifications/plan.ts alone. Delivery has exactly one caller per platform, so nothing can
+// fire or book a notification on rules of its own (the 2026-09-27 Deadline kind was missed that way).
+describe('pattern: notifications are delivered only from the planned paths', () => {
+  it('fireOSNotification is called only by the desktop/web checker; LocalNotifications.schedule only by the Android scheduler', () => {
+    const offenders: string[] = [];
+    for (const f of SOURCE_FILES) {
+      const r = rel(f);
+      if (r.endsWith('.test.ts') || r.endsWith('.test.tsx')) continue;
+      const content = fs.readFileSync(f, 'utf8');
+      if (/fireOSNotification\(/.test(content) && !['src/hooks/useNotificationChecker.ts', 'src/services/notificationService.ts'].includes(r)) offenders.push(`${r}: fireOSNotification`);
+      if (/LocalNotifications\.schedule\(/.test(content) && r !== 'src/services/notifications/androidScheduler.ts') offenders.push(`${r}: LocalNotifications.schedule`);
+    }
+    expect(offenders, offenders.join('\n')).toEqual([]);
+  });
+});
+
+describe('pattern: an item kind has one icon, from config/itemIcons.ts', () => {
+  // Deadlines were ⏳ in one place, 🚩 in another and ⏰ (the reminder's) in a third.
+  it('no source file but itemIcons.ts spells out the reminder, deadline or task icon', () => {
+    const files = SOURCE_FILES.filter((f) => !f.endsWith('itemIcons.ts'));
+    const hits = findMatches(files, /'(⏰|🏁|☑️)'/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per link', () => {
+  // A CSS ::before/::after on the mark element repeats on every line and around every bold word
+  // (ProseMirror splits a mark into one element per piece) — the bug the grouping fixed.
+  it('no CSS draws content on mark[data-artifact-…] itself', () => {
+    const css = walk(SRC, ['.css']);
+    const hits = findMatches(css, /mark\[data-artifact[^\]]*\][^{]*::?(before|after)/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  it('every `\` object kind is in NOTE_OBJECT_KINDS and only the registry builds the menu', () => {
+    const kindFiles = SOURCE_FILES.filter((f) => /NoteEditor[\/]objects[\/].*Kind\.ts$/.test(f));
+    const registry = fs.readFileSync(path.join(SRC, 'components/NoteEditor/objects/kinds.ts'), 'utf8');
+    const missing = kindFiles
+      .map((f) => path.basename(f, '.ts'))
+      .filter((name) => !new RegExp(`NOTE_OBJECT_KINDS[^=]*=\s*\[[^\]]*\b${name}\b`).test(registry));
+    expect(missing).toEqual([]);
   });
 });

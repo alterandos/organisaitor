@@ -263,7 +263,7 @@ Three tiers were identified, cheapest first:
     - The inferred **title** is just the selection's whitespace-collapsed text verbatim — no attempt to strip the date/priority/link phrases out of it, a deliberate scope call to avoid mangling sentences; the user edits it in `AddTaskModal` if they want it tidier.
   - **Endeavour inheritance**: the created task's `collectionId` defaults to the *note's own* `collectionId` if it has one, falling back to the Notes section's currently-focused Endeavour otherwise (`noteCollectionId ?? activeCollectionId ?? null`) — matches the explicit ask ("if the note has an Endeavour, the created task gets it too") while still degrading sensibly for a note with no Endeavour of its own. **Tag inheritance was explicitly scoped out**: Notes' own tags (`NoteTag` — notebooks and annotation labels) and Tasks' `Tag` entity are two entirely separate ID spaces with no overlap today (unlike `collectionId`, which both share), so "the same tags carry over" has no literal meaning yet; a match-by-name-or-create scheme was considered and rejected for this pass as more complexity/risk (duplicate or mismatched tags) than the ask justified — flagged here rather than silently built, since it's a real design fork if picked up later.
   - **Data model, bi-directional — the forward half lives in the note's own content, the reverse half is a generic embedded field, not the normalized `cross_app_links` table.** Three options were weighed for the reverse link (confirmed with the user): a field per target type, a normalized join table (the existing-but-unused `cross_app_links`), or one generic list field with a type discriminator — the third was chosen, matching the codebase's established preference for simple embedded FK-style fields (`Task.calendarEventId`/`calendarReminderId`) over a generic join table nothing else uses either.
-    - **Forward** (Note → Task): the `ArtifactLinkMark` Tiptap mark (`src/components/NoteEditor/extensions/ArtifactLinkMark.ts`, attrs `targetType`/`targetId`) applied to exactly the selected text span — saves/loads through the note's existing autosave path for free, no extra store. Rendered distinctly from both the plain `link` mark (solid underline) and the `noteTag` mark (solid border in the tag's own color): a dashed green underline plus a trailing 📋 icon (`NoteEditor.module.css`, `mark[data-artifact-id]` / `mark[data-artifact-type="task"]::after`), using `--color-success` so it reads correctly in both themes.
+    - **Forward** (Note → Task): the `ArtifactLinkMark` Tiptap mark (`src/components/NoteEditor/extensions/ArtifactLinkMark.ts`, attrs `targetType`/`targetId`) applied to exactly the selected text span — saves/loads through the note's existing autosave path for free, no extra store. Rendered distinctly from both the plain `link` mark (solid underline) and the `noteTag` mark (solid border in the tag's own color): originally a dashed green underline with a trailing per-element `::after` icon. **Superseded by "Inline objects in notes (`\`), and linked text drawn as one object (a pane that expands)" (2026-10-06)**: the mark is now unstyled data, and each link is drawn as an inline pane that expands into a box, by `objects/artifactGroups.ts`.
     - **Reverse** (Task → Note(s)): `CrossAppRef { type: CrossAppRefType; id: string }` (`src/types/index.ts`) — `type` is `'note' | 'task' | 'event' | 'reminder' | 'listItem' | 'trackerEntry'`, extensible for when Calendar/List/Tracker targets ship; no denormalized title, display data is always looked up live from the referenced entity's own store. `Task.crossAppRefs: CrossAppRef[]` (taskStore bumped to **v10**, migration backfills `[]`; `CreateTaskInput.crossAppRefs?`; Supabase migration `016_task_cross_app_refs.sql` adds `cross_app_refs jsonb not null default '[]'` — and `mappers.ts`'s `taskToRow`/`rowToTask` updated).
     - **No dead links, by construction — confirmed as a requirement before building, not assumed**: since there's no normalized join table with cascading deletes, cleanup is explicit, centralized in **`src/services/crossAppLinkCleanup.ts`** (the one module allowed to import both `taskStore` and `noteStore` — those two must never import each other directly, which would be a circular module dependency since both would need to reach the other). `deleteTaskWithCleanup(taskId)` — now the single call site for task deletion (replaces the deletion logic previously duplicated across `TaskPane.handleDelete` and `TaskItem`'s Android swipe-delete): cleans up the shadow calendar event/reminder (pre-existing behaviour, consolidated here) **and** strips any `ArtifactLinkMark` pointing at this task from every note in its `crossAppRefs` (via `stripArtifactLinksFromContent()`, `src/utils/noteContent.ts` — a pure JSON-tree walk over the note's stored Tiptap content, deliberately editor-independent since the note being cleaned up is very often not the one currently open; unmarks the text, never deletes it, same effect as the toolbar's own "Remove link"). `deleteNoteWithCleanup(noteId)` — now the call site in `NoteList.tsx` — strips the matching `crossAppRefs` entry from every task that referenced the deleted note (a plain linear scan over `taskStore.tasks`, entirely acceptable at this app's scale). `removeCrossAppRefFromTarget(targetType, targetId, ref)` — strips the matching reverse entry so an unlink doesn't leave a stale chip on the task side. *(Changed 2026-09-21: `FloatingToolbar`'s "Remove link" no longer calls it directly — it only unmarks the text, and `NoteEditor` asks whether to drop the link too; see "Linked from bar".)* All three paths verified end-to-end via live round-trips (Playwright): deleting a linked task removes the note's mark and leaves the surrounding text intact; deleting a linked note removes the task's "Linked notes" chip; unlinking from the note removes both the mark and the chip.
   - **Click behaviour, mirroring the existing `link`/`noteTag` mark conventions in `NoteEditor.tsx`'s `handleClick`**: a plain click navigates — `setActiveView('tasks')` + `openTaskPane(targetId)` (guarded by a live existence check against `taskStore`) — landing exactly where `CalendarEventPane`'s pre-existing "Linked task" chip lands, and pushes onto `uiStore.sectionHistory` the same as any other section switch, so `Backspace` returns to the note. The reverse direction (`TaskPane`'s "Linked notes" chip) does the same in the other direction — `setActiveView('notes')` + `openNote(noteId)`. Ctrl/Cmd+click on the mark instead selects its text range (via `getMarkRange`), matching how Ctrl+click already behaves on the other two mark types, so the link can be removed via the toolbar's "Remove link" button (shown in place of "+ Create" whenever the selection is inside an existing `artifactLink` mark) without deleting the underlying text.
@@ -986,3 +986,236 @@ Three tiers were identified, cheapest first:
       - The notebook row showed Add section / Edit / Delete; the note row showed Open / Edit details / Delete.
       - The overscroll room measured 534px of a 668px view (80%), screenshots in light and dark.
   - **Not verified:** the Tauri desktop app's clipboard permission for menu Paste (WebView2); Android (unchanged by design).
+- [x] **Restore marker: a backup restore wins on every signed-in device** (2026-10-06). The 2026-10-05 fix made a restore upload the restored data for every synced store, but the restored records keep their old `updatedAt`. Another device holding newer copies would then push them back on its next load (`queueLocalOnlyAndNewer`), undoing the restore.
+  - **Decision (user, 2026-10-06):** one account-level marker, not a per-record "restored" field (that would need a column on ~17 tables plus every type, mapper and store migration), and not restamping `updatedAt` to the restore time (cheaper, but "last edited" dates would change).
+  - **How it works:**
+    - `restoreBackupData` → `forceUpload` → `markRestored(userId)`, which upserts `sync_markers.restored_at` (migration `042`, new table) and records the marker as seen on this device.
+    - `runInitSync` reads the marker alongside the tables. If it's newer than the one this device last saw (`todo-sync-restore-seen`), it sets `restoreCutoff` for that one hydrate:
+      - `dropPendingBefore` drops queued changes older than the restore, including undatable queued deletes;
+      - `mergeRecords` gives older local copies the cloud's version and drops older local-only records.
+    - Records edited after the restore keep the normal newest-wins rule.
+    - The marker is recorded as seen only once every table loaded.
+    - A device with no seen record (never loaded the account) only records it, so guest data being brought into the account is kept.
+    - A table that can't be read (migration not run) means the marker is ignored.
+  - **Files:** `src/services/sync/syncService.ts` ("Restore marker" section, `MARKER_TABLE`, deliberately not in `SYNC_TABLES`), `src/utils/backupExport.ts`, `supabase/migrations/042_sync_markers.sql`, CLAUDE.md (How sync works, migration tables, table summary). Planned notifications migrations renumbered to `043` (done dates) and `044` (tracker reminders) in `docs/android/05-notifications.md` and BACKLOG.md.
+  - **Known limits:**
+    - A device that loads in the few seconds between the restore's upload and its marker write can still push old copies first.
+    - Records without `updatedAt` (tags, list types, portfolio tags/purposes) already merge remote-wins, so they follow the restore anyway.
+    - A pending delete made on another device after the restore but before its next load is dropped (queued deletes carry no time).
+  - **Tests:** 6 new cases in `src/services/sync/syncService.test.ts` (an unseen restore applies; it applies only once; a new device only records it; queued pre-restore changes are dropped; an unreadable table changes nothing; `markRestored` doesn't re-apply to itself). **Verified:** `tsc -b`, full Vitest suite. **Not verified:** against the live database (migration `042` pending) or across two real devices.
+- [x] **Notifications rebuilt on one set of rules; Android system notifications; "done" on Reminders/Deadlines** (2026-10-06). Workstream W9, design signed off 2026-10-04 in `docs/android/05-notifications.md`; that doc's "Build log" is the detailed record.
+  - **Why:** reminders are one of the main reasons to have the app on a phone (D9), and the desktop checker had two live bugs.
+    - **No Deadline notified anywhere** from 2026-09-27 (the Deadline kind) until this change: the checker had no deadlines loop, and task shadows had moved to Deadlines.
+    - **Repeating items notified only on their first date.**
+  - **Shared rules:** `services/notifications/plan.ts` `planNotifications(snapshot, {from, to, zone, clockFormat})`, pure.
+    - Events: notify-before.
+    - Reminders: at their time, or whole-day at `notifyDaysBefore`/`notifyAtTime`.
+    - Deadlines: always before.
+    - Committed Schedule blocks: 30 minutes before.
+    - A snooze (`remindAt`) adds one notification and supersedes earlier occurrences.
+    - Skips: archived items, task-linked ones whose task is done, and `doneDates`.
+    - Every repeating occurrence is expanded via `recurrence.ts`.
+    - `hooks/useNotificationChecker.ts` now just fires what the plan says is due (bell + OS on desktop; bell only on Android). `notificationStore` v2 keys the log per occurrence, honouring old item-keyed entries.
+  - **Android:** `services/notifications/androidScheduler.ts`, mounted in `App.tsx`. See CLAUDE.md "Notifications — one set of rules" and `05-notifications.md` for channels, buttons, reconcile, permission and quiet hours.
+  - **Shared actions:** `services/notifications/actions.ts` (snooze presets `snoozeTime`, `snoozeNotificationTarget`, `markOccurrenceDone`, `completeNotificationTask`, `openNotificationTarget`, `clearNotificationCard`). The bell (`NotificationCenter`) now handles Deadlines and uses `taskId` from the plan.
+  - **Done per occurrence:** `doneDates` on `CalendarReminder`/`CalendarDeadline`, `calendarStore` v15, `setOccurrenceDone`, mappers, migration `043_done_dates.sql` (pending). Strikethrough via `isCompletedItem` in `CalendarView`. `ItemActionFooter` gained `completeLabels` for "Mark done / Not done" in the Reminder and Deadline panes.
+  - **Settings:** `settingsStore` v6 (`notifyReminders`, `notifyEvents`, `snoozeMorningTime`, `snoozeEveningTime`, `quietHours`); `SettingsPane/NotificationsSection.tsx` (Android only); `Toggle`/`SettingRow` moved to `SettingsPane/SettingControls.tsx`. The Escape pattern test's pinned SettingsPane line moved 110 → 84 as a result.
+  - **Pattern:** CLAUDE.md "Notifications — one set of rules", with a pattern test (delivery only from the checker and the scheduler).
+  - **Not built:** tracker/routine "Remind me" (N7, with Records, on hold); Done in a calendar item's long-press sheet (W3).
+  - **Verified:** `tsc -b`; full Vitest suite. **Not verified:** anything on the emulator or a phone; desktop notifications weren't exercised by hand either.
+- [x] **Inline objects in notes (`\`), and linked text drawn as one object (a pane that expands)** (2026-10-06, revised twice the same day after the user tested it). The user asked for "type `\` to create an object" in Notes, starting with Reminders and extended to almost every other kind soon, so the pattern had to be robust and cheap to extend. They also asked to fix linked text showing its icon on every line, and for a basic/expanded view of a link. The design was agreed in conversation; the user accepted every recommendation (natural language first, Tab/Enter rules, Undo toast, live expanded view, status styling, Android path). The rule for new code is CLAUDE.md "Inline objects in notes (`\`)".
+  - **Creating with `\`:**
+    - Type `\` at the start of a line or after a space. The `\…` text turns into a draft (tinted, outlined) and a menu opens under it, or above it near the bottom of the screen.
+    - Typing narrows the kinds. Tab or Enter picks the highlighted one, so `\rem` Tab becomes `\reminder ` (Enter only once something is typed, or the arrows were used). A unique prefix followed by a space counts as chosen.
+    - Then type what it is: `call mum tomorrow 5pm`. The menu becomes a live preview (What / Date / Time), read by the same parser as Ctrl+Q (`inferCalendarItemFromSelection`).
+    - **Enter** creates it silently and removes `\reminder `.
+      - **What was typed is replaced by the item's title, linked**: the date, time and cues live in the item now.
+      - The cursor carries on as plain text: the commit clears the link from the stored marks after its last step, because a step clears stored marks.
+      - A toast offers Open and Undo. Undo deletes the item outright (also from the Recycling Bin) and puts the originally typed words back.
+    - **Ctrl+Enter / All options** opens the full Add Calendar Item pane prefilled. The text becomes the title and waits as `uiStore.pendingArtifactLink` with `replaceWithTitle`. On creation (`applyResolvedArtifactLink`) it becomes the pane's *final* title, linked, even when nothing was typed (the bug the user reported).
+    - **Tab** moves into the preview's fields. They take natural language: "fri" and "next sat" via `whenInput.ts` (see below), "2:30pm". A field it can't read is outlined red and stops Enter with a reason. Esc, or Tab past the last field, returns to the text.
+    - **Esc** (or a click elsewhere, or moving the cursor out) ends it and leaves the text as typed. `\\` types one literal backslash.
+    - It never triggers inside a word (`C:\Users`), in code, or from paste.
+  - **Linked text, for every link (Ctrl+Q's too), drawn as one pane** (the user's design, second round):
+    - Pieces of one link are grouped back together, because ProseMirror splits a mark per paragraph and around bold. Each link is drawn once.
+    - **Inline:** `[⏰ REMINDER] Call mum [Tomorrow 17:00 · ❗ ✏️ 🔁 · state · ☐ ↗ ▾]`, sized to its contents.
+      - It's a head widget, the text's inline decorations and a tail widget sharing one outline.
+      - **Clicks:**
+        - the title is the note's own text, so a click edits it (it no longer opens the item);
+        - the date and the time each become a small input (Enter or leaving saves, Esc cancels; an unreadable value stays open, outlined);
+        - ☐ marks done; ↗ opens;
+        - **anything else on it expands or collapses.**
+      - State: done struck through, overdue's date in the warning colour, deleted greyed with "Deleted" and ✕ unlink. A whole-day item counts as overdue only after its day.
+    - **Expanded: the same pane, grown.** The paragraph holding the link becomes the box (a node decoration), with that line as its heading. The body is a widget at the end of the same paragraph, displayed as a block under the heading line.
+      - The body holds only what the heading doesn't: the notes as plain text, links as chips (click opens, × removes), the Endeavour as a chip in its colour. No field labels. Each is click-to-edit, and missing ones show as faint "+ Notes / + Link / + Endeavour" hints.
+      - Rendered by `ArtifactBody` → the type's `Body` (`CalendarItemBody` → the shared `ObjectBody`) in its own React root.
+    - **Right-click on a link:** Open, Show all details / Hide details, Mark done, **Important / Tentative / Repeat ▸** (the type's `menu`; the visual pane doesn't offer the flags), Unlink.
+    - The view is stored on the mark (`display: 'basic' | 'expanded'`; default basic, so old notes load unchanged). Live state is redrawn on store changes and every minute.
+    - **The mark is inclusive** (typing at the end of a title extends it; the tail widget is `side: 1`, so the cursor there sits before the date).
+      - An `appendTransaction` in `ArtifactLinkGroups` drops the link from the stored marks whenever the cursor's line doesn't hold it, so Enter at the end of a title starts a plain line.
+      - Home/End on an expanded pane's line are handled by `paneLineKeys`: the body box inside the paragraph made the browser's End jump into the next paragraph.
+  - **Third round (same day, the user's feedback):**
+    - **Default when nothing is said about when:** a `\reminder` is tomorrow at 12:00; a `\event` is tomorrow 12:00–13:00 (the user's call). A date alone is still a whole day; a time alone is today. Constants: `DEFAULT_OBJECT_TIME` and `defaultObjectDate` in `whenInput.ts`.
+    - **Options that are off are offered in the expanded body, greyed** (icon in greyscale too, so it can't read as "on"): Important, Tentative, Repeat (asks how often). A click turns one on, and from then it shows in the heading.
+      - **One list per kind** (`flags(id)` → `ArtifactFlag[]`, `objects/flags.ts`: `calendarFlags`) feeds both the body and the right-click menu (`flagMenuItems`). The earlier per-type `menu` is gone.
+    - **"Notify me":**
+      - Events: opt-in. Greyed "🔔 Notify me" turns it on (1 hour before, the modal's default); the chip is then click-to-change (number, unit, Off).
+      - Deadlines (and whole-day Reminders): the calendar *always* notifies these, so instead of an off state the body shows the setting as a chip ("🔔 1 day before, 17:00"), click to change via `AllDayNotifyField`. Told to the user.
+      - Files: `objects/NotifyChips.tsx` (`LeadNotifyChip`, `BeforeNotifyChip`).
+    - **The done checkbox moved into the icon slot**, shown while the pane is hovered (and kept, ticked, once done). The heading's end no longer has it. It's the row options pattern (an icon that becomes its control on hover): nothing moves, nothing is covered.
+      - Hover is tracked per link by the groups plugin (`mouseover`/`mouseleave` → `data-hover` on the head), since head, text and tail are separate elements.
+      - Consequence: while hovered, a click on the icon ticks done rather than expanding. The kind label and the rest of the heading still expand.
+    - **`\event`** (`objects/eventKind.ts`, aliases `\ev` `\e` `\meet` `\meeting`): What / Date / Time (a range, "1-2pm") / Where. It reads meeting links as the place and birthday/travel cues. A start alone gets an hour (`endAfter`). Created through `buildCalendarEventInput`.
+      - Its pane: the heading shows the time range, and editing the start keeps the event's length (`editEventWhen`).
+      - Its body (`EventBody`): the place as a chip (📍, ↗ when it's a link, click to change), notes, links, Endeavour, the greyed options, the opt-in notification.
+    - **Short weekdays in what's typed after the keyword** (`expandShortWeekdays`), only where they can only be a day:
+      - before a time ("fri 1-2pm"), after on/next/this/by/until, or as the last word;
+      - "sat down with Sam" keeps its verb.
+      - The menu's own hint used "fri", which the shared parser didn't read.
+  - **Fourth round (same day, the user's layout for the expanded pane):** one pane in four bands.
+    - **Top bar** (the paragraph's own line): icon, kind, title, and of the options only **Important** (it matters most), then ↗ ▴.
+    - **Second heading line** (`WhenLine.tsx`, first in the body, on the pane's tint, smaller): what's *on* and about the item. It holds the date and time (click-to-edit), Tentative ✏️ / Repeat 🔁, the state, then the kind's place 📍, Endeavour chip and notification chip.
+    - **Content** (on the surface): notes and links.
+    - **Bottom bar:** what's *off* or missing, greyed (+ Notes, + Link, + Place, + Endeavour, Important / Tentative / Repeat, Notify me).
+    - **A click on an active option removes it** (❗ in the top bar, ✏️ 🔁 in the second line; hover tints it red and strikes it). It then reappears greyed in the bottom bar.
+    - The collapsed (inline) pane is unchanged: its flag icons are part of the heading, so a click there still expands.
+    - A trailing "important" / "urgent" / "asap" after `\` now comes off the title (`tidyObjectTitle`); Ctrl+Q prose keeps it. Seen in a screenshot.
+    - Structure: `ArtifactBody` renders `WhenLine` and hands it to the kind's `Body` as `heading`, which `ObjectBody` puts first in its `subheading` band.
+    - New `offExtra` slot for a kind's off things (`NotifyMeOption`). Active ones go in `extra` (`BeforeNotifyChip`, now null while off).
+  - **Fifth round (same day, then Deadline):**
+    - **Any empty space in the heading toggles the pane.** That covers the pieces' background (as before), the expanded box's own empty space (the plugin's `click` on the paragraph, keyed by `data-artifact-key`), and the second line's empty space (`onToggle` through `ArtifactBodyProps` → `ObjectBody`).
+    - **The title highlights under the mouse** like the date and time (it's note text: a click edits it; the mark is no longer `cursor: pointer`).
+    - **↗ and ▴ are right-aligned** in the expanded top bar (`paneActions`, floated right inside the box).
+    - **Past and done are faded**, not struck through. The approach follows the usual practice: past events are faded in Google Calendar and Outlook; finished to-dos are faded rather than crossed out in Things; overdue unfinished to-dos stay prominent, with a warning colour, in Todoist and Things.
+      - New state `past`: an event that has ended (a repeating one never is). `done`: ticked.
+      - Both are drawn at reduced opacity, the whole box when expanded; hovering brings it back to full strength.
+      - **overdue** (past, not done: reminders, deadlines, tasks) stays at full strength with "Overdue" in the warning colour.
+      - The words "Done" and "Past" aren't shown: ☑ and the fading say it.
+    - **`\deadline`** (`\dl`, `\due`, `\d`): built from the same definition as Reminder via `datedKindFactory.ts`. `reminderKind.ts` and `deadlineKind.ts` are one line each, so the two can't drift.
+      - What, Due, By; tomorrow 12:00 when nothing is said.
+      - Its pane is the reminder's: done in the icon slot, the options, the "1 day before, 17:00" setting chip.
+      - Prerequisite fixed: `store/noteBacklinks.ts` now lists deadlines (and marks a done reminder or deadline as done), and the removed-link prompt names deadlines.
+    - **Documentation:** CLAUDE.md "Inline objects in notes" was rewritten as one pattern with an explicit **"Adding a kind" checklist**.
+    - **Test for future kinds:** a new test runs **every registered kind** end to end (`\` → created → linked → drawn → in Linked from), so a future kind can't skip a step the way deadlines nearly did.
+  - **Sixth round (same day): repeating reminders, deadlines and events.**
+    - **The pane follows the current occurrence** (`currentOccurrence`: the first from today on that isn't done). It shows that date, its ☐ ticks it (`doneDates`), and the pane moves on to the next, like a recurring to-do. Before this a repeating item showed its first date ever and had no done box.
+      - A missed occurrence today reads Overdue.
+      - ↗ opens the current occurrence.
+    - **Its dates:** the date shows "▾" and drops down a list (`OccurrenceList`, `WhenLine.tsx`; data from `ArtifactTypeDef.occurrences`, `occurrenceWindow`): the rule ("Every week", `formatRepeatRule`), 3 before (faded), the current (NEXT), 8 after.
+      - Each can be ticked (`toggleOccurrenceDone`) or opened alone in the calendar: `openArtifactTarget` gained `occurrenceDate`, and the calendar pane's existing "only this one / this and following" scope bar takes it from there. "Open the series ↗" sits at the bottom.
+      - Clicking the date in the inline pane expands the pane with the list open (`occurrenceRequests.ts`).
+      - Chosen over a hover reveal: a click works on touch, and holds still while you tick.
+    - **Turning Repeat off asks first** ("Stop repeating?"; destructive confirm in the flag's `toggle`, so the second-line 🔁 and the right-click menu both ask). Reported by the user after losing a series to a stray click.
+    - **Important moved before the title**, in both views.
+    - **Bug found and fixed:** ticking the current date from the list closed the list. ProseMirror's `placeWidget` only matches the next existing widget, so the replaced heading widget made it build the body again.
+      - Fix: `paneState.ts` (`usePaneState`, keyed per pane, cleared on collapse) holds the body's UI state (list open, the note/link/place drafts) so a rebuilt body resumes.
+      - The initial value is stored too: the inline request can't be asked twice.
+      - Tried first and dropped: handing ProseMirror the old DOM element back (it ended up detached in jsdom).
+    - **Latent bug fixed on the way:** the expanded body had `overflow: hidden` (for its rounded corners), which would clip any dropdown in it, the Endeavour menu included. The bottom band rounds the corners now.
+    - Tests: current occurrence and moving on, the list (window, tick, open one), inline date → list, ticking keeps the list open, repeat-off asks (cancel keeps, confirm removes), ❗ before the title. Seen in the app: list, tick, confirm.
+    - Then built (seventh round, the user agreed): a date taken out of a series keeps its link back. See "Calendar: a date taken out of a repeating series stays linked" below.
+  - **Icons, one per item kind, everywhere:** `config/itemIcons.ts` (`ITEM_TYPE_ICON`, `ITEM_FLAG_ICON`).
+    - **Deadline is 🏁 (the finish line).** The user found ⏳ unclear. ⏳ already means a waiting task, 🚩 reads as "flagged", and ❗ is important. Deadlines had been ⏳, 🚩 and ⏰ in three places.
+    - Used by the note panes, `NoteBacklinks`, `ListLinksBar`, `CalendarView` (the deadline type icon) and `overview/sources.ts`. As a result Overview's task ✔→☑️, reminder 🔔→⏰, list 📃→📋, list item 🔹→📃.
+    - Pattern test.
+  - **Date boxes** (`objects/whenInput.ts`, `readWhenInput`): the preview's fields and the pane's date/time.
+    - These read short weekdays ("fri", "next sat"), which the shared parser deliberately doesn't: in prose "sat"/"wed" are words. A box holds only a date, so it's safe there.
+  - **Files** (all under `components/NoteEditor/objects/` unless noted):
+    - `types.ts`: the `NoteObjectKind<D>` contract.
+    - `kinds.ts`: `NOTE_OBJECT_KINDS`, `matchKinds`, `interpretQuery`.
+    - `reminderKind.ts`: the Reminder kind.
+    - `session.ts`: the session plugin state and draft decorations.
+    - `actions.ts`: `acceptKind`, `resolveDraft`, `commitSession`, `applyResolvedArtifactLink`, `insertObjectTrigger`, `unlinkArtifact`.
+    - `NoteObjectTrigger.ts`: the extension and keys.
+    - `NoteObjectMenu.tsx` + CSS: the menu.
+    - `artifactTypes.ts`: `ARTIFACT_TYPES`, with `summarize` (+ `dateLabel`/`timeLabel`), `toggleDone`, `editWhen`, `menu`, `Body`.
+    - `calendarItems.ts`: `datedItem`, `updateDated`.
+    - `whenInput.ts` (`readWhenInput`, `expandShortWeekdays`, the defaults, `endAfter`).
+    - `eventKind.ts`, `EventBody.tsx`, `flags.ts`, `NotifyChips.tsx` (third round); `WhenLine.tsx` (fourth); `datedKindFactory.ts`, `deadlineKind.ts` (fifth; `reminderKind.ts` now uses the factory); `occurrenceRequests.ts`, `paneState.ts` (sixth).
+    - `artifactGroups.ts` + `ArtifactLinks.module.css`: grouping, the pane, the expanded box, the body widget, `paneLineKeys`, the stored-mark guard.
+    - `ArtifactBody.tsx`, `ObjectBody.tsx` + `ObjectBody.module.css`, `CalendarItemBody.tsx`: the body.
+    - `format.ts`.
+    - `contextMenu.ts`: the `note-editor.artifact-link` provider.
+    - New `config/itemIcons.ts`.
+    - **Changed:**
+      - `extensions/ArtifactLinkMark.ts`: the `display` attribute; target attributes also parsed from `data-artifact-*`.
+      - `NoteEditor.tsx`: the extensions, the menu, `getObjectContext`, the `\` toolbar button; the pending-link effect calls `applyResolvedArtifactLink`; a plain click on linked text no longer opens it.
+      - `NoteEditor.module.css`: draft styling; the mark itself is unstyled.
+      - `store/uiStore.ts`: `PendingArtifactLink` (+ `replaceWithTitle`).
+      - `config/labels.ts` (`LABELS.noteObjects`) and `config/hotkeys.ts` (`notes-object`).
+    - **Removed in the second revision:** `ArtifactCard.tsx`, `CalendarItemDetails.tsx` and `ArtifactCard.module.css` (the separate card with a labelled field grid).
+  - **Decisions:**
+    - A custom ProseMirror plugin rather than `@tiptap/suggestion` (not installed). The session is re-read from the text on every transaction, so undo, IME composition and edits mid-draft all hold.
+    - A session starts only when a `\` is *typed*.
+    - A link stays a mark over the note's own text (one representation; search, encryption and link cleanup unchanged).
+    - **The pane is visual, not an editing form** (the user's words): no field labels, nothing repeated between heading and body, flags in the right-click menu, everything else via ↗.
+    - **Expanded = the paragraph as the box, with the body inside it**, so heading and body are one element sized to the wider of the two. Rejected: a separate card under the paragraph (the user disliked it), and a box around a separate widget (widths couldn't match).
+    - **A link mid-sentence, expanded, boxes its whole paragraph.**
+  - **Bugs found and how:**
+    - The draft's keyword and body drew a seam (screenshot).
+    - `.configure()` during render tripped `react-hooks/refs`.
+    - **Reported by the user:** All options with nothing typed made an unlinked reminder (regression test).
+    - Whole-day "today" shown as overdue (screenshot; test).
+    - A NoteBacklinks line shift moved a pinned pattern-test exception.
+    - Second revision:
+      - An empty strip under the expanded body: ProseMirror's separator `<img>` is forced `display: inline !important` by its stylesheet, so it's hidden with `!important` (DOM inspection).
+      - End in an expanded pane jumped to the next paragraph (screenshot); `paneLineKeys`, with a test.
+      - Making the mark inclusive let Enter carry the link onto the next line (screenshot); the stored-mark guard, with a test.
+      - The commit's stored marks were set before the mark step, which cleared them (test).
+  - **Verified:**
+    - `tsc -b`, `npm run build`, full Vitest suite (1039). `objects/objects.test.ts` (66 tests) covers:
+      - creating: registry, query parsing, session rules, the keys, quick create (text → title), Undo restoring the typed words, Ctrl+Enter / All options with and without text, Ctrl+Q's selection untouched;
+      - the pane: one pane per multi-paragraph link, flag icons, live state, whole-day overdue, expanded as one box with an unlabelled body, heading clicks (toggle / done), date/time click-to-edit, notes click-to-edit, the flags menu, End plus typing extending a title, Enter after a title staying plain;
+      - `readWhenInput`.
+      - fifth round: every kind end to end, `\deadline` (reading, defaults, its pane), `past` vs repeating, no "Done" word, empty-space clicks on the box and the second line, ↗ ▴ grouped;
+      - fourth round: the four bands (date/time in the second line, not the top bar), Important removed from the top bar and Tentative from the second line coming back greyed at the bottom, the place in the second line, `tidyObjectTitle`;
+      - third round: the defaults, `\event` (range, link as place, defaults, a start alone, length kept on edit, its body's place and opt-in notification), one flag list for body and menu, greyed options turning on (Repeat asking how often), the deadline's notify chip, hover → done in the icon slot, `expandShortWeekdays`.
+    - Three pattern tests.
+    - Third round in the real app (Playwright, light and dark): the two-kind menu, the event preview reading "fri 1-2pm" and a meeting link, a reminder defaulting to tomorrow 12:00, the hover checkbox, both panes expanded with greyed options.
+    - Driven in the real app with Playwright, light and dark, with screenshots: expanded empty, notes + link added in place, time edited in the heading, right-click menu, an Endeavour created and assigned from the pane, title edited at both ends, a plain line after a title.
+  - **Not verified:**
+    - Android (the toolbar `\` button is the touch path; Gboard composition untested on a device; gap F11).
+    - Changing an Endeavour that has a colour set (only the no-colour fallback was seen).
+  - **Not built (BACKLOG.md "Inline objects in notes — next"):** other kinds; custom objects (lists, trackers, annotation tags); usage-ranked menu order; a `\task` kind; a `Body` and `editWhen` for tasks (their panes are read-only apart from done/open); keeping note text and item title in step; parser misses seen in testing.
+- [x] **Calendar: a date taken out of a repeating series stays linked** (2026-10-06). The user asked whether an occurrence edited on its own should keep a link to its series. Best practice says yes: iCalendar (RFC 5545) uses the series' UID plus `RECURRENCE-ID`, Google uses `recurringEventId` + `originalStartTime`, Outlook keeps "exceptions" of the master.
+  - **Before:** "Edit only this one" made a standalone copy with `crossAppRefs: []`, which also cut its link to the note it was made from.
+  - **Data:**
+    - `seriesId` + `seriesDate` on `CalendarEvent` / `CalendarReminder` / `CalendarDeadline` (and their create inputs, plus `doneDates`). `calendarStore` v16 backfills nulls.
+    - Mappers `series_id` / `series_date`, migration `044_series_links.sql` (**pending**).
+  - **Store:**
+    - `detach…Occurrence` and `split…Series` set them and keep `crossAppRefs`.
+    - A detach moves that date's done mark to the copy; a split moves the marks from the split date on.
+    - The store test that encoded "a copy drops its cross-app refs" was rewritten to the new rule, with the reason.
+  - **`services/calendarSeries.ts`:** `changedDatesOf`, `unlinkFromSeries`, `afterSeriesDeleted`. Deleting a series from its pane asks "Also delete the N dates changed separately?". "Keep them" unlinks them.
+  - **UI:**
+    - `SeriesLinkBar` (`components/RecurrenceScopeBar/`) in the three calendar panes: "Part of a repeating series — stands in for its …" / "Continues a repeating series from …" / "Was part of a series that has been deleted", with Open the series and Unlink.
+    - The note pane's list of dates (`ArtifactOccurrences.items[].changedId`) shows a changed date at the date it replaces, labelled with its own date and a "changed" tag. It opens and ticks the separate item.
+  - Copy: `LABELS.calendarSeries`. Pattern recorded in CLAUDE.md "Repeating series — a date taken out stays linked".
+  - **Verified:** `tsc -b`, full Vitest suite. Tests: store detach/split (links, refs, done marks), `calendarSeries.test.ts` (order, unlink, delete-ask both ways, no question without changed dates), the note list's changed entry. **Not verified in the app by hand:** the calendar panes' bar and the delete question.
+
+- [x] **Notification actions rebuilt: Got it, per-occurrence Snooze, Postpone moves, Archive per occurrence** (2026-10-06).
+  - **Why:** the user reported that Done in the bell didn't stick. The audit (BACKLOG.md "Notification actions — audit 2026-10-06") found five causes:
+    - Migration 043 wasn't run, so done marks never synced.
+    - Done on a snoozed repeating card ticked the series' first date.
+    - Archive only archived tasks.
+    - Bell cards survived the item being done elsewhere.
+    - A snooze silenced every date up to it.
+  - Re-specced with the user; the full table is in `docs/android/05-notifications.md` "Notification actions", and the rule summary in CLAUDE.md "Notifications".
+  - **Data:** `remindOccurrence` on events/reminders/deadlines (which occurrence a snooze is for) and `seenDates` on events/deadlines (acknowledged with Got it). `calendarStore` v17 with a cumulative migrate, `setOccurrenceSeen(kind, id, date)`, mappers, migration `045_notification_acks.sql` (**pending**). Detach/split carry `seenDates` with the dates they take.
+  - **`services/notifications/actions.ts`** (rewritten):
+    - `acknowledgeOccurrence` (Got it), `markOccurrenceDone`, `completeNotificationTask`.
+    - `snoozeTime` and `snoozeNotificationTarget(kind, id, until, occurrence)`.
+    - `postponeDate(preset, occurrence, today)` and `postponeOccurrence`: a repeating item is detached first through `soloOccurrence`, still linked to its series.
+    - `archiveOccurrence(…, wholeSeries)`, which returns an Undo.
+    - `openNotificationTarget(kind, id, occurrence)`.
+  - **`plan.ts`:** a snooze applies only to its own occurrence; done or seen occurrences (and snoozes for them) never notify. `useNotificationChecker`'s `isStale` drops a card whose occurrence is done or seen.
+  - **UI:**
+    - `NotificationCenter`'s card: Got it (✕ is the same), Done (deadlines), Snooze panel (presets, plus "in N min/hours"), Postpone panel (Tomorrow / Next week, plus date and `TimeInput`), Archive (repeating → "Archive the whole series" checkbox, off by default), Open.
+    - Clear all is device-only, and says so in its tooltip.
+    - Android shade: "Got it" on all three kinds, with snoozes carrying the occurrence.
+    - Copy: `LABELS.notifications.card`, `LABELS.notifications.actions.done = 'Got it'`.
+  - **Decisions:**
+    - Got it doesn't strike out events or deadlines (one still happens, the other is still due); only reminders.
+    - Clear all changes no item (the user's call).
+    - Postpone presets are hidden when they wouldn't move the item later.
+  - **Verified:** `tsc -b`, full Vitest suite. Tests: `plan.test.ts` (per-occurrence snooze, seen dates and their snoozes), new `actions.test.ts` (Got it per kind, snooze occurrence, postpone presets, one-off/repeating/event-length moves, archive one date vs. series, Undo). **Not verified in the app by hand:** the card's panels and the Android shade buttons.

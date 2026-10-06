@@ -126,6 +126,7 @@ function savePending() {
 export function clearPendingSync(): void {
   pending = null;
   try { localStorage.removeItem(PENDING_KEY); } catch { /* nothing to clear */ }
+  try { localStorage.removeItem(RESTORE_SEEN_KEY); } catch { /* nothing to clear */ }
 }
 
 function markDirty(table: string, ids: string[]) {
@@ -210,6 +211,78 @@ function flushPending(userId: string): Promise<void> {
   return flushing;
 }
 
+// ── Restore marker ──────────────────────────────────────────────
+// A restore uploads the backup's records with their OLD updatedAt, so on its own the merge would
+// let any other device holding a newer copy push it straight back. So a restore also writes one
+// account-level timestamp (`sync_markers.restored_at`, migration 042, via markRestored). A device
+// that loads after a restore it hasn't seen yet treats the cloud as the truth for that one load:
+// local records and queued changes older than the restore give way (restoreCutoff, read by
+// mergeRecords), while anything edited after the restore still wins normally, and "last edited"
+// dates are untouched.
+//
+// RESTORE_SEEN_KEY records, per device and account, the last marker this device has taken in.
+// Absent = this device has never loaded this account since the marker existed: it just records the
+// current marker and applies nothing, since it holds no stale copies (and must not drop guest data
+// it is about to upload). Like PENDING_KEY: per-device bookkeeping, not in PERSISTED_STORAGE_KEYS,
+// cleared on sign-out. If the table isn't there yet (migration not run), all of this is skipped.
+
+const RESTORE_SEEN_KEY = 'todo-sync-restore-seen';
+// Not in SYNC_TABLES on purpose: it holds no records to merge, just this one account-level value.
+const MARKER_TABLE = 'sync_markers';
+interface RestoreSeen { userId: string; restoredAt: string | null }
+
+// Set only while hydrateStores runs after an unseen restore; read by mergeRecords.
+let restoreCutoff: number | null = null;
+
+function readRestoreSeen(userId: string): RestoreSeen | null {
+  try {
+    const raw = localStorage.getItem(RESTORE_SEEN_KEY);
+    const seen = raw ? (JSON.parse(raw) as RestoreSeen) : null;
+    return seen && seen.userId === userId ? seen : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeRestoreSeen(userId: string, restoredAt: string | null) {
+  try { localStorage.setItem(RESTORE_SEEN_KEY, JSON.stringify({ userId, restoredAt })); } catch { /* best effort */ }
+}
+
+const updatedTime = (item: unknown): number | undefined => {
+  const u = (item as { updatedAt?: string } | undefined)?.updatedAt;
+  return u ? Date.parse(u) : undefined;
+};
+
+// Queued changes from before the restore are dropped: the restore replaces them. A queued delete
+// (the record no longer exists here) can't be dated, so it goes too — the restore wins.
+function dropPendingBefore(cutoff: number) {
+  if (!pending) return;
+  for (const table of Object.keys(pending.tables)) {
+    const records = TABLE_DEFS[table as keyof typeof TABLE_DEFS]?.get() ?? {};
+    for (const id of Object.keys(pending.tables[table])) {
+      const t = updatedTime(records[id]);
+      if (t === undefined || t < cutoff) delete pending.tables[table][id];
+    }
+    if (Object.keys(pending.tables[table]).length === 0) delete pending.tables[table];
+  }
+  savePending();
+}
+
+// Called by restoreBackupData once its forceUpload has put the restored data in the cloud. This
+// device's data IS the restore, so it records the marker as already seen.
+export function markRestored(userId: string): Promise<void> {
+  return enqueue(async () => {
+    const restoredAt = new Date().toISOString();
+    try {
+      const res = await supabase.from(MARKER_TABLE).upsert([{ user_id: userId, restored_at: restoredAt }]);
+      if (res.error) { console.error('[sync] could not record the restore:', res.error.message); return; }
+      writeRestoreSeen(userId, restoredAt);
+    } catch (err) {
+      console.error('[sync] could not record the restore:', err instanceof Error ? err.message : String(err));
+    }
+  });
+}
+
 // After the load's merge: anything that exists only here (created offline, or before signing in),
 // or is newer here than in Supabase (edited offline, or in the moment between the app opening and
 // the load finishing), is queued for upload. hydrateStores keeps such items but never used to send
@@ -291,7 +364,15 @@ async function runInitSync(userId: string): Promise<void> {
   setStatus('syncing');
 
   try {
-    const results = await Promise.all(SYNC_TABLES.map((t) => supabase.from(t).select('*').eq('user_id', userId)));
+    const [results, markerRes] = await Promise.all([
+      Promise.all(SYNC_TABLES.map((t) => supabase.from(t).select('*').eq('user_id', userId))),
+      supabase.from(MARKER_TABLE).select('restored_at').eq('user_id', userId),
+    ]);
+    // undefined = unreadable (e.g. migration 042 not run yet): the marker is ignored entirely.
+    const restoredAt: string | null | undefined = markerRes.error
+      ? undefined
+      : ((markerRes.data as { restored_at: string }[] | null)?.[0]?.restored_at ?? null);
+    const seen = readRestoreSeen(userId);
 
     // A table that fails to load (missing grant/migration, transient error) must not stop
     // every OTHER table from syncing — it used to (one all-or-nothing throw), which meant
@@ -320,9 +401,21 @@ async function runInitSync(userId: string): Promise<void> {
     if (isEmpty && failed.length === 0) {
       await upsertAllToSupabase(userId);
     } else {
-      hydrateStores(remote);
+      const unseenRestore = !!restoredAt && !!seen && (!seen.restoredAt || Date.parse(restoredAt) > Date.parse(seen.restoredAt));
+      if (unseenRestore) {
+        restoreCutoff = Date.parse(restoredAt!);
+        dropPendingBefore(restoreCutoff);
+      }
+      try {
+        hydrateStores(remote);
+      } finally {
+        restoreCutoff = null;
+      }
       queueLocalOnlyAndNewer(remote);
     }
+    // Only once every table loaded: a table that failed hasn't taken the restore in yet, so the
+    // next load must apply it again (harmless for the rest — edits since the restore are newer).
+    if (restoredAt !== undefined && failed.length === 0) writeRestoreSeen(userId, restoredAt);
 
     if (failed.length > 0) setStatus('error', `Could not sync: ${failed.join(', ')} (other data synced normally)`);
     else setStatus('idle');
@@ -399,6 +492,16 @@ function mergeRecords<T>(
   table: string,
 ): Record<string, T> {
   const result: Record<string, T> = { ...local };
+  // After an unseen restore (see "Restore marker"): local records older than the restore that the
+  // cloud doesn't have were not part of it, so they go; ones it does have take the cloud's copy below.
+  const cutoff = rows ? restoreCutoff : null;
+  if (cutoff !== null) {
+    const remoteIds = new Set((rows ?? []).map((r) => r.id as string));
+    for (const [id, item] of Object.entries(local)) {
+      const t = updatedTime(item);
+      if (!remoteIds.has(id) && t !== undefined && t < cutoff) delete result[id];
+    }
+  }
   // Rows deleted on THIS device whose soft-delete hasn't reached the cloud yet (deleted offline, or
   // the request failed): the cloud still has them alive, but they must not come back.
   const deletedHere = new Set(dirtyIds(table).filter((id) => !(id in local)));
@@ -416,7 +519,7 @@ function mergeRecords<T>(
     const itemUpdatedAt = (item as any).updatedAt;
     const existingTime = existingUpdatedAt ? new Date(existingUpdatedAt).getTime() : -Infinity;
     const itemTime      = itemUpdatedAt     ? new Date(itemUpdatedAt).getTime()     : Infinity;
-    if (!result[id] || itemTime >= existingTime) {
+    if (!result[id] || itemTime >= existingTime || (cutoff !== null && existingTime < cutoff)) {
       result[id] = item;
     }
   }

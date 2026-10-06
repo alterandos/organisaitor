@@ -9,7 +9,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useTrashStore } from '@/store/trashStore';
 import { useOverviewStore } from '@/store/overviewStore';
-import { forceUpload } from '@/services/sync/syncService';
+import { forceUpload, markRestored } from '@/services/sync/syncService';
 import { getBackupSnapshot } from '@/services/autoBackupStorage';
 import { saveFile } from '@/utils/saveFile';
 
@@ -81,7 +81,12 @@ export async function restoreBackupData(backup: Record<string, unknown>, userId:
     useOverviewStore.persist.rehydrate(),
   ]);
 
-  if (userId) await forceUpload(userId);
+  if (userId) {
+    await forceUpload(userId);
+    // Tells the account's other devices a restore happened, so their older copies give way to it
+    // instead of being pushed back over it (syncService.ts "Restore marker").
+    await markRestored(userId);
+  }
 
   return restored;
 }

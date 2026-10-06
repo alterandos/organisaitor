@@ -8,12 +8,13 @@ import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import { linkedListIds } from '@/services/taskListLinks';
 import { LABELS } from '@/config/labels';
+import { ITEM_TYPE_ICON } from '@/config/itemIcons';
 import type { CrossAppRef } from '@/types';
 import type { List, ListId } from '@/types/lists';
 import styles from './ListsSection.module.css';
 
 interface Backlink { type: 'task' | 'event' | 'reminder' | 'deadline'; id: string; title: string; done: boolean }
-const ICON: Record<Backlink['type'], string> = { task: '☑️', event: '📅', reminder: '⏰', deadline: '⏳' };
+const ICON: Record<Backlink['type'], string> = ITEM_TYPE_ICON;
 
 // Under a list's name: what links to it (tasks and calendar items — worked out from their
 // crossAppRefs on each change, never stored, like a note's "Linked from" bar), and the list's own

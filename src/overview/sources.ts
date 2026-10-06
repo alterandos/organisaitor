@@ -1,4 +1,5 @@
 import { LABELS } from '@/config/labels';
+import { ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { addDaysToIso } from '@/utils/date';
 import { expandRepeat } from '@/utils/recurrence';
 import { getNoteEffectiveCollectionId } from '@/utils/notes';
@@ -59,7 +60,7 @@ function calendarWhen(date: string, endDate: string | null, repeat: RepeatConfig
 
 export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   {
-    key: 'task', icon: '✔', label: LABELS.overview.sources.task,
+    key: 'task', icon: ITEM_TYPE_ICON.task, label: LABELS.overview.sources.task,
     rows: (snap) => ({
       locked: [],
       rows: Object.values(snap.tasks).map((t) => row('task', t.id, {
@@ -74,7 +75,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   },
   {
     // A task's own scheduled/deadline shadows are left out — the task row already stands for them.
-    key: 'event', icon: '📅', label: LABELS.overview.sources.event,
+    key: 'event', icon: ITEM_TYPE_ICON.event, label: LABELS.overview.sources.event,
     rows: (snap, today) => ({
       locked: [],
       rows: Object.values(snap.events).filter((e) => e.eventType !== 'task').map((e) => {
@@ -88,7 +89,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     }),
   },
   {
-    key: 'reminder', icon: '🔔', label: LABELS.overview.sources.reminder,
+    key: 'reminder', icon: ITEM_TYPE_ICON.reminder, label: LABELS.overview.sources.reminder,
     rows: (snap, today) => ({
       locked: [],
       rows: Object.values(snap.reminders).filter((r) => r.reminderType !== 'task').map((r) => {
@@ -102,7 +103,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     }),
   },
   {
-    key: 'deadline', icon: '⏰', label: LABELS.overview.sources.deadline,
+    key: 'deadline', icon: ITEM_TYPE_ICON.deadline, label: LABELS.overview.sources.deadline,
     rows: (snap, today) => ({
       locked: [],
       rows: Object.values(snap.deadlines).filter((d) => d.deadlineType !== 'task').map((d) => {
@@ -117,7 +118,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   },
   {
     // Reference material rather than something to finish: undated, and "open" while it exists.
-    key: 'note', icon: '📝', label: LABELS.overview.sources.note,
+    key: 'note', icon: ITEM_TYPE_ICON.note, label: LABELS.overview.sources.note,
     rows: (snap) => {
       const notes = Object.values(snap.notes);
       return {
@@ -131,7 +132,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     },
   },
   {
-    key: 'list', icon: '📃', label: LABELS.overview.sources.list,
+    key: 'list', icon: ITEM_TYPE_ICON.list, label: LABELS.overview.sources.list,
     rows: (snap) => {
       const lists = Object.values(snap.lists);
       return {
@@ -146,7 +147,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   {
     // An item's date is its list's first date field (or its tab's, if the tab has its own fields);
     // its Endeavour is its list's.
-    key: 'listItem', icon: '🔹', label: LABELS.overview.sources.listItem,
+    key: 'listItem', icon: ITEM_TYPE_ICON.listItem, label: LABELS.overview.sources.listItem,
     rows: (snap) => {
       const items = Object.values(snap.listItems);
       const visible = items.filter((i) => snap.lists[i.listId] && !snap.lockedListIds.has(i.listId));
@@ -171,7 +172,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     },
   },
   {
-    key: 'trackerEntry', icon: '📊', label: LABELS.overview.sources.trackerEntry,
+    key: 'trackerEntry', icon: ITEM_TYPE_ICON.trackerEntry, label: LABELS.overview.sources.trackerEntry,
     rows: (snap) => ({
       locked: [],
       rows: Object.values(snap.entries).filter((e) => snap.collections[e.trackerId]).map((e) => {

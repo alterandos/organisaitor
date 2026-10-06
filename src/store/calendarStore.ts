@@ -46,12 +46,19 @@ interface CalendarState {
   addDeadline:    (input: CreateCalendarDeadlineInput)    => CalendarDeadlineId;
   updateDeadline: (id: CalendarDeadlineId, changes: Partial<Omit<CalendarDeadline, 'id' | 'createdAt'>>) => void;
   deleteDeadline: (id: CalendarDeadlineId)                => void;
+  // Marks one occurrence of a Reminder or Deadline as done (or not): struck through on the
+  // calendar, and services/notifications/plan.ts stops notifying for it. THE way to set it —
+  // the bell, Android notification buttons and the panes all call this.
+  setOccurrenceDone: (kind: 'reminder' | 'deadline', id: CalendarReminderId | CalendarDeadlineId, date: string, done: boolean) => void;
+  // An occurrence's notification acknowledged ("Got it"): it won't notify again on any device.
+  setOccurrenceSeen: (kind: 'event' | 'deadline', id: CalendarEventId | CalendarDeadlineId, date: string) => void;
   archiveDeadline: (id: CalendarDeadlineId, reason?: string | null) => void;
   restoreDeadline: (id: CalendarDeadlineId) => void;
 
   // Individual-occurrence editing for repeating items (see src/utils/recurrence.ts). "skip" =
   // delete just this date; "endBefore" = delete this date and everything after; "detach" =
-  // pull this date out of the series into its own standalone item; "split" = start a new
+  // pull this date out of the series into its own item, still linked back to it (seriesId /
+  // seriesDate — RECURRENCE-ID in iCalendar terms), keeping its links and that date's done mark; "split" = start a new
   // series from this date so later occurrences can be edited independently of earlier ones.
   // detach/split return the id of the item that now represents that date, or null if the
   // source item wasn't a repeating one.
@@ -116,6 +123,10 @@ export const useCalendarStore = create<CalendarState>()(
           crossAppRefs:      input.crossAppRefs      ?? [],
           archivedAt:        null,
           archiveReason:     null,
+          seriesId:          input.seriesId           ?? null,
+          seriesDate:        input.seriesDate         ?? null,
+          remindOccurrence:  null,
+          seenDates:         input.seenDates          ?? [],
           source:              input.source              ?? null,
           sourceConnectionId:  input.sourceConnectionId   ?? null,
           sourceCalendarId:    input.sourceCalendarId     ?? null,
@@ -178,6 +189,10 @@ export const useCalendarStore = create<CalendarState>()(
           archiveReason: null,
           notifyDaysBefore: input.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE,
           notifyAtTime:     input.notifyAtTime     ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
+          doneDates:        input.doneDates ?? [],
+          seriesId:         input.seriesId   ?? null,
+          seriesDate:       input.seriesDate ?? null,
+          remindOccurrence: null,
         };
         set((s) => ({ reminders: { ...s.reminders, [id]: reminder } }));
         return id;
@@ -234,6 +249,11 @@ export const useCalendarStore = create<CalendarState>()(
           archiveReason: null,
           notifyDaysBefore: input.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE,
           notifyAtTime:     input.notifyAtTime     ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
+          doneDates:        input.doneDates ?? [],
+          seriesId:         input.seriesId   ?? null,
+          seriesDate:       input.seriesDate ?? null,
+          remindOccurrence: null,
+          seenDates:        input.seenDates ?? [],
         };
         set((s) => ({ deadlines: { ...s.deadlines, [id]: deadline } }));
         return id;
@@ -261,6 +281,29 @@ export const useCalendarStore = create<CalendarState>()(
         return { deadlines: { ...s.deadlines, [id]: { ...deadline, archivedAt: null, archiveReason: null, updatedAt: now() } } };
       }),
 
+      setOccurrenceDone: (kind, id, date, done) => set((s) => {
+        const slice = kind === 'reminder' ? s.reminders : s.deadlines;
+        const item = (slice as Record<string, CalendarReminder | CalendarDeadline>)[id];
+        if (!item) return {};
+        const current = item.doneDates ?? [];
+        if (current.includes(date) === done) return {};
+        const doneDates = done ? [...current, date].sort() : current.filter((d) => d !== date);
+        const next = { ...item, doneDates, updatedAt: now() };
+        return kind === 'reminder'
+          ? { reminders: { ...s.reminders, [id]: next as CalendarReminder } }
+          : { deadlines: { ...s.deadlines, [id]: next as CalendarDeadline } };
+      }),
+
+      setOccurrenceSeen: (kind, id, date) => set((s) => {
+        const slice = kind === 'event' ? s.events : s.deadlines;
+        const item = (slice as Record<string, CalendarEvent | CalendarDeadline>)[id];
+        if (!item || (item.seenDates ?? []).includes(date)) return {};
+        const next = { ...item, seenDates: [...(item.seenDates ?? []), date].sort(), updatedAt: now() };
+        return kind === 'event'
+          ? { events: { ...s.events, [id]: next as CalendarEvent } }
+          : { deadlines: { ...s.deadlines, [id]: next as CalendarDeadline } };
+      }),
+
       deleteDeadline: (id) => set((s) => {
         const { [id]: removed, ...rest } = s.deadlines;
         if (removed) moveToTrash('calendarDeadline', removed);
@@ -283,7 +326,7 @@ export const useCalendarStore = create<CalendarState>()(
         const ev = get().events[id];
         if (!ev?.repeat) return null;
         get().updateEvent(id, { repeat: withException(ev.repeat, date) });
-        return get().addEvent({ ...ev, date, endDate: null, crossAppRefs: [], repeat: null, source: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceRaw: null });
+        return get().addEvent({ ...ev, date, endDate: null, repeat: null, seriesId: id, seriesDate: date, seenDates: (ev.seenDates ?? []).filter((d) => d === date), source: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceRaw: null });
       },
 
       splitEventSeries: (id, date) => {
@@ -291,7 +334,7 @@ export const useCalendarStore = create<CalendarState>()(
         if (!ev?.repeat || date <= ev.date) return null;
         const tail = tailOf(ev.date, ev.repeat, date);
         get().updateEvent(id, { repeat: endedBefore(ev.repeat, date) });
-        return get().addEvent({ ...ev, date, endDate: null, crossAppRefs: [], repeat: tail, source: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceRaw: null });
+        return get().addEvent({ ...ev, date, endDate: null, repeat: tail, seriesId: id, seriesDate: date, seenDates: (ev.seenDates ?? []).filter((d) => d >= date), source: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceRaw: null });
       },
 
       skipReminderOccurrence: (id, date) => {
@@ -310,7 +353,9 @@ export const useCalendarStore = create<CalendarState>()(
         const rem = get().reminders[id];
         if (!rem?.repeat) return null;
         get().updateReminder(id, { repeat: withException(rem.repeat, date) });
-        return get().addReminder({ ...rem, date, crossAppRefs: [], repeat: null });
+        const copy = get().addReminder({ ...rem, date, repeat: null, seriesId: id, seriesDate: date, doneDates: rem.doneDates.filter((d) => d === date) });
+        get().updateReminder(id, { doneDates: rem.doneDates.filter((d) => d !== date) });
+        return copy;
       },
 
       splitReminderSeries: (id, date) => {
@@ -318,7 +363,9 @@ export const useCalendarStore = create<CalendarState>()(
         if (!rem?.repeat || date <= rem.date) return null;
         const tail = tailOf(rem.date, rem.repeat, date);
         get().updateReminder(id, { repeat: endedBefore(rem.repeat, date) });
-        return get().addReminder({ ...rem, date, crossAppRefs: [], repeat: tail });
+        const copy = get().addReminder({ ...rem, date, repeat: tail, seriesId: id, seriesDate: date, doneDates: rem.doneDates.filter((d) => d >= date) });
+        get().updateReminder(id, { doneDates: rem.doneDates.filter((d) => d < date) });
+        return copy;
       },
 
       skipDeadlineOccurrence: (id, date) => {
@@ -337,7 +384,9 @@ export const useCalendarStore = create<CalendarState>()(
         const dl = get().deadlines[id];
         if (!dl?.repeat) return null;
         get().updateDeadline(id, { repeat: withException(dl.repeat, date) });
-        return get().addDeadline({ ...dl, date, crossAppRefs: [], repeat: null });
+        const copy = get().addDeadline({ ...dl, date, repeat: null, seriesId: id, seriesDate: date, doneDates: dl.doneDates.filter((d) => d === date), seenDates: (dl.seenDates ?? []).filter((d) => d === date) });
+        get().updateDeadline(id, { doneDates: dl.doneDates.filter((d) => d !== date) });
+        return copy;
       },
 
       splitDeadlineSeries: (id, date) => {
@@ -345,7 +394,9 @@ export const useCalendarStore = create<CalendarState>()(
         if (!dl?.repeat || date <= dl.date) return null;
         const tail = tailOf(dl.date, dl.repeat, date);
         get().updateDeadline(id, { repeat: endedBefore(dl.repeat, date) });
-        return get().addDeadline({ ...dl, date, crossAppRefs: [], repeat: tail });
+        const copy = get().addDeadline({ ...dl, date, repeat: tail, seriesId: id, seriesDate: date, doneDates: dl.doneDates.filter((d) => d >= date), seenDates: (dl.seenDates ?? []).filter((d) => d >= date) });
+        get().updateDeadline(id, { doneDates: dl.doneDates.filter((d) => d < date) });
+        return copy;
       },
 
       importedSourceKeys: [],
@@ -370,7 +421,7 @@ export const useCalendarStore = create<CalendarState>()(
     {
       name: 'todo-calendar',
       storage: persistStorage(),
-      version: 14,
+      version: 17,
       migrate(state: any, version: number) {
         if (version < 2) {
           const events = state.events ?? {};
@@ -440,6 +491,29 @@ export const useCalendarStore = create<CalendarState>()(
           // CLAUDE.md "Unversioned stores"), just as a version-gated step within an existing
           // store rather than the store's very first version.
           if (state.deadlines === undefined) state.deadlines = {};
+        }
+        if (version < 15) {
+          // doneDates (Reminder/Deadline "done", 2026-10-06).
+          (Object.values(state.reminders ?? {}) as { doneDates?: string[] }[]).forEach((rem) => { if (rem.doneDates === undefined) rem.doneDates = []; });
+          (Object.values(state.deadlines ?? {}) as { doneDates?: string[] }[]).forEach((dl) => { if (dl.doneDates === undefined) dl.doneDates = []; });
+        }
+        if (version < 16) {
+          // seriesId / seriesDate (a date taken out of a series keeps its link back, 2026-10-06).
+          for (const slice of [state.events, state.reminders, state.deadlines]) {
+            (Object.values(slice ?? {}) as { seriesId?: string | null; seriesDate?: string | null }[]).forEach((item) => {
+              if (item.seriesId === undefined) item.seriesId = null;
+              if (item.seriesDate === undefined) item.seriesDate = null;
+            });
+          }
+        }
+        if (version < 17) {
+          // remindOccurrence (all three) + seenDates (events, deadlines): notification actions, 2026-10-06.
+          for (const slice of [state.events, state.reminders, state.deadlines]) {
+            (Object.values(slice ?? {}) as { remindOccurrence?: string | null }[]).forEach((item) => { if (item.remindOccurrence === undefined) item.remindOccurrence = null; });
+          }
+          for (const slice of [state.events, state.deadlines]) {
+            (Object.values(slice ?? {}) as { seenDates?: string[] }[]).forEach((item) => { if (item.seenDates === undefined) item.seenDates = []; });
+          }
         }
         return state as CalendarState;
       },

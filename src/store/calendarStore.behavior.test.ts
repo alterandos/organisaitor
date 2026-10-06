@@ -79,13 +79,28 @@ describe('detachEventOccurrence / detachReminderOccurrence', () => {
     expect(Object.keys(useCalendarStore.getState().events)).toEqual([id]);
   });
 
-  it('a detached copy does not carry over cross-app refs or external-sync provenance from the source', () => {
+  // Changed 2026-10-06 (the user's call, following iCalendar's RECURRENCE-ID): a detached copy
+  // stays linked to its series and keeps its cross-app links (the note it was made from); it still
+  // drops external-sync provenance.
+  it('a detached copy keeps its cross-app refs and links back to its series and date', () => {
     const id = useCalendarStore.getState().addEvent({
       title: 'E', date: '2030-01-01', repeat: weekly,
       crossAppRefs: [{ type: 'note', id: 'n1' }],
     });
     const newId = useCalendarStore.getState().detachEventOccurrence(id, '2030-01-15')!;
-    expect(useCalendarStore.getState().events[newId].crossAppRefs).toEqual([]);
+    const copy = useCalendarStore.getState().events[newId];
+    expect(copy.crossAppRefs).toEqual([{ type: 'note', id: 'n1' }]);
+    expect(copy).toMatchObject({ seriesId: id, seriesDate: '2030-01-15', source: null });
+    expect(useCalendarStore.getState().events[id].seriesId).toBeNull();
+  });
+
+  it("reminder: that date's done mark moves to the copy; the series keeps the others", () => {
+    const id = useCalendarStore.getState().addReminder({ title: 'R', date: '2030-01-01', repeat: weekly });
+    useCalendarStore.getState().setOccurrenceDone('reminder', id, '2030-01-08', true);
+    useCalendarStore.getState().setOccurrenceDone('reminder', id, '2030-01-15', true);
+    const newId = useCalendarStore.getState().detachReminderOccurrence(id, '2030-01-15')!;
+    expect(useCalendarStore.getState().reminders[newId]).toMatchObject({ seriesId: id, seriesDate: '2030-01-15', doneDates: ['2030-01-15'] });
+    expect(useCalendarStore.getState().reminders[id].doneDates).toEqual(['2030-01-08']);
   });
 
   it('reminder: same detach behaviour', () => {
@@ -125,6 +140,12 @@ describe('splitEventSeries / splitReminderSeries', () => {
     const newId = useCalendarStore.getState().splitReminderSeries(id, '2030-01-15')!;
     expect(useCalendarStore.getState().reminders[id].repeat?.until).toBe('2030-01-14');
     expect(useCalendarStore.getState().reminders[newId].repeat?.count).toBe(3);
+  });
+
+  it('the split-off tail links back to the series it continues', () => {
+    const id = useCalendarStore.getState().addDeadline({ title: 'D', date: '2030-01-01', repeat: weekly, crossAppRefs: [{ type: 'note', id: 'n1' }] });
+    const newId = useCalendarStore.getState().splitDeadlineSeries(id, '2030-01-15')!;
+    expect(useCalendarStore.getState().deadlines[newId]).toMatchObject({ seriesId: id, seriesDate: '2030-01-15', crossAppRefs: [{ type: 'note', id: 'n1' }] });
   });
 });
 

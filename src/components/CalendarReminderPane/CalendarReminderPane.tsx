@@ -14,6 +14,8 @@ import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteReminderWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import type { CrossAppRef } from '@/types';
 import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
+import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
+import { afterSeriesDeleted } from '@/services/calendarSeries';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
@@ -36,6 +38,7 @@ export function CalendarReminderPane() {
   const reminder = editingId ? remindersRecord[editingId as CalendarReminderId] : null;
   const archiveReminder = useCalendarStore((s) => s.archiveReminder);
   const restoreReminder = useCalendarStore((s) => s.restoreReminder);
+  const setOccurrenceDone = useCalendarStore((s) => s.setOccurrenceDone);
   const { dialog, setDialog, closeDialog } = useItemActions({
     itemKey:   editingId,
     archived:  !!reminder?.archivedAt,
@@ -62,6 +65,9 @@ export function CalendarReminderPane() {
   // A task's deadline is mirrored as a reminder (Task.calendarReminderId) — same link as the
   // event pane's, so the task can be opened or completed from here.
   const linkedTask = Object.values(tasksRecord).find((t) => t.calendarReminderId === id) ?? null;
+  // Mark done applies to the occurrence this pane was opened on (the item's own date if not repeating).
+  const doneDate = occurrenceDate ?? reminder.date;
+  const occurrenceDone = (reminder.doneDates ?? []).includes(doneDate);
 
   const openLinkedTask = () => {
     if (!linkedTask) return;
@@ -80,7 +86,12 @@ export function CalendarReminderPane() {
     if (v !== reminder.notes) updateReminder(id, { notes: v });
   };
 
-  const handleDelete = () => { closeDialog(); deleteReminderWithCleanup(id); closePane(); };
+  // Deleting a series also asks about the dates taken out of it (services/calendarSeries.ts).
+  const handleDelete = () => {
+    const wasSeries = !!reminder.repeat;
+    closeDialog(); deleteReminderWithCleanup(id); closePane();
+    if (wasSeries) void afterSeriesDeleted('reminder', id);
+  };
   const handleArchive = (reason: string) => { closeDialog(); archiveReminder(id, reason); closePane(); };
 
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
@@ -116,6 +127,10 @@ export function CalendarReminderPane() {
 
         <div className={styles.body}>
           {reminder.archivedAt && <ArchivedBanner archivedAt={reminder.archivedAt} reason={reminder.archiveReason} />}
+
+          {reminder.seriesId && (
+            <SeriesLinkBar kind="reminder" id={id} seriesId={reminder.seriesId} seriesDate={reminder.seriesDate} repeats={!!reminder.repeat} />
+          )}
 
           {reminder.repeat && (
             <RecurrenceScopeBar
@@ -324,9 +339,10 @@ export function CalendarReminderPane() {
 
         <ItemActionFooter
           archived={!!reminder.archivedAt}
-          completed={linkedTask?.completed}
-          onToggleComplete={linkedTask ? () => void toggleTaskCompletion(linkedTask.id) : undefined}
+          completed={linkedTask ? linkedTask.completed : occurrenceDone}
+          onToggleComplete={linkedTask ? () => void toggleTaskCompletion(linkedTask.id) : () => setOccurrenceDone('reminder', id, doneDate, !occurrenceDone)}
           completeOptions={linkedTask ? taskCompletionOptions(linkedTask.id) : []}
+          completeLabels={linkedTask ? undefined : { on: LABELS.itemActions.markDone, off: LABELS.itemActions.notDone }}
           deleteLabel={reminder.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.reminder.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreReminder(id)}

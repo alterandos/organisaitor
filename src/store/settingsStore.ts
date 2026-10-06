@@ -57,6 +57,20 @@ interface SettingsState {
   togglePriorityColor:     () => void;
   toggleAlwaysShowDueDate: () => void;
 
+  // ── Notifications (docs/android/05-notifications.md N9) ─────────────────────────
+  // Read by the Android scheduler (services/notifications/androidScheduler.ts); the snooze times
+  // also by its "Tomorrow" button. Per device, like every other setting.
+  notifyReminders:      boolean;   // Reminders, Deadlines and task deadlines
+  notifyEvents:         boolean;   // Events and committed Schedule blocks
+  snoozeMorningTime:    string;    // HH:MM — "Tomorrow" snooze
+  snoozeEveningTime:    string;    // HH:MM — "This evening" snooze
+  quietHours:           { enabled: boolean; start: string; end: string }; // HH:MM; important items still come through
+  setNotifyReminders:   (v: boolean) => void;
+  setNotifyEvents:      (v: boolean) => void;
+  setSnoozeMorningTime: (t: string) => void;
+  setSnoozeEveningTime: (t: string) => void;
+  setQuietHours:        (patch: Partial<{ enabled: boolean; start: string; end: string }>) => void;
+
   // ── Notes ────────────────────────────────────────────────────────────────────
   noteHeadingStyle:    'academic' | 'highlight';
   setNoteHeadingStyle: (s: 'academic' | 'highlight') => void;
@@ -132,6 +146,17 @@ export const useSettingsStore = create<SettingsState>()(
       setChronicleTreeWidth: (w) => set({ chronicleTreeWidth: Math.round(Math.max(160, Math.min(480, w))) }),
       setChronicleListWidth: (w) => set({ chronicleListWidth: Math.round(Math.max(160, Math.min(480, w))) }),
 
+      notifyReminders:      true,
+      notifyEvents:         true,
+      snoozeMorningTime:    '09:00',
+      snoozeEveningTime:    '18:00',
+      quietHours:           { enabled: false, start: '22:00', end: '07:00' },
+      setNotifyReminders:   (v) => set({ notifyReminders: v }),
+      setNotifyEvents:      (v) => set({ notifyEvents: v }),
+      setSnoozeMorningTime: (t) => set({ snoozeMorningTime: t }),
+      setSnoozeEveningTime: (t) => set({ snoozeEveningTime: t }),
+      setQuietHours:        (patch) => set((s) => ({ quietHours: { ...s.quietHours, ...patch } })),
+
       colorEnabled:            true,
       priorityColorEnabled:    true,
       alwaysShowDueDate:       false,
@@ -169,7 +194,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 5,
+      version: 6,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -203,6 +228,14 @@ export const useSettingsStore = create<SettingsState>()(
         }
         // v4 → v5: hideBlockedTasks (task links, 2026-10-01) — default greyed in place.
         if (version < 5 && state.hideBlockedTasks === undefined) state.hideBlockedTasks = false;
+        // v5 → v6: notification settings (Android notifications, 2026-10-06).
+        if (version < 6) {
+          if (state.notifyReminders === undefined) state.notifyReminders = true;
+          if (state.notifyEvents === undefined) state.notifyEvents = true;
+          if (state.snoozeMorningTime === undefined) state.snoozeMorningTime = '09:00';
+          if (state.snoozeEveningTime === undefined) state.snoozeEveningTime = '18:00';
+          if (state.quietHours === undefined) state.quietHours = { enabled: false, start: '22:00', end: '07:00' };
+        }
         return state;
       },
     }

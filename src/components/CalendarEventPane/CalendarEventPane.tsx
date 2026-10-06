@@ -16,6 +16,8 @@ import { deleteEventWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLi
 import { updateCalendarEventLinked as updateEvent } from '@/services/taskCalendarLinks';
 import type { CrossAppRef } from '@/types';
 import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
+import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
+import { afterSeriesDeleted } from '@/services/calendarSeries';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
@@ -92,7 +94,12 @@ export function CalendarEventPane() {
     if (v !== event.notes) updateEvent(id, { notes: v });
   };
 
-  const handleDelete = () => { closeDialog(); deleteEventWithCleanup(id); closePane(); };
+  // Deleting a series also asks about the dates taken out of it (services/calendarSeries.ts).
+  const handleDelete = () => {
+    const wasSeries = !!event.repeat;
+    closeDialog(); deleteEventWithCleanup(id); closePane();
+    if (wasSeries) void afterSeriesDeleted('event', id);
+  };
   const handleArchive = (reason: string) => { closeDialog(); archiveEvent(id, reason); closePane(); };
 
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
@@ -157,6 +164,10 @@ export function CalendarEventPane() {
 
         <div className={styles.body}>
           {event.archivedAt && <ArchivedBanner archivedAt={event.archivedAt} reason={event.archiveReason} />}
+
+          {event.seriesId && (
+            <SeriesLinkBar kind="event" id={id} seriesId={event.seriesId} seriesDate={event.seriesDate} repeats={!!event.repeat} />
+          )}
 
           {event.repeat && (
             <RecurrenceScopeBar

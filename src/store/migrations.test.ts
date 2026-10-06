@@ -63,6 +63,18 @@ describe('settingsStore migration', () => {
     expect(state.calendarLayerVisibility).toMatchObject({ events: true, tentative: true, deadlines: true });
   });
 
+  it('v5 -> v6 backfills the notification settings and keeps everything else', async () => {
+    seed('todo-settings', { clockFormat: '24h', hideBlockedTasks: true }, 5);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    const state = useSettingsStore.getState();
+    expect(state.hideBlockedTasks).toBe(true);
+    expect(state.notifyReminders).toBe(true);
+    expect(state.notifyEvents).toBe(true);
+    expect(state.snoozeMorningTime).toBe('09:00');
+    expect(state.quietHours).toEqual({ enabled: false, start: '22:00', end: '07:00' });
+  });
+
   it('a fresh install with no persisted state at all gets the full default shape', async () => {
     const { useSettingsStore } = await import('@/store/settingsStore');
     await flush();

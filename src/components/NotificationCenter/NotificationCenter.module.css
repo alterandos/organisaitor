@@ -231,3 +231,30 @@
 .miniSelect:focus,
 .miniDate:focus,
 .miniTime:focus { border-color: var(--color-primary); }
+
+/* A card's snooze / postpone / archive choices (services/notifications/actions.ts). */
+.panel2 {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.hint {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}
+
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}

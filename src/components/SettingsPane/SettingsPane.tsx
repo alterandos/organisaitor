@@ -8,6 +8,9 @@ import { captureBindingFromEvent } from '@/utils/hotkeyBinding';
 import { listTimezones, resolveTimezone, SYSTEM_TIMEZONE } from '@/utils/timezone';
 import { rezoneAllCalendarData } from '@/services/timezoneMigration';
 import { StorageSection } from './StorageSection';
+import { NotificationsSection } from './NotificationsSection';
+import { SettingRow, Toggle } from './SettingControls';
+import { usePlatform } from '@/hooks/usePlatform';
 import styles from './SettingsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
@@ -45,37 +48,8 @@ function HotkeyCell({
   );
 }
 
-function Toggle({
-  on, onToggle, label,
-}: { on: boolean; onToggle: () => void; label: string }) {
-  return (
-    <button
-      className={`${styles.toggle} ${on ? styles.toggleOn : ''}`}
-      onClick={onToggle}
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-    >
-      <span className={styles.toggleThumb} />
-    </button>
-  );
-}
-
-function SettingRow({
-  name, desc, children,
-}: { name: string; desc: string; children: React.ReactNode }) {
-  return (
-    <div className={styles.setting}>
-      <div className={styles.settingInfo}>
-        <span className={styles.settingName}>{name}</span>
-        <span className={styles.settingDesc}>{desc}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
 export function SettingsPane() {
+  const { isAndroid } = usePlatform();
   const closeSettings = useUIStore((s) => s.closeSettings);
   const activeView    = useUIStore((s) => s.activeView);
 
@@ -288,6 +262,7 @@ export function SettingsPane() {
             </div>
           </section>
 
+          {isAndroid && <NotificationsSection />}
           <StorageSection />
 
           {activeView === 'tasks' && (

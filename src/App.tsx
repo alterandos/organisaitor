@@ -11,6 +11,7 @@ import { initSync, stopSync } from '@/services/sync/syncService';
 import { checkVaultStatus, resetVaultModuleState } from '@/services/vault';
 import { initNoteSecretsSync } from '@/services/noteSecretsSync';
 import { startDeepLinks } from '@/services/android/deepLinks';
+import { initAndroidNotifications, scheduleReconcile, watchForChanges } from '@/services/notifications/androidScheduler';
 import { registerOAuthReturn } from '@/services/android/oauthReturn';
 import { initListSecretsSync } from '@/services/listSecretsSync';
 import { initAutoBackup } from '@/services/autoBackup';
@@ -320,6 +321,17 @@ export default function App() {
     const unregisterOAuth = registerOAuthReturn();
     const stop = startDeepLinks();
     return () => { stop(); unregisterOAuth(); };
+  }, [isAndroid]);
+
+  // Android: system notifications booked ahead with the OS (services/notifications/androidScheduler.ts),
+  // re-planned on launch, on any change to what they're built from, and on returning to the app.
+  useEffect(() => {
+    if (!isAndroid) return;
+    void initAndroidNotifications();
+    scheduleReconcile();
+    const unwatch = watchForChanges();
+    const resume = CapApp.addListener('appStateChange', ({ isActive }) => { if (isActive) scheduleReconcile(); });
+    return () => { unwatch(); void resume.then((l) => l.remove()); };
   }, [isAndroid]);
 
   // Syncs connected Google calendars while the app is open — on load/sign-in, then every

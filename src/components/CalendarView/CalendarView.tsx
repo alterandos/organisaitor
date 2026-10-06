@@ -21,6 +21,7 @@ import { EVENT_TYPE_ICON } from '@/config/calendarEventTypes';
 import { ScheduleOccurrencePopover } from '@/components/ScheduleOccurrencePopover/ScheduleOccurrencePopover';
 import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane';
 import { useTimeGridDrag } from '@/hooks/useTimeGridDrag';
+import { ITEM_FLAG_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import styles from './CalendarView.module.css';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -28,8 +29,8 @@ import styles from './CalendarView.module.css';
 type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
   | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean }
-  | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
-  | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string }
+  | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
+  | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
   | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean };
 
 interface SpanSlot {
@@ -49,6 +50,13 @@ interface SpanSlot {
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
+
+// Struck through: a completed task, or a Reminder/Deadline occurrence marked done (doneDates).
+function isCompletedItem(item: CalDisplayItem): boolean {
+  if (item.kind === 'task') return item.completed;
+  if (item.kind === 'reminder' || item.kind === 'deadline') return item.done;
+  return false;
+}
 
 function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -338,10 +346,11 @@ export function CalendarView() {
         status: rem.status ?? 'confirmed',
         important: rem.important ?? false,
         occurrenceDate: rem.date,
+        done: (rem.doneDates ?? []).includes(rem.date),
       };
       if (!isOccurrenceSkipped(rem.repeat, rem.date)) push(rem.date, item);
       if (rem.repeat) {
-        for (const d of expandRepeat(rem.date, rem.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d });
+        for (const d of expandRepeat(rem.date, rem.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d, done: (rem.doneDates ?? []).includes(d) });
       }
     });
 
@@ -362,14 +371,15 @@ export function CalendarView() {
         collectionId: dl.collectionId,
         notes: dl.notes,
         links: dl.links,
-        typeIcon: dl.important ? '❗' : '🚩',
+        typeIcon: dl.important ? ITEM_FLAG_ICON.important : ITEM_TYPE_ICON.deadline,
         status: dl.status ?? 'confirmed',
         important: dl.important ?? false,
         occurrenceDate: dl.date,
+        done: (dl.doneDates ?? []).includes(dl.date),
       };
       if (!isOccurrenceSkipped(dl.repeat, dl.date)) push(dl.date, item);
       if (dl.repeat) {
-        for (const d of expandRepeat(dl.date, dl.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d });
+        for (const d of expandRepeat(dl.date, dl.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d, done: (dl.doneDates ?? []).includes(d) });
       }
     });
 
@@ -1000,7 +1010,7 @@ export function CalendarView() {
           ) : (
             (itemsByDate.get(selectedDate) ?? []).map((item) => {
               const past      = item.kind !== 'task' ? isPastItem(selectedDate, item.time) : false;
-              const completed = item.kind === 'task' && item.completed;
+              const completed = isCompletedItem(item);
               return (
                 <button
                   key={`${item.kind}-${item.id}`}
@@ -1149,7 +1159,7 @@ export function CalendarView() {
                           >
                             {dayItems.slice(0, MAX_VISIBLE).map((item) => {
                               const past      = item.kind !== 'task' ? isPastItem(dateStr, item.time) : false;
-                              const completed = item.kind === 'task' && item.completed;
+                              const completed = isCompletedItem(item);
                               return (
                                 <button
                                   key={`${item.kind}-${item.id}`}
@@ -1249,7 +1259,7 @@ export function CalendarView() {
                     {weekViewDateStrs.map((dateStr, i) => (
                       <div key={dateStr} className={styles.weekUntimedCol}>
                         {weekTimeGrid.perDayUntimed[i].map((item) => {
-                          const completed = item.kind === 'task' && item.completed;
+                          const completed = isCompletedItem(item);
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
@@ -1317,7 +1327,7 @@ export function CalendarView() {
                           )}
                           {dayLayout.map(({ item, top, height, col, totalCols }) => {
                             const past      = item.kind !== 'task' ? isPastItem(dateStr, item.time) : false;
-                            const completed = item.kind === 'task' && item.completed;
+                            const completed = isCompletedItem(item);
                             const widthPct  = 100 / totalCols;
                             const startMin  = timeToMinutes(item.time!);
                             const endMin    = getItemEndMinutes(item, startMin);
@@ -1419,7 +1429,7 @@ export function CalendarView() {
                   {dayTimeGrid.untimed.length > 0 && (
                     <div className={styles.dayUntimedRow}>
                       {dayTimeGrid.untimed.map((item) => {
-                        const completed = item.kind === 'task' && item.completed;
+                        const completed = isCompletedItem(item);
                         return (
                           <button
                             key={`${item.kind}-${item.id}`}
@@ -1476,7 +1486,7 @@ export function CalendarView() {
                         )}
                         {dayTimeGrid.timedLayout.map(({ item, top, height, col, totalCols }) => {
                           const past      = item.kind !== 'task' ? isPastItem(selectedDate, item.time) : false;
-                          const completed = item.kind === 'task' && item.completed;
+                          const completed = isCompletedItem(item);
                           const widthPct  = 100 / totalCols;
                           const startMin  = timeToMinutes(item.time!);
                           const endMin    = getItemEndMinutes(item, startMin);
@@ -1566,7 +1576,7 @@ export function CalendarView() {
               <div className={styles.dayPaneBody}>
                 {(itemsByDate.get(dayPaneDate) ?? []).map((item) => {
                   const past      = item.kind !== 'task' ? isPastItem(dayPaneDate, item.time) : false;
-                  const completed = item.kind === 'task' && item.completed;
+                  const completed = isCompletedItem(item);
                   return (
                     <button
                       key={`${item.kind}-${item.id}`}

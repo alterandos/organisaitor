@@ -553,6 +553,55 @@ Built: see CLAUDE.md "Right-click menus" and the 2026-10-06 entry in `docs/featu
 - **Section-wide menus** (a `section` provider, e.g. "New notebook" on empty Chronicle space).
 - Possible menu features as needs arise: checkable items, a header row naming the item, items revealed while holding a modifier.
 
+### Inline objects in notes (`\`) — Reminder built 2026-10-06; next kinds and custom objects
+
+Built: see CLAUDE.md "Inline objects in notes (`\`)" and the 2026-10-06 entry in `docs/features/implemented-features.md`. The user's direction: this will be extended to almost every kind of thing, with Reminder as the trial that settles the UX. Confirmed next:
+- **More built-in kinds**, each one `NoteObjectKind` in `components/NoteEditor/objects/` plus an entry in `NOTE_OBJECT_KINDS`:
+  - ~~**Event**~~: built 2026-10-06 (`eventKind.ts`, `EventBody`). Not handled from the pane: multi-day events (end date), an event's birthday/travel type (set via ↗).
+  - ~~**Deadline**~~: built 2026-10-06 (`deadlineKind.ts` via `datedKindFactory.ts`; `NoteBacklinks` lists deadlines now).
+  - **Task**: `inferTaskFromSelection`; the create path must go through the task store's own rules (shadow calendar entries via `taskCalendarLinks`).
+  - **List item and tracker entry**: the Ctrl+Q stubs.
+- **Custom objects** (the user's own things; proposed 2026-10-06 and agreed as the direction, to design later):
+  - **Lists:** `\groceries milk` adds an item to that list.
+  - **Trackers:** `\weight 72.4` logs an entry.
+  - **Annotation tags:** `\important` tags what's typed next.
+  - Likely shape: the registry gains kinds generated from the user's lists/trackers/tags at menu time (a `dynamicKinds()` source next to `NOTE_OBJECT_KINDS`).
+  - Open questions:
+    - Keyword collisions with built-ins: built-ins win, and the menu shows both?
+    - Encrypted lists: never offered while locked.
+    - Whether a tag is an "object" at all, or a separate `\` mode.
+- **Menu order by use**: rank kinds by how often each is picked (agreed 2026-10-06). Deferred while there's one kind; needs a small persisted usage count (a new persisted key → `PERSISTED_STORAGE_KEYS`).
+- ~~**Editing from the pane**~~: built 2026-10-06 for reminders and deadlines (click-to-edit date/time in the heading; notes, links and Endeavour in the expanded body; flags in the right-click menu). Still to do: a `Body` and `editWhen` for **tasks and events** (their panes offer only done/open today; a task's date must go through its store rules for the shadow calendar entries), and per-type extras like a reminder's whole-day notify time.
+- **Note text vs. item title**: the text is the title at creation. Renaming the item elsewhere (or editing the text) doesn't update the other. Options: show the item's title in the pane when they differ, or a "use this title" action; a full two-way sync is probably too clever.
+- **Parser misses seen in testing (2026-10-06)**, in `utils/textToTask.ts` (shared with Ctrl+Q, so add a test in `textToTask.test.ts` with each fix):
+  - "pay rent every month on the 1st" doesn't read "on the 1st" as a date.
+  - "yesterday" isn't read at all ("standup yesterday 9am" lands on today, title "standup yesterday"). Seen 2026-10-06.
+  - A trailing "important" sets the flag but stays in the title — **fixed for `\` 2026-10-06** (`tidyObjectTitle`); still so for Ctrl+Q, on purpose. Only a *leading* "Important:" is stripped, on purpose, so prose like "this is important" survives Ctrl+Q; stripping a trailing cue word needs care for the same reason.
+- ~~**`NoteBacklinks` doesn't list deadlines**~~ — fixed 2026-10-06 with the `\deadline` kind.
+- **Default view setting**: whether new links start inline or as cards (settingsStore field; default inline today).
+
+### ~~Calendar: occurrences taken out of a series keep their link~~ — built 2026-10-06 (see "Calendar: a date taken out of a repeating series stays linked" in implemented-features.md; migration 044 pending)
+
+**Today:** "Edit only this one" (`detach…Occurrence`) adds an exception to the series and creates a **standalone copy** with `crossAppRefs: []` and no record of where it came from. The copy loses its link to the note it was made from, and nothing ties it back to its series. "Edit this and following" (`split…Series`) does the same for the new tail series.
+
+**Best practice:** iCalendar (RFC 5545) and every major calendar keep a changed occurrence *part of its series*.
+- iCalendar: a component with the series' UID and a `RECURRENCE-ID` naming the date it replaces.
+- Google Calendar API: `recurringEventId` + `originalStartTime`.
+- Outlook: "exceptions" of the master.
+- Consequences everywhere:
+  - The changed one still shows as part of the series.
+  - Deleting the series asks about (and can remove) the changed ones.
+  - "Edit all" can choose whether to override them.
+  - Sync can line them up.
+
+**Proposal:**
+- Add `seriesId` (the original item's id) and `seriesDate` (the occurrence date it replaces) to events, reminders and deadlines. A detach sets both and **keeps `crossAppRefs`** (so the note's link survives).
+- A split sets `seriesId` on the new tail series too.
+- The calendar pane of a detached one says "Part of a series · Open series · Unlink from series". Unlinking clears the two fields, as the user asked.
+- The note pane's list of dates shows a changed one at its date, marked "changed", opening the copy.
+- Deleting a series offers to delete its changed ones too.
+- **Needs:** a Supabase migration (two columns on three tables), mappers, a `calendarStore` version bump, the three panes, and the list. Agent commands that detach (if any) follow automatically through the store actions.
+
 ### Custom note and tab templates (requested 2026-10-05, design proposed, not built; request text was cut off)
 
 **The use case.** Each subject is a notebook. Inside it, a "Lectures" note gets one new tab per lecture. Setting up that note, and each lecture tab, is repeated per lecture and per subject. The user suggested reusable custom templates, shown in the new-note pane next to the built-in six, carrying every field a note has (notebook tags, annotation tags, Endeavour). Created from wherever you are, they would inherit that place's tags and Endeavour, and "New note template" would join the + speed dial. The request ends mid-sentence ("But in particular, …"), so ask what came next before building.
@@ -726,6 +775,19 @@ A setting in the Settings pane to control watchlist row size (e.g. Compact / Nor
 ---
 
 ## Notifications & Reminders
+
+### Notification actions — audit 2026-10-06 (resolved 2026-10-06)
+
+**Resolved** by the re-spec in `docs/android/05-notifications.md` "Notification actions" (Got it / Done / per-occurrence Snooze / Postpone moves the item / Archive per occurrence or series / Clear all device-only). Each finding below is fixed; the per-device one needed migrations 043 and 045 run. Kept for the reasoning.
+
+
+The user reported that Done in the bell seemed to apply only momentarily: items they'd marked done came back. These findings came from reading the code and reproducing flows with the real checker and stores in jsdom:
+- **Done on a *snoozed* card of a repeating reminder/deadline marks the wrong date.** A snooze notification carries `occurrence: item.date` (the series' first date) in `plan.ts`. Done then ticks that first date and leaves the occurrence that actually fired un-done (reproduced: snoozed today's card → `doneDates = ['<series start>']`). The Android shade's buttons use the same data.
+- **Archive on a plain reminder/deadline card does nothing** but dismiss the card (`NotificationCenter.handleArchive` only archives a task).
+- **A card stays in the bell after the occurrence is done elsewhere** (calendar pane, note pane): `isStale` checks deleted/archived but not `doneDates`.
+- **Snooze/Postpone set `remindAt` and suppress *every* occurrence up to that time** (reproduced: a daily reminder snoozed 2 days skipped day 2). Postpone doesn't move the item's date; it's a snooze to a chosen moment (09:00 if no time given).
+- **Events offer only OK (dismiss)** in the bell; editing an event's time after dismissing re-notifies it.
+- **Per-device state:** the bell (`pending`) and the "already notified" log are per device. Marking done syncs, but **only once migration 043 is run**: until then every reminder/deadline upsert is rejected, so Done never reaches other devices. Each device then notifies (and the Android OS schedule books) the item again. This is the likeliest cause of "it came back". A dismissed event card also reappears on another device.
 
 ### Records — Habit / tracker reminders
 
@@ -2599,19 +2661,23 @@ Complete dark mode first (steps 1–6) — it benefits desktop immediately and i
 
 $1 (Update 2026-09-20: the *delete confirmation* for all of those now uses the shared `confirmDelete` dialog, so the wording and keyboard behaviour match — what they still lack is the archive half.)
 
-## Backup restore across two devices — open decision (logged 2026-10-05)
+## Backup restore across two devices — BUILT 2026-10-06 (Option C, restore marker)
+
+Decided by the user 2026-10-06: Option C. Built: see "Restore marker" under CLAUDE.md "How sync works" and the 2026-10-06 entry in `docs/features/implemented-features.md`. Migration `042_sync_markers.sql` is pending until the user runs it. Kept below for the reasoning.
+
 
 `restoreBackupData` now uploads the restored data for every synced store (fixed 2026-10-05; see "Fixes from the first phone test" in `docs/features/implemented-features.md`). One gap remains: restored records keep their **old `updatedAt`**. Another signed-in device holding a newer copy will see "local is newer" on its next load (`queueLocalOnlyAndNewer`) and push it back, undoing the restore for those records. The same happens if restore is done while that device has unsynced edits.
 - **Option A (recommended):** on restore, stamp every restored record's `updatedAt` with the restore time, so the restore wins on every device. Cost: "last edited" dates and sorts show the restore time.
 - **Option B:** keep dates; tell the user to restore on each device, or to sign out the others first.
+- **Option C (recommended 2026-10-06, after the user asked about a per-record "restored" field):** one **account-level restore marker**, not a per-record field. A per-record field would mean a column on all ~17 synced tables, plus every type, mapper and store migration; not worth it. Instead: restore writes one `restoredAt` timestamp to the cloud (one small row, one migration). On load, a device that sees a `restoredAt` newer than the last one it saw treats the cloud as the truth for that load. It drops local records and pending-queue entries whose `updatedAt` is older than `restoredAt`, adopts the cloud copies, then records the marker as seen. Edits made after the restore still win normally, and "last edited" dates are untouched. Logic lives in `initSync`'s merge step only; test it against the existing fake-Supabase sync tests. About half a day. The user said dates matter only slightly, so A is an acceptable fallback.
 - Records without `updatedAt` (tags, list types, portfolio tags/purposes) already merge remote-wins, so they follow the restore.
 
-## Notifications rebuild + "done" on Reminders/Deadlines — designed 2026-10-04, not built
+## Notifications rebuild + "done" on Reminders/Deadlines — BUILT 2026-10-06 except tracker reminders
 
-Full design, signed off by the user 2026-10-04: `docs/android/05-notifications.md`. Two parts land on desktop too, not just Android:
+Full design, signed off by the user 2026-10-04: `docs/android/05-notifications.md` (its "Build log" says what was built and how it differs). **Still open:** the tracker/routine "Remind me" below (waits for Records), and on-device verification. Two parts land on desktop too, not just Android:
 - **Shared trigger engine** (`services/notifications/plan.ts`), used by the desktop poller and the Android scheduler. Its first step fixes a live bug: **Deadlines never notify** (no `deadlines` loop in `useNotificationChecker`; task shadows became `CalendarDeadline`s on 2026-09-27), and `NotificationCenter`'s `linkedTask` lookup still uses `calendarReminderId`.
 - **"Done" on a Reminder or standalone Deadline**: `doneDates: string[]` per occurrence, struck through on the calendar, no further notifications. Migration 042 (041 is taken by W1's OAuth migration), `calendarStore` v15.
-- **Tracker/routine "Remind me"** (`Collection.reminder`, migration 043, `taskStore` v14), skipped when today is already logged.
+- **Tracker/routine "Remind me"** (`Collection.reminder`, migration 044, `taskStore` v14), skipped when today is already logged.
 
 ## Android back button should use the same overlay stack as Escape — built 2026-10-04 (W2)
 
@@ -2633,6 +2699,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
 | **`/api/*` via `apiFetch()`; files via `saveFile()`** (Android W1, 2026-10-04) | `src/test/patterns.test.ts` "/api/* calls go through apiFetch"; for files, `grep -rn "\.download =" src` (only `utils/saveFile.ts`) | **Fully applied 2026-10-04** — every `/api/*` caller already used `apiFetch`; the only downloads (`backupExport.ts`) now call `saveFile`. No test for `saveFile` yet (grep only). |
+| **Notifications: one set of rules** (`services/notifications/plan.ts`, 2026-10-06) | `src/test/patterns.test.ts` "notifications are delivered only from the planned paths" | **Fully applied 2026-10-06** — the old checker was the only place with rules, and it now uses `plan.ts`. |
 | **Pickers suggest by keywords** (`utils/suggestRank.ts`, 2026-10-01) | `src/test/patterns.test.ts` "\"link a …\" pickers suggest by keywords" | **Fully applied 2026-10-01** — NotePickerModal (its own tab-aware ranking), TaskPickerModal, ListPickerModal; every opener passes `suggestFrom`. |
 | **Toasts via `showToast()` + one `ToastHost`** (2026-10-01) | `src/test/patterns.test.ts` "toasts go through showToast and the one ToastHost" | **Fully applied 2026-10-01** — no toast existed before. |
 | **Task completion via `toggleTaskCompletion()`** (2026-10-01) | `src/test/patterns.test.ts` "the UI completes tasks through toggleTaskCompletion" | **Fully applied 2026-10-01** in components. Deliberate exception: `taskListLinks.toggleChecklistItemWithTasks` (see "Task links — follow-ons"). |
@@ -2650,6 +2717,8 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 | **One implementation of each create/edit rule, shared by the UI and the agent** | for calendar items: every `addEvent(`/`addReminder(` call site should build its input with `utils/calendarItemInput.ts`; for schedule blocks: `createScheduleBlock` | Applied to `AddCalendarItemModal` and `AddScheduleModal` 2026-09-22. **Remaining:** `MobileCalendarQuickAdd` builds its own event/reminder input, `CalendarEventPane` applies the end-date and notes→links rules itself on edit, and the ICS import in `IntegrationsPane` builds events directly. |
 | **Every sync mapper's `xToRow` sends an explicit `deleted_at: null`** | `npx vitest run src/test/patterns.test.ts -t "deleted_at"` | **Fully applied 2026-09-24** — all 18 mappers (17 existing + the new `trashEntryToRow`), fixed in the same change that added the Recycling Bin (see CLAUDE.md "Recycling Bin"). Without this, restoring an item previously tombstoned by another device would leave it zombie-tombstoned forever. |
 | **Right-click menus only through `src/contextMenu/`** (scopes + providers; adopted 2026-10-06, CLAUDE.md "Right-click menus") | `npx vitest run src/test/patterns.test.ts -t "right-click"` | **Fully applied 2026-10-06**: nothing else listens for `contextmenu` (the exceptions only suppress it: BottomSheet, useLongPress, the menu itself). Coverage of places is a feature list, not a retrofit — see "Right-click menus — next places". |
+| **One icon per item kind, from `config/itemIcons.ts`** (adopted 2026-10-06, CLAUDE.md "Inline objects in notes") | `npx vitest run src/test/patterns.test.ts -t "one icon"` | **Fully applied 2026-10-06** for the reminder, deadline and task icons: NoteBacklinks, ListLinksBar, CalendarView (deadline type icon), overview/sources.ts and the note panes all read it. Not yet covered by the check: event/list/note emoji elsewhere (calendar event-type icons are a separate concept in `config/calendarEventTypes.ts` and stay there). |
+| **Linked text drawn once per link by `objects/artifactGroups.ts`; `\` kinds only through `NOTE_OBJECT_KINDS`** (adopted 2026-10-06, CLAUDE.md "Inline objects in notes (`\`)") | `npx vitest run src/test/patterns.test.ts -t "linked text"` | **Fully applied 2026-10-06**: the per-element `mark[data-artifact-type]::after` icons were removed in the same change. Both creation paths (Ctrl+Q and `\`) end in the same `artifactLink` mark. A future retrofit: Ctrl+Q's Create menu could become a picker over `NOTE_OBJECT_KINDS` (one list of kinds for both), once Task and Event kinds exist. |
 | **Creation panes show the "what are you creating?" switcher** (`CreateKindSwitcher` + `config/createKinds.ts`, adopted 2026-10-05; CLAUDE.md "Creation panes: the switcher") | `npx vitest run src/test/patterns.test.ts -t "createKinds"` (registered kinds have a pane); `grep -L "CreateKindSwitcher" src/components/Add*Modal/*.tsx` lists the panes without it | **Applied to Notes only** (`AddNoteModal`, `AddNoteTagModal`). Not yet: Records (`AddTrackerModal` / `AddEntryModal` / `AddRoutineModal`), Lists (`AddListModal` / `AddListItemModal`), Portfolio (`AddWatchlistItemModal` / `AddPortfolioTagModal` / `AddInvestmentPurposeModal`), Fitness (`AddActivityModal` / `EditActivityTypeModal`), Tasks (`AddTaskModal`, also `AddCollectionModal` / `AddPurposeModal` / `AddTagModal`?), Calendar (`AddCalendarItemModal` already switches event/reminder/deadline inside itself; decide whether those become registry kinds), Overview. Also: the speed dial (`AddTaskButton`) keeps its own per-section option lists; it could read `CREATE_KINDS` instead. Each pane joining also reads `uiStore.createDraft` for its first field. |
 | **Row hover-action menu (`RowHoverActions`), not inline-growth CSS** — **changed 2026-10-05 to `RowOptionsMenu`** (the row's leading icon becomes a ⋯ on hover; hovering the ⋯ drops the actions down in the icon column; hovering the row opens nothing) | `npx vitest run src/test/patterns.test.ts -t "RowHoverActions\|RowOptionsMenu"` | **2026-10-05: fully applied to all 7 row sites** (Chronicle, Sidebar ×3, Manage, Lists, Records, Overview); a pattern test keeps the hook/menu private to `RowOptionsMenu` and `HoverOptions`. **Fully applied to all 5 known nav-column sites 2026-09-24** (see CLAUDE.md "Row hover-action menu"). **Known gap, not fixed**: the pattern is hover-only, with no touch/tap fallback — the old inline-growth CSS it replaced had one (`@media (hover: none)`). **Now a real problem**: Manage (via More), Records, Lists and Notes are all reachable on Android, so their row actions are unreachable there. Fix decided 2026-10-04 (D1): long-press opens the same items in an `ActionSheet` — see the next row. |
 | **Android: every hover affordance has a touch path** (long-press → `ActionSheet`, D1, decided 2026-10-04 — `docs/android/11-design-and-coding-patterns.md` §6.1) | `grep -rlE "useRowHoverActions\|HoverOptions" src/components` — each site must work via long-press on Android (once the shared change lands, all do) | **Fully applied 2026-10-04 (W2)** for `RowHoverActions` and `HoverOptions`: `useRowHoverActions` adds long-press on Android and `RowHoverActionsMenu` shows the actions in a `BottomSheet`; every site's actions are `RowAction`s with a label from `LABELS` (pattern test: no raw `<button>` inside a `<RowHoverActionsMenu>`). `TruncatedText` wraps to two lines on Android. Still hover-only, by decision or later workstream: `LinkHoverPreview` and calendar hover cards (n/a: a tap opens the item), NoteList's inline note-row actions (W7). Also fixed: AddTaskButton's speed dial opened on sticky `:hover` after a tap and its empty column swallowed taps on the list. |

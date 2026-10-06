@@ -32,6 +32,17 @@ export interface CalendarItemPrefillExtra {
   repeat?:       { freq: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number } | null;
 }
 
+// A Notes text range waiting for the item it was turned into (see pendingArtifactLink).
+export interface PendingArtifactLink {
+  noteId:            string;
+  from:              number;
+  to:                number;
+  targetType:        CrossAppRefType;
+  tabId?:            string;
+  replaceWithTitle?: boolean;
+  resolvedTargetId?: string;
+}
+
 // Back/forward section-navigation history (Alt+Left / Alt+Right, Backspace remains a
 // secondary alternate for back). An object shape (not a bare AppView[]) so a future entry
 // can carry more than "which section" — e.g. which note/list was open — without a
@@ -183,8 +194,10 @@ interface UIState {
   // watches for to apply the ArtifactLinkMark and then clears this field itself. Only one
   // pending link at a time — matches there only ever being one create modal open at once.
   // tabId: the note tab the selection was in (see CrossAppRef.tabId), carried into the reverse link.
-  pendingArtifactLink: { noteId: string; from: number; to: number; targetType: CrossAppRefType; tabId?: string; resolvedTargetId?: string } | null;
-  setPendingArtifactLink:   (link: { noteId: string; from: number; to: number; targetType: CrossAppRefType; tabId?: string }) => void;
+  // replaceWithTitle (a `\` object): once created, the text from..to (possibly empty) becomes the
+  // item's final title, so the note reads as the item does. Ctrl+Q links the selection as it is.
+  pendingArtifactLink: PendingArtifactLink | null;
+  setPendingArtifactLink:   (link: Omit<PendingArtifactLink, 'resolvedTargetId'>) => void;
   // targetType overrides the pending link's type when what actually got created differs from what
   // was requested — e.g. the Calendar-item modal lets the user flip Event/Reminder after opening.
   resolveArtifactLink:      (targetId: string, targetType?: CrossAppRefType) => void;

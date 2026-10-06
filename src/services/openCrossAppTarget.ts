@@ -6,8 +6,10 @@ import { useListStore } from '@/store/listStore';
 
 // Opens the task / calendar event / reminder / deadline / list a cross-app link points at, in its own
 // section. Shared by clicking linked text in a note (ArtifactLinkMark) and clicking a "Linked
-// from" pill. Returns false if the target no longer exists or isn't a supported type.
-export function openArtifactTarget(targetType: string | null | undefined, targetId: string | null | undefined): boolean {
+// from" pill. occurrenceDate opens one date of a repeating calendar item (its pane then offers
+// "only this one / this and following"). Returns false if the target no longer exists or isn't a
+// supported type.
+export function openArtifactTarget(targetType: string | null | undefined, targetId: string | null | undefined, occurrenceDate?: string): boolean {
   if (!targetType || !targetId) return false;
   const ui = useUIStore.getState();
   if (targetType === 'task') {
@@ -21,16 +23,16 @@ export function openArtifactTarget(targetType: string | null | undefined, target
     const event = calendar.events[targetId as CalendarEventId];
     if (!event) return false;
     ui.setActiveView('calendar');
-    ui.requestCalendarDate(event.date);
-    ui.openCalendarEventPane(targetId);
+    ui.requestCalendarDate(occurrenceDate ?? event.date);
+    ui.openCalendarEventPane(targetId, occurrenceDate);
     return true;
   }
   if (targetType === 'reminder') {
     const reminder = calendar.reminders[targetId as CalendarReminderId];
     if (!reminder) return false;
     ui.setActiveView('calendar');
-    ui.requestCalendarDate(reminder.date);
-    ui.openCalendarReminderPane(targetId);
+    ui.requestCalendarDate(occurrenceDate ?? reminder.date);
+    ui.openCalendarReminderPane(targetId, occurrenceDate);
     return true;
   }
   if (targetType === 'list') {
@@ -45,8 +47,8 @@ export function openArtifactTarget(targetType: string | null | undefined, target
     const deadline = calendar.deadlines[targetId as CalendarDeadlineId];
     if (!deadline) return false;
     ui.setActiveView('calendar');
-    ui.requestCalendarDate(deadline.date);
-    ui.openCalendarDeadlinePane(targetId);
+    ui.requestCalendarDate(occurrenceDate ?? deadline.date);
+    ui.openCalendarDeadlinePane(targetId, occurrenceDate);
     return true;
   }
   return false;

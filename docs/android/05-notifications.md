@@ -2,7 +2,7 @@
 
 How reminders, deadlines, events, schedules and record-tracking prompts reach the user on Android when the app is closed. Reminders and record tracking are among the most important reasons to have the app on a phone (D9, decided 2026-10-04), so this is designed in detail rather than ported.
 
-**Status:** Design signed off 2026-10-04 (N1–N10, including the shared trigger engine). Not built. Supersedes BACKLOG.md's "Android App — Capacitor" §6 (Notifications), whose per-entity rules predate per-item notify settings, Deadlines and Schedules. Its permission flow, ID hashing and deep-link sketch are carried forward below where still right.
+**Status:** Design signed off 2026-10-04. **Built 2026-10-06 except N7** (tracker/routine "Remind me", deferred with Records, which is on hold). See "Build log" at the end for what changed from the design. Not yet verified on an emulator or phone. Supersedes BACKLOG.md's "Android App — Capacitor" §6 (Notifications), whose per-entity rules predate per-item notify settings, Deadlines and Schedules. Its permission flow, ID hashing and deep-link sketch are carried forward below where still right.
 
 Read first: CLAUDE.md, `00-architecture.md` (ADR-6), `11-design-and-coding-patterns.md`.
 
@@ -67,10 +67,30 @@ Act without opening the app; each action goes through the same service as the UI
 - **Snooze** opens Android's action-reply chooser: **10 min · 1 hour · This evening · Tomorrow morning**. "This evening" and "Tomorrow morning" use two new settings, defaulting to 18:00 and 09:00. Snooze writes the item's existing `remindAt`, so it syncs and desktop respects it too.
 - **Done** on a Reminder or standalone Deadline (decided 2026-10-04): it marks that **occurrence** as actioned. The item stays where it is; on the calendar it renders **struck through and muted**, and it sends no more notifications or snoozes for that occurrence. Done again undoes it.
   - **Today:** Done on a plain Reminder only removes the card from the bell panel; the item has no done state. Done on a task-deadline card completes the task, but that lookup still goes through `calendarReminderId` and is broken by the same Deadline bug (§1).
-  - **New field, desktop and Android:** `doneDates: string[]` (occurrence dates actioned) on `CalendarReminder` and `CalendarDeadline`. It's per occurrence, so a repeating reminder is struck through for this week only; same idea as Schedule's `committedDates`. Needs `calendarStore` v15 with a cumulative migrate, migration `042` (`done_dates jsonb not null default '[]'` on `calendar_reminders` and `calendar_deadlines`, no new table), the mappers, and agent-layer exposure via the shared store action.
+  - **New field, desktop and Android:** `doneDates: string[]` (occurrence dates actioned) on `CalendarReminder` and `CalendarDeadline`. It's per occurrence, so a repeating reminder is struck through for this week only; same idea as Schedule's `committedDates`. Needs `calendarStore` v15 with a cumulative migrate, migration `043` (`done_dates jsonb not null default '[]'` on `calendar_reminders` and `calendar_deadlines`, no new table), the mappers, and agent-layer exposure via the shared store action.
   - **Where Done appears:** the notification action, the bell panel, the Reminder/Deadline pane footer ("Mark done" / "Not done"), and the long-press action sheet on a calendar item.
   - Task-linked Deadlines keep using the task's own completion (already shown on the calendar).
   - Events have no Done; they just happen.
+
+#### Notification actions (re-specced with the user 2026-10-06; supersedes the table above where they differ)
+
+The same actions in the bell (`NotificationCenter`) and on the Android notification; all of them live in `services/notifications/actions.ts`. Every action acts on **the occurrence the notification is about**, never the whole series, unless it says so.
+
+| Action | Reminder | Deadline | Event |
+|--------|----------|----------|-------|
+| **Got it** (also the card's ✕; was "Done") | Occurrence done: struck out (`doneDates`) | Acknowledged (`seenDates`): still due, not struck out | Acknowledged (`seenDates`) |
+| **Done** | (same as Got it) | Occurrence done (`doneDates`); a task deadline completes the task | — |
+| **Snooze** | 10 min · 1 hour · This evening · Tomorrow morning, or "in N minutes/hours". Sets `remindAt` + `remindOccurrence`; only that occurrence | same | same |
+| **Postpone** | Moves the occurrence: Tomorrow · Next week (offered only when later than the occurrence) · a date + optional time (else it keeps its time). Repeating: just that date, as a copy linked to the series | same; a task deadline moves the task's deadline | same; keeps its length (and a multi-day span) |
+| **Archive** | That occurrence (repeating: a linked copy, archived). Repeating items show "Archive the whole series", unchecked by default. Undo in the toast | same; a task deadline archives the task | same |
+| **Open** | The occurrence in the calendar | same | same |
+
+- **Synced vs. per device:** every action above writes the item (synced), so no device notifies that occurrence again. **Clear all** only empties this device's bell; it changes no item.
+- **Why Got it doesn't strike out events and deadlines:** an event still happens and a deadline is still due; striking them out would read as "done" on the calendar. Got it only means "stop telling me".
+- **Snooze is per occurrence** (`remindOccurrence`): before this, a snooze stood for the series' first date and silenced every date up to the snooze time.
+- **Bell cleanup:** the checker drops a card whose occurrence was done or seen on another device or in a pane.
+- Android's shade buttons: Got it (all three kinds), Done (deadlines), Snooze. Postpone and Archive need a date or a choice, so they open the app (tap).
+- Fields: `remindOccurrence` on all three kinds, `seenDates` on events and deadlines (`calendarStore` v17, migration `045`).
 
 ### N5. Permission: asked at the moment it's needed
 Not on first launch. The first time the user saves something that would notify, an explainer sheet ("Get a nudge when this is due?") leads to the OS prompt, and then the exact-alarm/battery check. If refused, Settings → Notifications shows the state and a button to Android's settings. Asked once; never nags.
@@ -80,7 +100,7 @@ Tapping goes through the D5 deep-link listener (`organisaitor://open/<kind>/<id>
 
 ### N7. Record-tracking prompts (new, for desktop too)
 Trackers and routines get an optional **"Remind me"**: a time plus days of the week (default: the routine's own `repeatConfig.daysOfWeek`, or every day).
-- **New field** on `Collection` (tracker/routine kinds): `reminder: { time: string; days: number[] } | null`. That means `taskStore` v14 with a cumulative migrate, a Supabase column `collections.reminder jsonb` (migration 043), and a mapper update. It's synced, and desktop's poller fires it too.
+- **New field** on `Collection` (tracker/routine kinds): `reminder: { time: string; days: number[] } | null`. That means `taskStore` v14 with a cumulative migrate, a Supabase column `collections.reminder jsonb` (migration 044), and a mapper update. It's synced, and desktop's poller fires it too.
 - **Skipped automatically** if today is already logged (a routine instance completed, or a tracker entry exists for today), so the prompt only comes when it's still needed.
 - **Log ✓ from the notification** for one-tap shapes: a single-boolean tracker, or a routine whose steps you tick all at once. Rating or multi-field trackers open straight into the quick-log (Records W5).
 - Edited in `EditTrackerPane`/`EditRoutinePane` on every platform.
@@ -105,8 +125,8 @@ Server push (FCM), so completing on one device clears the other's alarms. A home
 2. Install `@capacitor/local-notifications`; channels (N3); scheduler + reconcile (N2); permission flow (N5).
 3. Deep-link routing (N6, shared with W1's OAuth return).
 4. Actions + snooze (N4).
-5. Reminder/Deadline "done" (`doneDates`, migration 042, calendar strikethrough, pane + bell + action sheet), desktop and Android.
-6. N7 (schema, migration 043, pane UI on desktop and Android, Log ✓ action). Coordinate with Records W5.
+5. Reminder/Deadline "done" (`doneDates`, migration 043, calendar strikethrough, pane + bell + action sheet), desktop and Android.
+6. N7 (schema, migration 044, pane UI on desktop and Android, Log ✓ action). Coordinate with Records W5.
 7. Settings section (N9). Real-device test: Pixel plus one aggressive-battery OEM if available.
 
 ## 5. Acceptance (emulator via CDP, then a real device)
@@ -130,3 +150,35 @@ Server push (FCM), so completing on one device clears the other's alarms. A home
 | N8 | Bell stays as history | **Decided 2026-10-04** |
 | N9 | Settings section incl. quiet hours | **Decided 2026-10-04** |
 | N10 | Push/widget/location deferred | **Decided 2026-10-04** |
+
+## Build log (2026-10-06)
+
+**Built:**
+- **N1:** `services/notifications/plan.ts` + `plan.test.ts`. Desktop's `hooks/useNotificationChecker.ts` now runs on it. Fixes: Deadlines notify again; repeating items notify every occurrence, not just the first; the bell's per-item dedupe is now per occurrence (`notificationStore` v2 `key`; old item-keyed log entries are honoured so nothing re-fires).
+- **N2/N3/N5:** `services/notifications/androidScheduler.ts`.
+  - Booking: 14-day window, max 200, stable djb2 ids, diff-based reconcile. It runs on launch, on resume, and 1.5 s after any change to tasks/calendar/schedules/settings (a sync pull included).
+  - Channels: Reminders & deadlines (high), Events (default), Important (max).
+  - Exact alarms: `USE_EXACT_ALARM` in `AndroidManifest.xml` (Play reviews this declaration).
+  - Permission: an explainer dialog the first time there's something to book, asked once per device (`todo-notif-permission-asked`), with the exact-alarm prompt after.
+- **N4:**
+  - Buttons on the notification (`actions.ts` shared with the bell).
+  - "Done" = `doneDates` per occurrence: `calendarStore` v15, `setOccurrenceDone`, migration `043`, strikethrough on the calendar, "Mark done / Not done" in the Reminder and Deadline pane footers, the bell's Done.
+- **N6:** tapping a notification opens its item (`openNotificationTarget` → `openArtifactTarget`).
+- **N8:** the bell stays as the history on every platform; on Android the checker fills it but doesn't fire OS notifications (the scheduler does).
+- **N9:** `SettingsPane/NotificationsSection.tsx`, Android only:
+  - permission status and Turn on;
+  - exact-timing status and Allow;
+  - Reminders & deadlines and Events switches;
+  - "Tomorrow" and "This evening" snooze times;
+  - quiet hours (important items exempt);
+  - a battery hint and a test button.
+  - `settingsStore` v6.
+
+**Changed from the design:**
+- **Buttons:** Android shows at most three, so not all four snooze presets fit. The shade gets **Done/Complete · 1 hour · Tomorrow** (events: **10 min · 1 hour**); "This evening" and custom times are in the in-app bell.
+- **Permission timing:** asked at the first reconcile that has something to book, which can be the first launch if reminders already exist, rather than strictly "the first time you save something".
+- **N6:** no `organisaitor://open/...` deep-link route was needed, because the plugin delivers notification taps directly. Add the route when something outside a notification needs to open an item.
+- **Done from the long-press action sheet on a calendar item:** not built (calendar items have no long-press sheet yet; that's W3). Done is available in the pane, the bell and the notification.
+- **N7** (tracker/routine "Remind me", migration `044`): not built; it goes with Records (on hold, `10-gap-analysis.md` §D-hold).
+
+**Not verified:** nothing has run on an emulator or phone yet, so notifications firing with the app killed, the buttons, exact timing and the OEM battery behaviour are all untested (§5 Acceptance is still the checklist). Also unchecked: the small notification icon, which Android needs as a white monochrome resource. Without one it may show a blank square; add `ic_stat_*` and set `smallIcon` in `capacitor.config.ts`. Migration `043` must be run before reminder/deadline changes sync.

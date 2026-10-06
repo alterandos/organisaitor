@@ -8,10 +8,10 @@ import type { List } from '@/types/lists';
 import type { CrossAppRef } from '@/types';
 
 export interface NoteBacklink {
-  type:  'task' | 'event' | 'reminder' | 'list';
+  type:  'task' | 'event' | 'reminder' | 'deadline' | 'list';
   id:    string;
   title: string;
-  done:  boolean;   // a completed task — shown struck through
+  done:  boolean;   // a completed task, or a reminder/deadline marked done — shown struck through
   tabId?: string;   // the note tab the link is about (CrossAppRef.tabId); absent = the whole note
 }
 
@@ -27,6 +27,7 @@ function collect(
   tasks: ReturnType<typeof useTaskStore.getState>['tasks'],
   events: ReturnType<typeof useCalendarStore.getState>['events'],
   reminders: ReturnType<typeof useCalendarStore.getState>['reminders'],
+  deadlines: ReturnType<typeof useCalendarStore.getState>['deadlines'],
   lists: List[],   // views (listView), so an encrypted list shows its name, or the locked placeholder
 ): NoteBacklink[] {
   const out: NoteBacklink[] = [];
@@ -40,7 +41,11 @@ function collect(
   }
   for (const r of Object.values(reminders)) {
     const ref = r.archivedAt ? undefined : refTo(r.crossAppRefs, noteId);
-    if (ref) out.push({ type: 'reminder', id: r.id, title: r.title, done: false, tabId: ref.tabId });
+    if (ref) out.push({ type: 'reminder', id: r.id, title: r.title, done: !r.repeat && r.doneDates.includes(r.date), tabId: ref.tabId });
+  }
+  for (const d of Object.values(deadlines)) {
+    const ref = d.archivedAt ? undefined : refTo(d.crossAppRefs, noteId);
+    if (ref) out.push({ type: 'deadline', id: d.id, title: d.title, done: !d.repeat && d.doneDates.includes(d.date), tabId: ref.tabId });
   }
   for (const l of lists) {
     const ref = refTo(l.crossAppRefs, noteId);
@@ -51,7 +56,8 @@ function collect(
 
 // Same list, read once from the stores (for event handlers and timers, where a hook can't be used).
 export function getNoteBacklinks(noteId: string): NoteBacklink[] {
-  return collect(noteId, useTaskStore.getState().tasks, useCalendarStore.getState().events, useCalendarStore.getState().reminders,
+  const cal = useCalendarStore.getState();
+  return collect(noteId, useTaskStore.getState().tasks, cal.events, cal.reminders, cal.deadlines,
     Object.values(useListStore.getState().lists).map(listView));
 }
 
@@ -59,6 +65,7 @@ export function useNoteBacklinks(noteId: string | null | undefined): NoteBacklin
   const tasks     = useTaskStore((s) => s.tasks);
   const events    = useCalendarStore((s) => s.events);
   const reminders = useCalendarStore((s) => s.reminders);
+  const deadlines = useCalendarStore((s) => s.deadlines);
   const lists     = useListViews();
-  return useMemo(() => (noteId ? collect(noteId, tasks, events, reminders, Object.values(lists)) : []), [noteId, tasks, events, reminders, lists]);
+  return useMemo(() => (noteId ? collect(noteId, tasks, events, reminders, deadlines, Object.values(lists)) : []), [noteId, tasks, events, reminders, deadlines, lists]);
 }

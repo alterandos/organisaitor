@@ -76,7 +76,7 @@ const fake = vi.hoisted(() => {
 
 vi.mock('@/services/supabase', () => ({ supabase: { from: (t: string) => fake.from(t) } }));
 
-const { initSync, forceUpload, stopSync, clearPendingSync, onSyncStatus } = await import('@/services/sync/syncService');
+const { initSync, forceUpload, stopSync, clearPendingSync, onSyncStatus, markRestored } = await import('@/services/sync/syncService');
 
 const USER = 'user-1';
 
@@ -371,5 +371,112 @@ describe('customListTypes — built-in list types are never uploaded', () => {
     expect(uploadedIds).toEqual(['custom-1']);
     expect(builtinIds.some((id) => uploadedIds.includes(id))).toBe(false);
     expect(counts.listTypes).toBe(1);
+  });
+});
+
+describe('restore marker (sync_markers) — a restore on another device wins over older local copies', () => {
+  const RESTORED_AT = '2031-01-01T00:00:00.000Z';
+  const marker = { rows: [{ restored_at: RESTORED_AT }] };
+  const setTask = (id: TaskId, title: string, updatedAt: string) =>
+    useTaskStore.setState((s) => ({ tasks: { ...s.tasks, [id]: { ...s.tasks[id], id, title, updatedAt } } }));
+
+  // A first load with no marker: this device has now synced the account, so a later restore applies.
+  async function knownDevice() {
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, tasks: { rows: [] } });
+    await initSync(USER);
+    stopSync();
+  }
+
+  it('after an unseen restore, older local copies take the cloud copy, older local-only records go, later edits stay', async () => {
+    await knownDevice();
+    const older = useTaskStore.getState().addTask({ title: 'x' }) as TaskId;
+    const localOnly = useTaskStore.getState().addTask({ title: 'x' }) as TaskId;
+    const later = useTaskStore.getState().addTask({ title: 'x' }) as TaskId;
+    setTask(older, 'Edited before the restore', '2030-06-01T00:00:00.000Z');
+    setTask(localOnly, 'Created before the restore', '2030-03-01T00:00:00.000Z');
+    setTask(later, 'Edited after the restore', '2032-01-01T00:00:00.000Z');
+    fake.reset({
+      collections: { rows: [KEEP_ALIVE_COLLECTION] },
+      tasks: { rows: [taskRow({ id: older, title: 'Restored' }), taskRow({ id: later, title: 'Restored too' })] },
+      sync_markers: marker,
+    });
+
+    await initSync(USER);
+    await tick();
+
+    const tasks = useTaskStore.getState().tasks;
+    expect(tasks[older].title).toBe('Restored');
+    expect(tasks[localOnly]).toBeUndefined();
+    expect(tasks[later].title).toBe('Edited after the restore');
+    expect((fake.upserts.tasks ?? []).some((r) => r.id === older)).toBe(false); // not pushed back over the restore
+  });
+
+  it('applies only once: on the next load the normal newest-wins merge is back', async () => {
+    await knownDevice();
+    const id = useTaskStore.getState().addTask({ title: 'x' }) as TaskId;
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, tasks: { rows: [taskRow({ id, title: 'Restored' })] }, sync_markers: marker });
+    await initSync(USER);
+    stopSync();
+
+    setTask(id, 'Edited since (still dated before the restore)', '2030-07-01T00:00:00.000Z');
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, tasks: { rows: [taskRow({ id, title: 'Restored' })] }, sync_markers: marker });
+    await initSync(USER);
+    expect(useTaskStore.getState().tasks[id].title).toBe('Edited since (still dated before the restore)');
+  });
+
+  it('a device that has never loaded this account just records the marker (keeps its data, e.g. guest data)', async () => {
+    const id = useTaskStore.getState().addTask({ title: 'x' }) as TaskId;
+    setTask(id, 'Local', '2030-06-01T00:00:00.000Z');
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, tasks: { rows: [taskRow({ id, title: 'Remote' })] }, sync_markers: marker });
+    await initSync(USER);
+    expect(useTaskStore.getState().tasks[id].title).toBe('Local');
+    expect(JSON.parse(localStorage.getItem('todo-sync-restore-seen')!).restoredAt).toBe(RESTORED_AT);
+  });
+
+  it('queued changes from before the restore are dropped, not pushed', async () => {
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, tasks: { rows: [] } });
+    fake.upsertErrors.tasks = { message: 'network down' };
+    await initSync(USER);
+    const id = useTaskStore.getState().addTask({ title: 'Queued offline' }) as TaskId;
+    await tick();
+    expect(pendingState().tables.tasks[id]).toBeDefined();
+    stopSync();
+
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, tasks: { rows: [] }, sync_markers: marker });
+    await initSync(USER);
+    await tick();
+    expect(pendingState().tables.tasks).toBeUndefined();
+    expect(useTaskStore.getState().tasks[id]).toBeUndefined();
+    expect(fake.upserts.tasks ?? []).toEqual([]);
+  });
+
+  it('an unreadable marker table (migration not run) changes nothing', async () => {
+    await knownDevice();
+    const id = useTaskStore.getState().addTask({ title: 'x' }) as TaskId;
+    setTask(id, 'Local newer', '2030-06-01T00:00:00.000Z');
+    fake.reset({
+      collections: { rows: [KEEP_ALIVE_COLLECTION] },
+      tasks: { rows: [taskRow({ id, title: 'Remote' })] },
+      sync_markers: { selectError: { message: 'relation "sync_markers" does not exist' } },
+    });
+    await initSync(USER);
+    expect(useTaskStore.getState().tasks[id].title).toBe('Local newer');
+  });
+
+  it('markRestored writes the marker and counts it as seen on the restoring device', async () => {
+    await knownDevice();
+    await markRestored(USER);
+    const written = fake.upserts.sync_markers?.[0];
+    expect(written.user_id).toBe(USER);
+
+    const id = useTaskStore.getState().addTask({ title: 'x' }) as TaskId;
+    setTask(id, 'Local newer', '2000-06-01T00:00:00.000Z');
+    fake.reset({
+      collections: { rows: [KEEP_ALIVE_COLLECTION] },
+      tasks: { rows: [taskRow({ id, title: 'Remote', updated_at: '2000-01-01T00:00:00.000Z' })] },
+      sync_markers: { rows: [{ restored_at: written.restored_at }] },
+    });
+    await initSync(USER);
+    expect(useTaskStore.getState().tasks[id].title).toBe('Local newer'); // not re-applied to itself
   });
 });

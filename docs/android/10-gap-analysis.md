@@ -45,8 +45,8 @@ Legend: **Severity**: H = broken or unreachable on Android; M = works but painfu
 | A9 ✅ | Soft keyboard: it's unknown whether `MobileQuickAddBar`, the calendar quick-add sheet and full-screen modals stay above the keyboard. `@capacitor/keyboard` is installed with no configuration. | M | **Done 2026-10-04 (W1).** All three checks pass on the emulator with `resize: 'body'` (quick-add bar with chips, calendar quick-add sheet, AddTaskModal's bottom link field); no layout fix needed. Both quick-add titles now set `enterKeyHint="done"`. Was: Verify on the emulator, then fix by pattern **11 §10.3** (resize mode `body`, a `--keyboard-height` variable for bottom-anchored bars). | S |
 | A10 | **Done 2026-10-04 (W2).** Toasts (completion toast with Undo / Follow-up): may overlap `MobileNav`/`MobileQuickAddBar` at the bottom of the screen. | M | Verify; on Android, place the toast above the bottom chrome (**11 §3**). | S |
 | A11 | Multi-entry-point launcher icons are not built. | L | Unchanged; `00-architecture.md` §4. Workstream W10. | M |
-| A12 | Notifications are not built. `05-notifications.md` now exists as a draft (2026-10-04, proposals N1–N10). Since BACKLOG §6 was drafted, desktop added the Deadline kind, whole-day reminder notifications (`notifyDaysBefore`/`notifyAtTime`), optional notify-before, important items and Google-import notifications. | H | Write `05-notifications.md` from BACKLOG §6, updated for those. **Decision D9** on priority. | L |
-| A16 | **Desktop bug, all platforms (found 2026-10-04):** Deadlines never notify. `useNotificationChecker` has no `deadlines` loop, and since 2026-09-27 task-deadline shadows are `CalendarDeadline`s, so its `reminderType === 'task'` branch matches nothing. | H | First step of `05-notifications.md` N1 (shared `plan.ts` with a Deadline rule), or a standalone fix sooner. | S |
+| A12 | **Built 2026-10-06 (W9)** except N7. Android notifications: shared rules (`plan.ts`), 14-day booking with the OS, channels, buttons, permission ask, Settings section. Not yet verified on a device. | H | See `05-notifications.md` "Build log". | L |
+| A16 | **Fixed 2026-10-06 (W9 step 1):** Deadlines never notified (no `deadlines` loop in the old checker). The shared engine `services/notifications/plan.ts` covers them; also fixed: repeating items only ever notified for their first date. | H | Done. | S |
 | A13 | Monetization (Track B) is not built: `isAppEnabled()` is still the always-true stub. | — | Unchanged; `00-architecture.md` §7. Not parity work, so it's out of this analysis except for ordering (§K). | L |
 | A14 | "Trust this device" for the encryption vault keeps the key in IndexedDB (convenience-only). On Android, the Keystore (with biometric unlock) is the natural home. (BACKLOG, client-side encryption.) | L | Later. Note it in 11 §11 as the intended direction. | M |
 | A15 | IndexedDB size and behaviour in the Android WebView are unmeasured (notes store, Recycling Bin, auto-backups). | L | Verify with real data during the Notes workstream (Settings → Storage already reports usage). | S |
@@ -136,6 +136,7 @@ Notes is free on Android (ADR-4) and has never had a phone design. It is the lar
 | F7 | Zoom (Ctrl+scroll / Ctrl+=). | L | Pinch-to-zoom on the editor, or n/a, decided inside the Notes spec. |
 | F8 | Structured tags (Acronym popover), annotation tags, NotePicker, templates, encryption prompt. | M | Bottom sheets; verify. |
 | F9 | Camera / photo capture into a note. | — | **Dropped for now (D11)**: Notes on a phone is read-first. |
+| F11 | **Inline objects (`\`, 2026-10-06).** `\` is a few taps away on a phone keyboard; the session is detected from the text (not keydown), so Gboard composition should work, but no device has tried it. The menu is mouse/keyboard-styled; Tab/Ctrl+Enter don't exist on a soft keyboard. | M | Touch path built: the `\` button in the editor toolbar starts a session; the menu's kinds, fields and Create / All options buttons are tap targets. W7 must keep that button in its collapsed tool bar (D11), and verify on a device: composition, the menu above the keyboard, Enter on the soft keyboard creating. |
 
 ## G. Overview
 
@@ -199,7 +200,7 @@ Each becomes a self-contained brief in `docs/android/` that a cold agent can pic
 | W6 | Lists (Phase 4, refreshed, with checklists) | E1–E5 | W2, D4 | After W2 |
 | W7 | Notes, read-first (new spec, then build) | F1–F8 | W2, W4, D11 | Spec now; build after W2 |
 | W8 | Overview + Quick Access + Manage | G1, G2, I1, I2 | W2, D6, D7 | After W2 |
-| W9 | Notifications and reminders (write `05-notifications.md`, build): **priority** | A12 | Design session with the user | Spec now; build alongside W1/W2 |
+| W9 | Notifications and reminders (`05-notifications.md`): **built 2026-10-06 except N7** (tracker/routine "Remind me" waits for Records, on hold). Not device-verified | A12, A16 | — | Done |
 | W10 | Launcher icons, then Track B | A11, A13 | Icon assets | Independent |
 
 **Order (D9, 2026-10-04):** W1 and W2 first and in parallel, with W9 (reminders) built alongside them since it barely touches UI. W5 (Records) was next but is **on hold** (2026-10-04, see §D-hold). So: W3, W6, W8 and W7, then Records. W4 slots in whenever W6/W7 need it; W10 is independent.

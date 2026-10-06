@@ -14,6 +14,8 @@ import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteDeadlineWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import type { CrossAppRef } from '@/types';
 import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
+import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
+import { afterSeriesDeleted } from '@/services/calendarSeries';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
@@ -42,6 +44,7 @@ export function CalendarDeadlinePane() {
   const deadline = editingId ? deadlinesRecord[editingId as CalendarDeadlineId] : null;
   const archiveDeadline = useCalendarStore((s) => s.archiveDeadline);
   const restoreDeadline = useCalendarStore((s) => s.restoreDeadline);
+  const setOccurrenceDone = useCalendarStore((s) => s.setOccurrenceDone);
   const { dialog, setDialog, closeDialog } = useItemActions({
     itemKey:   editingId,
     archived:  !!deadline?.archivedAt,
@@ -68,6 +71,9 @@ export function CalendarDeadlinePane() {
   // A task's deadline is mirrored as a CalendarDeadline (Task.calendarDeadlineId) — same link
   // pattern as the event/reminder panes', so the task can be opened or completed from here.
   const linkedTask = Object.values(tasksRecord).find((t) => t.calendarDeadlineId === id) ?? null;
+  // Mark done applies to the occurrence this pane was opened on (the item's own date if not repeating).
+  const doneDate = occurrenceDate ?? deadline.date;
+  const occurrenceDone = (deadline.doneDates ?? []).includes(doneDate);
 
   const openLinkedTask = () => {
     if (!linkedTask) return;
@@ -86,7 +92,12 @@ export function CalendarDeadlinePane() {
     if (v !== deadline.notes) updateDeadline(id, { notes: v });
   };
 
-  const handleDelete = () => { closeDialog(); deleteDeadlineWithCleanup(id); closePane(); };
+  // Deleting a series also asks about the dates taken out of it (services/calendarSeries.ts).
+  const handleDelete = () => {
+    const wasSeries = !!deadline.repeat;
+    closeDialog(); deleteDeadlineWithCleanup(id); closePane();
+    if (wasSeries) void afterSeriesDeleted('deadline', id);
+  };
   const handleArchive = (reason: string) => { closeDialog(); archiveDeadline(id, reason); closePane(); };
 
   const navigateToCrossAppRef = (ref: CrossAppRef) => {
@@ -123,6 +134,10 @@ export function CalendarDeadlinePane() {
         <div className={styles.body}>
           {deadline.archivedAt && <ArchivedBanner archivedAt={deadline.archivedAt} reason={deadline.archiveReason} />}
 
+          {deadline.seriesId && (
+            <SeriesLinkBar kind="deadline" id={id} seriesId={deadline.seriesId} seriesDate={deadline.seriesDate} repeats={!!deadline.repeat} />
+          )}
+
           {deadline.repeat && (
             <RecurrenceScopeBar
               kind="deadline"
@@ -153,7 +168,7 @@ export function CalendarDeadlinePane() {
           <textarea
             ref={notesRef}
             className={styles.notesInput}
-            placeholder="Add notes... (Ctrl+B/I bold/italic, Ctrl+L to insert a link)"
+            placeholder="Add notes..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             onBlur={saveNotes}
@@ -186,7 +201,7 @@ export function CalendarDeadlinePane() {
               atTime={deadline.notifyAtTime ?? '17:00'}
               onChange={(d, t) => updateDeadline(id, { notifyDaysBefore: d, notifyAtTime: t })}
             />
-            <p className={styles.repeatSmall}>A Deadline only ever notifies before it's due, never at the moment itself — this applies even if you set a Time above.</p>
+            <p className={styles.repeatSmall}></p>
           </div>
 
           <div className={styles.field}>
@@ -329,9 +344,10 @@ export function CalendarDeadlinePane() {
 
         <ItemActionFooter
           archived={!!deadline.archivedAt}
-          completed={linkedTask?.completed}
-          onToggleComplete={linkedTask ? () => void toggleTaskCompletion(linkedTask.id) : undefined}
+          completed={linkedTask ? linkedTask.completed : occurrenceDone}
+          onToggleComplete={linkedTask ? () => void toggleTaskCompletion(linkedTask.id) : () => setOccurrenceDone('deadline', id, doneDate, !occurrenceDone)}
           completeOptions={linkedTask ? taskCompletionOptions(linkedTask.id) : []}
+          completeLabels={linkedTask ? undefined : { on: LABELS.itemActions.markDone, off: LABELS.itemActions.notDone }}
           deleteLabel={deadline.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.deadline.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreDeadline(id)}

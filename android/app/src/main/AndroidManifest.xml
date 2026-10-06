@@ -47,4 +47,7 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Reminders must arrive on time (docs/android/05-notifications.md N2). Granted automatically to
+         calendar/reminder apps; Play reviews this declaration at submission. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 </manifest>

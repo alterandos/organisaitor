@@ -83,7 +83,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       notifyBeforeValue: 30, notifyBeforeUnit: 'minutes', remindAt: null, notifyAtTime: null,
       repeat: { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null },
       status: 'confirmed', important: true, background: false, color: null, crossAppRefs: [{ type: 'note', id: 'n1' }],
-      archivedAt: null, archiveReason: null,
+      archivedAt: null, archiveReason: null, seriesId: 'e0', seriesDate: '2030-01-08', remindOccurrence: '2030-01-08', seenDates: ['2030-01-01'],
       source: 'google', sourceConnectionId: 'conn1', sourceCalendarId: 'cal1', sourceEventId: 'evt1',
       sourceRaw: { raw: true },
     };
@@ -95,7 +95,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       id: 'r1' as CalendarReminderId, title: 'Pay bill', date: '2030-01-01', time: null, notes: null, links: [],
       collectionId: null, reminderType: 'default', createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
       remindAt: null, repeat: null, important: false, status: 'confirmed', crossAppRefs: [], archivedAt: null, archiveReason: null,
-      notifyDaysBefore: 1, notifyAtTime: '17:00',
+      notifyDaysBefore: 1, notifyAtTime: '17:00', doneDates: ['2030-01-01'], seriesId: 'r0', seriesDate: '2030-01-01', remindOccurrence: null,
     };
     expect(rowToReminder(reminderToRow(r, USER))).toEqual(r);
   });
@@ -106,7 +106,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       collectionId: null, deadlineType: 'default', createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
       remindAt: null, repeat: { freq: 'yearly', interval: 1, endKind: 'forever', count: null, until: null },
       important: true, status: 'confirmed', crossAppRefs: [], archivedAt: null, archiveReason: null,
-      notifyDaysBefore: 3, notifyAtTime: '09:00',
+      notifyDaysBefore: 3, notifyAtTime: '09:00', doneDates: ['2030-04-15'], seriesId: null, seriesDate: null, remindOccurrence: '2030-04-15', seenDates: ['2030-04-15'],
     };
     expect(rowToDeadline(deadlineToRow(d, USER))).toEqual(d);
   });

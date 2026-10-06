@@ -7,11 +7,12 @@ import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
+import { ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { MAIN_TAB_ID, effectiveLinkTabId, tabNameOf } from '@/utils/noteTabs';
 import { ARTIFACT_DRAG_TYPE, insertArtifactLinkAtSelection, removeArtifactMarksFor } from './artifactLinkInsert';
 import styles from './NoteBacklinks.module.css';
 
-const ICON: Record<NoteBacklink['type'], string> = { task: '☑️', event: '📅', reminder: '⏰', list: '📋' };
+const ICON: Record<NoteBacklink['type'], string> = ITEM_TYPE_ICON;
 
 interface Props {
   note:        Note;

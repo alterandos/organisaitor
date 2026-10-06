@@ -27,7 +27,6 @@ import type { Transaction } from '@tiptap/pm/state';
 import { confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { usePlatform } from '@/hooks/usePlatform';
 import { getNoteBacklinks } from '@/store/noteBacklinks';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
 import { collectArtifactTargets } from '@/utils/noteContent';
 import { linkTabIdFor, MAIN_TAB_ID, resolveNoteTab, titlePrefillFor } from '@/utils/noteTabs';
@@ -41,6 +40,12 @@ import './contextMenu';
 import type { NoteEditorMenuApi } from './contextMenu';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { NoteTOC } from './NoteTOC';
+import { NoteObjectTrigger, objectTriggerStorage } from './objects/NoteObjectTrigger';
+import { NoteObjectMenu } from './objects/NoteObjectMenu';
+import { applyResolvedArtifactLink, insertObjectTrigger } from './objects/actions';
+import { ArtifactLinkGroups } from './objects/artifactGroups';
+import type { NoteObjectContext } from './objects/types';
+import './objects/contextMenu';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { openExternalLink, normalizeLinkUrl } from '@/utils/links';
 import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
@@ -645,6 +650,20 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
 
   // Set by the editor's keydown for Ctrl+Shift+V, read (and cleared) by the paste that follows.
   const plainPasteRef = useRef(false);
+
+  // Where a `\` object would be created right now (objects/): this note, its open tab, and its
+  // Endeavour (else the one focused in Notes) — the same defaults as Ctrl+Q's Create menu.
+  function getObjectContext(): NoteObjectContext | null {
+    const id = currentNoteIdRef.current;
+    if (!id) return null;
+    const open = viewOf(id);
+    return {
+      noteId:       id,
+      tabId:        linkTabIdFor(open, activeTabIdRef.current),
+      collectionId: (open?.collectionId ?? selectActiveCollectionId(useUIStore.getState()) ?? null) as CollectionId | null,
+      now:          new Date(),
+    };
+  }
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ document: false, link: { openOnClick: false, HTMLAttributes: { class: styles.link } } }),
@@ -655,6 +674,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       Placeholder.configure({ placeholder: 'Start writing…' }),
       NoteTagMark,
       ArtifactLinkMark,
+      ArtifactLinkGroups,
+      NoteObjectTrigger,
       ResizableImage.configure({ allowBase64: true, inline: false }),
       Superscript,
       Subscript,
@@ -745,10 +766,9 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
 
         const artifactEl = target.closest('mark[data-artifact-id]') as HTMLElement | null;
         if (artifactEl) {
-          const targetType = artifactEl.getAttribute('data-artifact-type');
-          const targetId = artifactEl.getAttribute('data-artifact-id');
-          // Ctrl/Cmd+click selects the mark's text (so it can be unlinked via the
-          // toolbar), same convention as the plain `link` mark above and noteTag below.
+          // Linked text is the item's title, written in the note: a plain click edits it like any
+          // other text (the pane's ↗ opens the item). Ctrl/Cmd+click selects the whole of it (so it
+          // can be unlinked via the toolbar), same convention as the plain `link` mark above.
           if (event.ctrlKey || event.metaKey) {
             const $pos = view.state.doc.resolve(pos);
             const markType = view.state.schema.marks.artifactLink;
@@ -758,8 +778,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             }
             return true;
           }
-          openArtifactTarget(targetType, targetId);
-          return true;
+          return false;
         }
 
         if (!target.closest('mark[data-tag-id]')) return false;
@@ -984,7 +1003,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         const targetId = rest.join(':');
         const link = getNoteBacklinks(noteId).find((l) => l.type === targetType && l.id === targetId);
         if (!link) continue;
-        const noun = link.type === 'task' ? 'task' : link.type === 'event' ? 'event' : 'reminder';
+        const noun = link.type === 'list' ? LABELS.list.toLowerCase() : LABELS.calendarItemKind[link.type as 'event' | 'reminder' | 'deadline']?.toLowerCase() ?? 'task';
         promptingLinkKeysRef.current.add(key);
         const remove = await confirmDialog({
           focusDelayMs: REMOVED_LINK_FOCUS_DELAY_MS,
@@ -1305,15 +1324,17 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // originally-captured selection, flush immediately (same reasoning as the tab-switch flush
   // above — don't wait on the debounce, in case the user switches away right after), then
   // clear the pending request so it can't be picked up again.
+  // The `\` objects' Enter needs to know where it's creating (see getObjectContext).
+  useEffect(() => {
+    if (editor) objectTriggerStorage(editor).getContext = getObjectContext;
+  });
+
   const pendingArtifactLink = useUIStore((s) => s.pendingArtifactLink);
   useEffect(() => {
     if (!editor) return;
     if (!pendingArtifactLink?.resolvedTargetId) return;
     if (pendingArtifactLink.noteId !== note?.id) return;
-    editor.chain()
-      .setTextSelection({ from: pendingArtifactLink.from, to: pendingArtifactLink.to })
-      .setMark('artifactLink', { targetType: pendingArtifactLink.targetType, targetId: pendingArtifactLink.resolvedTargetId })
-      .run();
+    applyResolvedArtifactLink(editor.view, { ...pendingArtifactLink, resolvedTargetId: pendingArtifactLink.resolvedTargetId });
     flushCurrentTab();
     useUIStore.getState().clearPendingArtifactLink();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1516,6 +1537,15 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           >
             <OrderedIcon />
           </button>
+
+          {/* `\` objects: same as typing \ (the touch path — \ is a few taps away on a phone keyboard) */}
+          <button
+            className={styles.toolbarBtn}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { if (editor) insertObjectTrigger(editor.view); }}
+            title={LABELS.noteObjects.toolbarButton}
+            disabled={noteLocked}
+          >{'\\'}</button>
 
           {/* Superscript / Subscript */}
           <button
@@ -1967,6 +1997,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           ) : (
             <>
               {editor && <FloatingToolbar actionsRef={toolbarActionsRef} editor={editor} noteId={note.id} getLinkTabId={() => linkTabIdFor(viewOf(currentNoteIdRef.current), activeTabIdRef.current)} onStructuredTag={openStructuredTagCreate} />}
+              {editor && <NoteObjectMenu editor={editor} getContext={getObjectContext} />}
               <EditorContent editor={editor} innerRef={editorContentRef} className={styles.editor} />
             </>
           )}

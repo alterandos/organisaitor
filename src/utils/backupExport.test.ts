@@ -12,6 +12,7 @@ vi.mock('@/services/sync/syncService', async () => {
       uploaded.schedules = useScheduleStore.getState().schedules;
       return {};
     }),
+    markRestored: vi.fn(async () => {}),
   };
 });
 

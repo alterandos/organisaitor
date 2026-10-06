@@ -316,6 +316,16 @@ export interface CalendarEvent {
   crossAppRefs:       CrossAppRef[];    // reverse cross-app links (e.g. the note(s) this event was created from)
   archivedAt:         string | null;    // sunset, not deleted — hidden from the calendar, restorable (same as Task)
   archiveReason:      string | null;    // optional "why", captured when archiving
+  // A date taken out of a repeating series ("Edit only this one" / "this and following") keeps its
+  // link back, the way iCalendar's RECURRENCE-ID and Google's recurringEventId do: which series it
+  // came from, and which of its dates it replaces. null for anything else, or once unlinked.
+  seriesId:           string | null;
+  seriesDate:         string | null;    // YYYY-MM-DD — the occurrence of the series it stands in for
+  // Notifications (services/notifications/): which occurrence a snooze (remindAt) is for, and the
+  // occurrences whose notification was acknowledged ("Got it") — synced, so no device notifies
+  // them again. An event isn't struck out by that: it still happens.
+  remindOccurrence:   string | null;
+  seenDates:          string[];
   // External calendar sync provenance (see CLAUDE.md "External calendar sync — built (Google,
   // Phase 1)"). All null for a native, in-app-created event. Once synced in, this app is the
   // source of truth — these fields are provenance/dedup only, never used to re-sync or
@@ -351,6 +361,10 @@ export interface CalendarReminder {
   // day), at this HH:MM. Ignored when `time` is set — that notifies at the time itself.
   notifyDaysBefore: number;
   notifyAtTime:     string;
+  doneDates:        string[];         // occurrence dates (YYYY-MM-DD) marked done — struck through, no more notifications for them (2026-10-06)
+  seriesId:         string | null;    // see CalendarEvent.seriesId
+  seriesDate:       string | null;
+  remindOccurrence: string | null;    // see CalendarEvent.remindOccurrence ("Got it" on a reminder marks it done)
 }
 
 export interface CreateCalendarEventInput {
@@ -373,6 +387,10 @@ export interface CreateCalendarEventInput {
   background?:        boolean;
   color?:             string | null;
   crossAppRefs?:      CrossAppRef[];
+  seriesId?:          string | null;   // see CalendarEvent.seriesId
+  seriesDate?:        string | null;
+  doneDates?:         string[];
+  seenDates?:         string[];
   source?:             string | null;
   sourceConnectionId?: string | null;
   sourceCalendarId?:   string | null;
@@ -411,6 +429,10 @@ export interface CreateCalendarReminderInput {
   important?:    boolean;
   status?:       EventStatus;
   crossAppRefs?: CrossAppRef[];
+  seriesId?:     string | null;   // see CalendarEvent.seriesId
+  seriesDate?:   string | null;
+  doneDates?:    string[];
+  seenDates?:    string[];
   notifyDaysBefore?: number;
   notifyAtTime?:     string;
 }
@@ -442,6 +464,11 @@ export interface CalendarDeadline {
   archiveReason: string | null;
   notifyDaysBefore: number;
   notifyAtTime:     string;
+  doneDates:        string[];         // occurrence dates marked done — same as CalendarReminder.doneDates
+  seriesId:         string | null;    // see CalendarEvent.seriesId
+  seriesDate:       string | null;
+  remindOccurrence: string | null;    // see CalendarEvent.remindOccurrence
+  seenDates:        string[];         // notifications acknowledged ("Got it") — not done: a deadline still needs doing
 }
 
 export interface CreateCalendarDeadlineInput {
@@ -456,6 +483,10 @@ export interface CreateCalendarDeadlineInput {
   important?:    boolean;
   status?:       EventStatus;
   crossAppRefs?: CrossAppRef[];
+  seriesId?:     string | null;   // see CalendarEvent.seriesId
+  seriesDate?:   string | null;
+  doneDates?:    string[];
+  seenDates?:    string[];
   notifyDaysBefore?: number;
   notifyAtTime?:     string;
 }
