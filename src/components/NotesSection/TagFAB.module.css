@@ -9,6 +9,12 @@
   gap: 0.5rem;
 }
 
+/* Phone: no NavSidebar to clear, and above the bottom tab bar. */
+:global(.platform-android) .wrap {
+  left: var(--space-5);
+  bottom: calc(var(--mobile-nav-h, 0px) + var(--space-5));
+}
+
 .fab {
   width: 44px;
   height: 44px;

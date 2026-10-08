@@ -1,0 +1,129 @@
+/* The open note's side panel on a phone (MobileNoteSidePanel.tsx): slides in from the right over
+   a dimmed note, at the sheet tier (above panes, below toasts and dialogs). */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  background: var(--color-backdrop);
+  animation: fade 0.18s ease-out;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(22rem, 86vw);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: slideIn 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: none; } }
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 0 var(--space-3) 0 var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  color: var(--color-text);
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.close {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font-size: var(--text-lg);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.section {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sectionTitle {
+  margin: 0 0 var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-md);
+}
+
+.tabActive { background: var(--color-primary-subtle); }
+
+.tabName {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: none;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+}
+
+.tabActive .tabName { color: var(--color-primary); font-weight: 600; }
+
+.tabRename {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+}
+
+.renameInput {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-base);
+}
+
+.addTab,
+.details {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-align: left;
+}
+
+.details { width: 100%; padding: 0; }

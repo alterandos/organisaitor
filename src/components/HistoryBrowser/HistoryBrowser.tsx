@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import { useUIStore } from '@/store/uiStore';
 import type { NavPlace } from '@/store/navHistory';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { SECTION_ICONS } from '@/components/NavSidebar/navItems';
 import { LABELS } from '@/config/labels';
 import { formatRelativeTime } from '@/utils/date';
 import { describePlace } from './describePlace';
+import { PlaceCard, PlaceCardBadge } from './PlaceCard';
 import styles from './HistoryBrowser.module.css';
 
 // Alt+N: the app's history (store/navHistory.ts) as a carousel of cards — oldest on the left,
@@ -92,29 +92,19 @@ export function HistoryBrowser() {
           const s = summaries[i];
           const { place, offset } = card;
           return (
-            <article
+            <PlaceCard
               key={i}
-              className={`${styles.card} ${d === 0 ? styles.cardSel : ''} ${s.removed ? styles.cardRemoved : ''}`}
-              data-view={place.view}
+              place={place}
+              summary={s}
+              selected={d === 0}
+              className={styles.card}
               style={{ ['--d' as string]: d, ['--ad' as string]: Math.abs(d), ['--s' as string]: Math.sign(d) }}
-              aria-current={d === 0}
               onClick={() => { if (!drag.current?.moved) go(i); }}
-            >
-              <div className={styles.band}>
-                <span className={styles.sectionIcon} aria-hidden="true">{SECTION_ICONS[place.view]}</span>
-                <span className={styles.section}>{LABELS.views[place.view]}</span>
-                {offset === 0
-                  ? <span className={styles.badgeHere}>{LABELS.history.here}</span>
-                  : <span className={styles.when}>{offset > 0 ? LABELS.history.forward : formatRelativeTime(place.at)}</span>}
-              </div>
-              <div className={styles.body}>
-                {s.path.length > 0 && <div className={styles.path}>{s.path.join(' › ')}</div>}
-                <h3 className={styles.cardTitle}>{s.title}</h3>
-                {s.detail && <div className={styles.detail}>{s.detail}</div>}
-                {s.preview && <p className={styles.preview}>{s.preview}</p>}
-              </div>
-              {d === 0 && offset !== 0 && <div className={styles.open}>{LABELS.history.open} ↵</div>}
-            </article>
+              badge={offset === 0
+                ? <PlaceCardBadge here>{LABELS.history.here}</PlaceCardBadge>
+                : <PlaceCardBadge>{offset > 0 ? LABELS.history.forward : formatRelativeTime(place.at)}</PlaceCardBadge>}
+              footer={d === 0 && offset !== 0 ? <>{LABELS.history.open} ↵</> : undefined}
+            />
           );
         })}
       </div>

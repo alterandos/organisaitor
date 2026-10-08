@@ -718,14 +718,14 @@ Recommend scoping as its own multi-phase brief (`docs/agent-tasks/`) once the re
 
 Tablets and some laptops have pens (Apple Pencil, Surface Pen, S Pen). The user asks whether Notes can take drawing and handwriting, especially over an imported document (above). Technically reachable: Pointer Events give pen pressure and tilt (`pointerType === 'pen'`) in the browser, WebView2 (Tauri) and Android's WebView, and ink can be stored as vector strokes (small, scalable) in a note block (`\sketch`: a canvas block like the chart, strokes as data) or as a layer over a document page. Questions: a drawing block inside the text, or a free page; handwriting recognition to text (needs a service or an on-device model; not in the browser natively); palm rejection (pen-only drawing with touch scrolling is the usual answer). A drawing block is the small first step and fits "Block designs".
 
-### Android: Notes overhaul (requested 2026-10-08 — direction set, design not finished)
+### Android: Notes overhaul (requested 2026-10-08) — built 2026-10-09; see "Notes on a phone" in implemented-features.md
 
 The desktop Notes UI doesn't work on a phone. The user's direction (gap F24 in `docs/android/10-gap-analysis.md`; refines F1/F2 and decision D11's read-first view):
 1. **Landing screen in Notes:** either the navigation pane (notebook tree) filling the screen, or cards of recently viewed notes; the user toggles between the two views.
 2. **Opening a note:** the note fills the screen between the top and bottom bars.
 3. **Inside a note:** a heading at the top with the note's title that can be expanded or collapsed (keep it, or hide it for more room); a swipe in from the side for options (what goes there is open — candidates: tabs, outline/contents, linked-from, note details, the collapsed editing tools); the Back button returns to the landing screen.
 
-Open questions before it's specced as W7: does Back from a note go to the tree/cards view the user came from (likely) or always the default; which view is the default the first time; do the recent cards show a preview of the text and the notebook path (like the history browser's cards — `describePlace` could be reused); does the collapsed heading collapse on scroll automatically; and do the note's tabs live in the heading or in the side panel.
+**Answered 2026-10-09 and built:** Back returns to the view you came from; the recent cards reuse the history browser's cards; the heading hides on scroll down and returns on scroll up, with a pin to keep it; tabs live in the side panel. **Still open:** the side panel's contents may grow (it holds tabs, contents, key points, linked from, details today); home-screen search and sort; moving notes between notebooks on a phone. Original questions, for the record: does Back from a note go to the tree/cards view the user came from (likely) or always the default; which view is the default the first time; do the recent cards show a preview of the text and the notebook path (like the history browser's cards — `describePlace` could be reused); does the collapsed heading collapse on scroll automatically; and do the note's tabs live in the heading or in the side panel.
 
 ### Design consistency across suite
 

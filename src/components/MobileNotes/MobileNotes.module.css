@@ -1,0 +1,177 @@
+/* Notes on a phone (MobileNotes.tsx): the home screen (notebook tree or recent cards) and the
+   note screen around NoteEditor. */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-bg);
+}
+
+.homeBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.toggle {
+  display: flex;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+}
+
+.toggleBtn {
+  min-height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.toggleBtnOn {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.newBtn {
+  margin-left: auto;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.homeBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for the + button and the bottom bar. */
+  padding-bottom: calc(96px + var(--mobile-nav-h, 0px));
+}
+
+/* ── The tree ─────────────────────────────────────────────────────────── */
+.tree { padding: 6px 0; }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding-right: 14px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-base);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.row:active { background: var(--color-surface-alt); }
+.rowSelected { background: var(--color-primary-subtle); }
+
+.noteRow {
+  min-height: 44px;
+  font-size: var(--text-md);
+}
+
+.chevron {
+  flex: 0 0 14px;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.rowIcon {
+  flex: 0 0 22px;
+  font-size: var(--text-lg);
+  text-align: center;
+}
+
+.rowName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+.rowWhen {
+  flex-shrink: 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+.rowEmpty {
+  padding-top: 6px;
+  padding-bottom: 10px;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* ── Recent ───────────────────────────────────────────────────────────── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+
+.card { height: 12.5rem; }
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 24px;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.emptyBtn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+}
+
+/* ── The note screen: NoteEditor fills it ─────────────────────────────── */
+.noteScreen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-surface);
+}

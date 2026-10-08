@@ -78,6 +78,9 @@ interface SettingsState {
   // a preset from config/noteBackdrops.ts, or the user's own picture (a compressed data URL).
   noteBackdrop:        NoteBackdrop;
   setNoteBackdrop:     (b: NoteBackdrop) => void;
+  // Android: the open note's heading stays put instead of hiding as you scroll down.
+  noteHeadingPinned:   boolean;
+  setNoteHeadingPinned: (v: boolean) => void;
   setNoteHeadingStyle: (s: 'academic' | 'highlight') => void;
 
   noteEditorZoom:      number;   // multiplier on editor font size; 1.0 = default, range 0.7–2.0
@@ -141,6 +144,8 @@ export const useSettingsStore = create<SettingsState>()(
       noteHeadingStyle:    'academic',
       noteBackdrop:        null,
       setNoteBackdrop:     (b) => set({ noteBackdrop: b }),
+      noteHeadingPinned:   false,
+      setNoteHeadingPinned: (v) => set({ noteHeadingPinned: v }),
       setNoteHeadingStyle: (s) => set({ noteHeadingStyle: s }),
 
       noteEditorZoom:      1.0,
@@ -201,7 +206,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 7,
+      version: 8,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -245,6 +250,8 @@ export const useSettingsStore = create<SettingsState>()(
         }
         // v6 → v7: noteBackdrop (the picture below the end of a note, 2026-10-08).
         if (version < 7 && state.noteBackdrop === undefined) state.noteBackdrop = null;
+        // v7 → v8: noteHeadingPinned (Android Notes, 2026-10-09).
+        if (version < 8 && state.noteHeadingPinned === undefined) state.noteHeadingPinned = false;
         return state;
       },
     }

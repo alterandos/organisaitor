@@ -43,6 +43,8 @@ import { ChartExtensions } from './extensions/Chart';
 import { NoteBlockSelect } from './extensions/blockDesigns';
 import { NoteBlockPicks } from './extensions/blockPicks';
 import { NoteBackdrop } from './NoteBackdrop';
+import { MobileNoteSidePanel } from './MobileNoteSidePanel';
+import { PinIcon } from '@/components/Icons';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
 import { SpecialCharInput } from './extensions/SpecialCharInput';
@@ -294,6 +296,13 @@ function buildDisplayOrder(note: Note): DisplayTab[] {
   });
 }
 
+// ── Phone (MobileNotes): the heading's scroll-hiding and the side panel's swipe ──
+const HEADING_SCROLL_STEP   = 6;    // px of scroll in one event that counts as a direction
+const HEADING_SHOW_NEAR_TOP = 24;   // within this of the top, the heading always shows
+const SWIPE_EDGE_FROM       = 16;   // a panel swipe starts this far in from the right edge…
+const SWIPE_EDGE_TO         = 72;   // …up to this far
+const SWIPE_OPEN_PX         = 48;   // and opens the panel after this much leftward travel
+
 // ── Main component ────────────────────────────────────────────────────────
 
 interface NoteEditorProps {
@@ -360,6 +369,15 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
 
   const [title, setTitle]           = useState('');
   const [tocOpen, setTocOpen]       = useState(false);
+  // Phone (MobileNotes, gap F24): the heading hides as the note scrolls down and comes back on
+  // the way up, unless pinned; the editing tools sit behind its ⌄; the side panel holds the tabs,
+  // contents, "Linked from" and details.
+  const headingPinned       = useSettingsStore((s) => s.noteHeadingPinned);
+  const setHeadingPinned    = useSettingsStore((s) => s.setNoteHeadingPinned);
+  const [toolsOpen, setToolsOpen]         = useState(false);
+  const [panelOpen, setPanelOpen]         = useState(false);
+  const [headingHidden, setHeadingHidden] = useState(false);
+  const lastScrollTopRef = useRef(0);
   const [abstract, setAbstract]     = useState<string | null>(null);
   // The abstract can also be changed outside the editor (a calendar item's linked-note box,
   // components/LinkedNoteAbstracts): take a new stored value on, unless the abstract box is being
@@ -417,6 +435,36 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const promptingLinkKeysRef  = useRef<Set<string>>(new Set());
   const checkRemovedLinksRef  = useRef<() => void>(() => {});
   const containerRef          = useRef<HTMLDivElement>(null);
+
+  // Phone: a swipe in from near the right edge opens the side panel. It starts a little inside the
+  // edge (SWIPE_EDGE_FROM–SWIPE_EDGE_TO px), because the very edge belongs to Android's back gesture.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!isAndroid || !el) return;
+    let start: { x: number; y: number } | null = null;
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      const fromEdge = window.innerWidth - t.clientX;
+      start = e.touches.length === 1 && fromEdge >= SWIPE_EDGE_FROM && fromEdge <= SWIPE_EDGE_TO ? { x: t.clientX, y: t.clientY } : null;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start) return;
+      const t = e.touches[0];
+      const dx = start.x - t.clientX;
+      const dy = Math.abs(t.clientY - start.y);
+      if (dy > 30 && dy > dx) { start = null; return; }
+      if (dx > SWIPE_OPEN_PX && dx > dy * 2) { start = null; setPanelOpen(true); }
+    };
+    const onEnd = () => { start = null; };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: true });
+    el.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+    };
+  }, [isAndroid, editingNoteId]);
 
   // ── Table insert picker ───────────────────────────────────────────────────
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
@@ -1642,7 +1690,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   return (
     <div className={styles.container} ref={containerRef}>
       {/* ── Title bar ────────────────────────────────────────────────────── */}
-      <div className={styles.titleBar}>
+      <div
+        className={`${styles.titleBar} ${isAndroid ? styles.titleBarMobile : ''}`}
+        data-hidden={isAndroid && headingHidden && !headingPinned && !toolsOpen ? '' : undefined}
+      >
+        {isAndroid && (
+          <button type="button" className={styles.mobileHeadBtn} onClick={closeNote} aria-label={LABELS.mobileNotes.back}>←</button>
+        )}
         {noteTagViewReturn && (
           <button
             className={styles.backBtn}
@@ -1681,308 +1735,338 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         />
         
 
-        <div className={styles.toolbar}>
-          {/* Heading style selector */}
-          <select
-            className={styles.headingSelect}
-            value={currentHeadingValue}
-            onChange={handleHeadingChange}
-            title="Paragraph / heading style"
-          >
-            <option value="title">Title</option>
-            <option value="subtitle">{LABELS.noteStyles.subtitle}</option>
-            <option value="author">{LABELS.noteStyles.author}</option>
-            <option value="p">Normal</option>
-            <option value="1">Heading 1</option>
-            <option value="2">Heading 2</option>
-            <option value="3">Heading 3</option>
-            <option value="4">Heading 4</option>
-            <option value="5">Heading 5</option>
-            <optgroup label="── Heading style">
-              <option value="style:academic">Academic {noteHeadingStyle === 'academic' ? '✓' : ''}</option>
-              <option value="style:highlight">Highlight {noteHeadingStyle === 'highlight' ? '✓' : ''}</option>
-            </optgroup>
-          </select>
-
-          <div className={styles.toolbarDivider} />
-
-          {/* Bullet list */}
-          <button
-            className={`${styles.toolbarBtn} ${editor?.isActive('bulletList') ? styles.toolbarBtnActive : ''}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor?.chain().focus().toggleBulletList().run()}
-            title="Bullet list"
-          >
-            <BulletIcon />
-          </button>
-
-          {/* Ordered list */}
-          <button
-            className={`${styles.toolbarBtn} ${editor?.isActive('orderedList') ? styles.toolbarBtnActive : ''}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-            title="Numbered list"
-          >
-            <OrderedIcon />
-          </button>
-
-          {/* `\` objects: same as typing \. Android only: it's the touch path (\ is a few taps away
-              on a phone keyboard, gap F11); with a keyboard, typing \ is quicker. */}
-          {isAndroid && (
+        {isAndroid && (
+          <>
+            {note.tabs.length > 0 && (
+              <button type="button" className={styles.mobileTabChip} onClick={() => setPanelOpen(true)}>
+                {buildDisplayOrder(note).find((t) => (t.isMain ? null : t.id) === activeTabId)?.name ?? ''}
+              </button>
+            )}
             <button
-              className={styles.toolbarBtn}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { if (editor) insertObjectTrigger(editor.view); }}
-              title={LABELS.noteObjects.toolbarButton}
+              type="button"
+              className={`${styles.mobileHeadBtn} ${headingPinned ? styles.mobileHeadBtnOn : ''}`}
+              onClick={() => setHeadingPinned(!headingPinned)}
+              aria-pressed={headingPinned}
+              aria-label={headingPinned ? LABELS.mobileNotes.unpin : LABELS.mobileNotes.pin}
+              title={headingPinned ? LABELS.mobileNotes.unpin : LABELS.mobileNotes.pin}
+            ><PinIcon className={styles.mobileHeadIcon} /></button>
+            <button
+              type="button"
+              className={`${styles.mobileHeadBtn} ${toolsOpen ? styles.mobileHeadBtnOn : ''}`}
+              onClick={() => setToolsOpen((v) => !v)}
+              aria-expanded={toolsOpen}
+              aria-label={LABELS.mobileNotes.tools}
+              title={LABELS.mobileNotes.tools}
               disabled={noteLocked}
-            >{'\\'}</button>
-          )}
+            >{toolsOpen ? '▴' : '▾'}</button>
+            <button type="button" className={styles.mobileHeadBtn} onClick={() => setPanelOpen(true)} aria-label={LABELS.mobileNotes.panel} title={LABELS.mobileNotes.panel}>☰</button>
+          </>
+        )}
 
-          {/* Font size: a step down / the size / a step up (Ctrl+Shift+< / Ctrl+Shift+>) */}
-          <div className={styles.fontSizeGroup}>
-            <button
-              className={styles.toolbarBtn}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { if (editor) stepFontSize(editor, -1); }}
-              title={LABELS.noteStyles.smaller}
-              aria-label={LABELS.noteStyles.smaller}
-            ><span className={styles.fontStepIcon}>A<small>−</small></span></button>
+        {(!isAndroid || toolsOpen) && (
+          <div className={styles.toolbar}>
+            {/* Heading style selector */}
             <select
-              className={styles.fontSizeSelect}
-              value={cursorFormat?.ownFontSize ? String(Math.round(currentFontSizePx)) : ''}
-              onChange={(e) => { if (editor) setFontSize(editor, e.target.value ? Number(e.target.value) : null); }}
-              title={LABELS.noteStyles.fontSize}
-              aria-label={LABELS.noteStyles.fontSize}
+              className={styles.headingSelect}
+              value={currentHeadingValue}
+              onChange={handleHeadingChange}
+              title="Paragraph / heading style"
             >
-              <option value="">{cursorFormat?.ownFontSize ? LABELS.noteStyles.defaultSize : Math.round(currentFontSizePx)}</option>
-              {FONT_SIZES.map((px) => <option key={px} value={px}>{px}</option>)}
+              <option value="title">Title</option>
+              <option value="subtitle">{LABELS.noteStyles.subtitle}</option>
+              <option value="author">{LABELS.noteStyles.author}</option>
+              <option value="p">Normal</option>
+              <option value="1">Heading 1</option>
+              <option value="2">Heading 2</option>
+              <option value="3">Heading 3</option>
+              <option value="4">Heading 4</option>
+              <option value="5">Heading 5</option>
+              <optgroup label="── Heading style">
+                <option value="style:academic">Academic {noteHeadingStyle === 'academic' ? '✓' : ''}</option>
+                <option value="style:highlight">Highlight {noteHeadingStyle === 'highlight' ? '✓' : ''}</option>
+              </optgroup>
             </select>
+
+            <div className={styles.toolbarDivider} />
+
+            {/* Bullet list */}
+            <button
+              className={`${styles.toolbarBtn} ${editor?.isActive('bulletList') ? styles.toolbarBtnActive : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor?.chain().focus().toggleBulletList().run()}
+              title="Bullet list"
+            >
+              <BulletIcon />
+            </button>
+
+            {/* Ordered list */}
+            <button
+              className={`${styles.toolbarBtn} ${editor?.isActive('orderedList') ? styles.toolbarBtnActive : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+              title="Numbered list"
+            >
+              <OrderedIcon />
+            </button>
+
+            {/* `\` objects: same as typing \. Android only: it's the touch path (\ is a few taps away
+                on a phone keyboard, gap F11); with a keyboard, typing \ is quicker. */}
+            {isAndroid && (
+              <button
+                className={styles.toolbarBtn}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { if (editor) insertObjectTrigger(editor.view); }}
+                title={LABELS.noteObjects.toolbarButton}
+                disabled={noteLocked}
+              >{'\\'}</button>
+            )}
+
+            {/* Font size: a step down / the size / a step up (Ctrl+Shift+< / Ctrl+Shift+>) */}
+            <div className={styles.fontSizeGroup}>
+              <button
+                className={styles.toolbarBtn}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { if (editor) stepFontSize(editor, -1); }}
+                title={LABELS.noteStyles.smaller}
+                aria-label={LABELS.noteStyles.smaller}
+              ><span className={styles.fontStepIcon}>A<small>−</small></span></button>
+              <select
+                className={styles.fontSizeSelect}
+                value={cursorFormat?.ownFontSize ? String(Math.round(currentFontSizePx)) : ''}
+                onChange={(e) => { if (editor) setFontSize(editor, e.target.value ? Number(e.target.value) : null); }}
+                title={LABELS.noteStyles.fontSize}
+                aria-label={LABELS.noteStyles.fontSize}
+              >
+                <option value="">{cursorFormat?.ownFontSize ? LABELS.noteStyles.defaultSize : Math.round(currentFontSizePx)}</option>
+                {FONT_SIZES.map((px) => <option key={px} value={px}>{px}</option>)}
+              </select>
+              <button
+                className={styles.toolbarBtn}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { if (editor) stepFontSize(editor, 1); }}
+                title={LABELS.noteStyles.larger}
+                aria-label={LABELS.noteStyles.larger}
+              ><span className={styles.fontStepIcon}>A<small>+</small></span></button>
+            </div>
+
+            {/* Superscript / Subscript */}
+            <button
+              className={`${styles.toolbarBtn} ${editor?.isActive('superscript') ? styles.toolbarBtnActive : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor?.chain().focus().toggleSuperscript().run()}
+              title="Superscript (Ctrl+Shift+=)"
+            >x²</button>
+            <button
+              className={`${styles.toolbarBtn} ${editor?.isActive('subscript') ? styles.toolbarBtnActive : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor?.chain().focus().toggleSubscript().run()}
+              title="Subscript (Ctrl+Shift+-)"
+            >x₂</button>
+
+            {/* Font color (full picker) */}
+            <div className={styles.popoverAnchor}>
+              <button
+                className={`${styles.toolbarBtn} ${colorPickerOpen ? styles.toolbarBtnActive : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => { e.stopPropagation(); setColorPickerOpen((o) => !o); }}
+                title="Text color"
+              >
+                <TextColorIcon current={editor?.getAttributes('textStyle').color as string | undefined} />
+              </button>
+              {colorPickerOpen && (
+                <div className={styles.colorPickerPopover} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className={styles.colorDefaultBtn}
+                    onClick={() => { editor?.chain().focus().unsetColor().run(); setColorPickerOpen(false); }}
+                  >
+                    Default color
+                  </button>
+                  <ColorPicker
+                    value={(editor?.getAttributes('textStyle').color as string) || null}
+                    onChange={(color) => {
+                      if (color) editor?.chain().focus().setColor(color).run();
+                      else editor?.chain().focus().unsetColor().run();
+                      setColorPickerOpen(false);
+                    }}
+                  />
+                  <ColorPicker
+                    palette="light"
+                    value={(editor?.getAttributes('textStyle').color as string) || null}
+                    onChange={(color) => {
+                      if (color) editor?.chain().focus().setColor(color).run();
+                      else editor?.chain().focus().unsetColor().run();
+                      setColorPickerOpen(false);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className={styles.toolbarDivider} />
+
+            {/* Insert table (with row/col picker) */}
+            <div className={styles.popoverAnchor}>
+              <button
+                className={`${styles.toolbarBtn} ${tablePickerOpen ? styles.toolbarBtnActive : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => { e.stopPropagation(); setTablePickerOpen((o) => !o); }}
+                title="Insert table"
+              >
+                <TableIcon />
+              </button>
+              {tablePickerOpen && (
+                <div className={styles.tablePicker} onClick={(e) => e.stopPropagation()}>
+                  <div className={styles.tablePickerField}>
+                    <span className={styles.tablePickerLabel}>Rows</span>
+                    <input
+                      type="number" min={1} max={20}
+                      className={styles.tablePickerInput}
+                      value={tablePickerRows}
+                      onChange={(e) => setTablePickerRows(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                    />
+                  </div>
+                  <div className={styles.tablePickerField}>
+                    <span className={styles.tablePickerLabel}>Cols</span>
+                    <input
+                      type="number" min={1} max={20}
+                      className={styles.tablePickerInput}
+                      value={tablePickerCols}
+                      onChange={(e) => setTablePickerCols(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                    />
+                  </div>
+                  <button
+                    className={styles.tablePickerInsert}
+                    onClick={() => {
+                      editor?.chain().focus().insertTable({ rows: tablePickerRows, cols: tablePickerCols, withHeaderRow: true }).run();
+                      setTablePickerOpen(false);
+                    }}
+                  >
+                    Insert {tablePickerRows}×{tablePickerCols}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className={styles.toolbarDivider} />
+
+            {/* Columns (per-section layout) */}
+            <div className={styles.popoverAnchor}>
+              <button
+                className={`${styles.toolbarBtn} ${columnsPickerOpen ? styles.toolbarBtnActive : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => { e.stopPropagation(); setColumnsPickerOpen((o) => !o); }}
+                title="Columns"
+              >
+                <ColumnsIcon />
+              </button>
+              {columnsPickerOpen && (
+                <div className={styles.columnsPicker} onClick={(e) => e.stopPropagation()}>
+                  {Array.from({ length: MAX_SECTION_COLUMNS }, (_, i) => i + 1).map((n) => (
+                    <button
+                      key={n}
+                      className={`${styles.columnsOption} ${currentSectionColumns === n ? styles.columnsOptionActive : ''}`}
+                      onClick={() => { if (editor) editor.chain().focus().setSectionColumns(n, editor.state.selection.from).run(); setColumnsPickerOpen(false); }}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Section break */}
             <button
               className={styles.toolbarBtn}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { if (editor) stepFontSize(editor, 1); }}
-              title={LABELS.noteStyles.larger}
-              aria-label={LABELS.noteStyles.larger}
-            ><span className={styles.fontStepIcon}>A<small>+</small></span></button>
-          </div>
-
-          {/* Superscript / Subscript */}
-          <button
-            className={`${styles.toolbarBtn} ${editor?.isActive('superscript') ? styles.toolbarBtnActive : ''}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor?.chain().focus().toggleSuperscript().run()}
-            title="Superscript (Ctrl+Shift+=)"
-          >x²</button>
-          <button
-            className={`${styles.toolbarBtn} ${editor?.isActive('subscript') ? styles.toolbarBtnActive : ''}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor?.chain().focus().toggleSubscript().run()}
-            title="Subscript (Ctrl+Shift+-)"
-          >x₂</button>
-
-          {/* Font color (full picker) */}
-          <div className={styles.popoverAnchor}>
-            <button
-              className={`${styles.toolbarBtn} ${colorPickerOpen ? styles.toolbarBtnActive : ''}`}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => { e.stopPropagation(); setColorPickerOpen((o) => !o); }}
-              title="Text color"
+              onClick={() => editor?.chain().focus().insertSectionBreak().run()}
+              title="Insert section break"
             >
-              <TextColorIcon current={editor?.getAttributes('textStyle').color as string | undefined} />
+              <SectionBreakIcon />
             </button>
-            {colorPickerOpen && (
-              <div className={styles.colorPickerPopover} onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  className={styles.colorDefaultBtn}
-                  onClick={() => { editor?.chain().focus().unsetColor().run(); setColorPickerOpen(false); }}
-                >
-                  Default color
-                </button>
-                <ColorPicker
-                  value={(editor?.getAttributes('textStyle').color as string) || null}
-                  onChange={(color) => {
-                    if (color) editor?.chain().focus().setColor(color).run();
-                    else editor?.chain().focus().unsetColor().run();
-                    setColorPickerOpen(false);
-                  }}
-                />
-                <ColorPicker
-                  palette="light"
-                  value={(editor?.getAttributes('textStyle').color as string) || null}
-                  onChange={(color) => {
-                    if (color) editor?.chain().focus().setColor(color).run();
-                    else editor?.chain().focus().unsetColor().run();
-                    setColorPickerOpen(false);
-                  }}
-                />
-              </div>
-            )}
-          </div>
 
-          <div className={styles.toolbarDivider} />
+            <div className={styles.toolbarDivider} />
 
-          {/* Insert table (with row/col picker) */}
-          <div className={styles.popoverAnchor}>
+            {/* TOC toggle */}
             <button
-              className={`${styles.toolbarBtn} ${tablePickerOpen ? styles.toolbarBtnActive : ''}`}
+              className={`${styles.toolbarBtn} ${tocOpen ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => { e.stopPropagation(); setTablePickerOpen((o) => !o); }}
-              title="Insert table"
+              onClick={() => setTocOpen((o) => !o)}
+              title="Toggle navigation pane"
             >
-              <TableIcon />
+              <TocIcon />
             </button>
-            {tablePickerOpen && (
-              <div className={styles.tablePicker} onClick={(e) => e.stopPropagation()}>
-                <div className={styles.tablePickerField}>
-                  <span className={styles.tablePickerLabel}>Rows</span>
-                  <input
-                    type="number" min={1} max={20}
-                    className={styles.tablePickerInput}
-                    value={tablePickerRows}
-                    onChange={(e) => setTablePickerRows(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                  />
-                </div>
-                <div className={styles.tablePickerField}>
-                  <span className={styles.tablePickerLabel}>Cols</span>
-                  <input
-                    type="number" min={1} max={20}
-                    className={styles.tablePickerInput}
-                    value={tablePickerCols}
-                    onChange={(e) => setTablePickerCols(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                  />
-                </div>
-                <button
-                  className={styles.tablePickerInsert}
-                  onClick={() => {
-                    editor?.chain().focus().insertTable({ rows: tablePickerRows, cols: tablePickerCols, withHeaderRow: true }).run();
-                    setTablePickerOpen(false);
-                  }}
-                >
-                  Insert {tablePickerRows}×{tablePickerCols}
-                </button>
-              </div>
-            )}
-          </div>
 
-          <div className={styles.toolbarDivider} />
+            <div className={styles.toolbarDivider} />
 
-          {/* Columns (per-section layout) */}
-          <div className={styles.popoverAnchor}>
-            <button
-              className={`${styles.toolbarBtn} ${columnsPickerOpen ? styles.toolbarBtnActive : ''}`}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => { e.stopPropagation(); setColumnsPickerOpen((o) => !o); }}
-              title="Columns"
-            >
-              <ColumnsIcon />
-            </button>
-            {columnsPickerOpen && (
-              <div className={styles.columnsPicker} onClick={(e) => e.stopPropagation()}>
-                {Array.from({ length: MAX_SECTION_COLUMNS }, (_, i) => i + 1).map((n) => (
+            {/* Note options menu */}
+            <div className={styles.popoverAnchor}>
+              <button
+                className={`${styles.toolbarBtnText} ${noteMenuOpen ? styles.toolbarBtnActive : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => { e.stopPropagation(); setNoteMenuOpen((o) => !o); }}
+                title="Note options"
+              >Note ▾</button>
+              {noteMenuOpen && (
+                <div className={styles.noteMenu} onClick={(e) => e.stopPropagation()}>
                   <button
-                    key={n}
-                    className={`${styles.columnsOption} ${currentSectionColumns === n ? styles.columnsOptionActive : ''}`}
-                    onClick={() => { if (editor) editor.chain().focus().setSectionColumns(n, editor.state.selection.from).run(); setColumnsPickerOpen(false); }}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Section break */}
-          <button
-            className={styles.toolbarBtn}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor?.chain().focus().insertSectionBreak().run()}
-            title="Insert section break"
-          >
-            <SectionBreakIcon />
-          </button>
-
-          <div className={styles.toolbarDivider} />
-
-          {/* TOC toggle */}
-          <button
-            className={`${styles.toolbarBtn} ${tocOpen ? styles.toolbarBtnActive : ''}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setTocOpen((o) => !o)}
-            title="Toggle navigation pane"
-          >
-            <TocIcon />
-          </button>
-
-          <div className={styles.toolbarDivider} />
-
-          {/* Note options menu */}
-          <div className={styles.popoverAnchor}>
-            <button
-              className={`${styles.toolbarBtnText} ${noteMenuOpen ? styles.toolbarBtnActive : ''}`}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => { e.stopPropagation(); setNoteMenuOpen((o) => !o); }}
-              title="Note options"
-            >Note ▾</button>
-            {noteMenuOpen && (
-              <div className={styles.noteMenu} onClick={(e) => e.stopPropagation()}>
-                <button
-                  className={styles.noteMenuItem}
-                  onClick={() => {
-                    const id = currentNoteIdRef.current;
-                    if (abstract !== null) {
-                      setAbstract(null);
-                      if (id) updateNote(id as NoteId, { abstract: null });
-                    } else {
-                      setAbstract('');
-                      setAbstractCollapsed(false);
-                      if (id) updateNote(id as NoteId, { abstract: '' });
-                    }
-                    setNoteMenuOpen(false);
-                  }}
-                >
-                  {abstract !== null ? '✓ Abstract' : 'Add abstract'}
-                </button>
-                <button
-                  className={styles.noteMenuItem}
-                  disabled={!vaultUnlocked && !note?.isEncrypted}
-                  title={!vaultUnlocked && !note?.isEncrypted ? 'Unlock encryption in Settings → Account first' : undefined}
-                  onClick={() => {
-                    const id = currentNoteIdRef.current;
-                    if (!id || !editor) return;
-                    if (!noteLocked) {
-                      // Save anything still sitting in a debounce first, so the payload built from
-                      // the store includes the very latest text.
-                      flushCurrentTab();
-                      if (title.trim()) updateNote(id as NoteId, { title: title.trim() });
-                    }
-                    if (note?.isEncrypted) {
-                      // Removing encryption asks for the passphrase (same as clicking the 🔒).
-                      useUIStore.getState().requestDecrypt('note', id);
+                    className={styles.noteMenuItem}
+                    onClick={() => {
+                      const id = currentNoteIdRef.current;
+                      if (abstract !== null) {
+                        setAbstract(null);
+                        if (id) updateNote(id as NoteId, { abstract: null });
+                      } else {
+                        setAbstract('');
+                        setAbstractCollapsed(false);
+                        if (id) updateNote(id as NoteId, { abstract: '' });
+                      }
                       setNoteMenuOpen(false);
-                      return;
-                    }
-                    useNoteStore.getState().encryptNote(id as NoteId).catch((err) => {
-                      console.error('[NoteEditor] encryption toggle failed:', err);
-                      void alertDialog(err instanceof Error ? err.message : 'Could not change encryption for this note.');
-                    });
-                    setNoteMenuOpen(false);
-                  }}
-                >
-                  {note?.isEncrypted ? '🔓 Remove encryption' : '🔒 Encrypt this note'}
-                </button>
-              </div>
-            )}
+                    }}
+                  >
+                    {abstract !== null ? '✓ Abstract' : 'Add abstract'}
+                  </button>
+                  <button
+                    className={styles.noteMenuItem}
+                    disabled={!vaultUnlocked && !note?.isEncrypted}
+                    title={!vaultUnlocked && !note?.isEncrypted ? 'Unlock encryption in Settings → Account first' : undefined}
+                    onClick={() => {
+                      const id = currentNoteIdRef.current;
+                      if (!id || !editor) return;
+                      if (!noteLocked) {
+                        // Save anything still sitting in a debounce first, so the payload built from
+                        // the store includes the very latest text.
+                        flushCurrentTab();
+                        if (title.trim()) updateNote(id as NoteId, { title: title.trim() });
+                      }
+                      if (note?.isEncrypted) {
+                        // Removing encryption asks for the passphrase (same as clicking the 🔒).
+                        useUIStore.getState().requestDecrypt('note', id);
+                        setNoteMenuOpen(false);
+                        return;
+                      }
+                      useNoteStore.getState().encryptNote(id as NoteId).catch((err) => {
+                        console.error('[NoteEditor] encryption toggle failed:', err);
+                        void alertDialog(err instanceof Error ? err.message : 'Could not change encryption for this note.');
+                      });
+                      setNoteMenuOpen(false);
+                    }}
+                  >
+                    {note?.isEncrypted ? '🔓 Remove encryption' : '🔒 Encrypt this note'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        <button className={styles.closeBtn} onClick={closeNote} title="Close (Esc)">✕</button>
+        {!isAndroid && <button className={styles.closeBtn} onClick={closeNote} title="Close (Esc)">✕</button>}
       </div>
 
-      <NoteBacklinks note={note} activeTabId={activeTabId} editor={editor} canInsert={!noteLocked} onSwitchTab={switchTab} />
+      {!isAndroid && <NoteBacklinks note={note} activeTabId={activeTabId} editor={editor} canInsert={!noteLocked} onSwitchTab={switchTab} />}
 
-      {/* ── Tab bar ──────────────────────────────────────────────────────── */}
-      <div className={styles.tabBar}>
+      {/* ── Tab bar (on a phone, in the side panel instead) ──────────────── */}
+      {!isAndroid && <div className={styles.tabBar}>
         {buildDisplayOrder(note).map(({ id: tabId, name: tabName, isMain }) => {
           const activeId = isMain ? null : tabId;
           const isActive = activeTabId === activeId;
@@ -2099,7 +2183,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           );
         })}
         <button className={styles.tabAdd} onClick={handleAddTab} title="Add tab">+</button>
-      </div>
+      </div>}
 
       {/* ── Abstract ─────────────────────────────────────────────────────── */}
       {abstract !== null && (
@@ -2203,6 +2287,14 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       >
         <div
           className={styles.editorWrap}
+          onScroll={isAndroid ? (e) => {
+            const top = e.currentTarget.scrollTop;
+            const delta = top - lastScrollTopRef.current;
+            lastScrollTopRef.current = top;
+            if (top < HEADING_SHOW_NEAR_TOP) setHeadingHidden(false);
+            else if (delta > HEADING_SCROLL_STEP) setHeadingHidden(true);
+            else if (delta < -HEADING_SCROLL_STEP) setHeadingHidden(false);
+          } : undefined}
           onMouseOver={handleEditorMouseOver}
           onMouseLeave={() => {
             scheduleHoverClear();
@@ -2235,10 +2327,22 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           <NoteBackdrop />
         </div>
 
-        {tocOpen && editor && (
+        {tocOpen && editor && !isAndroid && (
           <NoteTOC editor={editor} onClose={() => setTocOpen(false)} />
         )}
       </div>
+
+      {isAndroid && panelOpen && (
+        <MobileNoteSidePanel
+          note={note}
+          tabs={buildDisplayOrder(note)}
+          activeTabId={activeTabId}
+          editor={editor}
+          noteLocked={noteLocked}
+          onSwitchTab={(id) => switchTab(id, { focusEditor: false })}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
 
       {/* ── Section hover: lock-columns checkbox (portal, position:fixed) ── */}
       {sectionHover && createPortal((() => {

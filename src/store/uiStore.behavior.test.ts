@@ -315,6 +315,14 @@ describe('session memory', () => {
     expect(saved.expandedNoteTagIds).toEqual(['nb-1']);
   });
 
+  it('the phone’s Notes home (notebooks or recent) is remembered; migrating from v4 starts on notebooks', () => {
+    useUIStore.getState().setMobileNotesHome('recent');
+    const saved = useUIStore.persist.getOptions().partialize!(useUIStore.getState()) as { mobileNotesHome?: string };
+    expect(saved.mobileNotesHome).toBe('recent');
+    const migrated = useUIStore.persist.getOptions().migrate!({ activeView: 'notes' }, 4) as { mobileNotesHome: string };
+    expect(migrated.mobileNotesHome).toBe('notebooks');
+  });
+
   it('migrating from v3 backfills an empty expanded list', () => {
     const migrated = useUIStore.persist.getOptions().migrate!({ activeView: 'notes' }, 3) as { expandedNoteTagIds: string[] };
     expect(migrated.expandedNoteTagIds).toEqual([]);

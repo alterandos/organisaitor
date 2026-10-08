@@ -307,8 +307,8 @@ interface RepeatConfig {
 | `portfolioStore` | `todo-portfolio` | **v7** | localStorage + Supabase | watchlist items, portfolio tags, investment purposes (Portfolio app) — `columnConfig` (table display prefs) stays local-only |
 | `fitnessStore` | `fitness-storage` | **v3** | localStorage only | activities + activity types (Fitness app) |
 | `scheduleStore` | `todo-schedules` | **v1** | localStorage + Supabase | Schedule templates (recurring weekly timetables, Calendar section) |
-| `uiStore` | `todo-ui-session` | **v4** | localStorage (partial) + memory | all UI state (modals, panes, active section) — only navigation/session memory is persisted, see below (v4: the Notes tree's `expandedNoteTagIds`) |
-| `settingsStore` | `todo-settings` | **v7** | localStorage | user preferences (v7: `noteBackdrop`, what fills the room below a note — see `config/noteBackdrops.ts`; v6: Android notification settings — `notifyReminders`/`notifyEvents`, snooze times, `quietHours`) (includes `autoBackup*` fields — see "Automatic local backup rotation" in Implemented features — and `hideBlockedTasks`, v5) |
+| `uiStore` | `todo-ui-session` | **v5** | localStorage (partial) + memory | all UI state (modals, panes, active section) — only navigation/session memory is persisted, see below (v4: the Notes tree's `expandedNoteTagIds`; v5: `mobileNotesHome`, the phone's Notes home view) |
+| `settingsStore` | `todo-settings` | **v8** | localStorage | user preferences (v8: `noteHeadingPinned`, the phone note heading kept in place; v7: `noteBackdrop`, what fills the room below a note — see `config/noteBackdrops.ts`; v6: Android notification settings — `notifyReminders`/`notifyEvents`, snooze times, `quietHours`) (includes `autoBackup*` fields — see "Automatic local backup rotation" in Implemented features — and `hideBlockedTasks`, v5) |
 | `authStore` | — | — | memory only | Supabase session |
 | `recentItemsStore` | `todo-recent-items` | **v1** | localStorage only | Quick Access (Ctrl+G) recent/frequent visit history |
 | `notificationStore` | `todo-notifications` | **v2** | localStorage only | pending in-app notifications (v2: per-occurrence `key`, `occurrence`, `taskId`) + the log of already-notified triggers |
@@ -442,6 +442,9 @@ setCalendarSelectedDate(v: string)
 // Notes: which notebooks are expanded in the Chronicle tree (persisted since v4, so the tree
 // reopens as it was left; ids of deleted notebooks are harmless and ignored)
 expandedNoteTagIds: NoteTagId[], toggleNoteTagExpanded(id)
+
+// Android: what Notes opens on with no note open (MobileNotes) — persisted since v5
+mobileNotesHome: 'notebooks' | 'recent', setMobileNotesHome(home)
 
 // Notes: which column has keyboard focus (ChronicleView's arrow-key navigation), back to 'tree'
 // on entering Notes; decides what N/Space creates. Memory-only.
@@ -747,11 +750,12 @@ src/
     useMarkdownHotkeys.ts    — "light rich text" for plain-<textarea> notes fields (Task/Calendar): Ctrl+B/Ctrl+I wrap the selection in Markdown bold/italic syntax (utils/markdownTextEdit.ts's pure toggleWrap), Ctrl+L opens components/MarkdownLinkPrompt to insert a `[text](url)` link. Attached directly to the textarea element, not `document`. See "Light rich text" in Implemented features
   components/
     NavSidebar/              — left nav: section switcher, settings, account icons (desktop/web only — hidden on Android in favour of MobileNav); navItems.tsx holds CORE_NAV_ITEMS and SECTION_ICONS (THE icon per section)
-    HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores
+    HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores; PlaceCard.tsx is THE card for a place, shared with the phone's recent notes (MobileNotes)
     MobileNav/               — Android-only bottom tab bar: Tasks/Calendar/Records/Lists/More
     MobileMoreSheet/         — Android-only overflow sheet for MobileNav's More tab: Notes/Portfolio/Fitness/Manage Library/Settings/Account
     MobileQuickAddBar/       — Android-only bottom-anchored task quick-add (title + Due/Priority/Endeavour chips), replaces QuickAddInput on Android
     MobileCalendarQuickAdd/  — Android-only bottom-sheet quick-add for calendar events/reminders
+    MobileNotes/             — Android-only Notes (NotesSection renders it instead of ChronicleView): the home screen (notebook tree with notes inside, or Recent as PlaceCards; uiStore.mobileNotesHome) and the full-screen note. The note's phone heading and side panel are in NoteEditor (isAndroid) and NoteEditor/MobileNoteSidePanel.tsx
     Sidebar/                 — hover panel (from the header hamburger, left-hand side): pinned "Manage Library" button (M/Ctrl+M) at top, then active endeavours (collections), purposes, tags — quick glance + filter/edit, not administration (see ManagePane). Every section except Calendar — there, the same hamburger click-opens CalendarSidePane instead (see "Calendar side pane")
     TaskList/                — main task list + collapsible Routines section
     TaskItem/                — single task row; shows subtask progress pill
@@ -913,7 +917,7 @@ useCtrlEnterSubmit(() => formRef.current?.requestSubmit());
 ### Icons come from one place — `src/components/Icons/` (suite-wide pattern, adopted 2026-10-07)
 
 **A control that appears in more than one place takes its icon from `components/Icons` (`index.ts`)**, so it looks the same everywhere. The user asked for this when the ribbon's text-colour button (an underlined A, which reads as Underline) and the selection toolbar's (a hue-wheel swatch) had drifted apart.
-- **What's there today:** `TextColorIcon` (the hue-wheel swatch, with the colour in use in its middle), the item-action icons `TrashIcon`, `ArchiveIcon`, `RestoreIcon`, `CheckCircleIcon` (moved from `ItemActions/icons.tsx`), `AccountIcon` (the header's account button; it was `◎`, which is also the Purpose icon) and `ImageIcon` (choosing a picture). Plain-DOM code (a ProseMirror widget) can't render the React component: it copies the same SVG markup with a comment naming the icon (`blockDesigns.ts`'s Delete), and a right-click item passes `createElement(TrashIcon)`.
+- **What's there today:** `TextColorIcon` (the hue-wheel swatch, with the colour in use in its middle), the item-action icons `TrashIcon`, `ArchiveIcon`, `RestoreIcon`, `CheckCircleIcon` (moved from `ItemActions/icons.tsx`), `PinIcon` (the phone note heading's pin), `AccountIcon` (the header's account button; it was `◎`, which is also the Purpose icon) and `ImageIcon` (choosing a picture). Plain-DOM code (a ProseMirror widget) can't render the React component: it copies the same SVG markup with a comment naming the icon (`blockDesigns.ts`'s Delete), and a right-click item passes `createElement(TrashIcon)`.
 - **A site can override locally** through the icon's props or `className` (size, tint, the current colour), never by drawing its own copy.
 - **Item-kind icons** (task, event, deadline, ❗ ✏️ 🔁) are the emoji in `config/itemIcons.ts`, not here.
 - **An icon used in only one component** may stay local, like NoteEditor's list and table SVGs. It moves here the day a second place needs it.

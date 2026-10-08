@@ -1,5 +1,7 @@
 import { useUIStore } from '@/store/uiStore';
 import { ChronicleView } from '../ChronicleView/ChronicleView';
+import { MobileNotes } from '../MobileNotes/MobileNotes';
+import { usePlatform } from '@/hooks/usePlatform';
 import { TagView } from './TagView';
 import { GlossaryView } from './GlossaryView';
 import { ReviewView } from './ReviewView';
@@ -9,6 +11,8 @@ import styles from './NotesSection.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 
 export function NotesSection() {
+  const { isAndroid } = usePlatform();
+  const editingNoteId     = useUIStore((s) => s.editingNoteId);
   const noteTagViewActive = useUIStore((s) => s.noteTagViewActive);
   const glossaryOpen      = useUIStore((s) => s.notesGlossaryOpen);
   const reviewOpen        = useUIStore((s) => s.notesReviewOpen);
@@ -21,8 +25,8 @@ export function NotesSection() {
 
   return (
     <div className={styles.container}>
-      {glossaryOpen ? <GlossaryView /> : reviewOpen ? <ReviewView /> : noteTagViewActive ? <TagView /> : <ChronicleView />}
-      <TagFAB />
+      {glossaryOpen ? <GlossaryView /> : reviewOpen ? <ReviewView /> : noteTagViewActive ? <TagView /> : isAndroid ? <MobileNotes /> : <ChronicleView />}
+      {!(isAndroid && editingNoteId) && <TagFAB />}
       {editNoteTagOpen && <EditNoteTagModal key={editingNoteTagId} />}
     </div>
   );

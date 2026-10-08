@@ -629,7 +629,8 @@ export default function App() {
         )}
         </ErrorBoundary>
 
-        <AddTaskButton />
+        {/* On a phone an open note has the screen to itself (MobileNotes). */}
+        {!(isAndroid && activeView === 'notes' && editingNoteId) && <AddTaskButton />}
 
         {!isAndroid && <Sidebar onHoverEnter={handleHoverOpen} onHoverLeave={handleHoverClose} />}
         {editingTaskId             && <TaskPane key={editingTaskId} />}

@@ -14,6 +14,7 @@ import { type NavPlace, pushPlace, travel } from '@/store/navHistory';
 export type AppView = 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
 // Notes' three columns (ChronicleView). Which one has keyboard focus decides what N/Space creates.
 export type NotesColumn = 'tree' | 'list' | 'editor';
+export type MobileNotesHome = 'notebooks' | 'recent';
 
 // What the Overview section is showing: an Endeavour's automatic Overview, or a saved one.
 export type OverviewSelection = { kind: 'endeavour' | 'saved'; id: string } | null;
@@ -414,6 +415,10 @@ interface UIState {
   // back to 'tree' each time Notes is entered, as when it was ChronicleView's own state.
   notesFocusedColumn:      NotesColumn;
   setNotesFocusedColumn:   (col: NotesColumn) => void;
+  // Android: what Notes opens on when no note is open (MobileNotes): the notebook tree or the
+  // recently viewed notes. Persisted, so it comes back as it was left.
+  mobileNotesHome:         MobileNotesHome;
+  setMobileNotesHome:      (home: MobileNotesHome) => void;
   editingNoteId:           string | null;
   // tabId (optional): open on that tab of the note — '__main__' or a NoteTab id. Consumed by
   // NoteEditor. In Notes, the note being left becomes a history stop (`opts.mode` 'silent': not,
@@ -890,6 +895,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   pendingNoteTagKind:     'area',
   notesFocusedColumn:     'tree',
   setNotesFocusedColumn:  (col) => set({ notesFocusedColumn: col }),
+  mobileNotesHome:        'notebooks',
+  setMobileNotesHome:     (home) => set({ mobileNotesHome: home }),
   editingNoteId:          null,
   openNote: (id, tabId, opts) => set((s) => {
     const requestedNoteTab = tabId ? { noteId: id, tabId } : null;
@@ -992,11 +999,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 }), {
   name:    'todo-ui-session',
   storage: persistStorage(),
-  version: 4,
+  version: 5,
   // v1 → v2: overviewSelection (Overview section, 2026-10-01).
   // v2 → v3: one history of places (navHistory/navForward) replaces sectionHistory and
   // notesHistory (2026-10-07); the old section stops carry over, the note stops are dropped.
   // v3 → v4: expandedNoteTagIds persisted, so the notebook tree reopens as it was left (2026-10-08).
+  // v4 → v5: mobileNotesHome (Android Notes: notebooks or recent, 2026-10-09).
   migrate: (persisted, fromVersion) => {
     let state = (persisted ?? {}) as Record<string, unknown>;
     if (fromVersion < 2 && state.overviewSelection === undefined) state = { ...state, overviewSelection: null };
@@ -1008,6 +1016,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       state = { ...rest, navHistory: toPlaces(state.sectionHistory), navForward: toPlaces(state.sectionForwardHistory) };
     }
     if (fromVersion < 4 && !Array.isArray(state.expandedNoteTagIds)) state = { ...state, expandedNoteTagIds: [] };
+    if (fromVersion < 5 && state.mobileNotesHome === undefined) state = { ...state, mobileNotesHome: 'notebooks' };
     return state as never;
   },
   partialize: (s) => ({
@@ -1022,6 +1031,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     notesTabMemory:           s.notesTabMemory,
     selectedNoteTagId:        s.selectedNoteTagId,
     expandedNoteTagIds:       s.expandedNoteTagIds,
+    mobileNotesHome:          s.mobileNotesHome,
     listsLastActiveListId:    s.listsLastActiveListId,
     listsLastActiveTabId:     s.listsLastActiveTabId,
     overviewSelection:        s.overviewSelection,

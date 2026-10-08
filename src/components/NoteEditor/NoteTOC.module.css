@@ -8,6 +8,15 @@
   overflow: hidden;
 }
 
+/* Inside the phone's note panel: the panel's width, no frame of its own. */
+.embedded {
+  width: auto;
+  flex-shrink: 1;
+  border-left: none;
+  background: none;
+  overflow: visible;
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -178,3 +187,6 @@
 /* Contents takes what it needs (up to most of the pane); Key points the rest. */
 .headingsList { flex: 0 1 auto; max-height: 60%; }
 .pointsList   { flex: 1 1 0; }
+
+.embedded .headingsList,
+.embedded .pointsList { flex: none; max-height: none; overflow: visible; }

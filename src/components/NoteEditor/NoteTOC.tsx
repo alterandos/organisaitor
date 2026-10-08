@@ -38,9 +38,13 @@ function extractItems(editor: Editor): TocItem[] {
 interface Props {
   editor: Editor;
   onClose: () => void;
+  // Inside the phone's note panel (MobileNoteSidePanel): full width, no close button of its own,
+  // and choosing an entry doesn't focus the editor (that would raise the keyboard); onClose then
+  // closes the panel after the jump.
+  embedded?: boolean;
 }
 
-export function NoteTOC({ editor, onClose }: Props) {
+export function NoteTOC({ editor, onClose, embedded }: Props) {
   const [items, setItems]         = useState<TocItem[]>([]);
   const [points, setPoints]       = useState<ImportantPassage[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -75,30 +79,34 @@ export function NoteTOC({ editor, onClose }: Props) {
 
   const scrollTo = (item: TocItem) => {
     // Set cursor inside the heading then scroll into view
-    editor.chain().focus().setTextSelection(item.pos + 1).run();
+    if (embedded) editor.commands.setTextSelection(item.pos + 1);
+    else editor.chain().focus().setTextSelection(item.pos + 1).run();
     try {
       const { node } = editor.view.domAtPos(item.pos + 1);
       const el = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement) as HTMLElement | null;
       const heading = el?.closest('h1, h2, h3, h4, h5');
       heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch { /* ignore */ }
+    if (embedded) onClose();
   };
 
   // Key points: the note's Important passages, most important first, then in order.
   const keyPoints = [...points].sort((a, b) => b.level - a.level || a.from - b.from);
   const goToPoint = (p: ImportantPassage) => {
-    editor.chain().focus().setTextSelection({ from: p.from, to: p.to }).run();
+    if (embedded) editor.commands.setTextSelection({ from: p.from, to: p.to });
+    else editor.chain().focus().setTextSelection({ from: p.from, to: p.to }).run();
     try {
       const { node } = editor.view.domAtPos(p.from);
       (node.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node.parentElement)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch { /* not laid out */ }
+    if (embedded) onClose();
   };
 
   return (
-    <div className={styles.panel}>
+    <div className={`${styles.panel} ${embedded ? styles.embedded : ''}`}>
       <div className={styles.header}>
         <span className={styles.title}>Contents</span>
-        <button className={styles.closeBtn} onClick={onClose} title="Close navigation">◀</button>
+        {!embedded && <button className={styles.closeBtn} onClick={onClose} title="Close navigation">◀</button>}
       </div>
 
       <div className={`${styles.list} ${styles.headingsList}`}>

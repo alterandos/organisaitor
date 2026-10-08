@@ -84,6 +84,15 @@ describe('settingsStore migration', () => {
     expect(state.noteBackdrop).toBeNull();
   });
 
+  it('v7 -> v8 backfills an unpinned note heading', async () => {
+    seed('todo-settings', { noteBackdrop: { kind: 'preset', id: 'aurora' } }, 7);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    const state = useSettingsStore.getState();
+    expect(state.noteHeadingPinned).toBe(false);
+    expect(state.noteBackdrop).toEqual({ kind: 'preset', id: 'aurora' });
+  });
+
   it('a fresh install with no persisted state at all gets the full default shape', async () => {
     const { useSettingsStore } = await import('@/store/settingsStore');
     await flush();
