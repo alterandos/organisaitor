@@ -690,7 +690,7 @@ describe('pattern: styles use the design tokens in index.css (CLAUDE.md "Design 
   // agreed (2026-10-09). Replace them as files are touched; the counts may only go down. When
   // this fails because a count went DOWN, lower the number here to lock the gain in. When it
   // fails because one went UP, use the token (var(--text-sm), var(--space-3), var(--z-toast)…).
-  const BASELINE = { hex: 154, fontSize: 1231, zIndex: 137, radius: 311, shadow: 202 };
+  const BASELINE = { hex: 154, fontSize: 1222, zIndex: 137, radius: 306, shadow: 123 };
   const CSS = walk(SRC, ['.css']).filter((f) => f.endsWith('.module.css'))
     .map((f) => fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''));
   const count = (re: RegExp) => CSS.reduce((n, s) => n + (s.match(re) ?? []).length, 0);
@@ -699,7 +699,8 @@ describe('pattern: styles use the design tokens in index.css (CLAUDE.md "Design 
     fontSize: count(/font-size:\s*[0-9.]+(rem|px|em)/g),
     zIndex:   count(/z-index:\s*-?[0-9]+/g),
     radius:   count(/border-radius:\s*[0-9.]+(px|rem|em)/g),
-    shadow:   count(/box-shadow:\s*(?!var\(|none|inherit)[^;]*/g),
+    // The value as a whole, so the lookahead can't be dodged by \s* backtracking to zero.
+    shadow:   count(/box-shadow:\s*(?![\s]|var\(|none|inherit)[^;]*/g),
   };
   for (const key of Object.keys(BASELINE) as (keyof typeof BASELINE)[]) {
     it(`hard-coded ${key} values don't increase (now ${now[key]}, baseline ${BASELINE[key]})`, () => {
