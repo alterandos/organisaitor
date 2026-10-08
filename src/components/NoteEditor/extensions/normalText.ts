@@ -3,7 +3,7 @@ import type { Editor } from '@tiptap/core';
 // Marks that carry meaning rather than styling — a link, an annotation tag, a cross-app link.
 // "Normal" leaves them alone; everything else (bold, italic, underline, strike, code, colour,
 // super/subscript, and any formatting mark added later) is removed.
-const KEPT_MARKS = new Set(['link', 'noteTag', 'artifactLink']);
+const KEPT_MARKS = new Set(['link', 'noteTag', 'artifactLink', 'conceptRef']);
 
 // "Normal text" (Ctrl+H then 0, or Normal in the style dropdown): the block becomes a plain
 // paragraph AND its text loses all formatting. Scope: the selection, or with nothing selected the

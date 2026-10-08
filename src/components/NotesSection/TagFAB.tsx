@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { BUILTIN_TAGS, type BuiltinTag } from '../NoteEditor/builtinTags';
+import { dueReviews } from '@/services/noteReview';
+import { LABELS } from '@/config/labels';
 import styles from './TagFAB.module.css';
 
 export function TagFAB() {
@@ -15,6 +17,11 @@ export function TagFAB() {
   const closeNoteTagView     = useUIStore((s) => s.closeNoteTagView);
 
   const userTags = Object.values(noteTagsRecord);
+  const openNotesGlossary = useUIStore((s) => s.openNotesGlossary);
+  const openNotesReview   = useUIStore((s) => s.openNotesReview);
+  const notesRecord       = useNoteStore((s) => s.notes);
+  // Counted when the panel opens (and when notes change while it's open), never on every render.
+  const dueCount = useMemo(() => (open ? (void notesRecord, dueReviews().length) : 0), [open, notesRecord]);
 
   const hoverOpen = () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -46,6 +53,14 @@ export function TagFAB() {
     <div className={styles.wrap} onMouseEnter={hoverOpen} onMouseLeave={hoverClose}>
       {open && (
         <div className={styles.panel}>
+          <div className={styles.views}>
+            <button className={styles.viewBtn} onClick={() => { setOpen(false); openNotesGlossary(); }} title={LABELS.glossary.openHint}>
+              <span aria-hidden="true">📖</span>{LABELS.glossary.open}
+            </button>
+            <button className={styles.viewBtn} onClick={() => { setOpen(false); openNotesReview(); }} title={LABELS.review.openHint}>
+              <span aria-hidden="true">🔁</span>{LABELS.review.open(dueCount)}
+            </button>
+          </div>
           <div className={styles.panelHeader}>
             <span>Filter by tag</span>
             {allTagIds.length > 0 && (

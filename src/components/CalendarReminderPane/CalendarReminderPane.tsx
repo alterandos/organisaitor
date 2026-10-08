@@ -10,6 +10,8 @@ import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import { LinkedNoteAbstracts } from '@/components/LinkedNoteAbstracts/LinkedNoteAbstracts';
+import { newNoteTitleFor } from '@/services/noteFromItem';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteReminderWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import type { CrossAppRef } from '@/types';
@@ -169,6 +171,8 @@ export function CalendarReminderPane() {
             rows={3}
           />
 
+          <LinkedNoteAbstracts refs={reminder.crossAppRefs ?? []} onOpen={navigateToCrossAppRef} />
+
           <div className={styles.field}>
             <span className={styles.label}>Date</span>
             <input
@@ -319,6 +323,7 @@ export function CalendarReminderPane() {
             <CrossAppRefPicker
               value={reminder.crossAppRefs ?? []}
               suggestFrom={reminder.title}
+              newNoteTitle={newNoteTitleFor(reminder.title, reminder.date)}
               onChange={handleCrossAppRefsChange}
               onNavigate={navigateToCrossAppRef}
             />

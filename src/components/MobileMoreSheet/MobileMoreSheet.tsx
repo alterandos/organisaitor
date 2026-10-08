@@ -42,6 +42,9 @@ export function MobileMoreSheet() {
 
       <div className={styles.divider} />
 
+      <button className={styles.item} onClick={() => go(() => useUIStore.getState().openHistoryBrowser())}>
+        {LABELS.history.moreLabel}
+      </button>
       <button className={styles.item} onClick={() => go(() => openManage())}>
         Manage Library
       </button>

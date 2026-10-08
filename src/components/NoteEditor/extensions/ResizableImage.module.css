@@ -1,0 +1,199 @@
+/* A note's picture (ResizableImage.ts): resize handles when selected, and the crop stage. */
+
+.wrap {
+  position: relative;
+  display: block;
+  margin: 0.75rem 0;
+  line-height: 0;
+}
+
+.frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.clip {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.wrap .img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+/* Cropped or stretched: the clip is the visible picture and the whole image sits inside it. */
+.framed .clip { overflow: hidden; }
+
+.wrap .framed .img {
+  position: absolute;
+  max-width: none;
+  border-radius: 0;
+}
+
+.selected .clip {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ── Resize handles ── */
+
+.handles {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+}
+
+.selected .handles,
+.resizing .handles { display: block; }
+
+.handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--color-primary);
+  border-radius: 2px;
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* A bigger target than it looks, for a finger. */
+.handle::before {
+  position: absolute;
+  inset: -8px;
+  content: '';
+}
+
+.h_nw { top: 0; left: 0; cursor: nwse-resize; }
+.h_ne { top: 0; left: 100%; cursor: nesw-resize; }
+.h_sw { top: 100%; left: 0; cursor: nesw-resize; }
+.h_se { top: 100%; left: 100%; cursor: nwse-resize; }
+.h_n  { top: 0; left: 50%; cursor: ns-resize; }
+.h_s  { top: 100%; left: 50%; cursor: ns-resize; }
+.h_e  { top: 50%; left: 100%; cursor: ew-resize; }
+.h_w  { top: 50%; left: 0; cursor: ew-resize; }
+
+.resizing,
+.resizing * { cursor: inherit; user-select: none; }
+
+/* ── The bar of picture actions ── */
+
+.bar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  display: none;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  line-height: normal;
+}
+
+.selected:not(.resizing):not(.croppingMode) > .bar,
+.croppingMode > .cropBar { display: inline-flex; }
+
+.barBtn {
+  padding: 0.2rem 0.55rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.barBtn:hover:not(:disabled) { background: var(--color-surface-alt); }
+.barBtn:disabled { color: var(--color-muted); cursor: default; }
+
+.primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.primary:hover:not(:disabled) { background: var(--color-primary); filter: brightness(1.08); }
+
+/* ── Cropping ── */
+
+.croppingMode > .frame { display: none; }
+
+.stage {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  user-select: none;
+}
+
+.wrap .stageImg {
+  position: absolute;
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* What the crop keeps; everything outside it is dimmed. */
+.cropBox {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  outline: 1px solid rgba(255, 255, 255, 0.85);
+}
+
+.cropHandle {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  touch-action: none;
+}
+
+.cropHandle::after {
+  position: absolute;
+  content: '';
+  border: 0 solid #111;
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff);
+}
+
+/* Corners are L-shaped and edges short bars, sitting on the crop line. */
+.c_nw, .c_ne, .c_sw, .c_se { --arm: 16px; }
+.c_nw { top: -3px; left: -3px; cursor: nwse-resize; }
+.c_ne { top: -3px; right: -3px; cursor: nesw-resize; }
+.c_sw { bottom: -3px; left: -3px; cursor: nesw-resize; }
+.c_se { bottom: -3px; right: -3px; cursor: nwse-resize; }
+.c_nw::after { top: 0; left: 0; width: var(--arm); height: var(--arm); border-top-width: 4px; border-left-width: 4px; }
+.c_ne::after { top: 0; right: 0; width: var(--arm); height: var(--arm); border-top-width: 4px; border-right-width: 4px; }
+.c_sw::after { bottom: 0; left: 0; width: var(--arm); height: var(--arm); border-bottom-width: 4px; border-left-width: 4px; }
+.c_se::after { bottom: 0; right: 0; width: var(--arm); height: var(--arm); border-bottom-width: 4px; border-right-width: 4px; }
+
+.c_n, .c_s { left: 50%; width: 30px; transform: translateX(-50%); cursor: ns-resize; }
+.c_e, .c_w { top: 50%; height: 30px; transform: translateY(-50%); cursor: ew-resize; }
+.c_n { top: -3px; }
+.c_s { bottom: -3px; }
+.c_e { right: -3px; }
+.c_w { left: -3px; }
+.c_n::after { top: 0; left: 4px; right: 4px; border-top-width: 4px; }
+.c_s::after { bottom: 0; left: 4px; right: 4px; border-bottom-width: 4px; }
+.c_e::after { top: 4px; bottom: 4px; right: 0; border-right-width: 4px; }
+.c_w::after { top: 4px; bottom: 4px; left: 0; border-left-width: 4px; }

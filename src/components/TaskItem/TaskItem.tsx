@@ -15,6 +15,8 @@ import { formatDeadline, isOverdue } from '@/utils/date';
 import { hexToRgba } from '@/utils/color';
 import { openBlockers } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
+import { ITEM_FLAG_ICON } from '@/config/itemIcons';
+import { repeatSummary } from '@/services/recurringTasks';
 import styles from './TaskItem.module.css';
 
 // Two 80px actions (Archive, Delete) behind the row on a left swipe.
@@ -145,6 +147,12 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
             title="Scheduled date"
           >
             🕐{formatDeadline(task.scheduledAt, task.scheduledTime, clockFormat)}
+          </span>
+        )}
+
+        {task.repeat && !task.completed && (
+          <span className={styles.indicator} style={showDueDate ? { opacity: 1 } : undefined} title={LABELS.recurring.rowTitle(repeatSummary(task.repeat))}>
+            {ITEM_FLAG_ICON.repeats}
           </span>
         )}
 

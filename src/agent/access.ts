@@ -11,6 +11,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { addTaskWithCalendar, updateTaskLinked, updateCalendarEventLinked } from '@/services/taskCalendarLinks';
+import { spawnNextOccurrence } from '@/services/recurringTasks';
 import { AgentError } from '@/agent/errors';
 import { newTagId } from '@/utils/id';
 import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
@@ -76,7 +77,12 @@ type CalendarItemKindForAgent = 'event' | 'reminder' | 'deadline';
 export const write = {
   createTask:   (input: CreateTaskInput): TaskId => addTaskWithCalendar(input),
   updateTask:   (id: string, changes: Partial<Omit<Task, 'id' | 'createdAt'>>): void => updateTaskLinked(id as TaskId, changes),
-  toggleTask:   (id: string): void => tasksState().toggleTask(id as TaskId),
+  // A recurring task's next occurrence is made the same way as from the UI.
+  toggleTask:   (id: string): void => {
+    const wasDone = tasksState().tasks[id as TaskId]?.completed;
+    tasksState().toggleTask(id as TaskId);
+    if (wasDone === false) spawnNextOccurrence(id as TaskId);
+  },
   archiveTask:  (id: string, reason?: string | null): void => tasksState().archiveTask(id as TaskId, reason),
   restoreTask:  (id: string): void => tasksState().restoreTask(id as TaskId),
 

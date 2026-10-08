@@ -5,9 +5,10 @@ import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { newTagId } from '@/utils/id';
 import { makeItemLink } from '@/utils/taskLinks';
-import { now } from '@/utils/date';
+import { now, todayIso } from '@/utils/date';
+import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { LABELS } from '@/config/labels';
-import type { Priority, TagId, PurposeId, CollectionId, TaskKind, TaskId, CrossAppRef } from '@/types';
+import type { Priority, TagId, PurposeId, CollectionId, TaskKind, TaskId, CrossAppRef, RepeatConfig } from '@/types';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
@@ -45,6 +46,7 @@ export function AddTaskModal() {
   };
 
   const [advanced, setAdvanced] = useState(taskModalAdvanced || !!pendingParentId);
+  const [repeat, setRepeat] = useState<RepeatConfig | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   const [title,         setTitle]         = useState(quickAddPrefill?.title ?? '');
@@ -209,7 +211,8 @@ export function AddTaskModal() {
       title,
       notes:           notes || null,
       links:           links.filter(Boolean),
-      deadline:        deadline     || null,
+      // A repeating task with no date starts from today (services/recurringTasks.ts).
+      deadline:        deadline || (repeat && !scheduledAt ? todayIso() : null),
       deadlineTime:    deadlineTime || null,
       scheduledAt:     scheduledAt  || null,
       scheduledTime:   scheduledTime || null,
@@ -221,6 +224,7 @@ export function AddTaskModal() {
       parentId:     parentId ? parentId as TaskId : null,
       crossAppRefs,
       itemLinks:    followUpOrigin ? [makeItemLink('followUpOf', followUpOrigin.id, null, now())] : undefined,
+      repeat:       parentId ? null : repeat,
     });
 
     if (pendingArtifactLink) useUIStore.getState().resolveArtifactLink(taskId);
@@ -360,6 +364,13 @@ export function AddTaskModal() {
           {/* ── Advanced fields ── */}
           {advanced && (
             <div className={styles.advanced}>
+              {/* Repeat — not for a sub-task, which repeats with its parent */}
+              {!parentId && (
+                <div className={styles.field}>
+                  <RepeatField value={repeat} onChange={setRepeat} hint={LABELS.recurring.hint} />
+                </div>
+              )}
+
               {/* Task kind */}
               <div className={styles.field}>
                 <label className={styles.label}>Type</label>

@@ -10,7 +10,7 @@ import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import Superscript from '@tiptap/extension-superscript';
 import Subscript from '@tiptap/extension-subscript';
-import { TextStyle, Color } from '@tiptap/extension-text-style';
+import { TextStyle, Color, FontSize } from '@tiptap/extension-text-style';
 import { ResizableImage } from './extensions/ResizableImage';
 import { HeadingNumbering } from './extensions/HeadingNumbering';
 import { SectionDocument, Section, ColumnBlock, Column, MAX_SECTION_COLUMNS } from './extensions/Section';
@@ -29,10 +29,31 @@ import { usePlatform } from '@/hooks/usePlatform';
 import { getNoteBacklinks } from '@/store/noteBacklinks';
 import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
 import { collectArtifactTargets } from '@/utils/noteContent';
-import { linkTabIdFor, MAIN_TAB_ID, resolveNoteTab, titlePrefillFor } from '@/utils/noteTabs';
+import { linkTabIdFor, MAIN_TAB_ID, resolveNoteTab, titlePrefillFor, tabDatesText } from '@/utils/noteTabs';
 import { setNormalText } from './extensions/normalText';
 import { NoteTitle } from './extensions/NoteTitle';
 import { DuplicateLine } from './extensions/DuplicateLine';
+import { TimelineExtensions } from './extensions/Timeline';
+import { QuoteExtensions } from './extensions/Quote';
+import { CycleExtensions } from './extensions/Cycle';
+import { BreakdownExtensions } from './extensions/Breakdown';
+import { HierarchyExtensions } from './extensions/Hierarchy';
+import { PyramidExtensions } from './extensions/Pyramid';
+import { ChartExtensions } from './extensions/Chart';
+import { NoteBlockSelect } from './extensions/blockDesigns';
+import { GlossaryAutolink } from './extensions/GlossaryAutolink';
+import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
+import { SpecialCharInput } from './extensions/SpecialCharInput';
+import { HeadingLevel } from './extensions/HeadingLevel';
+import { NoteSubtitle, NoteAuthor } from './extensions/NoteBylines';
+import { FONT_SIZES, currentFontSize, setFontSize, stepFontSize } from './extensions/fontSize';
+import { noteClipboardText } from './noteClipboardText';
+import { TextColorIcon } from '@/components/Icons';
+import { ConceptRefMark, ConceptMargin } from './extensions/ConceptRef';
+import { Importance, cycleImportance } from './extensions/Importance';
+import { SelectionMenu } from './objects/SelectionMenu';
+import './extensions/annotationMenu';
+import { registerLiveNoteEditor } from '@/services/liveNoteEditor';
 import { LABELS } from '@/config/labels';
 import { compressImageBlob } from '@/utils/imageCompress';
 import { FloatingToolbar, type FloatingToolbarActions } from './FloatingToolbar';
@@ -46,6 +67,13 @@ import { applyResolvedArtifactLink, insertObjectTrigger } from './objects/action
 import { ArtifactLinkGroups } from './objects/artifactGroups';
 import type { NoteObjectContext } from './objects/types';
 import './objects/contextMenu';
+import './extensions/timelineMenu';
+import './extensions/quoteMenu';
+import './extensions/cycleMenu';
+import './extensions/breakdownMenu';
+import './extensions/hierarchyMenu';
+import './extensions/pyramidMenu';
+import './extensions/chartMenu';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { openExternalLink, normalizeLinkUrl } from '@/utils/links';
 import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
@@ -271,6 +299,20 @@ interface NoteEditorProps {
   onNavReturn?: () => void;  // Ctrl+Left: return focus to the navigation columns
 }
 
+// Scrolls the editor so the text at pos sits near the top of the view (a fifth of the way down),
+// where it reads as "here it is" rather than wherever the browser's nearest-edge scroll leaves it.
+function showNearTop(view: import('@tiptap/pm/view').EditorView, pos: number) {
+  try {
+    const { node } = view.domAtPos(pos);
+    const el = node.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node.parentElement;
+    let scroller = el?.parentElement ?? null;
+    while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+    if (!el || !scroller) return;
+    const offset = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    scroller.scrollTo({ top: Math.max(0, scroller.scrollTop + offset - scroller.clientHeight / 5), behavior: 'smooth' });
+  } catch { /* not laid out */ }
+}
+
 export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const { isAndroid }       = usePlatform();
   const editingNoteId       = useUIStore((s) => s.editingNoteId);
@@ -317,6 +359,16 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const [title, setTitle]           = useState('');
   const [tocOpen, setTocOpen]       = useState(false);
   const [abstract, setAbstract]     = useState<string | null>(null);
+  // The abstract can also be changed outside the editor (a calendar item's linked-note box,
+  // components/LinkedNoteAbstracts): take a new stored value on, unless the abstract box is being
+  // typed in — then the typing wins, and saves over it as before.
+  const [abstractFocused, setAbstractFocused] = useState(false);
+  const storedAbstract = note?.abstract ?? null;
+  const [abstractSeen, setAbstractSeen] = useState(storedAbstract);
+  if (storedAbstract !== abstractSeen) {
+    setAbstractSeen(storedAbstract);
+    if (!abstractFocused) setAbstract(storedAbstract);
+  }
   const [abstractCollapsed, setAbstractCollapsed] = useState(false);
   const [noteMenuOpen, setNoteMenuOpen] = useState(false);
   // See src/services/vault.ts — encryption applies to Note.content (Main tab) only, not
@@ -342,6 +394,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const hasRestoredTabRef = useRef(false);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  // Where the cursor was when F2 started renaming the tab; Enter or Esc puts it back there.
+  const renameReturnRef = useRef<{ from: number; to: number } | null>(null);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dragOverInfo, setDragOverInfo] = useState<{ tabId: string; side: 'left' | 'right' } | null>(null);
   // Refs mirror the drag state so onDrop always reads live values (no stale closure)
@@ -681,17 +735,37 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       Subscript,
       TextStyle,
       Color,
+      FontSize,
       Table.configure({ resizable: false }),
       TableRow,
       TableHeader,
       TableCell,
       HeadingNumbering,
       NoteTitle,
+      NoteSubtitle,
+      NoteAuthor,
       DuplicateLine,
+      ...TimelineExtensions,
+      ...QuoteExtensions,
+      ...CycleExtensions,
+      ...BreakdownExtensions,
+      ...HierarchyExtensions,
+      ...PyramidExtensions,
+      ...ChartExtensions,
+      NoteBlockSelect,
+      GlossaryAutolink,
+      OccurrenceHighlight,
+      SpecialCharInput,
+      HeadingLevel,
+      ConceptRefMark,
+      ConceptMargin,
+      Importance,
     ],
     content: '',
     editorProps: {
       attributes: { class: styles.editorContent },
+      // Copying to a plain-text place keeps headings, lists, tables… as Markdown (noteClipboardText.ts).
+      clipboardTextSerializer: (slice) => noteClipboardText(slice),
       handleDOMEvents: {
         // Chromium/WebKit have a native "Ctrl/Cmd+click follows a link inside contenteditable"
         // behaviour that fires on the link's own default action regardless of what a later
@@ -914,6 +988,27 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     if (opts?.focusEditor !== false) editor.commands.focus('end');
   };
 
+  // F2: rename the open tab. Reads only refs and module functions, so the editor-focused keydown
+  // handler (registered once per editor) can call it.
+  function startRenameActiveTab() {
+    const n = viewOf(currentNoteIdRef.current);
+    if (!n || !editor) return;
+    const entry = buildDisplayOrder(n).find((t) => (t.isMain ? null : t.id) === activeTabIdRef.current);
+    if (!entry) return;
+    renameReturnRef.current = { from: editor.state.selection.from, to: editor.state.selection.to };
+    setRenamingTabId(entry.id);
+    setRenameValue(entry.name);
+  }
+
+  // The tab rename finished from the keyboard: back to the text, where F2 left it (else the end).
+  function returnFromRename() {
+    const back = renameReturnRef.current;
+    renameReturnRef.current = null;
+    if (!editor) return;
+    if (back) editor.chain().focus().setTextSelection(back).scrollIntoView().run();
+    else editor.commands.focus('end');
+  }
+
   // Title (Ctrl+H then H, or the style dropdown): one per tab, at the top, starting as the tab's
   // name — see extensions/NoteTitle.ts and titlePrefillFor.
   const insertTitle = () => {
@@ -1086,6 +1181,47 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- switchTab is a per-render closure over refs; the request itself is the trigger
   }, [requestedNoteTab, editor, note?.id]);
 
+  // What's open, for changes made from outside the editor (services/liveNoteEditor.ts).
+  useEffect(() => {
+    if (!editor || !note || noteLocked) return;
+    const entry = { noteId: note.id, tabId: activeTabId, view: editor.view };
+    registerLiveNoteEditor(entry);
+    return () => registerLiveNoteEditor(null);
+  }, [editor, note?.id, activeTabId, noteLocked]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Something asked to show a passage of this note (services/notePassage.ts): select its first run
+  // of marked text and bring it into view. After the tab effect above, so it searches the right tab.
+  const requestedNotePassage = useUIStore((s) => s.requestedNotePassage);
+  useEffect(() => {
+    if (!editor || !note || !requestedNotePassage || requestedNotePassage.noteId !== note.id) return;
+    const { mark, attr, value } = requestedNotePassage;
+    useUIStore.getState().setRequestedNotePassage(null);
+    let from = -1;
+    let to = -1;
+    let done = false;
+    editor.state.doc.descendants((node, pos) => {
+      if (done) return false;
+      if (!node.isText) return true;
+      if (node.marks.some((m) => m.type.name === mark && m.attrs[attr] === value)) {
+        if (from < 0) from = pos;
+        to = pos + node.nodeSize;
+      } else if (from >= 0 && node.text?.trim()) {
+        done = true;
+      }
+      return false;
+    });
+    if (from < 0) return;
+    // Two frames on: opening the note (or its tab) focuses the editor at the end a frame late
+    // (Tiptap's delayed focus), which would move the cursor and the scroll to the bottom.
+    // (Not cancelled on cleanup: clearing the request above re-runs this effect at once.)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (editor.isDestroyed) return;
+      editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection({ from, to }).run();
+      showNearTop(editor.view, from);
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the request is the trigger; only the note's id matters
+  }, [requestedNotePassage, editor, note?.id]);
+
   // The open note just became locked or readable (Lock now, or the vault unlocked — e.g. via
   // Account, or a trusted-device auto-unlock landing after the note opened). Reload the editor
   // and the title/abstract inputs from the current view WITHOUT resetting the tab the way a
@@ -1199,6 +1335,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
 
   // Editor-specific hotkeys (only when editor is focused)
   const awaitingHeadingRef = useRef(false);
+  const headingSelectionRef = useRef<{ from: number; to: number } | null>(null);
   useEffect(() => {
     if (!editor) return;
     const handler = (e: KeyboardEvent) => {
@@ -1210,6 +1347,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         e.preventDefault();
         if (awaitingHeadingRef.current) { awaitingHeadingRef.current = false; insertTitle(); return; }
         awaitingHeadingRef.current = true;
+        headingSelectionRef.current = { from: editor.state.selection.from, to: editor.state.selection.to };
         return;
       }
 
@@ -1218,6 +1356,17 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         awaitingHeadingRef.current = false;
         if (e.key === '0') { e.preventDefault(); setNormalText(editor); return; }
         if (e.key.toLowerCase() === 'h') { e.preventDefault(); insertTitle(); return; }
+        // Subtitle / Author. With Ctrl still held, A is also the editor's Select all (which has
+        // already run), so the selection from when Ctrl+H was pressed is put back first.
+        const byline = ({ s: 'noteSubtitle', a: 'noteAuthor' } as Record<string, string>)[e.key.toLowerCase()];
+        if (byline) {
+          e.preventDefault();
+          const sel = headingSelectionRef.current;
+          const chain = editor.chain().focus();
+          if (sel) chain.setTextSelection(sel);
+          chain.setNode(byline).run();
+          return;
+        }
         if (['1','2','3','4','5'].includes(e.key)) {
           e.preventDefault();
           editor.chain().focus().setHeading({ level: parseInt(e.key) as 1|2|3|4|5 }).run();
@@ -1234,6 +1383,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           const tag = BUILTIN_TAGS[digit - 1];
           e.preventDefault();
           const applyTag = () => {
+            // Important steps through its levels (Important, Very important, Critical) and then off.
+            if (tag.typeKey === 'important') { cycleImportance(editor.view); return; }
             if (editor.isActive('noteTag', { tagId: tag.id })) {
               const entryId = editor.getAttributes('noteTag').structuredEntryId as string | null;
               editor.chain().focus().unsetMark('noteTag').run();
@@ -1276,6 +1427,20 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === '/') {
         e.preventDefault();
         editor.chain().focus().toggleOrderedList().run();
+        return;
+      }
+
+      // Ctrl+Shift+< / Ctrl+Shift+> → font size down / up a step (extensions/fontSize.ts)
+      if (e.ctrlKey && e.shiftKey && !e.altKey && (e.code === 'Comma' || e.code === 'Period')) {
+        e.preventDefault();
+        stepFontSize(editor, e.code === 'Period' ? 1 : -1);
+        return;
+      }
+
+      // F2 → rename the open tab; Enter (or Esc) puts the cursor back where it was.
+      if (e.key === 'F2' && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        startRenameActiveTab();
         return;
       }
 
@@ -1424,13 +1589,18 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     selector: ({ editor: ed }) => ({
       heading: !ed ? 'p'
         : ed.isActive('noteTitle') ? 'title'
+        : ed.isActive('noteSubtitle') ? 'subtitle'
+        : ed.isActive('noteAuthor') ? 'author'
         : ([1, 2, 3, 4, 5].find((l) => ed.isActive('heading', { level: l }))?.toString() ?? 'p'),
+      fontSize: ed ? currentFontSize(ed) : 16,
+      ownFontSize: !!ed?.getAttributes('textStyle').fontSize,
       columns: !ed ? 1
         : (Array.from({ length: MAX_SECTION_COLUMNS }, (_, i) => i + 1).find((n) => ed.isActive('section', { columns: n })) ?? 1),
     }),
   });
   const currentHeadingValue   = cursorFormat?.heading ?? 'p';
   const currentSectionColumns = cursorFormat?.columns ?? 1;
+  const currentFontSizePx     = cursorFormat?.fontSize ?? 16;
 
   const handleHeadingChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
@@ -1442,6 +1612,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     }
     if (val === 'title') {
       insertTitle();
+    } else if (val === 'subtitle' || val === 'author') {
+      editor?.chain().focus().setNode(val === 'subtitle' ? 'noteSubtitle' : 'noteAuthor').run();
     } else if (val === 'p') {
       if (editor) setNormalText(editor);
     } else {
@@ -1504,6 +1676,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             title="Paragraph / heading style"
           >
             <option value="title">Title</option>
+            <option value="subtitle">{LABELS.noteStyles.subtitle}</option>
+            <option value="author">{LABELS.noteStyles.author}</option>
             <option value="p">Normal</option>
             <option value="1">Heading 1</option>
             <option value="2">Heading 2</option>
@@ -1538,14 +1712,45 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             <OrderedIcon />
           </button>
 
-          {/* `\` objects: same as typing \ (the touch path — \ is a few taps away on a phone keyboard) */}
-          <button
-            className={styles.toolbarBtn}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => { if (editor) insertObjectTrigger(editor.view); }}
-            title={LABELS.noteObjects.toolbarButton}
-            disabled={noteLocked}
-          >{'\\'}</button>
+          {/* `\` objects: same as typing \. Android only: it's the touch path (\ is a few taps away
+              on a phone keyboard, gap F11); with a keyboard, typing \ is quicker. */}
+          {isAndroid && (
+            <button
+              className={styles.toolbarBtn}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { if (editor) insertObjectTrigger(editor.view); }}
+              title={LABELS.noteObjects.toolbarButton}
+              disabled={noteLocked}
+            >{'\\'}</button>
+          )}
+
+          {/* Font size: a step down / the size / a step up (Ctrl+Shift+< / Ctrl+Shift+>) */}
+          <div className={styles.fontSizeGroup}>
+            <button
+              className={styles.toolbarBtn}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { if (editor) stepFontSize(editor, -1); }}
+              title={LABELS.noteStyles.smaller}
+              aria-label={LABELS.noteStyles.smaller}
+            ><span className={styles.fontStepIcon}>A<small>−</small></span></button>
+            <select
+              className={styles.fontSizeSelect}
+              value={cursorFormat?.ownFontSize ? String(Math.round(currentFontSizePx)) : ''}
+              onChange={(e) => { if (editor) setFontSize(editor, e.target.value ? Number(e.target.value) : null); }}
+              title={LABELS.noteStyles.fontSize}
+              aria-label={LABELS.noteStyles.fontSize}
+            >
+              <option value="">{cursorFormat?.ownFontSize ? LABELS.noteStyles.defaultSize : Math.round(currentFontSizePx)}</option>
+              {FONT_SIZES.map((px) => <option key={px} value={px}>{px}</option>)}
+            </select>
+            <button
+              className={styles.toolbarBtn}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { if (editor) stepFontSize(editor, 1); }}
+              title={LABELS.noteStyles.larger}
+              aria-label={LABELS.noteStyles.larger}
+            ><span className={styles.fontStepIcon}>A<small>+</small></span></button>
+          </div>
 
           {/* Superscript / Subscript */}
           <button
@@ -1569,13 +1774,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
               onClick={(e) => { e.stopPropagation(); setColorPickerOpen((o) => !o); }}
               title="Text color"
             >
-              <span className={styles.colorIconLetter}>
-                A
-                <span
-                  className={styles.colorIconBar}
-                  style={{ background: (editor?.getAttributes('textStyle').color as string) || 'currentColor' }}
-                />
-              </span>
+              <TextColorIcon current={editor?.getAttributes('textStyle').color as string | undefined} />
             </button>
             {colorPickerOpen && (
               <div className={styles.colorPickerPopover} onClick={(e) => e.stopPropagation()}>
@@ -1784,6 +1983,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                 dragOverInfo?.tabId === tabId && dragOverInfo.side === 'right' ? styles.tabDragAfter : '',
               ].filter(Boolean).join(' ')}
               draggable={renamingTabId !== tabId}
+              data-link-preview={tabDatesText(note, activeId)}
               onDragStart={(e) => {
                 startDrag(tabId);
                 e.dataTransfer.effectAllowed = 'move';
@@ -1841,6 +2041,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                   onFocus={(e) => e.target.select()}
                   onChange={(e) => setRenameValue(e.target.value)}
                   onBlur={() => {
+                    renameReturnRef.current = null;
                     if (renameValue.trim()) {
                       if (isMain) renameMainTab(currentNoteIdRef.current as NoteId, renameValue);
                       else renameNoteTab(currentNoteIdRef.current as NoteId, tabId, renameValue);
@@ -1854,12 +2055,17 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                         else renameNoteTab(currentNoteIdRef.current as NoteId, tabId, renameValue);
                       }
                       setRenamingTabId(null);
-                      // Enter is the deliberate "done naming" gesture — move on into the editor.
-                      // (Not done on blur too: blur can also mean "clicked straight into the
-                      // editor at a specific spot," which this would incorrectly override.)
-                      editor?.commands.focus('end');
+                      // Enter is the deliberate "done naming" gesture — move on into the editor,
+                      // where F2 left the cursor (else the end). (Not done on blur too: blur can
+                      // also mean "clicked straight into the editor at a specific spot," which
+                      // this would incorrectly override.)
+                      returnFromRename();
                     }
-                    if (e.key === 'Escape') setRenamingTabId(null);
+                    if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      setRenamingTabId(null);
+                      if (renameReturnRef.current) returnFromRename();
+                    }
                     e.stopPropagation();
                   }}
                   onClick={(e) => e.stopPropagation()}
@@ -1899,7 +2105,9 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
               className={styles.abstractInput}
               value={abstract}
               onChange={(e) => { setAbstract(e.target.value); scheduleAbstract(e.target.value); }}
+              onFocus={() => setAbstractFocused(true)}
               onBlur={() => {
+                setAbstractFocused(false);
                 const id = currentNoteIdRef.current;
                 if (id) {
                   if (abstractSaveRef.current) clearTimeout(abstractSaveRef.current);
@@ -1998,6 +2206,15 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             <>
               {editor && <FloatingToolbar actionsRef={toolbarActionsRef} editor={editor} noteId={note.id} getLinkTabId={() => linkTabIdFor(viewOf(currentNoteIdRef.current), activeTabIdRef.current)} onStructuredTag={openStructuredTagCreate} />}
               {editor && <NoteObjectMenu editor={editor} getContext={getObjectContext} />}
+              {editor && (
+                <SelectionMenu
+                  editor={editor}
+                  onMarkAs={(typeKey, from, to) => {
+                    const tag = BUILTIN_TAGS.find((t) => t.typeKey === typeKey);
+                    if (tag) openStructuredTagCreate(tag, from, to);
+                  }}
+                />
+              )}
               <EditorContent editor={editor} innerRef={editorContentRef} className={styles.editor} />
             </>
           )}

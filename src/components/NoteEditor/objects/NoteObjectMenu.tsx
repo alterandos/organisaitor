@@ -1,9 +1,10 @@
-import { useEffect, useReducer, useRef } from 'react';
+import { Fragment, useEffect, useReducer, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import type { NoteObjectContext } from './types';
+import { isBlockKind } from './types';
 import { getSession } from './session';
 import { acceptKind, commitSession, dismissSession, resolveDraft, setHighlight, setOverride } from './actions';
 import { objectTriggerStorage } from './NoteObjectTrigger';
@@ -94,22 +95,28 @@ export function NoteObjectMenu({ editor, getContext }: Props) {
       <>
         <ul className={styles.kinds} role="listbox">
           {matches.map((kind, i) => (
-            <li
-              key={kind.id}
-              role="option"
-              aria-selected={i === session.highlight}
-              className={`${styles.kind} ${i === session.highlight ? styles.kindActive : ''}`}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => { if (i !== session.highlight) setHighlight(view, i); }}
-              onClick={() => { acceptKind(view, kind); view.focus(); }}
-            >
-              <span className={styles.kindIcon} aria-hidden="true">{kind.icon}</span>
-              <span className={styles.kindText}>
-                <span className={styles.kindLabel}>{kind.label}</span>
-                <span className={styles.kindHint}>{kind.hint}</span>
-              </span>
-              <span className={styles.kindKeyword}>\{[kind.id, ...kind.aliases].reduce((a, b) => (b.length < a.length ? b : a))}</span>
-            </li>
+            <Fragment key={kind.id}>
+              {(i === 0 || isBlockKind(kind) !== isBlockKind(matches[i - 1])) && (
+                <li role="presentation" className={styles.group}>
+                  {isBlockKind(kind) ? LABELS.noteObjects.groupBlocks : LABELS.noteObjects.groupItems}
+                </li>
+              )}
+              <li
+                role="option"
+                aria-selected={i === session.highlight}
+                className={`${styles.kind} ${i === session.highlight ? styles.kindActive : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => { if (i !== session.highlight) setHighlight(view, i); }}
+                onClick={() => { acceptKind(view, kind); view.focus(); }}
+              >
+                <span className={styles.kindIcon} aria-hidden="true">{kind.icon}</span>
+                <span className={styles.kindText}>
+                  <span className={styles.kindLabel}>{kind.label}</span>
+                  <span className={styles.kindHint}>{kind.hint}</span>
+                </span>
+                <span className={styles.kindKeyword}>\{[kind.id, ...kind.aliases].reduce((a, b) => (b.length < a.length ? b : a))}</span>
+              </li>
+            </Fragment>
           ))}
         </ul>
         <div className={styles.footer}>{LABELS.noteObjects.pickHint}</div>

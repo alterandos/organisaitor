@@ -10,6 +10,7 @@
 // so an agent completing a task doesn't reset a list: that would be an untracked, un-undoable
 // change to data agents are otherwise kept away from (encrypted lists included).
 import { useTaskStore } from '@/store/taskStore';
+import { spawnNextOccurrence } from '@/services/recurringTasks';
 import { useListStore } from '@/store/listStore';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { isListLocked, listView, LOCKED_LIST_NAME } from '@/services/listSecrets';
@@ -44,16 +45,20 @@ export function checklistProgress(
 const listName = (list: List) => (isListLocked(list) ? LOCKED_LIST_NAME : listView(list).name);
 
 // Toggles a task's completion. On completing it, unticks every linked checklist marked reusable.
-export function toggleTaskWithLists(taskId: TaskId): void {
+// Completing a recurring task also creates its next occurrence (services/recurringTasks.ts);
+// returns that occurrence's id, if one was made.
+export function toggleTaskWithLists(taskId: TaskId): TaskId | null {
   const before = useTaskStore.getState().tasks[taskId];
-  if (!before) return;
+  if (!before) return null;
   useTaskStore.getState().toggleTask(taskId);
-  if (before.completed) return;
+  if (before.completed) return null;
+  const next = spawnNextOccurrence(taskId);
   const { lists, uncheckAllListItems } = useListStore.getState();
   for (const id of linkedListIds(before.crossAppRefs)) {
     const list = lists[id];
     if (list?.kind === 'checklist' && list.resetOnTaskComplete) uncheckAllListItems(id);
   }
+  return next;
 }
 
 // Open (not completed, not archived) tasks that link to a list.

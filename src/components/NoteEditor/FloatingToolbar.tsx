@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { TextColorIcon } from '@/components/Icons';
+import { NodeSelection } from '@tiptap/pm/state';
 import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/react';
 import { useNoteStore } from '@/store/noteStore';
@@ -98,7 +100,8 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
   const activeCollectionId = useUIStore(selectActiveCollectionId);
 
   const updatePos = useCallback(() => {
-    if (editor.state.selection.empty) { setPos(null); return; }
+    // Text only: not a whole selected block or image (NodeSelection), which has no text to format.
+    if (editor.state.selection.empty || editor.state.selection instanceof NodeSelection) { setPos(null); return; }
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) { setPos(null); return; }
     const rect = sel.getRangeAt(0).getBoundingClientRect();
@@ -455,7 +458,7 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
           <button className={`${styles.btn} ${editor.isActive('strike')    ? styles.on : ''}`} onClick={() => fmt(() => editor.chain().toggleStrike().run())}    title="Strike"><s>S</s></button>
           <button className={`${styles.btn} ${hasLink ? styles.on : ''}`} onClick={openLinkInput} title="Link">🔗</button>
           <button className={styles.btn} onClick={() => setShowColorPicker(true)} title="Text color">
-            <span className={styles.colorBtnIcon} />
+            <TextColorIcon current={editor.getAttributes('textStyle').color as string | undefined} />
           </button>
           <div className={styles.div} />
           {hasTagMark ? (

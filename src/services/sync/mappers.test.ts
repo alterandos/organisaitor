@@ -48,6 +48,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       archived: false, archivedAt: null, archiveReason: null, kind: 'action', timeIntensity: 'medium',
       parentId: null, subtaskIds: ['t2' as TaskId], sortOrder: 3, crossAppRefs: [{ type: 'note', id: 'n1' }],
       itemLinks: [{ kind: 'dependsOn', targetType: 'task', targetId: 't0', reason: 'needs the referral', createdAt: '2026-10-01T00:00:00.000Z' }],
+      repeat: { freq: 'weekly', interval: 2, endKind: 'count', count: 5, until: null },
     };
     expect(rowToTask(taskToRow(t, USER))).toEqual(t);
   });
@@ -175,8 +176,8 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     const n: Note = {
       id: 'n1' as NoteId, title: 'Notes on X', content: '{"type":"doc"}', tagIds: ['nt1' as NoteTagId],
       tagData: { nt1: { field1: 'v' } }, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
-      abstract: 'summary', lastViewedAt: '2030-01-02T00:00:00.000Z', archivedAt: null, color: '#f00', pinned: true,
-      userId: USER, parentId: null, tabs: [{ id: 'tab1', name: 'Extra', content: '{}' }], mainTabName: 'Main',
+      abstract: 'summary', mainTabUpdatedAt: '2030-01-03T00:00:00.000Z', lastViewedAt: '2030-01-02T00:00:00.000Z', archivedAt: null, color: '#f00', pinned: true,
+      userId: USER, parentId: null, tabs: [{ id: 'tab1', name: 'Extra', content: '{}', createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-04T00:00:00.000Z' }], mainTabName: 'Main',
       tabOrder: ['__main__', 'tab1'], templateId: null, collectionId: null, isEncrypted: false, encryptedPayload: null,
     };
     expect(rowToNote(noteToRow(n, USER))).toEqual(n);

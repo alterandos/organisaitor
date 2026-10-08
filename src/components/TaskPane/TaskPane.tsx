@@ -14,6 +14,8 @@ import { addTaskWithCalendar, updateTaskLinked } from '@/services/taskCalendarLi
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinksField } from '@/components/LinksField/LinksField';
+import { RepeatField } from '@/components/RepeatField/RepeatField';
+import { todayIso } from '@/utils/date';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
@@ -254,6 +256,18 @@ export function TaskPane() {
               </span>
             )}
           </div>
+
+          {/* Repeat (services/recurringTasks.ts). Not on a sub-task: it repeats with its parent.
+              A repeating task with no date starts from today. */}
+          {!task.parentId && (
+            <div className={styles.field}>
+              <RepeatField
+                value={task.repeat ?? null}
+                hint={LABELS.recurring.hint}
+                onChange={(repeat) => updateTaskLinked(taskId, repeat && !task.deadline && !task.scheduledAt ? { repeat, deadline: todayIso() } : { repeat })}
+              />
+            </div>
+          )}
 
           <div className={styles.field}>
             <span className={styles.label}>Priority</span>

@@ -202,12 +202,12 @@ All collections also carry `collectionId: CollectionId | null` — meaningful fo
 
 ### Task
 
-Key fields beyond the obvious: `kind: TaskKind` (`'action' | 'waiting' | 'milestone'`), `timeIntensity: TimeIntensity | null` (`'low' | 'medium' | 'high'`), `parentId: TaskId | null`, `subtaskIds: TaskId[]`, `links: string[]`, `completedAt: string | null`, `scheduledAt: string | null` (YYYY-MM-DD day user plans to work on it — distinct from deadline), `scheduledTime: string | null` (HH:MM 24-hour), `calendarEventId: CalendarEventId | null` (auto-created CalendarEvent when scheduledAt is set; kept in sync on edits; deleted when task is deleted or scheduledAt cleared), `archived: boolean` + `archivedAt: string | null` + `archiveReason: string | null` (see "Task archiving" in Implemented features — the reason is its own field, deliberately not appended to `notes`), `itemLinks: ItemLink[]` (links this task owns to other tasks — see "ItemLink" below).
+Key fields beyond the obvious: `kind: TaskKind` (`'action' | 'waiting' | 'milestone'`), `timeIntensity: TimeIntensity | null` (`'low' | 'medium' | 'high'`), `parentId: TaskId | null`, `subtaskIds: TaskId[]`, `links: string[]`, `completedAt: string | null`, `scheduledAt: string | null` (YYYY-MM-DD day user plans to work on it — distinct from deadline), `scheduledTime: string | null` (HH:MM 24-hour), `calendarEventId: CalendarEventId | null` (auto-created CalendarEvent when scheduledAt is set; kept in sync on edits; deleted when task is deleted or scheduledAt cleared), `archived: boolean` + `archivedAt: string | null` + `archiveReason: string | null` (see "Task archiving" in Implemented features — the reason is its own field, deliberately not appended to `notes`), `itemLinks: ItemLink[]` (links this task owns to other tasks — see "ItemLink" below), `repeat: RepeatConfig | null` (a recurring task: completing it creates the next occurrence — see "Recurring tasks" below).
 
 ### ItemLink (task links)
 
 ```typescript
-type ItemLinkKind = 'dependsOn' | 'followUpOf' | 'related';
+type ItemLinkKind = 'dependsOn' | 'followUpOf' | 'related' | 'repeatOf';
 interface ItemLink { kind: ItemLinkKind; targetType: 'task'; targetId: string; reason: string | null; createdAt: string; }
 ```
 
@@ -215,6 +215,11 @@ A typed link with an optional reason, **stored once, on the owning task** ("owne
 - **Rules live in `utils/taskLinks.ts`** and nowhere else. `isBlocked`/`openBlockers`: waiting on an unresolved task, where resolved = completed **or archived**. `canAddLink`: no self-links, duplicates or loops; the store's `addItemLink` refuses anything else and returns why. `unlockedBy`, `openBlockersDeep`.
 - **A link to a missing (deleted) task is ignored, not cleaned up.** Restoring that task from the Recycling Bin brings its links back.
 - **`followUpOf` blocks too**: a follow-up created before its origin is done waits for it.
+- **`repeatOf`** is set only by recurring tasks (an occurrence names the one it came from); it doesn't block.
+
+### Recurring tasks
+
+A task with `repeat` set is one occurrence of a series. **Completing it creates the next occurrence** (decided with the user 2026-10-07: one open occurrence at a time, not a pre-made list). The rules live in `services/recurringTasks.ts` and nowhere else: `spawnNextOccurrence` is called from `toggleTaskWithLists` (so every UI completion, through `toggleTaskCompletion`) and from `agent/access.ts`'s `toggleTask`. The next date is the first date on the rule after this occurrence's deadline (else its scheduled date, else today) that is not in the past — completing late skips missed dates rather than piling them up; the scheduled date moves by the same amount. It carries title, notes, links, Endeavour, tags, purposes, priority, kind, time intensity and `crossAppRefs` (its notes and lists), copies sub-tasks reset to undone, and gets a `repeatOf` link back. "After N times" counts down on each occurrence. Reopening and completing again reuses the existing next occurrence; the Completed toast's Undo deletes it for good (no Recycling Bin entry). Sub-tasks can't repeat. A repeat with no date sets the deadline to today. The repeat editor is `components/RepeatField`.
 
 ### RoutineTask (lightweight template, NOT a full Task)
 
@@ -291,16 +296,16 @@ interface RepeatConfig {
 
 | Store | Persist key | Version | Persisted to | Purpose |
 |-------|------------|---------|-------------|---------|
-| `taskStore` | `todo-app-storage` | **v13** | localStorage + Supabase | tasks, collections, tags, purposes |
+| `taskStore` | `todo-app-storage` | **v14** | localStorage + Supabase | tasks, collections, tags, purposes |
 | `calendarStore` | `todo-calendar` | **v17** | localStorage + Supabase | calendar events, reminders, deadlines (v15: `doneDates` on reminders/deadlines; v16: `seriesId`/`seriesDate` on all three — see "Repeating series" under Component patterns; v17: `remindOccurrence` on all three, `seenDates` on events/deadlines — see "Notifications") |
 | `trackerStore` | `todo-tracker` | **v1** | localStorage + Supabase | tracker entries |
 | `routineStore` | `todo-routines` | **v1** | localStorage only | daily routine instances (transient) |
-| `noteStore` | `notes-storage` | **v12** | **IndexedDB** (not localStorage — see below) + Supabase | notes, note tags, structured tag entries |
+| `noteStore` | `notes-storage` | **v13** | **IndexedDB** (not localStorage — see below) + Supabase | notes, note tags, structured tag entries |
 | `listStore` | `lists-storage` | **v7** | localStorage + Supabase | lists, list items, list types (custom types only) |
 | `portfolioStore` | `todo-portfolio` | **v7** | localStorage + Supabase | watchlist items, portfolio tags, investment purposes (Portfolio app) — `columnConfig` (table display prefs) stays local-only |
 | `fitnessStore` | `fitness-storage` | **v3** | localStorage only | activities + activity types (Fitness app) |
 | `scheduleStore` | `todo-schedules` | **v1** | localStorage + Supabase | Schedule templates (recurring weekly timetables, Calendar section) |
-| `uiStore` | `todo-ui-session` | **v2** | localStorage (partial) + memory | all UI state (modals, panes, active section) — only navigation/session memory is persisted, see below |
+| `uiStore` | `todo-ui-session` | **v3** | localStorage (partial) + memory | all UI state (modals, panes, active section) — only navigation/session memory is persisted, see below |
 | `settingsStore` | `todo-settings` | **v6** | localStorage | user preferences (v6: Android notification settings — `notifyReminders`/`notifyEvents`, snooze times, `quietHours`) (includes `autoBackup*` fields — see "Automatic local backup rotation" in Implemented features — and `hideBlockedTasks`, v5) |
 | `authStore` | — | — | memory only | Supabase session |
 | `recentItemsStore` | `todo-recent-items` | **v1** | localStorage only | Quick Access (Ctrl+G) recent/frequent visit history |
@@ -318,7 +323,7 @@ interface RepeatConfig {
 
 When adding fields to a persisted store's shape: **bump `version`** and write a **cumulative `migrate` function** that backfills defaults for every prior version. Never write non-cumulative migrations.
 
-Current taskStore v12 migrate backfills: `routineTasks: []`, `repeatConfig: null`, `fieldSchema: []`, `tagIds: []` on collections (v5); `scheduledAt: null`, `scheduledTime: null`, `calendarEventId: null` on tasks (v6); `collectionId: null` on collections (v7); `archivedAt: null` on both collections and purposes (v8); `calendarReminderId: null` on tasks (v9); `crossAppRefs: []` on tasks (v10); `archivedAt` (from `updatedAt` for already-archived tasks, else `null`) + `archiveReason: null` on tasks (v11); `calendarDeadlineId: null` on tasks (v12, "Deadline calendar kind" 2026-09-27); `itemLinks: []` on tasks (v13, "Task links" 2026-10-01). Each `if (fromVersion < N)` step **reassigns `state` and falls through** rather than returning — this matters because `migrate` is called once per load with whatever version is on disk, so a store that skipped several app versions in one load (not opened for months) must still receive every intervening step, not just the first applicable one. **Bug found and fixed 2026-09-24:** every step used to `return` immediately after applying its own patch, so a store more than one version behind silently skipped every later step (a v2 store jumping straight to v11 got only the v5 collections patch and the v11 wrapper's own fields, missing v6/v7/v8/v9/v10 entirely) — caught by `src/store/migrations.test.ts`'s "v2 -> v11" fixture; see BACKLOG.md. Follow the fall-through pattern for v12+ — never `return` from inside an individual version step again.
+Current taskStore v12 migrate backfills: `routineTasks: []`, `repeatConfig: null`, `fieldSchema: []`, `tagIds: []` on collections (v5); `scheduledAt: null`, `scheduledTime: null`, `calendarEventId: null` on tasks (v6); `collectionId: null` on collections (v7); `archivedAt: null` on both collections and purposes (v8); `calendarReminderId: null` on tasks (v9); `crossAppRefs: []` on tasks (v10); `archivedAt` (from `updatedAt` for already-archived tasks, else `null`) + `archiveReason: null` on tasks (v11); `calendarDeadlineId: null` on tasks (v12, "Deadline calendar kind" 2026-09-27); `itemLinks: []` on tasks (v13, "Task links" 2026-10-01); `repeat: null` on tasks (v14, "Recurring tasks" 2026-10-07). Each `if (fromVersion < N)` step **reassigns `state` and falls through** rather than returning — this matters because `migrate` is called once per load with whatever version is on disk, so a store that skipped several app versions in one load (not opened for months) must still receive every intervening step, not just the first applicable one. **Bug found and fixed 2026-09-24:** every step used to `return` immediately after applying its own patch, so a store more than one version behind silently skipped every later step (a v2 store jumping straight to v11 got only the v5 collections patch and the v11 wrapper's own fields, missing v6/v7/v8/v9/v10 entirely) — caught by `src/store/migrations.test.ts`'s "v2 -> v11" fixture; see BACKLOG.md. Follow the fall-through pattern for v12+ — never `return` from inside an individual version step again.
 
 **Unversioned stores:** persisted data with no `version` arrives as v0. The first time such a store's shape changes, give it `version: 1` and a `migrate` that backfills the new fields (`scheduleStore` did exactly this) — a `version` with no `migrate` makes zustand discard the stored state. Every persisted store now has a version.
 
@@ -342,19 +347,24 @@ reload by design, so the app never reopens pointing at a stale modal.
 activeView: AppView               // 'tasks' | 'calendar' | 'records'  — persisted
 setActiveView(view, opts?: { mode?: 'push' | 'back' | 'forward' })  // mode defaults to 'push'
 
-// Back/forward section navigation (Alt+Left/Alt+Right, Backspace a secondary alternate for
-// back) — standard browser semantics: 'push' clears the forward stack, 'back'/'forward'
-// push onto the *other* stack. Both stacks persisted.
-sectionHistory: SectionHistoryEntry[]          // back stack, most-recent-first, capped at MAX_SECTION_HISTORY
-sectionForwardHistory: SectionHistoryEntry[]   // forward stack, same shape
-navigateBack(): boolean, navigateForward()   // navigateBack reports whether it moved (the Android back button minimises when it didn't)
-// navigateBack/navigateForward check Notes' OWN note-level stack FIRST whenever
-// activeView === 'notes' (see notesHistory below) — only once that's exhausted do they fall
-// through to the section-level stacks above. This is the one place granularity differs
-// between sections: Tasks/Calendar use the coarser "remember a single last item" shape
-// (tasksLastEditingTaskId, calendarLastEditing below); Notes gets a real multi-stop stack
-// because browsing between many notes in one session is common enough that "go back several
-// notes" is worth supporting, confirmed with the user 2026-09-25.
+// The ONE back/forward history (store/navHistory.ts) — Alt+Left/Backspace, Alt+Right, the
+// Android back button and the Alt+N history browser all walk it. A stop is a *place* (NavPlace):
+// a section plus where you were in it. What counts as a stop (the user, 2026-10-07): Notes, every
+// note (with its tab and notebook); Tasks / Lists, one per visit, back to the open task / list;
+// Calendar, one per visit, back to the period and view; Records, its tracker/routine; Overview,
+// its selection. Browser semantics: a normal navigation pushes where you're leaving and clears
+// the forward stack. Both persisted; capped at MAX_NAV_HISTORY (40). Replaced sectionHistory and
+// notesHistory (uiStore v3).
+navHistory: NavPlace[], navForward: NavPlace[]   // most-recent-first
+setActiveView(view, { mode: 'silent' })          // history's own moves; everything else pushes
+openNote(id, tabId?, { mode: 'silent' })         // in Notes, the note being left is a stop
+navigateBack(): boolean, navigateForward()        // navigateBack reports whether it moved (Android minimises when it didn't)
+travelHistory(steps): boolean                     // several stops at once (the history browser); stops in between stay
+currentPlace(): NavPlace
+historyBrowserOpen, openHistoryBrowser(), closeHistoryBrowser()
+// A new section with its own "where was I" (a selected item, a period) adds it to NavPlace,
+// capturePlace and goToPlace (bottom of uiStore.ts), and a case in describePlace
+// (components/HistoryBrowser/) — or it is one stop that just reopens the section.
 
 // Endeavour focus filter (CollectionFilterPicker, header) — keyed per section so each
 // of Tasks/Calendar/Records/Notes remembers its own focused Endeavour independently;
@@ -435,6 +445,12 @@ notesFocusedColumn: 'tree' | 'list' | 'editor', setNotesFocusedColumn(col)
 // Cleared by closeModal.
 createDraft: string | null, setCreateDraft(draft)
 
+// Notes: a passage to select once a note is open (services/notePassage.ts sets it with openNote;
+// NoteEditor consumes it), and the Glossary / Review views in place of the tree (memory-only).
+requestedNotePassage: { noteId, mark, attr, value } | null, setRequestedNotePassage(p)
+notesGlossaryOpen, openNotesGlossary(), closeNotesGlossary()
+notesReviewOpen, openNotesReview(), closeNotesReview()
+
 // Records
 activeTrackerId: string | null
 setActiveTracker(id)
@@ -491,6 +507,8 @@ Every new column on a persisted type needs:
 | `042` | **Applied** | `042_sync_markers.sql` (new `sync_markers` table: the account's restore marker). Until it runs, restore works as before and other devices can still push older copies back over a restore; nothing else is affected. |
 | `044` | **Applied** | `044_series_links.sql` (`series_id` + `series_date` text on `calendar_events`, `calendar_reminders`, `calendar_deadlines`: a date taken out of a repeating series keeps its link back). Every event/reminder/deadline upsert now sends both columns, so those tables reject writes until it runs (sync isolates the failure per table; changes stay queued locally). |
 | `043` | **Applied** | `043_done_dates.sql` (`done_dates jsonb` on `calendar_reminders` and `calendar_deadlines`: Reminder/Deadline occurrences marked done). Every reminder/deadline upsert now sends `done_dates`, so those two tables reject writes until it runs (sync isolates the failure per table; changes stay queued locally). |
+| `046` | **Applied** | `046_task_repeat.sql` (`repeat jsonb` on `tasks` — "Recurring tasks", 2026-10-07). Every task upsert now sends `repeat`, so `tasks` rejects writes until it runs (sync isolates the failure per table; changes stay queued locally). |
+| `047` | **Applied** | `047_note_tab_dates.sql` (`main_tab_updated_at timestamptz` on `notes`: when the main tab's content last changed, for the tab's hover; extra tabs keep their dates inside the existing `tabs` jsonb). Every note upsert now sends it, so `notes` rejects writes until it runs (sync isolates the failure per table; changes stay queued locally). |
 | `045` | **Applied** | `045_notification_acks.sql` (`remind_occurrence` on `calendar_events`/`calendar_reminders`/`calendar_deadlines`; `seen_dates jsonb` on events and deadlines). Every upsert to those three tables now sends them, so they reject writes until it runs (sync isolates the failure per table; changes stay queued locally). |
 
 ### Migration history
@@ -542,6 +560,8 @@ Every new column on a persisted type needs:
 | `044_series_links.sql` | `series_id text` + `series_date text` on `calendar_events`, `calendar_reminders` and `calendar_deadlines`: a date taken out of a repeating series ("Edit only this one" / "this and following") names the series and the occurrence it stands in for (iCalendar's RECURRENCE-ID). Alters existing tables only, so no new grant. **Applied** |
 | `043_done_dates.sql` | `done_dates jsonb not null default '[]'` on `calendar_reminders` and `calendar_deadlines`: the occurrence dates marked done (struck through, no more notifications). See `docs/android/05-notifications.md` N4. Alters existing tables only, so no new grant. **Applied** |
 | `045_notification_acks.sql` | `remind_occurrence text` on `calendar_events`, `calendar_reminders` and `calendar_deadlines` (which occurrence a snooze is for); `seen_dates jsonb not null default '[]'` on `calendar_events` and `calendar_deadlines` (occurrences acknowledged with "Got it", synced so no device notifies them again). Alters existing tables only, so no new grant. **Applied** |
+| `046_task_repeat.sql` | `repeat jsonb` on `tasks` (null = doesn't repeat; the task's `RepeatConfig`) — "Recurring tasks". Alters an existing table only, so no new grant. **Applied** |
+| `047_note_tab_dates.sql` | `main_tab_updated_at timestamptz` on `notes` (`Note.mainTabUpdatedAt`): when the main tab's content last changed. A tab's own `createdAt`/`updatedAt` live in the `tabs` jsonb, needing no column. Alters an existing table only, so no new grant. **Pending — not yet run** |
 
 ### Supabase tables (summary)
 
@@ -587,6 +607,8 @@ src/
   types/agent.ts             — agent command-layer types (RiskTier, EntityKind, AgentLogEntry, AgentBatch); not re-exported from index.ts
   types/overview.ts          — Overview types (OverviewQuery, Overview, OverviewRow, OverviewSourceKey); not re-exported from index.ts — see "Overview"
   contextMenu/               — right-click menus (see "Right-click menus"): types.ts (item / scope / provider / context), registry.ts (registerContextMenuProvider, scopes by element, resolveContextMenu), useContextMenuScope.ts
+  specialChars/              — `//name` → a character, in every text field (see "Special characters"): charSets.ts (THE table: Greek today; findCharTrigger, matchChars, exactChar), charPicker.ts (the list under the cursor, shared), fieldInput.ts (installSpecialCharInput: one set of document listeners for every input and textarea, installed from App.tsx)
+  charts/                    — charts for any app (see "Charts"): chartSpec.ts (ChartSpec, THE library-neutral description of a chart, and the pure data helpers: pasted tables, 100% stacking, waterfall steps), chartAdapter.ts (THE only module that knows Chart.js: toChartConfig, drawChart, which loads the library on first use), ChartWidget.ts + .module.css (THE chart-with-data-editor: the drawing, the data table, the paste box; plain DOM so any host can use it)
   overview/                  — the Overview engine (see "Overview"): sources.ts (OVERVIEW_SOURCES — THE registry, one entry per app/item kind, pure functions over a store snapshot), engine.ts (runOverview: filter/sort/group; endeavourOverviewQuery), useOverviewSnapshot.ts (the React hook that builds the snapshot, encrypted notes/lists resolved through their views), open.ts (openOverviewRow — jump to a row's source)
   types/trash.ts             — Recycling Bin types (TrashEntry, TrashableKind, DeletedBy); not re-exported from index.ts — see "Recycling Bin" above
   agent/                     — the AI agent command layer (see "Agent command layer" below and docs/ai/02-command-layer.md): access.ts (THE boundary: what an agent can read and do), commands/*.ts, run.ts (runCommand), registry.ts (toolDefinitions), batch.ts (snapshot/diff/revert), errors.ts, devHandle.ts (dev-only console handle)
@@ -604,6 +626,7 @@ src/
     createKinds.ts           — CREATE_KINDS: every kind of thing a creation pane's switcher can switch to, grouped by section (see "Creation panes: the switcher")
     backup.ts                — PERSISTED_STORAGE_KEYS: every localStorage key any store persists to (single source of truth for full-app Export/Restore in AccountPane and IntegrationsPane — add a key here when a new persisted store is added, nowhere else)
   store/
+    navHistory.ts            — the back/forward history's shape (NavPlace, what a stop is) and pure stack moves (pushPlace, travel); uiStore captures and restores places
     taskStore.ts             — tasks, collections, tags, purposes
     trackerStore.ts          — tracker entries
     routineStore.ts          — routine instances (localStorage only)
@@ -627,6 +650,11 @@ src/
     mappers.ts               — xToRow / rowToX for every entity
   services/newItem.ts       — openNewItem(view): THE N/Space/Ctrl+N routing, section by section (Notes: by focused column) — see "New-item hotkey"
   services/signOut.ts       — requestSignOut(): THE way to sign out — confirms (and says what stays on the device), locks the vault, force-uploads and only wipes if that succeeded (else warns, user can cancel), then authStore.signOut(). Never call authStore.signOut() directly from UI
+  services/glossary.ts      — the Glossary model (Definitions, Concepts, Acronyms across notes): glossaryEntries/glossaryEntry/glossaryReferences, through the views — see "Annotations"
+  services/noteFromItem.ts  — createNoteForItem(place, title): a new note in a notebook, or a new tab of a note, returned as the CrossAppRef to link; newNoteTitleFor(title, date). "+ New note" in the calendar panes
+  services/notePassage.ts   — openNotePassage(noteId, { mark, attr, value }): THE way to open a note at a passage (finds the tab; NoteEditor selects it). definitionPassage(entryId)
+  services/noteReview.ts    — Review later: reviewItems/dueReviews (Important passages on the review list, from stored content) and answerReview (writes the schedule back, through the editor if that text is open)
+  services/liveNoteEditor.ts — which note/tab is open in the editor (registered by NoteEditor): liveNoteEditorFor(noteId, tabId). A change to a note's content from outside the editor goes through that view when it's open
   services/clearLocalData.ts — clearSyncedLocalData(): empties every CLOUD-SYNCED store + the account-specific selection ids (each reset from its own getInitialState()). Local-only stores (fitness, routine instances, settings, hotkeys, portfolio columnConfig) are deliberately left; add a store here in the same change that gives it cloud sync
   services/shrinkNoteImages.ts — shrinkNoteImages(): recompresses every large inline image in every note and tab (skips locked encrypted notes; closes the open note first so the editor can't autosave its old copy over the result); Settings → Storage's button
   services/oauthState.ts    — mintOAuthState(provider): the single-use nonce used as the OAuth `state` for Strava/Google connect (migration 032; on Android it also records the client, migration 041, falling back if that isn't run); never put a credential in an OAuth URL. openOAuthFlow(provider, url): THE way a connect button starts the flow — a page navigation on web/desktop, the in-app browser on Android (resolves when the flow returns or the browser closes)
@@ -640,6 +668,7 @@ src/
   config/itemIcons.ts       — ITEM_TYPE_ICON / ITEM_FLAG_ICON: THE icon for each item kind (deadline 🏁) and flag (❗ ✏️ 🔁) — see "Inline objects in notes"
   config/itemLinkKinds.ts   — ITEM_LINK_KINDS: THE registry of task-link kinds (Waiting on / Follow-up of / Related — icon, labels, blocks, symmetric); see "ItemLink" in Type system
   utils/taskLinks.ts        — the task-link rules, pure: taskRelations (both directions), openBlockers/isBlocked/openBlockersDeep, unlockedBy, canAddLink (self/duplicate/loop), makeItemLink
+  services/recurringTasks.ts — recurring tasks: nextOccurrenceDate (pure), spawnNextOccurrence (called on completion by taskListLinks and agent/access), nextOccurrenceOf, discardOccurrence (the toast's Undo), repeatSummary — see "Recurring tasks" in Type system
   services/taskListLinks.ts — a task's linked lists: checklistProgress() (the "📋 3/7" pill), toggleTaskWithLists() (toggles a task and unticks a linked checklist marked reusable — the UI calls it through services/taskCompletion.ts, never directly), toggleChecklistItemWithTasks() (THE way UI ticks a checklist item — offers to complete the linked task when the last one is ticked). Agents don't use it (no list access) — see "Lists: links from tasks, calendar items and notes" in Implemented features
   services/taskCalendarLinks.ts — keeps a task's shadow CalendarDeadline (deadline date) and event (scheduled date) matching the task, and flows edits made on the event back — the one place that logic lives (see "Task ⇄ calendar shadow entries" in Implemented features); like crossAppLinkCleanup it may import both taskStore and calendarStore
   services/taskDeadlineMigration.ts — migrateTaskDeadlineShadows(), called once from App.tsx's startup effect: converts any pre-2026-09-27 task shadow that's still a `CalendarReminder` with `reminderType: 'task'` into a `CalendarDeadline` with `deadlineType: 'task'` and repoints the owning task's `calendarDeadlineId`. State-driven (looks for legacy shadows still present, not a run-once flag), so it's naturally idempotent — see "Deadline calendar kind" in Implemented features
@@ -683,10 +712,12 @@ src/
     apiFetch.ts               — apiFetch(path, init): THE way to call /api/* (a pattern test fails on a bare fetch('/api…)); routes to the production Vercel URL through a native HTTP client in the packaged apps — @tauri-apps/plugin-http under Tauri, CapacitorHttp under Android (adapted back into a Response; never enable CapacitorHttp globally, it would patch Supabase's fetch too) — plain same-origin fetch in the browser. oauthRedirectOrigin(): the origin OAuth providers redirect back to (production in the packaged apps). See "Desktop (Tauri) API access" and "Android W1: platform services" in Implemented features
     saveFile.ts               — saveFile(filename, blob): THE way to hand the user a file (every export: backups, auto-backup snapshots, ErrorBoundary). Anchor download on web/Tauri; on Android writes to the cache directory and opens the share sheet (@capacitor/filesystem + @capacitor/share)
     textToTask.ts            — inferTaskFromSelection(text): non-AI date/time/priority/link inference for the Notes "Create ▸ Task" feature, and inferCalendarItemFromSelection(text) for "Create ▸ Calendar item" (kind event/reminder/deadline from phrase cues, plus travel/birthday, tentative, important, repeat — see "Notes Create ▸ Calendar item: phrase cues" in Implemented features) — regex-based, no external dependency; locale-aware (Intl) for ambiguous numeric dates. A new cue goes in with a test in textToTask.test.ts
+    timelineWhen.ts          — readTimelineWhen (a timeline entry's When as a sortable point: dates in many formats, years, BC/AD, decades, ranges, times, "Day 3" steps) and readTimeline (the order, inherited years). Pure; a new format goes in with a test
+    definitionInference.ts   — inferDefinitionFromSelection: term + meaning from "X is Y" / "X: Y" / a term and its sentence, for the Definition and Concept popover
     idbStorage.ts            — IndexedDB persistence for the notes store: preloadIdbStorage() (awaited in main.tsx before the app is imported), persistStorageIdb(), readPersistedValue()/writePersistedValue() for backup/restore, IDB_STORAGE_KEYS, getIdbUsage()
     persistStorage.ts        — THE `storage:` for every persist() (guards QuotaExceededError, see Zustand migration rule) + getStorageUsage()/formatStorageSize() for Settings → Storage
     imageCompress.ts         — compressImageBlob(file) / recompressDataUrl(dataUrl): scale to fit 1600 px + WebP, used on paste into notes and by shrinkNoteImages
-    noteTabs.ts              — MAIN_TAB_ID ('__main__'), linkTabIdFor / effectiveLinkTabId / tabNameOf: how a CrossAppRef.tabId (a link naming one tab of a note) is recorded, resolved (deleted tab → main) and named
+    noteTabs.ts              — MAIN_TAB_ID ('__main__'), tabDatesText (a tab's created/modified, the tab bar's hover), linkTabIdFor / effectiveLinkTabId / tabNameOf: how a CrossAppRef.tabId (a link naming one tab of a note) is recorded, resolved (deleted tab → main) and named
     keywords.ts              — extractKeywords(text) (stop-words/short words dropped, max 8) + stemForMatch(word); used by NotePickerModal's title-keyword suggestions
     noteSearchText.ts        — getNoteTabTexts(note): cached plain text of a note's main tab and each extra tab for searching (never caches encrypted notes); read a note's text for search through this, not by re-parsing its JSON
     openCrossAppTarget.ts    — (in services/) openArtifactTarget(type,id): opens a linked task/event/reminder in its section; used by editor link clicks and the Linked-from pills
@@ -708,7 +739,8 @@ src/
     useTimeGridDrag.ts       — shared drag-to-move / drag-to-resize for any hourly time grid built on utils/timeGrid.ts: one hook instance can drive every draggable block on a page (geometry supplied per-gesture, not fixed at hook-creation time). Used by CalendarView's week/day grids (Events move+resize, Reminders move only) and ScheduleWeekGridPreview's block editor (AddScheduleModal) — see "Calendar drag-to-move / drag-to-resize" in Implemented features
     useMarkdownHotkeys.ts    — "light rich text" for plain-<textarea> notes fields (Task/Calendar): Ctrl+B/Ctrl+I wrap the selection in Markdown bold/italic syntax (utils/markdownTextEdit.ts's pure toggleWrap), Ctrl+L opens components/MarkdownLinkPrompt to insert a `[text](url)` link. Attached directly to the textarea element, not `document`. See "Light rich text" in Implemented features
   components/
-    NavSidebar/              — left nav: section switcher, settings, account icons (desktop/web only — hidden on Android in favour of MobileNav)
+    NavSidebar/              — left nav: section switcher, settings, account icons (desktop/web only — hidden on Android in favour of MobileNav); navItems.tsx holds CORE_NAV_ITEMS and SECTION_ICONS (THE icon per section)
+    HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores
     MobileNav/               — Android-only bottom tab bar: Tasks/Calendar/Records/Lists/More
     MobileMoreSheet/         — Android-only overflow sheet for MobileNav's More tab: Notes/Portfolio/Fitness/Manage Library/Settings/Account
     MobileQuickAddBar/       — Android-only bottom-anchored task quick-add (title + Due/Priority/Endeavour chips), replaces QuickAddInput on Android
@@ -717,7 +749,8 @@ src/
     TaskList/                — main task list + collapsible Routines section
     TaskItem/                — single task row; shows subtask progress pill
     TaskPane/                — slide-in task detail/edit pane
-    ItemActions/             — the SHARED archive/restore + delete pattern every item pane uses (Task, Calendar event, Calendar reminder; future apps' panes should too) — see "Shared item actions" in Implemented features: icons.tsx (TrashIcon/ArchiveIcon/RestoreIcon/CheckCircleIcon), ItemActionFooter (optional Complete/Mark-incomplete toggle for task-backed items), ItemActionDialog (archive-with-reason + delete-confirm, portaled z-102), ArchivedBanner, useItemActions hook (dialog state + Escape + Ctrl+Enter + hotkeys)
+    Icons/                   — THE suite's shared UI icons (see "Icons come from one place"): index.ts, ActionIcons.tsx (TrashIcon/ArchiveIcon/RestoreIcon/CheckCircleIcon), TextColorIcon.tsx
+    ItemActions/             — the SHARED archive/restore + delete pattern every item pane uses (Task, Calendar event, Calendar reminder; future apps' panes should too) — see "Shared item actions" in Implemented features: icons from components/Icons, ItemActionFooter (optional Complete/Mark-incomplete toggle for task-backed items), ItemActionDialog (archive-with-reason + delete-confirm, portaled z-102), ArchivedBanner, useItemActions hook (dialog state + Escape + Ctrl+Enter + hotkeys)
     AddTaskModal/            — create task (basic + advanced sections)
     AddTaskButton/           — speed-dial FAB (view-aware)
     AddCollectionModal/      — create endeavour (project/list/tracker/routine)
@@ -739,6 +772,7 @@ src/
     CalendarSidePane/        — left-sliding pane (Calendar section): Layers toggles + Schedule list/manager (active toggle, conflict hint, overlay-preview grid) in one place — supersedes the old CalendarLayersPicker (header dropdown) and ManageSchedulesPane (right-sliding pane), see "Calendar side pane" in Implemented features
     ScheduleOccurrencePopover/ — click a Schedule occurrence on the calendar: skip this date, commit/uncommit (commitment mode), or jump to editing the Schedule
     TimeInput/               — segmented hour/minute/AM-PM combobox respecting settingsStore.clockFormat (not a native <input type="time">, see Clock format setting below and the Timepicker rebuild entry in Implemented features), plus a quick-pick dropdown of half-hour times
+    RepeatField/             — the repeat-rule editor (on/off, every N days/weeks/months/years, ends never/after N/on a date); TaskPane and AddTaskModal
     LinksField/              — the shared links list (clickable / edit / delete / add) used by TaskPane, CalendarEventPane and CalendarReminderPane; links typed into notes arrive via `mergeNewLinks` in the store's update action, never here
     LinkHoverPreview/        — app-wide: shows a hovered link's URL bottom-left (see "Link hover preview" pattern below)
     QuickAccessPane/         — app-wide, Ctrl+G: portaled search-and-jump overlay across Notes/Notebooks/Tasks/Lists/Endeavours/Trackers/Routines/Schedules, or browse Recent/Frequent visit history (see "Suite-wide Quick Access pane" in Implemented features)
@@ -752,20 +786,40 @@ src/
     RecyclingBinPane/        — suite-wide Recycling Bin: Ctrl+Shift+R or the "Recycling Bin" button in Account; filter chips by section, Restore / Delete forever per row, "Empty recycling bin" — see "Recycling Bin" above
     ColorPicker/             — reusable colour swatch picker
     CollectionPicker/        — CollectionPicker.tsx (single-select dropdown, used in create/edit forms) + CollectionFilterPicker.tsx (header Endeavour-focus picker, numbered for the E/Ctrl+E hotkey)
-    CrossAppRefPicker/       — controlled { value: CrossAppRef[]; onChange; onNavigate?; types? } widget: chips for existing links + "+ Note" (NotePickerModal) and "+ List" (ListPickerModal) buttons; `types` limits which are offered (a list's own ListLinksBar offers notes only). List item/Tracker entry targets are BACKLOG. Used by AddTaskModal, TaskPane, the calendar event/reminder/deadline panes and ListsSection's ListLinksBar
+    CrossAppRefPicker/       — controlled { value: CrossAppRef[]; onChange; onNavigate?; types?; newNoteTitle? } widget: chips for existing links + "+ Note" (NotePickerModal) and "+ List" (ListPickerModal) buttons, and "+ New note" where `newNoteTitle` is passed (the calendar panes: NotePickerModal's place mode, then services/noteFromItem.ts); `types` limits which are offered (a list's own ListLinksBar offers notes only). List item/Tracker entry targets are BACKLOG. Used by AddTaskModal, TaskPane, the calendar event/reminder/deadline panes and ListsSection's ListLinksBar
     ListPickerModal/         — the "link a list" search dialog (portaled, shares NotePickerModal's CSS module); checklists first, encrypted lists by their view name
     LinkedChecklists/        — a task's linked checklists rendered as tickable steps inside TaskPane (each row IS the ListItem — nothing copied)
     MarkdownLinkPrompt/      — the Ctrl+L "insert a link" prompt for plain-<textarea> notes fields (Task/Calendar) — text+URL popover, portaled, mirrors NoteEditor's own "New link" pane visually/by keyboard. See hooks/useMarkdownHotkeys.ts and "Light rich text" in Implemented features
-    NotePickerModal/         — the "link a note" search dialog (portaled to document.body, z-index 1000): title + notebook path + preview + date per result, multi-word search over title/path/content, title-keyword suggestions while the search box is empty (`suggestFrom`), keyboard nav; captures Ctrl+Enter so the pane/modal behind it doesn't answer. Any future "pick a note" UI should reuse it rather than list notes by title alone — titles are not unique
+    LinkedNoteAbstracts/     — under a calendar item's notes: each linked note's abstract, editable in place (saves to the note); kept apart from the item's own notes. Used by the three calendar panes
+    NotePickerModal/         — the "link a note" search dialog (mode 'place': where a NEW note goes — notebooks join the results, picking a note means a new tab of it) (portaled to document.body, z-index 1000): title + notebook path + preview + date per result, multi-word search over title/path/content, title-keyword suggestions while the search box is empty (`suggestFrom`), keyboard nav; captures Ctrl+Enter so the pane/modal behind it doesn't answer. Any future "pick a note" UI should reuse it rather than list notes by title alone — titles are not unique
     PurposeFilterPicker/     — header Purpose-focus picker (multi-select checkboxes), Tasks section only; P/Ctrl+P hotkey
     SortBar/                 — sort controls for task list
     NoteEditor/              — Tiptap v3 rich-text editor with toolbar, zoom, table support, abstract, attributes panel
-      extensions/ResizableImage.ts   — custom NodeView: resizable image with drag handle
+      extensions/ResizableImage.ts   — the note picture: eight handles when selected (corners keep the shape, edges stretch, `height` set once stretched) and Crop (crop handles over the whole picture, dimmed outside; Enter/Done/click away applies, Esc cancels). The crop is attributes (`crop`, fractions per side), never cut from the image. Geometry is pure in imageGeometry.ts; CSS in ResizableImage.module.css
       extensions/HeadingNumbering.ts — ProseMirror plugin: computes hierarchical heading numbers, sets data-heading-number
       extensions/Section.ts          — custom Document (content: 'section+') + Section node (content: 'block+', columns/locked attrs) + ColumnBlock/Column nodes (locked-columns layout); commands setSectionColumns / insertSectionBreak / toggleSectionLocked
       extensions/DuplicateLine.ts    — Alt+Shift+↓: duplicateLineDown copies the current line (textblock, or its whole list item) or the selected lines below
+      extensions/Timeline.ts         — the `\timeline` note block: Timeline (variant attr) / TimelineItem / TimelineWhen nodes, insertTimeline, and TimelineBehaviour (Enter/Backspace/Delete, placeholders, current-entry dot, "+ Add entry" widget) — see "Note blocks"
+      extensions/timelineMenu.ts     — the timeline's right-click provider (Style ▸ / Order ▸)
+      noteClipboardText.ts           — what a copy puts on the clipboard as plain text (editorProps.clipboardTextSerializer): Markdown-style headings, lists, quotes, tables as tab-separated rows
+      extensions/HeadingLevel.ts     — Ctrl+= / Ctrl+− on a heading change its level (else App.tsx zooms)
+      extensions/NoteBylines.ts      — Subtitle (Ctrl+H, S) and Author (Ctrl+H, A) paragraph styles: own nodes like NoteTitle, never numbered or in the outline
+      extensions/fontSize.ts         — the font-size ladder (FONT_SIZES), currentFontSize / setFontSize / stepFontSize (Ctrl+Shift+< / >, the ribbon's A− [size] A+)
+      extensions/Quote.ts            — the `\quote` note block: QuoteBlock (variant, hidden), QuoteText, QuoteField (QUOTE_FIELDS), insertQuote / quoteFromSelection, setQuoteVariant / toggleQuoteField, keys and the pill; quoteMenu.ts is its right-click provider
+      extensions/Cycle.ts            — the `\cycle` note block (at least two stages, each owning the arrow to the next; arrows' direction and name; icons/pictures; designs Ring / Flow / Steps); cycleMenu.ts is its right-click provider
+      extensions/Breakdown.ts        — the `\breakdown` note block (a whole and at least two parts; designs Hub / Pillars / Tree; spectrum colours); breakdownMenu.ts is its right-click provider
+      extensions/Hierarchy.ts        — the `\hierarchy` note block (`\tree`, `\taxonomy`): items stored flat with a level, written as an outline (Enter, Tab / Shift+Tab move an item and its children a level); level names (`tiers`) beside the rows or over the columns; designs Tree / Columns / Outline. hierarchyLayout.ts reads the tree (spans, siblings) purely; hierarchyMenu.ts is its right-click provider
+      extensions/Chart.ts            — the `\chart` note block: one atom node (`variant` = chart type, `spec` = a ChartSpec) whose view is the block's pill around the shared ChartWidget (src/charts/); chartMenu.ts is its right-click provider
+      extensions/Pyramid.ts          — the `\pyramid` note block (`\funnel`, `\maslow`): at least two layers, top first, each a label drawn on its shape and a note beside it; designs Pyramid / Funnel / Stacked; pyramidMenu.ts is its right-click provider
+      extensions/SpecialCharInput.ts — `//name` → a character in the note editor (the same table, list and keys as fieldInput.ts, through ProseMirror; not in code)
+      extensions/OccurrenceHighlight.ts — selecting a word or phrase faintly marks its other mentions in the tab (whole words when the selection is whole words); decorations only
+      extensions/GlossaryAutolink.ts — offers to link a Glossary term as it's typed (once per note per term); Enter/Tab, Backspace undoes
+      extensions/blockDesigns.ts     — Block designs, the shared half: BlockDesign, blockPill, designButtons, designMenuItem, pillButton, openBlockPopover (+ BlockDesigns.module.css for the popover)
+      extensions/ConceptRef.ts       — ConceptRefMark (text linked to a Glossary term) + ConceptMargin (the brace and label beside it, hover card, click to the definition) — see "Annotations"
+      extensions/Importance.ts       — Important's levels, passages, Review later scheduling and the margin markers; importanceLevels.ts holds the three levels
+      extensions/annotationMenu.ts   — right-click on linked text (go to definition, unlink) and on Important text (level, review, remove)
       extensions/ArtifactLinkMark.ts — Mark (targetType/targetId/display attrs) marking a span of note text as linked to a cross-app entity made from it, via FloatingToolbar's "Create ▸" menu (Ctrl+Q) or `\`; only data — drawn by objects/artifactGroups.ts; see "Cross-app linking" in Implemented features
-      objects/               — inline objects (`\`) and link rendering (see "Inline objects in notes"): kinds.ts (NOTE_OBJECT_KINDS — THE registry), types.ts (NoteObjectKind), reminderKind.ts, session.ts (the `\` session, derived from the text), actions.ts (accept/commit/unlink/insertObjectTrigger), NoteObjectTrigger.ts (the extension + keys), NoteObjectMenu.tsx, artifactTypes.ts (ARTIFACT_TYPES: live summary per linked type), artifactGroups.ts (ArtifactLinkGroups: the pane per link, states, the expanded box and body widget, Home/End, the stored-mark guard), eventKind.ts, deadlineKind.ts + reminderKind.ts (both from datedKindFactory.ts), ArtifactBody.tsx + WhenLine.tsx + ObjectBody.tsx + CalendarItemBody.tsx + EventBody.tsx + NotifyChips.tsx (the expanded body), flags.ts (ArtifactFlag, calendarFlags, flagMenuItems), calendarItems.ts, whenInput.ts (readWhenInput, expandShortWeekdays, the defaults), contextMenu.ts (right-click on a link), format.ts
+      objects/               — inline objects (`\`) and link rendering (see "Inline objects in notes"): kinds.ts (NOTE_OBJECT_KINDS — THE registry; matchPickable/chosenKind across objects and blocks), blockKinds.ts (NOTE_BLOCK_KINDS — the note-block registry) + timelineBlock.ts, types.ts (NoteObjectKind, NoteBlockKind, PickableKind), reminderKind.ts, session.ts (the `\` session, derived from the text), actions.ts (accept/commit/unlink/insertObjectTrigger), NoteObjectTrigger.ts (the extension + keys), NoteObjectMenu.tsx, artifactTypes.ts (ARTIFACT_TYPES: live summary per linked type), artifactGroups.ts (ArtifactLinkGroups: the pane per link, states, the expanded box and body widget, Home/End, the stored-mark guard), eventKind.ts, deadlineKind.ts + reminderKind.ts (both from datedKindFactory.ts), ArtifactBody.tsx + WhenLine.tsx + ObjectBody.tsx + CalendarItemBody.tsx + EventBody.tsx + NotifyChips.tsx (the expanded body), flags.ts (ArtifactFlag, calendarFlags, flagMenuItems), calendarItems.ts, whenInput.ts (readWhenInput, expandShortWeekdays, the defaults), contextMenu.ts (right-click on a link), format.ts
       extensions/NoteTagMark.ts      — Mark (tagId/color/typeKey/structuredEntryId attrs) for annotation tags; structuredEntryId links a tagged passage to its StructuredTagEntry (see "Structured tag entries")
       contextMenu.ts         — the editor's right-click providers (clipboard, link/create, Style ▸, select all) on the `note-editor` scope; NoteEditorMenuApi is what NoteEditor hands them
       builtinTags.ts         — 8 built-in annotation tag definitions (Important/Concept/Definition/Example/Question/Reference/Learn Later/Acronym) — typeKey drives both Learn Later's future create-task action and Acronym's structured-tag-entry behaviour
@@ -780,7 +834,7 @@ src/
     EditNoteMetaModal/       — edit note metadata: tagIds (notebooks + annotation tags), accent color, pinned
     NoteTagPresetModal/      — install curated annotation tag packs; detects already-installed via presetKey
     ChronicleView/           — Notes section layout: notebook tree, note list, editor; hover-expand on notebooks; NotebookLocationView is the editor column's empty state (path/tree of where you are)
-    NotesSection/            — Notes section wrapper
+    NotesSection/            — Notes section wrapper; GlossaryView.tsx (the Glossary) and ReviewView.tsx (Review later), both opened from TagFAB's # panel
     ListsSection/            — Lists section: sidebar (Checklists/Watchlists/Reference dividers) + card grid (watchlist), table (reference) or ChecklistView.tsx (checklist — tick-off, checked items struck through and moved to the bottom via listStore.toggleListItemChecked) + tab bar
     AddListModal/            — two-step create/edit list (type picker grouped by kind → form with field schema editor + tabs editor)
     AddListItemModal/        — add/edit list item (tab picker, status picker for watchlists, dynamic fields, notes, links)
@@ -819,7 +873,7 @@ How it works: one `document` listener (installed at module load) plus an ordered
 **Why not per-component listeners (the old rule):** two independent `document` listeners both fire on one keypress in whatever order they registered, so an overlay opened *on top of* another can't be given priority — a delete confirmation over an event pane, a schedule modal over the calendar side pane, a picker inside a modal each closed the layer underneath (or both). The old workarounds — an outer layer checking "is an inner modal open" (`openModal !== 'add-schedule'`), capture-phase + `stopImmediatePropagation` (`CrossAppRefPicker`, `DecryptPrompt`, `StructuredTagPopover`) — were each a one-off patch for one pair; they're gone.
 
 **Rules for new overlays:**
-1. Use `useEscapeClose`. Nothing else handles Escape for an overlay.
+1. Use `useEscapeClose`. Nothing else handles Escape for an overlay. An overlay that isn't a React component (a popover a ProseMirror widget opens) uses `registerEscapeClose(onClose)` from the same file and calls the returned function when it closes.
 2. **Inline, input-level Escape handlers** (cancel an in-place edit, dismiss a suggestions list) stay as ordinary `onKeyDown`, but must call `e.stopPropagation()` — and only when they actually have something to cancel — so the keypress doesn't also reach the stack and close the pane around the input. An input that is *always* mounted (e.g. `AddTaskModal`'s tag field) must consume Escape only while its list/edit is open, or the modal can never be closed from it.
 3. Open order = close order automatically; don't try to control it with z-index or flags.
 4. The one deliberate exception is a capture-phase key listener that owns *all* keys for a moment (`SettingsPane`'s hotkey-rebind capture): it consumes Escape itself (cancels the capture) before the stack sees it.
@@ -850,6 +904,15 @@ useEffect(() => {
 **Item panes** (Task, Calendar event, Calendar reminder) get it from `useItemActions`: those panes save each field on change/blur rather than through a Save button, so Ctrl+Enter blurs the focused field (committing a half-typed title, note, time or link) and closes the pane. It does nothing while the archive/delete dialog is open — the dialog owns it then.
 
 **Deliberately not wired**: `NoteTagPresetModal` only (a list of independent "Install" actions — no primary action). Every other modal, pane and popover with a primary action binds it, including `CalendarImportReviewModal` (Import) and the `ConfirmDialog` (confirm). When two layers both bind Ctrl+Enter (a confirmation opened over a modal), the confirmation's listener runs in the capture phase and calls `stopImmediatePropagation`, so only the top layer answers.
+
+### Icons come from one place — `src/components/Icons/` (suite-wide pattern, adopted 2026-10-07)
+
+**A control that appears in more than one place takes its icon from `components/Icons` (`index.ts`)**, so it looks the same everywhere. The user asked for this when the ribbon's text-colour button (an underlined A, which reads as Underline) and the selection toolbar's (a hue-wheel swatch) had drifted apart.
+- **What's there today:** `TextColorIcon` (the hue-wheel swatch, with the colour in use in its middle), and the item-action icons `TrashIcon`, `ArchiveIcon`, `RestoreIcon`, `CheckCircleIcon` (moved from `ItemActions/icons.tsx`).
+- **A site can override locally** through the icon's props or `className` (size, tint, the current colour), never by drawing its own copy.
+- **Item-kind icons** (task, event, deadline, ❗ ✏️ 🔁) are the emoji in `config/itemIcons.ts`, not here.
+- **An icon used in only one component** may stay local, like NoteEditor's list and table SVGs. It moves here the day a second place needs it.
+- **Pattern test:** no hue-wheel `conic-gradient` outside `components/Icons`, and no imports from the old `ItemActions/icons`. **Retrofit:** close ×, edit ✎ and link 🔗 are typed as characters across many files (BACKLOG.md "Pattern retrofit backlog").
 
 ### Confirmations and alerts — never `window.confirm()` / `alert()` / `prompt()`
 
@@ -1087,6 +1150,82 @@ Typing `\` in the Notes editor creates an item (a Reminder, Event or Deadline to
 - **Right-click on a link:** the `note-editor.artifact-link` provider (`objects/contextMenu.ts`): Open, details, done, the kind's options, Unlink.
 - **Android:** the editor toolbar's `\` button (`insertObjectTrigger`) is the touch path (gap F11).
 
+### Note blocks (`\timeline`) — the other half of `\`, adopted 2026-10-06
+
+`\` makes two families of thing, offered in one menu under two headings ("Create and link", "Add to the note"):
+- **Objects** (above) are items that live elsewhere in the app, linked from the text.
+- **Note blocks** are note-taking structures that live in the note itself and nowhere else: the timeline (`\timeline`), and, all 2026-10-07, the quote (`\quote`), the cycle (`\cycle`), the breakdown (`\breakdown`: a whole and the parts it's made of), the hierarchy (`\hierarchy`: ranks inside ranks, e.g. a taxonomy, with named levels), the pyramid (`\pyramid`: layers, top first) and the chart (`\chart`, see \"Charts\" below).
+
+The user asked for this as a pattern, so each new block plugs into the same machinery.
+
+**Adding a block — the checklist:**
+1. **Its node(s)** in `extensions/<Name>.ts`, registered in `NoteEditor`'s `extensions`. Use `parseHTML`/`renderHTML` on `data-*` attributes, so copy and paste round-trip; notes are stored as Tiptap JSON. Put the keys and decorations in a separate `Extension` with `priority` above 100: a higher-priority *node* moves up the schema, and the first `block` node is what ProseMirror fills empty content with. That must stay the paragraph.
+2. **A `NoteBlockKind`** (`objects/types.ts`) in `objects/<name>Block.ts`: `{ family: 'block', id, aliases, label, icon, hint, insert(view, from, to) }`. `insert` replaces the typed `\…` (and the space before it) with the block, cursor inside it. An empty line becomes the block; otherwise the block goes after the line, or after the nearest container that can hold it.
+3. **Register it** in `NOTE_BLOCK_KINDS` (`objects/blockKinds.ts`). A pattern test fails on a `*Block.ts` that isn't registered.
+4. **Strings** in `LABELS.noteBlocks.<block>`.
+5. **Tests** beside the node (`extensions/Timeline.test.ts` is the template): insertion through `\`, its keys, and a JSON + HTML round trip.
+
+**How picking one works** (`kinds.ts`, `NoteObjectTrigger.ts`, `actions.ts`):
+- A block has no draft and no preview. Picking it (Tab or Enter in the menu, a click, or **its keyword then a space**: `\tl `) inserts it, and the writing happens in the block.
+- `interpretQuery` never composes a block; `chosenKind` resolves a keyword across both families.
+
+**Design rules for a block:**
+- **Keyboard-first, list-like.** Enter moves forward through the block's parts, an empty part leaves, and Backspace steps back rather than merging two parts. The timeline: Enter in a When goes to the text; Enter on an empty last line starts the next entry; Enter on an entry that's still empty leaves the timeline.
+- **Every hover affordance shows on touch.** Use `@media (hover: none)`; the timeline's "+ Add entry" is always visible there.
+- **Every block offers several designs: see "Block designs" below.** Never a different node per look.
+- **A block's settings** (style, order, which fields show) are a small pill at its top right, shown on hover, while editing in it and always on touch, **and** the same choices in its right-click menu (a `note-editor` provider: `extensions/timelineMenu.ts`, `quoteMenu.ts`). Both call one function per setting (`setTimelineSettings`, `setQuoteVariant`, `toggleQuoteField`). The pill element carries `data-block-tools`, which holds the shared look; a block's own attribute (`data-timeline-tools`, `data-quote-tools`) only places it. Settings live on the block, not in Settings: the choice is made where you're looking at it.
+- **Optional fields** (the quote's Who/Role/Source/When/Where/Link) are child nodes present only while shown. Hiding one keeps its text in the block's `hidden` attribute, and showing it again restores it. An empty field shows only while the block is being edited.
+- **Reordering happens when the cursor leaves a part, never under it** (the timeline sorts by its Whens in `appendTransaction`, `sortOnLeave`). The part the cursor moves into stays where it is, and the part that moved flashes in its new place. How a When is read as a date is `utils/timelineWhen.ts` (pure, tested); a new format goes there with a test.
+- **Placeholders use their own attribute** (`data-tl-placeholder`), never `data-placeholder`, which the editor-wide Placeholder extension also writes.
+
+### Block designs — every note block comes in several designs (suite pattern, named and adopted 2026-10-07)
+
+**"Block designs"** is the name for this pattern: one block, several ways of drawing the same content, switched freely. The timeline (Vertical, Horizontal), quote (Classic, Card, Pull quote) and cycle (Ring, Flow, Steps) all follow it. The user asked for it to be a global pattern with a name, and in the backlog, "so we always know how to develop these". The how-to and ideas are in BACKLOG.md "Block designs".
+- **A design is a value of the block's `variant` attribute plus its CSS under `[data-variant="…"]`.** The content never changes, so switching is always safe and loses nothing. Anything a design needs that the content doesn't hold is computed in decorations (e.g. the ring's stage positions, a stage's colour), never stored.
+- **The list is a `<BLOCK>_DESIGNS: BlockDesign<V>[]`** in the block's extension: `{ id, label (LABELS), icon (a 16×16 line drawing) }`. Every block uses the shared half in `extensions/blockDesigns.ts`:
+  - `blockPill(attr)`: the settings pill at the top right, shown on hover, while editing and always on touch;
+  - `designButtons(designs, current, pick)`: the design row in the pill;
+  - `designMenuItem(…)`: Design ▸ in the block's right-click menu;
+  - `pillButton`, for the block's other settings;
+  - `openBlockPopover(anchor, build)`: a small popover for a part of the block (a cycle's arrow or icon), closed by Escape through `registerEscapeClose`.
+- **Every block can be selected whole** (to cut, copy or delete it): its root node's name is in `NOTE_BLOCK_NODES` and its root renders `data-note-block`. Its pill ends with `selectButton(view, getPos)`; right-click offers Select whole block; and **Esc inside a block selects it** (`NoteBlockSelect`, below the default priority so a `\` session sees Esc first; Esc again goes on to whatever is around the editor). A selected block is outlined, and the selection toolbar stays hidden for it.
+- **Every block can be framed:** Outline and Shade (`blockFrameAttributes()` spread into its attributes, `frameButtons` in its pill, `frameMenuItem` in its right-click menu). One default look each, drawn outside the block's own box (an outline at an offset and a shadow spread to the same distance), so no design's layout moves when it's framed. Colour choices for frames are not built.
+- **A block's widget layout is fitted to the real DOM after each render when it must touch other parts** (the cycle's ring arcs end at the measured cards, `RingLayout`), not guessed from fixed sizes.
+- **Pattern test:** every `objects/*Block.ts` block's extension must define `_DESIGNS: BlockDesign<…>`, use `designButtons` from `./blockDesigns`, have `selectButton(view, getPos)` and `data-note-block`, and offer frames (`...blockFrameAttributes()`, `frameButtons`).
+- **A design is designed for both themes** (tokens, plus accent colours that read on both), keeps every part editable in place, and has a touch path: the pill shows on touch, and parts open on tap.
+- **Adding a design to an existing block:** a value in its `*_VARIANTS`, an entry in its `*_DESIGNS` (label + icon), its CSS block, and a test that switching to it round-trips. **Adding a block:** the Note blocks checklist above, with at least two designs from the start.
+
+### Annotations: the Glossary, linked terms and Important (adopted 2026-10-07)
+
+Passages of a note can be marked as more than text. Definitions, Concepts and Acronyms are **records** (structured tag entries) that form one **Glossary** across all notes. Other text can be **linked to a term**, and passages can be **Important** at three levels and put on a **review list**. Detail: "The Glossary…" and "Important, built out…" in `docs/features/implemented-features.md`.
+- **`\` on a selection opens the selection menu** (`objects/SelectionMenu.tsx`; caught on keydown *and* in `handleTextInput`, because a selection across paragraphs never reaches `handleTextInput`). A new way to mark selected text is one entry in its items, plus the same choice in the right-click menu (`extensions/annotationMenu.ts`). While it's open, the editor forwards keys to it (`selectionMenuKey`), so fast typing never replaces the selection.
+- **The Glossary types are `GLOSSARY_TYPES`** (`config/structuredTagTypes.ts`); `glossaryMeaning` reads an entry's meaning. Read entries through `services/glossary.ts` (views, so encrypted ones show only while unlocked).
+- **Linked text (`conceptRef` mark) is drawn once per run** by `extensions/ConceptRef.ts`: a highlight on the text, and the brace and label in a layer beside the editor. Never with CSS per mark element (it repeats per line; pattern test).
+- **Important's state lives on its mark** (`NoteTagMark`: `level`, `passageId`, `reviewDue`, `reviewStep`), so it syncs and encrypts with the note. Change it through `extensions/Importance.ts` (`setImportance` keeps the passage id and schedule), never by setting the mark directly. Ctrl+1 steps through the levels and then off.
+- **Linking to the Glossary as you type** (`extensions/GlossaryAutolink.ts`): when the word just typed is a Glossary term (plurals too), a chip offers the link. Enter/Tab links it (its own undo step), anything else leaves it, and Backspace straight after takes the link off. **Offered once per note per term**: not where the note already links it, and not again in a note where it was passed over this session. Never in code, an existing link, or the term's own definition. Hovering linked text shows its card, with a way to the definition (`ConceptMarginView`). A new place that should offer links reuses `findSuggestion`.
+- **Opening a note at a passage** goes through `services/notePassage.ts` `openNotePassage(noteId, { mark, attr, value })`: it finds the tab, opens the note there and NoteEditor selects the passage (`uiStore.requestedNotePassage`).
+- **Changing a note's content from outside the editor** (Review rescheduling a passage, and any future such change) must check `liveNoteEditorFor(noteId, tabId)` (`services/liveNoteEditor.ts`) and go through that view's transaction when the text is open. Otherwise the editor's next save writes its copy back over the change. `crossAppLinkCleanup.ts` predates this rule (BACKLOG.md retrofit).
+
+### Special characters — `//name`, in every text field (adopted 2026-10-08)
+
+**Typing `//` and a name puts in a character, the same way in every text field of the app** (the user: Greek letters first, other characters later, and the same everywhere). `//alpha` → α, `//Delta` → Δ (a capital first letter gives the capital), `//` alone lists the alphabet; ↑↓ choose, Enter or Tab puts it in, a full name and a space does it at once, Esc keeps the text. `//` only starts at the start of a word, so `https://` never does; `\\` was taken (it types a backslash) and `\` makes blocks.
+- **The table is `src/specialChars/charSets.ts`**, with the pure rules (`findCharTrigger`, `matchChars`, `exactChar`). A new set (arrows, maths) is entries there with its own `set`; nothing else lists characters by name (pattern test).
+- **Ordinary fields need nothing**: `installSpecialCharInput()` (`fieldInput.ts`, run once from App.tsx) listens on the document for every `<input>` (text-like types) and `<textarea>`, and replaces text with `setRangeText` plus an `input` event, so React's `onChange` sees it. Its keys are caught on `window` in the capture phase while the list is up, so Esc, Enter and Ctrl+Enter don't also reach the Escape stack, a form or a pane.
+- **A rich-text editor is not an ordinary field**: the note editor has `extensions/SpecialCharInput.ts`, the same rules through ProseMirror. Any new rich-text editor adds that extension.
+- The list (`charPicker.ts`) is one floating element for the app, never focused, at z-index 1200.
+- No library: none does in-app text expansion for web fields; Tiptap's Typography extension covers arrows and © only, and OS tools (a Greek keyboard layout, Espanso) live outside the app.
+
+### Charts — one neutral description, one adapter (adopted 2026-10-07)
+
+**A chart anywhere in the suite is a `ChartSpec` (`src/charts/chartSpec.ts`) drawn through `src/charts/chartAdapter.ts`.** The user chose the simplest library (Chart.js) on the condition that it stays swappable, with a spreadsheet-like app possibly to come.
+- **Stored data is only ever a `ChartSpec`**: title, axis titles, labels, series of numbers, stacking, options. Never a library's own config. A chart's *type* is held beside it (the note block's `variant`), so switching type loses nothing.
+- **Only `chartAdapter.ts` imports the library**, and only with `import type` plus the dynamic `import('chart.js/auto')` in `drawChart`, so the library is its own chunk and loads the first time a chart is shown. A new chart type, or a change of library, is a change there (and in `CHART_KINDS`), never in stored notes or in the components.
+- **Data in**: typed into the table (`parseNumber` reads "1,234", "$12", "45%", "(30)"), or pasted: a spreadsheet copy (tabs) or CSV/semicolons, headings detected (`parseDelimited` → `tableToChart`). A new way to get data in produces a `ChartSpec` through these, never its own parser.
+- **Derived data** (100% shares, waterfall steps) is computed from the spec when drawing (`toPercentages`, `waterfallSteps`), never stored.
+- Chart colours come from the theme tokens (`readChartTheme`), and a chart redraws when the theme changes.
+- **Showing and editing a chart is `ChartWidget` (`src/charts/ChartWidget.ts`), for every app.** It owns the drawing, the data table and the paste box, and reports changes through `onCommit(spec)`; the host only stores the spec and adds its own chrome. The note block (`NoteEditor/extensions/Chart.ts`) is one host: its pill, frames and selection around the widget. The user plans charts in Records next: that is a second host (a small React wrapper that mounts the widget and saves to the tracker), never a copy of the table. Chart strings are `LABELS.charts`; only the note block's own are in `LABELS.noteBlocks.chart`.
+- **The one exception**: Portfolio's ticker chart (`WatchlistView/TickerChart.tsx`) uses `lightweight-charts` for candlesticks and live price scales, which a ChartSpec doesn't describe.
+
 ### Repeating series — a date taken out stays linked (adopted 2026-10-06)
 
 Calendar items (events, reminders, deadlines) follow the iCalendar model: a changed occurrence is still **part of its series**.
@@ -1147,8 +1286,10 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 | `0`-`9` | — | While the Endeavour filter is expanded: select an Endeavour by its position (0 = All) |
 | `P` | `Ctrl+P` | Expand the Purpose filter (header) — Tasks section only |
 | `M` | `Ctrl+M` | Open/close the Manage view (Endeavours / Purposes / Tags) |
-| `Alt+Left` | `Backspace` | Go back to the previous app section (up to 6 deep) — `uiStore.sectionHistory`/`navigateBack()` |
-| `Alt+Right` | — | Go forward to the next app section, after going back — `uiStore.sectionForwardHistory`/`navigateForward()` |
+| `Alt+Left` | `Backspace` | Go back one stop in history (a note, or a section where you were in it) — `uiStore.navHistory`/`navigateBack()` |
+| `Alt+Right` | — | Go forward one stop, after going back — `uiStore.navForward`/`navigateForward()` |
+| `//` | — | Any text field: a Greek letter by name — `//alpha` → α, `//Delta` → Δ, `//` alone lists them; ↑↓, Enter/Tab, or the whole name and a space; Esc keeps the text (`special-chars`; src/specialChars/) |
+| `Alt+N` | — | The history browser: a carousel of where you've been; scroll / ←→ / swipe to move, Enter or a click to go there, Esc closes (`action-history`, customizable; touch: More → History) |
 | `Ctrl+G` | — | Open/close Quick Access — search or browse recent/frequent items across Notes, Notebooks, Tasks, Lists, Endeavours, Trackers, Routines, Schedules |
 | `Ctrl+D` | — | Dictate into the focused text field; press again (or plain `Enter`) to finish, `Esc` cancels (`action-dictate`, customizable; handled before the `isTyping` guard in `App.tsx`) |
 | `Ctrl+Shift+A` | — | Archive the open task / calendar event / reminder — or Restore it if already archived (item panes only, via `useItemActions`) |
@@ -1165,14 +1306,16 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 | `Ctrl+T` | — | New tab, prompting for a name (Notes editor focused, local to `NoteEditor.tsx`) |
 | `` Ctrl+` `` | — | Move keyboard focus between the tree/list nav columns and the editor (Notes section only; previously `Ctrl+Tab`, moved once `Ctrl+Tab` became the tab-cycle key above — see "Notes/Lists keyboard nav" below) |
 | `Ctrl+L` | — | Turn the selection into a link (opens a URL popover); with no selection, opens a "New link" pane (text + URL) instead (Notes editor) |
-| `Ctrl+H` | — | Then press `1`–`5` to turn the current paragraph into that heading level, `0` for plain text (also strips all formatting except links/tags — `extensions/normalText.ts`), or `H` to go to the tab's Title, creating it at the top from the tab name if there isn't one; Ctrl may stay held for the second key (Notes editor, local to `NoteEditor.tsx`) |
+| `Ctrl+H` | — | Then press `1`–`5` to turn the current paragraph into that heading level, `0` for plain text (also strips all formatting except links/tags — `extensions/normalText.ts`), `H` to go to the tab's Title (creating it at the top from the tab name if there isn't one), `S` for a Subtitle or `A` for the Author; Ctrl may stay held for the second key (Notes editor, local to `NoteEditor.tsx`) |
+| `Ctrl+Shift+>` | `Ctrl+Shift+<` | Larger / smaller text, a step at a time (Notes editor, `extensions/fontSize.ts`; the ribbon's A+ / A−) |
+| `F2` | — | Rename the open tab; Enter (or Esc) puts the cursor back where it was (Notes editor) |
 | `Ctrl+Shift+V` | — | Paste as plain text: no formatting, links or images from the source (Notes editor; ProseMirror's own Shift-paste, which `handlePaste` steps aside for) |
 | `Alt+Shift+↓` | — | Insert a copy of the current line (paragraph, heading, list item) or the selected lines below it (Notes editor, `extensions/DuplicateLine.ts`) |
-| `\` | — | Notes editor: create an object as you type (`\rem` / `\ev` / `\dl`, e.g. `\rem call mum tomorrow 5pm`, Enter). Tab/Enter picks the kind, Enter creates and links the text, Ctrl+Enter opens the full pane, Tab edits the fields, Esc keeps plain text, `\\` types a backslash (`objects/NoteObjectTrigger.ts`; touch: the toolbar's `\` button) |
+| `\` | — | Notes editor: create an object as you type (`\rem` / `\ev` / `\dl`, e.g. `\rem call mum tomorrow 5pm`, Enter). Tab/Enter picks the kind, Enter creates and links the text, Ctrl+Enter opens the full pane, Tab edits the fields, Esc keeps plain text, `\\` types a backslash. `\timeline` (or `\tl` then a space) adds a timeline instead, see "Note blocks" (`objects/NoteObjectTrigger.ts`; touch: the toolbar's `\` button) |
 | `Ctrl+Q` | — | On a Notes selection: open the "Create ▸" menu (Task/Calendar item/List item/Tracker entry — Task is wired, the rest are stubs); 1-4 picks, Esc cancels (Notes editor) |
 | `Ctrl+click` | — | On a link in the Notes editor: select its text instead of opening it (plain click opens) |
-| `Ctrl+−` | — | Zoom out in Notes editor (without Shift) |
-| `Ctrl+=` | — | Zoom in in Notes editor (without Shift; Ctrl+Shift+= is superscript) |
+| `Ctrl+−` | — | Zoom out in Notes editor (without Shift); on a heading, lower its level instead (H5 → normal text) |
+| `Ctrl+=` | — | Zoom in in Notes editor (without Shift; Ctrl+Shift+= is superscript); on a heading, raise its level instead |
 | `Ctrl+scroll` | — | Zoom in/out in Notes editor (non-passive wheel listener) |
 | `↑`/`↓` | — | Navigate between lists (Lists section only, local to `ListsSection.tsx`; only when the sidebar nav area has focus — see "Notes/Lists keyboard nav" below) |
 | `` Ctrl+` `` | — | Move focus between the lists sidebar and the list's content area (Lists section only, local to `ListsSection.tsx`) |
@@ -1266,8 +1409,8 @@ Not bugs in normal use; recorded so they aren't rediscovered from scratch.
 - **Soft-delete tombstones are never purged** (`deleted_at` rows stay forever). Fine at current scale; add a scheduled purge of rows older than ~90 days once any table grows.
 - **`calendar_events.notify_before_value` is `integer`** but `CalendarEventPane` feeds it a free-typed number, so typing `1.5` would fail sync (see migration 023's note). Clamp/round the input, or widen the column.
 - **The other stores still live in localStorage (about 5 MB for the whole site).** Notes moved to IndexedDB (see "Zustand migration rule"), so pasted images no longer count against it, but every save still re-serialises a whole store (opening a note writes `lastViewedAt`, which rewrites *all* notes — now a database write rather than a localStorage one) and images are still inline base64 in note content, which also inflates every Supabase sync of a note. Pasted images are scaled to 1600 px / WebP on the way in (`utils/imageCompress.ts`) and Settings → Storage can shrink existing ones (`services/shrinkNoteImages.ts`). Remaining ideas are in BACKLOG.md "Local storage headroom".
-- **`src/services/autoBackup.test.ts` is flaky under full-suite load** (seen 2026-10-06: one or two of its tests failed in two full runs, passed alone and in the next full run; the file is untouched by the change that saw it). Probably IndexedDB/timer timing; worth a look before CI starts failing on it.
-- **Modal z-index tiers are ad hoc** (28 / 30 / 100 / 102 / 110 / 1000 for modals; 400 Quick Access; 500 voice indicator; 1020 BottomSheet; 1050 toast; 1080 right-click menu; 1100 confirm dialog; 10000 link preview). It only matters when one overlay opens over another: a modal opened *from inside a pane* needs a tier above the pane's 100/101 (use 102), and anything that can be summoned from anywhere sits above the modals. `AddListModal`, `AddListItemModal` and `EditNoteTagModal` are at 100, the same tier as the panes, but nothing opens them from inside a pane today. Centralising these as `--z-*` tokens is optional tidying (docs/agent-tasks/02).
+- **`src/services/autoBackup.test.ts` is flaky under full-suite load** (seen again 2026-10-07, "takes a snapshot once enough weighted changes accumulate"; first seen 2026-10-06: one or two of its tests failed in two full runs, passed alone and in the next full run; the file is untouched by the change that saw it). Probably IndexedDB/timer timing; worth a look before CI starts failing on it.
+- **Modal z-index tiers are ad hoc** (28 / 30 / 100 / 102 / 110 / 1000 for modals; 400 Quick Access; 410 history browser; 500 voice indicator; 1020 BottomSheet; 1050 toast; 1080 right-click menu; 1100 confirm dialog; 1200 special-character list; 10000 link preview). It only matters when one overlay opens over another: a modal opened *from inside a pane* needs a tier above the pane's 100/101 (use 102), and anything that can be summoned from anywhere sits above the modals. `AddListModal`, `AddListItemModal` and `EditNoteTagModal` are at 100, the same tier as the panes, but nothing opens them from inside a pane today. Centralising these as `--z-*` tokens is optional tidying (docs/agent-tasks/02).
 
 ---
 
@@ -1291,7 +1434,7 @@ Reading an encrypted note: **always through `noteView()` / `useNoteView()`** —
 ### How it works
 
 - **CSS variables**: All colors live as `--color-*` custom properties in `src/index.css`. The `:root` block defines light mode values; `[data-theme="dark"]` on `<html>` overrides them with dark equivalents.
-- **New semantic variables added**: `--color-surface-alt`, `--color-primary-subtle`, `--color-primary-border`, `--color-danger`, `--color-danger-muted`, `--color-warning`, `--color-warning-muted`, `--color-success-muted`, `--color-success-text`, `--shadow-lg`, `--color-border-strong` (2026-09-28 — the divider between a time grid's whole-day zone and its hours), `--color-backdrop` (2026-10-04 — the dimmed layer behind a BottomSheet), `--color-overscroll` (2026-10-06 — the greyed room below the end of a note, NoteEditor `.editorWrap::after`; light grey in light mode, a dark grey lighter than the editor in dark), `--color-blocked-wash`/`--color-blocked-stripe` (2026-10-01 — the hatched overlay on a task waiting on another task, TaskItem `.itemBlocked::after`), `--color-tentative-stripe-1`/`-2` + `--tentative-blend-mode` (2026-09-27 — see "Fixed: tentative-event hatch unreadable in dark mode" in Implemented features; not just a colour swap, dark mode also switches the blend mode itself)
+- **New semantic variables added**: `--color-surface-alt`, `--color-primary-subtle`, `--color-primary-border`, `--color-danger`, `--color-danger-muted`, `--color-warning`, `--color-warning-muted`, `--color-success-muted`, `--color-success-text`, `--shadow-lg`, `--color-border-strong` (2026-09-28 — the divider between a time grid's whole-day zone and its hours), `--color-backdrop` (2026-10-04 — the dimmed layer behind a BottomSheet), `--color-overscroll` (2026-10-06 — the greyed room below the end of a note, NoteEditor `.editorWrap::after`; light grey in light mode, a dark grey lighter than the editor in dark), `--color-occurrence` (2026-10-07 — the faint mark on other mentions of the selected text in a note, OccurrenceHighlight), `--color-blocked-wash`/`--color-blocked-stripe` (2026-10-01 — the hatched overlay on a task waiting on another task, TaskItem `.itemBlocked::after`), `--color-tentative-stripe-1`/`-2` + `--tentative-blend-mode` (2026-09-27 — see "Fixed: tentative-event hatch unreadable in dark mode" in Implemented features; not just a colour swap, dark mode also switches the blend mode itself)
 - **FOUC prevention**: Inline `<script>` in `index.html` `<head>` reads `localStorage['todo-settings'].state.theme` synchronously and sets `data-theme` before React hydrates.
 - **Theme effect** (`src/App.tsx`): `useEffect` reads `theme` from `settingsStore`; for `'system'` mode it attaches a `matchMedia('prefers-color-scheme: dark')` listener that updates `data-theme` on OS changes; for explicit `'light'`/`'dark'` it sets `data-theme` directly.
 - **settingsStore** (`src/store/settingsStore.ts`): Added `theme: 'light' | 'dark' | 'system'` (default `'system'`) and `setTheme` action.

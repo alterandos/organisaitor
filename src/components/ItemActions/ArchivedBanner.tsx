@@ -1,6 +1,6 @@
 import { LABELS } from '@/config/labels';
 import { formatDate } from '@/utils/date';
-import { ArchiveIcon } from './icons';
+import { ArchiveIcon } from '@/components/Icons';
 import styles from './ItemActions.module.css';
 
 interface Props {

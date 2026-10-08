@@ -6,8 +6,10 @@ import { showToast } from '@/components/Toast/showToast';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { LABELS } from '@/config/labels';
 import type { CrossAppRef } from '@/types';
-import type { AnyNoteObjectKind, NoteObjectContext } from './types';
+import type { AnyNoteObjectKind, NoteObjectContext, PickableKind } from './types';
+import { isBlockKind } from './types';
 import { getSession, withSessionMeta } from './session';
+import { openSelectionMenu } from './selectionMenuState';
 import { ARTIFACT_TYPES } from './artifactTypes';
 
 // Everything that changes a `\` session, for the key handling (NoteObjectTrigger) and the menu
@@ -17,6 +19,8 @@ import { ARTIFACT_TYPES } from './artifactTypes';
 // way in on a phone keyboard, where `\` is a few taps away. Adds a space first if the cursor
 // is right after a word (a `\` only counts after a space).
 export function insertObjectTrigger(view: EditorView): void {
+  // With text selected it's the selection menu, as typing `\` over a selection is.
+  if (openSelectionMenu(view)) return;
   const { $from, from, to } = view.state.selection;
   const before = $from.parent.textBetween(Math.max(0, $from.parentOffset - 1), $from.parentOffset, undefined, ' ');
   view.dispatch(view.state.tr.insertText(before && !/\s/.test(before) ? ' \\' : '\\', from, to).scrollIntoView());
@@ -35,10 +39,12 @@ export function setOverride(view: EditorView, key: string, value: string): void 
   view.dispatch(withSessionMeta(view.state.tr, { type: 'override', key, value }));
 }
 
-// Picking → composing: the typed keyword becomes the kind's full keyword and a space.
-export function acceptKind(view: EditorView, kind: AnyNoteObjectKind): void {
+// Picking an object kind → composing: the typed keyword becomes the kind's full keyword and a
+// space. Picking a note block inserts it in place of what was typed, and the session is over.
+export function acceptKind(view: EditorView, kind: PickableKind): void {
   const s = getSession(view.state);
   if (!s || s.interp.phase !== 'picking') return;
+  if (isBlockKind(kind)) { kind.insert(view, s.anchor, s.to); return; }
   const tr = view.state.tr.insertText(`${kind.id} `, s.anchor + 1, s.to);
   view.dispatch(tr.setSelection(TextSelection.create(tr.doc, s.anchor + 2 + kind.id.length)).scrollIntoView());
 }

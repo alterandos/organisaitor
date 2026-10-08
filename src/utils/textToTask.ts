@@ -70,7 +70,7 @@ function addDays(base: Date, days: number): Date {
 // used only to break a genuine tie (both parts ≤ 12) when a year makes it clear *some* real
 // date was intended, just not which part is which. Defaults to day-first (the more common
 // convention worldwide) if Intl can't answer.
-function isDayFirstLocale(): boolean {
+export function isDayFirstLocale(): boolean {
   try {
     const parts = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
       .formatToParts(new Date(2020, 0, 2));

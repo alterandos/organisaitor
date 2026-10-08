@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getEffectiveCollectionId, resolveNoteInheritedCollectionId, getNoteEffectiveCollectionId,
-  getNotebookIcon, getNoteBreadcrumb, getVisibleNoteTagIds,
+  getNotebookIcon, getNoteBreadcrumb, getNoteNotebookPath, getVisibleNoteTagIds,
 } from '@/utils/notes';
 import type { CollectionId, NoteTag } from '@/types';
 
@@ -111,6 +111,18 @@ describe('getNotebookIcon', () => {
     const tags = { a: tag('a') };
     const notes = { n1: { tagIds: ['a'], archivedAt: '2030-01-01T00:00:00.000Z' } };
     expect(getNotebookIcon(tags.a, tags, notes)).toBe('📁');
+  });
+});
+
+describe('getNoteNotebookPath', () => {
+  it('lists the notebooks from the root down (the Glossary shows the last, and the whole path on hover)', () => {
+    const tags = {
+      root: tag('root', { name: 'University' }),
+      subject: tag('subject', { name: 'Biology', parentTagId: 'root' as never }),
+      topic: tag('topic', { name: 'Cells', parentTagId: 'subject' as never }),
+    };
+    expect(getNoteNotebookPath({ tagIds: ['topic'] }, tags)).toEqual(['University', 'Biology', 'Cells']);
+    expect(getNoteNotebookPath({ tagIds: [] }, tags)).toEqual([]);
   });
 });
 

@@ -133,3 +133,48 @@
 .level3 .text,
 .level4 .text { color: var(--color-muted); }
 .level5 .text { color: var(--color-muted); font-size: 0.75rem; }
+
+/* ── Key points (the note's Important passages) ── */
+
+.point {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.4rem;
+  width: 100%;
+  padding: 0.35rem 0.875rem 0.35rem 0.75rem;
+  border: none;
+  border-left: 2px solid var(--level-color);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.point + .point { margin-top: 2px; }
+.point:hover { background: var(--color-primary-subtle); }
+
+.pointIcon { flex-shrink: 0; font-size: 0.75rem; }
+
+.pointText {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pointReview {
+  flex-basis: 100%;
+  padding-left: 1.15rem;
+  color: var(--color-muted);
+  font-size: 0.7rem;
+}
+
+/* Contents takes what it needs (up to most of the pane); Key points the rest. */
+.headingsList { flex: 0 1 auto; max-height: 60%; }
+.pointsList   { flex: 1 1 0; }

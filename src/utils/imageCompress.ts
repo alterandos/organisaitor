@@ -53,3 +53,18 @@ export async function recompressDataUrl(dataUrl: string, byteSize = Math.floor(d
     return dataUrl;
   }
 }
+
+// A small square picture for an icon slot (a cycle stage's icon): centre-cropped to `size` px and
+// re-encoded, so a dropped photo costs a few KB in the note rather than megabytes.
+export async function squareIconDataUrl(file: Blob, size = 160): Promise<string> {
+  const img = await loadImage(await readAsDataUrl(file));
+  const side = Math.min(img.naturalWidth, img.naturalHeight);
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx || !side) return readAsDataUrl(file);
+  ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+  const webp = canvas.toDataURL('image/webp', QUALITY);
+  return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/png');
+}

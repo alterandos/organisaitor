@@ -36,5 +36,6 @@ export function createTask(input: CreateTaskInput, sortOrder: number): Task {
     sortOrder,
     crossAppRefs: input.crossAppRefs ?? [],
     itemLinks:    input.itemLinks ?? [],
+    repeat:       input.repeat ?? null,
   };
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Editor } from '@tiptap/core';
 import { act, fireEvent } from '@testing-library/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -77,12 +77,16 @@ const linkMarks = () => {
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
 beforeEach(() => {
+  // The panes word dates against the real clock ("Tomorrow"), so it has to be NOW too. Only Date
+  // is faked: flush() needs real timers.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
   useCalendarStore.setState(useCalendarStore.getInitialState(), true);
   useUIStore.setState(useUIStore.getInitialState(), true);
   useToastStore.setState(useToastStore.getInitialState(), true);
   useTrashStore.setState(useTrashStore.getInitialState(), true);
 });
-afterEach(() => editor?.destroy());
+afterEach(() => { editor?.destroy(); vi.useRealTimers(); });
 
 describe('the kind registry', () => {
   it('every kind has a unique keyword set and live link rendering for what it creates', () => {

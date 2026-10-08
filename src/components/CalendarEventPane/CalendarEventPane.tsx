@@ -11,6 +11,8 @@ import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import { LinkedNoteAbstracts } from '@/components/LinkedNoteAbstracts/LinkedNoteAbstracts';
+import { newNoteTitleFor } from '@/services/noteFromItem';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteEventWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import { updateCalendarEventLinked as updateEvent } from '@/services/taskCalendarLinks';
@@ -205,6 +207,8 @@ export function CalendarEventPane() {
             onBlur={saveNotes}
             rows={3}
           />
+
+          <LinkedNoteAbstracts refs={event.crossAppRefs ?? []} onOpen={navigateToCrossAppRef} />
 
           <div className={styles.field}>
             <span className={styles.label}>Date</span>
@@ -481,6 +485,7 @@ export function CalendarEventPane() {
             <CrossAppRefPicker
               value={event.crossAppRefs ?? []}
               suggestFrom={event.title}
+              newNoteTitle={newNoteTitleFor(event.title, event.date)}
               onChange={handleCrossAppRefsChange}
               onNavigate={navigateToCrossAppRef}
             />

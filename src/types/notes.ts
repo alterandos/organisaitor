@@ -20,6 +20,9 @@ export interface NoteTab {
   id: string;       // nanoid
   name: string;
   content: string;  // Rich-text JSON (same format as Note.content)
+  // When the tab was added and its content last changed. Absent on tabs made before 2026-10-08.
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ── Note entity ────────────────────────────────────────────────────────────────
@@ -32,6 +35,7 @@ export interface Note {
   createdAt: string;                  // ISO 8601
   updatedAt: string;
   abstract: string | null;            // Optional collapsible summary at top of note
+  mainTabUpdatedAt: string | null;    // When the main tab's content last changed (null: not since 2026-10-08); its created date is the note's
   lastViewedAt: string | null;
   archivedAt: string | null;          // Soft delete
   color: string | null;               // User-chosen highlight color

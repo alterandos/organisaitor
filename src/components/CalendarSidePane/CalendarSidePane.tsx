@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useCalendarStore } from '@/store/calendarStore';
-import { ArchiveIcon } from '@/components/ItemActions/icons';
+import { ArchiveIcon } from '@/components/Icons';
 import { useUIStore, type CalendarViewMode } from '@/store/uiStore';
 import { useSettingsStore, type CalendarLayerKey } from '@/store/settingsStore';
 import { useAuthStore } from '@/store/authStore';

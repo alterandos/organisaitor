@@ -156,3 +156,29 @@
   font-size: 0.83rem;
   color: var(--color-muted);
 }
+
+/* Glossary and Review: views of everything, above the tag filter. */
+.views {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.viewBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.65rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.viewBtn:hover { background: var(--color-primary-subtle); color: var(--color-primary); }

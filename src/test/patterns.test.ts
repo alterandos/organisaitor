@@ -573,6 +573,29 @@ describe('pattern: notifications are delivered only from the planned paths', () 
   });
 });
 
+describe('pattern: special characters work in every text field (CLAUDE.md "Special characters")', () => {
+  it('App installs the field listener once, and the note editor has the extension', () => {
+    const app = fs.readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
+    const editorSrc = fs.readFileSync(path.join(SRC, 'components/NoteEditor/NoteEditor.tsx'), 'utf8');
+    expect(app).toContain('installSpecialCharInput()');
+    expect(editorSrc).toMatch(/\n\s+SpecialCharInput,\n/);
+  });
+  it('nothing but src/specialChars/charSets.ts lists Greek letters by name', () => {
+    const files = SOURCE_FILES.filter((f) => !/specialChars[/\\]charSets\.ts$/.test(f));
+    const hits = findMatches(files, /\['(alpha|lambda|omega)', '[αλω]'/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: charts go through one neutral spec and one adapter (CLAUDE.md "Charts")', () => {
+  // The library must stay swappable and lazy-loaded: nothing but the adapter names it.
+  it('only src/charts/chartAdapter.ts imports the charting library', () => {
+    const files = SOURCE_FILES.filter((f) => !/charts[/\\]chartAdapter\.ts$/.test(f));
+    const hits = findMatches(files, /from 'chart\.js|import\('chart\.js/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
 describe('pattern: an item kind has one icon, from config/itemIcons.ts', () => {
   // Deadlines were ⏳ in one place, 🚩 in another and ⏰ (the reminder's) in a third.
   it('no source file but itemIcons.ts spells out the reminder, deadline or task icon', () => {
@@ -598,5 +621,52 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
       .map((f) => path.basename(f, '.ts'))
       .filter((name) => !new RegExp(`NOTE_OBJECT_KINDS[^=]*=\s*\[[^\]]*\b${name}\b`).test(registry));
     expect(missing).toEqual([]);
+  });
+
+  it('suite-wide icons come from components/Icons: no local text-colour swatch, no old ItemActions icons path', () => {
+    const css = walk(SRC, ['.css']).filter((f) => !/components[/\\]Icons[/\\]/.test(f));
+    const swatches = findMatches(css, /conic-gradient\(/);
+    expect(swatches, describeHits(swatches)).toEqual([]);
+    const oldPath = findMatches(SOURCE_FILES, /ItemActions\/icons/);
+    expect(oldPath, describeHits(oldPath)).toEqual([]);
+  });
+
+  it('every note block offers its designs through blockDesigns (Block designs)', () => {
+    const blockFiles = SOURCE_FILES.filter((f) => /NoteEditor[/\\]objects[/\\].*Block\.ts$/.test(f));
+    const offenders: string[] = [];
+    for (const f of blockFiles) {
+      const src = fs.readFileSync(f, 'utf8');
+      const ext = src.match(/from '\.\.\/extensions\/(\w+)'/)?.[1];
+      if (!ext) { offenders.push(`${path.basename(f)}: no extension`); continue; }
+      const extSrc = fs.readFileSync(path.join(SRC, 'components/NoteEditor/extensions', `${ext}.ts`), 'utf8');
+      if (!/from '\.\/blockDesigns'/.test(extSrc) || !/designButtons\(/.test(extSrc) || !/_DESIGNS: BlockDesign</.test(extSrc)) offenders.push(`${ext}.ts`);
+      // …and can be selected whole: the pill's Select button, and data-note-block on its root.
+      if (!/selectButton\(view, getPos\)/.test(extSrc) || !/'data-note-block': ''/.test(extSrc)) offenders.push(`${ext}.ts: select`);
+      // …and can be framed: Outline and Shade.
+      if (!/\.\.\.blockFrameAttributes\(\)/.test(extSrc) || !/frameButtons\(view, getPos/.test(extSrc)) offenders.push(`${ext}.ts: frames`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('no CSS draws content on [data-concept-ref] (text linked to a Glossary term) itself', () => {
+    const css = walk(SRC, ['.css']);
+    const hits = findMatches(css, /\[data-concept-ref[^\]]*\][^{]*::?(before|after)/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  it('every note block is in NOTE_BLOCK_KINDS, and the editor registers the timeline nodes', () => {
+    const blockFiles = SOURCE_FILES.filter((f) => /NoteEditor[/\\]objects[/\\].*Block\.ts$/.test(f));
+    const registry = fs.readFileSync(path.join(SRC, 'components/NoteEditor/objects/blockKinds.ts'), 'utf8');
+    const list = registry.slice(registry.indexOf('NOTE_BLOCK_KINDS'));
+    const missing = blockFiles.map((f) => path.basename(f, '.ts')).filter((name) => !list.includes(name));
+    expect(missing).toEqual([]);
+    const editorSrc = fs.readFileSync(path.join(SRC, 'components/NoteEditor/NoteEditor.tsx'), 'utf8');
+    expect(editorSrc).toContain('...TimelineExtensions');
+    expect(editorSrc).toContain('...QuoteExtensions');
+    expect(editorSrc).toContain('...CycleExtensions');
+    expect(editorSrc).toContain('...BreakdownExtensions');
+    expect(editorSrc).toContain('...HierarchyExtensions');
+    expect(editorSrc).toContain('...PyramidExtensions');
+    expect(editorSrc).toContain('...ChartExtensions');
   });
 });

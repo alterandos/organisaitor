@@ -63,7 +63,11 @@ registerContextMenuProvider({
       label: LABELS.contextMenu.style,
       icon: '¶',
       submenu: [
-        [{ id: 'title', label: LABELS.contextMenu.title, shortcut: 'Ctrl+H, H', run: insertTitle }],
+        [
+          { id: 'title', label: LABELS.contextMenu.title, shortcut: 'Ctrl+H, H', run: insertTitle },
+          { id: 'subtitle', label: LABELS.noteStyles.subtitle, shortcut: 'Ctrl+H, S', run: () => { editor.chain().focus().setNode('noteSubtitle').run(); } },
+          { id: 'author', label: LABELS.noteStyles.author, shortcut: 'Ctrl+H, A', run: () => { editor.chain().focus().setNode('noteAuthor').run(); } },
+        ],
         levels.map((level) => ({
           id: `h${level}`,
           label: LABELS.contextMenu.heading(level),

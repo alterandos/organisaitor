@@ -46,6 +46,17 @@ export function closeTopOverlay(): boolean {
 // components add to `document` later.
 if (typeof document !== 'undefined') document.addEventListener('keydown', onKeyDown);
 
+// The same, for an overlay that isn't a React component (a popover a ProseMirror widget opens,
+// extensions/blockDesigns.ts). Returns the unregister function; call it when the overlay closes.
+export function registerEscapeClose(onClose: () => void): () => void {
+  const entry: Entry = { handler: { current: onClose } };
+  stack.push(entry);
+  return () => {
+    const i = stack.indexOf(entry);
+    if (i >= 0) stack.splice(i, 1);
+  };
+}
+
 export function useEscapeClose(onClose: () => void, active = true) {
   const ref = useRef(onClose);
   useEffect(() => { ref.current = onClose; });

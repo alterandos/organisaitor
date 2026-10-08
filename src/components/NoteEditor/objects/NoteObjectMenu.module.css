@@ -29,6 +29,21 @@
   overflow-y: auto;
 }
 
+/* A group's heading: "Create and link" (objects), "Add to the note" (blocks). */
+.group {
+  padding: 8px 8px 3px;
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: default;
+}
+
+.group:first-child {
+  padding-top: 4px;
+}
+
 .kind {
   display: flex;
   align-items: center;
@@ -190,4 +205,39 @@
   font-family: inherit;
   font-size: 0.68rem;
   opacity: 0.75;
+}
+
+/* The selection menu's search box (SelectionMenu.tsx). */
+.search {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 8px 8px 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.search:focus {
+  border-color: var(--color-primary-border);
+  box-shadow: 0 0 0 3px var(--color-primary-subtle);
+}
+
+.emptyNote {
+  padding: 8px;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+/* The colour of the term's kind, or the importance level. */
+.swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }

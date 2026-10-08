@@ -1,5 +1,5 @@
 import { useUIStore } from '@/store/uiStore';
-import { CORE_NAV_ITEMS } from '@/components/NavSidebar/NavSidebar';
+import { CORE_NAV_ITEMS } from '@/components/NavSidebar/navItems';
 import styles from './MobileNav.module.css';
 
 // Android-only bottom tab bar (docs/android/00-architecture.md §5b, corrected tab list).

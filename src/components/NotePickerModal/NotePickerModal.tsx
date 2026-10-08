@@ -6,10 +6,17 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { getNoteBreadcrumb } from '@/utils/notes';
 import { getNoteTabTexts } from '@/utils/noteSearchText';
 import { extractKeywords, stemForMatch } from '@/utils/keywords';
+import { MAIN_TAB_ID } from '@/utils/noteTabs';
+import { LABELS } from '@/config/labels';
+import type { NotePlace } from '@/services/noteFromItem';
 import styles from './NotePickerModal.module.css';
 
 interface Props {
   excludeIds: ReadonlySet<string>;
+  // 'link' (default): pick a note to link. 'place': pick where a NEW note goes — a notebook, or a
+  // note to add a tab to — with the same search and suggestions; onPlace is called instead of onPick.
+  mode?:      'link' | 'place';
+  onPlace?:   (place: NotePlace) => void;
   // Title of the item being linked from. While the search box is empty its keywords are used to
   // suggest notes; the first keystroke replaces them with the typed search.
   suggestFrom?: string;
@@ -27,6 +34,7 @@ interface TabCandidate {
 }
 
 interface Candidate {
+  kind:      'note' | 'notebook';
   id:        string;
   title:     string;
   path:      string;
@@ -100,6 +108,9 @@ function combine(stats: TermStat[], weights: number[], tabCount: number): { scor
   return { score, bestTab };
 }
 
+// Also where a new note goes (mode 'place', "+ New note" in CrossAppRefPicker): the notebooks join
+// the results, ranked the same way, and picking a note adds a tab to it instead of linking it.
+//
 // The "link to a note" search used by CrossAppRefPicker (Task / Calendar item panes and the Add
 // Task modal). Two notes in different notebooks can share a title, so every result shows where
 // the note lives (its notebook path), a preview of its content and when it was last edited, and
@@ -116,10 +127,12 @@ function combine(stats: TermStat[], weights: number[], tabCount: number): { scor
 // the hits, weighting a keyword by how rare it is across the user's notes (so "exchange" outranks
 // "meeting" when few notes mention it). Nothing is indexed up front: the per-tab plain text is
 // cached (utils/noteSearchText.ts) and the scoring is a substring scan of it.
-export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose }: Props) {
+export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode = 'link', onPlace }: Props) {
+  const placing = mode === 'place';
   const notes    = useNoteViews();
   const noteTags = useNoteStore((s) => s.noteTags);
 
+  const L = LABELS.newNoteFromItem;
   const [query, setQuery]               = useState('');
   const [highlightIndex, setHighlight]  = useState(0);
   // Tabs the user picked by hand for a row (note id → tab id), overriding the pre-selected best one.
@@ -129,12 +142,27 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
   useEscapeClose(onClose);
 
   const candidates = useMemo<Candidate[]>(
-    () => Object.values(notes)
-      .filter((n) => !n.archivedAt && !excludeIds.has(n.id))
-      .map((n) => {
+    () => [
+      // Placing a new note: the notebooks too, by name and the notebooks above them.
+      ...(placing ? Object.values(noteTags).filter((t) => t.kind === 'area').map((t): Candidate => {
+        const ancestors: string[] = [];
+        for (let p = t.parentTagId ? noteTags[t.parentTagId] : undefined; p; p = p.parentTagId ? noteTags[p.parentTagId] : undefined) ancestors.unshift(p.name);
+        const path = ancestors.join(' > ');
+        const text = t.description ?? '';
+        return {
+          kind: 'notebook', id: t.id, title: t.name, path, hasTabs: false,
+          tabs: [{ id: MAIN_TAB_ID, name: '', text, lowerName: '', lowerText: text.toLowerCase() }],
+          lower: { title: t.name.toLowerCase(), path: path.toLowerCase() },
+          encrypted: false, updatedAt: t.updatedAt, sortTime: new Date(t.updatedAt).getTime(),
+        };
+      }) : []),
+      ...Object.values(notes)
+      .filter((n) => !n.archivedAt && (placing ? !(n.isEncrypted && !n.title) : !excludeIds.has(n.id)))
+      .map((n): Candidate => {
         const title = n.title || (n.isEncrypted ? 'Locked note' : 'Untitled');
         const path  = getNoteBreadcrumb(n, noteTags);
         return {
+          kind:      'note',
           id:        n.id,
           title,
           path,
@@ -146,7 +174,8 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
           sortTime:  new Date(n.lastViewedAt ?? n.updatedAt).getTime(),
         };
       }),
-    [notes, noteTags, excludeIds],
+    ],
+    [notes, noteTags, excludeIds, placing],
   );
 
   const terms = useMemo(() => query.toLowerCase().split(/\s+/).filter(Boolean), [query]);
@@ -204,9 +233,11 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
   }, [highlightIndex, results]);
 
   const pick = (row: Row, tabIndex = tabIndexFor(row)) => {
-    onPick(row.c.id, row.c.hasTabs ? row.c.tabs[tabIndex].id : undefined);
+    if (placing) onPlace?.({ kind: row.c.kind, id: row.c.id });
+    else onPick(row.c.id, row.c.hasTabs ? row.c.tabs[tabIndex].id : undefined);
     onClose();
   };
+  const placeOutside = () => { onPlace?.({ kind: 'notebook', id: null }); onClose(); };
   const pickHighlighted = () => { const r = results[highlightIndex]; if (r) pick(r); };
 
   const cycleTab = (row: Row, step: number) => {
@@ -236,7 +267,7 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
     else if (e.key === 'Enter') { e.preventDefault(); pickHighlighted(); }
     else if (e.key === 'Tab') {
       const row = results[highlightIndex];
-      if (row?.c.hasTabs) { e.preventDefault(); cycleTab(row, e.shiftKey ? -1 : 1); }
+      if (row?.c.hasTabs && !placing) { e.preventDefault(); cycleTab(row, e.shiftKey ? -1 : 1); }
     }
   };
 
@@ -247,16 +278,16 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
       // Keeps App's global single-key hotkeys from firing behind the picker when a result has focus.
       onKeyDown={(e) => { if (e.key !== 'Escape' && !e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
     >
-      <div className={styles.modal} role="dialog" aria-label="Link a note">
+      <div className={styles.modal} role="dialog" aria-label={placing ? L.placeTitle : 'Link a note'}>
         <div className={styles.header}>
-          <span className={styles.title}>📝 Link a note</span>
+          <span className={styles.title}>{placing ? `📝 ${L.placeTitle}` : '📝 Link a note'}</span>
           <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
         </div>
 
         <input
           autoFocus
           className={styles.search}
-          placeholder="Search by title, notebook, tab or content…"
+          placeholder={placing ? L.placeSearch : 'Search by title, notebook, tab or content…'}
           value={query}
           onChange={(e) => { setQuery(e.target.value); setHighlight(0); setTabOverride({}); }}
           onKeyDown={handleKeyDown}
@@ -264,7 +295,7 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
 
         <div className={styles.results} ref={listRef}>
           {results.length === 0 && (
-            <div className={styles.empty}>{terms.length ? 'No notes match' : 'No notes to link yet'}</div>
+            <div className={styles.empty}>{terms.length ? 'No notes match' : placing ? L.placeEmpty : 'No notes to link yet'}</div>
           )}
           {results.map((row, i) => {
             const { c } = row;
@@ -290,16 +321,18 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
                   <button type="button" className={styles.resultMain} onClick={() => pick(row)}>
                     <span className={styles.resultTop}>
                       <span className={styles.resultTitle}>
+                        {placing && <span className={styles.placeKind}>{c.kind === 'notebook' ? L.placeInNotebook : L.placeAsTab}</span>}
+                        {placing && c.kind === 'notebook' ? '📓 ' : ''}
                         {c.encrypted ? '🔒 ' : ''}{highlight(c.title, marks)}
                       </span>
                       <span className={styles.resultDate}>
                         {new Date(c.updatedAt).toLocaleDateString()}
                       </span>
                     </span>
-                    <span className={styles.resultPath}>📓 {highlight(c.path, marks)}</span>
+                    {(c.kind === 'note' || c.path) && <span className={styles.resultPath}>📓 {highlight(c.path, marks)}</span>}
                     {snippet && <span className={styles.resultSnippet}>{highlight(snippet, marks)}</span>}
                   </button>
-                  {c.hasTabs && (
+                  {c.hasTabs && !placing && (
                     <span className={styles.tabChips} role="group" aria-label="Tab to link">
                       {c.tabs.map((t, ti) => (
                         <button
@@ -318,9 +351,14 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
               </Fragment>
             );
           })}
+          {placing && (
+            <button type="button" className={`${styles.result} ${styles.placeOutside}`} onClick={placeOutside}>
+              {L.placeOutside}
+            </button>
+          )}
         </div>
 
-        <div className={styles.footer}>↑↓ navigate · Tab switches the note's tab · Enter or Ctrl+Enter link · Esc cancel</div>
+        <div className={styles.footer}>{placing ? L.placeFooter : "↑↓ navigate · Tab switches the note's tab · Enter or Ctrl+Enter link · Esc cancel"}</div>
       </div>
     </div>,
     document.body,

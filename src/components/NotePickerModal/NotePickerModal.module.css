@@ -190,3 +190,28 @@
   letter-spacing: 0.04em;
   color: var(--color-muted);
 }
+
+/* Placing a new note: what picking a row does, before its name. */
+.placeKind {
+  margin-right: 0.4rem;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-size: 0.68rem;
+  font-weight: 650;
+  vertical-align: 1px;
+}
+
+.placeOutside {
+  width: 100%;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.placeOutside:hover { color: var(--color-text); }

@@ -96,6 +96,7 @@ export const useNoteStore = create<NoteStore>()(
           title: input.title.trim(),
           content: input.content ?? '',
           abstract: null,
+          mainTabUpdatedAt: ts,
           tagIds,
           tagData: {},
           createdAt: ts,
@@ -120,7 +121,8 @@ export const useNoteStore = create<NoteStore>()(
         return id;
       },
 
-      updateNote: (id, changes) => editNote(id, (n) => ({ ...n, ...changes })),
+      // A change to the main tab's content also stamps when it was last changed (the tab's hover).
+      updateNote: (id, changes) => editNote(id, (n) => ({ ...n, ...changes, ...('content' in changes ? { mainTabUpdatedAt: now() } : {}) })),
 
       encryptNote: (id) => encryptNoteImpl(id),
       decryptNote: (id) => decryptNoteImpl(id),
@@ -182,7 +184,8 @@ export const useNoteStore = create<NoteStore>()(
       addNoteTab: (noteId, name) => {
         const tabId = nanoid(8);
         editNote(noteId, (note) => {
-          const tab: NoteTab = { id: tabId, name: name.trim() || 'Tab', content: '' };
+          const ts = now();
+          const tab: NoteTab = { id: tabId, name: name.trim() || 'Tab', content: '', createdAt: ts, updatedAt: ts };
           const currentOrder = (note.tabOrder ?? []).length
             ? note.tabOrder
             : ['__main__', ...note.tabs.map((t) => t.id)];
@@ -207,7 +210,7 @@ export const useNoteStore = create<NoteStore>()(
       updateNoteTabContent: (noteId, tabId, content) =>
         editNote(noteId, (note) => ({
           ...note,
-          tabs: note.tabs.map((t) => t.id === tabId ? { ...t, content } : t),
+          tabs: note.tabs.map((t) => t.id === tabId ? { ...t, content, updatedAt: now() } : t),
         })),
 
       renameMainTab: (noteId, name) =>
@@ -395,7 +398,7 @@ export const useNoteStore = create<NoteStore>()(
     {
       name: 'notes-storage',
       storage: persistStorageIdb(),
-      version: 12,
+      version: 13,
       migrate: (persisted: unknown, fromVersion: number) => {
         let state = persisted as NoteData;
         if (fromVersion < 2) {
@@ -508,6 +511,12 @@ export const useNoteStore = create<NoteStore>()(
             ])
           ) as unknown as Record<StructuredTagEntryId, StructuredTagEntry>;
           state = { ...state, notes, structuredTagEntries };
+        }
+        if (fromVersion < 13) {
+          const notes = Object.fromEntries(
+            Object.entries(state.notes ?? {}).map(([id, note]) => [id, { mainTabUpdatedAt: null, ...(note as object) }]),
+          ) as unknown as Record<NoteId, Note>;
+          state = { ...state, notes };
         }
         return state;
       },

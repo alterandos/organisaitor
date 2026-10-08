@@ -42,6 +42,7 @@ export function taskToRow(t: Task, userId: string) {
     sort_order:     t.sortOrder      ?? 0,
     cross_app_refs: t.crossAppRefs   ?? [],
     item_links:     t.itemLinks      ?? [],
+    repeat:         t.repeat         ?? null,
     created_at:     t.createdAt,
     updated_at:     t.updatedAt,
     // Explicit null on every live upsert (not merely omitted) so a row previously
@@ -84,6 +85,7 @@ export function rowToTask(r: Record<string, any>): Task {
     sortOrder:     r.sort_order    ?? 0,
     crossAppRefs:  r.cross_app_refs ?? [],
     itemLinks:     r.item_links    ?? [],
+    repeat:        r.repeat        ?? null,
     createdAt:     r.created_at,
     updatedAt:     r.updated_at,
   };
@@ -619,6 +621,7 @@ export function noteToRow(n: Note, userId: string) {
     color:           n.color ?? null,
     pinned:          n.pinned,
     abstract:        n.abstract ?? null,
+    main_tab_updated_at: n.mainTabUpdatedAt ?? null,
     parent_id:       n.parentId ?? null,
     tabs:            n.tabs ?? [],
     main_tab_name:   n.mainTabName ?? 'Main',
@@ -646,6 +649,7 @@ export function rowToNote(r: Record<string, any>): Note {
     color:        r.color    ?? null,
     pinned:       r.pinned   ?? false,
     abstract:     r.abstract ?? null,
+    mainTabUpdatedAt: r.main_tab_updated_at ?? null,
     parentId:     r.parent_id ?? null,
     tabs:         r.tabs ?? [],
     mainTabName:  r.main_tab_name ?? 'Main',

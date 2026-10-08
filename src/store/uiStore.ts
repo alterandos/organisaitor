@@ -8,6 +8,8 @@ import { persistStorage } from '@/utils/persistStorage';
 import { todayIso } from '@/utils/date';
 import { getNotePrimaryNotebookId } from '@/utils/notes';
 import type { NoteId } from '@/types/notes';
+import type { PassageMark } from '@/utils/noteContent';
+import { type NavPlace, pushPlace, travel } from '@/store/navHistory';
 
 export type AppView = 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
 // Notes' three columns (ChronicleView). Which one has keyboard focus decides what N/Space creates.
@@ -43,20 +45,7 @@ export interface PendingArtifactLink {
   resolvedTargetId?: string;
 }
 
-// Back/forward section-navigation history (Alt+Left / Alt+Right, Backspace remains a
-// secondary alternate for back). An object shape (not a bare AppView[]) so a future entry
-// can carry more than "which section" — e.g. which note/list was open — without a
-// breaking change to the stack's element type. Scoped to app-switching only for now, per
-// the request ("if we leave it at app switching for now that'll be enough, but keep in
-// mind flexibility to expand"). MAX_SECTION_HISTORY is the one place to change the depth.
-//
-// Standard browser back/forward semantics: navigating to a new section (mode 'push', the
-// default) pushes the current section onto the back stack and clears the forward stack;
-// navigateBack pops the back stack and pushes onto forward; navigateForward does the
-// reverse. This is why setActiveView takes a `mode` rather than a bare skip flag — 'back'
-// and 'forward' each need to push onto the *other* stack, not just skip recording.
-export interface SectionHistoryEntry { view: AppView }
-export const MAX_SECTION_HISTORY = 6;
+// Back/forward history: see store/navHistory.ts (what a stop is) and recordPlace/goToPlace below.
 
 // notesTabMemory hygiene cap — same shape as recentItemsStore's MAX_ENTRIES/TRIM_TO: nothing
 // ever removes an entry when its note is deleted, so trimming down on write when the map gets
@@ -68,24 +57,6 @@ const NOTE_TAB_MEMORY_TRIM_TO = 400;
 
 // How long calendarLastEditing stays eligible to auto-reopen when returning to Calendar.
 export const CALENDAR_LAST_EDITING_TTL_MS = 30 * 60_000;
-
-// Depth cap for notesHistory/notesForwardHistory — deeper than MAX_SECTION_HISTORY since
-// visiting notes happens far more often than switching app sections.
-export const MAX_NOTES_HISTORY = 20;
-
-// Shared by every place editingNoteId changes away from a real note as an ordinary user
-// action (not openNote's own back/forward-stepping, which has its own logic since only it
-// needs to know about those modes) — closeNote() and setSelectedNoteTag()'s "switching
-// notebooks closes the open note" both need this too, not just openNote's note-to-note case.
-// Found missing 2026-09-25: a user testing "visit note A, switch to a different NOTEBOOK,
-// visit note B" saw nothing pushed to notesHistory at all — switching notebooks nulls
-// editingNoteId directly (setSelectedNoteTag, below), so by the time openNote ran for note B
-// there was no longer a previous note in state for it to capture. The fix is this: capture
-// the outgoing note at the moment it's actually being left, wherever that happens, not only
-// inside openNote's own note-to-note transition.
-function pushNoteLeftFromHistory(notesHistory: { noteId: string }[], outgoingId: string | null): { noteId: string }[] {
-  return outgoingId ? [{ noteId: outgoingId }, ...notesHistory].slice(0, MAX_NOTES_HISTORY) : notesHistory;
-}
 
 // A notebook's tree row only renders if every ancestor above it is expanded (ChronicleView
 // only maps a node's children when `isExpanded`) — so jumping straight to a note whose
@@ -280,19 +251,22 @@ interface UIState {
   setSortDir:   (d: SortDir) => void;
 
   activeView:    AppView;
-  setActiveView: (view: AppView, opts?: { mode?: 'push' | 'back' | 'forward' }) => void;
+  // mode 'silent': switch without recording a history stop (history's own moves).
+  setActiveView: (view: AppView, opts?: { mode?: 'push' | 'silent' }) => void;
 
-  // Back/forward section navigation (Alt+Left/Alt+Right primary, Backspace a secondary
-  // alternate for back only). Both lists are most-recent-first, capped at
-  // MAX_SECTION_HISTORY. navigateBack()/navigateForward() pop their own stack and switch
-  // via setActiveView(..., { mode: 'back' | 'forward' }) — see the SectionHistoryEntry
-  // comment above for why a plain 'push' isn't reused for these.
-  sectionHistory:        SectionHistoryEntry[];
-  sectionForwardHistory: SectionHistoryEntry[];
-  // navigateBack returns whether it moved (a note or a section), so the Android back
-  // button knows when to minimise instead.
-  navigateBack:    () => boolean;
-  navigateForward: () => void;
+  // The one back/forward history (store/navHistory.ts): stops most-recent-first. Alt+Left /
+  // Backspace / the Android back button go back, Alt+Right forward, and the Alt+N history browser
+  // jumps several stops at once (travelHistory). navigateBack reports whether it moved, so the
+  // Android back button knows when to minimise instead.
+  navHistory:        NavPlace[];
+  navForward:        NavPlace[];
+  navigateBack:      () => boolean;
+  navigateForward:   () => void;
+  travelHistory:     (steps: number) => boolean;
+  currentPlace:      () => NavPlace;
+  historyBrowserOpen: boolean;
+  openHistoryBrowser:  () => void;
+  closeHistoryBrowser: () => void;
 
   taskViewMode:    TaskViewMode;
   setTaskViewMode: (mode: TaskViewMode) => void;
@@ -442,25 +416,25 @@ interface UIState {
   setNotesFocusedColumn:   (col: NotesColumn) => void;
   editingNoteId:           string | null;
   // tabId (optional): open on that tab of the note — '__main__' or a NoteTab id. Consumed by
-  // NoteEditor. `opts.mode` (default 'push') is the same push/back/forward vocabulary
-  // setActiveView uses, for notesHistory/notesForwardHistory below — 'back'/'forward' are
-  // only ever passed by navigateBack/navigateForward themselves, never by ordinary callers
-  // (clicking a note, Quick Access, a cross-app link, …), which all want the default 'push'.
-  openNote:                (id: string, tabId?: string, opts?: { mode?: 'push' | 'back' | 'forward' }) => void;
+  // NoteEditor. In Notes, the note being left becomes a history stop (`opts.mode` 'silent': not,
+  // for history's own moves).
+  openNote:                (id: string, tabId?: string, opts?: { mode?: 'push' | 'silent' }) => void;
   requestedNoteTab:        { noteId: string; tabId: string } | null;
   clearRequestedNoteTab:   () => void;
+  // A passage to select and scroll to once the note is open (a Glossary entry's definition, a
+  // reference to it, a Key point, a passage due for review). Set with openNote by
+  // services/notePassage.ts; consumed by NoteEditor.
+  requestedNotePassage:      ({ noteId: string } & PassageMark) | null;
+  setRequestedNotePassage:   (p: ({ noteId: string } & PassageMark) | null) => void;
+  // The Notes Glossary view (components/NotesSection/GlossaryView.tsx), in place of the tree.
+  notesGlossaryOpen:       boolean;
+  openNotesGlossary:       () => void;
+  closeNotesGlossary:      () => void;
+  // The Notes Review view (passages marked "review later" that are due).
+  notesReviewOpen:         boolean;
+  openNotesReview:         () => void;
+  closeNotesReview:        () => void;
   closeNote:               () => void;
-  // Notes' OWN back/forward stack, one stop per distinct note visited (never per tab switch
-  // within a note — see NoteEditor's notesTabMemory for that) — nested underneath the
-  // app-wide sectionHistory: Alt+Left/Right, while already in Notes, walks this stack first
-  // and only falls through to leaving the section once it's exhausted (confirmed with the
-  // user 2026-09-25, since a plain "remember the single last note" — the shape every other
-  // section uses — isn't enough to explain "go back through the last several notes I had
-  // open"). A stop is pushed the moment the open note changes to any different note, whether
-  // or not the editor was ever focused in it. Persists across leaving/re-entering Notes by
-  // a different path (nav click, notesLastEditingNoteId) — untouched by setActiveView.
-  notesHistory:            { noteId: string }[];
-  notesForwardHistory:     { noteId: string }[];
   // Remembers which note (if any) was open in the Notes section so switching away and
   // back restores it — separate from editingNoteId, which also drives NoteEditorPane's
   // cross-app quick-view in other sections and must still clear on section switch.
@@ -696,23 +670,9 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   activeView:    'tasks',
   setActiveView: (view, opts) => set((s) => {
     if (view === s.activeView) return {};
-    const mode = opts?.mode ?? 'push';
-    // 'push' (a normal navigation, e.g. a nav hotkey or clicking a section icon): record
-    // the section we're leaving on the back stack, and invalidate the forward stack — the
-    // same rule a browser follows when you navigate somewhere new after going back.
-    // 'back': don't touch the back stack (navigateBack already popped it) — push the
-    // section we're leaving onto the forward stack instead, so it can be returned to.
-    // 'forward': the mirror image — push the section we're leaving onto the back stack.
-    const sectionHistory =
-      mode === 'push' || mode === 'forward'
-        ? [{ view: s.activeView }, ...s.sectionHistory].slice(0, MAX_SECTION_HISTORY)
-        : s.sectionHistory;
-    const sectionForwardHistory =
-      mode === 'push'
-        ? []
-        : mode === 'back'
-        ? [{ view: s.activeView }, ...s.sectionForwardHistory].slice(0, MAX_SECTION_HISTORY)
-        : s.sectionForwardHistory;
+    // A normal navigation records where we're leaving and clears the forward stack, as a
+    // browser does; history's own moves ('silent') manage the stacks themselves.
+    const history = (opts?.mode ?? 'push') === 'push' ? recordPlace(s) : {};
     // Only reopen a remembered Calendar pane if it's still within the TTL — otherwise it's
     // treated the same as no memory at all (both editing ids land on null below).
     const freshCalendarMemory =
@@ -721,8 +681,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
         : null;
     return {
       activeView: view,
-      sectionHistory,
-      sectionForwardHistory,
+      ...history,
       portfolioChartOpen:  false,
       // Close inline note editor and tag view when leaving the notes section (editingNoteId
       // also drives NoteEditorPane's cross-app quick-view elsewhere, so it can't just be left
@@ -775,37 +734,22 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     };
   }),
 
-  sectionHistory:        [],
-  sectionForwardHistory: [],
-  navigateBack: () => {
+  navHistory: [],
+  navForward: [],
+  navigateBack:    () => get().travelHistory(-1),
+  navigateForward: () => { get().travelHistory(1); },
+  travelHistory: (steps) => {
     const s = get();
-    // While already in Notes, walk its own note-level stack first — only once that's
-    // exhausted does Alt+Left fall through to leaving the section (see notesHistory above).
-    if (s.activeView === 'notes' && s.notesHistory.length > 0) {
-      const [prevNote, ...rest] = s.notesHistory;
-      set({ notesHistory: rest });
-      get().openNote(prevNote.noteId, undefined, { mode: 'back' });
-      return true;
-    }
-    const [prev, ...rest] = s.sectionHistory;
-    if (!prev) return false;
-    set({ sectionHistory: rest });
-    get().setActiveView(prev.view, { mode: 'back' });
+    const moved = travel(s.navHistory, s.navForward, capturePlace(s), steps);
+    if (!moved) return false;
+    set({ navHistory: moved.back, navForward: moved.forward });
+    goToPlace(moved.target);
     return true;
   },
-  navigateForward: () => {
-    const s = get();
-    if (s.activeView === 'notes' && s.notesForwardHistory.length > 0) {
-      const [nextNote, ...rest] = s.notesForwardHistory;
-      set({ notesForwardHistory: rest });
-      get().openNote(nextNote.noteId, undefined, { mode: 'forward' });
-      return;
-    }
-    const [next, ...rest] = s.sectionForwardHistory;
-    if (!next) return;
-    set({ sectionForwardHistory: rest });
-    get().setActiveView(next.view, { mode: 'forward' });
-  },
+  currentPlace: () => capturePlace(get()),
+  historyBrowserOpen:  false,
+  openHistoryBrowser:  () => set({ historyBrowserOpen: true }),
+  closeHistoryBrowser: () => set({ historyBrowserOpen: false }),
 
   taskViewMode:    'overview',
   setTaskViewMode: (mode) => {
@@ -932,8 +876,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       ...(id ? { expandedNoteTagIds: expandNotebookAncestors(s.expandedNoteTagIds, id, useNoteStore.getState().noteTags) } : {}),
       ...(id !== s.selectedNoteTagId ? {
         editingNoteId: null,
-        notesHistory: pushNoteLeftFromHistory(s.notesHistory, s.editingNoteId),
-        notesForwardHistory: [],
+        ...(s.editingNoteId ? recordPlace(s) : {}),
       } : {}),
     }));
   },
@@ -951,11 +894,9 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   openNote: (id, tabId, opts) => set((s) => {
     const requestedNoteTab = tabId ? { noteId: id, tabId } : null;
     if (id === s.editingNoteId) return { requestedNoteTab };
-    const mode = opts?.mode ?? 'push';
-    const prevId = s.editingNoteId;
-    const notesHistory = mode === 'back' ? s.notesHistory : pushNoteLeftFromHistory(s.notesHistory, prevId);
-    const notesForwardHistory =
-      mode === 'push' ? [] : mode === 'back' ? pushNoteLeftFromHistory(s.notesForwardHistory, prevId) : s.notesForwardHistory;
+    // The note being left is a stop, only in Notes itself (editingNoteId also drives the
+    // quick-view pane in other sections, which isn't a place you were).
+    const history = (opts?.mode ?? 'push') === 'push' && s.activeView === 'notes' && s.editingNoteId ? recordPlace(s) : {};
 
     // Keep the notebook tree/list panels in sync with whatever note is actually being shown.
     // Every path that opens a note funnels through here — tree click, Quick Access, cross-app
@@ -971,16 +912,21 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       ? expandNotebookAncestors(s.expandedNoteTagIds, notebookId, noteTags)
       : s.expandedNoteTagIds;
 
-    return { editingNoteId: id, requestedNoteTab, notesHistory, notesForwardHistory, selectedNoteTagId, expandedNoteTagIds };
+    return { editingNoteId: id, requestedNoteTab, ...history, selectedNoteTagId, expandedNoteTagIds };
   }),
-  notesHistory:           [],
-  notesForwardHistory:    [],
   requestedNoteTab:       null,
   clearRequestedNoteTab:  () => set({ requestedNoteTab: null }),
+  requestedNotePassage:     null,
+  setRequestedNotePassage:  (p) => set({ requestedNotePassage: p }),
+  notesGlossaryOpen:      false,
+  openNotesGlossary:      () => set({ notesGlossaryOpen: true, notesReviewOpen: false, noteTagViewActive: false }),
+  closeNotesGlossary:     () => set({ notesGlossaryOpen: false }),
+  notesReviewOpen:        false,
+  openNotesReview:        () => set({ notesReviewOpen: true, notesGlossaryOpen: false, noteTagViewActive: false }),
+  closeNotesReview:       () => set({ notesReviewOpen: false }),
   closeNote: () => set((s) => ({
     editingNoteId: null,
-    notesHistory: pushNoteLeftFromHistory(s.notesHistory, s.editingNoteId),
-    notesForwardHistory: [],
+    ...(s.activeView === 'notes' && s.editingNoteId ? recordPlace(s) : {}),
   })),
   notesLastEditingNoteId: null,
   notesLastActiveTabId:   null,
@@ -1007,7 +953,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   noteTagViewActive:      false,
   noteTagViewTagIds:      [],
-  openNoteTagView:        (tagIds) => set({ noteTagViewActive: true, noteTagViewTagIds: tagIds }),
+  openNoteTagView:        (tagIds) => set({ noteTagViewActive: true, noteTagViewTagIds: tagIds, notesGlossaryOpen: false, notesReviewOpen: false }),
   closeNoteTagView:       () => set({ noteTagViewActive: false, noteTagViewTagIds: [] }),
   noteTagViewReturn:    null,
   setNoteTagViewReturn: (ids) => set({ noteTagViewReturn: ids }),
@@ -1046,25 +992,32 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 }), {
   name:    'todo-ui-session',
   storage: persistStorage(),
-  version: 2,
+  version: 3,
   // v1 → v2: overviewSelection (Overview section, 2026-10-01).
+  // v2 → v3: one history of places (navHistory/navForward) replaces sectionHistory and
+  // notesHistory (2026-10-07); the old section stops carry over, the note stops are dropped.
   migrate: (persisted, fromVersion) => {
-    const state = (persisted ?? {}) as Record<string, unknown>;
-    if (fromVersion < 2 && state.overviewSelection === undefined) state.overviewSelection = null;
+    let state = (persisted ?? {}) as Record<string, unknown>;
+    if (fromVersion < 2 && state.overviewSelection === undefined) state = { ...state, overviewSelection: null };
+    if (fromVersion < 3) {
+      const at = new Date().toISOString();
+      const toPlaces = (v: unknown) => (Array.isArray(v) ? v : []).map((e: { view: AppView }) => ({ view: e.view, at }));
+      const rest = { ...state };
+      for (const k of ['sectionHistory', 'sectionForwardHistory', 'notesHistory', 'notesForwardHistory']) delete rest[k];
+      state = { ...rest, navHistory: toPlaces(state.sectionHistory), navForward: toPlaces(state.sectionForwardHistory) };
+    }
     return state as never;
   },
   partialize: (s) => ({
     activeView:               s.activeView,
-    sectionHistory:           s.sectionHistory,
-    sectionForwardHistory:    s.sectionForwardHistory,
+    navHistory:               s.navHistory,
+    navForward:               s.navForward,
     activeCollectionIdByView: s.activeCollectionIdByView,
     activePurposeIds:         s.activePurposeIds,
     tasksLastEditingTaskId:   s.tasksLastEditingTaskId,
     notesLastEditingNoteId:   s.notesLastEditingNoteId,
     notesLastActiveTabId:     s.notesLastActiveTabId,
     notesTabMemory:           s.notesTabMemory,
-    notesHistory:             s.notesHistory,
-    notesForwardHistory:      s.notesForwardHistory,
     selectedNoteTagId:        s.selectedNoteTagId,
     listsLastActiveListId:    s.listsLastActiveListId,
     listsLastActiveTabId:     s.listsLastActiveTabId,
@@ -1083,3 +1036,60 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 // show the Endeavour picker (Lists, Portfolio) simply never populate their entry.
 export const selectActiveCollectionId = (s: UIState): string | null =>
   s.activeCollectionIdByView[s.activeView] ?? null;
+
+// ── History: what "here" is, and going back to a place (store/navHistory.ts) ─────────────────
+
+export function capturePlace(s: UIState): NavPlace {
+  const at = new Date().toISOString();
+  switch (s.activeView) {
+    case 'notes': {
+      const noteId = s.editingNoteId;
+      return { view: 'notes', at, noteId, notebookId: s.selectedNoteTagId, tabId: noteId ? (s.notesTabMemory[noteId] ?? null) : null };
+    }
+    case 'tasks':    return { view: 'tasks', at, taskId: s.editingTaskId };
+    case 'lists':    return { view: 'lists', at, listId: s.activeListId ?? s.listsLastActiveListId, listTabId: s.listsLastActiveTabId };
+    case 'calendar': return { view: 'calendar', at, calendar: { mode: s.calendarViewMode, year: s.calendarYear, month: s.calendarMonth, date: s.calendarSelectedDate } };
+    case 'records':  return { view: 'records', at, trackerId: s.activeTrackerId, routineId: s.activeRoutineId };
+    case 'overview': return { view: 'overview', at, overview: s.overviewSelection };
+    default:         return { view: s.activeView, at };
+  }
+}
+
+// The stack change for a normal navigation away from where we are.
+function recordPlace(s: UIState): Pick<UIState, 'navHistory' | 'navForward'> {
+  return { navHistory: pushPlace(s.navHistory, capturePlace(s)), navForward: [] };
+}
+
+// Puts the app back at a place, without recording a stop. The section's own "where was I"
+// memory is set first, so entering the section lands there.
+function goToPlace(p: NavPlace): void {
+  const ui = useUIStore.getState();
+  const set = useUIStore.setState;
+  switch (p.view) {
+    case 'notes': {
+      set({ notesLastEditingNoteId: p.noteId ?? null, selectedNoteTagId: (p.notebookId ?? null) as NoteTagId | null });
+      ui.setActiveView('notes', { mode: 'silent' });
+      if (p.noteId) useUIStore.getState().openNote(p.noteId, p.tabId ?? undefined, { mode: 'silent' });
+      else set({ editingNoteId: null });
+      return;
+    }
+    case 'tasks':
+      set({ tasksLastEditingTaskId: p.taskId ?? null });
+      if (ui.activeView === 'tasks') set({ editingTaskId: p.taskId ?? null });
+      break;
+    case 'lists':
+      set({ listsLastActiveListId: p.listId ?? null, listsLastActiveTabId: p.listTabId ?? null });
+      if (ui.activeView === 'lists' && p.listId) ui.requestListSelection(p.listId);
+      break;
+    case 'calendar':
+      if (p.calendar) set({ calendarViewMode: p.calendar.mode, calendarYear: p.calendar.year, calendarMonth: p.calendar.month, calendarSelectedDate: p.calendar.date });
+      break;
+    case 'records':
+      set({ activeTrackerId: p.trackerId ?? null, activeRoutineId: p.routineId ?? null });
+      break;
+    case 'overview':
+      if (p.overview !== undefined) set({ overviewSelection: p.overview });
+      break;
+  }
+  useUIStore.getState().setActiveView(p.view, { mode: 'silent' });
+}

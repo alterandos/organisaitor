@@ -144,6 +144,8 @@ Three related requests about the navigation columns (Notes' notebook tree, Lists
 
 **Known gap, logged in the Pattern retrofit backlog below: touch/mobile.** The trigger is hover-only; the old CSS had an explicit `@media (hover: none)` "always show" fallback for touch that this doesn't have an equivalent for. Low risk today (none of these five components are reachable from Android's `MobileNav`), but not solved.
 
+- **Charts — one neutral spec, one adapter** (CLAUDE.md "Charts", 2026-10-07). Check: the pattern test "only src/charts/chartAdapter.ts imports the charting library". **Fully applied on 2026-10-07** (the note chart block is the only Chart.js user). **Deliberate exception:** Portfolio's ticker chart (`components/WatchlistView/TickerChart.tsx`) uses `lightweight-charts`, a specialised financial-chart library (candlesticks, live price scales) that a ChartSpec doesn't describe; it predates the pattern and stays as it is unless a general chart kind ever covers it.
+
 **Done 2026-09-24 — the "expand the full name on hover" half of this ask**: `src/components/TruncatedText/TruncatedText.tsx` already did exactly this for `ChronicleView`'s tree and `NoteList`; rolled out to the remaining four sites that were missing it — `Sidebar` (Endeavours/Tags/Purposes rows), `ManagePane` (its shared `ManageRow` component, covering all three tabs in one change), `ListsSection`'s sidebar, and `RecordsView`'s tracker/routine sidebar. All already had the required truncation CSS, so this was a drop-in `<span>` → `<TruncatedText>` swap at each site.
 
 ### ~~Item count badge in nav-column rows~~ — done 2026-09-24 (Notes notebook tree)
@@ -580,6 +582,84 @@ Built: see CLAUDE.md "Inline objects in notes (`\`)" and the 2026-10-06 entry in
 - ~~**`NoteBacklinks` doesn't list deadlines**~~ — fixed 2026-10-06 with the `\deadline` kind.
 - **Default view setting**: whether new links start inline or as cards (settingsStore field; default inline today).
 
+### Note blocks (`\timeline`, …) — Timeline built 2026-10-06, sorted by date + horizontal style 2026-10-07; more styles and more blocks
+
+Built: see CLAUDE.md "Note blocks" (under "Inline objects in notes") and "Note blocks: Timeline" in `docs/features/implemented-features.md`. The user asked for `\` to make note-taking structures as well as app items, starting with a simple timeline that can be extended later.
+- **More timeline styles.** Each is a value in `TIMELINE_VARIANTS` (`extensions/Timeline.ts`) plus its CSS under `[data-variant="…"]` and an icon in `STYLE_ICONS`; the content never changes, so switching style is safe. Choosing is built (the pill at the top right and the right-click menu, 2026-10-07). Candidates from other apps:
+  - **Alternating**: entries left and right of a centre line (the classic history-book layout; collapses to the rail on a narrow screen).
+  - **Compact**: When and text on one line, the When in a fixed-width column (changelogs, meeting logs).
+  - ~~**Horizontal**~~: built 2026-10-07, entries alternating above and below the line. Follow-up ideas: year markers on the line where the year changes; spacing proportional to time (a true scale) as an option.
+  - **Cards**: each entry in a soft box on the rail (Linear/GitHub activity feeds).
+- **Per-entry options**: an entry's dot colour or icon (a milestone, a warning), and marking an entry as "now" for a project timeline.
+- ~~**Ordering**~~: sorting by date built 2026-10-07 (`utils/timelineWhen.ts`, see "Timeline: sorted by date, and a horizontal style"). Still to do: moving entries by hand (Alt+Shift+↑/↓, drag on the dot) for "As typed" timelines; telling the user when a When couldn't be read (today it silently stays put); a per-timeline setting for day-first vs month-first dates when the locale guess is wrong.
+- **Turning a list into a timeline** (and back): a bulleted list whose items start with a date ("1914 – …") is the obvious source.
+- **More blocks**, each one node in `extensions/` + a `*Block.ts` in `objects/` + one `NOTE_BLOCK_KINDS` entry: a callout (`\callout`: an icon, a tint, text), a toggle/collapsible section, a pros/cons table, a definition list (`\term`), ~~a quote with source~~ (built 2026-10-07, `\quote`), a kanban-like board.
+- **Quote follow-ups:** a default style for new quotes in Settings (the user first suggested Settings; per-quote choice was built instead); quotes of more than one paragraph (today Shift+Enter line breaks); a Link field that opens the source; a "copy as citation" action (APA / MLA from the fields).
+
+### Block designs — how to develop them (the pattern, and ideas; logged 2026-10-07)
+
+The pattern is in CLAUDE.md "Block designs". The user asked for it to be named and kept here so every future block is built the same way.
+
+**How to add a design to a block:**
+1. Add a value to the block's `*_VARIANTS` (`extensions/<Block>.ts`).
+2. Add an entry to its `*_DESIGNS`: the label in `LABELS.noteBlocks.<block>`, and a 16×16 line-drawing icon (strokes in currentColor; circles filled).
+3. Write its CSS block under `[data-type="<block>"][data-variant="<id>"]` in `NoteEditor.module.css`. Shared parts (cards, placeholders, the pill) stay outside it.
+4. Anything the design needs that the content doesn't hold is computed in the block's decorations (positions, colours, counts as CSS variables), never stored.
+5. Test it: switching to it round-trips through JSON and HTML, and its widgets render. Then check it in the real app, light and dark, and with many and few parts.
+
+**How to add a block:** the Note blocks checklist in CLAUDE.md, with at least two designs from the start, using `blockPill` / `designButtons` / `designMenuItem`.
+
+**Design ideas not built yet:**
+- **Timeline:** Alternating (left and right of a centre line), Compact (When in a column, one line each), Cards on the rail.
+- **Quote:** Speech bubble; Minimal (just a rule and the text); Tweet-style card with the speaker's picture (needs pictures, below).
+- **Cycle:** Spiral (each round a little further out, for iterations); Orbit (stages as dots on the ring, labels outside); Two-way (a back-and-forth pair of stages, for a cycle of exactly two).
+- **Hierarchy** (built 2026-10-07 with Tree, Columns, Outline): Radial (the root in the middle, levels as rings); Bracket (a tournament-style tree); collapsing a branch; dragging an item onto another to re-parent it. Built from the Glossary: see "Glossary auto-linking — follow-ups".
+- **Pyramid** (built 2026-10-07 with Pyramid, Funnel, Stacked): a 3-D look (shaded sides); notes on alternate sides; numbers on the layers.
+- **A default design per block in Settings** (new quotes start as Card, …), if the per-block choice turns out to be repetitive.
+
+### Special characters — more sets (logged 2026-10-08)
+Built: Greek by name (`//name`, CLAUDE.md "Special characters"). The user wants "support for different characters, starting with Greek". Next sets, each entries in `src/specialChars/charSets.ts`: arrows (`//to` →, `//implies` ⇒), maths (`//inf` ∞, `//pm` ±, `//neq` ≠, `//leq` ≤, `//sum` ∑, `//sqrt` √, `//deg` °), sub- and superscript digits, and a card listing every name.
+
+### Charts in notes (logged 2026-10-07; built the same day)
+
+The user asked whether a chart library would do this out of the box (yes), and wanted the trade-offs before choosing. The options laid out, with a future data/spreadsheet app in mind:
+- Chart.js (small, simple);
+- Recharts (React, SVG);
+- Apache ECharts (the most capable: large data, many chart types, a dataset/transform model).
+**Decided 2026-10-07: Chart.js, kept neutral; built** ("Charts in notes" in `docs/features/implemented-features.md`, CLAUDE.md "Charts"). As planned:
+- The chart block should store a library-neutral spec (type, labels, series, options) and render through one adapter module, so the library can be swapped or a second added without touching stored notes.
+- The library should be lazy-loaded, so notes without charts never pay for it.
+**Not built yet** (charts): data labels on the bars; a second value axis; sorting and filtering the data; combining types in one chart (a line over columns); a chart from a List or a Tracker's entries (the spec makes this a source mapping, like an Overview source); waterfall subtotals part-way through; resizing a chart's height; ECharts-only kinds (heatmap, sankey, treemap), which would be the case for a second adapter.
+
+### Pictures and icons in note blocks (logged 2026-10-07)
+
+The user asked how hard it would be to drop small icons or pictures into blocks, resizable and reshapable. **Built now (quick):** each cycle stage has an icon slot. It takes an emoji (a picked grid or any typed one) or a picture: dropped on the slot, or chosen with "Choose a picture…", which is the touch path. The picture is centre-cropped to a 160 px square (`squareIconDataUrl`), with shape (circle / rounded / square) and size (S / M / L) chosen for the whole cycle.
+**Not built (bigger):**
+- The same slot in other blocks: the timeline's dots, and the quote card's avatar instead of initials. This is cheap once wanted: reuse `iconWidget` / `openIconPicker` from `extensions/Cycle.ts`, moved into `blockDesigns.ts`.
+- ~~**Free resizing and cropping of a picture**~~ — built 2026-10-07 for pictures in the note text ("Note pictures: resize like a word processor, and crop" in `docs/features/implemented-features.md`). Not for the cycle's icon slots, which stay block-wide shape and size. Follow-ons: the crop isn't carried into copied HTML (another app gets the whole picture, at its width and height); rotate and flip; a crop to a fixed shape (square, circle); wrapping text around a picture.
+- An icon library (searchable line icons, not only emoji), and pasting a picture into a slot.
+
+### Glossary auto-linking — follow-ups (logged 2026-10-07)
+
+Built: "Linking to the Glossary as you type" (see `docs/features/implemented-features.md`).
+- **Definitions linking to definitions.** The user's suggestion: Foraminifera's definition mentions eukaryote, so link it back. Partly automatic already: typing a term inside another term's definition gets the same offer, which links the passage to the term. Still to do: offer it when a definition is created from text that already mentions a term (the popover could list "Mentions: Eukaryote — link?"), and show a term's "related terms" in its card and in the Glossary.
+- **A hierarchy of linked concepts** (the user, 2026-10-07): eventually concepts linked into a hierarchy ("Eukaryote" under "Cell", "Foraminifera" under "Eukaryote"), from which a breakdown or hierarchy block could be built in one go ("Insert as a hierarchy"). Needs a parent link on a Glossary entry (a `parentEntryId`, or links between entries) and a way to set it (the definition popover, or dragging in the Glossary view).
+- **A setting to turn auto-link offers off**, or to only offer terms from the same notebook.
+- **Smarter matching:** stemming beyond -s / -es ("eukaryotic"), and a term's alternative names (an "Also called" field).
+- **Touch:** the offer chip is tappable; the hover card isn't reachable on a phone (gap F16).
+
+### Glossary and Important — follow-ups (logged 2026-10-07)
+
+Built: CLAUDE.md "Annotations" and the two 2026-10-07 entries in `docs/features/implemented-features.md` ("The Glossary…", "Important, built out…").
+- **Existing plain Definition/Concept marks** (made before 2026-10-07) have no record, so they aren't in the Glossary. Offer "Add to the Glossary" on them (right-click), or convert them on first open.
+- **One term defined in two notes** stays two entries. Merge, or show them as one term with two definitions.
+- **Quick Access (Ctrl+G) search for Glossary terms**: a `term` provider in `utils/quickAccess.ts` that opens the definition (`openNotePassage`).
+- **Edit a term from the Glossary view** (today: go to its note and use the popover).
+- **The margin label's hover card on touch**: a tap goes straight to the definition, so the meaning isn't seen on a phone. Log in `docs/android/10-gap-analysis.md` when Notes editing on Android (W7) is planned.
+- **Key points across a note's tabs** (the outline only sees the open tab), and across notes (an Overview source for Important passages).
+- **Review**: keyboard shortcuts in the Review view (avoid the bare digits, which navigate sections); a daily notification or badge when passages are due; an SM-2 style ease factor if the fixed ladder proves too blunt.
+- **Retrofit: `services/crossAppLinkCleanup.ts` writes stored note content without checking `liveNoteEditorFor`** (it predates the rule in CLAUDE.md "Annotations"), so stripping a dead link from the note that's open can be overwritten by the editor's next save. Route it through the live editor like `services/noteReview.ts` does.
+
 ### ~~Calendar: occurrences taken out of a series keep their link~~ — built 2026-10-06 (see "Calendar: a date taken out of a repeating series stays linked" in implemented-features.md; migration 044 pending)
 
 **Today:** "Edit only this one" (`detach…Occurrence`) adds an exception to the series and creates a **standalone copy** with `crossAppRefs: []` and no record of where it came from. The copy loses its link to the note it was made from, and nothing ties it back to its series. "Edit this and following" (`split…Series`) does the same for the new tail series.
@@ -842,7 +922,8 @@ Agreed with the user in the design conversation of 2026-10-01. Order confirmed.
 - **Not in step 1**: the header Endeavour picker isn't used in Overview (it has its own); portfolio watchlist items and fitness activities have no source yet (add-on apps — add sources when wanted); no agent commands read Overviews; Overview on Android is reachable only from the More sheet; the row hover menu (✎/✕) has the same touch gap as every `RowHoverActions` site.
 
 ### Task links — follow-ons (logged 2026-10-01)
-- **Recurring tasks — NEXT, user asked to be reminded at the start of the next session.** A task that repeats like a recurring reminder. Each new instance probably links automatically to the calendar Reminder/Deadline it creates. Design it on top of the `ItemLink` shape (a new link kind in `config/itemLinkKinds.ts`, e.g. "instance of") rather than a parallel mechanism. Not started; needs a design conversation first.
+- ~~**Recurring tasks**~~ — built 2026-10-07 (see "Recurring tasks" in `docs/features/implemented-features.md`). Follow-ons not built: (a) a repeat rule on specific weekdays (`daysOfWeek`, as routines have) and "every last Friday"-style rules; (b) reopening a completed occurrence *without* Undo leaves its already-created next occurrence in place (completing again reuses it, so no duplicate, but there are then two open occurrences until one is done); (c) completing from a checklist (`toggleChecklistItemWithTasks`) spawns the next occurrence but says nothing about it; (d) a "skip this one" action that moves to the next occurrence without completing.
+- **Pattern retrofit — one repeat-rule editor.** `components/RepeatField` is the task repeat editor; `AddCalendarItemModal` and the calendar panes still have their own copies. Check: `grep -rn "endKind" src/components --include=*.tsx` should list only `RepeatField`. Known sites: AddCalendarItemModal, CalendarEventPane, CalendarReminderPane, CalendarDeadlinePane.
 - **Agent commands for task links**: agents can't see or create links yet. Needs `access.ts` read/write (store actions `addItemLink`/`removeItemLink` already hold the rules), a `get_task` field for blockers, and a decision on whether an agent completing a blocked task should be refused or noted.
 - **Link an existing task as a follow-up / "unlocks" from this side**: today "+ Follow-up" always creates a new task, and "unlocks" can only be made from the other task ("+ Waiting on…" there).
 - **Ticking the last linked-checklist item** (`taskListLinks.toggleChecklistItemWithTasks`) completes the task through `toggleTaskWithLists` after its own confirm: no blocker prompt, no toast. Route it through `taskCompletion` (mind the import direction: taskCompletion imports taskListLinks).
@@ -1116,8 +1197,9 @@ register and every decision are in `docs/ai/01-capability-inventory.md`. Still t
 4. **Provider abstraction** (user's own key stored per device, never synced; local OpenAI-compatible endpoint); check CORS per provider (Tauri/Android use native HTTP).
 5. **Cross-device attribution:** a small synced table recording which items an agent created (a Supabase migration).
 6. **Phone widget** that opens the assistant with the app closed (headless launch on Android).
-7. **Archive support for notes, lists/items, schedules, Portfolio items and activities** (per entity: store action, the shared `ItemActions` UI, a migration), then extend `archive_item`. Until then agents create and modify those but cannot remove them.
-8. Commands for Lists, Records (trackers, entries, routines), Fitness and Portfolio.
+7. **An abstract written by the AI** (the user, 2026-10-08): today a note's abstract is written by hand (Note ▾ → Add abstract); offer "Write an abstract" that asks the model for a short summary of the note (or one tab) and fills the abstract for the user to edit, never silently. A command (`summarize_note` → proposes `update_note_properties` with `abstract`) under Chunk B; encrypted notes excluded like every agent read. It then shows in linked calendar items' panes for free ("Calendar items: a new note from the pane, and linked notes' abstracts").
+8. **Archive support for notes, lists/items, schedules, Portfolio items and activities** (per entity: store action, the shared `ItemActions` UI, a migration), then extend `archive_item`. Until then agents create and modify those but cannot remove them.
+9. Commands for Lists, Records (trackers, entries, routines), Fitness and Portfolio.
 
 ---
 
@@ -2698,6 +2780,11 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **Block designs** (note blocks offer several designs through `extensions/blockDesigns.ts`, 2026-10-07) | `src/test/patterns.test.ts` "every note block offers its designs through blockDesigns" | **Fully applied 2026-10-07** — timeline and quote moved onto it; the cycle built on it. |
+| **Icons come from one place (`components/Icons`)** (2026-10-07) | `src/test/patterns.test.ts` "suite-wide icons come from components/Icons"; for the rest, `grep -rln ">×<\|✎\|🔗" src/components --include=*.tsx` | Applied to the text-colour swatch and the item-action icons. **Not yet:** close × (in ~27 files), edit ✎ (~14), link 🔗 (~8) are typed as characters; give each an icon in `components/Icons` and switch the sites over. NoteEditor's ribbon SVGs are local on purpose (one place uses them). |
+| **Changes to a note from outside the editor go through `liveNoteEditorFor`** (2026-10-07) | `grep -rn "updateNote(\|updateNoteTabContent(" src/services` — each site must check `liveNoteEditorFor` first | `services/noteReview.ts` follows it. **Not yet:** `services/crossAppLinkCleanup.ts` (`stripArtifactLinksFromNote`), `services/shrinkNoteImages.ts` (closes the open note first instead, which is also safe). |
+| **Linked Glossary text drawn once per run, never per mark element** (2026-10-07) | `src/test/patterns.test.ts` "no CSS draws content on [data-concept-ref]" | **Fully applied 2026-10-07** — new. |
+| **Note blocks registered in `NOTE_BLOCK_KINDS`** (`\timeline`, 2026-10-06) | `src/test/patterns.test.ts` "every note block is in NOTE_BLOCK_KINDS" | **Fully applied 2026-10-06** — the timeline is the first note block; nothing existed before. |
 | **`/api/*` via `apiFetch()`; files via `saveFile()`** (Android W1, 2026-10-04) | `src/test/patterns.test.ts` "/api/* calls go through apiFetch"; for files, `grep -rn "\.download =" src` (only `utils/saveFile.ts`) | **Fully applied 2026-10-04** — every `/api/*` caller already used `apiFetch`; the only downloads (`backupExport.ts`) now call `saveFile`. No test for `saveFile` yet (grep only). |
 | **Notifications: one set of rules** (`services/notifications/plan.ts`, 2026-10-06) | `src/test/patterns.test.ts` "notifications are delivered only from the planned paths" | **Fully applied 2026-10-06** — the old checker was the only place with rules, and it now uses `plan.ts`. |
 | **Pickers suggest by keywords** (`utils/suggestRank.ts`, 2026-10-01) | `src/test/patterns.test.ts` "\"link a …\" pickers suggest by keywords" | **Fully applied 2026-10-01** — NotePickerModal (its own tab-aware ranking), TaskPickerModal, ListPickerModal; every opener passes `suggestFrom`. |

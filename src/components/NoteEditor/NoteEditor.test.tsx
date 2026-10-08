@@ -19,7 +19,7 @@ const doc = (text: string) => JSON.stringify({ type: 'doc', content: [{ type: 'p
 function makeNote(id: string, content: string, tabs: Note['tabs'] = []): Note {
   return {
     id: id as NoteId, title: id, content, tagIds: [], tagData: {}, createdAt: '2026-09-01T00:00:00.000Z',
-    updatedAt: '2026-09-01T00:00:00.000Z', abstract: null, lastViewedAt: null, archivedAt: null, color: null,
+    updatedAt: '2026-09-01T00:00:00.000Z', abstract: null, mainTabUpdatedAt: null, lastViewedAt: null, archivedAt: null, color: null,
     pinned: false, userId: '', parentId: null, tabs, mainTabName: 'Main', tabOrder: [], templateId: null,
     collectionId: null, isEncrypted: false, encryptedPayload: null,
   };
@@ -56,7 +56,7 @@ describe('NoteEditor tab restore on note switch', () => {
     render(<StrictMode><NoteEditor /></StrictMode>);
     expect(editorText()).toContain('MAIN-B');
 
-    act(() => { useUIStore.getState().openNote('note-a', undefined, { mode: 'back' }); });
+    act(() => { useUIStore.getState().openNote('note-a', undefined, { mode: 'silent' }); });
     expect(editorText()).toContain('TAB2-A');
     expect(editorText()).not.toContain('MAIN-A');
 
@@ -178,5 +178,52 @@ describe('NoteEditor paste as plain text', () => {
     expect(document.querySelector('.ProseMirror table')).toBeNull();
     paste({ 'text/plain': tsv });
     expect(document.querySelector('.ProseMirror table')).not.toBeNull();
+  });
+});
+
+// The live Tiptap editor inside the mounted NoteEditor (Tiptap keeps it on its DOM element).
+const liveEditor = () => (document.querySelector('.ProseMirror') as unknown as { editor: import('@tiptap/core').Editor }).editor;
+// A key pressed in the editor: it reaches the editor's own keymap first, then the document.
+const keyInEditor = (init: KeyboardEventInit) => act(() => {
+  document.querySelector('.ProseMirror')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+});
+
+describe('NoteEditor keys added 2026-10-07', () => {
+  const twoLines = JSON.stringify({ type: 'doc', content: [{ type: 'section', content: [
+    { type: 'paragraph', content: [{ type: 'text', text: 'Jo Bloggs' }] },
+    { type: 'paragraph', content: [{ type: 'text', text: 'Body text' }] },
+  ] }] });
+
+  it('F2 renames the open tab, and Enter puts the cursor back where it was', async () => {
+    useNoteStore.setState((s) => ({ notes: { ...s.notes, ['note-c' as NoteId]: makeNote('note-c', twoLines) } }));
+    useUIStore.setState({ activeView: 'notes' });
+    act(() => { useUIStore.getState().openNote('note-c'); });
+    render(<NoteEditor />);
+    const ed = liveEditor();
+    act(() => { ed.view.dom.focus(); ed.commands.setTextSelection(15); });
+    keyInEditor({ key: 'F2' });
+    const input = await screen.findByDisplayValue('Main');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Draft{Enter}');
+    expect(stored('note-c').mainTabName).toBe('Draft');
+    expect(ed.state.selection.from).toBe(15);
+    expect(ed.isFocused).toBe(true);
+  });
+
+  it('Ctrl+H then Ctrl+A makes the line the Author (not everything, though Ctrl+A also means Select all)', () => {
+    useNoteStore.setState((s) => ({ notes: { ...s.notes, ['note-c' as NoteId]: makeNote('note-c', twoLines) } }));
+    useUIStore.setState({ activeView: 'notes' });
+    act(() => { useUIStore.getState().openNote('note-c'); });
+    render(<NoteEditor />);
+    const ed = liveEditor();
+    act(() => { ed.view.dom.focus(); ed.commands.setTextSelection(4); });
+    keyInEditor({ key: 'h', ctrlKey: true });
+    keyInEditor({ key: 'a', ctrlKey: true });
+    const blocks: string[] = [];
+    ed.state.doc.forEach((section) => section.forEach((b) => blocks.push(`${b.type.name}:${b.textContent}`)));
+    expect(blocks).toEqual(['noteAuthor:Jo Bloggs', 'paragraph:Body text']);
+    keyInEditor({ key: 'h', ctrlKey: true });
+    keyInEditor({ key: 's' });
+    expect(ed.state.selection.$from.parent.type.name).toBe('noteSubtitle');
   });
 });

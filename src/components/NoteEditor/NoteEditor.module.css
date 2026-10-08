@@ -162,6 +162,41 @@
 }
 
 /* Heading dropdown */
+/* Font size: A− [size] A+ */
+.fontSizeGroup {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.fontSizeSelect {
+  height: 28px;
+  width: 4.1rem;
+  padding: 0 0.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  outline: none;
+}
+
+.fontStepIcon {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.fontStepIcon small {
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
 .headingSelect {
   height: 28px;
   padding: 0 0.375rem;
@@ -556,6 +591,42 @@
   color: var(--color-text);
 }
 
+/* ── Subtitle and Author (extensions/NoteBylines.ts) ─────────────────────────
+   Editorial conventions: the subtitle (standfirst) is a larger, light, muted sentence under the
+   title — a step down in weight and colour, never bold, so it can't be mistaken for a heading.
+   The author (byline) is small, spaced capitals after a short accent rule — compact and quiet,
+   the way magazines and newspapers set it. Never numbered, never in the outline. */
+.editorContent [data-note-subtitle] {
+  margin: -0.35rem 0 1rem;
+  font-size: 1.3rem;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+  color: var(--color-muted);
+}
+
+.editorContent [data-note-author] {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.25rem 0 1.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-text);
+}
+
+.editorContent [data-note-author]::before {
+  content: '';
+  flex-shrink: 0;
+  width: 1.4rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-primary);
+}
+
 /* ── Headings (H1–H5) with auto-numbering ────────────────────────────────── */
 
 .editorContent h1 {
@@ -710,6 +781,1780 @@
 .editorContent ul > li > ul           { list-style-type: circle; }
 .editorContent ul > li > ul > li > ul { list-style-type: square; }
 
+/* ── Timeline (extensions/Timeline.ts, `\timeline`) ──────────────────────────
+   Two styles, each its own [data-variant] block; what's outside one (placeholders, the inferred
+   year, the buttons, the flash of a moved entry) is shared. Lengths are px/rem, not em: zoom is
+   CSS `zoom`, which scales them anyway. */
+
+.editorContent [data-type="timeline"] {
+  position: relative;
+  margin: 0.75rem 0 1rem;
+}
+
+/* ·· Vertical (rail): entries hang off a line down the page ·································· */
+
+.editorContent [data-type="timeline"][data-variant="rail"] {
+  padding-left: 28px;
+}
+
+.editorContent [data-variant="rail"] > [data-type="timeline-item"] {
+  position: relative;
+  padding-bottom: 1rem;
+  border-radius: var(--radius-md);
+}
+
+/* The dot: hollow, filled while the cursor's in its entry. */
+.editorContent [data-variant="rail"] > [data-type="timeline-item"]::before {
+  content: '';
+  position: absolute;
+  left: -26px;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  background: var(--color-surface);
+  transition: background 0.15s, transform 0.15s;
+}
+
+/* The rail, from under this dot down to the next one. None below the last. */
+.editorContent [data-variant="rail"] > [data-type="timeline-item"]::after {
+  content: '';
+  position: absolute;
+  left: -21px;
+  top: 20px;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-primary-border);
+}
+
+.editorContent [data-variant="rail"] > [data-type="timeline-item"]:last-of-type::after {
+  display: none;
+}
+
+.editorContent [data-variant="rail"] [data-timeline-when] {
+  font-size: 0.8125rem;
+  line-height: 20px;
+}
+
+/* ·· Horizontal: a line across, entries alternating above and below it ·························
+   A two-row grid of half-card columns: entry n spans columns n and n+1, in the top row when n is
+   odd and the bottom row when even, so neighbours overlap by half a card on opposite sides and
+   the dots sit evenly along the line, one per column edge. Each card draws its own stretch of the
+   line (::after) and its dot (::before) in the gap between the rows; the stretches overlap into a
+   continuous line. Scrolls sideways when it's wider than the note. */
+
+.editorContent [data-type="timeline"][data-variant="horizontal"] {
+  --tl-gap: 64px;     /* between the rows: the line runs through the middle */
+  --tl-half: 116px;   /* half a card */
+  display: grid;
+  grid-template-rows: auto auto;
+  grid-auto-columns: var(--tl-half);
+  row-gap: var(--tl-gap);
+  overflow-x: auto;
+  padding: 40px 12px 16px;
+  margin-left: -12px;
+  margin-right: -12px;
+  scrollbar-width: thin;
+  scroll-padding-inline: 24px;
+}
+
+.editorContent [data-variant="horizontal"] > [data-type="timeline-item"] {
+  position: relative;
+  grid-column: var(--tl-col) / span 2;
+  margin: 0 7px;
+  padding: 10px 13px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.editorContent [data-variant="horizontal"] > [data-tl-side="above"] { grid-row: 1; align-self: end; }
+.editorContent [data-variant="horizontal"] > [data-tl-side="below"] { grid-row: 2; align-self: start; }
+
+.editorContent [data-variant="horizontal"] > [data-type="timeline-item"][data-tl-current] {
+  border-color: var(--color-primary-border);
+  box-shadow: 0 0 0 3px var(--color-primary-subtle), var(--shadow-md);
+}
+
+@media (hover: hover) {
+  .editorContent [data-variant="horizontal"] > [data-type="timeline-item"]:hover {
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* The stem from the card to the line, and the card's stretch of the line (half the gap away). */
+.editorContent [data-variant="horizontal"] > [data-type="timeline-item"]::after {
+  content: '';
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  height: calc(var(--tl-gap) / 2 + 1px);
+  pointer-events: none;
+  background:
+    linear-gradient(var(--color-primary-border), var(--color-primary-border)) center var(--tl-stem-y) / 2px calc(var(--tl-gap) / 2 - 8px) no-repeat,
+    linear-gradient(var(--color-primary-border), var(--color-primary-border)) left var(--tl-line-y) / 100% 2px no-repeat;
+}
+
+.editorContent [data-variant="horizontal"] > [data-tl-side="above"]::after { top: calc(100% + 1px); --tl-stem-y: top; --tl-line-y: bottom; }
+.editorContent [data-variant="horizontal"] > [data-tl-side="below"]::after { bottom: calc(100% + 1px); --tl-stem-y: bottom; --tl-line-y: top; }
+
+/* The dot, on the line under (or over) the middle of its card. */
+.editorContent [data-variant="horizontal"] > [data-type="timeline-item"]::before {
+  content: '';
+  position: absolute;
+  left: calc(50% - 7px);
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 4px var(--color-surface);
+  z-index: 1;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.editorContent [data-variant="horizontal"] > [data-tl-side="above"]::before { top: calc(100% + var(--tl-gap) / 2 - 7px); }
+.editorContent [data-variant="horizontal"] > [data-tl-side="below"]::before { bottom: calc(100% + var(--tl-gap) / 2 - 7px); }
+
+/* The When as a pill at the top of its card. */
+.editorContent [data-variant="horizontal"] [data-timeline-when] {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0 0 6px -2px;
+  padding: 1px 9px;
+  border-radius: 99px;
+  background: var(--color-primary-subtle);
+  font-size: 0.78rem;
+  line-height: 20px;
+}
+
+.editorContent [data-variant="horizontal"] [data-timeline-when][data-tl-empty] {
+  min-width: 4.5rem;
+}
+
+/* "+ Add entry" at the end of the line: a dashed dot on the line itself. */
+/* In the bottom row, lifted onto the line: the rows can differ in height, so it can't be centred
+   across both. --tl-end (set on the timeline) is the column after the last card. */
+.editorContent [data-variant="horizontal"] > [data-timeline-add] {
+  grid-row: 2;
+  grid-column: var(--tl-end);
+  align-self: start;
+  justify-self: start;
+  margin: calc(-1 * var(--tl-gap) / 2 - 10px) 0 0 22px;
+  padding-left: 22px;
+  white-space: nowrap;
+}
+
+.editorContent [data-variant="horizontal"] > [data-timeline-add]::before {
+  content: '+';
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: 50%;
+  background: var(--color-surface);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* The line runs on, faintly, to the add button. */
+.editorContent [data-variant="horizontal"] > [data-timeline-add]::after {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 9px;
+  width: 30px;
+  height: 2px;
+  background: linear-gradient(to right, var(--color-primary-border), transparent);
+}
+
+/* ·· Shared ················································································ */
+
+.editorContent [data-timeline-when] {
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+
+.editorContent [data-type="timeline-item"] > p { margin: 0 0 0.35rem; }
+.editorContent [data-type="timeline-item"] > p:last-child { margin-bottom: 0; }
+
+.editorContent [data-type="timeline-item"][data-tl-current]::before {
+  background: var(--color-primary);
+}
+
+@media (hover: hover) {
+  .editorContent [data-type="timeline-item"]:hover::before {
+    transform: scale(1.15);
+  }
+}
+
+/* The year a When was read with but doesn't say: "23 July · 1914". */
+.editorContent [data-tl-inferred] {
+  margin-left: 0.35em;
+  font-weight: 500;
+  color: var(--color-muted);
+  user-select: none;
+}
+
+.editorContent [data-tl-inferred]::before {
+  content: '· ';
+}
+
+/* An empty When, always; an empty line of an entry, while the cursor's on it. */
+.editorContent [data-tl-empty]::before {
+  content: attr(data-tl-placeholder);
+  float: left;
+  height: 0;
+  color: var(--color-muted);
+  opacity: 0.7;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+/* An entry that the sort just moved: a soft glow where it landed, and its dot pulses. */
+.editorContent [data-type="timeline-item"][data-tl-moved] {
+  animation: tlMoved 1.6s ease-out;
+}
+
+.editorContent [data-type="timeline-item"][data-tl-moved]::before {
+  animation: tlDotPulse 0.8s ease-out 2;
+}
+
+@keyframes tlMoved {
+  0%, 30% { background-color: var(--color-primary-subtle); }
+  100%    { background-color: transparent; }
+}
+
+.editorContent [data-variant="horizontal"] > [data-type="timeline-item"][data-tl-moved] {
+  animation-name: tlMovedCard;
+}
+
+@keyframes tlMovedCard {
+  0%, 30% { border-color: var(--color-primary); box-shadow: 0 0 0 4px var(--color-primary-subtle), var(--shadow-md); }
+  100%    { border-color: var(--color-border); box-shadow: var(--shadow-sm); }
+}
+
+@keyframes tlDotPulse {
+  0%   { box-shadow: 0 0 0 0 var(--color-primary-border); }
+  100% { box-shadow: 0 0 0 9px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editorContent [data-type="timeline-item"][data-tl-moved],
+  .editorContent [data-type="timeline-item"][data-tl-moved]::before { animation: none; }
+}
+
+/* "+ Add entry": under the last entry (vertical) or at the end of the line (horizontal). */
+.editorContent [data-timeline-add] {
+  position: relative;
+  display: block;
+  margin-top: -0.55rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 20px;
+  color: var(--color-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.editorContent [data-variant="rail"] > [data-timeline-add]::before {
+  content: '+';
+  position: absolute;
+  left: -27px;
+  top: 3px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition: border-color 0.15s;
+}
+
+.editorContent [data-timeline-add]:hover { color: var(--color-primary); }
+.editorContent [data-timeline-add]:hover::before { border-color: var(--color-primary); }
+
+/* Style and order, at the top right: shown like the add button. */
+.editorContent [data-block-tools] {
+  position: absolute;
+  top: -6px;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  transition: opacity 0.15s;
+  user-select: none;
+}
+
+.editorContent [data-variant="horizontal"] > [data-timeline-tools] {
+  top: 6px;
+  right: 12px;
+}
+
+.editorContent [data-block-tools] button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  height: 22px;
+  border: none;
+  border-radius: 99px;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.editorContent [data-block-designs] {
+  display: flex;
+  gap: 1px;
+}
+
+.editorContent [data-block-design] { width: 26px; }
+.editorContent [data-timeline-tools] [data-tl-tool="order"] { padding: 0 9px 0 7px; }
+
+.editorContent [data-timeline-tools] [data-tl-tool="order"]::before {
+  content: '⇅';
+  margin-right: 4px;
+}
+
+.editorContent [data-timeline-tools] [data-tl-tool="order"][data-order="asc"]::before    { content: '↓'; }
+.editorContent [data-timeline-tools] [data-tl-tool="order"][data-order="desc"]::before   { content: '↑'; }
+
+.editorContent [data-block-tools] button:hover { color: var(--color-text); background: var(--color-surface-alt); }
+.editorContent [data-block-tools] button[aria-pressed="true"] { color: var(--color-primary); background: var(--color-primary-subtle); }
+
+.editorContent [data-block-tools] svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.editorContent [data-block-tools] svg circle { fill: currentColor; stroke: none; }
+
+.editorContent [data-type="timeline"]:hover > [data-timeline-add],
+.editorContent [data-type="timeline"]:has([data-tl-current]) > [data-timeline-add],
+.editorContent [data-type="timeline"]:hover > [data-timeline-tools],
+.editorContent [data-type="timeline"]:has([data-tl-current]) > [data-timeline-tools],
+.editorContent [data-timeline-add]:focus-visible,
+.editorContent [data-block-tools]:focus-within {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .editorContent [data-timeline-add],
+  .editorContent [data-block-tools] { opacity: 1; }
+}
+
+/* ── Quote (extensions/Quote.ts, `\quote`) ─────────────────────────────────────
+   The quote, then one attribution line ("— Who · Source · When"), each field its own small block
+   laid out inline. Three styles, each its own [data-variant] block; the attribution's dash and
+   dots, the placeholders and the pill are shared. An empty field shows only while the quote is
+   being edited (data-qb-hide otherwise). */
+
+.editorContent [data-type="quote"] {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  row-gap: 2px;
+  margin: 1.25rem 0;
+}
+
+.editorContent [data-qb-text] {
+  flex: 0 0 100%;
+  color: var(--color-text);
+}
+
+.editorContent [data-qb-field] {
+  flex: 0 0 auto;
+  max-width: 100%;
+  margin-top: 0.5rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.editorContent [data-qb-field="who"] {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.editorContent [data-qb-field="source"] { font-style: italic; }
+
+.editorContent [data-qb-hide] { display: none; }
+
+.editorContent [data-qb-lead]::before { content: '— '; color: var(--color-muted); font-weight: 400; font-style: normal; }
+.editorContent [data-qb-sep]::before  { content: '·'; margin: 0 0.5em; color: var(--color-muted); font-weight: 400; font-style: normal; }
+
+/* ProseMirror's <br> in an empty block would break the attribution line; the placeholder gives
+   the empty field its height instead. */
+.editorContent [data-qb-field][data-qb-empty] > br.ProseMirror-trailingBreak { display: none; }
+
+/* Placeholders: after the (empty) text, so the caret sits before them. */
+.editorContent [data-qb-empty]::after {
+  content: attr(data-qb-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* ·· Classic: a large accent mark in the margin, the words in italic serif ···················· */
+
+.editorContent [data-type="quote"][data-variant="classic"] {
+  padding: 0.35rem 0 0.35rem 3.25rem;
+}
+
+.editorContent [data-type="quote"][data-variant="classic"]::before {
+  content: '“';
+  position: absolute;
+  left: 0.1rem;
+  top: -0.55rem;
+  font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+  font-size: 4.75rem;
+  line-height: 1;
+  color: var(--color-primary);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.editorContent [data-variant="classic"] > [data-qb-text] {
+  font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+  font-size: 1.22rem;
+  font-style: italic;
+  line-height: 1.55;
+}
+
+/* ·· Card: a soft card with an accent edge; the speaker's initials in a small circle ·········· */
+
+.editorContent [data-type="quote"][data-variant="card"] {
+  padding: 1rem 1.25rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: 12px;
+  background: var(--color-surface-alt);
+  box-shadow: var(--shadow-sm);
+}
+
+.editorContent [data-type="quote"][data-variant="card"]::before {
+  content: '“';
+  flex: 0 0 100%;
+  height: 1.35rem;
+  font-family: Georgia, serif;
+  font-size: 2.6rem;
+  line-height: 1;
+  color: var(--color-primary);
+  pointer-events: none;
+}
+
+.editorContent [data-variant="card"] > [data-qb-text] {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  font-weight: 450;
+}
+
+.editorContent [data-variant="card"] > [data-qb-field][data-qb-lead][data-qb-initials]::before {
+  content: attr(data-qb-initials);
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-primary-subtle);
+  border: 1px solid var(--color-primary-border);
+  color: var(--color-primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+/* ·· Pull quote: centred, large serif between two accent rules, the attribution in spaced capitals */
+
+.editorContent [data-type="quote"][data-variant="pull"] {
+  justify-content: center;
+  margin: 1.75rem 1.5rem;
+  padding: 1.25rem 1rem;
+  border-top: 2px solid var(--color-primary);
+  border-bottom: 2px solid var(--color-primary);
+  text-align: center;
+}
+
+.editorContent [data-variant="pull"] > [data-qb-text] {
+  font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+.editorContent [data-variant="pull"] > [data-qb-text]::before { content: '“'; color: var(--color-primary); }
+.editorContent [data-variant="pull"] > [data-qb-text]:not([data-qb-empty])::after { content: '”'; color: var(--color-primary); }
+
+.editorContent [data-variant="pull"] > [data-qb-field] {
+  margin-top: 0.75rem;
+  font-size: 0.72rem;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* The pill: like the timeline's (shared [data-block-tools] rules), with field chips. */
+.editorContent [data-quote-tools] {
+  top: -14px;
+  right: 0;
+}
+
+.editorContent [data-quote-tools] [data-qb-fields] {
+  display: flex;
+  gap: 1px;
+}
+
+.editorContent [data-quote-tools] [data-qb-tool="field"] { padding: 0 8px; font-weight: 600; }
+.editorContent [data-quote-tools] [data-qb-tool="field"][aria-pressed="false"] { opacity: 0.6; text-decoration: line-through; text-decoration-thickness: 1px; }
+
+.editorContent [data-type="quote"]:hover > [data-quote-tools],
+.editorContent [data-type="quote"][data-qb-current] > [data-quote-tools] {
+  opacity: 1;
+}
+
+/* ── Cycle (extensions/Cycle.ts, `\cycle`) ─────────────────────────────────────
+   Stages that lead round and back. Three designs, each its own [data-variant] block; what's
+   outside one (stage cards, icons, arrows, numbering, placeholders) is shared. Each stage's colour
+   is --stage-color: the accent, or a hue round the wheel in the Spectrum colours (set per stage).
+   Arrows are widgets after each stage (the last one's goes back to the first). */
+
+.editorContent [data-type="cycle"] {
+  --stage-color: var(--color-primary);
+  --cycle-arrow: color-mix(in srgb, var(--color-primary) 55%, var(--color-border-strong));
+  --cycle-icon: 40px;
+  position: relative;
+  margin: 1.5rem 0;
+  counter-reset: cycle-stage;
+}
+
+.editorContent [data-type="cycle"][data-icon-size="s"] { --cycle-icon: 28px; }
+.editorContent [data-type="cycle"][data-icon-size="l"] { --cycle-icon: 56px; }
+
+.editorContent [data-cycle-name] {
+  color: var(--color-text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.editorContent [data-type="cycle-stage"] {
+  counter-increment: cycle-stage;
+  position: relative;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+@media (hover: hover) {
+  .editorContent [data-type="cycle-stage"]:hover { box-shadow: var(--shadow-md); }
+}
+
+.editorContent [data-cycle-label] {
+  color: var(--color-text);
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.editorContent [data-cycle-text] {
+  margin-top: 2px;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.editorContent [data-cy-hide] { display: none; }
+
+.editorContent [data-cy-empty]::after {
+  content: attr(data-cy-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* Numbered: a small badge in the stage's colour before its label. */
+.editorContent [data-type="cycle"][data-numbered="true"] [data-cycle-label]::before {
+  content: counter(cycle-stage);
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.4rem;
+  padding: 0 0.3rem;
+  border-radius: 99px;
+  background: var(--stage-color);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  vertical-align: 0.1em;
+}
+
+/* The icon slot: an emoji or a small picture, in the stage's colour. Empty slots ("+") show only
+   while the cycle is hovered or being edited; a picture can be dropped on one. */
+.editorContent [data-cycle-icon] {
+  display: grid;
+  place-items: center;
+  width: var(--cycle-icon);
+  height: var(--cycle-icon);
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1.5px solid color-mix(in srgb, var(--stage-color) 35%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--stage-color) 12%, var(--color-surface));
+  font-size: calc(var(--cycle-icon) * 0.55);
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.editorContent [data-icon-shape="rounded"] [data-cycle-icon] { border-radius: 28%; }
+.editorContent [data-icon-shape="square"] [data-cycle-icon]  { border-radius: 4px; }
+
+.editorContent [data-cycle-icon] img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.editorContent [data-cycle-icon="empty"] {
+  display: none;
+  border-style: dashed;
+  border-color: var(--color-border-strong);
+  background: none;
+  color: var(--color-muted);
+  font-size: calc(var(--cycle-icon) * 0.4);
+}
+
+.editorContent [data-type="cycle"]:hover [data-cycle-icon="empty"],
+.editorContent [data-type="cycle"][data-cycle-current] [data-cycle-icon="empty"] { display: grid; }
+
+.editorContent [data-cycle-icon][data-drop] {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-subtle);
+}
+
+/* Arrows: shared colours. Ring arrows are SVG arcs; flow and steps arrows are drawn with CSS. */
+.editorContent [data-cycle-arrow] { cursor: pointer; }
+
+.editorContent [data-cycle-arrow] [data-label] {
+  color: var(--color-muted);
+  fill: var(--color-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ·· Ring: stages round a circle, the name in the middle ··································· */
+
+.editorContent [data-type="cycle"][data-variant="ring"] {
+  width: min(100%, 34rem);
+  aspect-ratio: 1 / 1;
+  margin-inline: auto;
+}
+
+.editorContent [data-variant="ring"] > [data-cycle-name] {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: 34%;
+  transform: translate(-50%, -50%);
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.editorContent [data-variant="ring"] > [data-type="cycle-stage"] {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  z-index: 1;
+  width: min(28%, 10.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 9px;
+  border-top: 3px solid var(--stage-color);
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.editorContent [data-cycle-ring-arrow] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.editorContent [data-cycle-ring-arrow] [data-line] {
+  fill: none;
+  stroke: var(--cycle-arrow);
+  stroke-width: 0.75;
+  stroke-linecap: round;
+  transition: stroke 0.15s;
+}
+
+.editorContent [data-cycle-ring-arrow] [data-hit] {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 7;
+  pointer-events: stroke;
+}
+
+.editorContent [data-cycle-ring-arrow] [data-head] {
+  fill: var(--cycle-arrow);
+  transition: fill 0.15s;
+}
+
+.editorContent [data-cycle-ring-arrow] [data-label] {
+  font-size: 3.1px;
+  pointer-events: auto;
+}
+
+.editorContent [data-cycle-ring-arrow]:has([data-hit]:hover) [data-line] { stroke: var(--color-primary); }
+.editorContent [data-cycle-ring-arrow]:has([data-hit]:hover) [data-head] { fill: var(--color-primary); }
+
+/* ·· Flow: a row of cards, arrows between, the return loop underneath ························ */
+
+/* Scrolls sideways, which would clip a pill sticking out above, so the pill sits inside. */
+.editorContent [data-type="cycle"][data-variant="flow"] {
+  --stage-w: 9rem;
+  padding-top: 1.6rem;
+  display: grid;
+  grid-template-columns: repeat(var(--cycle-cols), auto);
+  justify-content: start;
+  align-items: center;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.editorContent [data-variant="flow"] > [data-cycle-name] {
+  grid-column: 1 / -1;
+  margin-bottom: 0.75rem;
+}
+
+.editorContent [data-variant="flow"] > [data-type="cycle-stage"] {
+  grid-row: 2;
+  align-self: stretch;
+  width: var(--stage-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 10px 11px;
+  border-top: 3px solid var(--stage-color);
+  text-align: center;
+}
+
+/* The arrow's name sets its column's width (it sits in the flow, lifted above the line). */
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="next"] {
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  min-width: 3.5rem;
+  padding: 0 10px;
+}
+
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="return"] {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  margin: 8px calc(var(--stage-w) / 2) 0;
+}
+
+/* ·· Steps: a list down the page, the loop back as a bracket on the left ······················ */
+
+.editorContent [data-type="cycle"][data-variant="steps"] {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  column-gap: 0.5rem;
+}
+
+.editorContent [data-variant="steps"] > [data-cycle-name],
+.editorContent [data-variant="steps"] > [data-type="cycle-stage"],
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="next"] {
+  grid-column: 2;
+}
+
+.editorContent [data-variant="steps"] > [data-cycle-name] { margin-bottom: 0.6rem; }
+
+.editorContent [data-variant="steps"] > [data-type="cycle-stage"] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.7rem;
+  align-items: center;
+  padding: 8px 12px;
+  border-left: 3px solid var(--stage-color);
+}
+
+.editorContent [data-variant="steps"] > [data-type="cycle-stage"] > [data-cycle-icon] { grid-row: 1 / span 2; }
+.editorContent [data-variant="steps"] > [data-type="cycle-stage"] > [data-cycle-label],
+.editorContent [data-variant="steps"] > [data-type="cycle-stage"] > [data-cycle-text] { grid-column: 2; }
+
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="next"] {
+  height: 1.75rem;
+  margin-left: 1.35rem;
+}
+
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="return"] {
+  grid-column: 1;
+  grid-row: 2 / span var(--cycle-cols);
+  margin: 1.25rem 0 1.25rem 0.35rem;
+}
+
+/* ·· The straight arrows (flow and steps) ···································································· */
+
+.editorContent [data-cycle-line-arrow] {
+  position: relative;
+  align-self: stretch;
+  min-height: 1.5rem;
+}
+
+.editorContent [data-cycle-line-arrow] [data-line] {
+  position: absolute;
+  background: var(--cycle-arrow);
+  border-radius: 1px;
+}
+
+.editorContent [data-cycle-line-arrow] [data-head] {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+}
+
+.editorContent [data-cycle-line-arrow] [data-label] {
+  position: absolute;
+  padding: 0 4px;
+  background: var(--color-surface);
+}
+
+.editorContent [data-cycle-line-arrow]:hover [data-line] { background: var(--color-primary); }
+
+/* Across (flow): line through the middle; end head on the right, start head on the left. */
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="next"] [data-line] { left: 6px; right: 6px; top: calc(50% - 1px); height: 2px; }
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="next"] [data-head="end"]   { right: 0; top: calc(50% - 5px); border-left: 8px solid var(--cycle-arrow); border-right: 0; }
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="next"] [data-head="start"] { left: 0; top: calc(50% - 5px); border-right: 8px solid var(--cycle-arrow); border-left: 0; }
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="next"] [data-label] { position: static; transform: translateY(-0.85rem); background: none; }
+
+/* Down (steps): line down the left; end head at the bottom, start head at the top. */
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="next"] [data-line] { left: calc(var(--cycle-icon) / 2 - 1px); top: 3px; bottom: 6px; width: 2px; }
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="next"] [data-head="end"]   { left: calc(var(--cycle-icon) / 2 - 5px); bottom: 0; border-top: 8px solid var(--cycle-arrow); border-bottom: 0; }
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="next"] [data-head="start"] { left: calc(var(--cycle-icon) / 2 - 5px); top: 0; border-bottom: 8px solid var(--cycle-arrow); border-top: 0; }
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="next"] [data-label] { left: calc(var(--cycle-icon) / 2 + 10px); top: 50%; transform: translateY(-50%); background: none; }
+
+/* The return loop: drawn by the box's border; its heads point into the first stage (end) and the
+   last (start). Flow: under the row, heads pointing up. Steps: a bracket on the left, heads
+   pointing right. */
+.editorContent [data-cycle-line-arrow="return"] { border: 2px solid var(--cycle-arrow); }
+.editorContent [data-cycle-line-arrow="return"] [data-line] { display: none; }
+.editorContent [data-cycle-line-arrow="return"]:hover { border-color: var(--color-primary); }
+
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="return"] { min-height: 1.6rem; border-top: none; border-radius: 0 0 16px 16px; }
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="return"] [data-head="end"]   { left: -6px; top: -9px; border-bottom: 8px solid var(--cycle-arrow); border-top: 0; }
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="return"] [data-head="start"] { right: -6px; top: -9px; border-bottom: 8px solid var(--cycle-arrow); border-top: 0; }
+.editorContent [data-variant="flow"] > [data-cycle-line-arrow="return"] [data-label] { left: 50%; bottom: -0.55rem; transform: translateX(-50%); }
+
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="return"] { border-right: none; border-radius: 16px 0 0 16px; }
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="return"] [data-head="end"]   { right: -9px; top: -6px; border-left: 8px solid var(--cycle-arrow); border-right: 0; }
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="return"] [data-head="start"] { right: -9px; bottom: -6px; border-left: 8px solid var(--cycle-arrow); border-right: 0; }
+.editorContent [data-variant="steps"] > [data-cycle-line-arrow="return"] [data-label] {
+  left: -0.55rem;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  background: var(--color-surface);
+}
+
+/* The × in a stage's corner: on hover, while editing the cycle, and always on touch. Only drawn
+   while there are more than two stages. */
+.editorContent [data-cycle-delete] {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.editorContent [data-type="cycle-stage"]:hover > [data-cycle-delete],
+.editorContent [data-cycle-current] [data-cycle-delete]:hover,
+.editorContent [data-cycle-delete]:focus-visible { opacity: 1; }
+.editorContent [data-cycle-current] [data-type="cycle-stage"] > [data-cycle-delete] { opacity: 0.55; }
+.editorContent [data-cycle-delete]:hover { opacity: 1; color: var(--color-danger); border-color: var(--color-danger); }
+
+@media (hover: none) {
+  .editorContent [data-cycle-delete] { opacity: 1; }
+}
+
+/* The pill (shared [data-block-tools] rules), with the cycle's options. */
+.editorContent [data-cycle-tools] { top: -14px; right: 0; z-index: 3; }
+.editorContent [data-variant="flow"] > [data-cycle-tools] { top: 0; }
+.editorContent [data-cycle-tools] [data-cy-tool] { padding: 0 8px; font-weight: 600; }
+
+.editorContent [data-cycle-tools] [data-cy-tool="colours"]::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.editorContent [data-cycle-tools] [data-cy-tool="colours"][aria-pressed="true"]::before {
+  background: linear-gradient(90deg, hsl(210 62% 52%), hsl(300 62% 52%), hsl(30 62% 52%), hsl(120 62% 52%));
+}
+
+.editorContent [data-type="cycle"]:hover > [data-cycle-tools],
+.editorContent [data-type="cycle"][data-cycle-current] > [data-cycle-tools] { opacity: 1; }
+
+/* ── Breakdown (extensions/Breakdown.ts, `\breakdown`) ───────────────────────────
+   A whole and the parts it's made of. Three designs, each its own [data-variant] block; the part
+   cards, placeholders, × and pill are shared. Each part's colour is --part-color: the accent, or a
+   hue round the wheel with Spectrum colours. */
+
+.editorContent [data-type="breakdown"] {
+  --part-color: var(--color-primary);
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.editorContent [data-bd-whole] {
+  color: var(--color-text);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.editorContent [data-type="breakdown-part"] {
+  position: relative;
+  padding: 9px 11px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+}
+
+.editorContent [data-bd-label] {
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.editorContent [data-bd-text] {
+  margin-top: 3px;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.editorContent [data-bd-hide] { display: none; }
+
+.editorContent [data-bd-empty]::after {
+  content: attr(data-bd-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* ·· Hub: the whole in a circle at the centre, its parts around it on spokes ······················ */
+
+.editorContent [data-type="breakdown"][data-variant="hub"] {
+  width: min(100%, 32rem);
+  aspect-ratio: 1 / 1;
+  margin-inline: auto;
+}
+
+.editorContent [data-variant="hub"] > [data-bd-whole] {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: 32%;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  padding: 0.75rem;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  box-shadow: 0 0 0 6px var(--color-surface), var(--shadow-md);
+  font-size: 1.05rem;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.editorContent [data-bd-spokes] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.editorContent [data-bd-spokes] line {
+  stroke: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+  stroke-width: 0.6;
+  stroke-dasharray: 1.4 1.2;
+}
+
+.editorContent [data-variant="hub"] > [data-type="breakdown-part"] {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  z-index: 1;
+  width: min(27%, 9.5rem);
+  border-top: 3px solid var(--part-color);
+  transform: translate(-50%, -50%);
+}
+
+/* ·· Pillars: the whole as a temple's roof, each part a column, on a shared base ················· */
+
+.editorContent [data-type="breakdown"][data-variant="pillars"] {
+  display: grid;
+  grid-template-columns: repeat(var(--bd-n), minmax(0, 1fr));
+  column-gap: 14px;
+  padding: 0 4px;
+}
+
+/* The pediment: a low triangle over a band (the architrave), the whole's name in it. */
+.editorContent [data-variant="pillars"] > [data-bd-whole] {
+  grid-column: 1 / -1;
+  margin: 0 -4px 12px;
+  padding: 2.4rem 2rem 0.8rem;
+  background:
+    linear-gradient(var(--color-primary), var(--color-primary)) bottom / 100% 3px no-repeat,
+    color-mix(in srgb, var(--color-primary) 13%, var(--color-surface));
+  clip-path: polygon(50% 0, 100% 72%, 100% 100%, 0 100%, 0 72%);
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.editorContent [data-variant="pillars"] > [data-type="breakdown-part"] {
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 8.5rem;
+  margin: 10px 4px;
+  border-radius: 2px;
+  border-top: 0;
+  border-bottom: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 9px, color-mix(in srgb, var(--part-color) 9%, transparent) 9px 10px),
+    var(--color-surface);
+  box-shadow: none;
+}
+
+/* Each column's capital (top) and plinth (bottom), a little wider than its shaft. */
+.editorContent [data-variant="pillars"] > [data-type="breakdown-part"]::before,
+.editorContent [data-variant="pillars"] > [data-type="breakdown-part"]::after {
+  content: '';
+  position: absolute;
+  left: -7px;
+  right: -7px;
+  height: 10px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--part-color) 55%, var(--color-surface));
+}
+
+.editorContent [data-variant="pillars"] > [data-type="breakdown-part"]::before { top: -10px; }
+.editorContent [data-variant="pillars"] > [data-type="breakdown-part"]::after  { bottom: -10px; }
+
+/* The stylobate: the steps the columns stand on. */
+.editorContent [data-type="breakdown"][data-variant="pillars"]::after {
+  content: '';
+  grid-column: 1 / -1;
+  grid-row: 3;
+  height: 14px;
+  margin: 2px -4px 0;
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--color-primary), var(--color-primary)) top / 100% 3px no-repeat,
+    color-mix(in srgb, var(--color-primary) 13%, var(--color-surface));
+}
+
+/* ·· Tree: the whole on top, branching down to its parts ··········································· */
+
+.editorContent [data-type="breakdown"][data-variant="tree"] {
+  --branch: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  --drop: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(var(--bd-n), minmax(0, 1fr));
+  column-gap: 14px;
+}
+
+.editorContent [data-variant="tree"] > [data-bd-whole] {
+  position: relative;
+  grid-column: 1 / -1;
+  justify-self: center;
+  max-width: 70%;
+  margin-bottom: calc(var(--drop) * 2);
+  padding: 0.55rem 1.25rem;
+  border: 2px solid var(--color-primary);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  text-align: center;
+}
+
+/* The trunk: down from the whole to the branch line. */
+.editorContent [data-variant="tree"] > [data-bd-whole]::before {
+  content: '';
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 100%;
+  width: 2px;
+  height: calc(var(--drop) + 2px);
+  background: var(--branch);
+}
+
+.editorContent [data-variant="tree"] > [data-type="breakdown-part"] {
+  grid-row: 2;
+  border-top: 3px solid var(--part-color);
+}
+
+/* Each part's twig (up to the branch line) and its stretch of the line; the line runs from the
+   first part's middle to the last's. */
+.editorContent [data-variant="tree"] > [data-type="breakdown-part"]::before,
+.editorContent [data-variant="tree"] > [data-type="breakdown-part"]::after {
+  content: '';
+  position: absolute;
+  background: var(--branch);
+}
+
+.editorContent [data-variant="tree"] > [data-type="breakdown-part"]::before {
+  left: calc(50% - 1px);
+  bottom: calc(100% + 3px);
+  width: 2px;
+  height: var(--drop);
+}
+
+.editorContent [data-variant="tree"] > [data-type="breakdown-part"]::after {
+  left: -8px;
+  right: -8px;
+  bottom: calc(100% + 3px + var(--drop));
+  height: 2px;
+}
+
+.editorContent [data-variant="tree"] > [data-type="breakdown-part"]:nth-child(1 of [data-type="breakdown-part"])::after { left: 50%; }
+.editorContent [data-variant="tree"] > [data-type="breakdown-part"]:nth-last-child(1 of [data-type="breakdown-part"])::after { right: 50%; }
+
+/* ·· Shared: the × and the pill ··································································· */
+
+.editorContent [data-bd-delete] {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.editorContent [data-type="breakdown-part"]:hover > [data-bd-delete],
+.editorContent [data-bd-delete]:focus-visible { opacity: 1; }
+.editorContent [data-bd-current] [data-type="breakdown-part"] > [data-bd-delete] { opacity: 0.55; }
+.editorContent [data-bd-delete]:hover { opacity: 1; color: var(--color-danger); border-color: var(--color-danger); }
+
+@media (hover: none) {
+  .editorContent [data-bd-delete] { opacity: 1; }
+}
+
+.editorContent [data-breakdown-tools] { top: -14px; right: 0; z-index: 4; }
+.editorContent [data-breakdown-tools] [data-bd-tool] { padding: 0 8px; font-weight: 600; }
+
+.editorContent [data-breakdown-tools] [data-bd-tool="colours"]::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.editorContent [data-breakdown-tools] [data-bd-tool="colours"][aria-pressed="true"]::before {
+  background: linear-gradient(90deg, hsl(210 62% 52%), hsl(300 62% 52%), hsl(30 62% 52%), hsl(120 62% 52%));
+}
+
+.editorContent [data-type="breakdown"]:hover > [data-breakdown-tools],
+.editorContent [data-type="breakdown"][data-bd-current] > [data-breakdown-tools] { opacity: 1; }
+
+/* ── Hierarchy (extensions/Hierarchy.ts, `\hierarchy`) ───────────────────────────────────────────
+   Items stored flat with a level; the decoration hands each its level, its span across the leaves
+   (--start/--end), how it sits among its siblings (data-hi-sib) and whether it has children. Tree
+   and Columns are one grid each (rows = levels, or columns = levels) with the connectors drawn by
+   each item's pseudo-elements; Outline is an indented list with elbows. The text sits in
+   [data-hi-box]. Each item's colour is --item-color: the accent, or one per level. */
+
+.editorContent [data-type="hierarchy"] {
+  --item-color: var(--color-primary);
+  --branch: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  --drop: 0.65rem;
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.editorContent [data-type="hierarchy-item"] { position: relative; }
+
+.editorContent [data-hi-box] {
+  position: relative;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.editorContent [data-hi-root] > [data-hi-box] {
+  border-color: color-mix(in srgb, var(--item-color) 55%, var(--color-border));
+  background: color-mix(in srgb, var(--item-color) 10%, var(--color-surface));
+  font-weight: 650;
+}
+
+.editorContent [data-hi-empty] > [data-hi-box]::before {
+  content: var(--hi-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* The level names (Tree and Columns): buttons, one grid item each. */
+.editorContent [data-hi-tiers] { display: contents; }
+
+.editorContent [data-hi-tier] {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.editorContent [data-hi-tier]:hover { color: var(--color-primary); }
+.editorContent [data-hi-tier][data-hi-unnamed] { opacity: 0.55; font-weight: 500; }
+
+/* ·· Tree: top-down, the level names down the left ····························· */
+
+.editorContent [data-type="hierarchy"][data-variant="tree"] {
+  display: grid;
+  grid-template-columns: repeat(var(--hi-leaves), minmax(0, 1fr));
+  column-gap: 12px;
+}
+
+.editorContent [data-type="hierarchy"][data-variant="tree"][data-hi-tiered] {
+  grid-template-columns: max-content repeat(var(--hi-leaves), minmax(0, 1fr));
+}
+
+.editorContent [data-variant="tree"] > [data-type="hierarchy-item"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  grid-row: calc(var(--level) + 1);
+  grid-column: calc(var(--start) + 1) / calc(var(--end) + 1);
+  padding-top: calc(var(--drop) * 2);
+}
+
+.editorContent [data-hi-tiered][data-variant="tree"] > [data-type="hierarchy-item"] {
+  grid-column: calc(var(--start) + 2) / calc(var(--end) + 2);
+}
+
+.editorContent [data-variant="tree"] > [data-hi-root] { padding-top: 0; }
+
+.editorContent [data-variant="tree"] [data-hi-box] {
+  flex: 1;
+  width: fit-content;
+  min-width: 4.5rem;
+  max-width: 100%;
+  border-top: 3px solid var(--item-color);
+  text-align: center;
+}
+
+.editorContent [data-variant="tree"] [data-hi-tier] {
+  grid-column: 1;
+  grid-row: calc(var(--level) + 1);
+  align-self: center;
+  padding-right: 6px;
+  text-align: right;
+}
+
+.editorContent [data-variant="tree"] [data-hi-tier][data-hi-tier-sub] { padding-top: calc(var(--drop) * 2); }
+
+/* The branch line across the siblings (half the gap past each), the twig down to each box, and the
+   parent's stem down to the line. */
+.editorContent [data-variant="tree"] > [data-type="hierarchy-item"]:not([data-hi-root])::before,
+.editorContent [data-variant="tree"] > [data-type="hierarchy-item"]:not([data-hi-root])::after,
+.editorContent [data-variant="tree"] > [data-hi-parent] > [data-hi-box]::after {
+  content: '';
+  position: absolute;
+  background: var(--branch);
+}
+
+.editorContent [data-variant="tree"] > [data-type="hierarchy-item"]:not([data-hi-root])::before {
+  top: var(--drop);
+  left: -6px;
+  right: -6px;
+  height: 2px;
+}
+
+.editorContent [data-variant="tree"] > [data-type="hierarchy-item"]:not([data-hi-root])[data-hi-sib="first"]::before { left: 50%; }
+.editorContent [data-variant="tree"] > [data-type="hierarchy-item"]:not([data-hi-root])[data-hi-sib="last"]::before { right: 50%; }
+.editorContent [data-variant="tree"] > [data-type="hierarchy-item"]:not([data-hi-root])[data-hi-sib="only"]::before { display: none; }
+
+.editorContent [data-variant="tree"] > [data-type="hierarchy-item"]:not([data-hi-root])::after {
+  top: var(--drop);
+  left: calc(50% - 1px);
+  width: 2px;
+  height: var(--drop);
+}
+
+.editorContent [data-variant="tree"] > [data-hi-sib="only"]:not([data-hi-root])::after { top: 0; height: calc(var(--drop) * 2); }
+
+.editorContent [data-variant="tree"] > [data-hi-parent] > [data-hi-box]::after {
+  top: calc(100% + 1px);
+  left: calc(50% - 1px);
+  width: 2px;
+  height: var(--drop);
+}
+
+/* ·· Columns: left to right, the level names over the columns ··················· */
+
+.editorContent [data-type="hierarchy"][data-variant="columns"] {
+  display: grid;
+  grid-template-columns: repeat(var(--hi-depth), minmax(0, 1fr));
+  row-gap: 8px;
+}
+
+.editorContent [data-variant="columns"] > [data-type="hierarchy-item"] {
+  display: flex;
+  align-items: center;
+  grid-column: calc(var(--level) + 1);
+  grid-row: calc(var(--start) + 1) / calc(var(--end) + 1);
+  padding-left: calc(var(--drop) * 2);
+}
+
+.editorContent [data-hi-tiered][data-variant="columns"] > [data-type="hierarchy-item"] {
+  grid-row: calc(var(--start) + 2) / calc(var(--end) + 2);
+}
+
+.editorContent [data-variant="columns"] > [data-hi-root] { padding-left: 0; }
+
+.editorContent [data-variant="columns"] [data-hi-box] {
+  flex: 1;
+  min-width: 0;
+  border-left: 3px solid var(--item-color);
+}
+
+.editorContent [data-variant="columns"] [data-hi-tier] {
+  grid-row: 1;
+  grid-column: calc(var(--level) + 1);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.editorContent [data-variant="columns"] [data-hi-tier][data-hi-tier-sub] { padding-left: calc(var(--drop) * 2); }
+
+.editorContent [data-variant="columns"] > [data-type="hierarchy-item"]:not([data-hi-root])::before,
+.editorContent [data-variant="columns"] > [data-type="hierarchy-item"]:not([data-hi-root])::after,
+.editorContent [data-variant="columns"] > [data-hi-parent] > [data-hi-box]::after {
+  content: '';
+  position: absolute;
+  background: var(--branch);
+}
+
+.editorContent [data-variant="columns"] > [data-type="hierarchy-item"]:not([data-hi-root])::before {
+  left: var(--drop);
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+}
+
+.editorContent [data-variant="columns"] > [data-type="hierarchy-item"]:not([data-hi-root])[data-hi-sib="first"]::before { top: 50%; }
+.editorContent [data-variant="columns"] > [data-type="hierarchy-item"]:not([data-hi-root])[data-hi-sib="last"]::before { bottom: 50%; }
+.editorContent [data-variant="columns"] > [data-type="hierarchy-item"]:not([data-hi-root])[data-hi-sib="only"]::before { display: none; }
+
+.editorContent [data-variant="columns"] > [data-type="hierarchy-item"]:not([data-hi-root])::after {
+  top: calc(50% - 1px);
+  left: var(--drop);
+  width: var(--drop);
+  height: 2px;
+}
+
+.editorContent [data-variant="columns"] > [data-hi-sib="only"]:not([data-hi-root])::after { left: 0; width: calc(var(--drop) * 2); }
+
+.editorContent [data-variant="columns"] > [data-hi-parent] > [data-hi-box]::after {
+  top: calc(50% - 1px);
+  left: calc(100% + 1px);
+  width: var(--drop);
+  height: 2px;
+}
+
+/* ·· Outline: an indented list with elbows, each level's name in the left margin ················ */
+
+.editorContent [data-type="hierarchy"][data-variant="outline"] {
+  --step: 1.6rem;
+  --row: 2.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editorContent [data-type="hierarchy"][data-variant="outline"][data-hi-tiered] { padding-left: 7.5rem; }
+
+.editorContent [data-variant="outline"] > [data-type="hierarchy-item"] {
+  display: flex;
+  align-items: center;
+  min-height: var(--row);
+  padding-left: calc(var(--level) * var(--step));
+}
+
+.editorContent [data-variant="outline"] [data-hi-box] {
+  padding: 4px 10px;
+  border: none;
+  border-left: 3px solid var(--item-color);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--item-color) 6%, var(--color-surface));
+  box-shadow: none;
+}
+
+.editorContent [data-variant="outline"] > [data-type="hierarchy-item"]:not([data-hi-root])::before {
+  content: '';
+  position: absolute;
+  bottom: 50%;
+  left: calc((var(--level) - 1) * var(--step) + 0.55rem);
+  width: calc(var(--step) - 0.55rem);
+  height: calc(var(--since) * (var(--row) + 4px) - var(--row) / 2 + 2px);
+  border-bottom: 2px solid var(--branch);
+  border-left: 2px solid var(--branch);
+  border-bottom-left-radius: 7px;
+}
+
+.editorContent [data-hi-tiered][data-variant="outline"] > [data-hi-tier-name]::after {
+  content: attr(data-hi-tier-name);
+  position: absolute;
+  right: calc(100% + 0.75rem);
+  width: 6.75rem;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-align: right;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.editorContent [data-variant="outline"] > [data-hi-tier-repeat]::after { visibility: hidden; }
+
+.editorContent [data-hierarchy-tools] { top: -14px; right: 0; z-index: 4; }
+.editorContent [data-hierarchy-tools] [data-hi-tool] { padding: 0 8px; font-weight: 600; }
+
+.editorContent [data-hierarchy-tools] [data-hi-tool="colours"]::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.editorContent [data-hierarchy-tools] [data-hi-tool="colours"][aria-pressed="true"]::before {
+  background: linear-gradient(180deg, hsl(210 58% 50%), hsl(257 58% 50%), hsl(304 58% 50%));
+}
+
+.editorContent [data-type="hierarchy"]:hover > [data-hierarchy-tools],
+.editorContent [data-type="hierarchy"][data-hi-current] > [data-hierarchy-tools] { opacity: 1; }
+
+/* The level buttons act on the item being edited, so they only show while one is. */
+.editorContent [data-type="hierarchy"]:not([data-hi-current]) [data-hi-tool="shift"] { display: none; }
+
+/* ── Pyramid (extensions/Pyramid.ts, `\pyramid`) ─────────────────────────────────────────────────
+   Layers top to bottom. Each label is drawn on its shape (the label's ::before, clipped from
+   --top/--bottom, the widths at its edges) and kept inside it (--room); the layer's note sits in a
+   column beside it, gone when no layer has one. Each layer's colour is --layer-color, at --layer-mix
+   strength (deeper at the top, with one colour). */
+
+.editorContent [data-type="pyramid"] {
+  --layer-color: var(--color-primary);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 1.5rem 0;
+}
+
+.editorContent [data-type="pyramid"][data-py-nonotes] {
+  width: min(100%, 30rem);
+  margin-inline: auto;
+}
+
+.editorContent [data-type="pyramid-layer"] {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: center;
+  column-gap: 1.25rem;
+}
+
+.editorContent [data-py-nonotes] > [data-type="pyramid-layer"] { grid-template-columns: minmax(0, 1fr); }
+
+.editorContent [data-py-label] {
+  position: relative;
+  z-index: 0;
+  padding: 0.8rem max(0.4rem, calc((100% - max(var(--room), 7.5rem)) / 2));
+  overflow-wrap: normal;
+  color: var(--color-text);
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.editorContent [data-variant="pyramid"] > [data-type="pyramid-layer"]:first-child > [data-py-label] { padding-top: 1.6rem; }
+
+.editorContent [data-py-label]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: color-mix(in srgb, var(--layer-color) var(--layer-mix, 28%), var(--color-surface));
+  clip-path: polygon(calc(50% - var(--top) / 2) 0, calc(50% + var(--top) / 2) 0, calc(50% + var(--bottom) / 2) 100%, calc(50% - var(--bottom) / 2) 100%);
+}
+
+.editorContent [data-variant="stacked"] [data-py-label]::before {
+  left: calc(50% - var(--top) / 2);
+  right: calc(50% - var(--top) / 2);
+  border-radius: 8px;
+  clip-path: none;
+}
+
+.editorContent [data-py-text] {
+  position: relative;
+  padding: 2px 0 2px 0.85rem;
+  border-left: 2px solid color-mix(in srgb, var(--layer-color) 45%, var(--color-border));
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.editorContent [data-py-hide] { visibility: hidden; }
+.editorContent [data-py-text][data-py-empty]::after { left: 0.85rem; }
+
+/* Laid over the empty line (not after its <br>, which would put it on a line of its own). */
+.editorContent [data-py-empty]::after {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  content: attr(data-py-placeholder);
+  color: var(--color-muted);
+  opacity: 0.65;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.editorContent [data-py-delete] {
+  position: absolute;
+  top: 50%;
+  right: -10px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.editorContent [data-type="pyramid-layer"]:hover > [data-py-delete],
+.editorContent [data-py-delete]:focus-visible { opacity: 1; }
+.editorContent [data-py-delete]:hover { color: var(--color-danger); border-color: var(--color-danger); }
+
+@media (hover: none) {
+  .editorContent [data-py-delete] { opacity: 1; }
+}
+
+.editorContent [data-pyramid-tools] { top: -14px; right: 0; z-index: 4; }
+.editorContent [data-pyramid-tools] [data-py-tool] { padding: 0 8px; font-weight: 600; }
+
+.editorContent [data-pyramid-tools] [data-py-tool="colours"]::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.editorContent [data-pyramid-tools] [data-py-tool="colours"][aria-pressed="true"]::before {
+  background: linear-gradient(90deg, hsl(210 62% 52%), hsl(300 62% 52%), hsl(30 62% 52%), hsl(120 62% 52%));
+}
+
+.editorContent [data-type="pyramid"]:hover > [data-pyramid-tools],
+.editorContent [data-type="pyramid"][data-py-current] > [data-pyramid-tools] { opacity: 1; }
+
+/* ── Chart (extensions/Chart.ts, `\chart`) ────────────────────────────────────────────────────────
+   The block only: its spacing and its pill. The chart and its data table are the shared
+   ChartWidget, styled in src/charts/ChartWidget.module.css. */
+
+.editorContent [data-type="chart"] {
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.editorContent [data-chart-tools] { top: -14px; right: 0; z-index: 4; }
+.editorContent [data-chart-tools] [data-chart-tool] { padding: 0 8px; font-weight: 600; }
+
+.editorContent [data-type="chart"]:hover > [data-chart-tools],
+.editorContent [data-type="chart"][data-chart-editing] > [data-chart-tools],
+.editorContent [data-type="chart"]:global(.ProseMirror-selectednode) > [data-chart-tools] { opacity: 1; }
+
+/* ── Frames (blockDesigns.ts): Outline and Shade, on any note block ──────────────────────────────
+   Drawn outside the block's own box — an outline at an offset and a shadow spread to the same
+   distance — so no design's layout moves when it's framed; the margin grows to make the room.
+   One quiet default each: a hairline, and the alternate surface. */
+.editorContent [data-note-block][data-outlined="true"],
+.editorContent [data-note-block][data-shaded="true"] {
+  --frame-pad: 1.1rem;
+  border-radius: 4px;
+  margin-top: calc(1.5rem + var(--frame-pad));
+  margin-bottom: calc(1.5rem + var(--frame-pad));
+}
+
+.editorContent [data-note-block][data-shaded="true"] {
+  background-color: var(--color-surface-alt);
+  box-shadow: 0 0 0 var(--frame-pad) var(--color-surface-alt);
+}
+
+.editorContent [data-note-block][data-outlined="true"] {
+  outline: 1px solid var(--color-border-strong);
+  outline-offset: var(--frame-pad);
+}
+
+.editorContent [data-note-block][data-outlined="true"][data-shaded="true"] {
+  outline-color: var(--color-border);
+}
+
+/* The pill sits on the frame's edge rather than inside it — except in designs that scroll
+   sideways (they clip what's outside them), where it already sits inside. */
+.editorContent [data-note-block][data-outlined="true"]:not([data-variant="flow"], [data-variant="horizontal"]) > [data-block-tools],
+.editorContent [data-note-block][data-shaded="true"]:not([data-variant="flow"], [data-variant="horizontal"]) > [data-block-tools] {
+  transform: translateY(calc(-1 * var(--frame-pad)));
+}
+
+/* ── A whole note block selected (Select in its pill, its right-click menu, or Esc) ────────────
+   ProseMirror marks the selected node; the outline makes it plain that cut, copy and delete will
+   take the whole block. */
+.editorContent [data-note-block]:global(.ProseMirror-selectednode) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: var(--frame-pad, 6px);
+  border-radius: 12px;
+  background-color: var(--color-primary-subtle);
+  box-shadow: 0 0 0 var(--frame-pad, 0) var(--color-primary-subtle);
+}
+
+.editorContent [data-note-block]:global(.ProseMirror-selectednode) > [data-block-tools] { opacity: 1; }
+
+.editorContent [data-block-select],
+.editorContent [data-block-frame] { width: 26px; }
+
+.editorContent [data-block-frames] { display: flex; gap: 1px; }
+
 /* ── Other typography ────────────────────────────────────────────────────── */
 
 .editorContent blockquote {
@@ -773,13 +2618,243 @@
   font-style: normal;
 }
 
-.editorContent mark[data-tag-type="important"]::before   { content: "⭐"; }
+.editorContent mark[data-tag-type="important"]::before   { content: none; }
 .editorContent mark[data-tag-type="concept"]::before     { content: "💡"; }
 .editorContent mark[data-tag-type="definition"]::before  { content: "📖"; }
 .editorContent mark[data-tag-type="example"]::before     { content: "📋"; }
 .editorContent mark[data-tag-type="question"]::before    { content: "❓"; }
 .editorContent mark[data-tag-type="reference"]::before   { content: "📚"; }
 .editorContent mark[data-tag-type="learn-later"]::before { content: "🔖"; }
+
+/* ── Important, built out (extensions/Importance.ts) ──────────────────────────
+   Its icon is in the margin beside the line (one per line block, the highest level's), not
+   inline. Critical also reads heavier. */
+.editorContent mark[data-tag-type="important"][data-level="3"] {
+  font-weight: 600;
+}
+
+.editorContent [data-importance-marker] {
+  position: absolute;
+  margin-left: -2.35rem;
+  width: 2.1rem;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: -0.15em;
+  user-select: none;
+  cursor: default;
+  filter: drop-shadow(0 0 0.5px var(--importance-color));
+}
+
+/* ── Text linked to a Glossary term (extensions/ConceptRef.ts) ────────────────
+   The text: a soft highlight in the term's colour, dotted underline. The brace and the label are
+   drawn once per run in a layer beside the editor; the editor makes room for them on the right
+   (wide), or just for the brace and an icon (compact, a narrow editor). */
+.editor {
+  position: relative;
+}
+
+.editorContent[data-concept-margin="wide"]    { padding-right: 15rem; }
+.editorContent[data-concept-margin="compact"] { padding-right: 4rem; }
+
+.editorContent [data-concept-ref] {
+  background: color-mix(in srgb, var(--concept-color) 13%, transparent);
+  border-bottom: 1.5px dotted var(--concept-color);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.editorContent [data-concept-hover] {
+  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  border-radius: 2px;
+}
+
+.editor [data-concept-margin-layer] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.editor [data-concept-brace] {
+  position: absolute;
+  overflow: visible;
+  fill: none;
+  stroke: var(--concept-color);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+
+.editor [data-concept-label] {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  max-width: 12.75rem;
+  padding: 0 10px 0 7px;
+  border: 1px solid color-mix(in srgb, var(--concept-color) 35%, transparent);
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--concept-color) 9%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.editor [data-concept-label="compact"] {
+  width: 24px;
+  padding: 0;
+  justify-content: center;
+}
+
+.editor [data-concept-label][data-hover],
+.editor [data-concept-label]:hover {
+  border-color: var(--concept-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--concept-color) 18%, transparent);
+}
+
+.editor [data-concept-term] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Linking to the Glossary as you type (extensions/GlossaryAutolink.ts): the word just typed is
+   underlined, and a quiet chip after it offers the link — ↵ / Tab to take it, keep typing to
+   leave it. */
+.editorContent [data-autolink] {
+  text-decoration: underline dotted var(--color-primary);
+  text-underline-offset: 3px;
+}
+
+.editorContent [data-autolink-chip] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 1px 8px 1px 4px;
+  border: 1px solid var(--color-primary-border);
+  border-radius: 99px;
+  background: var(--color-primary-subtle);
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  animation: autolinkIn 0.18s ease-out;
+}
+
+.editorContent [data-autolink-chip] kbd {
+  padding: 0 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.68rem;
+}
+
+.editorContent [data-autolink-chip] b { color: var(--color-primary); font-weight: 600; }
+
+@keyframes autolinkIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Hovering linked text: its term's card under it, with a way to where it's defined. */
+.editor [data-concept-hovercard] {
+  position: absolute;
+  z-index: 5;
+  width: 17rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--concept-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  animation: autolinkIn 0.15s ease-out;
+}
+
+.editor [data-concept-hovercard] strong { font-size: 0.92rem; }
+.editor [data-concept-hovercard] em {
+  color: var(--concept-color);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.editor [data-concept-hovercard] small { color: var(--color-muted); font-size: 0.72rem; }
+.editor [data-concept-hovercard] button {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.editor [data-concept-hovercard] button:hover { text-decoration: underline; }
+
+@media (prefers-reduced-motion: reduce) {
+  .editorContent [data-autolink-chip], .editor [data-concept-hovercard] { animation: none; }
+}
+
+/* The card: what the term means, on hover. */
+.editor [data-concept-card] {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 3;
+  width: 15rem;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 9px;
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--concept-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+}
+
+.editor [data-concept-label]:hover [data-concept-card] { display: flex; }
+.editor [data-concept-card] strong { font-size: 0.9rem; }
+.editor [data-concept-card] em {
+  color: var(--concept-color);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.editor [data-concept-card] small { color: var(--color-muted); font-size: 0.72rem; }
 
 /* Cross-app artifact links: the mark itself is only data. Each link is drawn as one inline pane
    (icon, kind, the text, when, flags, buttons) and optionally a card, by objects/artifactGroups.ts —
@@ -970,21 +3045,7 @@
 
 /* ── Font color picker ───────────────────────────────────────────────────── */
 
-.colorIconLetter {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1;
-  font-weight: 700;
-  font-size: 0.8rem;
-}
 
-.colorIconBar {
-  width: 14px;
-  height: 3px;
-  border-radius: 1px;
-  margin-top: 2px;
-}
 
 .colorPickerPopover {
   position: absolute;
@@ -1214,4 +3275,11 @@
 
 .popoverAnchor {
   position: relative;
+}
+
+/* Other mentions of the selected text (extensions/OccurrenceHighlight.ts). */
+.editorContent :global(.note-occurrence) {
+  border-radius: 2px;
+  background: var(--color-occurrence);
+  box-shadow: 0 0 0 1px var(--color-occurrence);
 }

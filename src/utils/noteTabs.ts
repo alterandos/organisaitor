@@ -1,4 +1,5 @@
 import type { Note } from '@/types/notes';
+import { LABELS } from '@/config/labels';
 
 // The main tab has no NoteTab record of its own; this is its id wherever a tab is named by id
 // (Note.tabOrder, CrossAppRef.tabId).
@@ -43,4 +44,17 @@ export function resolveNoteTab(note: Pick<Note, 'tabs' | 'content'>, tabId: stri
 export function titlePrefillFor(note: Pick<Note, 'title' | 'tabs' | 'mainTabName'>, tabId: string | null): string {
   if (tabId) return note.tabs.find((t) => t.id === tabId)?.name ?? '';
   return note.mainTabName && note.mainTabName !== 'Main' ? note.mainTabName : note.title;
+}
+
+// A tab's created and modified dates, as the tab bar shows them on hover (bottom left, through the
+// app's link preview). The main tab was created with the note; tabs made before 2026-10-08 and a
+// main tab untouched since then have no recorded date for that part.
+export function tabDatesText(note: Pick<Note, 'tabs' | 'createdAt' | 'mainTabUpdatedAt'>, tabId: string | null): string {
+  const L = LABELS.noteTabDates;
+  const when = (iso: string | null | undefined) => (iso
+    ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : L.notRecorded);
+  if (!tabId || tabId === MAIN_TAB_ID) return L.text(when(note.createdAt), when(note.mainTabUpdatedAt));
+  const tab = note.tabs.find((t) => t.id === tabId);
+  return L.text(when(tab?.createdAt), when(tab?.updatedAt));
 }

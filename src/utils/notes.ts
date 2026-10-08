@@ -82,6 +82,16 @@ export function getNoteBreadcrumb(
   note: { tagIds: readonly string[] },
   noteTags: Record<string, NoteTag>,
 ): string {
+  const path = getNoteNotebookPath(note, noteTags);
+  return path.length > 0 ? path.join(' > ') : 'Uncategorized';
+}
+
+// The names from the root notebook down to the one a note is filed in (its first notebook, else
+// its first tag); empty when it's in neither.
+export function getNoteNotebookPath(
+  note: { tagIds: readonly string[] },
+  noteTags: Record<string, NoteTag>,
+): string[] {
   const ordered = [...note.tagIds].sort((a, b) => Number(noteTags[b]?.kind === 'area') - Number(noteTags[a]?.kind === 'area'));
   for (const tagId of ordered) {
     const path: string[] = [];
@@ -90,9 +100,9 @@ export function getNoteBreadcrumb(
       path.unshift(curr.name);
       curr = curr.parentTagId ? noteTags[curr.parentTagId] : undefined;
     }
-    if (path.length > 0) return path.join(' > ');
+    if (path.length > 0) return path;
   }
-  return 'Uncategorized';
+  return [];
 }
 
 // Notebook IDs that should stay visible when focused on a given Endeavour: notebooks whose

@@ -1,0 +1,228 @@
+/* The history browser (Alt+N): a carousel of places. Each card is placed from its distance to
+   the centred one (--d, --ad: set inline), so moving is one transition. Each section has its own
+   hue (--hue) for the card's band. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 410;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75rem;
+  background: color-mix(in srgb, var(--color-bg) 55%, transparent);
+  backdrop-filter: blur(14px) saturate(1.1);
+  outline: none;
+  overflow: hidden;
+  touch-action: pan-y;
+  user-select: none;
+  animation: fadeIn 0.18s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.header { text-align: center; }
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.hint {
+  margin: 0.35rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  height: 22rem;
+  perspective: 1400px;
+  transform-style: preserve-3d;
+}
+
+.card {
+  --hue: 230;
+  --w: min(19rem, 78vw);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  width: var(--w);
+  height: 19rem;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transform:
+    translate(-50%, -50%)
+    translateX(calc(var(--s) * (min(18.5rem, 60vw) + max(var(--ad) - 1, 0) * 7rem)))
+    translateZ(calc(var(--ad) * -140px))
+    rotateY(calc(var(--d) * -14deg));
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s;
+  z-index: calc(10 - var(--ad));
+}
+
+.cardSel {
+  border-color: hsl(var(--hue) 60% 55% / 0.65);
+  box-shadow: 0 18px 50px -12px hsl(var(--hue) 50% 30% / 0.45), var(--shadow-lg);
+}
+
+/* Cards stay opaque (nothing shows through from behind); the further from the centre, the more a
+   veil of the page's colour lies over them. */
+.card::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  content: '';
+  background: color-mix(in srgb, var(--color-bg) calc(var(--ad) * 20%), transparent);
+  pointer-events: none;
+  transition: background 0.3s;
+}
+
+.cardRemoved .body { opacity: 0.55; }
+
+.card[data-view="overview"]  { --hue: 262; }
+.card[data-view="tasks"]     { --hue: 228; }
+.card[data-view="calendar"]  { --hue: 12; }
+.card[data-view="records"]   { --hue: 152; }
+.card[data-view="lists"]     { --hue: 38; }
+.card[data-view="notes"]     { --hue: 196; }
+.card[data-view="portfolio"] { --hue: 280; }
+.card[data-view="fitness"]   { --hue: 338; }
+
+.band {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  background: linear-gradient(120deg, hsl(var(--hue) 70% 56% / 0.22), hsl(var(--hue) 70% 56% / 0.06));
+  border-bottom: 1px solid hsl(var(--hue) 60% 50% / 0.18);
+  color: hsl(var(--hue) 55% 42%);
+}
+
+:global([data-theme="dark"]) .band { color: hsl(var(--hue) 70% 72%); }
+
+.sectionIcon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+}
+
+.sectionIcon svg { width: 20px; height: 20px; }
+
+.section {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.when {
+  margin-left: auto;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}
+
+.badgeHere {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: hsl(var(--hue) 65% 52%);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+  padding: 0.85rem 1rem 1rem;
+}
+
+.path {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardTitle {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 1.12rem;
+  font-weight: 700;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.detail {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: var(--color-surface-alt);
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}
+
+.preview {
+  flex: 1;
+  margin: 0.25rem 0 0;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+
+.open {
+  padding: 0.55rem 1rem;
+  border-top: 1px solid var(--color-border);
+  color: hsl(var(--hue) 60% 48%);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-align: right;
+}
+
+.dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  max-width: 80vw;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.dotHere { background: var(--color-muted); }
+.dotSel { background: var(--color-primary); transform: scale(1.5); }
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: none; }
+  .overlay { animation: none; }
+}

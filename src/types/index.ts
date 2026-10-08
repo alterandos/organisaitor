@@ -42,7 +42,7 @@ export type TimeIntensity  = 'low' | 'medium' | 'high'; // extensible — add mo
 // their labels and what they mean (e.g. whether they block) live in ONE registry,
 // config/itemLinkKinds.ts. Task-to-task only today — targetType is there so other item types can
 // use the same shape later.
-export type ItemLinkKind = 'dependsOn' | 'followUpOf' | 'related';
+export type ItemLinkKind = 'dependsOn' | 'followUpOf' | 'related' | 'repeatOf';
 export interface ItemLink {
   kind:       ItemLinkKind;
   targetType: 'task';
@@ -188,7 +188,8 @@ export interface Task {
   subtaskIds:    TaskId[];
   sortOrder:     number;
   crossAppRefs:  CrossAppRef[];        // reverse cross-app links (e.g. the note(s) this task was created from)
-  itemLinks:     ItemLink[];           // links this task owns to other tasks (depends on / follow-up of / related) — see ItemLink
+  itemLinks:     ItemLink[];           // links this task owns to other tasks (depends on / follow-up of / related / repeat of) — see ItemLink
+  repeat:        RepeatConfig | null;  // a recurring task: completing it creates the next occurrence (services/recurringTasks.ts)
 }
 
 // ── Persisted application data ─────────────────────────────────────────────────
@@ -221,6 +222,7 @@ export interface CreateTaskInput {
   parentId?:        TaskId | null;
   crossAppRefs?:    CrossAppRef[];
   itemLinks?:       ItemLink[];
+  repeat?:          RepeatConfig | null;
 }
 
 export interface CreateCollectionInput {

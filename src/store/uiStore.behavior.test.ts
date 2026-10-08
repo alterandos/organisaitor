@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useUIStore, MAX_SECTION_HISTORY, CALENDAR_LAST_EDITING_TTL_MS } from '@/store/uiStore';
+import { useUIStore, CALENDAR_LAST_EDITING_TTL_MS } from '@/store/uiStore';
+import { MAX_NAV_HISTORY, placeKey, travel } from '@/store/navHistory';
 import { useNoteStore } from '@/store/noteStore';
 
 beforeEach(() => {
@@ -7,63 +8,100 @@ beforeEach(() => {
   useNoteStore.setState(useNoteStore.getInitialState(), true);
 });
 
-describe('setActiveView — back/forward history (browser semantics)', () => {
-  it('a normal ("push") navigation records where we came from and clears the forward stack', () => {
-    useUIStore.getState().setActiveView('calendar');
-    expect(useUIStore.getState().sectionHistory).toEqual([{ view: 'tasks' }]);
+const back = () => useUIStore.getState().navHistory.map(placeKey);
+const fwd = () => useUIStore.getState().navForward.map(placeKey);
 
+describe('history — one back/forward stack of places (browser semantics)', () => {
+  it('a normal navigation records where we came from and clears the forward stack', () => {
+    useUIStore.getState().setActiveView('calendar');
+    expect(back()).toEqual(['tasks']);
     useUIStore.getState().setActiveView('notes');
-    expect(useUIStore.getState().sectionHistory).toEqual([{ view: 'calendar' }, { view: 'tasks' }]);
-    expect(useUIStore.getState().sectionForwardHistory).toEqual([]);
+    expect(back()).toEqual(['calendar', 'tasks']);
+    expect(fwd()).toEqual([]);
   });
 
   it('navigating to the current section is a no-op', () => {
     useUIStore.getState().setActiveView('calendar');
-    const before = useUIStore.getState();
     useUIStore.getState().setActiveView('calendar');
-    expect(useUIStore.getState().sectionHistory).toEqual(before.sectionHistory);
+    expect(back()).toEqual(['tasks']);
   });
 
-  it('navigateBack pops the back stack, switches section, and pushes onto the FORWARD stack', () => {
+  it('back and forward move between the stacks', () => {
     useUIStore.getState().setActiveView('calendar');
-    useUIStore.getState().setActiveView('notes');
-
+    useUIStore.getState().setActiveView('records');
     expect(useUIStore.getState().navigateBack()).toBe(true);
     expect(useUIStore.getState().activeView).toBe('calendar');
-    expect(useUIStore.getState().sectionHistory).toEqual([{ view: 'tasks' }]);
-    expect(useUIStore.getState().sectionForwardHistory).toEqual([{ view: 'notes' }]);
-  });
-
-  it('navigateForward pops the forward stack, switches section, and pushes onto the BACK stack', () => {
-    useUIStore.getState().setActiveView('calendar');
-    useUIStore.getState().navigateBack(); // back to tasks; forward now has [calendar]
-
+    expect(back()).toEqual(['tasks']);
+    expect(fwd()).toEqual(['records']);
     useUIStore.getState().navigateForward();
-    expect(useUIStore.getState().activeView).toBe('calendar');
-    expect(useUIStore.getState().sectionForwardHistory).toEqual([]);
-    expect(useUIStore.getState().sectionHistory).toEqual([{ view: 'tasks' }]);
+    expect(useUIStore.getState().activeView).toBe('records');
+    expect(back()).toEqual(['calendar', 'tasks']);
+    expect(fwd()).toEqual([]);
   });
 
-  it('a fresh push after going back clears the forward stack, same as a browser', () => {
+  it('a fresh navigation after going back clears the forward stack', () => {
     useUIStore.getState().setActiveView('calendar');
-    useUIStore.getState().navigateBack(); // forward: [calendar]
-    useUIStore.getState().setActiveView('records'); // a genuinely new navigation
-    expect(useUIStore.getState().sectionForwardHistory).toEqual([]);
+    useUIStore.getState().navigateBack();
+    useUIStore.getState().setActiveView('records');
+    expect(fwd()).toEqual([]);
   });
 
-  it('navigateBack/navigateForward on an empty stack does nothing — navigateBack reports false', () => {
-    const before = useUIStore.getState().activeView;
+  it('on an empty stack nothing moves, and navigateBack reports false', () => {
     expect(useUIStore.getState().navigateBack()).toBe(false);
-    expect(useUIStore.getState().activeView).toBe(before);
     useUIStore.getState().navigateForward();
-    expect(useUIStore.getState().activeView).toBe(before);
+    expect(useUIStore.getState().activeView).toBe('tasks');
   });
 
-  it(`the back stack is capped at MAX_SECTION_HISTORY (${MAX_SECTION_HISTORY})`, () => {
-    const views: Array<'tasks' | 'calendar' | 'records' | 'lists' | 'notes' | 'portfolio' | 'fitness'> =
-      ['calendar', 'records', 'lists', 'notes', 'portfolio', 'fitness', 'tasks', 'calendar'];
-    for (const v of views) useUIStore.getState().setActiveView(v);
-    expect(useUIStore.getState().sectionHistory.length).toBe(MAX_SECTION_HISTORY);
+  it(`the back stack is capped at MAX_NAV_HISTORY (${MAX_NAV_HISTORY})`, () => {
+    const views = ['calendar', 'records', 'lists', 'portfolio'] as const;
+    for (let i = 0; i < MAX_NAV_HISTORY + 10; i++) useUIStore.getState().setActiveView(views[i % views.length]);
+    expect(useUIStore.getState().navHistory.length).toBe(MAX_NAV_HISTORY);
+  });
+
+  it('Calendar comes back to the period and view you were looking at', () => {
+    const s = useUIStore.getState();
+    s.setActiveView('calendar');
+    useUIStore.setState({ calendarViewMode: 'week', calendarSelectedDate: '2026-12-10', calendarYear: 2026, calendarMonth: 11 });
+    s.setActiveView('records');
+    useUIStore.setState({ calendarViewMode: 'month', calendarYear: 2027, calendarMonth: 0 });   // moved on elsewhere
+    useUIStore.getState().navigateBack();
+    expect(useUIStore.getState()).toMatchObject({ activeView: 'calendar', calendarViewMode: 'week', calendarSelectedDate: '2026-12-10', calendarMonth: 11 });
+  });
+
+  it('Tasks comes back to the task that was open, and Lists to the list', () => {
+    const s = useUIStore.getState();
+    s.openTaskPane('task-1');
+    s.setActiveView('lists');
+    useUIStore.setState({ activeListId: 'list-a' });
+    s.setActiveView('records');
+    useUIStore.setState({ tasksLastEditingTaskId: 'task-2', listsLastActiveListId: 'list-b', activeListId: null });
+    useUIStore.getState().navigateBack();
+    expect(useUIStore.getState().listsLastActiveListId).toBe('list-a');
+    useUIStore.getState().navigateBack();
+    expect(useUIStore.getState()).toMatchObject({ activeView: 'tasks', editingTaskId: 'task-1' });
+  });
+
+  it('travelHistory jumps several stops at once, keeping every stop in between', () => {
+    const s = useUIStore.getState();
+    s.setActiveView('calendar');
+    s.setActiveView('records');
+    s.setActiveView('lists');
+    expect(useUIStore.getState().travelHistory(-3)).toBe(true);
+    expect(useUIStore.getState().activeView).toBe('tasks');
+    expect(fwd()).toEqual(['calendar', 'records', 'lists']);
+    expect(useUIStore.getState().travelHistory(2)).toBe(true);
+    expect(useUIStore.getState().activeView).toBe('records');
+    expect(back()).toEqual(['calendar', 'tasks']);
+    expect(fwd()).toEqual(['lists']);
+    expect(useUIStore.getState().travelHistory(5)).toBe(false);
+  });
+
+  it('travel is pure: stacks in, target and stacks out', () => {
+    const at = 'x';
+    const r = travel([{ view: 'calendar', at }, { view: 'tasks', at }], [], { view: 'lists', at }, -2)!;
+    expect(r.target.view).toBe('tasks');
+    expect(r.back).toEqual([]);
+    expect(r.forward.map(placeKey)).toEqual(['calendar', 'lists']);
   });
 });
 
@@ -135,136 +173,63 @@ describe('setActiveView — Tasks last-edited pane memory (no TTL)', () => {
   });
 });
 
-describe("openNote / navigateBack / navigateForward — Notes' own note-level stack", () => {
-  it('walks back through several visited notes in the order they were left (note-level stops only — tab-level "last tab per note" restoration is notesTabMemory, tested separately)', () => {
+describe('history — Notes keeps a stop per note', () => {
+  it('walks back through several visited notes, then out of Notes', () => {
     const s = useUIStore.getState();
-    s.setActiveView('notes');
-    s.openNote('note1'); // tab switches within a note never call openNote — no stops from those
-    s.openNote('note2');
-    s.openNote('note3');
-    expect(useUIStore.getState().editingNoteId).toBe('note3');
-    expect(useUIStore.getState().notesHistory).toEqual([{ noteId: 'note2' }, { noteId: 'note1' }]);
-
-    useUIStore.getState().navigateBack();
-    expect(useUIStore.getState().editingNoteId).toBe('note2');
-    expect(useUIStore.getState().notesHistory).toEqual([{ noteId: 'note1' }]);
-    expect(useUIStore.getState().notesForwardHistory).toEqual([{ noteId: 'note3' }]);
-
-    useUIStore.getState().navigateBack();
-    expect(useUIStore.getState().editingNoteId).toBe('note1');
-    expect(useUIStore.getState().notesHistory).toEqual([]);
-    expect(useUIStore.getState().notesForwardHistory).toEqual([{ noteId: 'note2' }, { noteId: 'note3' }]);
-  });
-
-  it('navigateBack reports true for a note-level step even with no section history (Android back must not minimise then)', () => {
-    const s = useUIStore.getState();
-    s.setActiveView('notes');
-    useUIStore.setState({ sectionHistory: [] });
-    s.openNote('note1');
-    s.openNote('note2');
-    expect(useUIStore.getState().navigateBack()).toBe(true);
-    expect(useUIStore.getState().editingNoteId).toBe('note1');
-    expect(useUIStore.getState().navigateBack()).toBe(false);
-  });
-
-  it('navigateForward retraces the same path back', () => {
-    const s = useUIStore.getState();
+    s.setActiveView('records');
     s.setActiveView('notes');
     s.openNote('note1');
     s.openNote('note2');
     s.openNote('note3');
-    s.navigateBack();
-    s.navigateBack();
-    expect(useUIStore.getState().editingNoteId).toBe('note1');
-
-    useUIStore.getState().navigateForward();
-    expect(useUIStore.getState().editingNoteId).toBe('note2');
-    expect(useUIStore.getState().notesHistory).toEqual([{ noteId: 'note1' }]);
-    expect(useUIStore.getState().notesForwardHistory).toEqual([{ noteId: 'note3' }]);
-
-    useUIStore.getState().navigateForward();
-    expect(useUIStore.getState().editingNoteId).toBe('note3');
-    expect(useUIStore.getState().notesHistory).toEqual([{ noteId: 'note2' }, { noteId: 'note1' }]);
-    expect(useUIStore.getState().notesForwardHistory).toEqual([]);
-  });
-
-  it('once the note-stack is exhausted, navigateBack falls through to leaving the section', () => {
-    const s = useUIStore.getState();
-    s.setActiveView('records'); // establishes a section to fall back to
-    s.setActiveView('notes');
-    s.openNote('note1');
-    expect(useUIStore.getState().notesHistory).toEqual([]); // first note opened — nothing to push back from
+    expect(back()).toEqual(['notes:note2', 'notes:note1', 'records', 'tasks']);   // entering Notes with no note open isn't a stop of its own
 
     useUIStore.getState().navigateBack();
-    expect(useUIStore.getState().activeView).toBe('records');
+    expect(useUIStore.getState().editingNoteId).toBe('note2');
+    expect(fwd()).toEqual(['notes:note3']);
+    useUIStore.getState().navigateBack();
+    expect(useUIStore.getState().editingNoteId).toBe('note1');
+    useUIStore.getState().navigateForward();
+    expect(useUIStore.getState().editingNoteId).toBe('note2');
+    expect(fwd()).toEqual(['notes:note3']);
   });
 
-  it('re-opening the note that is already open does not push a stop', () => {
+  it('a stop per note, never for re-opening the same one', () => {
     const s = useUIStore.getState();
     s.setActiveView('notes');
     s.openNote('note1');
     s.openNote('note1');
-    expect(useUIStore.getState().notesHistory).toEqual([]);
+    expect(back()).toEqual(['tasks']);
   });
 
-  it('opening a genuinely new note clears the forward stack, same as a normal push', () => {
-    const s = useUIStore.getState();
-    s.setActiveView('notes');
-    s.openNote('note1');
-    s.openNote('note2');
-    s.navigateBack(); // forward: [note2]
-    expect(useUIStore.getState().notesForwardHistory).toEqual([{ noteId: 'note2' }]);
-
-    useUIStore.getState().openNote('note3'); // a genuinely new navigation, not a back/forward step
-    expect(useUIStore.getState().notesForwardHistory).toEqual([]);
-  });
-
-  it("the note-stack survives leaving Notes for another section and coming back via a normal nav click (not Alt+Left/Right)", () => {
+  it('notes and sections share one stack: back from Tasks returns to the note you left', () => {
     const s = useUIStore.getState();
     s.setActiveView('notes');
     s.openNote('note1');
     s.openNote('note2');
     s.setActiveView('tasks');
-    s.setActiveView('notes'); // ordinary re-entry, restores note2 via notesLastEditingNoteId
-    expect(useUIStore.getState().editingNoteId).toBe('note2');
-    expect(useUIStore.getState().notesHistory).toEqual([{ noteId: 'note1' }]);
-
+    useUIStore.getState().navigateBack();
+    expect(useUIStore.getState()).toMatchObject({ activeView: 'notes', editingNoteId: 'note2' });
     useUIStore.getState().navigateBack();
     expect(useUIStore.getState().editingNoteId).toBe('note1');
   });
 
-  // Regression: a note switch that goes through a DIFFERENT notebook in between (the real
-  // reported bug, 2026-09-25) — setSelectedNoteTag nulls editingNoteId directly when the
-  // notebook changes, so by the time openNote ran for the second note, openNote's own
-  // prevId (read from s.editingNoteId) was already null and had nothing to push. The note
-  // being left must be captured at the moment it's actually left, not only inside openNote.
-  it('switching to a different notebook in between two notes still pushes a stop for the note that was open', () => {
+  it('switching notebook or closing the note records the note that was open', () => {
     const s = useUIStore.getState();
     s.setActiveView('notes');
     s.setSelectedNoteTag('notebookA' as never);
     s.openNote('note1');
-    s.setSelectedNoteTag('notebookB' as never); // switching notebooks closes the open note
+    s.setSelectedNoteTag('notebookB' as never);
     expect(useUIStore.getState().editingNoteId).toBeNull();
-    expect(useUIStore.getState().notesHistory).toEqual([{ noteId: 'note1' }]);
-
+    expect(back()[0]).toBe('notes:note1');
     useUIStore.getState().openNote('note2');
-    expect(useUIStore.getState().editingNoteId).toBe('note2');
-    expect(useUIStore.getState().notesHistory).toEqual([{ noteId: 'note1' }]); // not duplicated
-
-    useUIStore.getState().navigateBack();
-    expect(useUIStore.getState().editingNoteId).toBe('note1');
+    expect(back()).toEqual(['notes:note1', 'tasks']);   // not twice
+    useUIStore.getState().closeNote();
+    expect(back()[0]).toBe('notes:note2');
   });
 
-  it('closeNote() (deselecting a note, e.g. Escape) also pushes a stop for the note that was open', () => {
-    const s = useUIStore.getState();
-    s.setActiveView('notes');
-    s.openNote('note1');
-    s.closeNote();
-    expect(useUIStore.getState().editingNoteId).toBeNull();
-    expect(useUIStore.getState().notesHistory).toEqual([{ noteId: 'note1' }]);
-
-    useUIStore.getState().navigateBack();
-    expect(useUIStore.getState().editingNoteId).toBe('note1');
+  it('opening a note in another section (the quick-view pane) is not a stop', () => {
+    useUIStore.getState().openNote('note1');
+    expect(back()).toEqual([]);
   });
 });
 

@@ -4,6 +4,9 @@ import type { EditorView } from '@tiptap/pm/view';
 import type { NoteObjectContext } from './types';
 import { applySession, getSession, type ObjectSession, objectSessionKey, sessionDecorations, withSessionMeta } from './session';
 import { acceptKind, commitSession, dismissSession, setHighlight } from './actions';
+import { chosenKind } from './kinds';
+import { getSelectionMenu, openSelectionMenu, selectionMenuPlugin } from './selectionMenuState';
+import { isBlockKind } from './types';
 
 // Set from outside after the editor exists (NoteEditor / NoteObjectMenu effects).
 export interface NoteObjectTriggerStorage {
@@ -11,6 +14,9 @@ export interface NoteObjectTriggerStorage {
   getContext:  () => NoteObjectContext | null;
   // Set by NoteObjectMenu while its fields are showing: moves focus into the first one.
   focusFields: (() => boolean) | null;
+  // Set by SelectionMenu while it's open: a key that reached the editor first (typed before the
+  // menu's search box took focus) is handled by the menu. Returns whether it took the key.
+  selectionMenuKey: ((event: KeyboardEvent) => boolean) | null;
 }
 
 export const objectTriggerStorage = (editor: { storage: unknown }): NoteObjectTriggerStorage =>
@@ -24,6 +30,12 @@ export const objectTriggerStorage = (editor: { storage: unknown }): NoteObjectTr
 // also acts on them.
 function handleSessionKey(view: EditorView, event: KeyboardEvent, storage: NoteObjectTriggerStorage): boolean {
   const s = getSession(view.state);
+  if (getSelectionMenu(view.state) && storage.selectionMenuKey?.(event)) { event.preventDefault(); event.stopPropagation(); return true; }
+  // `\` over selected text: the selection menu. Caught on the key as well as in handleTextInput,
+  // because a selection across paragraphs is replaced without going through handleTextInput.
+  if (!s && event.key === '\\' && !event.ctrlKey && !event.metaKey && !event.altKey && !view.state.selection.empty) {
+    if (openSelectionMenu(view)) { event.preventDefault(); return true; }
+  }
   if (!s || event.isComposing) return false;
   const consume = () => { event.preventDefault(); event.stopPropagation(); return true; };
   const mod = event.ctrlKey || event.metaKey;
@@ -65,7 +77,7 @@ export const NoteObjectTrigger = Extension.create<Record<string, never>, NoteObj
   name: 'noteObjectTrigger',
 
   addStorage() {
-    return { getContext: () => null, focusFields: null };
+    return { getContext: () => null, focusFields: null, selectionMenuKey: null };
   },
 
   addProseMirrorPlugins() {
@@ -80,15 +92,26 @@ export const NoteObjectTrigger = Extension.create<Record<string, never>, NoteObj
         props: {
           decorations: sessionDecorations,
           handleKeyDown: (view, event) => handleSessionKey(view, event, storage),
-          // `\\` right after the `\` that opened a session: one literal backslash, no session.
           handleTextInput: (view, from, to, text) => {
+            // `\` over selected text opens the selection menu instead of replacing the text.
+            if (text === '\\' && from !== to && !getSession(view.state)) return openSelectionMenu(view);
             const s = getSession(view.state);
-            if (!s || text !== '\\' || from !== to || from !== s.anchor + 1 || s.to !== s.anchor + 1) return false;
-            view.dispatch(withSessionMeta(view.state.tr, { type: 'dismiss' }));
-            return true;
+            if (!s || from !== to) return false;
+            // `\\` right after the `\` that opened a session: one literal backslash, no session.
+            if (text === '\\' && from === s.anchor + 1 && s.to === s.anchor + 1) {
+              view.dispatch(withSessionMeta(view.state.tr, { type: 'dismiss' }));
+              return true;
+            }
+            // A space after a note block's keyword (`\timeline `, `\tl `) inserts the block.
+            if (text === ' ' && from === s.to && s.interp.phase === 'picking') {
+              const kind = chosenKind(s.interp.word);
+              if (kind && isBlockKind(kind)) { acceptKind(view, kind); return true; }
+            }
+            return false;
           },
         },
       }),
+      selectionMenuPlugin(),
     ];
   },
 });

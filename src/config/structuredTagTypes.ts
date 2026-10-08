@@ -7,6 +7,7 @@
 // against Acronym specifically. See CLAUDE.md "Structured tag entries" for the full design.
 
 import { inferAcronymFromSelection } from '@/utils/acronymInference';
+import { inferDefinitionFromSelection } from '@/utils/definitionInference';
 
 export type StructuredTagFieldType = 'text' | 'textarea';
 
@@ -43,7 +44,37 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       return { term, fields: { expansion: expansion ?? '' } };
     },
   },
+  // Definition and Concept are the Glossary (components/NotesSection/GlossaryView.tsx): text
+  // elsewhere can be linked to one with `\` (a conceptRef mark, drawn with a bracket in the margin).
+  {
+    key:   'definition',
+    label: 'Definition',
+    fields: [
+      { id: 'meaning', name: 'Means', type: 'textarea', placeholder: 'What the term means' },
+    ],
+    infer: (selectedText, contextText) => {
+      const { term, meaning } = inferDefinitionFromSelection(selectedText, contextText);
+      return { term, fields: { meaning } };
+    },
+  },
+  {
+    key:   'concept',
+    label: 'Concept',
+    fields: [
+      { id: 'summary', name: 'In short', type: 'textarea', placeholder: 'The idea in a sentence' },
+    ],
+    infer: (selectedText, contextText) => {
+      const { term, meaning } = inferDefinitionFromSelection(selectedText, contextText);
+      return { term, fields: { summary: meaning } };
+    },
+  },
 ];
+
+// The types that make up the Glossary, and the field each one's meaning is in.
+export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', concept: 'summary', acronym: 'expansion' };
+
+export const glossaryMeaning = (entry: { typeKey: string; fields: Record<string, unknown> }): string =>
+  String(entry.fields[GLOSSARY_TYPES[entry.typeKey] ?? ''] ?? '');
 
 export function getStructuredTagType(typeKey: string | null | undefined): StructuredTagTypeDef | undefined {
   return typeKey ? STRUCTURED_TAG_TYPES.find((t) => t.key === typeKey) : undefined;

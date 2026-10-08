@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LABELS } from '@/config/labels';
-import { ArchiveIcon, TrashIcon } from './icons';
+import { ArchiveIcon, TrashIcon } from '@/components/Icons';
 import styles from './ItemActionDialog.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 

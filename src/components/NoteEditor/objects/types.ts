@@ -1,4 +1,5 @@
 import type { CollectionId, CrossAppRef, CrossAppRefType } from '@/types';
+import type { EditorView } from '@tiptap/pm/view';
 
 // Inline objects in notes: type `\`, pick a kind, keep typing, Enter creates it and links the
 // text to it (CLAUDE.md "Inline objects in notes"). Everything a kind needs to know lives in its
@@ -52,3 +53,22 @@ export interface NoteObjectKind<D> {
 // The registry holds kinds with different drafts.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyNoteObjectKind = NoteObjectKind<any>;
+
+// A note block: something `\` puts into the note itself (a timeline), rather than an item made
+// elsewhere in the app and linked. No draft and no preview: picking it inserts it, and the
+// writing happens in the block. Registered in NOTE_BLOCK_KINDS (blockKinds.ts).
+export interface NoteBlockKind {
+  family:  'block';
+  id:      string;      // the canonical keyword: `\timeline`
+  label:   string;
+  icon:    string;
+  aliases: string[];
+  hint:    string;
+  // Replaces the typed `\…` (from..to) with the block, the cursor inside it. Ends the session.
+  insert:  (view: EditorView, from: number, to: number) => void;
+}
+
+// Anything the `\` menu offers.
+export type PickableKind = AnyNoteObjectKind | NoteBlockKind;
+
+export const isBlockKind = (k: PickableKind): k is NoteBlockKind => (k as NoteBlockKind).family === 'block';

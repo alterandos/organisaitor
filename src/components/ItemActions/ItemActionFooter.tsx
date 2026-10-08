@@ -1,5 +1,5 @@
 import { LABELS } from '@/config/labels';
-import { ArchiveIcon, CheckCircleIcon, RestoreIcon, TrashIcon } from './icons';
+import { ArchiveIcon, CheckCircleIcon, RestoreIcon, TrashIcon } from '@/components/Icons';
 import { HoverOptions, type HoverOption } from '@/components/HoverOptions/HoverOptions';
 import styles from './ItemActions.module.css';
 

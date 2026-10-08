@@ -1,0 +1,54 @@
+/* A linked note's abstract under a calendar item's notes: a quiet box, marked as the note's. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.box {
+  padding: 0.5rem 0.65rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.noteLink {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+button.noteLink { cursor: pointer; }
+button.noteLink:hover { color: var(--color-primary); text-decoration: underline; }
+
+.text {
+  display: block;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  resize: vertical;
+  outline: none;
+}
+
+.text:hover { border-color: var(--color-border); }
+.text:focus { border-color: var(--color-primary-border); background: var(--color-surface); }

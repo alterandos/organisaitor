@@ -9,6 +9,8 @@
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { toggleTaskWithLists } from '@/services/taskListLinks';
+import { discardOccurrence } from '@/services/recurringTasks';
+import { formatDate } from '@/utils/date';
 import { choiceDialog } from '@/components/ConfirmDialog/dialogs';
 import { showToast } from '@/components/Toast/showToast';
 import { openBlockers, openBlockersDeep, unlockedBy } from '@/utils/taskLinks';
@@ -64,9 +66,13 @@ export async function toggleTaskCompletion(taskId: TaskId, opts: CompletionOptio
   }
 
   const completed: TaskId[] = [];
+  const spawned: TaskId[] = [];
   for (const id of [...upstream, taskId]) {
     const t = useTaskStore.getState().tasks[id];
-    if (t && !t.completed) { toggleTaskWithLists(id); completed.push(id); }
+    if (!t || t.completed) continue;
+    const next = toggleTaskWithLists(id);
+    completed.push(id);
+    if (next) spawned.push(next);
   }
   if (!completed.includes(taskId)) return;
 
@@ -75,7 +81,10 @@ export async function toggleTaskCompletion(taskId: TaskId, opts: CompletionOptio
   if (opts.thenFollowUp) useUIStore.getState().showAddFollowUp(taskId);
   showToast({
     message: L.toastCompleted(task.title) + (completed.length > 1 ? ` (+${completed.length - 1})` : ''),
-    detail:  unlocked.length > 0 ? L.toastUnlocked(unlocked.map((t) => t.title)) : undefined,
+    detail:  [
+      unlocked.length > 0 ? L.toastUnlocked(unlocked.map((t) => t.title)) : null,
+      ...spawned.map((id) => { const n = after[id]; const when = n?.deadline ?? n?.scheduledAt; return when ? LABELS.recurring.toastNext(formatDate(when)) : null; }),
+    ].filter(Boolean).join(' · ') || undefined,
     actions: [
       ...(opts.thenFollowUp ? [] : [{ label: L.toastFollowUp, onClick: () => useUIStore.getState().showAddFollowUp(taskId) }]),
       {
@@ -84,6 +93,8 @@ export async function toggleTaskCompletion(taskId: TaskId, opts: CompletionOptio
           for (const id of completed) {
             if (useTaskStore.getState().tasks[id]?.completed) useTaskStore.getState().toggleTask(id);
           }
+          // The next occurrence a recurring task's completion made goes again.
+          for (const id of spawned) discardOccurrence(id);
         },
       },
     ],

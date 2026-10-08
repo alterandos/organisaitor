@@ -21,6 +21,8 @@ export const ITEM_LINK_KINDS: Record<ItemLinkKind, ItemLinkKindDef> = {
   dependsOn:  { kind: 'dependsOn',  icon: '⛓', blocks: true,  symmetric: false, ...LABELS.taskLinks.kinds.dependsOn },
   followUpOf: { kind: 'followUpOf', icon: '↳',  blocks: true,  symmetric: false, ...LABELS.taskLinks.kinds.followUpOf },
   related:    { kind: 'related',    icon: '🔗', blocks: false, symmetric: true,  ...LABELS.taskLinks.kinds.related },
+  // A recurring task's next occurrence, linked to the one it repeats (services/recurringTasks.ts).
+  repeatOf:   { kind: 'repeatOf',   icon: '🔁', blocks: false, symmetric: false, ...LABELS.taskLinks.kinds.repeatOf },
 };
 
-export const ITEM_LINK_KIND_ORDER: ItemLinkKind[] = ['dependsOn', 'followUpOf', 'related'];
+export const ITEM_LINK_KIND_ORDER: ItemLinkKind[] = ['dependsOn', 'followUpOf', 'related', 'repeatOf'];

@@ -1,0 +1,171 @@
+/* A chart and its data editor (ChartWidget.ts), for any app. Classes are doubled up with .widget
+   so they hold inside a host with its own broad rules (the note editor styles every table, input
+   and button inside it). */
+
+.widget { position: relative; }
+
+.widget .box {
+  position: relative;
+  height: 320px;
+  padding: 22px 2px 6px;   /* room above the chart for a host's toolbar, so it never covers the title */
+}
+
+.widget .box canvas { display: block; }
+
+.widget .empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  border: 1.5px dashed var(--color-border);
+  border-radius: 10px;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.widget .empty[hidden],
+.widget .panel[hidden] { display: none; }
+
+.widget .panel {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-alt);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.widget .head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.widget .input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: var(--color-surface);
+  box-shadow: none;
+  color: var(--color-text);
+  font: inherit;
+  outline: none;
+}
+
+.widget .input:hover { border-color: var(--color-border); }
+.widget .input:focus { border-color: var(--color-primary-border); box-shadow: 0 0 0 2px var(--color-primary-subtle); }
+.widget .titleInput { flex: 2 1 12rem; font-weight: 600; }
+.widget .axisInput { flex: 1 1 9rem; }
+
+.widget .table {
+  width: 100%;
+  margin: 0;
+  border: none;
+  border-collapse: separate;
+  border-spacing: 3px;
+  table-layout: fixed;
+}
+
+.widget .table th,
+.widget .table td {
+  position: relative;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  vertical-align: middle;
+}
+
+.widget .table tr > :first-child { width: 28%; }
+.widget .table tr > :last-child:not([colspan]) { width: 5.5rem; }
+.widget .table th .input { font-weight: 650; }
+.widget .table tfoot td { text-align: left; }
+.widget .valueInput { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* A series heading carries the series' colour as a bar along its foot. */
+.widget .seriesHead .input { box-shadow: inset 0 -2px 0 var(--series-color); }
+.widget .unused .input { opacity: 0.45; }
+
+.widget .btn {
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.widget .btn:hover { border-color: var(--color-border); background: var(--color-surface); color: var(--color-text); }
+.widget .addBtn { color: var(--color-primary); font-weight: 600; }
+.widget .pasteBtn { margin-left: auto; border-color: var(--color-border); background: var(--color-surface); color: var(--color-text); }
+
+.widget .useBtn {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.widget .useBtn:hover { border-color: var(--color-primary); background: var(--color-primary); color: #fff; filter: brightness(1.08); }
+
+.widget .deleteBtn { opacity: 0; }
+.widget th .deleteBtn { position: absolute; top: -9px; right: -6px; padding: 0 5px; }
+.widget th:hover > .deleteBtn,
+.widget tr:hover .deleteBtn,
+.widget .deleteBtn:focus-visible { opacity: 1; }
+.widget .deleteBtn:hover { color: var(--color-danger); }
+
+@media (hover: none) {
+  .widget .deleteBtn { opacity: 1; }
+}
+
+.widget .check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.widget .paste { margin-bottom: 0.6rem; }
+
+.widget .pasteArea {
+  display: block;
+  width: 100%;
+  min-height: 8rem;
+  padding: 6px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.78rem;
+  white-space: pre;
+  resize: vertical;
+  outline: none;
+}
+
+.widget .pasteArea:focus { border-color: var(--color-primary-border); box-shadow: 0 0 0 2px var(--color-primary-subtle); }
+
+.widget .pasteActions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.widget .hint {
+  margin: 0.4rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}

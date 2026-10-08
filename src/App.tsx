@@ -72,6 +72,8 @@ import { RecyclingBinPane } from '@/components/RecyclingBinPane/RecyclingBinPane
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
+import { HistoryBrowser } from '@/components/HistoryBrowser/HistoryBrowser';
+import { installSpecialCharInput } from '@/specialChars/fieldInput';
 import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog/ConfirmDialog';
 import { ToastHost } from '@/components/Toast/Toast';
@@ -160,6 +162,7 @@ export default function App() {
   const portfolioChartOpen         = useUIStore((s) => s.portfolioChartOpen);
   const editingNoteId              = useUIStore((s) => s.editingNoteId);
   const quickAccessOpen            = useUIStore((s) => s.quickAccessOpen);
+  const historyBrowserOpen         = useUIStore((s) => s.historyBrowserOpen);
   const decryptPrompt              = useUIStore((s) => s.decryptPrompt);
   const toggleQuickAccess          = useUIStore((s) => s.toggleQuickAccess);
   const collectionsRecord          = useTaskStore((s) => s.collections);
@@ -245,6 +248,8 @@ export default function App() {
 
   useNotificationChecker();
   useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initAutoBackup(); migrateTaskDeadlineShadows(); }, []);
+  // `//name` → a Greek letter (and later other characters) in every text field (src/specialChars/).
+  useEffect(() => installSpecialCharInput(), []);
 
   const setSession = useAuthStore((s) => s.setSession);
   const authUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -349,7 +354,8 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       // Notes editor zoom — must fire before isTyping guard (editor is contentEditable)
       // !e.shiftKey prevents Ctrl+Shift+= (superscript) and Ctrl+Shift+- (subscript) from also zooming
-      if (activeView === 'notes' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+      // A key the editor already took (Ctrl+=/− on a heading changes its level) is not a zoom.
+      if (activeView === 'notes' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && !e.defaultPrevented) {
         if (e.key === '-') { e.preventDefault(); nudgeNoteEditorZoom(-0.1); return; }
         if (e.key === '=') { e.preventDefault(); nudgeNoteEditorZoom(0.1); return; }
       }
@@ -374,6 +380,13 @@ export default function App() {
       if (matchesHotkeyPrimary(e, 'action-forward')) {
         e.preventDefault();
         navigateForward();
+        return;
+      }
+      // The history browser: also from inside a text field (Alt+N types nothing there).
+      if (matchesHotkeyId(e, 'action-history')) {
+        e.preventDefault();
+        const ui = useUIStore.getState();
+        if (ui.historyBrowserOpen) ui.closeHistoryBrowser(); else ui.openHistoryBrowser();
         return;
       }
 
@@ -660,6 +673,7 @@ export default function App() {
         <ToastHost />
         <ContextMenuHost />
         {quickAccessOpen && <QuickAccessPane />}
+        {historyBrowserOpen && <HistoryBrowser />}
         {decryptPrompt && <DecryptPrompt />}
         {isAndroid && <MobileNav />}
         {isAndroid && mobileMoreSheetOpen && <MobileMoreSheet />}
