@@ -75,6 +75,15 @@ describe('settingsStore migration', () => {
     expect(state.quietHours).toEqual({ enabled: false, start: '22:00', end: '07:00' });
   });
 
+  it('v6 -> v7 backfills the plain note backdrop and keeps everything else', async () => {
+    seed('todo-settings', { clockFormat: '24h', notifyEvents: false }, 6);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    const state = useSettingsStore.getState();
+    expect(state.notifyEvents).toBe(false);
+    expect(state.noteBackdrop).toBeNull();
+  });
+
   it('a fresh install with no persisted state at all gets the full default shape', async () => {
     const { useSettingsStore } = await import('@/store/settingsStore');
     await flush();

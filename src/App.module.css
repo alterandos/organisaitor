@@ -101,6 +101,7 @@
   transition: color 140ms ease, background 140ms ease;
 }
 .settingsBtn:hover { color: var(--color-text); background: var(--color-bg); }
+.accountIcon { display: block; width: 1.05rem; height: 1.05rem; }
 
 .heading {
   font-size: 1.15rem;

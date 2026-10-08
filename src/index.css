@@ -57,7 +57,7 @@
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
   --color-backdrop: rgba(0, 0, 0, 0.45);
-  --color-overscroll: #e8e9ed; /* past the end of a note (NoteEditor .editorWrap::after) */
+  --color-overscroll: #e8e9ed; /* past the end of a note (NoteEditor's NoteBackdrop, when no backdrop is chosen) */
   --color-occurrence: rgba(250, 204, 21, 0.28); /* other mentions of the selected text in a note */
 }
 

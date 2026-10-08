@@ -11,7 +11,7 @@ import styles from './HistoryBrowser.module.css';
 
 // Alt+N: the app's history (store/navHistory.ts) as a carousel of cards — oldest on the left,
 // where you are in the middle, anything you went back from on the right. Scroll, ← →, swipe or
-// click to move; Enter or a click on the centred card goes there (travelHistory, so the stops in
+// to move; Enter, or a click on any card, goes there (travelHistory, so the stops in
 // between stay in history). Cards are read live when it opens (describePlace).
 
 const VISIBLE = 4;         // cards drawn either side of the centred one
@@ -98,7 +98,7 @@ export function HistoryBrowser() {
               data-view={place.view}
               style={{ ['--d' as string]: d, ['--ad' as string]: Math.abs(d), ['--s' as string]: Math.sign(d) }}
               aria-current={d === 0}
-              onClick={() => { if (drag.current?.moved) return; if (d === 0) go(i); else setSel(i); }}
+              onClick={() => { if (!drag.current?.moved) go(i); }}
             >
               <div className={styles.band}>
                 <span className={styles.sectionIcon} aria-hidden="true">{SECTION_ICONS[place.view]}</span>

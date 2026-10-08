@@ -226,4 +226,45 @@ describe('NoteEditor keys added 2026-10-07', () => {
     keyInEditor({ key: 's' });
     expect(ed.state.selection.$from.parent.type.name).toBe('noteSubtitle');
   });
+
+  // Ctrl+H on normal text makes Heading 1 at once (2026-10-09); a second key still picks the
+  // level. Holding Ctrl between the two auto-repeats Ctrl's own keydown, which used to cancel.
+  describe('Ctrl+H levels', () => {
+    function open() {
+      useNoteStore.setState((s) => ({ notes: { ...s.notes, ['note-c' as NoteId]: makeNote('note-c', twoLines) } }));
+      useUIStore.setState({ activeView: 'notes' });
+      act(() => { useUIStore.getState().openNote('note-c'); });
+      render(<NoteEditor />);
+      const ed = liveEditor();
+      act(() => { ed.view.dom.focus(); ed.commands.setTextSelection(13); });
+      const blocks = () => { const b: string[] = []; ed.state.doc.forEach((s) => s.forEach((x) => b.push(`${x.type.name}${x.attrs.level ?? ''}`))); return b; };
+      return { ed, blocks };
+    }
+
+    it('alone, on normal text, makes Heading 1', () => {
+      const { blocks } = open();
+      keyInEditor({ key: 'h', ctrlKey: true });
+      expect(blocks()).toEqual(['paragraph', 'heading1']);
+    });
+
+    it('then a digit (Ctrl held, auto-repeating) makes that level', () => {
+      const { blocks } = open();
+      keyInEditor({ key: 'h', ctrlKey: true });
+      keyInEditor({ key: 'Control', ctrlKey: true });
+      keyInEditor({ key: 'Control', ctrlKey: true });
+      keyInEditor({ key: '2', ctrlKey: true });
+      expect(blocks()).toEqual(['paragraph', 'heading2']);
+      keyInEditor({ key: 'h', ctrlKey: true });
+      expect(blocks()).toEqual(['paragraph', 'heading2']);   // a heading stays as it is
+      keyInEditor({ key: '1' });
+      expect(blocks()).toEqual(['paragraph', 'heading1']);
+    });
+
+    it('then H goes to the Title and leaves the line as normal text', () => {
+      const { blocks } = open();
+      keyInEditor({ key: 'h', ctrlKey: true });
+      keyInEditor({ key: 'h', ctrlKey: true });
+      expect(blocks()).toEqual(['noteTitle', 'paragraph', 'paragraph']);
+    });
+  });
 });

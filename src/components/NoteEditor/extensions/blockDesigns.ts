@@ -5,6 +5,8 @@ import type { ContextMenuItem } from '@/contextMenu/types';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { registerEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
+import { createElement } from 'react';
+import { TrashIcon } from '@/components/Icons';
 import styles from './BlockDesigns.module.css';
 
 // ── Frames: outline and shade ────────────────────────────────────────────────
@@ -85,6 +87,14 @@ export function selectBlock(view: EditorView, pos: number): void {
   view.focus();
 }
 
+// Deletes the whole block (Ctrl+Z brings it back).
+export function deleteBlock(view: EditorView, pos: number): void {
+  const node = view.state.doc.nodeAt(pos);
+  if (!node || !NOTE_BLOCK_NODES.has(node.type.name)) return;
+  view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize).scrollIntoView());
+  view.focus();
+}
+
 // The block a DOM element is in, as a document position.
 export function blockPosAt(view: EditorView, el: Element): number | null {
   const dom = el.closest('[data-note-block]');
@@ -97,17 +107,29 @@ export function blockPosAt(view: EditorView, el: Element): number | null {
 }
 
 const SELECT_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5V3a1 1 0 0 1 1-1h2M11 2h2a1 1 0 0 1 1 1v2M14 11v2a1 1 0 0 1-1 1h-2M5 14H3a1 1 0 0 1-1-1v-2M7 2h2M7 14h2M2 7v2M14 7v2"/></svg>';
+// The trash can of components/Icons (TrashIcon), as markup: the pill is plain DOM, not React.
+const DELETE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
-// The pill's Select button. Every block's pill ends with it (pattern test). `getPos` is the
-// pill widget's; the block starts just before it.
-export function selectButton(view: EditorView, getPos: () => number | undefined): HTMLButtonElement {
-  const b = pillButton(LABELS.noteBlocks.selectBlock, () => {
+// The pill's Select button, and its Delete button (shown only while the block is selected, CSS).
+// Every block's pill ends with these (pattern test). `getPos` is the pill widget's; the block
+// starts just before it.
+export function selectButton(view: EditorView, getPos: () => number | undefined): HTMLElement {
+  const group = document.createElement('span');
+  group.setAttribute('data-block-select-group', '');
+  const select = pillButton(LABELS.noteBlocks.selectBlock, () => {
     const p = getPos();
     if (p !== undefined) selectBlock(view, p - 1);
   });
-  b.setAttribute('data-block-select', '');
-  b.innerHTML = SELECT_ICON;
-  return b;
+  select.setAttribute('data-block-select', '');
+  select.innerHTML = SELECT_ICON;
+  const del = pillButton(LABELS.noteBlocks.deleteBlock, () => {
+    const p = getPos();
+    if (p !== undefined) deleteBlock(view, p - 1);
+  });
+  del.setAttribute('data-block-delete', '');
+  del.innerHTML = DELETE_ICON;
+  group.append(select, del);
+  return group;
 }
 
 // Esc inside a block selects the whole block (as in Notion); Esc again then goes on to whatever
@@ -140,7 +162,10 @@ registerContextMenuProvider({
     const view = (scope.data as { editor: { view: EditorView } }).editor.view;
     const pos = blockPosAt(view, ctx.target);
     if (pos === null) return [];
-    return [{ id: 'select-block', label: LABELS.noteBlocks.selectBlock, icon: '⬚', shortcut: 'Esc', run: () => selectBlock(view, pos) }];
+    return [
+      { id: 'select-block', label: LABELS.noteBlocks.selectBlock, icon: '⬚', shortcut: 'Esc', run: () => selectBlock(view, pos) },
+      { id: 'delete-block', label: LABELS.noteBlocks.deleteBlock, icon: createElement(TrashIcon), destructive: true, run: () => deleteBlock(view, pos) },
+    ];
   },
 });
 

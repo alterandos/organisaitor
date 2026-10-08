@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { Capacitor } from '@capacitor/core';
 import type { ClockFormat } from '@/utils/date';
 import { persistStorage } from '@/utils/persistStorage';
+import type { NoteBackdrop } from '@/config/noteBackdrops';
 
 // Every other platform defaults to 'system'; Android defaults to 'dark' (see
 // docs/android/00-architecture.md §5c). Only affects a brand-new install with no
@@ -73,6 +74,10 @@ interface SettingsState {
 
   // ── Notes ────────────────────────────────────────────────────────────────────
   noteHeadingStyle:    'academic' | 'highlight';
+  // What fills the room below the end of a note (NoteEditor's NoteBackdrop): null = the plain grey,
+  // a preset from config/noteBackdrops.ts, or the user's own picture (a compressed data URL).
+  noteBackdrop:        NoteBackdrop;
+  setNoteBackdrop:     (b: NoteBackdrop) => void;
   setNoteHeadingStyle: (s: 'academic' | 'highlight') => void;
 
   noteEditorZoom:      number;   // multiplier on editor font size; 1.0 = default, range 0.7–2.0
@@ -134,6 +139,8 @@ export const useSettingsStore = create<SettingsState>()(
       setChartTickerRowZoom: (z) => set({ chartTickerRowZoom: Math.max(0.5, Math.min(3.0, Math.round(z * 10) / 10)) }),
 
       noteHeadingStyle:    'academic',
+      noteBackdrop:        null,
+      setNoteBackdrop:     (b) => set({ noteBackdrop: b }),
       setNoteHeadingStyle: (s) => set({ noteHeadingStyle: s }),
 
       noteEditorZoom:      1.0,
@@ -194,7 +201,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 6,
+      version: 7,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -236,6 +243,8 @@ export const useSettingsStore = create<SettingsState>()(
           if (state.snoozeEveningTime === undefined) state.snoozeEveningTime = '18:00';
           if (state.quietHours === undefined) state.quietHours = { enabled: false, start: '22:00', end: '07:00' };
         }
+        // v6 → v7: noteBackdrop (the picture below the end of a note, 2026-10-08).
+        if (version < 7 && state.noteBackdrop === undefined) state.noteBackdrop = null;
         return state;
       },
     }

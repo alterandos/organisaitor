@@ -992,10 +992,11 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 }), {
   name:    'todo-ui-session',
   storage: persistStorage(),
-  version: 3,
+  version: 4,
   // v1 → v2: overviewSelection (Overview section, 2026-10-01).
   // v2 → v3: one history of places (navHistory/navForward) replaces sectionHistory and
   // notesHistory (2026-10-07); the old section stops carry over, the note stops are dropped.
+  // v3 → v4: expandedNoteTagIds persisted, so the notebook tree reopens as it was left (2026-10-08).
   migrate: (persisted, fromVersion) => {
     let state = (persisted ?? {}) as Record<string, unknown>;
     if (fromVersion < 2 && state.overviewSelection === undefined) state = { ...state, overviewSelection: null };
@@ -1006,6 +1007,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       for (const k of ['sectionHistory', 'sectionForwardHistory', 'notesHistory', 'notesForwardHistory']) delete rest[k];
       state = { ...rest, navHistory: toPlaces(state.sectionHistory), navForward: toPlaces(state.sectionForwardHistory) };
     }
+    if (fromVersion < 4 && !Array.isArray(state.expandedNoteTagIds)) state = { ...state, expandedNoteTagIds: [] };
     return state as never;
   },
   partialize: (s) => ({
@@ -1019,6 +1021,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     notesLastActiveTabId:     s.notesLastActiveTabId,
     notesTabMemory:           s.notesTabMemory,
     selectedNoteTagId:        s.selectedNoteTagId,
+    expandedNoteTagIds:       s.expandedNoteTagIds,
     listsLastActiveListId:    s.listsLastActiveListId,
     listsLastActiveTabId:     s.listsLastActiveTabId,
     overviewSelection:        s.overviewSelection,

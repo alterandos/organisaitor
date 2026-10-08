@@ -1,0 +1,177 @@
+/* The room below the end of a note (NoteBackdrop.tsx). flex-basis % resolves against
+   .editorWrap's own height (it is a sized column flex container). */
+.area {
+  position: relative;
+  flex: 0 0 80%;
+  background: var(--color-overscroll);
+  background-size: cover;
+  background-position: center top;
+  border-top: 1px solid var(--color-border-strong);
+}
+
+.change {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 18vh auto 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.area:hover .change,
+.change:focus-visible,
+.changeOpen { opacity: 0.9; }
+.change:hover { color: var(--color-text); opacity: 1; }
+.changeIcon { width: 20px; height: 20px; }
+
+@media (hover: none) {
+  .change { opacity: 0.75; }
+}
+
+/* ── The picker ─────────────────────────────────────────────────────────── */
+.panel {
+  position: fixed;
+  z-index: 1000;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+}
+
+.heading {
+  margin: 0 0 8px;
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 3px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.swatch:hover { color: var(--color-text); }
+.swatchSel { border-color: var(--color-primary); color: var(--color-text); }
+
+.swatchFill {
+  display: block;
+  height: 48px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-overscroll);
+  background-size: cover;
+  background-position: center;
+}
+
+.swatchLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.action:hover { background: var(--color-surface-alt); }
+.actionIcon { width: 15px; height: 15px; }
+
+/* ── Presets: the same rule draws the area and its swatch (config/noteBackdrops.ts) ──
+   Fixed colours on purpose: a backdrop is a picture, the same in both themes. */
+[data-backdrop="aurora"] {
+  background:
+    radial-gradient(ellipse 60% 70% at 18% 25%, rgba(18, 110, 66, 0.55), transparent 70%),
+    radial-gradient(ellipse 55% 65% at 82% 60%, rgba(88, 28, 135, 0.6), transparent 70%),
+    radial-gradient(ellipse 50% 50% at 50% 110%, rgba(13, 80, 70, 0.45), transparent 70%),
+    #040405;
+}
+
+[data-backdrop="lattice"] {
+  background:
+    repeating-linear-gradient(45deg, rgba(34, 140, 90, 0.38) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(-45deg, rgba(126, 58, 190, 0.38) 0 1px, transparent 1px 22px),
+    radial-gradient(ellipse at 50% 30%, rgba(40, 20, 60, 0.6), transparent 70%),
+    #050506;
+}
+
+[data-backdrop="ripples"] {
+  background:
+    repeating-radial-gradient(circle at 0% 100%, rgba(30, 130, 80, 0.4) 0 1.5px, transparent 1.5px 20px),
+    repeating-radial-gradient(circle at 100% 0%, rgba(110, 45, 175, 0.4) 0 1.5px, transparent 1.5px 20px),
+    #050506;
+}
+
+[data-backdrop="dusk"] {
+  background: linear-gradient(165deg, #1e1b4b 0%, #4c1d95 50%, #831843 100%);
+}
+
+[data-backdrop="blueprint"] {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 6px 6px,
+    #0b2545;
+}
+
+[data-backdrop="ocean"] {
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1.5px) 0 0 / 16px 16px,
+    linear-gradient(180deg, #0e5a7e 0%, #073047 100%);
+}
+
+[data-backdrop="paper"] {
+  background:
+    radial-gradient(rgba(120, 95, 60, 0.16) 1px, transparent 1.5px) 0 0 / 14px 14px,
+    #f4eddf;
+}
+
+[data-backdrop="sunset"] {
+  background: linear-gradient(180deg, #fde68a 0%, #fb923c 55%, #be185d 100%);
+}

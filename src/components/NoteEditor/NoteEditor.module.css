@@ -514,16 +514,7 @@
   min-width: 0;
 }
 
-/* Room to scroll past the end of the note: 80% of the visible height, so the last lines can be
-   brought up to mid-screen, clear of the + button. Greyed (--color-overscroll, light or dark) so
-   it reads as outside the page, not more of it. flex-basis % resolves against .editorWrap's own
-   height (it is a sized column flex container). */
-.editorWrap::after {
-  content: '';
-  flex: 0 0 80%;
-  background: var(--color-overscroll);
-  border-top: 1px solid var(--color-border-strong);
-}
+/* Room to scroll past the end of the note: NoteBackdrop.tsx, the last child of .editorWrap. */
 
 .lockBadge {
   flex-shrink: 0;
@@ -2549,6 +2540,20 @@
 }
 
 .editorContent [data-note-block]:global(.ProseMirror-selectednode) > [data-block-tools] { opacity: 1; }
+
+/* The pill's Delete shows only while the block is selected (blockDesigns.ts selectButton). */
+.editorContent [data-block-select-group] { display: flex; gap: 1px; }
+.editorContent [data-block-tools] [data-block-delete] { display: none; width: 26px; }
+.editorContent [data-note-block]:global(.ProseMirror-selectednode) > [data-block-tools] [data-block-delete] { display: inline-flex; }
+.editorContent [data-block-tools] [data-block-delete]:hover { color: var(--color-danger); }
+
+/* Parts picked with Ctrl+click (blockPicks.ts). */
+.editorContent [data-block-picked] {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary-subtle);
+}
 
 .editorContent [data-block-select],
 .editorContent [data-block-frame] { width: 26px; }

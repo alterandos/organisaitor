@@ -41,6 +41,8 @@ import { HierarchyExtensions } from './extensions/Hierarchy';
 import { PyramidExtensions } from './extensions/Pyramid';
 import { ChartExtensions } from './extensions/Chart';
 import { NoteBlockSelect } from './extensions/blockDesigns';
+import { NoteBlockPicks } from './extensions/blockPicks';
+import { NoteBackdrop } from './NoteBackdrop';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
 import { SpecialCharInput } from './extensions/SpecialCharInput';
@@ -753,6 +755,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       ...PyramidExtensions,
       ...ChartExtensions,
       NoteBlockSelect,
+      NoteBlockPicks,
       GlossaryAutolink,
       OccurrenceHighlight,
       SpecialCharInput,
@@ -1336,26 +1339,37 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // Editor-specific hotkeys (only when editor is focused)
   const awaitingHeadingRef = useRef(false);
   const headingSelectionRef = useRef<{ from: number; to: number } | null>(null);
+  const quickHeadingRef = useRef(false);   // Ctrl+H turned normal text into Heading 1
   useEffect(() => {
     if (!editor) return;
+    // Going to the Title (Ctrl+H, H) leaves the line as it was before Ctrl+H.
+    const undoQuickHeading = () => {
+      if (quickHeadingRef.current) editor.chain().setParagraph().run();
+      quickHeadingRef.current = false;
+    };
     const handler = (e: KeyboardEvent) => {
       if (!editor.isFocused) { awaitingHeadingRef.current = false; return; }
 
-      // Ctrl+H → enter heading-number sequence
+      // Ctrl+H → enter heading-number sequence. On normal text it makes Heading 1 at once (the
+      // user's choice, 2026-10-09), and a second key still picks another level or style.
       // A second Ctrl+H (Ctrl still held for the "H" step) is the Title step, not a restart.
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'h') {
         e.preventDefault();
-        if (awaitingHeadingRef.current) { awaitingHeadingRef.current = false; insertTitle(); return; }
+        if (awaitingHeadingRef.current) { awaitingHeadingRef.current = false; undoQuickHeading(); insertTitle(); return; }
         awaitingHeadingRef.current = true;
         headingSelectionRef.current = { from: editor.state.selection.from, to: editor.state.selection.to };
+        quickHeadingRef.current = editor.state.selection.$from.parent.type.name === 'paragraph'
+          && editor.chain().focus().setHeading({ level: 1 }).run();
         return;
       }
 
-      // Digit after Ctrl+H
+      // Digit after Ctrl+H. A modifier on its own (Ctrl held long enough to auto-repeat, or
+      // pressed again for the second key) is not the second key, so it mustn't cancel.
+      if (awaitingHeadingRef.current && ['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
       if (awaitingHeadingRef.current) {
         awaitingHeadingRef.current = false;
         if (e.key === '0') { e.preventDefault(); setNormalText(editor); return; }
-        if (e.key.toLowerCase() === 'h') { e.preventDefault(); insertTitle(); return; }
+        if (e.key.toLowerCase() === 'h') { e.preventDefault(); undoQuickHeading(); insertTitle(); return; }
         // Subtitle / Author. With Ctrl still held, A is also the editor's Select all (which has
         // already run), so the selection from when Ctrl+H was pressed is put back first.
         const byline = ({ s: 'noteSubtitle', a: 'noteAuthor' } as Record<string, string>)[e.key.toLowerCase()];
@@ -2218,6 +2232,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
               <EditorContent editor={editor} innerRef={editorContentRef} className={styles.editor} />
             </>
           )}
+          <NoteBackdrop />
         </div>
 
         {tocOpen && editor && (

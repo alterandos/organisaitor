@@ -578,7 +578,7 @@ describe('pattern: special characters work in every text field (CLAUDE.md "Speci
     const app = fs.readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
     const editorSrc = fs.readFileSync(path.join(SRC, 'components/NoteEditor/NoteEditor.tsx'), 'utf8');
     expect(app).toContain('installSpecialCharInput()');
-    expect(editorSrc).toMatch(/\n\s+SpecialCharInput,\n/);
+    expect(editorSrc).toMatch(/\n\s+SpecialCharInput,\r?\n/);
   });
   it('nothing but src/specialChars/charSets.ts lists Greek letters by name', () => {
     const files = SOURCE_FILES.filter((f) => !/specialChars[/\\]charSets\.ts$/.test(f));

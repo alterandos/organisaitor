@@ -41,6 +41,7 @@ import { ListsSection } from '@/components/ListsSection/ListsSection';
 import { OverviewSection } from '@/components/OverviewSection/OverviewSection';
 import { AddOverviewModal } from '@/components/AddOverviewModal/AddOverviewModal';
 import { ErrorBoundary } from '@/components/ErrorBoundary/ErrorBoundary';
+import { AccountIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
 import { AddActivityModal } from '@/components/AddActivityModal/AddActivityModal';
 import { EditActivityTypeModal } from '@/components/EditActivityTypeModal/EditActivityTypeModal';
@@ -572,7 +573,7 @@ export default function App() {
               onClick={openAccount}
               aria-label="Account"
               title="Account &amp; sync"
-            >◎</button>
+            ><AccountIcon className={styles.accountIcon} /></button>
             <button
               className={styles.settingsBtn}
               onClick={openSettings}

@@ -307,3 +307,16 @@ describe('setSelectedNoteTag — keeps the path to the selected notebook open', 
     expect([...useUIStore.getState().expandedNoteTagIds].sort()).toEqual([bio, other, uni].sort());
   });
 });
+
+describe('session memory', () => {
+  it('the notebook tree remembers which notebooks were expanded across a reload', () => {
+    useUIStore.getState().toggleNoteTagExpanded('nb-1' as never);
+    const saved = useUIStore.persist.getOptions().partialize!(useUIStore.getState()) as { expandedNoteTagIds?: string[] };
+    expect(saved.expandedNoteTagIds).toEqual(['nb-1']);
+  });
+
+  it('migrating from v3 backfills an empty expanded list', () => {
+    const migrated = useUIStore.persist.getOptions().migrate!({ activeView: 'notes' }, 3) as { expandedNoteTagIds: string[] };
+    expect(migrated.expandedNoteTagIds).toEqual([]);
+  });
+});

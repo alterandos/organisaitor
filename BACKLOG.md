@@ -712,6 +712,21 @@ Real sub-problems that need deciding before implementation starts, not just buil
 
 Recommend scoping as its own multi-phase brief (`docs/agent-tasks/`) once the rendering/storage/anchoring decisions are made, not a single change.
 
+**Raised again 2026-10-08 (for discussion, not confirmed):** bring in a PDF or other document by upload *or by a link to it*; the document becomes a kind of background the user writes notes over or in. Two shapes to choose between: (a) the document as the note's page, with notes as an overlay layer anchored to page positions (closest to "over the top of it"), or (b) the side-by-side view above, with anchors tying passages to pages. A link (URL, Google Drive) avoids storing the file but breaks if the link moves and needs a CORS-friendly fetch (an edge-function proxy). Pairs with pen input below.
+
+### Pen and handwriting input (raised 2026-10-08 — for discussion, not confirmed)
+
+Tablets and some laptops have pens (Apple Pencil, Surface Pen, S Pen). The user asks whether Notes can take drawing and handwriting, especially over an imported document (above). Technically reachable: Pointer Events give pen pressure and tilt (`pointerType === 'pen'`) in the browser, WebView2 (Tauri) and Android's WebView, and ink can be stored as vector strokes (small, scalable) in a note block (`\sketch`: a canvas block like the chart, strokes as data) or as a layer over a document page. Questions: a drawing block inside the text, or a free page; handwriting recognition to text (needs a service or an on-device model; not in the browser natively); palm rejection (pen-only drawing with touch scrolling is the usual answer). A drawing block is the small first step and fits "Block designs".
+
+### Android: Notes overhaul (requested 2026-10-08 — direction set, design not finished)
+
+The desktop Notes UI doesn't work on a phone. The user's direction (gap F24 in `docs/android/10-gap-analysis.md`; refines F1/F2 and decision D11's read-first view):
+1. **Landing screen in Notes:** either the navigation pane (notebook tree) filling the screen, or cards of recently viewed notes; the user toggles between the two views.
+2. **Opening a note:** the note fills the screen between the top and bottom bars.
+3. **Inside a note:** a heading at the top with the note's title that can be expanded or collapsed (keep it, or hide it for more room); a swipe in from the side for options (what goes there is open — candidates: tabs, outline/contents, linked-from, note details, the collapsed editing tools); the Back button returns to the landing screen.
+
+Open questions before it's specced as W7: does Back from a note go to the tree/cards view the user came from (likely) or always the default; which view is the default the first time; do the recent cards show a preview of the text and the notebook path (like the history browser's cards — `describePlace` could be reused); does the collapsed heading collapse on scroll automatically; and do the note's tabs live in the heading or in the side panel.
+
 ### Design consistency across suite
 
 **Shared design system (backlog item: "Suite design system")**
@@ -1855,6 +1870,11 @@ Needed before any of the Strava integration architecture above can be built or t
 Items here are not confirmed requirements — they are sensible ideas raised during design discussions, held here for future consideration.
 
 ---
+
+### New app: Nature / Environment (raised 2026-10-08 — for discussion, not confirmed)
+
+A passion project for the user: an app for learning about environmental issues, keeping up with news on them, and fleshing out the user's own projects in that space. A fit for the suite as an add-on app (like Portfolio/Fitness: its own store, section, `isAppEnabled` gate, an Overview source). Pieces to discuss: a news feed (RSS from chosen sources through an edge function, or a news API; saving an article into Notes), a learning library (topics and key concepts, which overlaps Notes' Glossary — possibly Notes notebooks with a Nature template rather than new storage), and projects (which already exist as Endeavours: Nature projects could simply be Endeavours with a Nature purpose, shown in the app). The open question is how much is a new app versus a view over existing Notes, Tasks and Endeavours plus a news feed.
+
 
 ### Portfolio — Preferred Market Setting
 
