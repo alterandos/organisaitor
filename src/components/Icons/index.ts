@@ -3,4 +3,6 @@
 // size or tint one through className/props. Item-kind icons (task, event, deadline…) are emoji
 // in config/itemIcons.ts instead.
 export { AccountIcon, ArchiveIcon, CheckCircleIcon, ImageIcon, PinIcon, RestoreIcon, TrashIcon } from './ActionIcons';
+export { DisclosureIcon } from './DisclosureIcon';
+export { createDisclosureIcon } from './disclosureDom';
 export { TextColorIcon } from './TextColorIcon';

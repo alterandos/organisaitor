@@ -11,6 +11,7 @@
 /* ── Shared panel base ───────────────────────────────────────────────────── */
 
 .panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -149,6 +150,8 @@
 
 .treePanel {
   flex-shrink: 0;
+  width: 220px;
+  min-width: 160px;
 }
 
 /* ── Tree nodes ──────────────────────────────────────────────────────────── */
@@ -306,35 +309,8 @@
 
 .listPanel {
   flex-shrink: 0;
-}
-
-/* ── Resize dividers ─────────────────────────────────────────────────────── */
-
-.divider {
-  width: 5px;
-  flex-shrink: 0;
-  cursor: col-resize;
-  background: transparent;
-  position: relative;
-  margin: 0 -2px;
-  z-index: 1;
-}
-
-.divider::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 2px;
-  width: 1px;
-  background: var(--color-border);
-}
-
-.divider:hover::after,
-.dividerActive::after {
-  left: 0;
-  width: 5px;
-  background: var(--color-primary-border);
+  width: 220px;
+  min-width: 160px;
 }
 
 /* ── Editor panel ────────────────────────────────────────────────────────── */

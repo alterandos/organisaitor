@@ -10,6 +10,9 @@ import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import type { Collection, Tag, Purpose } from '@/types';
+import { DisclosureIcon } from '@/components/Icons';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 interface Props {
   onHoverEnter: () => void;
@@ -76,6 +79,7 @@ function SidebarPurposeRow({ purpose, onEdit, onDelete }: { purpose: Purpose; on
 }
 
 export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
+  const paneResize = usePaneWidth('tasks-sidebar', { edge: 'right', min: 220, max: 520 });
   const [tagsOpen,       setTagsOpen]       = useState(true);
   const [purposesOpen,   setPurposesOpen]   = useState(true);
   const [projectsOpen,   setProjectsOpen]   = useState(true);
@@ -133,7 +137,7 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
     return (
       <div className={styles.section}>
         <button className={styles.sectionToggle} onClick={() => setOpen(!open)}>
-          <span className={`${styles.chevron} ${open ? styles.chevronOpen : ''}`}>▸</span>
+          <DisclosureIcon open={open} className={styles.chevron} />
           <span>{label}s</span>
           <span className={styles.count}>{items.length}</span>
         </button>
@@ -156,9 +160,11 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
   return (
     <aside
       className={`${styles.pane} ${sidebarOpen ? styles.open : ''}`}
+      style={paneResize.style}
       onMouseEnter={onHoverEnter}
       onMouseLeave={onHoverLeave}
     >
+      {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
       <div className={styles.body}>
 
         {/* ── Manage ── */}
@@ -171,7 +177,7 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
         {/* ── Tags ── */}
         <div className={styles.section}>
           <button className={styles.sectionToggle} onClick={() => setTagsOpen((o) => !o)}>
-            <span className={`${styles.chevron} ${tagsOpen ? styles.chevronOpen : ''}`}>▸</span>
+            <DisclosureIcon open={tagsOpen} className={styles.chevron} />
             <span>Tags</span>
             {tags.length > 0 && <span className={styles.count}>{tags.length}</span>}
           </button>
@@ -197,7 +203,7 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
         {/* ── Purposes ── */}
         <div className={styles.section}>
           <button className={styles.sectionToggle} onClick={() => setPurposesOpen((o) => !o)}>
-            <span className={`${styles.chevron} ${purposesOpen ? styles.chevronOpen : ''}`}>▸</span>
+            <DisclosureIcon open={purposesOpen} className={styles.chevron} />
             <span>Purposes</span>
             {purposes.length > 0 && <span className={styles.count}>{purposes.length}</span>}
           </button>

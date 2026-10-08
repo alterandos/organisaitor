@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Editor } from '@tiptap/react';
 import { collectImportantPassages, type ImportantPassage } from './extensions/Importance';
 import { importanceLevel } from './extensions/importanceLevels';
+import { computeHeadingFolds, foldsHiding, headingPosAt, toggleHeadingFold, type HeadingFoldInfo } from './extensions/HeadingFold';
+import { headingTrail, scrollHostOf, watchReadingPosition } from './headingTrail';
 import { formatDate } from '@/utils/date';
 import { LABELS } from '@/config/labels';
 import styles from './NoteTOC.module.css';
+import { DisclosureIcon } from '@/components/Icons';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 interface TocItem {
   level: number;
@@ -45,34 +50,42 @@ interface Props {
 }
 
 export function NoteTOC({ editor, onClose, embedded }: Props) {
+  const paneResize = usePaneWidth('note-contents', { edge: 'left', min: 160, max: 480 });
   const [items, setItems]         = useState<TocItem[]>([]);
   const [points, setPoints]       = useState<ImportantPassage[]>([]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Collapsing here is collapsing in the note (decided with the user 2026-10-09): one state, the
+  // headings' own (extensions/HeadingFold.ts), so the outline and the text never disagree.
+  const [folds, setFolds]         = useState<HeadingFoldInfo[]>([]);
+  // The heading the reader is in (the innermost one of the sticky trail), highlighted here.
+  const [activePos, setActivePos] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const update = () => { setItems(extractItems(editor)); setPoints(collectImportantPassages(editor.state.doc)); };
+    const update = () => {
+      setItems(extractItems(editor));
+      setPoints(collectImportantPassages(editor.state.doc));
+      setFolds(computeHeadingFolds(editor.state.doc));
+    };
     editor.on('update', update);
     update();
     return () => { editor.off('update', update); };
   }, [editor]);
 
-  const toggleCollapse = (number: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(number)) next.delete(number);
-      else next.add(number);
-      return next;
+  useEffect(() => {
+    const host = scrollHostOf(editor.view.dom);
+    if (!host) return;
+    return watchReadingPosition(host, editor, () => {
+      const current = headingTrail(editor.view.dom as HTMLElement, host).at(-1);
+      setActivePos(current ? headingPosAt(editor.view, current.el) : null);
     });
-  };
+  }, [editor]);
 
-  const isHidden = (item: TocItem): boolean => {
-    // Hide if any ancestor number is in the collapsed set
-    const parts = item.number.split('.');
-    for (let i = 1; i < parts.length; i++) {
-      if (collapsed.has(parts.slice(0, i).join('.'))) return true;
-    }
-    return false;
-  };
+  useEffect(() => {
+    listRef.current?.querySelector('[aria-current="location"]')?.scrollIntoView({ block: 'nearest' });
+  }, [activePos]);
+
+  const foldAt = (item: TocItem) => folds.find((f) => f.pos === item.pos);
+  const isHidden = (item: TocItem) => foldsHiding(folds, item.pos).length > 0;
 
   const hasChildren = (item: TocItem): boolean =>
     items.some((other) => other.number.startsWith(item.number + '.'));
@@ -103,36 +116,38 @@ export function NoteTOC({ editor, onClose, embedded }: Props) {
   };
 
   return (
-    <div className={`${styles.panel} ${embedded ? styles.embedded : ''}`}>
+    <div style={paneResize.style} className={`${styles.panel} ${embedded ? styles.embedded : ''}`}>
+      {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
       <div className={styles.header}>
         <span className={styles.title}>Contents</span>
         {!embedded && <button className={styles.closeBtn} onClick={onClose} title="Close navigation">◀</button>}
       </div>
 
-      <div className={`${styles.list} ${styles.headingsList}`}>
+      <div ref={listRef} className={`${styles.list} ${styles.headingsList}`}>
         {items.length === 0 ? (
           <div className={styles.empty}>Add headings to see the outline</div>
         ) : (
           items.map((item) => {
             if (isHidden(item)) return null;
-            const children = hasChildren(item);
-            const isCollapsed = collapsed.has(item.number);
+            const isCollapsed = !!foldAt(item)?.collapsed;
+            const children = hasChildren(item) || isCollapsed;
 
             return (
               <div
                 key={`${item.number}-${item.pos}`}
-                className={`${styles.item} ${styles[`level${item.level}`]}`}
+                className={`${styles.item} ${styles[`level${item.level}`]} ${item.pos === activePos ? styles.itemActive : ''}`}
               >
                 <button
                   className={styles.toggleBtn}
-                  onClick={() => toggleCollapse(item.number)}
+                  onClick={() => toggleHeadingFold(editor.view, item.pos)}
                   style={{ visibility: children ? 'visible' : 'hidden' }}
-                  aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                  aria-label={isCollapsed ? LABELS.noteHeadings.expand : LABELS.noteHeadings.collapse}
+                  aria-expanded={!isCollapsed}
                 >
-                  {isCollapsed ? '▸' : '▾'}
+                  <DisclosureIcon open={!isCollapsed} />
                 </button>
 
-                <button className={styles.label} onClick={() => scrollTo(item)}>
+                <button className={styles.label} onClick={() => scrollTo(item)} aria-current={item.pos === activePos ? 'location' : undefined}>
                   <span className={styles.number}>{item.number}</span>
                   <span className={styles.text}>{item.text}</span>
                 </button>

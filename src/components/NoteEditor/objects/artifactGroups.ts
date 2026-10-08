@@ -12,6 +12,7 @@ import { ArtifactBody } from './ArtifactBody';
 import { requestOccurrenceList } from './occurrenceRequests';
 import { clearPaneState } from './paneState';
 import styles from './ArtifactLinks.module.css';
+import { createDisclosureIcon } from '@/components/Icons';
 
 // How linked text (an `artifactLink` mark, made by `\` or Ctrl+Q) is drawn. ProseMirror splits a
 // mark into one element per paragraph and wherever another mark starts or stops inside it, so
@@ -276,7 +277,8 @@ function paneTail(group: ArtifactGroup, summary: ArtifactSummary | null, state: 
     // ↗ and the chevron, together: at the pane's right edge when it's expanded.
     const actions = el('span', styles.paneActions);
     actions.append(control(el('button', styles.paneBtn, '↗'), L.open, () => { openArtifactTarget(group.targetType, group.targetId, summary.repeats ? summary.occurrence ?? undefined : undefined); }));
-    const chevron = el('span', styles.paneChevron, expanded ? '▴' : '▾');
+    const chevron = el('span', styles.paneChevron);
+    chevron.append(createDisclosureIcon(expanded));
     chevron.title = expanded ? L.hideDetails : L.showDetails;
     actions.append(chevron);
     tail.append(actions);

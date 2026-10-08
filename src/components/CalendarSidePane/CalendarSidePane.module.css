@@ -7,6 +7,7 @@
    to the calendar's card, not a mismatched extension of it — the gap between the two is
    CalendarView.module.css's .desktopView `gap`, not anything in here. */
 .pane {
+  position: relative;
   width: 300px;
   flex-shrink: 0;
   height: 100%;
@@ -453,13 +454,6 @@
 }
 
 .archivedToggle:hover { color: var(--color-text); }
-
-.chevron {
-  display: inline-block;
-  transition: transform 140ms ease;
-}
-
-.chevronOpen { transform: rotate(90deg); }
 
 .archivedList {
   display: flex;

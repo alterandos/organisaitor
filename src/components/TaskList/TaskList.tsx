@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { isBlocked } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
 import styles from './TaskList.module.css';
+import { DisclosureIcon } from '@/components/Icons';
 
 function deadlineMs(t: Task): number {
   return t.deadline ? new Date(t.deadline).getTime() : Infinity;
@@ -176,7 +177,7 @@ export function TaskList() {
             className={styles.sectionToggle}
             onClick={() => setBlockedOpen((o) => !o)}
           >
-            <span className={`${styles.chevron} ${blockedOpen ? styles.chevronOpen : ''}`}>▸</span>
+            <DisclosureIcon open={blockedOpen} />
             ⛓ {LABELS.taskLinks.blockedGroup} ({blocked.length})
           </button>
           {(blockedOpen || blocked.some((t) => t.id === openRootId)) && blocked.map((task) => renderTaskGroup(task))}
@@ -188,7 +189,7 @@ export function TaskList() {
             className={styles.sectionToggle}
             onClick={() => setCompletedOpen((o) => !o)}
           >
-            <span className={`${styles.chevron} ${completedOpen ? styles.chevronOpen : ''}`}>▸</span>
+            <DisclosureIcon open={completedOpen} />
             Completed ({completed.length})
           </button>
           {(completedOpen || completed.some((t) => t.id === openRootId)) && completed.map((task) => renderTaskGroup(task))}
@@ -200,7 +201,7 @@ export function TaskList() {
             className={styles.sectionToggle}
             onClick={() => setArchivedOpen((o) => !o)}
           >
-            <span className={`${styles.chevron} ${archivedOpen ? styles.chevronOpen : ''}`}>▸</span>
+            <DisclosureIcon open={archivedOpen} />
             {LABELS.itemActions.archivedGroup} ({archived.length})
           </button>
           {(archivedOpen || archived.some((t) => t.id === openRootId)) && archived.map((task) => renderTaskGroup(task))}

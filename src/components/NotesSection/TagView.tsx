@@ -7,6 +7,7 @@ import { getStructuredTagType } from '@/config/structuredTagTypes';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { NoteTagId } from '@/types';
 import styles from './TagView.module.css';
+import { DisclosureIcon } from '@/components/Icons';
 
 type SortMode = 'type' | 'alpha' | 'count';
 
@@ -237,7 +238,7 @@ export function TagView() {
                   onClick={() => toggle(group.id)}
                   style={{ borderLeft: `4px solid ${group.color}` }}
                 >
-                  <span className={styles.groupToggle}>{isCollapsed ? '▸' : '▾'}</span>
+                  <span className={styles.groupToggle}><DisclosureIcon open={!isCollapsed} /></span>
                   <span className={styles.groupIcon}>{group.icon}</span>
                   <span className={styles.groupName}>{group.name}</span>
                   <span className={styles.groupCount}>{group.total}</span>

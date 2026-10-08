@@ -25,6 +25,8 @@ import { useItemActions } from '@/components/ItemActions/useItemActions';
 import styles from './CalendarDeadlinePane.module.css';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 // Structurally close to CalendarReminderPane (same fields, same repeat/tentative/important
 // machinery) — the one deliberate difference: the "Notify me" lead-time field is always shown
@@ -33,6 +35,7 @@ import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLink
 // "at" the time instead) — a Deadline never notifies "at" anything, so that gate doesn't
 // apply here; Time is purely informational (e.g. "due at 5pm").
 export function CalendarDeadlinePane() {
+  const paneResize = usePaneWidth('item-pane', { edge: 'left', min: 340, max: 820 });
   const editingId         = useUIStore((s) => s.editingCalendarDeadlineId);
   const occurrenceDate    = useUIStore((s) => s.editingCalendarDeadlineOccurrence);
   const closePane         = useUIStore((s) => s.closeCalendarDeadlinePane);
@@ -127,7 +130,8 @@ export function CalendarDeadlinePane() {
   return (
     <>
       <div className={styles.overlay} onClick={closePane} />
-      <aside className={styles.pane}>
+      <aside style={paneResize.style} className={styles.pane}>
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>{LABELS.calendarItemKind.deadline}</span>
           <button className={styles.closeBtn} onClick={closePane} aria-label="Close">×</button>

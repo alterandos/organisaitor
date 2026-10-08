@@ -28,8 +28,11 @@ import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
 import styles from './CalendarEventPane.module.css';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 export function CalendarEventPane() {
+  const paneResize = usePaneWidth('item-pane', { edge: 'left', min: 340, max: 820 });
   const editingId         = useUIStore((s) => s.editingCalendarEventId);
   const occurrenceDate    = useUIStore((s) => s.editingCalendarEventOccurrence);
   const closePane         = useUIStore((s) => s.closeCalendarEventPane);
@@ -158,7 +161,8 @@ export function CalendarEventPane() {
   return (
     <>
       <div className={styles.overlay} onClick={closePane} />
-      <aside className={styles.pane}>
+      <aside style={paneResize.style} className={styles.pane}>
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>{LABELS.calendarItemKind.event}</span>
           <button className={styles.closeBtn} onClick={closePane} aria-label="Close">×</button>

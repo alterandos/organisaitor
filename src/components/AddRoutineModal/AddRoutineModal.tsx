@@ -8,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import type { RoutineTask, RepeatConfig, PurposeId, TagId, CollectionId } from '@/types';
 import styles from './AddRoutineModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { DisclosureIcon } from '@/components/Icons';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAYS   = [1, 2, 3, 4, 5];
@@ -214,7 +215,7 @@ export function AddRoutineModal() {
             className={styles.advancedToggle}
             onClick={() => setAdvanced((v) => !v)}
           >
-            <span className={`${styles.chevron} ${advanced ? styles.chevronOpen : ''}`}>▸</span>
+            <DisclosureIcon open={advanced} className={styles.chevron} />
             Advanced options
           </button>
 

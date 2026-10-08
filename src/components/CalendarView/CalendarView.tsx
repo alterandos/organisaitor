@@ -23,6 +23,8 @@ import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane
 import { useTimeGridDrag } from '@/hooks/useTimeGridDrag';
 import { ITEM_FLAG_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import styles from './CalendarView.module.css';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -167,6 +169,7 @@ interface TooltipState {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function CalendarView() {
+  const paneResize = usePaneWidth('calendar-day', { edge: 'left', min: 280, max: 720 });
   const timezone     = useSettingsStore((s) => s.timezone);
   const effectiveZone = resolveTimezone(timezone);
   const todayIsoStr  = todayIsoInZone(effectiveZone);
@@ -1566,7 +1569,8 @@ export function CalendarView() {
         {dayPaneDate && desktopMode === 'month' && (
           <>
             <div className={styles.dayPaneOverlay} onClick={() => setDayPaneDate(null)} />
-            <aside className={styles.dayPane}>
+            <aside style={paneResize.style} className={styles.dayPane}>
+              {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
               <header className={styles.dayPaneHeader}>
                 <span className={styles.dayPaneTitle}>
                   {new Date(dayPaneDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}

@@ -16,6 +16,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 
 import { log } from '@/utils/log';
+import { DisclosureIcon } from '@/components/Icons';
 const FIELD_TYPES: { value: ListFieldType; label: string }[] = [
   { value: 'text',    label: 'Text'    },
   { value: 'number',  label: 'Number'  },
@@ -462,7 +463,7 @@ export function AddListModal() {
                         onClick={() => toggleTabExpand(idx)}
                         title={expandedTabs.has(idx) ? 'Hide fields' : 'Custom fields'}
                       >
-                        {expandedTabs.has(idx) ? '▾' : '▸'} Fields{tab.fieldSchema.length > 0 ? ` (${tab.fieldSchema.length})` : ''}
+                        <DisclosureIcon open={expandedTabs.has(idx)} /> Fields{tab.fieldSchema.length > 0 ? ` (${tab.fieldSchema.length})` : ''}
                       </button>
                       <button type="button" className={styles.removeFieldBtn} onClick={() => removeTab(idx)} title="Remove tab">✕</button>
                     </div>

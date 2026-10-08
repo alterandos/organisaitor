@@ -11,6 +11,9 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
+import { DisclosureIcon } from '@/components/Icons';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 // Left-nav tabs — add an entry here (+ a render branch below) to extend this view with
 // future sections (e.g. Notebooks, List types) without redesigning the layout.
@@ -122,7 +125,7 @@ function EndeavoursSection() {
       {archived.length > 0 && (
         <div className={styles.group}>
           <button className={styles.archivedToggle} onClick={() => setArchivedOpen((o) => !o)}>
-            <span className={`${styles.chevron} ${archivedOpen ? styles.chevronOpen : ''}`}>▸</span>
+            <DisclosureIcon open={archivedOpen} className={styles.chevron} />
             Archived ({archived.length})
           </button>
           {archivedOpen && archived.map((c) => (
@@ -185,7 +188,7 @@ function PurposesSection() {
       {archived.length > 0 && (
         <div className={styles.group}>
           <button className={styles.archivedToggle} onClick={() => setArchivedOpen((o) => !o)}>
-            <span className={`${styles.chevron} ${archivedOpen ? styles.chevronOpen : ''}`}>▸</span>
+            <DisclosureIcon open={archivedOpen} className={styles.chevron} />
             Archived ({archived.length})
           </button>
           {archivedOpen && archived.map((p) => (
@@ -240,6 +243,7 @@ function TagsSection() {
 // ── Main pane ─────────────────────────────────────────────────────────────
 
 export function ManagePane() {
+  const paneResize = usePaneWidth('manage-nav', { edge: 'right', min: 140, max: 360 });
   const manageOpen    = useUIStore((s) => s.manageOpen);
   const manageSection = useUIStore((s) => s.manageSection);
   const setManageSection = useUIStore((s) => s.setManageSection);
@@ -264,7 +268,8 @@ export function ManagePane() {
         </div>
 
         <div className={styles.body}>
-          <nav className={styles.nav}>
+          <nav style={paneResize.style} className={styles.nav}>
+            {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
             {MANAGE_SECTIONS.map((s) => (
               <button
                 key={s.id}

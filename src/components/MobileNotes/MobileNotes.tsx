@@ -17,6 +17,7 @@ import { LABELS } from '@/config/labels';
 import type { CollectionId, NoteTagId } from '@/types';
 import type { Note, NoteTag } from '@/types/notes';
 import styles from './MobileNotes.module.css';
+import { DisclosureIcon } from '@/components/Icons';
 
 // Notes on a phone (docs/android/10-gap-analysis.md F24, the user's design 2026-10-08/09).
 // With no note open, Notes is a home screen: the notebook tree (notes listed inside their
@@ -159,7 +160,7 @@ function NotebookRow({ tag, depth }: { tag: NoteTag; depth: number }) {
         style={{ paddingLeft: `${12 + depth * 18}px` }}
         onClick={toggle}
       >
-        <span className={styles.chevron} aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+        <span className={styles.chevron} aria-hidden="true"><DisclosureIcon open={expanded} /></span>
         <span className={styles.rowIcon} aria-hidden="true">{getNotebookIcon(tag, noteTags, notes)}</span>
         <span className={styles.rowName} style={tag.color && selected ? { color: tag.color } : undefined}>{tag.name}</span>
         {count > 0 && <span className={styles.count}>{count}</span>}

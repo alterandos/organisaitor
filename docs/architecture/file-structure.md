@@ -155,7 +155,8 @@ src/
     TaskList/                — main task list + collapsible Routines section
     TaskItem/                — single task row; shows subtask progress pill
     TaskPane/                — slide-in task detail/edit pane
-    Icons/                   — THE suite's shared UI icons (see "Icons come from one place"): index.ts, ActionIcons.tsx (TrashIcon/ArchiveIcon/RestoreIcon/CheckCircleIcon), TextColorIcon.tsx
+    ResizeHandle/            — THE draggable edge of every side panel and column: usePaneWidth (widths in settingsStore.paneWidths) + ResizeHandle
+    Icons/                   — THE suite's shared UI icons (see "Icons come from one place"): index.ts, ActionIcons.tsx (TrashIcon/ArchiveIcon/RestoreIcon/CheckCircleIcon), TextColorIcon.tsx, DisclosureIcon.tsx (the expand/collapse arrow) + disclosureDom.ts (the same arrow for plain-DOM code)
     ItemActions/             — the SHARED archive/restore + delete pattern every item pane uses (Task, Calendar event, Calendar reminder; future apps' panes should too) — see "Shared item actions" in Implemented features: icons from components/Icons, ItemActionFooter (optional Complete/Mark-incomplete toggle for task-backed items), ItemActionDialog (archive-with-reason + delete-confirm, portaled z-102), ArchivedBanner, useItemActions hook (dialog state + Escape + Ctrl+Enter + hotkeys)
     AddTaskModal/            — create task (basic + advanced sections)
     AddTaskButton/           — speed-dial FAB (view-aware)
@@ -209,6 +210,9 @@ src/
       extensions/timelineMenu.ts     — the timeline's right-click provider (Style ▸ / Order ▸)
       noteClipboardText.ts           — what a copy puts on the clipboard as plain text (editorProps.clipboardTextSerializer): Markdown-style headings, lists, quotes, tables as tab-separated rows
       extensions/HeadingLevel.ts     — Ctrl+= / Ctrl+− on a heading change its level (else App.tsx zooms)
+      extensions/HeadingFold.ts      — collapsing headings (the `collapsed` attribute, the margin arrow, Ctrl+., hidden text opens when the cursor reaches it); headingMenu.ts its right-click items
+      StickyHeadings.tsx             — the sticky heading trail at the top of a scrolling note (its A− / A+ and right-click)
+      headingTrail.ts                — where the reader is in the outline (shared by the sticky trail and the Contents highlight)
       extensions/NoteBylines.ts      — Subtitle (Ctrl+H, S) and Author (Ctrl+H, A) paragraph styles: own nodes like NoteTitle, never numbered or in the outline
       extensions/fontSize.ts         — the font-size ladder (FONT_SIZES), currentFontSize / setFontSize / stepFontSize (Ctrl+Shift+< / >, the ribbon's A− [size] A+)
       extensions/Quote.ts            — the `\quote` note block: QuoteBlock (variant, hidden), QuoteText, QuoteField (QUOTE_FIELDS), insertQuote / quoteFromSelection, setQuoteVariant / toggleQuoteField, keys and the pill; quoteMenu.ts is its right-click provider

@@ -316,7 +316,7 @@ interface RepeatConfig {
 | `fitnessStore` | `fitness-storage` | **v3** | localStorage only | activities + activity types (Fitness app) |
 | `scheduleStore` | `todo-schedules` | **v1** | localStorage + Supabase | Schedule templates (recurring weekly timetables, Calendar section) |
 | `uiStore` | `todo-ui-session` | **v5** | localStorage (partial) + memory | all UI state (modals, panes, active section) — only navigation/session memory is persisted, see below (v4: the Notes tree's `expandedNoteTagIds`; v5: `mobileNotesHome`, the phone's Notes home view) |
-| `settingsStore` | `todo-settings` | **v8** | localStorage | user preferences (v8: `noteHeadingPinned`, the phone note heading kept in place; v7: `noteBackdrop`, what fills the room below a note — see `config/noteBackdrops.ts`; v6: Android notification settings — `notifyReminders`/`notifyEvents`, snooze times, `quietHours`) (includes `autoBackup*` fields — see "Automatic local backup rotation" in Implemented features — and `hideBlockedTasks`, v5) |
+| `settingsStore` | `todo-settings` | **v10** | localStorage | user preferences (v10: `stickyHeadingsScale`, and `paneWidths` for every resizable panel — the Notes columns' old `chronicleTreeWidth`/`chronicleListWidth` moved into it; v9: `stickyHeadings`, the sticky heading trail in notes; v8: `noteHeadingPinned`, the phone note heading kept in place; v7: `noteBackdrop`, what fills the room below a note — see `config/noteBackdrops.ts`; v6: Android notification settings — `notifyReminders`/`notifyEvents`, snooze times, `quietHours`) (includes `autoBackup*` fields — see "Automatic local backup rotation" in Implemented features — and `hideBlockedTasks`, v5) |
 | `authStore` | — | — | memory only | Supabase session |
 | `recentItemsStore` | `todo-recent-items` | **v1** | localStorage only | Quick Access (Ctrl+G) recent/frequent visit history |
 | `notificationStore` | `todo-notifications` | **v2** | localStorage only | pending in-app notifications (v2: per-occurrence `key`, `occurrence`, `taskId`) + the log of already-notified triggers |
@@ -486,11 +486,12 @@ useCtrlEnterSubmit(() => formRef.current?.requestSubmit());
 ### Icons come from one place — `src/components/Icons/` (suite-wide pattern, adopted 2026-10-07)
 
 **A control that appears in more than one place takes its icon from `components/Icons` (`index.ts`)**, so it looks the same everywhere. The user asked for this when the ribbon's text-colour button (an underlined A, which reads as Underline) and the selection toolbar's (a hue-wheel swatch) had drifted apart.
-- **What's there today:** `TextColorIcon` (the hue-wheel swatch, with the colour in use in its middle), the item-action icons `TrashIcon`, `ArchiveIcon`, `RestoreIcon`, `CheckCircleIcon` (moved from `ItemActions/icons.tsx`), `PinIcon` (the phone note heading's pin), `AccountIcon` (the header's account button; it was `◎`, which is also the Purpose icon) and `ImageIcon` (choosing a picture). Plain-DOM code (a ProseMirror widget) can't render the React component: it copies the same SVG markup with a comment naming the icon (`blockDesigns.ts`'s Delete), and a right-click item passes `createElement(TrashIcon)`.
+- **What's there today:** `DisclosureIcon` (THE expand/collapse arrow: a chevron pointing right while closed, turned down while open, sized 1em; `createDisclosureIcon` gives plain-DOM code the same icon — the heading-fold arrow and a `\` link pane use them; not for a dropdown's ▾ or a submenu's ▸), `TextColorIcon` (the hue-wheel swatch, with the colour in use in its middle), the item-action icons `TrashIcon`, `ArchiveIcon`, `RestoreIcon`, `CheckCircleIcon` (moved from `ItemActions/icons.tsx`), `PinIcon` (the phone note heading's pin), `AccountIcon` (the header's account button; it was `◎`, which is also the Purpose icon) and `ImageIcon` (choosing a picture). Plain-DOM code (a ProseMirror widget) can't render the React component: it copies the same SVG markup with a comment naming the icon (`blockDesigns.ts`'s Delete), and a right-click item passes `createElement(TrashIcon)`.
 - **A site can override locally** through the icon's props or `className` (size, tint, the current colour), never by drawing its own copy.
+- **Icons beside text are sized from that text** (agreed with the user 2026-10-09). An icon that sits in or next to a line of text (an expand arrow, a marker) is a **1em square of that text's font size, centred on its first line** (`top: calc((1lh - 1em) / 2)` when positioned; `vertical-align` / flex centring inline), so it scales with the text and lines up with its middle. Its drawn glyph is about the height of the capitals (75–90% of the letters), the usual optical-sizing rule (Apple's SF Symbols scale with text; Material aligns icons to the text's centre). `DisclosureIcon` is drawn this way. A larger tap target comes from an invisible `::before` around the square, never a bigger icon. Pattern test: DisclosureIcon is 1em, and the heading-fold arrow keeps the rule.
 - **Item-kind icons** (task, event, deadline, ❗ ✏️ 🔁) are the emoji in `config/itemIcons.ts`, not here.
 - **An icon used in only one component** may stay local, like NoteEditor's list and table SVGs. It moves here the day a second place needs it.
-- **Pattern test:** no hue-wheel `conic-gradient` outside `components/Icons`, and no imports from the old `ItemActions/icons`. **Retrofit:** close ×, edit ✎ and link 🔗 are typed as characters across many files (BACKLOG.md "Pattern retrofit backlog").
+- **Pattern test:** no hue-wheel `conic-gradient` outside `components/Icons`, and no imports from the old `ItemActions/icons`; no expand/collapse arrow made by hand (a `'▸' : '▾'`-style glyph ternary, or a local `.chevronOpen` rotation). **Retrofit:** close ×, edit ✎ and link 🔗 are typed as characters across many files (BACKLOG.md "Pattern retrofit backlog").
 
 ### Confirmations and alerts — never `window.confirm()` / `alert()` / `prompt()`
 
@@ -558,6 +559,16 @@ The checker drops a bell card whose occurrence was done or seen elsewhere (`isSt
 - **Use `rankSuggestions` / `rankSearch` (`src/utils/suggestRank.ts`)** with the picker's own fields. `NotePickerModal` keeps its tab-aware original of the same scoring, since it also picks the best tab.
 - **Every place that opens a picker passes `suggestFrom`.** Two pattern tests check both halves.
 - **Applied to**: `NotePickerModal`, `TaskPickerModal` (title, Endeavour, parent, notes), `ListPickerModal` (name, description, item titles; checklists ahead in the recent tail).
+
+### Resizable side panels — `usePaneWidth` + `ResizeHandle` (suite-wide pattern, adopted 2026-10-09)
+
+**Every side panel and nav column can be resized by dragging its inner edge**, the way the Notes columns could (the user asked for it everywhere). One mechanism, `components/ResizeHandle/`:
+- `const resize = usePaneWidth('<id>', { edge, min, max })`; put `style={resize.style}` on the pane and `{resize.handle && <ResizeHandle {...resize.handle} />}` as its first child. `edge` is the side the handle sits on (`'left'` for a pane on the right of the screen). The pane needs a position other than static (a docked column gets `position: relative`).
+- Widths live in `settingsStore.paneWidths` by id. **Panes of one family share an id**, so they open at the same width: `item-pane` (task, event, reminder, deadline), `record-pane` (tracker, routine). Until dragged, a pane keeps its CSS width; double-clicking the edge returns it there.
+- Mouse, pen and touch drag (pointer capture); arrow keys move a focused edge 16px; the handle is a `role="separator"` with a label. While dragging, `:root[data-resizing]` holds the resize cursor and stops text selection. The handle follows a pane that scrolls its own content.
+- **Desktop only**: on Android the hook returns no handle and no width (panes are full width or sheets).
+- **Applied to:** the Notes tree and note list, Contents, the Lists, Records and Overview sidebars, the Calendar side pane and day pane, Manage's nav column, the Tasks sidebar, and the Task, Event, Reminder, Deadline, Routine, Tracker, Note, Integrations and Settings panes. A new side panel or column joins in the same change. Not: modals (Account, Recycling Bin), the icon rail (NavSidebar), popovers.
+- **Pattern test:** every pane in the list uses `usePaneWidth`, and no `col-resize` outside the component (and `index.css`).
 
 ### Row options menu (`RowOptionsMenu`) — suite-wide pattern, adopted 2026-09-24, changed 2026-10-05
 
@@ -638,6 +649,15 @@ Phone UI is built from shared primitives (`docs/android/11-design-and-coding-pat
   - Style ▸ (Title, Heading 1–5, Normal text).
   - Select all.
   - Paste from the menu reads the clipboard (`navigator.clipboard`), which needs the browser's permission; a refusal explains Ctrl+V / Ctrl+Shift+V.
+
+**How a menu is organised — "clicked thing first, families fold"** (agreed with the user 2026-10-09, from the platform menu guidelines plus the user's own two ideas):
+1. **Only what applies to the thing under the pointer.** A command for a heading, a block or a link shows only when that is what was right-clicked (a provider's `when`), never everywhere.
+2. **The clicked thing's likely action comes first, at the top level** (a provider `order` below the general sections: 5–6 for the clicked thing, clipboard at 10). Example: "Collapse this heading" on a heading.
+3. **Three or more related, less-used commands go into one submenu named for the family** (`Headings ▸`, `Style ▸`, `Design ▸`). A frequent command stays top level even when it belongs to a family.
+4. **A family that matters wherever you are** (Expand all headings) sits in its family submenu, shown anywhere the family applies (any note with headings).
+5. **At most two submenu levels** (`Headings ▸ Show headings to level ▸`). An on/off option shows `✓` as its icon while on.
+6. **Hide what doesn't apply here; grey out (`disabled`) what applies but can't be done right now** (Cut with nothing selected).
+`extensions/headingMenu.ts` is the worked example, and `headingMenu.test.ts` checks its order and depth. There is no mechanical check for the rest; the audit is in BACKLOG.md's Pattern retrofit backlog.
 
 **Adding to it:**
 - A new place: call `useContextMenuScope` with a new `kind`.
@@ -912,6 +932,7 @@ Not bugs in normal use; recorded so they aren't rediscovered from scratch.
 - **`calendar_events.notify_before_value` is `integer`** but `CalendarEventPane` feeds it a free-typed number, so typing `1.5` would fail sync (see migration 023's note). Clamp/round the input, or widen the column.
 - **The other stores still live in localStorage (about 5 MB for the whole site).** Notes moved to IndexedDB (see "Zustand migration rule"), so pasted images no longer count against it, but every save still re-serialises a whole store (opening a note writes `lastViewedAt`, which rewrites *all* notes — now a database write rather than a localStorage one) and images are still inline base64 in note content, which also inflates every Supabase sync of a note. Pasted images are scaled to 1600 px / WebP on the way in (`utils/imageCompress.ts`) and Settings → Storage can shrink existing ones (`services/shrinkNoteImages.ts`). Remaining ideas are in BACKLOG.md "Local storage headroom".
 - **`src/services/autoBackup.test.ts` is flaky under full-suite load** (seen again 2026-10-07, "takes a snapshot once enough weighted changes accumulate"; first seen 2026-10-06: one or two of its tests failed in two full runs, passed alone and in the next full run; the file is untouched by the change that saw it). Probably IndexedDB/timer timing; worth a look before CI starts failing on it.
+- **`NoteEditor.test.tsx` "F2 renames the open tab…" fails now and then under full-suite load** (2026-10-09: twice in about eight full runs; always passes alone and in repeated runs of the Notes tests). It first appeared in the session that added the sticky heading trail (`StickyHeadings`, which measures on an animation frame), but no link was found. Look at it before CI starts failing on it.
 - **Most z-index values are still literals** (28 / 30 / 100 / 102 / 110 / 1000 for modals, and the summoned-from-anywhere tiers 400–10000). The tiers are now tokens (`--z-*`, "Design tokens and theming"); existing literals move to them as files are touched. It matters only when one overlay opens over another. `AddListModal`, `AddListItemModal` and `EditNoteTagModal` are at 100, the same tier as the panes, but nothing opens them from inside a pane today.
 
 ---

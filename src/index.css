@@ -73,6 +73,7 @@
   --space-7: 2rem;
 
   /* ── Stacking tiers: an overlay summoned from anywhere sits above every modal ── */
+  --z-sticky:        5;      /* content pinned while its container scrolls (sticky headings) */
   --z-pane:          100;    /* slide-in panes and most modals */
   --z-pane-modal:    102;    /* a modal or dialog opened from inside a pane */
   --z-quick-access:  400;
@@ -136,6 +137,14 @@
   --color-backdrop: rgba(0, 0, 0, 0.6);
   --color-overscroll: #2e2e33;
   --color-occurrence: rgba(250, 204, 21, 0.2);
+}
+
+/* While a pane edge is being dragged (components/ResizeHandle), the resize cursor everywhere and
+   no text selection. */
+:root[data-resizing],
+:root[data-resizing] * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 body {

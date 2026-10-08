@@ -44,15 +44,16 @@ import { NoteBlockSelect } from './extensions/blockDesigns';
 import { NoteBlockPicks } from './extensions/blockPicks';
 import { NoteBackdrop } from './NoteBackdrop';
 import { MobileNoteSidePanel } from './MobileNoteSidePanel';
-import { PinIcon } from '@/components/Icons';
+import { DisclosureIcon, PinIcon, TextColorIcon } from '@/components/Icons';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
 import { SpecialCharInput } from './extensions/SpecialCharInput';
+import { StickyHeadings } from './StickyHeadings';
+import { HeadingFold, toggleHeadingFoldAtCursor } from './extensions/HeadingFold';
 import { HeadingLevel } from './extensions/HeadingLevel';
 import { NoteSubtitle, NoteAuthor } from './extensions/NoteBylines';
 import { FONT_SIZES, currentFontSize, setFontSize, stepFontSize } from './extensions/fontSize';
 import { noteClipboardText } from './noteClipboardText';
-import { TextColorIcon } from '@/components/Icons';
 import { ConceptRefMark, ConceptMargin } from './extensions/ConceptRef';
 import { Importance, cycleImportance } from './extensions/Importance';
 import { SelectionMenu } from './objects/SelectionMenu';
@@ -72,6 +73,7 @@ import { ArtifactLinkGroups } from './objects/artifactGroups';
 import type { NoteObjectContext } from './objects/types';
 import './objects/contextMenu';
 import './extensions/timelineMenu';
+import './extensions/headingMenu';
 import './extensions/quoteMenu';
 import './extensions/cycleMenu';
 import './extensions/breakdownMenu';
@@ -809,6 +811,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       OccurrenceHighlight,
       SpecialCharInput,
       HeadingLevel,
+      HeadingFold,
       ConceptRefMark,
       ConceptMargin,
       Importance,
@@ -1479,10 +1482,10 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         return;
       }
 
-      // Ctrl+. → bullet list
+      // Ctrl+. → collapse/expand the heading the cursor is in; anywhere else, bullet list
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === '.') {
         e.preventDefault();
-        editor.chain().focus().toggleBulletList().run();
+        if (!toggleHeadingFoldAtCursor(editor.view)) editor.chain().focus().toggleBulletList().run();
         return;
       }
 
@@ -1759,7 +1762,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
               aria-label={LABELS.mobileNotes.tools}
               title={LABELS.mobileNotes.tools}
               disabled={noteLocked}
-            >{toolsOpen ? '▴' : '▾'}</button>
+            ><DisclosureIcon open={toolsOpen} /></button>
             <button type="button" className={styles.mobileHeadBtn} onClick={() => setPanelOpen(true)} aria-label={LABELS.mobileNotes.panel} title={LABELS.mobileNotes.panel}>☰</button>
           </>
         )}
@@ -2177,13 +2180,14 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                 <button
                   className={styles.tabClose}
                   onClick={(e) => void handleRemoveTab(e, tabId, tabName)}
-                  title="Delete tab"
+                  title={LABELS.noteTabs.delete}
+                  aria-label={LABELS.noteTabs.delete}
                 >×</button>
               )}
             </div>
           );
         })}
-        <button className={styles.tabAdd} onClick={handleAddTab} title="Add tab">+</button>
+        <button className={styles.tabAdd} onClick={handleAddTab} title={LABELS.noteTabs.add} aria-label={LABELS.noteTabs.add}>+</button>
       </div>}
 
       {/* ── Abstract ─────────────────────────────────────────────────────── */}
@@ -2311,6 +2315,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             </div>
           ) : (
             <>
+              {editor && <StickyHeadings editor={editor} />}
               {editor && <FloatingToolbar actionsRef={toolbarActionsRef} editor={editor} noteId={note.id} getLinkTabId={() => linkTabIdFor(viewOf(currentNoteIdRef.current), activeTabIdRef.current)} onStructuredTag={openStructuredTagCreate} />}
               {editor && <NoteObjectMenu editor={editor} getContext={getObjectContext} />}
               {editor && (

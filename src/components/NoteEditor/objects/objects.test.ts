@@ -752,7 +752,8 @@ describe('the pane, fifth round', () => {
     const id = useCalendarStore.getState().addReminder({ title: 'Call mum', date: '2026-10-07' });
     make(`<p><mark data-artifact-id="${id}" data-artifact-type="reminder">Call mum</mark></p>`);
     const open = editor.view.dom.querySelector('[data-artifact-part="tail"] [title="Open"]')!;
-    expect(open.parentElement!.textContent).toBe('↗▾');
+    expect(open.parentElement!.textContent).toBe('↗');
+    expect(open.parentElement!.querySelector('svg')).not.toBeNull();
   });
 });
 

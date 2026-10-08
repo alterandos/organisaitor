@@ -1,0 +1,101 @@
+/* Height 0 and pinned to the top of the scroll area, so the trail floats over the note without
+   pushing it down. */
+.host {
+  position: sticky;
+  top: 0;
+  height: 0;
+  flex-shrink: 0;
+  z-index: var(--z-sticky);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-6);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  font-size: calc(var(--text-xs) * var(--trail-scale, 1));
+}
+
+.trail {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.crumb {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 40ch;
+  padding: 2px var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* The innermost heading — where you are — reads strongest and gets the room. */
+.crumb:last-child {
+  flex: 0 1 auto;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.crumb:hover { background: var(--color-surface-alt); color: var(--color-text); }
+
+.crumb:focus-visible,
+.sizeBtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+.number { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+.text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sep { flex-shrink: 0; color: var(--color-muted); }
+
+/* A− / A+ at the right: shown while the bar is hovered or focused, always on touch. A fixed size,
+   so they don't grow and shrink with the text they change. */
+.sizeControls {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.bar:hover .sizeControls,
+.bar:focus-within .sizeControls { opacity: 1; }
+
+@media (hover: none) {
+  .sizeControls { opacity: 1; }
+}
+
+.sizeBtn {
+  min-width: 1.8rem;
+  padding: 2px var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sizeBtn:hover:not(:disabled) { color: var(--color-text); background: var(--color-surface-alt); }
+
+.sizeBtn:disabled { opacity: 0.4; cursor: default; }

@@ -115,11 +115,11 @@ describe('pattern: Escape handling goes through useEscapeClose', () => {
   // CLAUDE.md's one deliberate exception: a capture-phase listener that owns all keys for a
   // moment and consumes Escape itself before the stack ever sees it (SettingsPane's
   // hotkey-rebind capture).
-  const CAPTURE_EXCEPTIONS = new Set(['src/components/SettingsPane/SettingsPane.tsx:84']);
+  const CAPTURE_EXCEPTIONS = [{ file: 'src/components/SettingsPane/SettingsPane.tsx', text: "if (e.key === 'Escape') { setListening(null); return; }" }];
   // A handler that deliberately does nothing to Escape (explicit early-return, letting it
   // bubble untouched to the Escape stack) rather than consuming it — not a stopPropagation
   // case at all, so it can't be found by scanning for that call.
-  const PASS_THROUGH_EXCEPTIONS = new Set(['src/components/NoteEditor/NoteBacklinks.tsx:58']);
+  const PASS_THROUGH_EXCEPTIONS = [{ file: 'src/components/NoteEditor/NoteBacklinks.tsx', text: "if (e.key === 'Escape' || e.key === 'Control' || e.key === 'Shift' || e.key === 'Alt' || e.key === 'Meta') return;" }];
 
   it("every source hit of the literal 'Escape' either lives in the mechanism itself, or is an inline handler that calls stopPropagation (within a few lines), or a documented exception", () => {
     const bad: string[] = [];
@@ -130,7 +130,8 @@ describe('pattern: Escape handling goes through useEscapeClose', () => {
       lines.forEach((text, i) => {
         if (!/'Escape'/.test(text)) return;
         const key = `${relPath}:${i + 1}`;
-        if (CAPTURE_EXCEPTIONS.has(key) || PASS_THROUGH_EXCEPTIONS.has(key)) return;
+        const excepted = (list: { file: string; text: string }[]) => list.some((x) => x.file === relPath && text.trim() === x.text);
+        if (excepted(CAPTURE_EXCEPTIONS) || excepted(PASS_THROUGH_EXCEPTIONS)) return;
         const window = lines.slice(i, i + 4).join(' ');
         if (!/stopPropagation/.test(window)) bad.push(`${key}  ${text.trim()}`);
       });
@@ -631,6 +632,44 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
     expect(oldPath, describeHits(oldPath)).toEqual([]);
   });
 
+  it('expand/collapse arrows are DisclosureIcon: no ▸/▾ glyph toggled by hand, no local rotate-on-open chevron', () => {
+    // A dropdown trigger's ▾ (it opens a list) and the right-click menu's submenu ▸ are other
+    // meanings and aren't caught: they don't toggle between two arrows. CollectionPicker's trigger
+    // does (▴ while its list is open) and is a dropdown, so it's the one exception.
+    const files = SOURCE_FILES.filter((f) => !/components[/\\]Icons[/\\]/.test(f) && !/CollectionPicker\.tsx$/.test(f));
+    const glyphToggle = findMatches(files, /\?\s*'[▸▾▴]'\s*:\s*'[▸▾▴]'/, { skipComments: true });
+    expect(glyphToggle, describeHits(glyphToggle)).toEqual([]);
+    const css = walk(SRC, ['.css']).filter((f) => !/components[/\\]Icons[/\\]/.test(f));
+    const rotated = findMatches(css, /\.chevronOpen\b/);
+    expect(rotated, describeHits(rotated)).toEqual([]);
+  });
+
+  it('icons beside text are sized from the text (Icons beside text): DisclosureIcon is 1em; the heading arrow is a 1em square on the first line', () => {
+    const icon = fs.readFileSync(path.join(SRC, 'components/Icons/DisclosureIcon.tsx'), 'utf8');
+    expect(icon).toMatch(/width="1em"/);
+    expect(icon).toMatch(/height="1em"/);
+    const css = fs.readFileSync(path.join(SRC, 'components/NoteEditor/NoteEditor.module.css'), 'utf8');
+    const rule = css.match(/\.editorContent \[data-heading-fold\] \{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/width: 1em;/);
+    expect(rule).toMatch(/height: 1em;/);
+    expect(rule).toMatch(/top: calc\(\(1lh - 1em\) \/ 2\);/);
+  });
+
+  it('side panels resize through usePaneWidth (Resizable side panels): every listed pane uses it, and no other col-resize', () => {
+    const PANES = [
+      'ChronicleView/ChronicleView.tsx', 'NoteEditor/NoteTOC.tsx', 'ListsSection/ListsSection.tsx', 'RecordsView/RecordsView.tsx',
+      'OverviewSection/OverviewSection.tsx', 'CalendarSidePane/CalendarSidePane.tsx', 'ManagePane/ManagePane.tsx', 'TaskPane/TaskPane.tsx',
+      'CalendarEventPane/CalendarEventPane.tsx', 'CalendarReminderPane/CalendarReminderPane.tsx', 'CalendarDeadlinePane/CalendarDeadlinePane.tsx',
+      'EditRoutinePane/EditRoutinePane.tsx', 'EditTrackerPane/EditTrackerPane.tsx', 'NoteEditorPane/NoteEditorPane.tsx',
+      'IntegrationsPane/IntegrationsPane.tsx', 'SettingsPane/SettingsPane.tsx', 'CalendarView/CalendarView.tsx', 'Sidebar/Sidebar.tsx',
+    ];
+    const missing = PANES.filter((f) => !/usePaneWidth\(/.test(fs.readFileSync(path.join(SRC, 'components', f), 'utf8')));
+    expect(missing).toEqual([]);
+    const files = [...walk(SRC, ['.css']), ...SOURCE_FILES].filter((f) => !/components[/\\]ResizeHandle[/\\]/.test(f) && !/src[/\\]index\.css$/.test(f));
+    const handRolled = findMatches(files, /col-resize/);
+    expect(handRolled, describeHits(handRolled)).toEqual([]);
+  });
+
   it('every note block offers its designs through blockDesigns (Block designs)', () => {
     const blockFiles = SOURCE_FILES.filter((f) => /NoteEditor[/\\]objects[/\\].*Block\.ts$/.test(f));
     const offenders: string[] = [];
@@ -691,7 +730,7 @@ describe('pattern: styles use the design tokens in index.css (CLAUDE.md "Design 
   // agreed (2026-10-09). Replace them as files are touched; the counts may only go down. When
   // this fails because a count went DOWN, lower the number here to lock the gain in. When it
   // fails because one went UP, use the token (var(--text-sm), var(--space-3), var(--z-toast)…).
-  const BASELINE = { hex: 154, fontSize: 1222, zIndex: 137, radius: 306, shadow: 123 };
+  const BASELINE = { hex: 154, fontSize: 1218, zIndex: 137, radius: 305, shadow: 123 };
   const CSS = walk(SRC, ['.css']).filter((f) => f.endsWith('.module.css'))
     .map((f) => fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''));
   const count = (re: RegExp) => CSS.reduce((n, s) => n + (s.match(re) ?? []).length, 0);

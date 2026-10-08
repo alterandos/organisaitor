@@ -12,6 +12,8 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 function formatFieldValue(schema: FieldSchema, value: unknown): string {
   if (value === undefined || value === null || value === '') return '—';
@@ -238,6 +240,7 @@ function TrackerSidebarRow({
 }
 
 export function RecordsView() {
+  const paneResize = usePaneWidth('records-sidebar', { edge: 'right', min: 160, max: 480 });
   const collections        = useTaskStore((s) => s.collections);
   const deleteCollection   = useTaskStore((s) => s.deleteCollection);
   const deleteInstances    = useRoutineStore((s) => s.deleteInstancesForRoutine);
@@ -280,7 +283,8 @@ export function RecordsView() {
   return (
     <div className={styles.shell}>
       {/* Sidebar */}
-      <aside className={styles.sidebar}>
+      <aside style={paneResize.style} className={styles.sidebar}>
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         {/* Trackers section */}
         <div className={styles.sidebarHeader}>
           <span className={styles.sidebarTitle}>Trackers</span>

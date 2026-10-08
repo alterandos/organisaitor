@@ -11,6 +11,8 @@ import styles from './EditTrackerPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'text',     label: 'Text' },
@@ -38,6 +40,7 @@ function fieldToRow(f: FieldSchema): FieldRow {
 }
 
 export function EditTrackerPane() {
+  const paneResize = usePaneWidth('record-pane', { edge: 'left', min: 340, max: 820 });
   const collections    = useTaskStore((s) => s.collections);
   const updateCollection = useTaskStore((s) => s.updateCollection);
   const purposes       = useTaskStore((s) => s.purposes);
@@ -147,7 +150,8 @@ export function EditTrackerPane() {
   return (
     <>
       <div className={styles.overlay} onClick={closeEditTracker} />
-      <aside className={styles.pane} role="complementary" aria-label="Edit tracker">
+      <aside style={paneResize.style} className={styles.pane} role="complementary" aria-label="Edit tracker">
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <div className={styles.header}>
           <span className={styles.heading}>Edit tracker</span>
           <button className={styles.closeBtn} onClick={closeEditTracker} aria-label="Close">✕</button>

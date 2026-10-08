@@ -98,14 +98,10 @@
 .sectionToggle:hover { background: var(--color-bg); }
 
 .chevron {
-  display: inline-block;
-  font-size: 0.68rem;
+  font-size: var(--text-2xs);
   color: var(--color-muted);
-  transition: transform 140ms ease;
-  flex-shrink: 0;
 }
 
-.chevronOpen { transform: rotate(90deg); }
 
 .count {
   margin-left: auto;

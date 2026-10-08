@@ -188,6 +188,7 @@ export const LABELS = {
       doneHint:    'Mark done (or untick)',
       markNotDone: 'Mark not done',
       unlink:      'Unlink',
+      options:     'Options',
       deleted:     'Deleted',
       missing:     'Deleted — restore it from the Recycling Bin to bring the link back',
       done:        'Done',
@@ -243,6 +244,7 @@ export const LABELS = {
 
   // Important passages, built out (extensions/Importance.ts).
   importance: {
+    menuLevel:     'Importance',
     levels:        { 1: 'Important', 2: 'Very important', 3: 'Critical' } as Record<1 | 2 | 3, string>,
     onReviewList:  'on your review list',
     reviewLater:   'Review later',
@@ -326,6 +328,29 @@ export const LABELS = {
     waterfallTotal:   'Show the total',
     total:            'Total',
     changeType:       'Chart type',
+  },
+  // Collapsing headings and the sticky heading trail (NoteEditor/extensions/HeadingFold.ts,
+  // NoteEditor/StickyHeadings.tsx).
+  noteHeadings: {
+    settingsSection: 'Notes',
+    family:      'Headings',
+    collapse:    'Collapse this heading',
+    expand:      'Expand this heading',
+    collapseAll: 'Collapse all headings',
+    expandAll:   'Expand all headings',
+    showToLevel: 'Show headings to level',
+    level:       (n: number) => n === 1 ? 'Level 1 only' : `Levels 1–${n}`,
+    sticky:      'Sticky headings',
+    stickyDesc:  'Keep the headings you are in at the top of the note while you scroll',
+    trail:       'Headings you are in',
+    goTo:        (name: string) => `Go to ${name}`,
+    textLarger:  'Larger text',
+    textSmaller: 'Smaller text',
+    stickyOff:   'Turn off sticky headings',
+  },
+  noteTabs: {
+    add:    'Add tab',
+    delete: 'Delete tab',
   },
   noteBackdrop: {
     change:   'Change the background below the note',
@@ -486,6 +511,7 @@ export const LABELS = {
   // A row's own actions (components/RowHoverActions/RowAction): the hover tooltip on desktop,
   // the visible label in the long-press sheet on Android.
   // Right-click menus (src/contextMenu/, CLAUDE.md "Right-click menus").
+  resizePane: 'Drag to resize · double-click to reset',
   contextMenu: {
     cut:          'Cut',
     removeImportant: 'Not important',

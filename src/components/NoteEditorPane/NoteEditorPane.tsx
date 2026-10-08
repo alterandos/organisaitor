@@ -6,8 +6,11 @@ import { isNoteLocked } from '@/services/noteSecrets';
 import type { NoteId } from '@/types';
 import styles from './NoteEditorPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 export function NoteEditorPane() {
+  const paneResize = usePaneWidth('note-pane', { edge: 'left', min: 360, max: 1100 });
   const editingNoteId = useUIStore((s) => s.editingNoteId);
   const closeNote = useUIStore((s) => s.closeNote);
 
@@ -65,7 +68,8 @@ export function NoteEditorPane() {
   if (!note || !editingNoteId) return null;
 
   return (
-    <div className={styles.pane}>
+    <div style={paneResize.style} className={styles.pane}>
+      {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
       <div className={styles.header}>
         <input
           type="text"

@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import type { RefObject } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId, type NotesColumn } from '@/store/uiStore';
-import { useSettingsStore } from '@/store/settingsStore';
 import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon } from '@/utils/notes';
 import type { NoteTagId, CollectionId } from '@/types';
 import type { NoteTag } from '@/types/notes';
@@ -15,6 +14,9 @@ import { RowAction } from '@/components/RowHoverActions/RowAction';
 import styles from './ChronicleView.module.css';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { DisclosureIcon } from '@/components/Icons';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 // ── Column order — extend here to add new panels in future ────────────────
 
@@ -26,7 +28,6 @@ type ColId = NotesColumn;
 const MIN_PANEL_WIDTH = 160;
 const MAX_PANEL_WIDTH = 480;
 
-type DragCol = 'tree' | 'list';
 
 // ── Flatten visible tree ──────────────────────────────────────────────────
 
@@ -290,7 +291,7 @@ function NoteTagTreeNode({
           aria-label={isExpanded ? 'Collapse' : 'Expand'}
         >
           {hasChildren
-            ? (isExpanded ? '▾' : '▸')
+            ? <DisclosureIcon open={isExpanded} />
             : <span className={styles.togglePlaceholder} />}
         </button>
 
@@ -378,54 +379,10 @@ export function ChronicleView() {
     setDragOverInfo(null);
   };
 
-  // Panel resize — persisted width per panel, with a live drag override while dragging
-  const chronicleTreeWidth    = useSettingsStore((s) => s.chronicleTreeWidth);
-  const chronicleListWidth    = useSettingsStore((s) => s.chronicleListWidth);
-  const setChronicleTreeWidth = useSettingsStore((s) => s.setChronicleTreeWidth);
-  const setChronicleListWidth = useSettingsStore((s) => s.setChronicleListWidth);
-  const [dragCol, setDragCol]           = useState<DragCol | null>(null);
-  const [liveTreeWidth, setLiveTreeWidth] = useState<number | null>(null);
-  const [liveListWidth, setLiveListWidth] = useState<number | null>(null);
-  const dragStateRef = useRef<{ col: DragCol; startX: number; startWidth: number; current: number } | null>(null);
-
-  const treeWidth = liveTreeWidth ?? chronicleTreeWidth;
-  const listWidth = liveListWidth ?? chronicleListWidth;
-
-  const startDrag = (col: DragCol) => (e: React.MouseEvent) => {
-    e.preventDefault();
-    const startWidth = col === 'tree' ? chronicleTreeWidth : chronicleListWidth;
-    dragStateRef.current = { col, startX: e.clientX, startWidth, current: startWidth };
-    setDragCol(col);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  };
-
-  useEffect(() => {
-    const handleMove = (e: MouseEvent) => {
-      const d = dragStateRef.current;
-      if (!d) return;
-      const next = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, d.startWidth + (e.clientX - d.startX)));
-      d.current = next;
-      if (d.col === 'tree') setLiveTreeWidth(next); else setLiveListWidth(next);
-    };
-    const handleUp = () => {
-      const d = dragStateRef.current;
-      if (!d) return;
-      if (d.col === 'tree') setChronicleTreeWidth(d.current); else setChronicleListWidth(d.current);
-      dragStateRef.current = null;
-      setDragCol(null);
-      setLiveTreeWidth(null);
-      setLiveListWidth(null);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    document.addEventListener('mousemove', handleMove);
-    document.addEventListener('mouseup', handleUp);
-    return () => {
-      document.removeEventListener('mousemove', handleMove);
-      document.removeEventListener('mouseup', handleUp);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Panel resize: the shared draggable edge (components/ResizeHandle), widths in settingsStore.
+  const treeResize = usePaneWidth('notes-tree', { edge: 'right', min: MIN_PANEL_WIDTH, max: MAX_PANEL_WIDTH });
+  const listResize = usePaneWidth('notes-list', { edge: 'right', min: MIN_PANEL_WIDTH, max: MAX_PANEL_WIDTH });
+  const dragging = treeResize.dragging || listResize.dragging;
 
   // Keyboard navigation — which column has focus. In uiStore so N/Space can create the right
   // thing for the column you're in (a notebook in the tree, a note elsewhere).
@@ -600,10 +557,11 @@ export function ChronicleView() {
 
       {/* ── Panel 1: Notebook tree ───────────────────────────────────────── */}
       <div
-        className={`${styles.panel} ${styles.treePanel} ${treeCollapsed ? styles.panelCollapsed : ''} ${focusedCol === 'tree' ? styles.panelFocused : ''} ${dragCol ? styles.panelNoTransition : ''}`}
-        style={!treeCollapsed ? { width: treeWidth, minWidth: MIN_PANEL_WIDTH } : undefined}
+        className={`${styles.panel} ${styles.treePanel} ${treeCollapsed ? styles.panelCollapsed : ''} ${focusedCol === 'tree' ? styles.panelFocused : ''} ${dragging ? styles.panelNoTransition : ''}`}
+        style={!treeCollapsed ? treeResize.style : undefined}
         onClick={() => setFocusedCol('tree')}
       >
+        {!treeCollapsed && treeResize.handle && <ResizeHandle {...treeResize.handle} />}
         {treeCollapsed ? (
           <button className={styles.expandStrip} onClick={() => setTreeCollapsed(false)} title="Expand notebooks">▸</button>
         ) : (
@@ -643,19 +601,14 @@ export function ChronicleView() {
         )}
       </div>
 
-      {!treeCollapsed && (
-        <div
-          className={`${styles.divider} ${dragCol === 'tree' ? styles.dividerActive : ''}`}
-          onMouseDown={startDrag('tree')}
-        />
-      )}
 
       {/* ── Panel 2: Note list ───────────────────────────────────────────── */}
       <div
-        className={`${styles.panel} ${styles.listPanel} ${listCollapsed ? styles.panelCollapsed : ''} ${focusedCol === 'list' ? styles.panelFocused : ''} ${dragCol ? styles.panelNoTransition : ''}`}
-        style={!listCollapsed ? { width: listWidth, minWidth: MIN_PANEL_WIDTH } : undefined}
+        className={`${styles.panel} ${styles.listPanel} ${listCollapsed ? styles.panelCollapsed : ''} ${focusedCol === 'list' ? styles.panelFocused : ''} ${dragging ? styles.panelNoTransition : ''}`}
+        style={!listCollapsed ? listResize.style : undefined}
         onClick={() => setFocusedCol('list')}
       >
+        {!listCollapsed && listResize.handle && <ResizeHandle {...listResize.handle} />}
         {listCollapsed ? (
           <button className={styles.expandStrip} onClick={() => setListCollapsed(false)} title="Expand note list">▸</button>
         ) : (
@@ -678,12 +631,6 @@ export function ChronicleView() {
         )}
       </div>
 
-      {!listCollapsed && (
-        <div
-          className={`${styles.divider} ${dragCol === 'list' ? styles.dividerActive : ''}`}
-          onMouseDown={startDrag('list')}
-        />
-      )}
 
       {/* ── Panel 3: Editor ─────────────────────────────────────────────── */}
       <div

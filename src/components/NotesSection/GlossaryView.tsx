@@ -10,6 +10,7 @@ import { rankSearch } from '@/utils/suggestRank';
 import { LABELS } from '@/config/labels';
 import type { NoteId } from '@/types';
 import styles from './GlossaryView.module.css';
+import { DisclosureIcon } from '@/components/Icons';
 
 type Filter = 'all' | 'definition' | 'concept' | 'acronym';
 const FILTERS: Filter[] = ['all', 'definition', 'concept', 'acronym'];
@@ -132,7 +133,7 @@ export function GlossaryView() {
                       </button>
                       {total > 0 ? (
                         <button type="button" className={styles.refs} aria-expanded={openRefs === e.id} onClick={() => setOpenRefs(openRefs === e.id ? null : e.id)}>
-                          {L.references(total)} {openRefs === e.id ? '▴' : '▾'}
+                          {L.references(total)} <DisclosureIcon open={openRefs === e.id} />
                         </button>
                       ) : (
                         <span className={styles.muted}>{L.noReferences}</span>

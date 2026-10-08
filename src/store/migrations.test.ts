@@ -93,6 +93,26 @@ describe('settingsStore migration', () => {
     expect(state.noteBackdrop).toEqual({ kind: 'preset', id: 'aurora' });
   });
 
+  it('v9 -> v10 moves the Notes column widths into paneWidths', async () => {
+    seed('todo-settings', { stickyHeadings: false, chronicleTreeWidth: 300, chronicleListWidth: 220 }, 9);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
+    expect(state.paneWidths).toEqual({ 'notes-tree': 300 });
+    expect(state.stickyHeadingsScale).toBe(1);
+    expect(state.stickyHeadings).toBe(false);
+    expect('chronicleTreeWidth' in state).toBe(false);
+  });
+
+  it('v8 -> v9 turns sticky headings on', async () => {
+    seed('todo-settings', { noteHeadingPinned: true }, 8);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    const state = useSettingsStore.getState();
+    expect(state.stickyHeadings).toBe(true);
+    expect(state.noteHeadingPinned).toBe(true);
+  });
+
   it('a fresh install with no persisted state at all gets the full default shape', async () => {
     const { useSettingsStore } = await import('@/store/settingsStore');
     await flush();

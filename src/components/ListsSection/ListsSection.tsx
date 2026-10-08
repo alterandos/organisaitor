@@ -19,6 +19,8 @@ import { ChecklistView } from './ChecklistView';
 import { LABELS } from '@/config/labels';
 
 import { log } from '@/utils/log';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 // Sidebar group order. Anything that isn't a checklist or watchlist (custom types included) is Reference.
 const KIND_GROUPS: ListKind[] = ['checklist', 'watchlist', 'reference'];
 const groupOf = (l: List): ListKind => (l.kind === 'checklist' || l.kind === 'watchlist' ? l.kind : 'reference');
@@ -314,6 +316,7 @@ function SidebarListItem({
 
 // ── Main section ──────────────────────────────────────────────────────────────
 export function ListsSection() {
+  const paneResize = usePaneWidth('lists-sidebar', { edge: 'right', min: 160, max: 480 });
   // Read lists/items THROUGH the views: an encrypted list's name/fields/tabs and its items'
   // contents are blank in the store (see services/listSecrets.ts). `rawLists` is only for the
   // lock check. Writes below go through store actions that route encrypted lists themselves.
@@ -593,8 +596,10 @@ export function ListsSection() {
       {/* ── Sidebar ── */}
       <aside
         className={`${styles.sidebar} ${focusedArea === 'nav' ? styles.navAreaFocused : ''}`}
+        style={paneResize.style}
         onClick={() => setFocusedArea('nav')}
       >
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <div className={styles.sidebarHeader}>
           <span className={styles.sidebarTitle}>My Lists</span>
           <button className={styles.sidebarNewBtn} onClick={showAddList} title="New list">+</button>

@@ -24,6 +24,8 @@ import type { CrossAppRef } from '@/types';
 import styles from './TaskPane.module.css';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 const PRIORITY_OPTIONS: { value: Priority; label: string; color: string }[] = [
   { value: 'low',    label: 'Low',    color: '#22c55e' },
@@ -32,6 +34,7 @@ const PRIORITY_OPTIONS: { value: Priority; label: string; color: string }[] = [
 ];
 
 export function TaskPane() {
+  const paneResize = usePaneWidth('item-pane', { edge: 'left', min: 340, max: 820 });
   const editingTaskId  = useUIStore((s) => s.editingTaskId);
   const closeTaskPane  = useUIStore((s) => s.closeTaskPane);
   const openTaskPane   = useUIStore((s) => s.openTaskPane);
@@ -181,7 +184,8 @@ export function TaskPane() {
   return (
     <>
       <div className={styles.overlay} onClick={closeTaskPane} />
-      <aside className={styles.pane}>
+      <aside style={paneResize.style} className={styles.pane}>
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>Task</span>
           <button className={styles.closeBtn} onClick={closeTaskPane} aria-label="Close">×</button>

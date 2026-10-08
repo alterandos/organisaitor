@@ -46,11 +46,15 @@ registerContextMenuProvider({
     const passage = collectImportantPassages(view.state.doc).find((p) => at.pos >= p.from && at.pos <= p.to);
     if (!passage) return [];
     const I = LABELS.importance;
+    const current = IMPORTANCE_LEVELS.find((lv) => lv.level === passage.level);
     return [
-      ...IMPORTANCE_LEVELS.map((lv) => ({
-        id: `level-${lv.level}`, label: lv.label, icon: passage.level === lv.level ? '✓' : lv.icon,
-        run: () => setImportance(view, passage.from, passage.to, lv.level),
-      })),
+      {
+        id: 'level', label: I.menuLevel, icon: current?.icon,
+        submenu: [IMPORTANCE_LEVELS.map((lv) => ({
+          id: `level-${lv.level}`, label: lv.label, icon: passage.level === lv.level ? '✓' : lv.icon,
+          run: () => setImportance(view, passage.from, passage.to, lv.level),
+        }))],
+      },
       { id: 'review', label: passage.reviewDue ? I.stopReviewing : I.reviewLater, icon: '🔁', run: () => toggleReview(view, passage.from, passage.to) },
       { id: 'remove', label: LABELS.contextMenu.removeImportant, icon: '✕', run: () => setImportance(view, passage.from, passage.to, null) },
     ];

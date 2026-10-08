@@ -20,6 +20,7 @@ import type { CollectionId } from '@/types';
 import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
 import styles from './AddCalendarItemModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { DisclosureIcon } from '@/components/Icons';
 
 function todayStr(): string {
   return todayIsoInZone(resolveTimezone(useSettingsStore.getState().timezone));
@@ -415,7 +416,7 @@ export function AddCalendarItemModal() {
             className={styles.formExpandBtn}
             onClick={() => setFormExpanded((v) => !v)}
           >
-            {formExpanded ? '▴ Fewer options' : '▾ More options'}
+            <DisclosureIcon open={formExpanded} /> {formExpanded ? 'Fewer options' : 'More options'}
           </button>
 
           {showAdvanced && (

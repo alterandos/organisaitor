@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { LABELS } from '@/config/labels';
 import { HOTKEYS, HOTKEY_GROUPS } from '@/config/hotkeys';
 import { useHotkeyOverridesStore, findConflicts, getEffectiveBinding } from '@/store/hotkeyOverridesStore';
 import { SPEECH_LANGUAGES } from '@/services/speech/languages';
@@ -14,6 +15,8 @@ import { usePlatform } from '@/hooks/usePlatform';
 import styles from './SettingsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 function renderKeys(combo: string) {
   const parts = combo.split('+');
@@ -49,6 +52,7 @@ function HotkeyCell({
 }
 
 export function SettingsPane() {
+  const paneResize = usePaneWidth('settings-pane', { edge: 'left', min: 280, max: 720 });
   const { isAndroid } = usePlatform();
   const closeSettings = useUIStore((s) => s.closeSettings);
   const activeView    = useUIStore((s) => s.activeView);
@@ -159,6 +163,8 @@ export function SettingsPane() {
   const toggleAlwaysShowDueDate = useSettingsStore((s) => s.toggleAlwaysShowDueDate);
   const hideBlockedTasks        = useSettingsStore((s) => s.hideBlockedTasks);
   const toggleHideBlockedTasks  = useSettingsStore((s) => s.toggleHideBlockedTasks);
+  const stickyHeadings          = useSettingsStore((s) => s.stickyHeadings);
+  const toggleStickyHeadings    = useSettingsStore((s) => s.toggleStickyHeadings);
 
   const shadePastDays              = useSettingsStore((s) => s.shadePastDays);
   const shadeWeekends              = useSettingsStore((s) => s.shadeWeekends);
@@ -172,7 +178,8 @@ export function SettingsPane() {
   return (
     <>
       <div className={styles.overlay} onClick={closeSettings} />
-      <aside className={styles.pane}>
+      <aside style={paneResize.style} className={styles.pane}>
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>Settings</span>
           <button className={styles.closeBtn} onClick={closeSettings} aria-label="Close settings">×</button>
@@ -295,6 +302,16 @@ export function SettingsPane() {
                 desc="Tasks waiting on another task go in a collapsed group at the bottom, instead of staying in place greyed out"
               >
                 <Toggle on={hideBlockedTasks} onToggle={toggleHideBlockedTasks} label="Toggle moving blocked tasks out of the list" />
+              </SettingRow>
+            </section>
+          )}
+
+          {activeView === 'notes' && (
+            <section className={styles.section}>
+              <h3 className={styles.sectionLabel}>{LABELS.noteHeadings.settingsSection}</h3>
+
+              <SettingRow name={LABELS.noteHeadings.sticky} desc={LABELS.noteHeadings.stickyDesc}>
+                <Toggle on={stickyHeadings} onToggle={toggleStickyHeadings} label={LABELS.noteHeadings.sticky} />
               </SettingRow>
             </section>
           )}

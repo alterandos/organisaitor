@@ -16,6 +16,7 @@ import styles from './AddTaskModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
+import { DisclosureIcon } from '@/components/Icons';
 
 type PendingTag = { id: TagId; name: string; isNew: boolean };
 
@@ -356,7 +357,7 @@ export function AddTaskModal() {
               onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setAdvanced(true)}
               aria-label="Show more options"
             >
-              <span className={styles.expandBarChevron}>▾</span>
+              <DisclosureIcon open={false} className={styles.expandBarChevron} />
               <span className={styles.expandBarLabel}>More options</span>
             </div>
           )}

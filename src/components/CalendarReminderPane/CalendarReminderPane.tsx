@@ -25,8 +25,11 @@ import { useItemActions } from '@/components/ItemActions/useItemActions';
 import styles from './CalendarReminderPane.module.css';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 export function CalendarReminderPane() {
+  const paneResize = usePaneWidth('item-pane', { edge: 'left', min: 340, max: 820 });
   const editingId         = useUIStore((s) => s.editingCalendarReminderId);
   const occurrenceDate    = useUIStore((s) => s.editingCalendarReminderOccurrence);
   const closePane         = useUIStore((s) => s.closeCalendarReminderPane);
@@ -121,7 +124,8 @@ export function CalendarReminderPane() {
   return (
     <>
       <div className={styles.overlay} onClick={closePane} />
-      <aside className={styles.pane}>
+      <aside style={paneResize.style} className={styles.pane}>
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>{LABELS.calendarItemKind.reminder}</span>
           <button className={styles.closeBtn} onClick={closePane} aria-label="Close">×</button>

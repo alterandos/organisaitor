@@ -12,6 +12,8 @@ import { listBackupSnapshots, type BackupSnapshotMeta } from '@/services/autoBac
 import styles from './IntegrationsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 type ImportStatus = 'idle' | 'success' | 'error';
 
@@ -407,6 +409,7 @@ function RestoreCard() {
 // ── Pane ──────────────────────────────────────────────────────────────────────
 
 export function IntegrationsPane() {
+  const paneResize = usePaneWidth('integrations-pane', { edge: 'left', min: 300, max: 720 });
   const closeIntegrations = useUIStore((s) => s.closeIntegrations);
 
   useEscapeClose(closeIntegrations);
@@ -414,7 +417,8 @@ export function IntegrationsPane() {
   return (
     <>
       <div className={styles.overlay} onClick={closeIntegrations} />
-      <aside className={styles.pane}>
+      <aside style={paneResize.style} className={styles.pane}>
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>Data &amp; Integrations</span>
           <button className={styles.closeBtn} onClick={closeIntegrations} aria-label="Close">×</button>

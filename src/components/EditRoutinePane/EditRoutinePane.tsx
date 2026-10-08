@@ -11,6 +11,8 @@ import styles from './EditRoutinePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAYS   = [1, 2, 3, 4, 5];
@@ -21,6 +23,7 @@ function buildRepeatConfig(daysOfWeek: number[]): RepeatConfig | null {
 }
 
 export function EditRoutinePane() {
+  const paneResize = usePaneWidth('record-pane', { edge: 'left', min: 340, max: 820 });
   const collections      = useTaskStore((s) => s.collections);
   const updateCollection = useTaskStore((s) => s.updateCollection);
   const deleteCollection = useTaskStore((s) => s.deleteCollection);
@@ -116,7 +119,8 @@ export function EditRoutinePane() {
   return (
     <>
       <div className={styles.overlay} onClick={closeEditRoutine} />
-      <aside className={styles.pane} role="complementary" aria-label="Edit routine">
+      <aside style={paneResize.style} className={styles.pane} role="complementary" aria-label="Edit routine">
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <div className={styles.header}>
           <span className={styles.heading}>Edit routine</span>
           <button className={styles.closeBtn} onClick={closeEditRoutine} aria-label="Close">✕</button>

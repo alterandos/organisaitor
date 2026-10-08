@@ -16,3 +16,12 @@
   border-radius: 2px;
   box-shadow: 0 0 0 1.5px var(--color-surface);
 }
+
+.disclosure {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: -0.125em;
+  transition: transform 140ms ease;
+}
+
+.disclosureOpen { transform: rotate(90deg); }

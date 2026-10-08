@@ -24,6 +24,10 @@ const DEFAULT_THEME: 'light' | 'dark' | 'system' =
 export type CalendarLayerKey = 'events' | 'reminders' | 'deadlines' | 'taskScheduled' | 'taskDeadlines' | 'tentative';
 export type CalendarLayerVisibility = Record<CalendarLayerKey, boolean>;
 
+export const STICKY_SCALE_MIN = 0.8;
+export const STICKY_SCALE_MAX = 1.6;
+export const STICKY_SCALE_STEP = 0.1;
+
 interface SettingsState {
   // ── Appearance ───────────────────────────────────────────────────────────────
   theme:    'light' | 'dark' | 'system';
@@ -81,15 +85,21 @@ interface SettingsState {
   // Android: the open note's heading stays put instead of hiding as you scroll down.
   noteHeadingPinned:   boolean;
   setNoteHeadingPinned: (v: boolean) => void;
+  // The headings you're inside stay at the top of the note as a one-line trail while you scroll.
+  stickyHeadings:      boolean;
+  toggleStickyHeadings: () => void;
+  // The trail's text size, as a multiple of its default (STICKY_SCALE_MIN–MAX).
+  stickyHeadingsScale: number;
+  stepStickyHeadingsScale: (dir: 1 | -1) => void;
   setNoteHeadingStyle: (s: 'academic' | 'highlight') => void;
 
   noteEditorZoom:      number;   // multiplier on editor font size; 1.0 = default, range 0.7–2.0
   nudgeNoteEditorZoom: (delta: number) => void;
 
-  chronicleTreeWidth:    number;   // Chronicle notebook-tree panel width in px; range 160–480
-  chronicleListWidth:    number;   // Chronicle note-list panel width in px; range 160–480
-  setChronicleTreeWidth: (w: number) => void;
-  setChronicleListWidth: (w: number) => void;
+  // Side panels and columns the user has resized by dragging their edge (components/ResizeHandle),
+  // by pane id. A pane with no entry keeps its CSS width.
+  paneWidths:    Record<string, number>;
+  setPaneWidth:  (id: string, width: number | null) => void;
 
   // ── Calendar view ─────────────────────────────────────────────────────────────
   shadePastDays:             boolean;
@@ -146,6 +156,12 @@ export const useSettingsStore = create<SettingsState>()(
       setNoteBackdrop:     (b) => set({ noteBackdrop: b }),
       noteHeadingPinned:   false,
       setNoteHeadingPinned: (v) => set({ noteHeadingPinned: v }),
+      stickyHeadings:      true,
+      toggleStickyHeadings: () => set((s) => ({ stickyHeadings: !s.stickyHeadings })),
+      stickyHeadingsScale: 1,
+      stepStickyHeadingsScale: (dir) => set((s) => ({
+        stickyHeadingsScale: Math.round(Math.max(STICKY_SCALE_MIN, Math.min(STICKY_SCALE_MAX, s.stickyHeadingsScale + dir * STICKY_SCALE_STEP)) * 10) / 10,
+      })),
       setNoteHeadingStyle: (s) => set({ noteHeadingStyle: s }),
 
       noteEditorZoom:      1.0,
@@ -153,10 +169,12 @@ export const useSettingsStore = create<SettingsState>()(
         noteEditorZoom: Math.round(Math.min(2.0, Math.max(0.7, s.noteEditorZoom + delta)) * 10) / 10,
       })),
 
-      chronicleTreeWidth:    220,
-      chronicleListWidth:    220,
-      setChronicleTreeWidth: (w) => set({ chronicleTreeWidth: Math.round(Math.max(160, Math.min(480, w))) }),
-      setChronicleListWidth: (w) => set({ chronicleListWidth: Math.round(Math.max(160, Math.min(480, w))) }),
+      paneWidths:    {},
+      setPaneWidth:  (id, width) => set((s) => {
+        const next = { ...s.paneWidths };
+        if (width === null) delete next[id]; else next[id] = Math.round(width);
+        return { paneWidths: next };
+      }),
 
       notifyReminders:      true,
       notifyEvents:         true,
@@ -206,7 +224,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 8,
+      version: 10,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -252,6 +270,22 @@ export const useSettingsStore = create<SettingsState>()(
         if (version < 7 && state.noteBackdrop === undefined) state.noteBackdrop = null;
         // v7 → v8: noteHeadingPinned (Android Notes, 2026-10-09).
         if (version < 8 && state.noteHeadingPinned === undefined) state.noteHeadingPinned = false;
+        // v8 → v9: stickyHeadings (Notes, 2026-10-09) — on by default.
+        if (version < 9 && state.stickyHeadings === undefined) state.stickyHeadings = true;
+        // v9 → v10: stickyHeadingsScale, and paneWidths (every resizable pane, 2026-10-09) —
+        // the Notes columns' own widths move into it.
+        if (version < 10) {
+          if (state.stickyHeadingsScale === undefined) state.stickyHeadingsScale = 1;
+          const old = state as unknown as { chronicleTreeWidth?: number; chronicleListWidth?: number };
+          if (state.paneWidths === undefined) {
+            const widths: Record<string, number> = {};
+            if (typeof old.chronicleTreeWidth === 'number' && old.chronicleTreeWidth !== 220) widths['notes-tree'] = old.chronicleTreeWidth;
+            if (typeof old.chronicleListWidth === 'number' && old.chronicleListWidth !== 220) widths['notes-list'] = old.chronicleListWidth;
+            state.paneWidths = widths;
+          }
+          delete old.chronicleTreeWidth;
+          delete old.chronicleListWidth;
+        }
         return state;
       },
     }

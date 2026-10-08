@@ -18,6 +18,9 @@ import { RowAction } from '@/components/RowHoverActions/RowAction';
 import type { CollectionId } from '@/types';
 import type { Overview, OverviewId, OverviewQuery, OverviewRow } from '@/types/overview';
 import styles from './OverviewSection.module.css';
+import { DisclosureIcon } from '@/components/Icons';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 const L = LABELS.overview;
 
@@ -93,6 +96,7 @@ function RowView({ row, showEndeavour, today }: { row: OverviewRow; showEndeavou
 // The Overview section: everything, from every app, for a question — an Endeavour's automatic
 // Overview or a saved one (see src/overview/ and docs/features/overview.md).
 export function OverviewSection() {
+  const paneResize = usePaneWidth('overview-sidebar', { edge: 'right', min: 160, max: 480 });
   const collections = useTaskStore((s) => s.collections);
   const overviews   = useOverviewStore((s) => s.overviews);
   const selection   = useUIStore((s) => s.overviewSelection);
@@ -131,7 +135,8 @@ export function OverviewSection() {
 
   return (
     <div className={styles.shell}>
-      <aside className={styles.sidebar}>
+      <aside style={paneResize.style} className={styles.sidebar}>
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <div className={styles.sidebarHeader}>
           <span className={styles.sidebarTitle}>{L.endeavoursHeading}</span>
         </div>
@@ -183,7 +188,7 @@ export function OverviewSection() {
                 <section key={g.key} className={styles.group}>
                   {g.label && (
                     <button className={styles.groupHeader} onClick={() => toggleGroup(g.key)} aria-expanded={!isCollapsed}>
-                      <span className={`${styles.chevron} ${isCollapsed ? '' : styles.chevronOpen}`}>▸</span>
+                      <DisclosureIcon open={!isCollapsed} />
                       {g.label} <span className={styles.groupCount}>{g.rows.length}</span>
                     </button>
                   )}

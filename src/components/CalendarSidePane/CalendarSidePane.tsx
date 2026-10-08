@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useCalendarStore } from '@/store/calendarStore';
-import { ArchiveIcon } from '@/components/Icons';
+import { ArchiveIcon, DisclosureIcon } from '@/components/Icons';
 import { useUIStore, type CalendarViewMode } from '@/store/uiStore';
 import { useSettingsStore, type CalendarLayerKey } from '@/store/settingsStore';
 import { useAuthStore } from '@/store/authStore';
@@ -18,6 +18,8 @@ import type { ScheduleId, ScheduleTemplate, CalendarConnection } from '@/types';
 import styles from './CalendarSidePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { alertDialog, confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 // Which calendar item categories render, filtered via CalendarEvent.eventType/status and
 // CalendarReminder.reminderType. See settingsStore.calendarLayerVisibility for the actual
@@ -222,6 +224,7 @@ interface Props {
 // "External calendar sync") is expected to join Google as a second entry within the
 // existing "Imported calendars" section, not a new section of its own.
 export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) {
+  const paneResize = usePaneWidth('calendar-side', { edge: 'right', min: 220, max: 560 });
   const { isAndroid } = usePlatform();
   const open  = useUIStore((s) => s.schedulesOpen);
   const close = useUIStore((s) => s.closeSchedules);
@@ -354,7 +357,8 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
       {/* Only Android's full-screen sheet needs a dimming backdrop — the desktop inline
           panel isn't covering anything, so there's nothing to dim. */}
       {isAndroid && <div className={styles.overlay} onClick={close} />}
-      <aside className={styles.pane} role="complementary" aria-label="Calendar layers and schedules">
+      <aside style={paneResize.style} className={styles.pane} role="complementary" aria-label="Calendar layers and schedules">
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <div className={styles.header}>
           <span className={styles.heading}>Calendar</span>
           <button className={styles.closeBtn} onClick={close} aria-label="Close">✕</button>
@@ -534,7 +538,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
           {archivedItems.length > 0 && (
             <div className={styles.section}>
               <button type="button" className={styles.archivedToggle} onClick={() => setArchivedOpen((o) => !o)} aria-expanded={archivedOpen}>
-                <span className={`${styles.chevron} ${archivedOpen ? styles.chevronOpen : ''}`}>▸</span>
+                <DisclosureIcon open={archivedOpen} />
                 <ArchiveIcon width={14} height={14} /> Archived ({archivedItems.length})
               </button>
               {archivedOpen && (

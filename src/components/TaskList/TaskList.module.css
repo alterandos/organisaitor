@@ -31,13 +31,6 @@
 
 .sectionToggle:hover { color: var(--color-text); }
 
-.chevron {
-  display: inline-block;
-  transition: transform 140ms ease;
-}
-
-.chevronOpen { transform: rotate(90deg); }
-
 /* ── Task group (parent + subtasks) ───────────────────── */
 
 .taskGroup {
