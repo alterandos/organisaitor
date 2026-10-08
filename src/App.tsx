@@ -391,6 +391,14 @@ export default function App() {
         return;
       }
 
+      // Quick Access: also from inside a text field. Left to the webview there, Ctrl+G is its
+      // own find-next (2026-10-09); neither Ctrl+G nor Alt+G types anything.
+      if (matchesHotkeyId(e, 'action-quick-access')) {
+        e.preventDefault();
+        toggleQuickAccess();
+        return;
+      }
+
       // Don't fire when typing in inputs
       const tag = (e.target as HTMLElement)?.tagName;
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
@@ -432,11 +440,6 @@ export default function App() {
       // (action-back/action-forward are dispatched above, before the isTyping guard, so
       // Alt+Left/Right also works while focus is in a text field.)
 
-      if (matchesHotkeyId(e, 'action-quick-access')) {
-        e.preventDefault();
-        toggleQuickAccess();
-        return;
-      }
 
       if (matchesHotkeyId(e, 'nav-overview'))  { e.preventDefault(); setActiveView('overview');  return; }
       if (matchesHotkeyId(e, 'nav-tasks'))     { e.preventDefault(); setActiveView('tasks');     return; }

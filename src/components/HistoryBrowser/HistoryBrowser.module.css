@@ -47,10 +47,15 @@
   height: 22rem;
   perspective: 1400px;
   transform-style: preserve-3d;
+  /* The side cards sit behind the stage's own plane (translateZ < 0), so the stage would take
+     every click meant for them; only the cards take clicks. A click between cards reaches the
+     overlay and closes, like any click outside. */
+  pointer-events: none;
 }
 
 /* A card's look is PlaceCard.module.css; here only where the carousel puts it. */
 .stage > .card {
+  pointer-events: auto;
   position: absolute;
   top: 50%;
   left: 50%;
