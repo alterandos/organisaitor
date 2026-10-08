@@ -38,7 +38,7 @@ Decided design (D5):
 - On Android, open the provider's authorise URL with `@capacitor/browser`.
 - The callback, after saving the connection exactly as today, redirects to `organisaitor://oauth-done?provider=<strava|google-calendar>&status=<connected|error>&reason=…` **when the flow was started from the Android app**, and to today's web URL otherwise.
 - The callback needs to know where the flow started. The recommended way: record it with the nonce. Add an optional `p_client text default 'web'` to `mint_oauth_state` (or a new overload) and make the save functions return it. See `supabase/migrations/032_oauth_state.sql`.
-- Follow CLAUDE.md "Live migration status" exactly. Additive only (ADR-9). List it as **Pending — not yet run**, tell the user to run it, and never mark it Applied yourself.
+- Follow CLAUDE.md "Supabase sync → Migrations" exactly (the record is `docs/supabase/migrations.md`). Additive only (ADR-9). List it as **Pending — not yet run**, tell the user to run it, and never mark it Applied yourself.
 - Use the next free migration number. `041`/`042` are reserved in planning docs for notifications work, so if you take 041, renumber those mentions in `docs/android/05-notifications.md` and BACKLOG.md.
 - **Degrade gracefully** until the migration is applied: if the two-argument mint fails, fall back to the current call, so web and desktop never break.
 - Register the `organisaitor` scheme in `AndroidManifest.xml` (intent-filter on `MainActivity`; see Capacitor's deep-link docs).

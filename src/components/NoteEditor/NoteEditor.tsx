@@ -91,6 +91,7 @@ import { useNoteView } from '@/store/noteViews';
 import styles from './NoteEditor.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
+import { log } from '@/utils/log';
 
 // Read a note by id THROUGH noteView() — an encrypted note's title/content/tabs are blanked in
 // the store and only resolve via the plaintext cache (see services/noteSecrets.ts).
@@ -2046,7 +2047,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                         return;
                       }
                       useNoteStore.getState().encryptNote(id as NoteId).catch((err) => {
-                        console.error('[NoteEditor] encryption toggle failed:', err);
+                        log.error('NoteEditor', 'encryption toggle failed', err);
                         void alertDialog(err instanceof Error ? err.message : 'Could not change encryption for this note.');
                       });
                       setNoteMenuOpen(false);

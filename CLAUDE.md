@@ -52,13 +52,20 @@ The suite is extended to Android via **Capacitor**, wrapping this same codebase 
 | `CLAUDE.md` (this file) | Overview and terminology, type system, stores, Supabase sync and live migration status, file structure, component patterns, hotkey rules, coding conventions, **pattern governance** |
 | `docs/features/implemented-features.md` | Running log of built features: what, why, files, integration points, bugs found and how |
 | `docs/features/fitness.md`, `schedules.md`, `external-calendar-sync.md`, `overview.md` | The big self-contained features |
-| `docs/features/not-yet-implemented.md` | Short summary list (full specs are in BACKLOG.md) |
+| `docs/supabase/migrations.md` | The migration record: live status, history, table summary. **Read only when a task writes or depends on a migration** |
+| `docs/architecture/file-structure.md` | The map of every folder and notable file |
+| `docs/architecture/ui-store.md` | The full uiStore state and action listing |
+| `docs/features/notes-objects.md` | How `\` inline objects in notes look and behave |
 | `docs/android/` | Android/Capacitor architecture, phased plan, and `implementation-status.md`; `05-notifications.md` (notifications/reminders design), `10-gap-analysis.md` (desktop→Android gaps, decisions, workstreams) and `11-design-and-coding-patterns.md` (Android design and coding rules — read before any Android work) |
 | `docs/agent-tasks/` | Self-contained briefs for follow-up work an agent can pick up cold |
 | `docs/ai/` | The AI agent integration: `01-capability-inventory.md` (what the app can do, invariants, decisions, what is left) and `02-command-layer.md` (the built command layer: design, how to add a command, tests) |
 | `BACKLOG.md` | Confirmed-but-unbuilt requirements, and the **Pattern retrofit backlog** |
 
 **Cross-references:** wherever this file says "see Implemented features" or names a feature entry in quotes ("Shared item actions", "Cross-app linking", "Timepicker rebuild", "Suite-wide Quick Access pane", …), it means the matching bullet in `docs/features/implemented-features.md` — search for the quoted name. Fitness, Schedules and external calendar sync have their own files in `docs/features/`.
+
+### Reading budget — read only what the task needs
+
+CLAUDE.md is read in full every session; nothing else is. **Every other doc is reference: open it only when the task touches its subject**, and prefer Grep/Glob and partial reads (`offset`/`limit`) over reading a long file whole. Tokens spent reading what the task doesn't need are wasted. In particular: the migration record is for migration work only; `implemented-features.md` and BACKLOG.md are searched by feature name, never read top to bottom; the file-structure map is for when a search doesn't find something.
 
 ### How to write and maintain the docs
 
@@ -69,7 +76,8 @@ The split only stays useful if every agent follows the same structure. These rul
 | What you're recording | Where |
 |-----------------------|-------|
 | A rule, pattern, convention, or architecture fact that applies across features | CLAUDE.md (the matching section) |
-| A store, persist key/version, type, migration, or a new folder/file-structure entry | CLAUDE.md (Stores / Type system / Supabase sync / File structure) |
+| A store, persist key/version, type, or a rule | CLAUDE.md (Stores / Type system / Supabase sync) |
+| A new folder or notable file; a migration's record | `docs/architecture/file-structure.md`; `docs/supabase/migrations.md` |
 | What a feature does, why, which files, integration points, bugs found, what was verified | `docs/features/implemented-features.md` |
 | A feature big enough to have its own architecture and sub-sections (roughly 100+ lines) | its own file in `docs/features/`, **plus** a one-line entry in `implemented-features.md` linking to it, **plus** a row in the Doc map above and in `docs/README.md` |
 | Confirmed requirement not yet built, or a known gap to retrofit | BACKLOG.md (features) / its "Pattern retrofit backlog" (consistency work) |
@@ -87,7 +95,7 @@ The split only stays useful if every agent follows the same structure. These rul
 
 **6. Agent briefs (`docs/agent-tasks/NN-name.md`).** Numbered, self-contained (a cold agent needs only the brief plus CLAUDE.md), each task with *the problem, what done looks like, how to verify*, and a "When done" section. Put a `Status:` line under the title (`Not started` / `In progress` / `Done YYYY-MM-DD — outcome`). Don't delete a finished brief; mark it done so the reasoning survives. **The agent doing the work keeps the Status line current and logs the work itself — the user is never expected to.**
 
-**7. Migration status is special.** Never mark a migration `Applied` on your own; only after the user says they've run it (rules under "Live migration status").
+**7. Migration status is special.** Never mark a migration `Applied` on your own; only after the user says they've run it (rules under "Supabase sync → Migrations").
 
 **8. Patterns.** A new or changed pattern follows "Pattern governance" below: recorded here, applied to new code, retrofit audit logged in BACKLOG.md.
 
@@ -105,7 +113,7 @@ The split only stays useful if every agent follows the same structure. These rul
 - [ ] BACKLOG.md updated if requirements changed
 - [ ] `config/labels.ts` updated if new user-facing strings
 - [ ] `src/types/index.ts` updated if new types
-- [ ] If a SQL migration was added: it includes its own `grant … to authenticated` (if it creates a table), is listed in "Migration history" **and** in "Live migration status" as `Pending — not yet run`, and the user has been told to run it — it only becomes `Applied` once they confirm
+- [ ] If a SQL migration was added: it includes its own `grant … to authenticated` (if it creates a table), is listed in `docs/supabase/migrations.md` ("Migration history" **and** the status table, as `Pending — not yet run`), and the user has been told to run it — it only becomes `Applied` once they confirm
 - [ ] If a new persisted store was added: its key is in `PERSISTED_STORAGE_KEYS` (`src/config/backup.ts`) and it has a `version`
 - [ ] If a new pattern was defined: recorded here, applied to new code, and the retrofit audit logged in BACKLOG.md
 - [ ] "Quality baseline" met (accessibility, security, performance, no unapproved dependency)
@@ -339,134 +347,15 @@ Current taskStore v12 migrate backfills: `routineTasks: []`, `repeatConfig: null
 
 ### uiStore — key state and actions
 
-uiStore is memory-only **except** the fields marked "persisted" below — those survive
+uiStore is memory-only **except** the fields in its `partialize` — those survive
 closing the app (`todo-ui-session`, localStorage; see PERSISTED_STORAGE_KEYS). Everything
 else (every modal/pane/dropdown open-state, every "currently editing X" pointer) resets on
 reload by design, so the app never reopens pointing at a stale modal.
 
-```typescript
-// Active section (pending rename: activeView→activeSection, AppView→AppSection, setActiveView→setActiveSection)
-activeView: AppView               // 'tasks' | 'calendar' | 'records'  — persisted
-setActiveView(view, opts?: { mode?: 'push' | 'back' | 'forward' })  // mode defaults to 'push'
-
-// The ONE back/forward history (store/navHistory.ts) — Alt+Left/Backspace, Alt+Right, the
-// Android back button and the Alt+N history browser all walk it. A stop is a *place* (NavPlace):
-// a section plus where you were in it. What counts as a stop (the user, 2026-10-07): Notes, every
-// note (with its tab and notebook); Tasks / Lists, one per visit, back to the open task / list;
-// Calendar, one per visit, back to the period and view; Records, its tracker/routine; Overview,
-// its selection. Browser semantics: a normal navigation pushes where you're leaving and clears
-// the forward stack. Both persisted; capped at MAX_NAV_HISTORY (40). Replaced sectionHistory and
-// notesHistory (uiStore v3).
-navHistory: NavPlace[], navForward: NavPlace[]   // most-recent-first
-setActiveView(view, { mode: 'silent' })          // history's own moves; everything else pushes
-openNote(id, tabId?, { mode: 'silent' })         // in Notes, the note being left is a stop
-navigateBack(): boolean, navigateForward()        // navigateBack reports whether it moved (Android minimises when it didn't)
-travelHistory(steps): boolean                     // several stops at once (the history browser); stops in between stay
-currentPlace(): NavPlace
-historyBrowserOpen, openHistoryBrowser(), closeHistoryBrowser()
-// A new section with its own "where was I" (a selected item, a period) adds it to NavPlace,
-// capturePlace and goToPlace (bottom of uiStore.ts), and a case in describePlace
-// (components/HistoryBrowser/) — or it is one stop that just reopens the section.
-
-// Endeavour focus filter (CollectionFilterPicker, header) — keyed per section so each
-// of Tasks/Calendar/Records/Notes remembers its own focused Endeavour independently;
-// switching sections and back preserves it. Lists/Portfolio never populate an entry
-// (picker isn't shown there). Default per section is null ("All Endeavours").
-activeCollectionIdByView: Partial<Record<AppView, string | null>>
-setActiveCollection(id)           // writes to activeCollectionIdByView[current activeView]
-selectActiveCollectionId(state)   // plain selector fn (not a hook) — reads the current section's value; use as useUIStore(selectActiveCollectionId)
-endeavourPickerOpen: boolean      // CollectionFilterPicker dropdown open state (E / Ctrl+E)
-openEndeavourPicker(), closeEndeavourPicker(), toggleEndeavourPicker()
-
-// Purpose filter (PurposeFilterPicker, header, Tasks section only) — multi-select;
-// reuses the pre-existing activePurposeIds/togglePurposeFilter (unchanged). Open state:
-purposePickerOpen: boolean        // P / Ctrl+P
-openPurposePicker(), closePurposePicker(), togglePurposePicker()
-
-// Both picker open-states are force-closed on any setActiveView() call, so switching
-// sections never leaves one stuck open in the background.
-
-// Manage view (library administration — Endeavours/Purposes/Tags), opened by clicking
-// (not hovering) the header hamburger button. Left-nav tabs, extensible — see ManageSection.
-manageOpen: boolean
-manageSection: ManageSection      // 'endeavours' | 'purposes' | 'tags'
-openManage(section?), closeManage(), setManageSection(section)
-
-// Modals (openModal: ModalType)
-// ModalType = 'add-task'|'add-collection'|'add-purpose'|'add-tag'|
-//             'add-calendar-item'|'add-tracker'|'add-entry'|'add-routine'|null
-showAddTask(), showAddSubtask(parentId?), showAddCollection()
-showAddPurpose(), showAddTag()
-showAddCalendarItem(date?, kind?)
-showAddTracker(), showAddEntry(trackerId), showAddRoutine()
-closeModal()
-
-// Task pane
-openTaskPane(id), closeTaskPane()
-editingTaskId: string | null
-tasksLastEditingTaskId: string | null   // last-open pane, restored on returning to Tasks (no TTL — see uiStore's own comment for why not)
-
-// TaskList expand/collapse — lifted out of TaskList's own local state so it survives
-// navigating away (TaskList unmounts on every section switch) and back. Memory-only (not
-// persisted) — resets on reload, same scope as sortField/sortDir.
-taskExpandedIds: string[]
-toggleTaskExpanded(taskId), clearTaskExpanded()  // setTaskViewMode() also clears it itself
-
-// Settings / account / integrations (slide-in panes)
-settingsOpen, openSettings(), closeSettings()
-accountOpen, openAccount(), closeAccount()
-integrationsOpen, openIntegrations(), closeIntegrations()
-
-// Edit panes (slide-in from right)
-editTrackerOpen, editingTrackerId, openEditTracker(id), closeEditTracker()
-editingEntryId, openEditEntry(id), closeEditEntry()
-editingCalendarEventId, openCalendarEventPane(id), closeCalendarEventPane()
-editingCalendarReminderId, openCalendarReminderPane(id), closeCalendarReminderPane()
-
-// Calendar last-edited memory — persisted; restores whichever event/reminder pane was open
-// when Calendar was last left, on returning to Calendar (any path — section click, hotkey, or
-// Alt+Left/Right), but only within CALENDAR_LAST_EDITING_TTL_MS (30 min, checked at read time
-// in setActiveView — no background timer). Not cleared when the pane is closed while still in
-// Calendar — "last edited," not "currently open."
-calendarLastEditing: { type: 'event' | 'reminder'; id: string; at: string } | null
-
-// Which date/period Calendar is showing — lifted out of CalendarView's own local state
-// (2026-09-25) so it survives leaving/re-entering the section, same reasoning as
-// calendarLastEditing above but unconditional (no TTL — this is just "where were you
-// looking," not reopening an edit UI). Month view reads year/month; week/day read
-// calendarSelectedDate. calendarViewMode (month/week/day) was already lifted earlier.
-calendarYear: number, calendarMonth: number /* 0-indexed */, calendarSelectedDate: string /* YYYY-MM-DD */
-setCalendarYear(v), setCalendarMonth(v)   // v: number | ((prev: number) => number), same overload as React's setState
-setCalendarSelectedDate(v: string)
-
-// Notes: which notebooks are expanded in the Chronicle tree (persisted since v4, so the tree
-// reopens as it was left; ids of deleted notebooks are harmless and ignored)
-expandedNoteTagIds: NoteTagId[], toggleNoteTagExpanded(id)
-
-// Android: what Notes opens on with no note open (MobileNotes) — persisted since v5
-mobileNotesHome: 'notebooks' | 'recent', setMobileNotesHome(home)
-
-// Notes: which column has keyboard focus (ChronicleView's arrow-key navigation), back to 'tree'
-// on entering Notes; decides what N/Space creates. Memory-only.
-notesFocusedColumn: 'tree' | 'list' | 'editor', setNotesFocusedColumn(col)
-
-// Text carried from one creation pane to the next when CreateKindSwitcher switches kind.
-// Cleared by closeModal.
-createDraft: string | null, setCreateDraft(draft)
-
-// Notes: a passage to select once a note is open (services/notePassage.ts sets it with openNote;
-// NoteEditor consumes it), and the Glossary / Review views in place of the tree (memory-only).
-requestedNotePassage: { noteId, mark, attr, value } | null, setRequestedNotePassage(p)
-notesGlossaryOpen, openNotesGlossary(), closeNotesGlossary()
-notesReviewOpen, openNotesReview(), closeNotesReview()
-
-// Records
-activeTrackerId: string | null
-setActiveTracker(id)
-pendingTrackerId: string | null  // passed to AddEntryModal
-```
-
----
+**Rules that constrain new code** (the full state and action listing is `docs/architecture/ui-store.md`; the store itself is the truth):
+- **One back/forward history** (`store/navHistory.ts`): Alt+Left/Backspace, Alt+Right, the Android back button and the Alt+N history browser all walk `navHistory`/`navForward`. A normal navigation pushes; history's own moves use `{ mode: 'silent' }`. **A new section with its own "where was I"** (a selected item, a period) adds it to `NavPlace`, `capturePlace` and `goToPlace` (bottom of `uiStore.ts`) and a case in `describePlace` (`components/HistoryBrowser/`); otherwise it is one stop that just reopens the section.
+- **Per-section memory** (the focused Endeavour `activeCollectionIdByView`, Calendar's period and view, Notes' tab and expanded notebooks, Lists' list and tab) is persisted, so a section reopens where it was left. Modal/pane open state and "currently editing" pointers are not.
+- Picker open-states (`endeavourPickerOpen`, `purposePickerOpen`) are force-closed by every `setActiveView()`.
 
 ## Supabase sync
 
@@ -485,115 +374,16 @@ Every new column on a persisted type needs:
 - Never call `authStore.signOut()`/wipe the stores while `watch()` subscriptions are live — the wipe would be read as "user deleted everything" (`stopSync()` first; see `authStore.signOut`).
 - **Restore marker** (`sync_markers`, migration `042`, 2026-10-06). A backup restore uploads records with their *old* `updatedAt`, so another device holding newer copies would push them back. `restoreBackupData` therefore calls `markRestored()` after its `forceUpload`, writing one account-level `restored_at`. A device that loads after a restore it hasn't seen (`todo-sync-restore-seen`, per device, not in `PERSISTED_STORAGE_KEYS`, cleared on sign-out) treats the cloud as the truth for that load. Local records and queued changes older than the restore give way; later edits still win. A device that has never loaded the account just records the marker. Logic: "Restore marker" in `syncService.ts` (`restoreCutoff`, read by `mergeRecords`); tests in `syncService.test.ts`. If the table can't be read, it's skipped.
 
-### Live migration status (Supabase project `zwbyvspbamovlqfxpjft`)
+### Migrations
 
-**This table is the only source of truth for which SQL has actually been executed against the live database.** The files in `supabase/migrations/` only *describe* schema — nothing applies them automatically (no `supabase/config.toml`, project isn't CLI-linked); the user runs each one by hand in the Supabase SQL editor. So a migration file existing, or code depending on it, tells you nothing about whether it's live.
+**Which SQL has actually been run against the live database is recorded only in `docs/supabase/migrations.md`** (its status table; the same file has the history and a summary of every table). Read it only when your task writes or depends on a migration. The files in `supabase/migrations/` only *describe* schema — nothing applies them automatically (no `supabase/config.toml`, project isn't CLI-linked); the user runs each one by hand in the Supabase SQL editor. So a migration file existing, or code depending on it, tells you nothing about whether it's live.
 
 **Rules for every future migration (a standing pattern, not a one-off):**
 1. Write the file in `supabase/migrations/NNN_description.sql` — and if it creates a table, it **must include its own `grant select, insert, update, delete on … to authenticated`** (raw SQL doesn't auto-grant; without it the API 403s before RLS runs — 019–021 forgot this and needed 022).
-2. Add a row to **"Migration history"** below (what it does) **and** a row to the table below with status **`Pending — not yet run`**.
+2. In `docs/supabase/migrations.md`, add a row to **"Migration history"** (what it does) **and** to the status table with status **`Pending — not yet run`**.
 3. Tell the user which file(s) to run and in what order.
 4. **Only after the user confirms they've run it**, change the row to **`Applied`** with the date and "confirmed by user". Never mark a migration applied on your own, and never assume one is applied because its file exists.
 5. Code that depends on a still-`Pending` migration must degrade gracefully rather than break unrelated features (sync already isolates per-table failures — see "Per-table failure isolation").
-
-| Migrations | Status | Confirmed |
-|------------|--------|-----------|
-| `001` – `027` | **Applied** | Everything through `027` has been run against the live project, confirmed by the user. `001`–`022` as a batch on 2026-09-19 ("ran all SQLs from 001 to 022"), `023` separately ("Migration 23 SQL has been completed"), and `024`–`027` on 2026-09-20 ("24, 25, 26, and 27 have all been run"; then "All Supabase SQL has been run up to 027 inclusive"). Reported by the user, not independently verified. `022` (grants) was written *after* 019–021 and run after them. Earlier "written, not yet run" notes on 012–021 predate this and were stale — removed. |
-| `029` | **Applied** | `029_calendar_archive.sql` (archive timestamp + reason on calendar events and reminders) — run against the live project, confirmed by the user 2026-09-20 ("I've run SQL 029 in Supabase"). Reported by the user, not independently verified. |
-| `030` | **Applied** | `030_speech_usage.sql` (voice dictation usage table + `record_speech_usage()` function) — run against the live project, confirmed by the user 2026-09-20 ("030 has been run in Supabase"). Reported by the user, not independently verified. |
-| `031` | **Applied** | `031_drop_cross_app_links.sql` (drops the never-used `cross_app_links` table) — run against the live project, confirmed by the user 2026-09-20 ("031 has been run"). Reported by the user, not independently verified. |
-| `028` | **Applied** | `028_task_archive_reason.sql` (task archive timestamp + reason) — run against the live project, confirmed by the user 2026-09-20 ("SQL task zero two eight has been run in Supabase"). Reported by the user, not independently verified. |
-| `032` | **Applied** | `032_oauth_state.sql` (`oauth_states` nonce table + `mint_oauth_state` / `save_strava_connection` / `save_calendar_connection` functions — the OAuth `state` is now a single-use nonce instead of the user's access token) — run against the live project, confirmed by the user 2026-09-20 ("032 has been run in supabase"). Reported by the user, not independently verified. |
-| `033` | **Applied** | `033_calendar_links.sql` (`links text[]` on `calendar_events` and `calendar_reminders`). every event/reminder upsert now sends `links`, so those two tables reject writes until it is applied (sync isolates the failure per table; nothing else breaks). |
-| `034` | **Applied** | `034_trash_items.sql` (new `trash_items` table — the suite-wide Recycling Bin; see "Recycling Bin" above). `trashStore` still works fully locally without it (IndexedDB-backed) — only cross-device sync of trash entries is blocked until this runs, isolated per-table like every other migration. |
-| `035` | **Applied** | `035_reminder_tentative.sql` (`status text` on `calendar_reminders`, extending the Events-only "tentative" flag to Reminders too, per the request 2026-09-24). Every reminder upsert now sends `status`, so `calendar_reminders` rejects writes until this runs (sync isolates the failure per table; nothing else breaks). |
-| `036` | **Applied** | `036_calendar_event_background.sql` (`background boolean` + `color text` on `calendar_events` — "Background / banner calendar events", 2026-09-27). Every event upsert now sends both columns, so `calendar_events` rejects writes until this runs (sync isolates the failure per table; nothing else breaks). |
-| `037` | **Applied** | `037_calendar_deadlines.sql` (new `calendar_deadlines` table + `tasks.calendar_deadline_id` — "Deadline calendar kind", 2026-09-27). `calendar_deadlines` sync (a new entry in `SYNC_TABLES`) fails entirely until this runs; isolated per-table like every other migration. |
-| `038` | **Applied** | `038_list_links.sql` (`cross_app_refs jsonb` + `reset_on_task_complete boolean` on `lists` — "Lists: links from tasks, calendar items and notes", 2026-09-28). Every list upsert now sends both columns, so `lists` rejects writes until this runs (sync isolates the failure per table; nothing else breaks). |
-| `039` | **Applied** | `039_task_item_links.sql` (`item_links jsonb` on `tasks` — "Task links", 2026-10-01). Every task upsert now sends `item_links`, so `tasks` rejects writes until this runs (sync isolates the failure per table; the change stays queued locally and syncs once it's applied). |
-| `040` | **Applied** | `040_overviews.sql` (new `overviews` table + `lists.collection_id` — "Overview", 2026-10-01). Until it runs: saved Overviews don't sync (they still work locally), and every list upsert (which now sends `collection_id`) is rejected, so list changes stay queued locally. Sync isolates both per table; nothing else breaks. |
-| `041` | **Applied** | `041_oauth_state_client.sql` (`oauth_states.client` + a two-argument `mint_oauth_state(p_provider, p_client)`, the save functions return `'ok:android'` for an Android flow, new `discard_oauth_state(p_nonce)` — "Android W1: platform services", 2026-10-04). Until it runs, the Android app falls back to the one-argument mint: Strava/Google connect still saves the connection, but the callback lands on the web app inside the in-app browser instead of returning to the app. Web and desktop are unaffected either way. |
-| `042` | **Applied** | `042_sync_markers.sql` (new `sync_markers` table: the account's restore marker). Until it runs, restore works as before and other devices can still push older copies back over a restore; nothing else is affected. |
-| `044` | **Applied** | `044_series_links.sql` (`series_id` + `series_date` text on `calendar_events`, `calendar_reminders`, `calendar_deadlines`: a date taken out of a repeating series keeps its link back). Every event/reminder/deadline upsert now sends both columns, so those tables reject writes until it runs (sync isolates the failure per table; changes stay queued locally). |
-| `043` | **Applied** | `043_done_dates.sql` (`done_dates jsonb` on `calendar_reminders` and `calendar_deadlines`: Reminder/Deadline occurrences marked done). Every reminder/deadline upsert now sends `done_dates`, so those two tables reject writes until it runs (sync isolates the failure per table; changes stay queued locally). |
-| `046` | **Applied** | `046_task_repeat.sql` (`repeat jsonb` on `tasks` — "Recurring tasks", 2026-10-07). Every task upsert now sends `repeat`, so `tasks` rejects writes until it runs (sync isolates the failure per table; changes stay queued locally). |
-| `047` | **Applied** | `047_note_tab_dates.sql` (`main_tab_updated_at timestamptz` on `notes`: when the main tab's content last changed, for the tab's hover; extra tabs keep their dates inside the existing `tabs` jsonb). Every note upsert now sends it, so `notes` rejects writes until it runs (sync isolates the failure per table; changes stay queued locally). |
-| `045` | **Applied** | `045_notification_acks.sql` (`remind_occurrence` on `calendar_events`/`calendar_reminders`/`calendar_deadlines`; `seen_dates jsonb` on events and deadlines). Every upsert to those three tables now sends them, so they reject writes until it runs (sync isolates the failure per table; changes stay queued locally). |
-
-### Migration history
-
-| File | What it does |
-|------|-------------|
-| `001_initial.sql` | Base tables: tasks, collections, tags, purposes, calendar_events, calendar_reminders |
-| `002_grants.sql` | RLS + grants |
-| `003_tracker_entries.sql` | `tracker_entries` table |
-| `004_collection_tags.sql` | `tag_ids jsonb` column on collections |
-| `005_routine_fields.sql` | `routine_tasks jsonb`, `repeat_config jsonb` on collections |
-| `006_tag_notes.sql` | `notes text` on tags |
-| `007_event_end_date.sql` | `end_date text` on calendar_events |
-| `008_notes_initial.sql` | notes, note_tags, cross_app_links tables (`cross_app_links` was never used and is dropped by 031) |
-| `009_task_scheduled.sql` | `scheduled_at text`, `scheduled_time text`, `calendar_event_id text` on tasks |
-| `010_collection_endeavour.sql` | `collection_id text` on collections (trackers/routines → Endeavour) |
-| `011_archiving.sql` | `archived_at timestamptz` on collections and purposes |
-| `012_fitness_strava.sql` | `fitness_strava_connection` table (Strava OAuth tokens) |
-| `013_soft_delete.sql` | `deleted_at timestamptz` on all 7 synced tables — soft-delete tombstones so deletions propagate across devices |
-| `014_schedules_and_lists.sql` | First-ever Supabase tables for Schedules and Lists: `schedules`, `lists`, `list_items`, `list_types` (custom types only — built-ins never sync) |
-| `015_task_calendar_layers.sql` | `calendar_reminder_id text` on `tasks`; `reminder_type text not null default 'default'` on `calendar_reminders` — see "Task Calendar Items — layers" |
-| `016_task_cross_app_refs.sql` | `cross_app_refs jsonb not null default '[]'` on `tasks` — reverse cross-app links (e.g. which note(s) a task was created from); see "Cross-app linking" |
-| `017_event_status.sql` | `status text not null default 'confirmed'` on `calendar_events` — tentative events, see "Tentative events" |
-| `018_calendar_sync.sql` | New `calendar_connections` table (one row per connected external account); `source`/`source_connection_id`/`source_calendar_id`/`source_event_id`/`source_raw` columns on `calendar_events` — see "External calendar sync" |
-| `019_user_vault.sql` | New `user_vault` table (one row per user): wrapped vault-key blobs for client-side encryption (passphrase path + recovery-code path) — see "Client-side encryption for Note content" |
-| `020_notes_sync.sql` | Catches up `notes`/`note_tags` (reserved early by `008_notes_initial.sql`, never wired into `syncService.ts`) with every field added to the domain model since, adds `deleted_at` tombstones to both, adds `is_encrypted` to `notes`; creates `structured_tag_entries` table — see "Notes Supabase sync" |
-| `021_portfolio_sync.sql` | New `watchlist_items`, `portfolio_tags`, `investment_purposes` tables — portfolioStore's first-ever Supabase sync — see "Portfolio Supabase sync" |
-| `022_grants_notes_portfolio_vault.sql` | `grant … to authenticated` for every table added by 008/012/018/019/020/021 — **required**: raw SQL doesn't auto-grant, and without it the API 403s ("permission denied for table X") before RLS is even evaluated. 019–021 omitted this (found 2026-09-19 when initial sync 403'd). **Every new-table migration must include its own grant** (001/003/014 do) |
-| `023_note_tags_order_fractional.sql` | `note_tags."order"` `int` → `double precision`: the app stores fractional sibling orders on purpose (`parent.order + 0.5` on outdent, drag-and-drop midpoints), and the integer column made the first Notes force-upload fail with `invalid input syntax for type integer: "0.5"`. Audited every other integer column (`tasks`/`list_items` `sort_order`, `notify_before_value`, `athlete_id`, `expires_at`, `kdf_iterations`) — none are *deliberately* given fractions by app code. One latent exception, not seen and not fixed: `calendar_events.notify_before_value` is `integer` but `CalendarEventPane` feeds it `Number(e.target.value)` from a free-typed field, so typing `1.5` would fail sync the same way |
-| `024_encrypted_note_payloads.sql` | `notes.encrypted_payload text`; `structured_tag_entries.is_encrypted boolean` + `encrypted_payload text` — the single AES-GCM envelope holding an encrypted note's/entry's sensitive fields (see "Client-side encryption for Notes — comprehensive"). No new table, so no grant needed |
-| `025_calendar_important_optional_notify.sql` | `important boolean` on `calendar_events`/`calendar_reminders`; `cross_app_refs jsonb` on both (reverse links from a note — see "Cross-app linking"); drops `NOT NULL` on `calendar_events.notify_before_value` (null = "notify before" off — see "Calendar: optional notify-before"). Alters existing tables only, so no new grants needed |
-| `026_reminder_allday_notify.sql` | `notify_days_before integer` (default 1) and `notify_at_time text` (default '17:00') on `calendar_reminders` — see "Calendar: whole-day reminder notifications". Alters an existing table only |
-| `027_encrypted_lists.sql` | `is_encrypted boolean` + `encrypted_payload text` on `lists` and `list_items` — the single AES-GCM envelope holding an encrypted list's name/description/type/field schema/tabs and each item's title/data/notes/links (see "Client-side encryption for Lists"). No new table, so no grant needed |
-| `028_task_archive_reason.sql` | `archived_at timestamptz` + `archive_reason text` on `tasks` (the `archived boolean` has existed since 001); backfills `archived_at = updated_at` for rows already archived. Alters an existing table only, so no new grant. Applied 2026-09-20 — see "Task archiving" |
-| `029_calendar_archive.sql` | `archived_at timestamptz` + `archive_reason text` on `calendar_events` and `calendar_reminders`. Alters existing tables only, so no new grant. Applied 2026-09-20 |
-| `030_speech_usage.sql` | New `speech_usage` table (per-user, per-day seconds; select-only via RLS + `grant select`) and a security-definer `record_speech_usage(p_seconds, p_monthly_limit)` function (`grant execute`) that checks the monthly cap and increments in one step — a user-writable counter would let anyone reset their own limit. See "Voice dictation". Applied 2026-09-20 |
-| `031_drop_cross_app_links.sql` | Drops `cross_app_links` (created by 008, granted by 022): superseded by embedded `crossAppRefs` columns (016, 025) and never read or written by any code. Applied 2026-09-20 |
-| `032_oauth_state.sql` | New `oauth_states` table (RLS on, **no policies, no grants** — only the functions touch it) and three security-definer functions: `mint_oauth_state(p_provider)` (`grant execute` to `authenticated`; binds a random ≥244-bit nonce to `auth.uid()` + provider, 10-minute expiry, one live nonce per user+provider) and `save_strava_connection(...)` / `save_calendar_connection(...)` (`grant execute` to `anon`; called by the two OAuth callbacks with the anon key — each deletes the nonce in the statement that validates it, so it is single-use, then upserts the connection row for the nonce's user). Replaces putting the access token in the OAuth `state` URL. See "OAuth `state` nonces" in `docs/features/implemented-features.md`. Applied 2026-09-20 (confirmed by user). |
-| `033_calendar_links.sql` | `links text[] not null default '{}'` on `calendar_events` and `calendar_reminders` — same as `tasks.links`; see "Calendar links, Complete button, pane Ctrl+Enter, TimeInput Enter" in `docs/features/implemented-features.md`. Alters existing tables only, so no new grant. Applied — see "Live migration status" above. |
-| `034_trash_items.sql` | New `trash_items` table — the suite-wide Recycling Bin (see "Recycling Bin" in `docs/features/implemented-features.md`). `trashStore` works fully locally (IndexedDB-backed) without it; only cross-device sync of trash entries is blocked until run. Applied |
-| `035_reminder_tentative.sql` | `status text not null default 'confirmed'` on `calendar_reminders` — same `EventStatus` (`'confirmed' \| 'tentative'`) column `calendar_events` has had since `017`, extended to Reminders 2026-09-24 (see "Tentative events" below — reopens what was a deliberate Events-only scope decision). Alters an existing table only, so no new grant. Applied |
-| `036_calendar_event_background.sql` | `background boolean not null default false` + `color text` on `calendar_events` — "Background / banner calendar events" (see `docs/features/implemented-features.md`). Alters an existing table only, so no new grant. **Applied** |
-| `037_calendar_deadlines.sql` | New `calendar_deadlines` table (full current `calendar_reminders` shape — links/important/status/notify-lead-time/cross_app_refs/archived) + `tasks.calendar_deadline_id text` — "Deadline calendar kind" (see `docs/features/implemented-features.md`). Includes its own grant (new table). **Applied** |
-| `038_list_links.sql` | `cross_app_refs jsonb not null default '[]'` + `reset_on_task_complete boolean not null default false` on `lists` — a list's own links to notes, and the checklist "reusable" flag ("Lists: links from tasks, calendar items and notes"). Links *to* a list from a task/event/reminder/deadline use those tables' existing `cross_app_refs`. Alters an existing table only, so no new grant. **Applied** |
-| `039_task_item_links.sql` | `item_links jsonb not null default '[]'` on `tasks` — task links (depends on / follow-up of / related, each with an optional reason; see "Task links" in `docs/features/implemented-features.md`). Alters an existing table only, so no new grant. **Applied** |
-| `040_overviews.sql` | New `overviews` table (saved Overviews: `name`, `icon`, and the whole query as one `definition jsonb`, so a new query option never needs a migration) + `collection_id text` on `lists` (a list's Endeavour, list-level only). Includes its own grant (new table). See `docs/features/overview.md`. **Applied** |
-| `041_oauth_state_client.sql` | Where an OAuth connect flow started (decision D5, `docs/android/10-gap-analysis.md`): `client text not null default 'web'` on `oauth_states` (`'web' \| 'android'`); a new two-argument overload `mint_oauth_state(p_provider, p_client)` (the one-argument version from 032 is unchanged); `save_strava_connection`/`save_calendar_connection` return `'ok:<client>'` for a non-web flow (still plain `'ok'` for web, same signatures); new `discard_oauth_state(p_nonce)` (`grant execute` to `anon`) consumes a nonce on a provider error and returns its client. Additive only (ADR-9). The callbacks use it through `api/_lib/oauthReturn.ts`. **Applied** |
-| `042_sync_markers.sql` | New `sync_markers` table, one row per user: `restored_at timestamptz`, the time of the last backup restore ("Restore marker" under How sync works). Includes its own grant (new table). **Applied** |
-| `044_series_links.sql` | `series_id text` + `series_date text` on `calendar_events`, `calendar_reminders` and `calendar_deadlines`: a date taken out of a repeating series ("Edit only this one" / "this and following") names the series and the occurrence it stands in for (iCalendar's RECURRENCE-ID). Alters existing tables only, so no new grant. **Applied** |
-| `043_done_dates.sql` | `done_dates jsonb not null default '[]'` on `calendar_reminders` and `calendar_deadlines`: the occurrence dates marked done (struck through, no more notifications). See `docs/android/05-notifications.md` N4. Alters existing tables only, so no new grant. **Applied** |
-| `045_notification_acks.sql` | `remind_occurrence text` on `calendar_events`, `calendar_reminders` and `calendar_deadlines` (which occurrence a snooze is for); `seen_dates jsonb not null default '[]'` on `calendar_events` and `calendar_deadlines` (occurrences acknowledged with "Got it", synced so no device notifies them again). Alters existing tables only, so no new grant. **Applied** |
-| `046_task_repeat.sql` | `repeat jsonb` on `tasks` (null = doesn't repeat; the task's `RepeatConfig`) — "Recurring tasks". Alters an existing table only, so no new grant. **Applied** |
-| `047_note_tab_dates.sql` | `main_tab_updated_at timestamptz` on `notes` (`Note.mainTabUpdatedAt`): when the main tab's content last changed. A tab's own `createdAt`/`updatedAt` live in the `tabs` jsonb, needing no column. Alters an existing table only, so no new grant. **Applied** |
-
-### Supabase tables (summary)
-
-- **tasks** — mirrors Task interface
-- **collections** — mirrors Collection; includes `field_schema jsonb`, `routine_tasks jsonb`, `repeat_config jsonb`, `collection_id text`, `archived_at timestamptz`
-- **tags** — mirrors Tag; includes `notes text`
-- **purposes** — mirrors Purpose; includes `archived_at timestamptz`
-- **calendar_events** / **calendar_reminders** — CalendarEvent / CalendarReminder; `calendar_reminders` includes `reminder_type text` (`'default' | 'task'` — see "Task Calendar Items — layers") and, since `035`, `status text` (`'confirmed' | 'tentative'`, same column and meaning as events — see "Tentative events"); `calendar_events` includes `status text`, `background boolean` + `color text` (since `036` — "Background / banner calendar events"), and `source`/`source_connection_id`/`source_calendar_id`/`source_event_id`/`source_raw` (external calendar sync provenance — see "External calendar sync")
-- **calendar_connections** — one row per connected external calendar account (Google today); `id` is a real primary key (not `user_id`), since multiple connections per user are supported — a real structural difference from `fitness_strava_connection`, which only ever needs one row per user; unique on `(user_id, provider, account_email)`; `access_token`/`refresh_token`/`expires_at`/`scope` never read client-side, only through `api/google-calendar-*.ts`; `calendars_enabled jsonb` lists which of the account's calendars are opted into syncing
-- **calendar_deadlines** — CalendarDeadline (since `037`, "Deadline calendar kind"); same shape as `calendar_reminders` (links/important/status/notify_days_before/notify_at_time/cross_app_refs/archived_at/archive_reason) plus `deadline_type text`; both it and `calendar_reminders` carry `done_dates jsonb` since `043` (`'default' | 'task'`, mirrors `calendar_reminders.reminder_type`) — a genuinely separate table, not a discriminator column on `calendar_reminders`
-- **tracker_entries** — TrackerEntry; `data jsonb`, RLS on `user_id`
-- **fitness_strava_connection** — one row per user: `athlete_id`, `access_token`, `refresh_token`, `expires_at`, `scope`; RLS on `user_id`; never read client-side directly, only through `api/strava-status.ts` / `api/strava-sync.ts`
-- **schedules** — mirrors `ScheduleTemplate`; `blocks jsonb` (the full `ScheduleBlock[]`, same "commit the whole array on save" pattern as `collections.field_schema`)
-- **lists** — mirrors `List`; `field_schema jsonb`, `tabs jsonb`, `cross_app_refs jsonb` + `reset_on_task_complete boolean` (since `038`), `collection_id text` (since `040` — the list's Endeavour, plaintext even on an encrypted list)
-- **overviews** — mirrors `Overview` (since `040`); `definition jsonb` holds the whole query (sources, Endeavour, status, dates, search, sort, grouping)
-- **sync_markers** — one row per user (since `042`): `restored_at`, read on every load and written by a restore; not a synced record table (not in `SYNC_TABLES`)
-- **list_items** — mirrors `ListItem`; `data jsonb`, `sort_order integer` (the domain field is named `order`, renamed at the DB boundary only — `order` is a SQL reserved word)
-- **list_types** — mirrors `ListType`, but **only rows for custom (non-built-in) types are ever written here** — built-ins have fixed ids (`lt-movies`, `lt-credentials`, …) and are always re-seeded locally by `listStore.ts` (its persist `merge` re-adds any built-in missing from saved state, so a new built-in just goes in `BUILTIN_LIST_TYPES` — no version bump), same as Fitness's `BUILTIN_ACTIVITY_TYPE_SEEDS`. No `created_at`/`updated_at` (the domain `ListType` interface has neither, same as `Tag`) — merges fall back to remote-wins, tombstone-aware, same as `tags`
-- **notes** / **note_tags** / **structured_tag_entries** — mirror `Note` / `NoteTag` / `StructuredTagEntry`; `notes` includes `is_encrypted boolean` (see "Client-side encryption for Note content" below — when true, `content` holds a JSON envelope, not raw Tiptap doc JSON, opaque to this table)
-- **user_vault** — one row per user: `wrapped_key`/`wrapped_key_iv`/`salt` (passphrase-unwrap path) and `recovery_wrapped_key`/`recovery_wrapped_key_iv`/`recovery_salt` (recovery-code-unwrap path), both wrapping the same underlying AES-GCM vault key; `kdf_iterations`; RLS on `user_id`; never holds anything usable without a secret only the client has — see "Client-side encryption for Note content"
-- **watchlist_items** — mirrors `WatchlistItem`; `investment_purpose_ids`/`tag_ids`/`links` all `jsonb`
-- **portfolio_tags** / **investment_purposes** — mirror `PortfolioTag` / `InvestmentPurpose`; neither has `created_at`/`updated_at` in the domain model (same as `Tag`) — merges fall back to remote-wins, tombstone-aware, same as `tags`/`list_types`. `investment_purposes`' built-in seed rows (fixed ids like `ip-dividend`) are ordinary synced data here, unlike `list_types`' built-ins — portfolioStore has no re-seed-on-load mechanism and never blocks editing/deleting a seed purpose
-- **trash_items** — mirrors `TrashEntry` (the Recycling Bin, see below); `snapshot jsonb` holds the deleted entity verbatim, `deleted_by jsonb`; `original_deleted_at` is the domain "when was this deleted" timestamp — kept distinct from this row's own `deleted_at` sync tombstone (set only when a trash entry itself is forgotten — emptied or restored)
 
 ### Recycling Bin (suite-wide delete/restore)
 
@@ -609,255 +399,34 @@ Every store's `delete*` action is a real local removal — the record is spliced
 
 ## File structure
 
-```
-src/
-  App.tsx                    — root: hotkey handler, modal routing, section switcher
-  types/index.ts             — all TypeScript interfaces and unions
-  types/agent.ts             — agent command-layer types (RiskTier, EntityKind, AgentLogEntry, AgentBatch); not re-exported from index.ts
-  types/overview.ts          — Overview types (OverviewQuery, Overview, OverviewRow, OverviewSourceKey); not re-exported from index.ts — see "Overview"
-  contextMenu/               — right-click menus (see "Right-click menus"): types.ts (item / scope / provider / context), registry.ts (registerContextMenuProvider, scopes by element, resolveContextMenu), useContextMenuScope.ts
-  specialChars/              — `//name` → a character, in every text field (see "Special characters"): charSets.ts (THE table: Greek today; findCharTrigger, matchChars, exactChar), charPicker.ts (the list under the cursor, shared), fieldInput.ts (installSpecialCharInput: one set of document listeners for every input and textarea, installed from App.tsx)
-  charts/                    — charts for any app (see "Charts"): chartSpec.ts (ChartSpec, THE library-neutral description of a chart, and the pure data helpers: pasted tables, 100% stacking, waterfall steps), chartAdapter.ts (THE only module that knows Chart.js: toChartConfig, drawChart, which loads the library on first use), ChartWidget.ts + .module.css (THE chart-with-data-editor: the drawing, the data table, the paste box; plain DOM so any host can use it)
-  overview/                  — the Overview engine (see "Overview"): sources.ts (OVERVIEW_SOURCES — THE registry, one entry per app/item kind, pure functions over a store snapshot), engine.ts (runOverview: filter/sort/group; endeavourOverviewQuery), useOverviewSnapshot.ts (the React hook that builds the snapshot, encrypted notes/lists resolved through their views), open.ts (openOverviewRow — jump to a row's source)
-  types/trash.ts             — Recycling Bin types (TrashEntry, TrashableKind, DeletedBy); not re-exported from index.ts — see "Recycling Bin" above
-  agent/                     — the AI agent command layer (see "Agent command layer" below and docs/ai/02-command-layer.md): access.ts (THE boundary: what an agent can read and do), commands/*.ts, run.ts (runCommand), registry.ts (toolDefinitions), batch.ts (snapshot/diff/revert), errors.ts, devHandle.ts (dev-only console handle)
-  test/                      — Vitest setup (Map-backed localStorage) and helpers
-  config/
-    hotkeys.ts               — HOTKEYS[] + HOTKEY_GROUPS (single source of truth)
-    labels.ts                — all user-facing strings; rename concepts here
-    trackerTemplates.ts      — FieldSchema[] presets for habit/books/movies/custom
-    noteTagPresets.ts        — TagPresetDef[] curated annotation tag packs (Academic preset)
-    noteTemplates.ts         — NoteTemplateDef[] content-prefill templates for AddNoteModal (Blank, Meeting Minutes, Daily Journal, Book/Article Notes, Project Brief, Cornell Notes)
-    activityTypes.ts         — BUILTIN_ACTIVITY_TYPE_SEEDS (Run/Hike/Walk/Ride/Swim/Strength/Yoga/Other, fixed ids) used once by fitnessStore to seed activityTypes; DEFAULT_TOP_TYPE_IDS fallback for the pill row before any activities exist
-    structuredTagTypes.ts    — STRUCTURED_TAG_TYPES[]: registry of built-in tags that carry their own separate StructuredTagEntry data (Acronym today); each entry pairs a typeKey (matching BuiltinTag.typeKey) with a field schema and an optional non-AI infer() — see "Structured tag entries" in Implemented features for the extensibility design
-    apps.ts                  — APP_TIERS (core vs addon nav sections) + isAppEnabled(view): single gating point for add-on app availability (Portfolio, Fitness today; no real entitlement backend yet — always returns true)
-    calendarEventTypes.ts    — PICKABLE_EVENT_TYPES (Event/Birthday/Travel, with icons — the one list AddCalendarItemModal, CalendarEventPane and the import review offer) + EVENT_TYPE_ICON; names come from LABELS.calendarEventType
-    createKinds.ts           — CREATE_KINDS: every kind of thing a creation pane's switcher can switch to, grouped by section (see "Creation panes: the switcher")
-    noteBackdrops.ts         — NOTE_BACKDROP_PRESETS and the NoteBackdrop type (what fills the room below a note); each preset's look is CSS in NoteEditor/NoteBackdrop.module.css
-    backup.ts                — PERSISTED_STORAGE_KEYS: every localStorage key any store persists to (single source of truth for full-app Export/Restore in AccountPane and IntegrationsPane — add a key here when a new persisted store is added, nowhere else)
-  store/
-    navHistory.ts            — the back/forward history's shape (NavPlace, what a stop is) and pure stack moves (pushPlace, travel); uiStore captures and restores places
-    taskStore.ts             — tasks, collections, tags, purposes
-    trackerStore.ts          — tracker entries
-    routineStore.ts          — routine instances (localStorage only)
-    noteStore.ts             — notes + note tags (localStorage only)
-    listStore.ts             — lists + list items + list types; list/item mutations route encrypted lists themselves (see "Client-side encryption for Lists")
-    fitnessStore.ts          — activities (Fitness app, localStorage only)
-    scheduleStore.ts         — Schedule templates (recurring weekly timetables, Calendar section, localStorage only)
-    uiStore.ts               — all UI state
-    settingsStore.ts         — user preferences
-    authStore.ts             — Supabase session
-    recentItemsStore.ts      — Quick Access (Ctrl+G) recent/frequent visit history, keyed by `${QuickAccessTargetType}:${entityId}`
-    dialogStore.ts           — queue of pending confirm/alert requests (memory-only) behind `confirmDialog()` / `choiceDialog()` / `alertDialog()` in components/ConfirmDialog/dialogs.ts
-    overviewStore.ts         — saved Overviews (persisted `overviews-storage`, synced `overviews`); deleteOverview goes to the Recycling Bin
-    toastStore.ts            — the one toast showing (memory-only) behind `showToast()` in components/Toast/showToast.ts — see "Toasts"
-    hotkeyOverridesStore.ts  — user-rebound hotkeys (persisted `todo-hotkey-overrides`); `matchesHotkeyId`, `findConflicts`
-    notificationStore.ts     — pending in-app notifications + already-notified log (persisted `todo-notifications`)
-    voiceStore.ts            — voice dictation status/level for VoiceIndicator (memory-only, written by services/speech/dictation.ts)
-    trashStore.ts            — Recycling Bin: TrashEntry snapshots (persisted `trash-storage`, IndexedDB), see "Recycling Bin" above
-  services/sync/
-    syncService.ts           — Supabase push/pull
-    mappers.ts               — xToRow / rowToX for every entity
-  services/newItem.ts       — openNewItem(view): THE N/Space/Ctrl+N routing, section by section (Notes: by focused column) — see "New-item hotkey"
-  services/signOut.ts       — requestSignOut(): THE way to sign out — confirms (and says what stays on the device), locks the vault, force-uploads and only wipes if that succeeded (else warns, user can cancel), then authStore.signOut(). Never call authStore.signOut() directly from UI
-  services/glossary.ts      — the Glossary model (Definitions, Concepts, Acronyms across notes): glossaryEntries/glossaryEntry/glossaryReferences, through the views — see "Annotations"
-  services/noteFromItem.ts  — createNoteForItem(place, title): a new note in a notebook, or a new tab of a note, returned as the CrossAppRef to link; newNoteTitleFor(title, date). "+ New note" in the calendar panes
-  services/notePassage.ts   — openNotePassage(noteId, { mark, attr, value }): THE way to open a note at a passage (finds the tab; NoteEditor selects it). definitionPassage(entryId)
-  services/noteReview.ts    — Review later: reviewItems/dueReviews (Important passages on the review list, from stored content) and answerReview (writes the schedule back, through the editor if that text is open)
-  services/liveNoteEditor.ts — which note/tab is open in the editor (registered by NoteEditor): liveNoteEditorFor(noteId, tabId). A change to a note's content from outside the editor goes through that view when it's open
-  services/clearLocalData.ts — clearSyncedLocalData(): empties every CLOUD-SYNCED store + the account-specific selection ids (each reset from its own getInitialState()). Local-only stores (fitness, routine instances, settings, hotkeys, portfolio columnConfig) are deliberately left; add a store here in the same change that gives it cloud sync
-  services/shrinkNoteImages.ts — shrinkNoteImages(): recompresses every large inline image in every note and tab (skips locked encrypted notes; closes the open note first so the editor can't autosave its old copy over the result); Settings → Storage's button
-  services/oauthState.ts    — mintOAuthState(provider): the single-use nonce used as the OAuth `state` for Strava/Google connect (migration 032; on Android it also records the client, migration 041, falling back if that isn't run); never put a credential in an OAuth URL. openOAuthFlow(provider, url): THE way a connect button starts the flow — a page navigation on web/desktop, the in-app browser on Android (resolves when the flow returns or the browser closes)
-  services/android/deepLinks.ts — THE organisaitor:// router on Android: registerDeepLink(host, handler), startDeepLinks() (one appUrlOpen listener + the cold-start launch URL), started from one effect in App.tsx. A feature adds a route here, never its own appUrlOpen listener
-  services/android/oauthReturn.ts — the `oauth-done` route: what the callbacks send an Android flow back to (closes the browser, settles openOAuthFlow, navigates like the web's ?strava/?googleCalendar return, toast). Server half: api/_lib/oauthReturn.ts
-  services/strava.ts         — client-side Strava wrapper: getStravaConnectUrl(), checkStravaStatus(), syncStrava() (calls api/strava-* edge functions, upserts results into fitnessStore)
-  services/googleCalendar.ts — client-side Google Calendar sync wrapper: getGoogleCalendarConnectUrl(), fetchGoogleCalendarConnections(), setGoogleCalendarEnabled(), disconnectGoogleCalendar(), syncGoogleCalendars() (calls api/google-calendar-* edge functions, maps + upserts results into calendarStore via upsertSyncedEvent) — see "External calendar sync"
-  services/crossAppLinkCleanup.ts — deleteTaskWithCleanup/deleteNoteWithCleanup/removeCrossAppRefFromTarget: keeps cross-app links (Task.crossAppRefs, Notes' ArtifactLinkMark) from going dead when either side is deleted; the one module allowed to import both taskStore and noteStore (they must never import each other directly) — see "Cross-app linking"
-  services/taskCompletion.ts — toggleTaskCompletion(taskId): THE way the UI completes or reopens a task. Asks before completing one that's waiting on other tasks (complete anyway / complete the whole chain upstream, via choiceDialog), then toggles through taskListLinks and shows the Completed toast (what it unlocked, + Follow-up, Undo). Agents toggle directly (agent/access.ts) — no dialog, no toast. Enforced by a pattern test
-  services/notifications/   — THE notification rules and their delivery (docs/android/05-notifications.md): plan.ts (planNotifications — pure, every platform; WHEN anything notifies is decided only here), actions.ts (snooze / Done / complete the task / open the item — shared by the bell and Android buttons), androidScheduler.ts (Android: books the next 14 days with the OS via @capacitor/local-notifications, reconciles on launch/resume/store change, channels, buttons, permission ask). The desktop/web poller is hooks/useNotificationChecker.ts, built on plan.ts
-  config/itemIcons.ts       — ITEM_TYPE_ICON / ITEM_FLAG_ICON: THE icon for each item kind (deadline 🏁) and flag (❗ ✏️ 🔁) — see "Inline objects in notes"
-  config/itemLinkKinds.ts   — ITEM_LINK_KINDS: THE registry of task-link kinds (Waiting on / Follow-up of / Related — icon, labels, blocks, symmetric); see "ItemLink" in Type system
-  utils/taskLinks.ts        — the task-link rules, pure: taskRelations (both directions), openBlockers/isBlocked/openBlockersDeep, unlockedBy, canAddLink (self/duplicate/loop), makeItemLink
-  services/recurringTasks.ts — recurring tasks: nextOccurrenceDate (pure), spawnNextOccurrence (called on completion by taskListLinks and agent/access), nextOccurrenceOf, discardOccurrence (the toast's Undo), repeatSummary — see "Recurring tasks" in Type system
-  services/taskListLinks.ts — a task's linked lists: checklistProgress() (the "📋 3/7" pill), toggleTaskWithLists() (toggles a task and unticks a linked checklist marked reusable — the UI calls it through services/taskCompletion.ts, never directly), toggleChecklistItemWithTasks() (THE way UI ticks a checklist item — offers to complete the linked task when the last one is ticked). Agents don't use it (no list access) — see "Lists: links from tasks, calendar items and notes" in Implemented features
-  services/taskCalendarLinks.ts — keeps a task's shadow CalendarDeadline (deadline date) and event (scheduled date) matching the task, and flows edits made on the event back — the one place that logic lives (see "Task ⇄ calendar shadow entries" in Implemented features); like crossAppLinkCleanup it may import both taskStore and calendarStore
-  services/taskDeadlineMigration.ts — migrateTaskDeadlineShadows(), called once from App.tsx's startup effect: converts any pre-2026-09-27 task shadow that's still a `CalendarReminder` with `reminderType: 'task'` into a `CalendarDeadline` with `deadlineType: 'task'` and repoints the owning task's `calendarDeadlineId`. State-driven (looks for legacy shadows still present, not a run-once flag), so it's naturally idempotent — see "Deadline calendar kind" in Implemented features
-  services/trashCapture.ts  — moveToTrash(kind, entity): the write half of the Recycling Bin, called from inside every store's own delete* action. Deliberately imports NO domain store (only trashStore) so every domain store can import it without an import cycle — see "Recycling Bin" above
-  services/trash.ts         — restoreFromTrash(entryId)/deleteForever(entryId), trashedBy(run)/restoreAllFromTrash(ids): the restore half, imports every domain store to write a snapshot back; never imported by a store or by trashCapture.ts (import cycle)
-  services/undoableActions.ts — archiveTaskWithUndo / deleteTaskWithUndo: act at once, then an Undo toast (decision D2: swipe-left and action-sheet paths; pane footers keep their confirm dialog). Delete's Undo restores every Recycling Bin entry the delete made
-  services/noteSecrets.ts    — the encrypted-notes model: NoteSecrets/EntrySecrets shapes, the memory-only plaintext cache, noteView()/entryView()/isNoteLocked() (the ONE way to read a possibly-encrypted note), the serialized re-encrypt queue (queueEncrypt/flushEncryptions) — see "Client-side encryption for Notes — comprehensive"
-  services/noteSecretsSync.ts — keeps that cache in step: decrypts encrypted notes/entries when the vault unlocks or a sync pull brings new payloads, wipes it on lock, upgrades v1 legacy encrypted notes
-  services/listSecrets.ts    — the encrypted-lists model (Lists twin of noteSecrets.ts): ListSecrets/ItemSecrets shapes, memory-only plaintext caches, listView()/itemView()/isListLocked() — the ONE way to read a possibly-encrypted list/item. Reuses noteSecrets.ts's crypto, serialised re-encrypt queue and cache-version counter
-  services/listSecretsSync.ts — keeps those caches in step with the vault (decrypt on unlock/sync pull, wipe on lock)
-  store/listViews.ts         — React hooks useListViews()/useListView(id)/useListItemViews(): lists/items resolved through the cache
-  components/ErrorBoundary/ — class ErrorBoundary: `scope="app"` (around <App /> in main.tsx: full-page fallback with Reload + Export backup + collapsed Details) and `scope="section"` (around the section switcher in App.tsx, keyed by `activeView` so navigating away resets it: "Reload this section", nav keeps working). A **new section must render inside that section boundary**; copy is `LABELS.errorBoundary`
-  components/ConfirmDialog/ — THE replacement for window.confirm()/alert(): `dialogs.ts` (`confirmDelete`, `confirmDialog`, `choiceDialog`, `alertDialog`) + `ConfirmDialogHost`, mounted once in App.tsx (see "Confirmations and alerts")
-  components/OverviewSection/ — the Overview section: sidebar (Endeavours → their automatic Overview; My overviews with RowHoverActions edit/delete; + New overview) + grouped table (row click opens the item in its app)
-  components/AddOverviewModal/ — create/edit a saved Overview (sources, Endeavour, open/all, dates + window, title search, sort, group)
-  utils/suggestRank.ts      — rankSuggestions/rankSearch: THE ordering for every "link a …" picker (see "Pickers suggest by keywords")
-  components/HoverOptions/  — HoverOptions: hovering a button offers labelled alternatives to its plain click (the RowHoverActions machinery, `align`-able, vertical list); on Android a long-press opens them in an ActionSheet. Used for a task's Complete (TaskItem checkbox, ItemActionFooter's `completeOptions`)
-  components/BottomSheet/   — BottomSheet: THE phone bottom sheet (portaled, backdrop tap / grabber drag-down / Escape + Android back close it, 85vh, safe-area padding, z-index 1020) — see "Bottom sheets"
-  components/ActionSheet/   — ActionSheet (a BottomSheet of `{ label, icon?, onSelect, destructive? }`; choosing closes, then runs) + ActionSheetButton (one row, shared with RowAction in the sheet)
-  components/Toast/         — `showToast()` (showToast.ts) + `ToastHost` (Toast.tsx), mounted once in App.tsx — see "Toasts"
-  components/TaskLinks/     — TaskLinksField: TaskPane's "Task links" section (grouped both-direction rows with editable reasons; + Waiting on… / + Follow-up / + Related…)
-  components/TaskPickerModal/ — the "link a task" search dialog (portaled, shares NotePickerModal's CSS module like ListPickerModal)
-  components/DecryptPrompt/  — app-wide "enter your passphrase to permanently decrypt this note/list" modal (uiStore.decryptPrompt / requestDecrypt), portaled, z-index 200; opened by every clickable 🔒
-  store/noteViews.ts         — React hooks useNoteViews()/useNoteView(id)/useEntryViews(): notes/entries resolved through the cache, re-derived when the store OR the cache changes
-  services/vault.ts          — client-side encryption vault: setupVault/unlockWithPassphrase/unlockWithRecoveryCode/lockVault, trustThisDevice (IndexedDB key cache), encryptField/decryptField (AES-GCM via Web Crypto) — see "Client-side encryption for Note content"
-  services/autoBackup.ts     — automatic local backup rotation (change-volume-triggered, no time-based trigger): subscribes to every persisted domain store, accumulates a weighted change score, and once it crosses settingsStore.autoBackupChangeThreshold builds+saves a snapshot via autoBackupStorage.ts and thins old ones via utils/backupRetention.ts. initAutoBackup() called once from App.tsx. See "Automatic local backup rotation" in Implemented features
-  services/autoBackupStorage.ts — IndexedDB storage for automatic snapshots, its own database (`organisaitor-backups`, deliberately separate from the notes/trash one): saveBackupSnapshot/listBackupSnapshots/getBackupSnapshot/deleteBackupSnapshot, all best-effort
-  utils/
-    backupRetention.ts       — selectSnapshotsToKeep(snapshots, targetAgesDays, now): pure grandfather/tiered-thinning algorithm (always keeps the newest, then claims the nearest unclaimed snapshot per target age, closest-first) — used by services/autoBackup.ts
-    backupExport.ts          — buildBackupSnapshot() (every `PERSISTED_STORAGE_KEYS` key, used by both downloadBackup() and services/autoBackup.ts) / downloadBackup() / downloadAutoBackupSnapshot(id, createdAt) (one automatic snapshot as a file — Integrations pane): exports straight from localStorage (works without the app rendering); used by AccountPane and the ErrorBoundary fallback. restoreBackupData(backup, userId): writes a backup object back to persisted storage + rehydrates the Supabase-synced stores + force-uploads if signed in — the one restore path AccountPane, IntegrationsPane and AutoBackupSection all call
-    calendarItemInput.ts     — buildCalendarEventInput / buildCalendarReminderInput: the rules for turning what a person or an agent supplied into a stored event/reminder (used by AddCalendarItemModal and the agent commands)
-    scheduleBlocks.ts        — createScheduleBlock(): the one place a ScheduleBlock's defaults live (used by AddScheduleModal and the agent commands)
-    date.ts                  — todayIso(), formatDate(), timeAddMinutes(), addDaysToIso(), computeLinkedEndTime() (auto-derives a linked end time from a start time — see Timepicker rebuild in Implemented features), etc.
-    id.ts                    — typed nanoid wrappers
-    notes.ts                 — Note/NoteTag Endeavour resolution: getEffectiveCollectionId, resolveNoteInheritedCollectionId, getNoteEffectiveCollectionId, getVisibleNoteTagIds, getNoteBreadcrumb (location string for StructuredTagPopover)
-    acronymInference.ts      — inferAcronymFromSelection(selectedText, contextText): non-AI pattern/initials-based acronym expansion inference for the Acronym structured tag type (see structuredTagTypes.ts)
-    collections.ts           — getOrderedEndeavours(collectionsRecord): Projects then Lists, in CollectionFilterPicker's render order; shared by the picker and the Ctrl+E digit-select hotkey
-    fitnessFormat.ts         — Fitness display formatting (metric only, Phase 1): formatDistance, formatDuration, formatSpeed, computeAverageSpeedMps. Stored data is always SI (meters/seconds/m·s⁻¹); conversion happens only here, at render time
-    fitnessActivityTypes.ts  — getActivityType() (graceful fallback if a type was deleted) and getTopActivityTypes() (usage-ranked, for the AddActivityModal pill row)
-    links.ts                 — openExternalLink(url) (Tauri-aware: routes through @tauri-apps/plugin-opener under Tauri, @capacitor/browser under Android, window.open() in the browser/PWA) and normalizeLinkUrl(raw) (prefixes bare domains with https://); shared by TaskItem/TaskPane/Notes link UI and App.tsx's global external-link click interceptor
-    apiFetch.ts               — apiFetch(path, init): THE way to call /api/* (a pattern test fails on a bare fetch('/api…)); routes to the production Vercel URL through a native HTTP client in the packaged apps — @tauri-apps/plugin-http under Tauri, CapacitorHttp under Android (adapted back into a Response; never enable CapacitorHttp globally, it would patch Supabase's fetch too) — plain same-origin fetch in the browser. oauthRedirectOrigin(): the origin OAuth providers redirect back to (production in the packaged apps). See "Desktop (Tauri) API access" and "Android W1: platform services" in Implemented features
-    saveFile.ts               — saveFile(filename, blob): THE way to hand the user a file (every export: backups, auto-backup snapshots, ErrorBoundary). Anchor download on web/Tauri; on Android writes to the cache directory and opens the share sheet (@capacitor/filesystem + @capacitor/share)
-    textToTask.ts            — inferTaskFromSelection(text): non-AI date/time/priority/link inference for the Notes "Create ▸ Task" feature, and inferCalendarItemFromSelection(text) for "Create ▸ Calendar item" (kind event/reminder/deadline from phrase cues, plus travel/birthday, tentative, important, repeat — see "Notes Create ▸ Calendar item: phrase cues" in Implemented features) — regex-based, no external dependency; locale-aware (Intl) for ambiguous numeric dates. A new cue goes in with a test in textToTask.test.ts
-    timelineWhen.ts          — readTimelineWhen (a timeline entry's When as a sortable point: dates in many formats, years, BC/AD, decades, ranges, times, "Day 3" steps) and readTimeline (the order, inherited years). Pure; a new format goes in with a test
-    definitionInference.ts   — inferDefinitionFromSelection: term + meaning from "X is Y" / "X: Y" / a term and its sentence, for the Definition and Concept popover
-    idbStorage.ts            — IndexedDB persistence for the notes store: preloadIdbStorage() (awaited in main.tsx before the app is imported), persistStorageIdb(), readPersistedValue()/writePersistedValue() for backup/restore, IDB_STORAGE_KEYS, getIdbUsage()
-    persistStorage.ts        — THE `storage:` for every persist() (guards QuotaExceededError, see Zustand migration rule) + getStorageUsage()/formatStorageSize() for Settings → Storage
-    imageCompress.ts         — compressImageBlob(file) / recompressDataUrl(dataUrl): scale to fit 1600 px + WebP, used on paste into notes and by shrinkNoteImages
-    noteTabs.ts              — MAIN_TAB_ID ('__main__'), tabDatesText (a tab's created/modified, the tab bar's hover), linkTabIdFor / effectiveLinkTabId / tabNameOf: how a CrossAppRef.tabId (a link naming one tab of a note) is recorded, resolved (deleted tab → main) and named
-    keywords.ts              — extractKeywords(text) (stop-words/short words dropped, max 8) + stemForMatch(word); used by NotePickerModal's title-keyword suggestions
-    noteSearchText.ts        — getNoteTabTexts(note): cached plain text of a note's main tab and each extra tab for searching (never caches encrypted notes); read a note's text for search through this, not by re-parsing its JSON
-    openCrossAppTarget.ts    — (in services/) openArtifactTarget(type,id): opens a linked task/event/reminder in its section; used by editor link clicks and the Linked-from pills
-    noteContent.ts           — stripArtifactLinksFromContent(contentJson, targetType, targetId): pure JSON-tree walk over a Note's stored Tiptap content, editor-independent (the note being cleaned up is rarely the one currently open) — used by crossAppLinkCleanup.ts
-    haptics.ts               — Android-only guarded haptic wrappers (hapticLight/hapticMedium/hapticWarning — add hapticSuccess when first needed), no-op via Capacitor.isNativePlatform() elsewhere
-    timeGrid.ts              — shared hourly time-grid layout math (buildHourLayout, minutesToY, layoutDayTimeGrid, markActiveHours), generic over item type; used by CalendarView's week/day views and CalendarSidePane's overlay-preview grid
-    timeGridDrag.ts          — computeDragResult(geometry, pointerMinute, pointerColIndex): pure snap/clamp math behind drag-to-move / drag-to-resize on any hourly time grid — see hooks/useTimeGridDrag.ts and "Calendar drag-to-move / drag-to-resize" in Implemented features
-    markdownTextEdit.ts      — toggleWrap(value, start, end, marker) / insertMarkdownLink(value, start, end, url, linkText?): pure text-splicing behind the "light rich text" Task/Calendar notes hotkeys — see hooks/useMarkdownHotkeys.ts
-    scheduleOccurrences.ts   — expandScheduleBlock() (turns one ScheduleBlock into concrete occurrence dates, honouring interval/anchor/exceptions), blocksMayConflict() + countTemplateConflicts() (the schedule manager's "N potential conflicts" hint)
-    recurrence.ts            — repeating calendar items: expandRepeat (honours RepeatConfig.exceptions), isOccurrenceSkipped, withException / endedBefore / tailOf (the "this one / this and following" operations) — see "Calendar: editing individual occurrences"
-    timezone.ts              — account-wide timezone: resolveTimezone, zonedTimeToUtc, utcToZonedTime, rezoneWallClock, todayIsoInZone, listTimezones
-    quickAccess.ts           — Quick Access (Ctrl+G) provider registry: one QuickAccessProvider per destination type (note/notebook/task/list/endeavour/tracker/routine/schedule) with list()/resolve()/navigate(); searchQuickAccessItems(), resolveRecentItems(), navigateToQuickAccessItem() — extension point for new destination types (see Implemented features)
-  services/timezoneMigration.ts — rezoneAllCalendarData(fromZone, toZone): re-stamps every stored wall-clock date+time when the timezone setting changes
-  hooks/
-    useCtrlEnterSubmit.ts    — THE Ctrl+Enter rule for form-less modals/panes: `useCtrlEnterSubmit(onSubmit, active?)` (see "Ctrl+Enter — universal submit rule")
-    useEscapeClose.ts        — THE Escape rule: every overlay registers here; Escape closes only the most recently opened one (see "Escape key — universal close rule"). closeTopOverlay() is the same for the Android back button
-    useLongPress.ts          — long-press (450 ms, cancelled by >10px movement, hapticMedium, swallows the click it produces, cancels Android's own long-press menu). Touch only — see "Bottom sheets"
-    useSwipeRow.ts           — swipe right (row's positive action) / swipe left (reveal the row's actions), axis lock, 24px edge exclusion; the classification is pure exported functions. Used by TaskItem
-    useTimeGridDrag.ts       — shared drag-to-move / drag-to-resize for any hourly time grid built on utils/timeGrid.ts: one hook instance can drive every draggable block on a page (geometry supplied per-gesture, not fixed at hook-creation time). Used by CalendarView's week/day grids (Events move+resize, Reminders move only) and ScheduleWeekGridPreview's block editor (AddScheduleModal) — see "Calendar drag-to-move / drag-to-resize" in Implemented features
-    useMarkdownHotkeys.ts    — "light rich text" for plain-<textarea> notes fields (Task/Calendar): Ctrl+B/Ctrl+I wrap the selection in Markdown bold/italic syntax (utils/markdownTextEdit.ts's pure toggleWrap), Ctrl+L opens components/MarkdownLinkPrompt to insert a `[text](url)` link. Attached directly to the textarea element, not `document`. See "Light rich text" in Implemented features
-  components/
-    NavSidebar/              — left nav: section switcher, settings, account icons (desktop/web only — hidden on Android in favour of MobileNav); navItems.tsx holds CORE_NAV_ITEMS and SECTION_ICONS (THE icon per section)
-    HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores; PlaceCard.tsx is THE card for a place, shared with the phone's recent notes (MobileNotes)
-    MobileNav/               — Android-only bottom tab bar: Tasks/Calendar/Records/Lists/More
-    MobileMoreSheet/         — Android-only overflow sheet for MobileNav's More tab: Notes/Portfolio/Fitness/Manage Library/Settings/Account
-    MobileQuickAddBar/       — Android-only bottom-anchored task quick-add (title + Due/Priority/Endeavour chips), replaces QuickAddInput on Android
-    MobileCalendarQuickAdd/  — Android-only bottom-sheet quick-add for calendar events/reminders
-    MobileNotes/             — Android-only Notes (NotesSection renders it instead of ChronicleView): the home screen (notebook tree with notes inside, or Recent as PlaceCards; uiStore.mobileNotesHome) and the full-screen note. The note's phone heading and side panel are in NoteEditor (isAndroid) and NoteEditor/MobileNoteSidePanel.tsx
-    Sidebar/                 — hover panel (from the header hamburger, left-hand side): pinned "Manage Library" button (M/Ctrl+M) at top, then active endeavours (collections), purposes, tags — quick glance + filter/edit, not administration (see ManagePane). Every section except Calendar — there, the same hamburger click-opens CalendarSidePane instead (see "Calendar side pane")
-    TaskList/                — main task list + collapsible Routines section
-    TaskItem/                — single task row; shows subtask progress pill
-    TaskPane/                — slide-in task detail/edit pane
-    Icons/                   — THE suite's shared UI icons (see "Icons come from one place"): index.ts, ActionIcons.tsx (TrashIcon/ArchiveIcon/RestoreIcon/CheckCircleIcon), TextColorIcon.tsx
-    ItemActions/             — the SHARED archive/restore + delete pattern every item pane uses (Task, Calendar event, Calendar reminder; future apps' panes should too) — see "Shared item actions" in Implemented features: icons from components/Icons, ItemActionFooter (optional Complete/Mark-incomplete toggle for task-backed items), ItemActionDialog (archive-with-reason + delete-confirm, portaled z-102), ArchivedBanner, useItemActions hook (dialog state + Escape + Ctrl+Enter + hotkeys)
-    AddTaskModal/            — create task (basic + advanced sections)
-    AddTaskButton/           — speed-dial FAB (view-aware)
-    AddCollectionModal/      — create endeavour (project/list/tracker/routine)
-    AddTrackerModal/         — create tracker (template picker + field config)
-    AddRoutineModal/         — create routine (steps + day-of-week picker)
-    AddEntryModal/           — add/edit tracker entry (dynamic fields)
-    AddTagModal/             — create/edit tag (has notes textarea)
-    AddPurposeModal/         — create/edit purpose
-    AddCalendarItemModal/    — create calendar event or reminder
-    EditTrackerPane/         — slide-in: edit tracker name/color/fields
-    RecordsView/             — Records section: tracker sidebar + tracker detail + routines
-    RoutineChecklist/        — routine card (steps, progress, complete button)
-    CalendarView/            — month/week/day calendar; week/day use an hourly time grid (src/utils/timeGrid.ts)
-    CalendarEventPane/       — slide-in: edit calendar event
-    CalendarReminderPane/    — slide-in: edit calendar reminder
-    CalendarDeadlinePane/    — slide-in: edit calendar deadline (structural near-copy of CalendarReminderPane; "Notify me" is always shown, not gated by "no Time set" — a Deadline notifies only before, never at, even with a Time)
-    RecurrenceScopeBar/      — shown at the top of the event/reminder panes for a repeating item: edit/delete only this occurrence or this-and-following
-    AddScheduleModal/        — create/edit a Schedule (recurring weekly timetable) and its blocks
-    CalendarSidePane/        — left-sliding pane (Calendar section): Layers toggles + Schedule list/manager (active toggle, conflict hint, overlay-preview grid) in one place — supersedes the old CalendarLayersPicker (header dropdown) and ManageSchedulesPane (right-sliding pane), see "Calendar side pane" in Implemented features
-    ScheduleOccurrencePopover/ — click a Schedule occurrence on the calendar: skip this date, commit/uncommit (commitment mode), or jump to editing the Schedule
-    TimeInput/               — segmented hour/minute/AM-PM combobox respecting settingsStore.clockFormat (not a native <input type="time">, see Clock format setting below and the Timepicker rebuild entry in Implemented features), plus a quick-pick dropdown of half-hour times
-    RepeatField/             — the repeat-rule editor (on/off, every N days/weeks/months/years, ends never/after N/on a date); TaskPane and AddTaskModal
-    LinksField/              — the shared links list (clickable / edit / delete / add) used by TaskPane, CalendarEventPane and CalendarReminderPane; links typed into notes arrive via `mergeNewLinks` in the store's update action, never here
-    LinkHoverPreview/        — app-wide: shows a hovered link's URL bottom-left (see "Link hover preview" pattern below)
-    QuickAccessPane/         — app-wide, Ctrl+G: portaled search-and-jump overlay across Notes/Notebooks/Tasks/Lists/Endeavours/Trackers/Routines/Schedules, or browse Recent/Frequent visit history (see "Suite-wide Quick Access pane" in Implemented features)
-    TruncatedText/           — wraps a CSS-ellipsis-truncated name/title; on hover, only when actually truncated, reveals the full text: `reveal="tooltip"` (default) in a floating box below the row, `reveal="extend"` drawn in place over the row and running out to the right (Notes: NoteList's note titles and ChronicleView's notebook names, 2026-09-28). Tooltip users: (2026-09-24) Sidebar/ManagePane/ListsSection/RecordsView's row names
-    RowHoverActions/         — suite-wide nav-column row actions: RowOptionsMenu (the row's leading icon slot, which becomes a "⋯" on row hover; hovering it drops the actions down as a narrow column; long-press the row on Android) + RowAction (one labelled action), built on useRowHoverActions() (open/close state machine, shared with HoverOptions) + RowHoverActionsMenu (portaled floating panel; a BottomSheet on Android) — see "Row options menu" in Component patterns. Used by ChronicleView, Sidebar, ManagePane, ListsSection, RecordsView, OverviewSection
-    SettingsPane/            — settings slide-in; reads HOTKEYS[] dynamically; NotificationsSection.tsx = Android-only Notifications block; SettingControls.tsx = the shared Toggle/SettingRow; StorageSection.tsx = the Storage block (per-store usage + Shrink images in notes)
-    ManagePane/              — library admin (Endeavours/Purposes/Tags): left-nav tabs + content, opened by clicking (not hovering) the header hamburger; archive/restore/delete rows. MANAGE_SECTIONS array in the file is the extension point for future tabs
-    AccountPane/             — Supabase auth + account info; renders AutoBackupSection (both signed-in and guest branches)
-    AutoBackupSection/       — automatic local backup UI (enable toggle, threshold, snapshot list with per-row Restore) — see services/autoBackup.ts and "Automatic local backup rotation" in Implemented features
-    IntegrationsPane/        — (stub) future integrations
-    RecyclingBinPane/        — suite-wide Recycling Bin: Ctrl+Shift+R or the "Recycling Bin" button in Account; filter chips by section, Restore / Delete forever per row, "Empty recycling bin" — see "Recycling Bin" above
-    ColorPicker/             — reusable colour swatch picker
-    CollectionPicker/        — CollectionPicker.tsx (single-select dropdown, used in create/edit forms) + CollectionFilterPicker.tsx (header Endeavour-focus picker, numbered for the E/Ctrl+E hotkey)
-    CrossAppRefPicker/       — controlled { value: CrossAppRef[]; onChange; onNavigate?; types?; newNoteTitle? } widget: chips for existing links + "+ Note" (NotePickerModal) and "+ List" (ListPickerModal) buttons, and "+ New note" where `newNoteTitle` is passed (the calendar panes: NotePickerModal's place mode, then services/noteFromItem.ts); `types` limits which are offered (a list's own ListLinksBar offers notes only). List item/Tracker entry targets are BACKLOG. Used by AddTaskModal, TaskPane, the calendar event/reminder/deadline panes and ListsSection's ListLinksBar
-    ListPickerModal/         — the "link a list" search dialog (portaled, shares NotePickerModal's CSS module); checklists first, encrypted lists by their view name
-    LinkedChecklists/        — a task's linked checklists rendered as tickable steps inside TaskPane (each row IS the ListItem — nothing copied)
-    MarkdownLinkPrompt/      — the Ctrl+L "insert a link" prompt for plain-<textarea> notes fields (Task/Calendar) — text+URL popover, portaled, mirrors NoteEditor's own "New link" pane visually/by keyboard. See hooks/useMarkdownHotkeys.ts and "Light rich text" in Implemented features
-    LinkedNoteAbstracts/     — under a calendar item's notes: each linked note's abstract, editable in place (saves to the note); kept apart from the item's own notes. Used by the three calendar panes
-    NotePickerModal/         — the "link a note" search dialog (mode 'place': where a NEW note goes — notebooks join the results, picking a note means a new tab of it) (portaled to document.body, z-index 1000): title + notebook path + preview + date per result, multi-word search over title/path/content, title-keyword suggestions while the search box is empty (`suggestFrom`), keyboard nav; captures Ctrl+Enter so the pane/modal behind it doesn't answer. Any future "pick a note" UI should reuse it rather than list notes by title alone — titles are not unique
-    PurposeFilterPicker/     — header Purpose-focus picker (multi-select checkboxes), Tasks section only; P/Ctrl+P hotkey
-    SortBar/                 — sort controls for task list
-    NoteEditor/              — Tiptap v3 rich-text editor with toolbar, zoom, table support, abstract, attributes panel
-      extensions/ResizableImage.ts   — the note picture: eight handles when selected (corners keep the shape, edges stretch, `height` set once stretched) and Crop (crop handles over the whole picture, dimmed outside; Enter/Done/click away applies, Esc cancels). The crop is attributes (`crop`, fractions per side), never cut from the image. Geometry is pure in imageGeometry.ts; CSS in ResizableImage.module.css
-      extensions/HeadingNumbering.ts — ProseMirror plugin: computes hierarchical heading numbers, sets data-heading-number
-      extensions/Section.ts          — custom Document (content: 'section+') + Section node (content: 'block+', columns/locked attrs) + ColumnBlock/Column nodes (locked-columns layout); commands setSectionColumns / insertSectionBreak / toggleSectionLocked
-      extensions/DuplicateLine.ts    — Alt+Shift+↓: duplicateLineDown copies the current line (textblock, or its whole list item) or the selected lines below
-      extensions/Timeline.ts         — the `\timeline` note block: Timeline (variant attr) / TimelineItem / TimelineWhen nodes, insertTimeline, and TimelineBehaviour (Enter/Backspace/Delete, placeholders, current-entry dot, "+ Add entry" widget) — see "Note blocks"
-      extensions/timelineMenu.ts     — the timeline's right-click provider (Style ▸ / Order ▸)
-      noteClipboardText.ts           — what a copy puts on the clipboard as plain text (editorProps.clipboardTextSerializer): Markdown-style headings, lists, quotes, tables as tab-separated rows
-      extensions/HeadingLevel.ts     — Ctrl+= / Ctrl+− on a heading change its level (else App.tsx zooms)
-      extensions/NoteBylines.ts      — Subtitle (Ctrl+H, S) and Author (Ctrl+H, A) paragraph styles: own nodes like NoteTitle, never numbered or in the outline
-      extensions/fontSize.ts         — the font-size ladder (FONT_SIZES), currentFontSize / setFontSize / stepFontSize (Ctrl+Shift+< / >, the ribbon's A− [size] A+)
-      extensions/Quote.ts            — the `\quote` note block: QuoteBlock (variant, hidden), QuoteText, QuoteField (QUOTE_FIELDS), insertQuote / quoteFromSelection, setQuoteVariant / toggleQuoteField, keys and the pill; quoteMenu.ts is its right-click provider
-      extensions/Cycle.ts            — the `\cycle` note block (at least two stages, each owning the arrow to the next; arrows' direction and name; icons/pictures; designs Ring / Flow / Steps); cycleMenu.ts is its right-click provider
-      extensions/Breakdown.ts        — the `\breakdown` note block (a whole and at least two parts; designs Hub / Pillars / Tree; spectrum colours); breakdownMenu.ts is its right-click provider
-      extensions/Hierarchy.ts        — the `\hierarchy` note block (`\tree`, `\taxonomy`): items stored flat with a level, written as an outline (Enter, Tab / Shift+Tab move an item and its children a level); level names (`tiers`) beside the rows or over the columns; designs Tree / Columns / Outline. hierarchyLayout.ts reads the tree (spans, siblings) purely; hierarchyMenu.ts is its right-click provider
-      extensions/Chart.ts            — the `\chart` note block: one atom node (`variant` = chart type, `spec` = a ChartSpec) whose view is the block's pill around the shared ChartWidget (src/charts/); chartMenu.ts is its right-click provider
-      extensions/Pyramid.ts          — the `\pyramid` note block (`\funnel`, `\maslow`): at least two layers, top first, each a label drawn on its shape and a note beside it; designs Pyramid / Funnel / Stacked; pyramidMenu.ts is its right-click provider
-      extensions/SpecialCharInput.ts — `//name` → a character in the note editor (the same table, list and keys as fieldInput.ts, through ProseMirror; not in code)
-      extensions/OccurrenceHighlight.ts — selecting a word or phrase faintly marks its other mentions in the tab (whole words when the selection is whole words); decorations only
-      extensions/GlossaryAutolink.ts — offers to link a Glossary term as it's typed (once per note per term); Enter/Tab, Backspace undoes
-      extensions/blockDesigns.ts     — Block designs, the shared half: BlockDesign, blockPill, designButtons, designMenuItem, pillButton, openBlockPopover, selectBlock / deleteBlock / selectButton (+ BlockDesigns.module.css for the popover)
-      extensions/blockPicks.ts       — Ctrl+click picks parts of a block (BLOCK_PART_NODES), Delete / copy / cut them together; Ctrl+Alt+click selects the whole block
-      NoteBackdrop.tsx               — the room below the end of a note (plain grey, a preset from config/noteBackdrops.ts, or the user's picture; settingsStore.noteBackdrop) and its picker
-      extensions/ConceptRef.ts       — ConceptRefMark (text linked to a Glossary term) + ConceptMargin (the brace and label beside it, hover card, click to the definition) — see "Annotations"
-      extensions/Importance.ts       — Important's levels, passages, Review later scheduling and the margin markers; importanceLevels.ts holds the three levels
-      extensions/annotationMenu.ts   — right-click on linked text (go to definition, unlink) and on Important text (level, review, remove)
-      extensions/ArtifactLinkMark.ts — Mark (targetType/targetId/display attrs) marking a span of note text as linked to a cross-app entity made from it, via FloatingToolbar's "Create ▸" menu (Ctrl+Q) or `\`; only data — drawn by objects/artifactGroups.ts; see "Cross-app linking" in Implemented features
-      objects/               — inline objects (`\`) and link rendering (see "Inline objects in notes"): kinds.ts (NOTE_OBJECT_KINDS — THE registry; matchPickable/chosenKind across objects and blocks), blockKinds.ts (NOTE_BLOCK_KINDS — the note-block registry) + timelineBlock.ts, types.ts (NoteObjectKind, NoteBlockKind, PickableKind), reminderKind.ts, session.ts (the `\` session, derived from the text), actions.ts (accept/commit/unlink/insertObjectTrigger), NoteObjectTrigger.ts (the extension + keys), NoteObjectMenu.tsx, artifactTypes.ts (ARTIFACT_TYPES: live summary per linked type), artifactGroups.ts (ArtifactLinkGroups: the pane per link, states, the expanded box and body widget, Home/End, the stored-mark guard), eventKind.ts, deadlineKind.ts + reminderKind.ts (both from datedKindFactory.ts), ArtifactBody.tsx + WhenLine.tsx + ObjectBody.tsx + CalendarItemBody.tsx + EventBody.tsx + NotifyChips.tsx (the expanded body), flags.ts (ArtifactFlag, calendarFlags, flagMenuItems), calendarItems.ts, whenInput.ts (readWhenInput, expandShortWeekdays, the defaults), contextMenu.ts (right-click on a link), format.ts
-      extensions/NoteTagMark.ts      — Mark (tagId/color/typeKey/structuredEntryId attrs) for annotation tags; structuredEntryId links a tagged passage to its StructuredTagEntry (see "Structured tag entries")
-      contextMenu.ts         — the editor's right-click providers (clipboard, link/create, Style ▸, select all) on the `note-editor` scope; NoteEditorMenuApi is what NoteEditor hands them
-      builtinTags.ts         — 8 built-in annotation tag definitions (Important/Concept/Definition/Example/Question/Reference/Learn Later/Acronym) — typeKey drives both Learn Later's future create-task action and Acronym's structured-tag-entry behaviour
-      NoteBacklinks.tsx      — the "Linked from" bar under a note's title: single pill / "🔗 N" chip + list, each pill openable, draggable into the text, or insertable at the cursor (derived from other items' crossAppRefs via store/noteBacklinks.ts — nothing stored); artifactLinkInsert.ts holds the insert/drop helpers
-    StructuredTagPopover.tsx — create/edit popover shared by every structured tag type (Acronym today): compact term+field preview with Enter-to-accept, "More options" expands in place to show every field + Endeavour + (edit mode) location/timestamps
-    NoteEditorPane/          — slide-in pane wrapping NoteEditor for non-Notes sections
-    AddNoteModal/            — quick-add note (Ctrl+Space) with hierarchical tag picker
-    ContextMenu/             — ContextMenuHost (THE contextmenu listener, mounted once in App.tsx) + ContextMenu (the menu: sections, submenus, keyboard); content comes from src/contextMenu/
-    CreateKindSwitcher/      — the Note / Notebook / Tag (…) strip at the top of a creation pane; kinds from config/createKinds.ts
-    AddNoteTagModal/         — create notebook (area) or custom annotation tag; a notebook's "Inside" picker (starts at where it was opened from, can move anywhere in the tree or to the top level)
-    EditNoteTagModal/        — edit notebook/tag name, icon, color; field schema editor for annotation tags
-    EditNoteMetaModal/       — edit note metadata: tagIds (notebooks + annotation tags), accent color, pinned
-    NoteTagPresetModal/      — install curated annotation tag packs; detects already-installed via presetKey
-    ChronicleView/           — Notes section layout: notebook tree, note list, editor; hover-expand on notebooks; NotebookLocationView is the editor column's empty state (path/tree of where you are)
-    NotesSection/            — Notes section wrapper; GlossaryView.tsx (the Glossary) and ReviewView.tsx (Review later), both opened from TagFAB's # panel
-    ListsSection/            — Lists section: sidebar (Checklists/Watchlists/Reference dividers) + card grid (watchlist), table (reference) or ChecklistView.tsx (checklist — tick-off, checked items struck through and moved to the bottom via listStore.toggleListItemChecked) + tab bar
-    AddListModal/            — two-step create/edit list (type picker grouped by kind → form with field schema editor + tabs editor)
-    AddListItemModal/        — add/edit list item (tab picker, status picker for watchlists, dynamic fields, notes, links)
-    FitnessSection/          — Fitness app: activity list (type icon, title, date, distance, moving time, avg speed) + empty state
-    AddActivityModal/        — create/edit Activity: top-3-usage type pills + "More…" dropdown of all types + Customise (⚙), title, date, distance, moving time h/m → avg speed computed live, selected type's custom fields, notes, purpose chips; Escape-safe from the start
-    EditActivityTypeModal/   — create/edit an ActivityType: name, icon, color, field-schema editor (mirrors EditTrackerPane); built-ins editable but not deletable
-  supabase/migrations/       — SQL migration files (run in order)
-```
+The full map (every folder and notable file, one line each) is **`docs/architecture/file-structure.md`**. Prefer searching the code; open the map when you need orientation. Add a line there for each new folder or notable file.
 
----
+Top level: `src/App.tsx` (root: hotkeys, modal routing, section switcher), `src/types/` (all entity types), `src/config/` (labels, hotkeys, registries), `src/store/` (Zustand stores), `src/services/` (cross-store logic and platform services), `src/utils/` (pure helpers), `src/hooks/`, `src/components/` (one folder per component), `src/agent/` (AI command layer), `src/overview/`, `src/contextMenu/`, `src/charts/`, `api/` (Vercel edge functions), `supabase/migrations/`, `src-tauri/` (desktop), `android/` (Capacitor).
+
+### Single entry points — use these, never a side door
+
+Each of these is THE one way to do its job. Most have a pattern section below and a pattern test; the rest are listed here so the rule isn't buried in the map.
+
+| Job | Use | Never |
+|-----|-----|-------|
+| Sign out | `services/signOut.ts` `requestSignOut()` (confirms, locks the vault, uploads, then wipes) | `authStore.signOut()` from UI |
+| Wipe synced data on sign-out | `services/clearLocalData.ts` `clearSyncedLocalData()`; a store that gains cloud sync is added there in the same change | resetting stores one by one |
+| Call `/api/*` | `utils/apiFetch.ts` `apiFetch()` | a bare `fetch('/api…')` (pattern test) |
+| Hand the user a file (exports, backups) | `utils/saveFile.ts` `saveFile()` (share sheet on Android) | an anchor download in a component |
+| Start an OAuth connect | `services/oauthState.ts` `mintOAuthState()` + `openOAuthFlow()` | a credential in an OAuth URL |
+| Handle an `organisaitor://` link (Android) | `services/android/deepLinks.ts` `registerDeepLink()` | another `appUrlOpen` listener |
+| Persist a store | `utils/persistStorage.ts` `persistStorage()` (`persistStorageIdb()` for IndexedDB) | zustand's default storage |
+| Back up / restore persisted data | `utils/idbStorage.ts` `readPersistedValue` / `writePersistedValue`; `utils/backupExport.ts` `restoreBackupData()` | reading localStorage directly |
+| Complete or reopen a task (UI) | `services/taskCompletion.ts` `toggleTaskCompletion()` | the store's `toggleTask` (pattern test) |
+| Tick a checklist item (UI) | `services/taskListLinks.ts` `toggleChecklistItemWithTasks()` | the store action directly |
+| Delete across apps (links) | `services/crossAppLinkCleanup.ts` | a store importing another domain store |
+| Read a possibly-encrypted note / list | `noteView()` / `useNoteView()`, `listView()` / `useListView()` | the raw store record |
+| A note's text for search | `utils/noteSearchText.ts` `getNoteTabTexts()` | re-parsing note JSON |
+| Open a note at a passage | `services/notePassage.ts` `openNotePassage()` | setting uiStore fields by hand |
+| New-item routing (N / Space / Ctrl+N) | `services/newItem.ts` `openNewItem()` | branching in `App.tsx` |
+| Links typed into a task/event's notes | the store's update action (`mergeNewLinks`) | adding them in `LinksField` |
+| A crash in a section | render inside the section `ErrorBoundary` in `App.tsx` (a new section too) | a section outside it |
+| Log anything | `utils/log.ts` `log.*` (see "Errors and logging") | `console.*` (pattern test) |
 
 ## Component patterns
 
@@ -906,9 +475,9 @@ useCtrlEnterSubmit(() => formRef.current?.requestSubmit());
 <form ref={formRef} onSubmit={handleSubmit}>
 ```
 
-(Older modals still bind Ctrl+Enter in an inline `useEffect`; that's the retrofit in BACKLOG.md, not a pattern to copy.)
+(About 15 older modals bind Ctrl+Enter in their own inline `useEffect` that calls `requestSubmit()`. That still meets the rule (none of them handle Escape there; checked 2026-10-09), but new code uses the hooks.)
 
-`requestSubmit()` (not calling `handleSubmit` directly) is the important detail — it goes through the DOM form submission machinery, so it always invokes whatever `onSubmit` is bound in the **current** render, respects `disabled`/native validation the same way clicking the visible submit button would, and can never fire a stale closure over old form state. For a component with **no `<form>`** (a plain "Save" button as the primary action — the Edit panes, `EditNoteMetaModal`, `EditActivityTypeModal`, `BulkUploadWatchlistModal`, …) use **`useCtrlEnterSubmit(() => handleSave(), active)`** (`src/hooks/useCtrlEnterSubmit.ts`): it keeps the callback in a ref refreshed every render, so an inline closure can never call stale state. Call it above the early `return null`, pass `active` = the same condition the early return uses, and declare the handler as a **function declaration** (`function handleSave() {}`), not a `const` arrow — a `const` defined below the hook call trips `react-hooks/immutability`, and a hoisted declaration doesn't. (The hook is also fine for form modals: `useCtrlEnterSubmit(() => formRef.current?.requestSubmit())`. The ~20 older modals keep the inline effect above; migrating them is in BACKLOG.md's Pattern retrofit backlog.)
+`requestSubmit()` (not calling `handleSubmit` directly) is the important detail — it goes through the DOM form submission machinery, so it always invokes whatever `onSubmit` is bound in the **current** render, respects `disabled`/native validation the same way clicking the visible submit button would, and can never fire a stale closure over old form state. For a component with **no `<form>`** (a plain "Save" button as the primary action — the Edit panes, `EditNoteMetaModal`, `EditActivityTypeModal`, `BulkUploadWatchlistModal`, …) use **`useCtrlEnterSubmit(() => handleSave(), active)`** (`src/hooks/useCtrlEnterSubmit.ts`): it keeps the callback in a ref refreshed every render, so an inline closure can never call stale state. Call it above the early `return null`, pass `active` = the same condition the early return uses, and declare the handler as a **function declaration** (`function handleSave() {}`), not a `const` arrow — a `const` defined below the hook call trips `react-hooks/immutability`, and a hoisted declaration doesn't. (The hook is also fine for form modals: `useCtrlEnterSubmit(() => formRef.current?.requestSubmit())`, as in the example above.)
 
 **Item panes** (Task, Calendar event, Calendar reminder) get it from `useItemActions`: those panes save each field on change/blur rather than through a Save button, so Ctrl+Enter blurs the focused field (committing a half-typed title, note, time or link) and closes the pane. It does nothing while the archive/delete dialog is open — the dialog owns it then.
 
@@ -935,6 +504,19 @@ useCtrlEnterSubmit(() => formRef.current?.requestSubmit());
 All of them return promises, so the handler becomes `async`. Where a listener owns the keyboard while it waits (`SettingsPane`'s hotkey capture), stop listening *before* opening the dialog. If an item has a real archive concept, prefer the `ItemActions` pane pattern instead (it offers "Archive instead").
 
 **A prompt raised by what the user is typing** (e.g. the note editor's "remove the link too?") passes `focusDelayMs` (and optionally `isStale`): the dialog shows at once but takes no focus and ignores Ctrl+Enter for that long, so a stray Enter can't answer it; if `isStale()` is true when the delay ends it closes itself as cancel.
+
+### Errors and logging — one approach (adopted 2026-10-09)
+
+The user asked for one way, so it can't drift again.
+- **Log through `utils/log.ts`**: `log.error('sync', 'push failed', err)`. `log.debug/info/warn/error(scope, message, ...detail)`. The scope is the area (`sync`, `vault`, `noteSecrets`, a component name). Output reads `[scope] message`. Debug entries are dropped from production builds. The last 100 entries are kept (`recentLogs()`), and the crash screen's Details lists the recent warnings and errors. **Never `console.*` in `src/`** (pattern test). Edge functions in `api/` log with `console` (that's Vercel's server log).
+- **Every error ends in one of four places:**
+  1. **The user must see it and act** → `alertDialog(message)` (see "Confirmations and alerts"). Plain words, what happened and what to do; no stack traces or codes.
+  2. **A render crash** → the `ErrorBoundary` (app-wide in `main.tsx`, per section in `App.tsx`), which logs it and offers Reload / Export backup.
+  3. **Expected and recoverable** (offline, a sync push refused, a locked encrypted item) → handled where it happens, logged as `warn` or `error`, and shown as state where the user needs it (Account's sync badge, a 🔒), not a popup.
+  4. **Nothing caught it** → `installGlobalErrorHandlers()` (installed in `main.tsx`) logs window errors and unhandled promise rejections.
+- **Never swallow an error silently.** An empty `catch {}` needs a comment saying why ignoring it is correct (best-effort cleanup, a feature check). Otherwise log it.
+- **Caught values are `unknown`**: read one with `errorMessage(e)`, not `e.message`.
+- **Error types:** throw a plain `Error` with a clear message. A subclass only when callers need to tell errors apart (`AgentError` carries a code for the model; `SpeechError` a reason). Edge functions return `{ error: string }` with a 4xx/5xx status.
 
 ### Toasts — `showToast()`, one `ToastHost` (suite-wide pattern, adopted 2026-10-01)
 
@@ -1088,71 +670,14 @@ Typing `\` in the Notes editor creates an item (a Reminder, Event or Deadline to
 6. **Tests:** `objects/objects.test.ts` runs every registered kind end to end (`\` → created → linked → drawn → listed in Linked from). Add the kind's own reading of text (cues, defaults) and anything its Body adds.
 7. **Docs:** the feature entry, and this section if a rule changed.
 
-**The kind** (`types.ts`, `NoteObjectKind<D>`):
-- Identity: `id` (the keyword), `aliases`, `label`, `icon`, `hint`, `targetType`.
-- Reading the text: `parse(body, ctx)`, pure.
-  - It reuses the app's existing inference (`utils/textToTask.ts`) after `expandShortWeekdays` ("fri 1-2pm"), and tidies the title with `tidyObjectTitle` (a trailing "important" is the flag).
-  - **Saying nothing about when means tomorrow at 12:00** (an event 12:00–13:00): `DEFAULT_OBJECT_TIME` / `defaultObjectDate` in `whenInput.ts`. A date alone is a whole day; a time alone is today.
-- The preview's editable lines: `fields` / `applyField`, read with `readWhenInput`. Then `validate`.
-- Acting:
-  - `create(draft, ctx, backLinks)` goes through the same input builder the UI and the agent use (`utils/calendarItemInput.ts`).
-  - `discard` is the toast's Undo: delete, and forget the Recycling Bin entry.
-  - `openFull` opens the full pane, prefilled. Also `describe` and `linkText`.
-
-**Typing it** (`session.ts`, `NoteObjectTrigger.ts`, `actions.ts`, `NoteObjectMenu.tsx`):
-- **The session is derived from the text.** Plugin state holds only where the `\` is, how far the draft reaches, the menu highlight and the field overrides. Don't add state that would have to be kept in step with the text.
-  - It starts only when a `\` is *typed* at a line start or after whitespace (never in a word, in code, or from paste).
-  - It ends when the cursor leaves the draft, the `\` is deleted, or on Esc, and always leaves the text as typed.
-- **Keys**, consumed with `stopPropagation` so the Escape stack and a pane's Ctrl+Enter don't also act:
-  - ↑/↓, and Tab picks a kind; Enter picks once something is typed or the arrows were used.
-  - Enter creates; Ctrl+Enter opens the full pane via `uiStore.pendingArtifactLink`, exactly like Ctrl+Q; Tab focuses the fields.
-  - Esc ends it; `\\` types one backslash.
-  - All changes go through `actions.ts`; the menu holds no state of its own.
-- **Where it's created** comes from `objectTriggerStorage(editor).getContext` (set by NoteEditor in an effect): the note, its tab, its Endeavour.
-- **The note text is the item's title.** Enter replaces what was typed with the title.
-  - The full pane's hand-off (`replaceWithTitle`, resolved by `applyResolvedArtifactLink`) puts in the *final* title. It always waits, even with nothing typed.
-  - Undo restores the typed words.
-
 **How a link is drawn** — only by `artifactGroups.ts` (`ArtifactLinkGroups`), for `\` and Ctrl+Q links alike. The mark is unstyled data. **Never draw anything per `mark[data-artifact-…]` element in CSS**: ProseMirror splits a mark per paragraph and around other marks, so it would repeat (pattern test). The pieces are grouped into one link (`collectArtifactGroups`) and drawn as **one pane that expands**. It's **visual, not an editing form**: no field labels, each thing click-to-edit where it's shown.
-- **Inline:** `[icon KIND ❗] title [date time · ✏️🔁 · state · ↗ ▾]`, sized to its contents. Important sits **before** the title in both views (it changes how much attention the item needs). It's a head widget, the text's inline decorations and a tail widget (`side: 1`) sharing one outline; keep the three at the text's font size so their borders line up.
-- **Expanded:** the paragraph holding the link becomes the box (node decoration). `ArtifactBody` sits inside the same paragraph (its own React root, keyed stably, so typing in it never rebuilds it). Four bands:
-  - **top bar:** icon, kind, ❗ (Important only — it matters most), title, and ↗ ▴ **right-aligned** (`paneActions`);
-  - **second heading line** (`WhenLine`, then the kind's place / Endeavour / notification): everything that's **on**;
-  - **content:** notes and links;
-  - **bottom bar:** everything that's **off**, greyed.
-  - **On → the heading lines, off → the bottom bar, never both.**
-- **Clicks**, the same in both views:
-  - The title (note text) and the date and time (`editWhen`) highlight under the mouse and edit on a click.
-  - ↗ opens.
-  - **Done lives in the icon slot.** While the pane is hovered (tracked per link, `data-hover` on every piece) or once done, the kind icon shows as ☐/☑ in the same space. Never put a done box elsewhere.
-  - In the expanded view, a click on an active option (❗ in the top bar, ✏️ 🔁 in the second line) removes it. It reappears greyed at the bottom, where a click turns it back on.
-  - **Any other click on the heading** expands or collapses: the pieces' background, the box's own empty space (the plugin's `click`, keyed by `data-artifact-key`), and the second line's empty space (`onToggle`).
-  - A new control goes through `control()`, or stops its click, so it doesn't also toggle.
-- **State** (`ArtifactState`, from `summarize`):
-  - **done** (ticked) and **past** (an event that has ended; a repeating one never is) are drawn **faded**, not struck through. That's the practice of calendar and to-do apps, chosen 2026-10-06. Hovering brings it back to full strength.
-  - **overdue** (past and not done) stays at full strength, with "Overdue" in the warning colour: it still needs doing.
-  - A whole-day item is overdue only after its day.
-- **Repeating items** (the user's design, 2026-10-06):
-  - The pane shows, and ticks, the **current occurrence**: the first from today on that isn't done (`currentOccurrence`, `calendarItems.ts`). Ticking it moves the pane on to the next, the way a recurring to-do does; the ticked date stays ticked (`doneDates`).
-  - The date reads "Tue, Oct 13 ▾". A click drops down the **list of dates** (`OccurrenceList` in `WhenLine.tsx`, from the type's `occurrences`): a few before (faded), the current one (NEXT), the next several. Each can be ticked (`toggleOccurrenceDone`) and opened on its own in the calendar (`openArtifactTarget(type, id, date)`, where the pane offers "only this one / this and following"). At the bottom: the rule ("Every week") and "Open the series".
-  - In the inline pane the same date expands the pane with the list open (`occurrenceRequests.ts`).
-  - ↗ opens the current occurrence.
-- **Removing something that takes data with it asks first.** Turning Repeat off removes every other date of the series, so the flag's `toggle` confirms (`confirmDialog`, destructive) before it acts. The user lost a series to one stray click. Other options toggle at once. A new option that destroys data on removal does the same, inside its own `toggle`, so every place that offers it (heading icon, right-click menu) is covered.
-- **A pane's body UI state lives in `paneState.ts` (`usePaneState`), never in plain `useState`**. That covers the list of dates being open and half-typed notes, links or place.
-  - ProseMirror matches widgets one step at a time, so replacing the heading widget just before the body (its date changed) builds the body again, and component state would be lost: the list closed under the click that ticked a date.
-  - The state is keyed per pane and cleared when it collapses. Don't try to keep the old DOM element instead: tried, and ProseMirror detaches it.
-- **Options** (Important, Tentative, Repeat) come from **one list per kind**: `flags(id)` → `ArtifactFlag[]` (`flags.ts`). It feeds the heading icons (on), the greyed bottom-bar options (off; Repeat asks how often) and the right-click menu (`flagMenuItems`). A new option is one entry in the list.
-- **Notifications:** an opt-in one (an event's) is a greyed "Notify me" while off. One the calendar always sends (a deadline's, a whole-day reminder's) is shown as its setting chip, never as off (`NotifyChips.tsx`).
-- **A kind's `Body`** maps its fields onto the shared `ObjectBody`:
-  - for the second line: `heading` (from `WhenLine`), place, Endeavour, `extra` (active chips);
-  - for the content: notes and links;
-  - for the bottom bar: the off `flags` plus `offExtra`.
-  - `onToggle` lets its empty space collapse the pane.
-- **Editing the title as text:**
-  - The mark is inclusive, so typing at a title's end extends it. The plugin's `appendTransaction` drops the mark from stored marks on any line that doesn't hold it (Enter after a title starts plain text).
-  - Home/End on an expanded heading are handled by `paneLineKeys`, because the body box confuses the browser's own.
-  - A commit that clears stored marks must do so *after* its last step.
-- Which view is the mark's `display` attribute. Live data is redrawn on store changes and every minute. Task completion goes through `toggleTaskCompletion`.
+- **The session is derived from the text** (`session.ts`): plugin state holds only where the `\` is, how far the draft reaches, the menu highlight and the field overrides. Don't add state that has to be kept in step with the text. Its keys stop propagation, so the Escape stack and a pane's Ctrl+Enter don't also act.
+- **A kind's `create`** goes through the same input builder the UI and the agent use (`utils/calendarItemInput.ts`); `discard` (the toast's Undo) deletes and forgets the Recycling Bin entry.
+- **A pane's body UI state lives in `paneState.ts` (`usePaneState`), never plain `useState`**: ProseMirror rebuilds the body widget when the heading before it changes, and component state would be lost.
+- **Options** (Important, Tentative, Repeat) come from **one list per kind**, `flags(id)` (`flags.ts`), feeding the heading icons, the greyed bottom-bar options and the right-click menu. A new option is one entry there.
+- **Removing something that takes data with it asks first**, inside the option's own `toggle` (Repeat off deletes the series's other dates), so every place offering it is covered.
+- **Done lives in the icon slot** (☐/☑ in place of the kind icon). A new control goes through `control()` or stops its click, so it doesn't also expand/collapse the pane.
+- The full behaviour (inline and expanded layouts, clicks, states, repeating dates, notifications, editing the title) is **`docs/features/notes-objects.md`**: read it before changing how a link looks or responds.
 
 **Also:**
 - **One icon per item kind, from `config/itemIcons.ts`** (`ITEM_TYPE_ICON`, `ITEM_FLAG_ICON`), wherever a link, backlink, Overview row or calendar entry shows one. Deadline is 🏁: ⏳ is a waiting task, 🚩 reads as flagged, ❗ is important. Never spell an item kind's icon out in a component (pattern test).
@@ -1278,62 +803,7 @@ Do **not** hardcode hotkey labels in `SettingsPane.tsx` or anywhere else.
 
 ### Current hotkeys
 
-| Primary | Secondary | Action |
-|---------|-----------|--------|
-| `0` | — | Overview section (`nav-overview`, customizable) |
-| `1` | `Ctrl+1` | Tasks section |
-| `2` | `Ctrl+2` | Calendar section |
-| `3` | `Ctrl+3` | Records section |
-| `4` | `Ctrl+4` | Lists section |
-| `5` | `Ctrl+5` | Notes section |
-| `6` | `Ctrl+6` | Portfolio section |
-| `7` | `Ctrl+7` | Fitness section |
-| `N` | `Space` | New item (section-aware, see below) — `Ctrl+N` also works |
-| `S` | — | Toggle settings |
-| `A` | — | Toggle account pane (`action-account`, customizable) |
-| `Ctrl+Shift+R` | — | Open/close the Recycling Bin (`action-recycling-bin`, customizable) |
-| `Esc` | — | Close panel / modal |
-| `E` | `Ctrl+E` | Expand the Endeavour filter (header) — Tasks/Calendar/Records/Notes only |
-| `0`-`9` | — | While the Endeavour filter is expanded: select an Endeavour by its position (0 = All) |
-| `P` | `Ctrl+P` | Expand the Purpose filter (header) — Tasks section only |
-| `M` | `Ctrl+M` | Open/close the Manage view (Endeavours / Purposes / Tags) |
-| `Alt+Left` | `Backspace` | Go back one stop in history (a note, or a section where you were in it) — `uiStore.navHistory`/`navigateBack()` |
-| `Alt+Right` | — | Go forward one stop, after going back — `uiStore.navForward`/`navigateForward()` |
-| `//` | — | Any text field: a Greek letter by name — `//alpha` → α, `//Delta` → Δ, `//` alone lists them; ↑↓, Enter/Tab, or the whole name and a space; Esc keeps the text (`special-chars`; src/specialChars/) |
-| `Alt+N` | — | The history browser: a carousel of where you've been; scroll / ←→ / swipe to move, Enter or a click to go there, Esc closes (`action-history`, customizable; touch: More → History) |
-| `Ctrl+G` | — | Open/close Quick Access — search or browse recent/frequent items across Notes, Notebooks, Tasks, Lists, Endeavours, Trackers, Routines, Schedules |
-| `Ctrl+D` | — | Dictate into the focused text field; press again (or plain `Enter`) to finish, `Esc` cancels (`action-dictate`, customizable; handled before the `isTyping` guard in `App.tsx`) |
-| `Ctrl+Shift+A` | — | Archive the open task / calendar event / reminder — or Restore it if already archived (item panes only, via `useItemActions`) |
-| `Delete` | `Ctrl+Shift+D` | Delete the open task / event / reminder — always opens the permanent-delete confirmation (item panes only, via `useItemActions`). Plain `Delete` is ignored while typing in a field, where it deletes a character |
-| `Ctrl+Enter` | — | Confirm the archive dialog (Esc cancels); focus starts in the optional reason box |
-| `O` | — | Toggle the Calendar side pane — Go to date / Layers / Schedules / Imported calendars (Calendar section only, local to `CalendarView.tsx`) |
-| `T` | — | Go to today in whichever view is showing — month, week or day (Calendar section only, local to `CalendarView.tsx`) |
-| `←`/`→` | `PgUp`/`PgDn` | Previous/next period — month, week, or day, matching the current view (Calendar section only, local to `CalendarView.tsx`) |
-| `Tab` | `Shift+Tab` | Cycle Month → Week → Day view; Shift+Tab cycles in reverse (Calendar section only, local to `CalendarView.tsx`; suppressed while any calendar modal/pane is open so normal focus-tabbing still works there) |
-| `→` | — | Expand selected notebook, then move to the next column: tree → notes → editor (Notes section only). Opening a note with the arrow keys leaves focus in the notes column, so `↑`/`↓` keep moving through notes until `→` (or `` Ctrl+` ``) enters the editor; clicking a note still goes straight into the editor |
-| `←` | — | Collapse selected notebook (Notes section only) |
-| `PgUp`/`PgDn` | — | Navigate the tree/list column, same as ↑/↓ (Notes section only) |
-| `Ctrl+Tab` | `Ctrl+PgUp`/`Ctrl+PgDn` | Cycle between the open note's tabs, `Ctrl+Shift+Tab`/`Ctrl+PgUp` reverses (Notes editor focused, local to `NoteEditor.tsx`) |
-| `Ctrl+T` | — | New tab, prompting for a name (Notes editor focused, local to `NoteEditor.tsx`) |
-| `` Ctrl+` `` | — | Move keyboard focus between the tree/list nav columns and the editor (Notes section only; previously `Ctrl+Tab`, moved once `Ctrl+Tab` became the tab-cycle key above — see "Notes/Lists keyboard nav" below) |
-| `Ctrl+L` | — | Turn the selection into a link (opens a URL popover); with no selection, opens a "New link" pane (text + URL) instead (Notes editor) |
-| `Ctrl+H` | — | On normal text, makes it Heading 1 at once. Then press `1`–`5` for that heading level (works on a heading too), `0` for plain text (also strips all formatting except links/tags — `extensions/normalText.ts`), `H` to go to the tab's Title (creating it at the top from the tab name if there isn't one), `S` for a Subtitle or `A` for the Author; Ctrl may stay held for the second key (Notes editor, local to `NoteEditor.tsx`) |
-| `Ctrl+Shift+>` | `Ctrl+Shift+<` | Larger / smaller text, a step at a time (Notes editor, `extensions/fontSize.ts`; the ribbon's A+ / A−) |
-| `F2` | — | Rename the open tab; Enter (or Esc) puts the cursor back where it was (Notes editor) |
-| `Ctrl+Shift+V` | — | Paste as plain text: no formatting, links or images from the source (Notes editor; ProseMirror's own Shift-paste, which `handlePaste` steps aside for) |
-| `Alt+Shift+↓` | — | Insert a copy of the current line (paragraph, heading, list item) or the selected lines below it (Notes editor, `extensions/DuplicateLine.ts`) |
-| `\` | — | Notes editor: create an object as you type (`\rem` / `\ev` / `\dl`, e.g. `\rem call mum tomorrow 5pm`, Enter). Tab/Enter picks the kind, Enter creates and links the text, Ctrl+Enter opens the full pane, Tab edits the fields, Esc keeps plain text, `\\` types a backslash. `\timeline` (or `\tl` then a space) adds a timeline instead, see "Note blocks" (`objects/NoteObjectTrigger.ts`; touch: the toolbar's `\` button) |
-| `Ctrl+Q` | — | On a Notes selection: open the "Create ▸" menu (Task/Calendar item/List item/Tracker entry — Task is wired, the rest are stubs); 1-4 picks, Esc cancels (Notes editor) |
-| `Ctrl+click` | — | On a link in the Notes editor: select its text instead of opening it (plain click opens) |
-| `Ctrl+click` | — | On a part of a note block (timeline entry, cycle stage, layer…): pick it; then Delete / Ctrl+C / Ctrl+X act on every picked part; Esc clears (`notes-block-pick`, `extensions/blockPicks.ts`) |
-| `Ctrl+Alt+click` | — | Anywhere in a note block: select the whole block (`notes-block-select`) |
-| `Ctrl+−` | — | Zoom out in Notes editor (without Shift); on a heading, lower its level instead (H5 → normal text) |
-| `Ctrl+=` | — | Zoom in in Notes editor (without Shift; Ctrl+Shift+= is superscript); on a heading, raise its level instead |
-| `Ctrl+scroll` | — | Zoom in/out in Notes editor (non-passive wheel listener) |
-| `↑`/`↓` | — | Navigate between lists (Lists section only, local to `ListsSection.tsx`; only when the sidebar nav area has focus — see "Notes/Lists keyboard nav" below) |
-| `` Ctrl+` `` | — | Move focus between the lists sidebar and the list's content area (Lists section only, local to `ListsSection.tsx`) |
-| `Ctrl+Tab` | `Ctrl+PgUp`/`Ctrl+PgDn` | Cycle between the current list's tabs, `Ctrl+Shift+Tab`/`Ctrl+PgUp` reverses (Lists section only, local to `ListsSection.tsx`; only when the selected list actually has tabs) |
-| `Ctrl+T` | — | New tab, prompting for a name (Lists section only, local to `ListsSection.tsx`; the only runtime way to add a list's very first tab, so unlike the cycle hotkey above this one does NOT require the list to already have tabs) |
+The list is **`src/config/hotkeys.ts`** (`HOTKEYS`, with each key's action and touch path), shown to the user in Settings. It is not repeated here; search that file for a key before adding one, and check `findConflicts`.
 
 ### New-item hotkey (N / Space / Ctrl+N) — section-aware behaviour
 
@@ -1442,7 +912,7 @@ Not bugs in normal use; recorded so they aren't rediscovered from scratch.
 - **`calendar_events.notify_before_value` is `integer`** but `CalendarEventPane` feeds it a free-typed number, so typing `1.5` would fail sync (see migration 023's note). Clamp/round the input, or widen the column.
 - **The other stores still live in localStorage (about 5 MB for the whole site).** Notes moved to IndexedDB (see "Zustand migration rule"), so pasted images no longer count against it, but every save still re-serialises a whole store (opening a note writes `lastViewedAt`, which rewrites *all* notes — now a database write rather than a localStorage one) and images are still inline base64 in note content, which also inflates every Supabase sync of a note. Pasted images are scaled to 1600 px / WebP on the way in (`utils/imageCompress.ts`) and Settings → Storage can shrink existing ones (`services/shrinkNoteImages.ts`). Remaining ideas are in BACKLOG.md "Local storage headroom".
 - **`src/services/autoBackup.test.ts` is flaky under full-suite load** (seen again 2026-10-07, "takes a snapshot once enough weighted changes accumulate"; first seen 2026-10-06: one or two of its tests failed in two full runs, passed alone and in the next full run; the file is untouched by the change that saw it). Probably IndexedDB/timer timing; worth a look before CI starts failing on it.
-- **Modal z-index tiers are ad hoc** (28 / 30 / 100 / 102 / 110 / 1000 for modals; 400 Quick Access; 410 history browser; 500 voice indicator; 1020 BottomSheet; 1050 toast; 1080 right-click menu; 1100 confirm dialog; 1200 special-character list; 10000 link preview). It only matters when one overlay opens over another: a modal opened *from inside a pane* needs a tier above the pane's 100/101 (use 102), and anything that can be summoned from anywhere sits above the modals. `AddListModal`, `AddListItemModal` and `EditNoteTagModal` are at 100, the same tier as the panes, but nothing opens them from inside a pane today. Centralising these as `--z-*` tokens is optional tidying (docs/agent-tasks/02).
+- **Most z-index values are still literals** (28 / 30 / 100 / 102 / 110 / 1000 for modals, and the summoned-from-anywhere tiers 400–10000). The tiers are now tokens (`--z-*`, "Design tokens and theming"); existing literals move to them as files are touched. It matters only when one overlay opens over another. `AddListModal`, `AddListItemModal` and `EditNoteTagModal` are at 100, the same tier as the panes, but nothing opens them from inside a pane today.
 
 ---
 
@@ -1461,19 +931,20 @@ Reading an encrypted note: **always through `noteView()` / `useNoteView()`** —
 
 ---
 
-## Dark mode — implementation details
+## Design tokens and theming (adopted 2026-10-09)
 
-### How it works
+**Every visual value comes from a token in `src/index.css`** (`:root`, the one shared source for every app in the suite): colours `--color-*` (redefined for dark mode under `[data-theme="dark"]`), type `--text-2xs … --text-2xl`, spacing `--space-1 … --space-7`, radius `--radius-sm/md/lg/pill`, shadows `--shadow-sm/md/lg` (also per theme), stacking tiers `--z-*`. Theming lives entirely in that file: a component never checks the theme to pick a colour.
+- **New CSS uses tokens.** A hard-coded value is allowed only where no token fits and the value is genuinely local (a 1px hairline, `50%` for a circle, a measured position).
+- **Existing hard-coded values are replaced as files are touched**, not in a sweep (the user's call, 2026-10-09). If a value you need isn't on a scale, add a token rather than a literal, and say so in the session report.
+- **Deliberate exceptions** keep their literal colours: `FloatingToolbar.module.css` (dark in both themes), the `NoteBackdrop` presets, brand colours (Strava `#fc4c02`), the accent colours named in a comment (indigo highlight, code-block background).
+- **Pattern test** (`patterns.test.ts`, "styles use the design tokens"): a ratchet on hard-coded colours, font sizes, z-index, radius and shadows in `*.module.css`. The counts may only go down; when you lower one, lower its baseline in the test.
+- A modal opened from inside a pane uses `--z-pane-modal`; anything that can be summoned from anywhere sits above every modal (see the tier comments).
+
+### Dark mode — how it works
 
 - **CSS variables**: All colors live as `--color-*` custom properties in `src/index.css`. The `:root` block defines light mode values; `[data-theme="dark"]` on `<html>` overrides them with dark equivalents.
-- **New semantic variables added**: `--color-surface-alt`, `--color-primary-subtle`, `--color-primary-border`, `--color-danger`, `--color-danger-muted`, `--color-warning`, `--color-warning-muted`, `--color-success-muted`, `--color-success-text`, `--shadow-lg`, `--color-border-strong` (2026-09-28 — the divider between a time grid's whole-day zone and its hours), `--color-backdrop` (2026-10-04 — the dimmed layer behind a BottomSheet), `--color-overscroll` (2026-10-06 — the greyed room below the end of a note, `NoteEditor/NoteBackdrop.tsx` when no backdrop is chosen; light grey in light mode, a dark grey lighter than the editor in dark), `--color-occurrence` (2026-10-07 — the faint mark on other mentions of the selected text in a note, OccurrenceHighlight), `--color-blocked-wash`/`--color-blocked-stripe` (2026-10-01 — the hatched overlay on a task waiting on another task, TaskItem `.itemBlocked::after`), `--color-tentative-stripe-1`/`-2` + `--tentative-blend-mode` (2026-09-27 — see "Fixed: tentative-event hatch unreadable in dark mode" in Implemented features; not just a colour swap, dark mode also switches the blend mode itself)
+- **Colour tokens** and what each is for: the comments beside them in `src/index.css`.
 - **FOUC prevention**: Inline `<script>` in `index.html` `<head>` reads `localStorage['todo-settings'].state.theme` synchronously and sets `data-theme` before React hydrates.
 - **Theme effect** (`src/App.tsx`): `useEffect` reads `theme` from `settingsStore`; for `'system'` mode it attaches a `matchMedia('prefers-color-scheme: dark')` listener that updates `data-theme` on OS changes; for explicit `'light'`/`'dark'` it sets `data-theme` directly.
 - **settingsStore** (`src/store/settingsStore.ts`): Added `theme: 'light' | 'dark' | 'system'` (default `'system'`) and `setTheme` action.
 - **Settings UI** (`src/components/SettingsPane/SettingsPane.tsx` + `.module.css`): Appearance section at top with a 3-button segmented control (Light / System / Dark) — follows existing `viewModeToggle` pattern.
-
-### CSS migration rule
-
-All component `*.module.css` files must use CSS variables — **no hardcoded hex colors** for neutral/semantic values. Intentional accent colors that don't adapt (e.g. `#6366f1` indigo in NoteEditor highlight style, `#1e293b` code block background, `#374151` Notes FAB) are acceptable exceptions.
-
-The `FloatingToolbar.module.css` is intentionally dark in all themes (it's a floating editor toolbar) — leave its colors as-is.

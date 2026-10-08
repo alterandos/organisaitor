@@ -19,7 +19,7 @@ export async function handleOAuthDone(url: URL): Promise<void> {
   const reason = url.searchParams.get('reason') ?? undefined;
 
   settleOAuthFlow(provider, connected ? { status: 'connected' } : { status: 'error', reason });
-  await Browser.close().catch(() => {});
+  await Browser.close().catch(() => { /* already closed */ });
 
   const ui = useUIStore.getState();
   if (provider === 'strava') {

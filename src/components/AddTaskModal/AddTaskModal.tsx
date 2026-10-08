@@ -467,7 +467,7 @@ export function AddTaskModal() {
                   <ul className={styles.linkList}>
                     {links.map((url) => {
                       let label = url;
-                      try { label = new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch {}
+                      try { label = new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch { /* not a URL: show it as typed */ }
                       return (
                         <li key={url} className={styles.linkRow}>
                           <span className={styles.linkLabel}>{label}</span>

@@ -225,7 +225,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
               <div className={styles.hoverLinks}>
                 {activeLinks.map((url, i) => {
                   let label = url;
-                  try { label = new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch {}
+                  try { label = new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch { /* not a URL: show it as typed */ }
                   return (
                     <a
                       key={i}

@@ -135,6 +135,6 @@ Also fix the `immutability` errors caused by an effect referencing a `const` han
 The **Bookkeeping** section at the top applies: set the Status line to Done with the outcome, and log every finished task/item. In addition:
 
 1. Record each task in `docs/features/implemented-features.md` (what, why, files, how verified, what was left).
-2. Update `CLAUDE.md`: "Live migration status" / "Migration history" if you added a migration (status **Pending** until the user confirms); remove or adjust anything this made untrue (e.g. the sign-out caveat in the cross-device-sync entry); note the ErrorBoundary in the file-structure map.
+2. Update `docs/supabase/migrations.md`: the status table / "Migration history" if you added a migration (status **Pending** until the user confirms); remove or adjust anything this made untrue (e.g. the sign-out caveat in the cross-device-sync entry); note the ErrorBoundary in the file-structure map.
 3. Update BACKLOG.md's "Pattern retrofit backlog" if you changed the state of any listed pattern.
 4. Tell the user which migration (if any) to run.

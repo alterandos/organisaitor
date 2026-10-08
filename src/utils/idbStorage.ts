@@ -93,7 +93,7 @@ export async function preloadIdbStorage(): Promise<void> {
   }
   ready = true;
   // Ask the browser not to evict the database under storage pressure (a no-op where unsupported).
-  void navigator.storage?.persist?.().catch(() => {});
+  void navigator.storage?.persist?.().catch(() => { /* best effort: the browser may refuse persistent storage */ });
 }
 
 // ── write-behind ─────────────────────────────────────────────────────────────

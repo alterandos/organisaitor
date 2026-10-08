@@ -282,7 +282,7 @@ describe('pattern: migration hygiene', () => {
   const migrationsDir = path.join(ROOT, 'supabase', 'migrations');
   const migrationFiles = fs.readdirSync(migrationsDir).filter((f: string) => f.endsWith('.sql')).sort();
   // Tables created by these migrations are granted later, in bulk, by 022 — documented in
-  // CLAUDE.md's migration 022 entry ("grant … for every table added by 008/012/018/019/020/021").
+  // the migration 022 entry in docs/supabase/migrations.md ("grant … for every table added by 008/012/018/019/020/021").
   const GRANTED_LATER_BY_022 = new Set([
     '008_notes_initial.sql',
     '012_fitness_strava.sql',
@@ -303,9 +303,9 @@ describe('pattern: migration hygiene', () => {
     expect(bad, bad.join('\n')).toEqual([]);
   });
 
-  it('every migration file is listed in CLAUDE.md\'s Migration history table', () => {
-    const claudeMd = fs.readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8');
-    const missing = migrationFiles.filter((f: string) => !claudeMd.includes(f));
+  it('every migration file is listed in docs/supabase/migrations.md (its Migration history)', () => {
+    const record = fs.readFileSync(path.join(ROOT, 'docs', 'supabase', 'migrations.md'), 'utf8');
+    const missing = migrationFiles.filter((f: string) => !record.includes(f));
     expect(missing, missing.join('\n')).toEqual([]);
   });
 });
@@ -672,12 +672,13 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
 });
 
 describe('pattern: app code logs through utils/log.ts (CLAUDE.md "Errors and logging")', () => {
-  // Sites still to convert, kept out of the way of other work in progress. Empty this list as
-  // each is done; never add to it.
-  const PENDING = ['src/components/NoteEditor/NoteEditor.tsx'];
   it('no console.* outside utils/log.ts and the test setup', () => {
-    const files = SOURCE_FILES.filter((f) => !['src/utils/log.ts', 'src/test/setup.ts', ...PENDING].includes(rel(f)));
+    const files = SOURCE_FILES.filter((f) => !['src/utils/log.ts', 'src/test/setup.ts'].includes(rel(f)));
     const hits = findMatches(files, /\bconsole\.(log|info|warn|error|debug)\(/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+  it('no silently empty catch: an ignored error says why in a comment', () => {
+    const hits = findMatches(SOURCE_FILES, /catch\s*(\(\w*\))?\s*\{\s*\}|\.catch\(\(\)\s*=>\s*\{\s*\}\)/);
     expect(hits, describeHits(hits)).toEqual([]);
   });
   it('the global error handlers are installed from main.tsx', () => {

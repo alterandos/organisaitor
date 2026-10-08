@@ -320,7 +320,7 @@ export function AddListItemModal() {
               <div className={styles.linkList}>
                 {links.map((url, idx) => {
                   let display = url;
-                  try { display = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+                  try { display = new URL(url).hostname.replace(/^www\./, ''); } catch { /* not a URL: show it as typed */ }
                   return (
                     <div key={idx} className={styles.linkRow}>
                       <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreview}>{display}</a>
