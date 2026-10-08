@@ -3,6 +3,8 @@
 Items here are confirmed requirements that are not yet implemented.
 Format: brief description + context/motivation.
 
+> **Do this first, before starting any backlog item (the user's instruction, 2026-10-09): audit this file against what's built.** It has grown to ~2,900 lines and some entries are already built, superseded or duplicated. Go through it section by section: check each item against the code and `docs/features/implemented-features.md` (search by feature name), then mark built items done with a pointer to their feature entry (or remove them), merge duplicates, and flag anything stale or unclear for the user. Record the outcome here, then delete this note. This was deferred from the CLAUDE.md audit of 2026-10-09 because it's a session of its own.
+
 ---
 
 ## Notes/Portfolio/Fitness Supabase sync — Notes and Portfolio built (2026-09-19); Fitness still pending
