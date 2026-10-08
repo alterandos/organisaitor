@@ -1,5 +1,6 @@
 import { App as CapApp } from '@capacitor/app';
 
+import { log } from '@/utils/log';
 // THE router for organisaitor:// links opening the Android app (AndroidManifest.xml registers
 // the scheme on MainActivity). A link's host picks the route: organisaitor://oauth-done?… goes to
 // whatever registered 'oauth-done'. Features register their own route here rather than adding
@@ -32,7 +33,7 @@ export async function handleDeepLink(raw: string): Promise<boolean> {
 
   const handler = routes.get(url.host);
   if (!handler) {
-    console.warn('[deepLinks] no route for', raw);
+    log.warn('deepLinks', 'no route for', raw);
     return false;
   }
   lastHandled = { url: raw, at: now };

@@ -2,6 +2,7 @@ import { createJSONStorage, type StateStorage } from 'zustand/middleware';
 import { LABELS } from '@/config/labels';
 import { guardedLocalStorage, reportPersistFailure } from '@/utils/persistStorage';
 
+import { log } from '@/utils/log';
 // IndexedDB-backed persistence for the stores that can outgrow localStorage's ~5 MB (see
 // persistStorage.ts). Today that is `notes-storage` alone — notes carry pasted images inline.
 //
@@ -66,7 +67,7 @@ export async function preloadIdbStorage(): Promise<void> {
   try {
     db = await openDb();
   } catch (e) {
-    console.error('[storage] IndexedDB unavailable — keeping localStorage', e);
+    log.error('storage', 'IndexedDB unavailable — keeping localStorage', e);
     IDB_STORAGE_KEYS.forEach((k) => localKeys.add(k));
     ready = true;
     return;
@@ -86,7 +87,7 @@ export async function preloadIdbStorage(): Promise<void> {
         cache.set(key, legacy);
       }
     } catch (e) {
-      console.error(`[storage] could not load or migrate "${key}" — keeping it in localStorage`, e);
+      log.error('storage', `could not load or migrate "${key}" — keeping it in localStorage`, e);
       localKeys.add(key);
     }
   }

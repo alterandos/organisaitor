@@ -1,6 +1,7 @@
 import { useListStore } from '@/store/listStore';
 import { onVaultStatus, isVaultUnlocked } from '@/services/vault';
 import { decryptSecrets } from '@/services/noteSecrets';
+import { log } from '@/utils/log';
 import {
   getListSecrets, getItemSecrets, putListSecrets, putItemSecrets,
   dropListSecrets, dropItemSecrets, clearListSecretsCache,
@@ -38,7 +39,7 @@ async function refresh(): Promise<void> {
           if (now?.encryptedPayload !== l.encryptedPayload || getListSecrets(l.id)?.dirty) continue;
           putListSecrets(l.id, secrets, l.encryptedPayload, false);
         } catch (err) {
-          console.error('[listSecrets] could not decrypt list', l.id, err);
+          log.error('listSecrets', 'could not decrypt list', l.id, err);
         }
       }
 
@@ -53,7 +54,7 @@ async function refresh(): Promise<void> {
           if (now?.encryptedPayload !== i.encryptedPayload || getItemSecrets(i.id)?.dirty) continue;
           putItemSecrets(i.id, secrets, i.encryptedPayload, false);
         } catch (err) {
-          console.error('[listSecrets] could not decrypt list item', i.id, err);
+          log.error('listSecrets', 'could not decrypt list item', i.id, err);
         }
       }
     } while (again);

@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
+import { log } from '@/utils/log';
 const url = import.meta.env.VITE_SUPABASE_URL  as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 if (!url || !key || url.includes('your-project-ref')) {
-  console.warn('[Supabase] Credentials not configured — cloud sync disabled. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local');
+  log.warn('Supabase', 'Credentials not configured — cloud sync disabled. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local');
 }
 
 // Circuit breaker: if the auth token endpoint fails outright (DNS/network error — not an
@@ -28,7 +29,7 @@ const circuitBreakerFetch: typeof fetch = async (input, init) => {
       consecutiveAuthFailures += 1;
       if (consecutiveAuthFailures >= AUTH_FAILURE_THRESHOLD) {
         supabase.auth.stopAutoRefresh();
-        console.warn(`[Supabase] Auth endpoint unreachable ${consecutiveAuthFailures} times in a row — pausing token refresh for ${COOLDOWN_MS / 60000} minute(s). Check that VITE_SUPABASE_URL points to a project that still exists.`);
+        log.warn('Supabase', `Auth endpoint unreachable ${consecutiveAuthFailures} times in a row — pausing token refresh for ${COOLDOWN_MS / 60000} minute(s). Check that VITE_SUPABASE_URL points to a project that still exists.`);
         setTimeout(() => {
           consecutiveAuthFailures = 0;
           supabase.auth.startAutoRefresh();

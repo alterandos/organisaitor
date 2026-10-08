@@ -11,6 +11,7 @@ import type {
 import { encryptSecrets, decryptSecrets, queueEncrypt } from '@/services/noteSecrets';
 import { persistStorage } from '@/utils/persistStorage';
 import { moveToTrash } from '@/services/trashCapture';
+import { log } from '@/utils/log';
 import {
   extractListSecrets, blankListSecrets, extractItemSecrets, blankItemSecrets,
   putListSecrets, putItemSecrets, dropListSecrets, dropItemSecrets,
@@ -257,7 +258,7 @@ export const useListStore = create<ListState>()(
         const id   = nanoid() as ListItemId;
         const parent = get().lists[input.listId];
         if (parent?.isEncrypted && isListLocked(parent)) {
-          console.warn('[listStore] refused to add an item to a locked encrypted list:', input.listId);
+          log.warn('listStore', 'refused to add an item to a locked encrypted list', input.listId);
           return '' as ListItemId;
         }
         const itemsInList = Object.values(get().listItems).filter((i) => i.listId === input.listId);
@@ -329,7 +330,7 @@ export const useListStore = create<ListState>()(
         const raw = get().lists[listId];
         if (!raw) return;
         if (raw.isEncrypted && isListLocked(raw)) {
-          console.warn('[listStore] ignored a tab removal on a locked encrypted list:', listId);
+          log.warn('listStore', 'ignored a tab removal on a locked encrypted list', listId);
           return;
         }
         // Tab NAMES live in the (possibly encrypted) list; items' tabId is plaintext structure.
@@ -494,7 +495,7 @@ function editList(id: ListId, edit: (l: List) => List): void {
     return;
   }
   if (isListLocked(raw)) {
-    console.warn('[listStore] ignored an edit to a locked encrypted list:', id);
+    log.warn('listStore', 'ignored an edit to a locked encrypted list', id);
     return;
   }
   const edited = edit(listView(raw));
@@ -520,7 +521,7 @@ function editItem(id: ListItemId, edit: (i: ListItem) => ListItem): void {
     return;
   }
   if (isItemLocked(raw)) {
-    console.warn('[listStore] ignored an edit to a locked encrypted list item:', id);
+    log.warn('listStore', 'ignored an edit to a locked encrypted list item', id);
     return;
   }
   const edited = edit(itemView(raw));

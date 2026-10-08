@@ -18,6 +18,7 @@ import { RowAction } from '@/components/RowHoverActions/RowAction';
 import { ChecklistView } from './ChecklistView';
 import { LABELS } from '@/config/labels';
 
+import { log } from '@/utils/log';
 // Sidebar group order. Anything that isn't a checklist or watchlist (custom types included) is Reference.
 const KIND_GROUPS: ListKind[] = ['checklist', 'watchlist', 'reference'];
 const groupOf = (l: List): ListKind => (l.kind === 'checklist' || l.kind === 'watchlist' ? l.kind : 'reference');
@@ -660,7 +661,7 @@ export function ListsSection() {
                     disabled={!vaultUnlocked}
                     onClick={() => {
                       encryptList(selectedList.id as ListId).catch((err) => {
-                        console.error('[ListsSection] could not encrypt list:', err);
+                        log.error('ListsSection', 'could not encrypt list', err);
                         void alertDialog(err instanceof Error ? err.message : 'Could not encrypt this list.');
                       });
                     }}

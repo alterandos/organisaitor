@@ -1,4 +1,5 @@
-// Dedicated IndexedDB database for automatic local backup snapshots — deliberately its OWN
+
+import { log } from '@/utils/log';// Dedicated IndexedDB database for automatic local backup snapshots — deliberately its OWN
 // database (`organisaitor-backups`), not a new object store added to `utils/idbStorage.ts`'s
 // `organisaitor` database. That database already holds notes/trash for real, and this safety-
 // net feature must never risk a version-upgrade conflict (or any other interaction) with the
@@ -52,7 +53,7 @@ export async function saveBackupSnapshot(data: string): Promise<number | null> {
       tx.onerror    = () => reject(tx.error);
     });
   } catch (e) {
-    console.error('[autoBackup] failed to save snapshot', e);
+    log.error('autoBackup', 'failed to save snapshot', e);
     return null;
   }
 }
@@ -71,7 +72,7 @@ export async function listBackupSnapshots(): Promise<BackupSnapshotMeta[]> {
       .map(({ id, createdAt }) => ({ id, createdAt }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   } catch (e) {
-    console.error('[autoBackup] failed to list snapshots', e);
+    log.error('autoBackup', 'failed to list snapshots', e);
     return [];
   }
 }
@@ -87,7 +88,7 @@ export async function getBackupSnapshot(id: number): Promise<string | null> {
     });
     return row?.data ?? null;
   } catch (e) {
-    console.error('[autoBackup] failed to read snapshot', e);
+    log.error('autoBackup', 'failed to read snapshot', e);
     return null;
   }
 }
@@ -102,6 +103,6 @@ export async function deleteBackupSnapshot(id: number): Promise<void> {
       tx.onerror    = () => reject(tx.error);
     });
   } catch (e) {
-    console.error('[autoBackup] failed to delete snapshot', e);
+    log.error('autoBackup', 'failed to delete snapshot', e);
   }
 }

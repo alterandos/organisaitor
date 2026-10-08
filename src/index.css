@@ -51,6 +51,39 @@
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* ── Type scale (CLAUDE.md "Design tokens"; chosen 2026-10-09 from the sizes most used) ── */
+  --text-2xs:  0.68rem;
+  --text-xs:   0.75rem;
+  --text-sm:   0.82rem;
+  --text-md:   0.9rem;
+  --text-base: 1rem;
+  --text-lg:   1.1rem;
+  --text-xl:   1.3rem;
+  --text-2xl:  1.6rem;
+
+  /* ── Spacing scale (padding, margin, gap) ── */
+  --space-1: 0.25rem;
+  --space-2: 0.4rem;
+  --space-3: 0.5rem;
+  --space-4: 0.75rem;
+  --space-5: 1rem;
+  --space-6: 1.5rem;
+  --space-7: 2rem;
+
+  /* ── Stacking tiers: an overlay summoned from anywhere sits above every modal ── */
+  --z-pane:          100;    /* slide-in panes and most modals */
+  --z-pane-modal:    102;    /* a modal or dialog opened from inside a pane */
+  --z-quick-access:  400;
+  --z-history:       410;
+  --z-voice:         500;
+  --z-picker:        1000;   /* pickers that open over a modal (NotePickerModal…) */
+  --z-sheet:         1020;   /* BottomSheet */
+  --z-toast:         1050;
+  --z-context-menu:  1080;
+  --z-confirm:       1100;   /* ConfirmDialog: above everything a person can act in */
+  --z-link-preview:  10000;  /* the hovered-link URL, never covered */
 
   /* ── Shadows ── */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);

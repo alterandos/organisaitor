@@ -15,6 +15,7 @@ import {
 } from './actions';
 import type { NotificationKind } from '@/store/notificationStore';
 
+import { log } from '@/utils/log';
 // Android system notifications (docs/android/05-notifications.md N2–N6). The app is usually closed
 // on a phone, so notifications are booked with the OS ahead of time: the next SCHEDULE_WINDOW_DAYS
 // of planNotifications() (the rules shared with desktop), kept in step by reconcile — on launch, on
@@ -207,7 +208,7 @@ async function runReconcile(): Promise<void> {
     const toBook = want.filter((n) => !kept.has(n.id));
     if (toBook.length > 0) await LocalNotifications.schedule({ notifications: toBook });
   } catch (err) {
-    console.error('[notifications] reconcile failed:', err instanceof Error ? err.message : String(err));
+    log.error('notifications', 'reconcile failed', err instanceof Error ? err.message : String(err));
   }
 }
 

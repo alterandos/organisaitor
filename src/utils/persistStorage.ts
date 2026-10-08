@@ -2,6 +2,7 @@ import { createJSONStorage, type StateStorage } from 'zustand/middleware';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 import { LABELS } from '@/config/labels';
 
+import { log } from '@/utils/log';
 // THE storage every persisted store uses (`storage: persistStorage()` in its persist options).
 //
 // Browsers give a site roughly 5 MB of localStorage, shared by every store. Zustand's persist calls
@@ -46,7 +47,7 @@ const REWARN_AFTER_MS = 10 * 60 * 1000;
 let lastWarnedAt = 0;
 
 function warnStorageFull(failedKey: string) {
-  console.error(`[persist] storage is full — "${failedKey}" was not saved`);
+  log.error('persist', `storage is full — "${failedKey}" was not saved`);
   if (Date.now() - lastWarnedAt < REWARN_AFTER_MS) return;
   lastWarnedAt = Date.now();
   const biggest = getStorageUsage()[0];
@@ -75,7 +76,7 @@ export const persistStorage = <S,>() => createJSONStorage<S>(() => guardedLocalS
 // a full quota gets the same alert; any other error gets a plain "couldn't save" one.
 export function reportPersistFailure(key: string, error: unknown) {
   if (isQuotaError(error)) { warnStorageFull(key); return; }
-  console.error(`[persist] could not save "${key}"`, error);
+  log.error('persist', `could not save "${key}"`, error);
   if (Date.now() - lastWarnedAt < REWARN_AFTER_MS) return;
   lastWarnedAt = Date.now();
   void alertDialog(LABELS.storage.saveFailedMessage, LABELS.storage.saveFailedTitle);

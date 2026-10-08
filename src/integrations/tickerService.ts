@@ -2,6 +2,7 @@ import type { TickerMatch, TickerQuote } from './types';
 import type { AssetClass } from '@/types/portfolio';
 import { apiFetch } from '@/utils/apiFetch';
 
+import { log } from '@/utils/log';
 // In dev, Vite proxies /yf/* → https://query1.finance.yahoo.com/* (Node.js, no CORS).
 // In production, Vercel edge functions at /api/* handle the same proxy.
 const USE_PROXY = import.meta.env.DEV;
@@ -61,7 +62,7 @@ export async function searchTickers(q: string): Promise<TickerMatch[]> {
     if (!res.ok) return [];
     return res.json();
   } catch (err) {
-    console.error('[ticker] searchTickers error:', err);
+    log.error('ticker', 'searchTickers error', err);
     return [];
   }
 }
@@ -76,7 +77,7 @@ export async function getBatchQuotes(symbols: string[]): Promise<TickerQuote[]> 
         `/yf/v7/finance/quote?symbols=${encodeURIComponent(joined)}`,
         { headers: YF_HEADERS },
       );
-      if (!res.ok) { console.warn('[ticker] getBatchQuotes status:', res.status); return []; }
+      if (!res.ok) { log.warn('ticker', 'getBatchQuotes status', res.status); return []; }
       const data = await res.json();
       return (data?.quoteResponse?.result ?? []).map(mapYFQuote);
     }
@@ -84,7 +85,7 @@ export async function getBatchQuotes(symbols: string[]): Promise<TickerQuote[]> 
     if (!res.ok) return [];
     return res.json();
   } catch (err) {
-    console.error('[ticker] getBatchQuotes error:', err);
+    log.error('ticker', 'getBatchQuotes error', err);
     return [];
   }
 }
@@ -131,7 +132,7 @@ export async function getChartHistory(
       }))
       .filter((b) => b.open && b.high && b.low && b.close);
   } catch (err) {
-    console.error('[ticker] getChartHistory error for', symbol, err);
+    log.error('ticker', 'getChartHistory error for', symbol, err);
     return [];
   }
 }

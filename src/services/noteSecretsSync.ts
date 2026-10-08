@@ -1,5 +1,6 @@
 import { useNoteStore } from '@/store/noteStore';
 import { onVaultStatus, isVaultUnlocked, registerBeforeLock } from '@/services/vault';
+import { log } from '@/utils/log';
 import {
   getNoteSecrets, getEntrySecrets, putNoteSecrets, putEntrySecrets,
   dropNoteSecrets, dropEntrySecrets, clearSecretsCache, decryptSecrets, flushEncryptions,
@@ -39,7 +40,7 @@ async function refresh(): Promise<void> {
           if (now?.encryptedPayload !== n.encryptedPayload || getNoteSecrets(n.id)?.dirty) continue;
           putNoteSecrets(n.id, secrets, n.encryptedPayload, false);
         } catch (err) {
-          console.error('[noteSecrets] could not decrypt note', n.id, err);
+          log.error('noteSecrets', 'could not decrypt note', n.id, err);
         }
       }
 
@@ -54,7 +55,7 @@ async function refresh(): Promise<void> {
           if (now?.encryptedPayload !== e.encryptedPayload || getEntrySecrets(e.id)?.dirty) continue;
           putEntrySecrets(e.id, secrets, e.encryptedPayload, false);
         } catch (err) {
-          console.error('[noteSecrets] could not decrypt entry', e.id, err);
+          log.error('noteSecrets', 'could not decrypt entry', e.id, err);
         }
       }
     } while (again);

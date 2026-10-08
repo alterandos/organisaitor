@@ -1,5 +1,6 @@
 import { supabase } from '@/services/supabase';
 
+import { log } from '@/utils/log';
 // Client-side encryption vault — generates a symmetric AES-GCM key that only ever exists
 // unwrapped in memory on a device that's unlocked it. Supabase only ever stores two
 // PBKDF2-wrapped copies of that key (passphrase path + recovery-code path); the raw key
@@ -196,12 +197,12 @@ export async function checkVaultStatus(userId: string): Promise<void> {
   const seq = ++checkSeq;
   const stale = () => seq !== checkSeq;
   try {
-    console.info('[vault] checking: fetching vault row');
+    log.debug('vault', 'checking: fetching vault row');
     const row = await withTimeout(fetchVaultRow(userId), VAULT_FETCH_TIMEOUT_MS, 'fetching the vault row from Supabase');
     if (stale()) return;
     if (!row) { cachedRow = null; lastError = null; setStatus('not-set-up'); return; }
     cachedRow = row;
-    console.info('[vault] checking: reading trusted-device cache');
+    log.debug('vault', 'checking: reading trusted-device cache');
     // A hung/blocked IndexedDB just means "no cached key" — never worth blocking on.
     const cachedKey = await withTimeout(loadTrustedDeviceKey(userId), IDB_TIMEOUT_MS, 'reading the trusted-device cache')
       .catch(() => null);
@@ -217,7 +218,7 @@ export async function checkVaultStatus(userId: string): Promise<void> {
     if (stale()) return;
     // Never treat an unreadable vault as "not set up" (would invite creating a second one
     // that overwrites the first) or as "locked" (would show an unlock form with nothing to unlock).
-    console.error('[vault] could not read user_vault:', err instanceof Error ? err.message : err);
+    log.error('vault', 'could not read user_vault', err instanceof Error ? err.message : err);
     cachedRow = null;
     lastError = err instanceof Error ? err.message : String(err);
     setStatus('unavailable');
@@ -249,13 +250,13 @@ export async function lockVault(): Promise<void> {
   if (status !== 'unlocked') return;
   for (const phase of ['flush', 'settle'] as const) {
     for (const hook of [...beforeLockHooks[phase]]) {
-      try { await hook(); } catch (err) { console.error(`[vault] before-lock (${phase}) hook failed:`, err); }
+      try { await hook(); } catch (err) { log.error('vault', `before-lock (${phase}) hook failed`, err); }
     }
   }
   rawVaultKey = null;
   manuallyLocked = true;
   setStatus('locked');
-  if (currentUserId) await untrustThisDevice(currentUserId).catch((err) => console.error('[vault] could not clear trusted-device key:', err));
+  if (currentUserId) await untrustThisDevice(currentUserId).catch((err) => log.error('vault', 'could not clear trusted-device key', err));
 }
 
 // First-time setup. Returns the recovery code exactly once — the caller (Settings UI) is

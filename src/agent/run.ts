@@ -8,6 +8,7 @@ import { useAgentBatchStore } from '@/store/agentBatchStore';
 import type { ApprovalPolicy, CommandDef, CommandResult, RunOptions } from '@/agent/types';
 import type { AgentOutcome, EntityKind, EntityRef, RiskTier } from '@/types/agent';
 
+import { log as appLog } from '@/utils/log';
 // The single entry point for an agent to do anything: validate the input, enforce the risk tier and
 // the approval policy, run the handler inside a change-capturing batch, and record it all in the
 // audit log. A handler that throws part-way has its partial writes rolled back, so a command either
@@ -57,14 +58,14 @@ export function runCommand(name: string, rawInput: unknown, opts: RunOptions = {
   } catch (e) {
     rollback();
     if (e instanceof AgentError) return fail(def.tier, e.code, e.message);
-    console.error(`[agent] ${name} failed`, e);
+    appLog.error('agent', `${name} failed`, e);
     return fail(def.tier, 'internal', 'Something went wrong running this command, and nothing was changed.');
   }
 
   const changes = diffSince(snapshot);
   if (def.tier === 'read' && changes.length) {
     rollback();
-    console.error(`[agent] read command ${name} changed data — rolled back`);
+    appLog.error('agent', `read command ${name} changed data — rolled back`);
     return fail(def.tier, 'internal', 'A read command tried to change data, so it was undone.');
   }
   if (changes.length) useAgentBatchStore.getState().record(batchId, sessionId, name, changes);

@@ -16,6 +16,7 @@ import { decryptField } from '@/services/vault';
 import { persistStorageIdb } from '@/utils/idbStorage';
 import { moveToTrash } from '@/services/trashCapture';
 
+import { log } from '@/utils/log';
 interface NoteData {
   notes: Record<NoteId, Note>;
   noteTags: Record<NoteTagId, NoteTag>;
@@ -551,7 +552,7 @@ function editNote(id: NoteId, edit: (n: Note) => Note): void {
     return;
   }
   if (isNoteLocked(raw)) {
-    console.warn('[noteStore] ignored an edit to a locked encrypted note:', id);
+    log.warn('noteStore', 'ignored an edit to a locked encrypted note', id);
     return;
   }
   const edited = edit(noteView(raw));
@@ -578,7 +579,7 @@ function editEntry(id: StructuredTagEntryId, edit: (e: StructuredTagEntry) => St
     return;
   }
   if (isEntryLocked(raw)) {
-    console.warn('[noteStore] ignored an edit to a locked encrypted entry:', id);
+    log.warn('noteStore', 'ignored an edit to a locked encrypted entry', id);
     return;
   }
   const edited = edit(entryView(raw));
@@ -672,7 +673,7 @@ async function upgradeLegacyImpl(id: NoteId): Promise<void> {
     await Promise.all(entriesOfNote(id).map((e) => encryptEntryImpl(e.id)));
   } catch (err) {
     upgradeFailed.add(id);
-    console.error('[noteStore] could not upgrade legacy encrypted note', id, err);
+    log.error('noteStore', 'could not upgrade legacy encrypted note', id, err);
   } finally {
     upgrading.delete(id);
   }

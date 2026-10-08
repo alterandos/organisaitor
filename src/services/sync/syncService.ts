@@ -14,6 +14,7 @@ import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
 import type { TrashEntry } from '@/types/trash';
+import { log } from '@/utils/log';
 import {
   taskToRow,       rowToTask,
   collectionToRow, rowToCollection,
@@ -172,7 +173,7 @@ async function pushIds(userId: string, table: keyof typeof TABLE_DEFS, ids: stri
   }
 
   if (error) {
-    console.error(`[sync] push ${table}:`, error);
+    log.error('sync', `push ${table}`, error);
     if (syncStatus !== 'syncing') { pushFailed = true; setStatus('error', `${error} — will retry (${pendingCount()} change${pendingCount() === 1 ? '' : 's'} waiting)`); }
     return false;
   }
@@ -275,10 +276,10 @@ export function markRestored(userId: string): Promise<void> {
     const restoredAt = new Date().toISOString();
     try {
       const res = await supabase.from(MARKER_TABLE).upsert([{ user_id: userId, restored_at: restoredAt }]);
-      if (res.error) { console.error('[sync] could not record the restore:', res.error.message); return; }
+      if (res.error) { log.error('sync', 'could not record the restore', res.error.message); return; }
       writeRestoreSeen(userId, restoredAt);
     } catch (err) {
-      console.error('[sync] could not record the restore:', err instanceof Error ? err.message : String(err));
+      log.error('sync', 'could not record the restore', err instanceof Error ? err.message : String(err));
     }
   });
 }
@@ -382,7 +383,7 @@ async function runInitSync(userId: string): Promise<void> {
     // an unreadable table could be hiding real remote data.
     const failed = SYNC_TABLES.filter((_, i) => results[i].error);
     for (const [i, name] of SYNC_TABLES.entries()) {
-      if (results[i].error) console.error(`[sync] could not load ${name}:`, results[i].error!.message);
+      if (results[i].error) log.error('sync', `could not load ${name}`, results[i].error!.message);
     }
 
     const remote = Object.fromEntries(SYNC_TABLES.map((t, i) => [t, results[i].error ? null : results[i].data])) as RemoteRows;
@@ -421,7 +422,7 @@ async function runInitSync(userId: string): Promise<void> {
     else setStatus('idle');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[sync] init failed:', msg);
+    log.error('sync', 'init failed', msg);
     setStatus('error', msg);
   } finally {
     hydrating = false;
@@ -465,7 +466,7 @@ async function runForceUpload(userId: string): Promise<UploadCounts> {
     return counts;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[sync] force upload failed:', msg);
+    log.error('sync', 'force upload failed', msg);
     setStatus('error', msg);
     throw err;
   }

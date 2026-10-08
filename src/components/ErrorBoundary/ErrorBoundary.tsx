@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { LABELS } from '@/config/labels';
 import { downloadBackup } from '@/utils/backupExport';
+import { log, recentLogs } from '@/utils/log';
 import styles from './ErrorBoundary.module.css';
 
 interface Props {
@@ -17,6 +18,15 @@ interface State {
   backupFailed:   boolean;
 }
 
+// The warnings and errors logged just before the crash, for the Details box (utils/log.ts).
+function recentProblems(): string {
+  const lines = recentLogs()
+    .filter((e) => e.level === 'warn' || e.level === 'error')
+    .slice(-10)
+    .map((e) => `${e.at.slice(11, 19)} ${e.level} [${e.scope}] ${e.message}`);
+  return lines.length ? `\n\n${LABELS.errorBoundary.recentLog}\n${lines.join('\n')}` : '';
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null, componentStack: '', backupFailed: false };
 
@@ -27,14 +37,14 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     const componentStack = info.componentStack ?? '';
     this.setState({ componentStack });
-    console.error(`[ErrorBoundary:${this.props.scope}] ${error.message}`, error, componentStack);
+    log.error(`ErrorBoundary:${this.props.scope}`, error.message, error, componentStack);
   }
 
   private exportBackup = () => {
     downloadBackup().then(
       () => this.setState({ backupFailed: false }),
       (err) => {
-        console.error('[ErrorBoundary] backup export failed:', err);
+        log.error('ErrorBoundary', 'backup export failed', err);
         this.setState({ backupFailed: true });
       },
     );
@@ -65,7 +75,7 @@ export class ErrorBoundary extends Component<Props, State> {
           {backupFailed && <p className={styles.error}>{L.backupFailed}</p>}
           <details className={styles.details}>
             <summary>{L.details}</summary>
-            <pre className={styles.pre}>{error.message}{componentStack}</pre>
+            <pre className={styles.pre}>{error.message}{componentStack}{recentProblems()}</pre>
           </details>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { lockVault, untrustThisDevice } from '@/services/vault';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { LABELS } from '@/config/labels';
 
+import { log } from '@/utils/log';
 // The one way a user signs out. Returns false if they cancelled (still signed in, nothing lost).
 //   1. confirm, and say what stays on this device (the local-only stores);
 //   2. lock the vault — flushes in-flight note/list encryptions, wipes the decrypted caches and
@@ -23,7 +24,7 @@ export async function requestSignOut(): Promise<boolean> {
 
   if (user) {
     await lockVault();
-    await untrustThisDevice(user.id).catch((err) => console.error('[signOut] could not clear trusted-device key:', err));
+    await untrustThisDevice(user.id).catch((err) => log.error('signOut', 'could not clear trusted-device key', err));
 
     try {
       await forceUpload(user.id);

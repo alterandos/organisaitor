@@ -15,6 +15,7 @@ import styles from './AddListModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 
+import { log } from '@/utils/log';
 const FIELD_TYPES: { value: ListFieldType; label: string }[] = [
   { value: 'text',    label: 'Text'    },
   { value: 'number',  label: 'Number'  },
@@ -210,7 +211,7 @@ export function AddListModal() {
       });
       if (encryptOnCreate && vaultUnlocked) {
         encryptList(newId).catch((err) => {
-          console.error('[AddListModal] could not encrypt the new list:', err);
+          log.error('AddListModal', 'could not encrypt the new list', err);
           void alertDialog(err instanceof Error ? err.message : 'Could not encrypt this list.');
         });
       }

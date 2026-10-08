@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { encryptField, decryptField } from '@/services/vault';
 import type { Note, NoteTab, StructuredTagEntry } from '@/types/notes';
 
+import { log } from '@/utils/log';
 // Encrypted notes / structured-tag entries — see BACKLOG.md "Client-side encryption for
 // sensitive content" and CLAUDE.md "Client-side encryption for Notes".
 //
@@ -137,7 +138,7 @@ export function queueEncrypt(key: string, secrets: unknown, onPayload: (payload:
         return;
       }
     } catch (err) {
-      console.error(`[noteSecrets] failed to encrypt ${key}; edit not persisted:`, err);
+      log.error('noteSecrets', `failed to encrypt ${key}; edit not persisted`, err);
     } finally {
       slots.delete(key);
     }

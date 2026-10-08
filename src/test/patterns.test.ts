@@ -670,3 +670,40 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
     expect(editorSrc).toContain('...ChartExtensions');
   });
 });
+
+describe('pattern: app code logs through utils/log.ts (CLAUDE.md "Errors and logging")', () => {
+  // Sites still to convert, kept out of the way of other work in progress. Empty this list as
+  // each is done; never add to it.
+  const PENDING = ['src/components/NoteEditor/NoteEditor.tsx'];
+  it('no console.* outside utils/log.ts and the test setup', () => {
+    const files = SOURCE_FILES.filter((f) => !['src/utils/log.ts', 'src/test/setup.ts', ...PENDING].includes(rel(f)));
+    const hits = findMatches(files, /\bconsole\.(log|info|warn|error|debug)\(/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+  it('the global error handlers are installed from main.tsx', () => {
+    expect(fs.readFileSync(path.join(SRC, 'main.tsx'), 'utf8')).toContain('installGlobalErrorHandlers()');
+  });
+});
+
+describe('pattern: styles use the design tokens in index.css (CLAUDE.md "Design tokens")', () => {
+  // A ratchet, not a purge: these were the counts of hard-coded values when the tokens were
+  // agreed (2026-10-09). Replace them as files are touched; the counts may only go down. When
+  // this fails because a count went DOWN, lower the number here to lock the gain in. When it
+  // fails because one went UP, use the token (var(--text-sm), var(--space-3), var(--z-toast)…).
+  const BASELINE = { hex: 154, fontSize: 1231, zIndex: 137, radius: 311, shadow: 202 };
+  const CSS = walk(SRC, ['.css']).filter((f) => f.endsWith('.module.css'))
+    .map((f) => fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''));
+  const count = (re: RegExp) => CSS.reduce((n, s) => n + (s.match(re) ?? []).length, 0);
+  const now = {
+    hex:      count(/#[0-9a-fA-F]{3,8}\b/g),
+    fontSize: count(/font-size:\s*[0-9.]+(rem|px|em)/g),
+    zIndex:   count(/z-index:\s*-?[0-9]+/g),
+    radius:   count(/border-radius:\s*[0-9.]+(px|rem|em)/g),
+    shadow:   count(/box-shadow:\s*(?!var\(|none|inherit)[^;]*/g),
+  };
+  for (const key of Object.keys(BASELINE) as (keyof typeof BASELINE)[]) {
+    it(`hard-coded ${key} values don't increase (now ${now[key]}, baseline ${BASELINE[key]})`, () => {
+      expect(now[key]).toBeLessThanOrEqual(BASELINE[key]);
+    });
+  }
+});

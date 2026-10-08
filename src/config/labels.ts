@@ -577,6 +577,7 @@ export const LABELS = {
     exportBackup:   'Export backup',
     backupFailed:   "Couldn't export a backup.",
     details:        'Details',
+    recentLog:      'Recent warnings and errors:',
   },
 
   signOut: {
