@@ -76,6 +76,17 @@ describe('chart block', () => {
     expect(noteClipboardText(editor.state.doc.slice(0, editor.state.doc.content.size))).toBe('Quarter\tNorth\tSouth\nQ1\t1\t3\nQ2\t2\t4');
   });
 
+  it('typing on a selected chart opens its table and never replaces the chart', () => {
+    const spec = normalizeChart({ title: 'T', labels: ['a'], series: [{ name: 's', values: [1] }] });
+    make(`<div data-type="chart" data-spec='${JSON.stringify(spec)}'></div>`);
+    expect(editor.view.dom.querySelector('[data-type="chart"] table')).toBeNull();
+    editor.commands.setNodeSelection(chartPos());
+    const handled = editor.view.someProp('handleKeyDown', (f) => f(editor.view, new KeyboardEvent('keydown', { key: 'x', cancelable: true })));
+    expect(handled).toBe(true);
+    expect(normalizeChart(editor.state.doc.nodeAt(chartPos())!.attrs.spec)).toEqual(spec);
+    expect(editor.view.dom.querySelector('[data-type="chart"] table')).not.toBeNull();
+  });
+
   it('type, stacking and data round-trip through JSON and HTML', () => {
     make();
     type('\\chart ');

@@ -44,7 +44,7 @@
   transition: background 120ms, color 120ms, border-color 120ms;
 }
 .filterPill:hover { color: var(--color-text); border-color: var(--color-text); }
-.filterPillActive { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+.filterPillActive { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
 .filterPillActive:hover { filter: brightness(1.1); }
 
 /* ── Column icon button (in actions th) ──────────────────────────────────────── */
@@ -518,7 +518,7 @@
   padding: 0 3px;
   border-radius: 99px;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   font-size: 0.6rem;
   font-weight: 700;
   line-height: 1;
@@ -665,7 +665,7 @@
   transition: background 100ms, color 100ms, border-color 100ms;
 }
 .filterChip:hover { color: var(--color-text); border-color: var(--color-text); }
-.filterChipActive { background: var(--color-primary); color: #fff !important; border-color: var(--color-primary) !important; }
+.filterChipActive { background: var(--color-primary); color: var(--color-on-primary) !important; border-color: var(--color-primary) !important; }
 .filterChipActive:hover { filter: brightness(1.1); }
 
 /* Market cap tier buttons — full-width rows */

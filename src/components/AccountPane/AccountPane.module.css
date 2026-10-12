@@ -134,7 +134,7 @@
   background: var(--color-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: #fff;
+  color: var(--color-on-primary);
   cursor: pointer;
   font-size: 0.9rem;
   font-family: inherit;

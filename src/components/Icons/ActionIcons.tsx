@@ -5,7 +5,7 @@ import type { SVGProps } from 'react';
 // products use for these three actions: a trash can for delete, a lidded box for archive, and
 // the same box with an up-arrow for restore. Always rendered next to a text label (never alone
 // on a destructive action) and hidden from screen readers, so the label is what's announced.
-function Icon({ children, ...rest }: SVGProps<SVGSVGElement>) {
+export function Icon({ children, ...rest }: SVGProps<SVGSVGElement>) {
   return (
     <svg
       width="16"

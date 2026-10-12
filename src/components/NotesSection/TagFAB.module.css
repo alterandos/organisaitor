@@ -142,10 +142,13 @@
 }
 
 .viewBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0.5rem;
   padding: 0.625rem 1rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 6px;
   font-size: 0.875rem;
@@ -156,6 +159,7 @@
 }
 
 .viewBtn:hover { background: var(--color-primary-hover); }
+.viewIcon { width: 1em; height: 1em; flex: none; }
 
 .empty {
   padding: 0.75rem 1rem;

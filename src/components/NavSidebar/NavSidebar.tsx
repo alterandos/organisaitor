@@ -3,13 +3,7 @@ import { LABELS } from '@/config/labels';
 import { isAppEnabled } from '@/config/apps';
 import styles from './NavSidebar.module.css';
 import { CORE_NAV_ITEMS, OverviewIcon, PortfolioIcon, FitnessIcon } from './navItems';
-
-const IntegrationsIcon = (
-  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-    <path d="M11 3v6M8 6l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M4 13h4v4a1 1 0 001 1h6a1 1 0 001-1v-4h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-);
+import { IntegrationsIcon } from '@/components/Icons';
 
 export function NavSidebar() {
   const activeView        = useUIStore((s) => s.activeView);
@@ -79,7 +73,7 @@ export function NavSidebar() {
         title="Data & Integrations"
         aria-label="Data & Integrations"
       >
-        {IntegrationsIcon}
+        <IntegrationsIcon width={22} height={22} />
       </button>
     </nav>
   );

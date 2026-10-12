@@ -10,7 +10,7 @@ import { rankSearch } from '@/utils/suggestRank';
 import { LABELS } from '@/config/labels';
 import type { NoteId } from '@/types';
 import styles from './GlossaryView.module.css';
-import { DisclosureIcon } from '@/components/Icons';
+import { DisclosureIcon, GlossaryIcon } from '@/components/Icons';
 
 type Filter = 'all' | 'definition' | 'concept' | 'acronym';
 const FILTERS: Filter[] = ['all', 'definition', 'concept', 'acronym'];
@@ -73,7 +73,7 @@ export function GlossaryView() {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.titleRow}>
-          <span className={styles.title}>📖 {L.title}</span>
+          <span className={styles.title}><GlossaryIcon className={styles.titleIcon} />{L.title}</span>
           <span className={styles.count}>{all.length}</span>
           <button type="button" className={styles.closeBtn} onClick={close} title={L.back}>×</button>
         </div>

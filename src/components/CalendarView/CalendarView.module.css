@@ -94,7 +94,7 @@
 
 .weekDayNumToday {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   font-weight: 700;
 }
 
@@ -443,7 +443,7 @@
 
 .dayNumToday {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   border-radius: 50%;
   width: 1.5rem;
   height: 1.5rem;

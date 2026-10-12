@@ -41,10 +41,10 @@ export function setOverride(view: EditorView, key: string, value: string): void 
 
 // Picking an object kind → composing: the typed keyword becomes the kind's full keyword and a
 // space. Picking a note block inserts it in place of what was typed, and the session is over.
-export function acceptKind(view: EditorView, kind: PickableKind): void {
+export function acceptKind(view: EditorView, kind: PickableKind, ctx: NoteObjectContext | null = null): void {
   const s = getSession(view.state);
   if (!s || s.interp.phase !== 'picking') return;
-  if (isBlockKind(kind)) { kind.insert(view, s.anchor, s.to); return; }
+  if (isBlockKind(kind)) { kind.insert(view, s.anchor, s.to, ctx); return; }
   const tr = view.state.tr.insertText(`${kind.id} `, s.anchor + 1, s.to);
   view.dispatch(tr.setSelection(TextSelection.create(tr.doc, s.anchor + 2 + kind.id.length)).scrollIntoView());
 }

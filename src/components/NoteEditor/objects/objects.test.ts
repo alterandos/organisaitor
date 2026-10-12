@@ -759,7 +759,10 @@ describe('the pane, fifth round', () => {
 
 describe('repeating items', () => {
   const weekly = { freq: 'weekly' as const, interval: 1, endKind: 'forever' as const, count: null, until: null };
-  const today = todayIso();
+  // Read inside each test, on the faked clock (NOW). At collection time it was the real date,
+  // which only agreed with NOW by luck and stopped agreeing a week later (2026-10-13).
+  let today = '';
+  beforeEach(() => { today = todayIso(); });
 
   it('the pane shows the current occurrence; ticking it moves on to the next', () => {
     const id = useCalendarStore.getState().addReminder({ title: 'Bins', date: addDaysToIso(today, -14), time: '08:00', repeat: weekly });

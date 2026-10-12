@@ -23,10 +23,15 @@
 }
 
 .title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: 1.05rem;
   font-weight: 650;
   color: var(--color-text);
 }
+
+.titleIcon { width: 1em; height: 1em; flex: none; }
 
 .count {
   padding: 0.05rem 0.5rem;

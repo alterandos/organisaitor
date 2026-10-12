@@ -1,0 +1,48 @@
+/* The picker itself uses NotePickerModal's styles; this is its heading icon and the row of
+   relations (how what's added relates to the hub's idea). */
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.icon {
+  width: 1em;
+  height: 1em;
+}
+
+.relations {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 1rem 0.6rem;
+}
+
+.relationsLabel {
+  margin-right: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.relation {
+  padding: 2px var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.relation:hover { border-color: var(--color-primary-border); }
+.relation:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+.relationOn {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-weight: 600;
+}

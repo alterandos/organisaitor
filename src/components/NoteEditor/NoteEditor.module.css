@@ -2625,27 +2625,51 @@
 /* ── Frames (blockDesigns.ts): Outline and Shade, on any note block ──────────────────────────────
    Drawn outside the block's own box — an outline at an offset and a shadow spread to the same
    distance — so no design's layout moves when it's framed; the margin grows to make the room.
+   The distance also takes in whatever the design draws past its own box (--frame-overflow,
+   measured by blockDesigns.ts's frame fit), e.g. the ring's side cards.
    One quiet default each: a hairline, and the alternate surface. */
 .editorContent [data-note-block][data-outlined="true"],
 .editorContent [data-note-block][data-shaded="true"] {
-  --frame-pad: 1.1rem;
-  border-radius: 4px;
+  --frame-pad: calc(1.1rem + var(--frame-overflow, 0px));
+  --frame-line: 1px;
+  border-radius: var(--radius-sm);
   margin-top: calc(1.5rem + var(--frame-pad));
   margin-bottom: calc(1.5rem + var(--frame-pad));
 }
 
+/* Shape: the outline and the shade both follow the block's corner radius (grown by the pad). */
+.editorContent [data-note-block][data-frame-shape="rounded"] { border-radius: var(--radius-lg); }
+.editorContent [data-note-block][data-frame-shape="pill"]    { border-radius: var(--radius-pill); }
+.editorContent [data-note-block][data-frame-shape="circle"]  { border-radius: 50%; }
+
 .editorContent [data-note-block][data-shaded="true"] {
-  background-color: var(--color-surface-alt);
-  box-shadow: 0 0 0 var(--frame-pad) var(--color-surface-alt);
+  --frame-fill: var(--color-surface-alt);
+  background-color: var(--frame-fill);
+  box-shadow: 0 0 0 var(--frame-pad) var(--frame-fill);
+}
+
+/* A chosen shade colour, mixed into the surface so text on it stays readable in both themes. */
+.editorContent [data-note-block][data-shaded="true"][data-shade-color] {
+  --frame-fill: color-mix(in srgb, var(--frame-shade) 16%, var(--color-surface));
 }
 
 .editorContent [data-note-block][data-outlined="true"] {
-  outline: 1px solid var(--color-border-strong);
+  outline: var(--frame-line) solid var(--frame-outline, var(--color-border-strong));
   outline-offset: var(--frame-pad);
 }
 
-.editorContent [data-note-block][data-outlined="true"][data-shaded="true"] {
+.editorContent [data-note-block][data-outlined="true"][data-shaded="true"]:not([data-outline-color]) {
   outline-color: var(--color-border);
+}
+
+.editorContent [data-note-block][data-outline-width="medium"] { --frame-line: 2px; }
+.editorContent [data-note-block][data-outline-width="thick"]  { --frame-line: 3px; }
+.editorContent [data-note-block][data-outlined="true"][data-outline-style="dashed"] { outline-style: dashed; }
+.editorContent [data-note-block][data-outlined="true"][data-outline-style="dotted"] { outline-style: dotted; }
+/* A double line needs room for two lines and the gap: three times the chosen thickness. */
+.editorContent [data-note-block][data-outlined="true"][data-outline-style="double"] {
+  outline-style: double;
+  outline-width: calc(var(--frame-line) * 3);
 }
 
 /* The pill sits on the frame's edge rather than inside it — except in designs that scroll
@@ -2704,20 +2728,618 @@
   font-family: 'Fira Code', 'Cascadia Code', monospace;
 }
 
-.editorContent pre {
-  background: #1e293b;
-  border-radius: 6px;
-  padding: 1rem 1.25rem;
-  margin: 0.75rem 0;
-  overflow-x: auto;
+/* ── Inbox (extensions/Inbox.ts, `\inbox`) ───────────────────────────────────────────────────────
+   A name, then items. Each item: a line of chips (status, where it came from, its task, ⋯) above
+   its text, and a bar on its left in its status's colour. Designs: List, Cards, Board (a column
+   per status: the items are placed by data-status; the content never changes). */
+.editorContent [data-type="inbox"] {
+  position: relative;
+  margin: var(--space-6) 0;
+  padding: var(--space-2) 0 var(--space-1);
+  border-top: 2px solid var(--color-primary-border);
 }
 
-.editorContent pre code {
-  background: none;
-  color: #e2e8f0;
-  padding: 0;
-  font-size: 0.9em;
+.editorContent [data-inbox-title] {
+  position: relative;
+  padding: var(--space-1) 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 700;
 }
+
+.editorContent [data-inbox-title]::before { content: '📥 '; }
+
+.editorContent [data-inbox-title][data-inbox-placeholder]::after,
+.editorContent [data-type="inbox-item"] > [data-inbox-placeholder]::before {
+  content: attr(data-inbox-placeholder);
+  color: var(--color-muted);
+  opacity: 0.65;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.editorContent [data-type="inbox-item"] > [data-inbox-placeholder]::before {
+  float: left;
+  height: 0;
+}
+
+.editorContent [data-type="inbox-item"] {
+  --status-color: var(--color-swatch-yellow);
+  position: relative;
+  margin: var(--space-2) 0;
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
+  border-left: 3px solid var(--status-color);
+}
+
+.editorContent [data-type="inbox-item"][data-status="discussing"] { --status-color: var(--color-swatch-blue); }
+.editorContent [data-type="inbox-item"][data-status="parked"]     { --status-color: var(--color-swatch-grey); }
+.editorContent [data-type="inbox-item"][data-status="built"]      { --status-color: var(--color-swatch-green); }
+
+.editorContent [data-type="inbox-item"] > p { margin: var(--space-1) 0; }
+
+.editorContent [data-inbox-chrome] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  user-select: none;
+}
+
+.editorContent [data-inbox-chrome] button {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.editorContent [data-inbox-chrome] button:hover,
+.editorContent [data-inbox-chrome] button:focus-visible { border-color: var(--color-primary-border); color: var(--color-text); }
+
+.editorContent [data-inbox-chrome] [data-inbox-status] { color: var(--color-text); font-weight: 600; }
+
+/* ⋯ shows on hover and while writing in the item; always on touch. */
+.editorContent [data-inbox-more] { opacity: 0; transition: opacity 0.12s; }
+.editorContent [data-type="inbox-item"]:hover [data-inbox-more],
+.editorContent [data-type="inbox-item"]:focus-within [data-inbox-more],
+.editorContent [data-inbox-more]:focus-visible { opacity: 1; }
+
+.editorContent [data-inbox-empty] {
+  padding: var(--space-3) 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+  user-select: none;
+}
+
+.editorContent [data-inbox-add] {
+  margin-top: var(--space-1);
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.editorContent [data-type="inbox"]:hover [data-inbox-add],
+.editorContent [data-type="inbox"][data-inbox-current] [data-inbox-add],
+.editorContent [data-type="inbox"][data-inbox-none] [data-inbox-add],
+.editorContent [data-inbox-add]:focus-visible { opacity: 1; }
+.editorContent [data-inbox-add]:hover { color: var(--color-primary); }
+
+@media (hover: none) {
+  .editorContent [data-inbox-more],
+  .editorContent [data-inbox-add] { opacity: 1; }
+}
+
+/* ·· Cards ·· */
+.editorContent [data-type="inbox"][data-variant="cards"] > [data-type="inbox-item"],
+.editorContent [data-type="inbox"][data-variant="board"] > [data-type="inbox-item"] {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--status-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ·· Board: a column per status ·· */
+.editorContent [data-type="inbox"][data-variant="board"] {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-flow: row dense;
+  align-items: start;
+  column-gap: var(--space-3);
+}
+
+.editorContent [data-type="inbox"][data-variant="board"] > * { grid-column: 1 / -1; }
+.editorContent [data-type="inbox"][data-variant="board"] > [data-inbox-title] { grid-row: 1; }
+.editorContent [data-inbox-columns] { display: contents; }
+
+.editorContent [data-inbox-column] {
+  grid-row: 2;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  user-select: none;
+}
+
+.editorContent [data-inbox-column="idea"]       { grid-column: 1; }
+.editorContent [data-inbox-column="discussing"] { grid-column: 2; }
+.editorContent [data-inbox-column="parked"]     { grid-column: 3; }
+.editorContent [data-inbox-column="built"]      { grid-column: 4; }
+
+.editorContent [data-type="inbox"][data-variant="board"] > [data-type="inbox-item"][data-status="idea"]       { grid-column: 1; }
+.editorContent [data-type="inbox"][data-variant="board"] > [data-type="inbox-item"][data-status="discussing"] { grid-column: 2; }
+.editorContent [data-type="inbox"][data-variant="board"] > [data-type="inbox-item"][data-status="parked"]     { grid-column: 3; }
+.editorContent [data-type="inbox"][data-variant="board"] > [data-type="inbox-item"][data-status="built"]      { grid-column: 4; }
+
+/* A phone has no room for four columns: one, the status on each card. */
+@media (max-width: 600px) {
+  .editorContent [data-type="inbox"][data-variant="board"] { grid-template-columns: minmax(0, 1fr); }
+  .editorContent [data-inbox-columns] { display: none; }
+  .editorContent [data-type="inbox"][data-variant="board"] > [data-type="inbox-item"] { grid-column: 1; }
+}
+
+/* The pill. */
+.editorContent [data-inbox-tools] { top: -14px; right: 0; }
+.editorContent [data-inbox-tools] [data-inbox-tool] { padding: 0 var(--space-3); }
+
+.editorContent [data-type="inbox"]:hover > [data-inbox-tools],
+.editorContent [data-type="inbox"][data-inbox-current] > [data-inbox-tools],
+.editorContent [data-type="inbox"]:global(.ProseMirror-selectednode) > [data-inbox-tools] { opacity: 1; }
+
+/* What a sent passage leaves behind: "↪ Moved to Ideas ×". */
+.editorContent [data-type="moved-stub"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 0 var(--space-2);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  vertical-align: baseline;
+  user-select: none;
+}
+
+.editorContent [data-type="moved-stub"] button {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.editorContent [data-stub-open]:hover { color: var(--color-primary); text-decoration: underline; }
+.editorContent [data-stub-remove]:hover { color: var(--color-danger); }
+.editorContent [data-type="moved-stub"]:global(.ProseMirror-selectednode) { border-color: var(--color-primary); }
+
+/* ── Idea hub (extensions/Hub.ts, `\hub`) ────────────────────────────────────────────────────────
+   A name, your take, then the links grouped under their relation (List), or flowing as chips that
+   each say how they relate (Compact). A canvas is to come as another design. A linked passage in a
+   note gets a small marker after it (data-hub-marker), drawn once per passage. */
+.editorContent [data-type="hub"] {
+  position: relative;
+  margin: var(--space-6) 0;
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-subtle);
+}
+
+.editorContent [data-hub-title] {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.editorContent [data-hub-take] {
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--color-text);
+  font-style: italic;
+}
+
+.editorContent [data-hub-title][data-hub-placeholder]::before,
+.editorContent [data-hub-take][data-hub-placeholder]::before {
+  content: attr(data-hub-placeholder);
+  float: left;
+  height: 0;
+  color: var(--color-muted);
+  opacity: 0.65;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.editorContent [data-hub-heading] {
+  margin: var(--space-3) 0 var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.editorContent [data-type="hub-link"] {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.editorContent [data-type="hub-link"]:hover { background: var(--color-surface); }
+.editorContent [data-type="hub-link"]:global(.ProseMirror-selectednode) { outline: 2px solid var(--color-primary); }
+
+.editorContent [data-type="hub-link"] button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.editorContent [data-hub-link-icon] { flex: none; }
+
+.editorContent [data-hub-link-open] {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editorContent [data-hub-link-open]:hover,
+.editorContent [data-hub-link-open]:focus-visible { color: var(--color-primary); text-decoration: underline; }
+
+.editorContent [data-hub-link-where] {
+  flex: none;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+/* How it relates: in List the heading says it, so the chip shows on hover to change it. */
+.editorContent [data-type="hub-link"] [data-hub-link-relation] {
+  flex: none;
+  margin-left: auto;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  opacity: 0;
+}
+
+.editorContent [data-hub-link-remove] { flex: none; color: var(--color-muted); opacity: 0; }
+.editorContent [data-hub-link-remove]:hover { color: var(--color-danger); }
+
+.editorContent [data-type="hub-link"]:hover [data-hub-link-relation],
+.editorContent [data-type="hub-link"]:hover [data-hub-link-remove],
+.editorContent [data-type="hub-link"] button:focus-visible { opacity: 1; }
+
+@media (hover: none) {
+  .editorContent [data-type="hub-link"] [data-hub-link-relation],
+  .editorContent [data-hub-link-remove] { opacity: 1; }
+}
+
+/* ·· Compact: chips that flow, each saying how it relates ·· */
+.editorContent [data-type="hub"][data-variant="compact"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.editorContent [data-type="hub"][data-variant="compact"] > :not([data-type="hub-link"]) { flex-basis: 100%; }
+.editorContent [data-type="hub"][data-variant="compact"] [data-hub-heading] { display: none; }
+
+.editorContent [data-type="hub"][data-variant="compact"] > [data-type="hub-link"] {
+  max-width: 100%;
+  padding: 2px var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+}
+
+.editorContent [data-type="hub"][data-variant="compact"] [data-hub-link-relation] {
+  order: -1;
+  margin-left: 0;
+  opacity: 1;
+}
+
+.editorContent [data-type="hub"][data-variant="compact"] [data-hub-link-where] { display: none; }
+
+.editorContent [data-hub-empty] {
+  padding: var(--space-2) 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+  user-select: none;
+}
+
+.editorContent [data-hub-add] {
+  margin-top: var(--space-1);
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.editorContent [data-type="hub"]:hover [data-hub-add],
+.editorContent [data-type="hub"][data-hub-current] [data-hub-add],
+.editorContent [data-type="hub"][data-hub-none] [data-hub-add],
+.editorContent [data-hub-add]:focus-visible { opacity: 1; }
+.editorContent [data-hub-add]:hover { color: var(--color-primary); }
+
+@media (hover: none) {
+  .editorContent [data-hub-add] { opacity: 1; }
+}
+
+.editorContent [data-hub-tools] { top: -14px; right: 0; }
+
+.editorContent [data-type="hub"]:hover > [data-hub-tools],
+.editorContent [data-type="hub"][data-hub-current] > [data-hub-tools],
+.editorContent [data-type="hub"]:global(.ProseMirror-selectednode) > [data-hub-tools] { opacity: 1; }
+
+/* A linked passage: a faint underline on the text (the mark), and its marker after it. */
+.editorContent [data-hub-ref] {
+  text-decoration: underline dotted var(--color-primary-border);
+  text-underline-offset: 3px;
+}
+
+.editorContent [data-hub-marker] {
+  display: inline-grid;
+  place-items: center;
+  width: 1em;
+  height: 1em;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  vertical-align: -0.1em;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.editorContent [data-hub-marker]:hover,
+.editorContent [data-hub-marker]:focus-visible { opacity: 1; }
+
+.editorContent [data-hub-marker] svg {
+  width: 0.85em;
+  height: 0.85em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* ── Maths (extensions/Maths.ts, `\maths`) ───────────────────────────────────────────────────────
+   A MathLive field (a custom element; its insides are styled through its CSS variables and
+   ::part), or the LaTeX as text until MathLive has loaded. A block centres, sits left, or carries
+   an equation number counted down the note (CSS counter). Inline maths sits in the line. */
+.editorContent { counter-reset: equation; }
+
+.editorContent [data-type="math"] {
+  position: relative;
+  margin: 1rem 0;
+  padding: 0.4rem 0;
+  text-align: center;
+}
+
+.editorContent [data-type="math"][data-variant="left"] { text-align: left; }
+.editorContent [data-type="math"][data-variant="numbered"] { counter-increment: equation; padding-right: 3.5rem; }
+.editorContent [data-type="math"][data-variant="numbered"]::after {
+  content: '(' counter(equation) ')';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  color: var(--color-muted);
+  transform: translateY(-50%);
+}
+
+.editorContent [data-type="math-inline"] { display: inline-block; vertical-align: middle; }
+
+.editorContent [data-math-holder] { font-family: 'Fira Code', 'Cascadia Code', monospace; color: var(--color-muted); }
+.editorContent [data-math-holder]:has(math-field) { font-family: inherit; color: inherit; }
+
+.editorContent math-field {
+  display: inline-block;
+  min-width: 3rem;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  --caret-color: var(--color-primary);
+  --selection-background-color: var(--color-primary-subtle);
+  --contains-highlight-background-color: var(--color-primary-subtle);
+  --placeholder-color: var(--color-muted);
+  --smart-fence-color: var(--color-muted);
+}
+
+.editorContent [data-type="math"] math-field { font-size: var(--text-lg); }
+.editorContent [data-type="math-inline"] math-field { min-width: 1.5rem; padding: 0 3px; }
+
+.editorContent math-field:hover { border-color: var(--color-border); }
+.editorContent math-field:focus-within { border-color: var(--color-primary-border); background: var(--color-primary-subtle); outline: none; }
+
+/* One right-click menu (ours); the keyboard button only on touch screens. */
+.editorContent math-field::part(menu-toggle) { display: none; }
+@media (hover: hover) {
+  .editorContent math-field::part(virtual-keyboard-toggle) { display: none; }
+}
+
+.editorContent [data-math-tools] { top: -14px; right: 0; }
+
+.editorContent [data-type="math"]:hover > [data-math-tools],
+.editorContent [data-type="math"]:focus-within > [data-math-tools],
+.editorContent [data-type="math"]:global(.ProseMirror-selectednode) > [data-math-tools] { opacity: 1; }
+
+.editorContent [data-type="math-inline"]:global(.ProseMirror-selectednode) math-field { border-color: var(--color-primary); }
+
+/* ── Code block (extensions/CodeBlock.ts, `\code` or ```) ────────────────────────────────────────
+   The pill above a dark panel (dark in both themes): a header with the language, then the line
+   numbers (Line numbers design) beside the code. The panel, not the block, is dark, so a frame's
+   shade sits around it. Syntax colours are lowlight's hljs-* classes, drawn from --color-code-*. */
+.editorContent [data-type="code-block"] {
+  position: relative;
+  margin: 0.75rem 0;
+}
+
+.editorContent [data-code-panel] {
+  border-radius: var(--radius-md);
+  background: var(--color-code-bg);
+  color: var(--color-code-text);
+}
+
+.editorContent [data-code-header] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 0;
+  user-select: none;
+}
+
+/* The language: always shown, quietly, so you can see what the code is; a click changes it. */
+.editorContent [data-code-language] {
+  max-width: 14rem;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-code-header);
+  font: inherit;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.editorContent [data-code-language]:hover,
+.editorContent [data-code-language]:focus-visible { border-color: var(--color-code-gutter); outline: none; }
+.editorContent [data-code-language] option { background: var(--color-surface); color: var(--color-text); }
+.editorContent [data-code-language]:disabled { cursor: default; appearance: none; }
+
+.editorContent [data-code-body] {
+  display: flex;
+  overflow-x: auto;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.editorContent [data-code-body] pre {
+  flex: 1;
+  margin: 0;
+  padding: 0.5rem 1.25rem 0.9rem;
+  background: none;
+  font: inherit;
+  white-space: pre;
+}
+
+.editorContent [data-code-body] code {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.editorContent [data-code-gutter] {
+  display: none;
+  position: sticky;
+  left: 0;
+  padding: 0.5rem 0.6rem 0.9rem 0.9rem;
+  border-right: 1px solid var(--color-code-gutter);
+  background: inherit;
+  color: var(--color-code-gutter);
+  text-align: right;
+  white-space: pre;
+  user-select: none;
+}
+
+.editorContent [data-type="code-block"][data-variant="numbered"] [data-code-body] { background: var(--color-code-bg); }
+.editorContent [data-type="code-block"][data-variant="numbered"] [data-code-gutter] { display: block; }
+.editorContent [data-type="code-block"][data-variant="numbered"] [data-code-body] pre { padding-left: 0.9rem; }
+
+/* Terminal: a darker window with its three dots. */
+.editorContent [data-type="code-block"][data-variant="terminal"] [data-code-panel] { background: var(--color-code-terminal); }
+.editorContent [data-type="code-block"][data-variant="terminal"] [data-code-header] {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-code-gutter);
+}
+.editorContent [data-code-dots] { display: none; }
+.editorContent [data-type="code-block"][data-variant="terminal"] [data-code-dots] {
+  display: inline-flex;
+  gap: 5px;
+}
+.editorContent [data-code-dots] span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-swatch-red);
+}
+.editorContent [data-code-dots] span:nth-child(2) { background: var(--color-swatch-yellow); }
+.editorContent [data-code-dots] span:nth-child(3) { background: var(--color-swatch-green); margin-right: 6px; }
+.editorContent [data-type="code-block"][data-variant="terminal"] [data-code-body] pre { padding-top: 0.6rem; }
+
+/* The pill: Copy beside the shared buttons. */
+.editorContent [data-code-tools] { top: -14px; right: 0; }
+.editorContent [data-code-tools] [data-code-tool] { padding: 0 8px; font-weight: 600; }
+
+.editorContent [data-type="code-block"]:hover > [data-code-tools],
+.editorContent [data-type="code-block"]:focus-within > [data-code-tools],
+.editorContent [data-type="code-block"]:global(.ProseMirror-selectednode) > [data-code-tools] { opacity: 1; }
+
+.editorContent [data-code-body] :global(.hljs-comment),
+.editorContent [data-code-body] :global(.hljs-quote) { color: var(--color-code-comment); font-style: italic; }
+.editorContent [data-code-body] :global(.hljs-keyword),
+.editorContent [data-code-body] :global(.hljs-selector-tag),
+.editorContent [data-code-body] :global(.hljs-literal),
+.editorContent [data-code-body] :global(.hljs-doctag) { color: var(--color-code-keyword); }
+.editorContent [data-code-body] :global(.hljs-string),
+.editorContent [data-code-body] :global(.hljs-regexp),
+.editorContent [data-code-body] :global(.hljs-template-tag) { color: var(--color-code-string); }
+.editorContent [data-code-body] :global(.hljs-number),
+.editorContent [data-code-body] :global(.hljs-symbol),
+.editorContent [data-code-body] :global(.hljs-bullet) { color: var(--color-code-number); }
+.editorContent [data-code-body] :global(.hljs-title),
+.editorContent [data-code-body] :global(.hljs-section),
+.editorContent [data-code-body] :global(.hljs-name) { color: var(--color-code-title); }
+.editorContent [data-code-body] :global(.hljs-type),
+.editorContent [data-code-body] :global(.hljs-built_in),
+.editorContent [data-code-body] :global(.hljs-class),
+.editorContent [data-code-body] :global(.hljs-variable.language_) { color: var(--color-code-type); }
+.editorContent [data-code-body] :global(.hljs-attr),
+.editorContent [data-code-body] :global(.hljs-attribute),
+.editorContent [data-code-body] :global(.hljs-property),
+.editorContent [data-code-body] :global(.hljs-meta),
+.editorContent [data-code-body] :global(.hljs-selector-class),
+.editorContent [data-code-body] :global(.hljs-selector-id) { color: var(--color-code-attr); }
+.editorContent [data-code-body] :global(.hljs-deletion) { color: var(--color-code-deletion); }
+.editorContent [data-code-body] :global(.hljs-addition) { color: var(--color-code-addition); }
+.editorContent [data-code-body] :global(.hljs-emphasis) { font-style: italic; }
+.editorContent [data-code-body] :global(.hljs-strong) { font-weight: 700; }
 
 .editorContent hr {
   border: none;
@@ -2778,6 +3400,8 @@
   cursor: default;
   filter: drop-shadow(0 0 0.5px var(--importance-color));
 }
+
+.editorContent [data-importance-marker] svg { width: 1em; height: 1em; margin-left: 0.2em; vertical-align: -0.15em; color: var(--color-muted); }
 
 /* ── Text linked to a Glossary term (extensions/ConceptRef.ts) ────────────────
    The text: a soft highlight in the term's colour, dotted underline. The brace and the label are
@@ -3122,7 +3746,7 @@
   width: 100%;
   padding: 0.28rem 0;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 5px;
   font-size: 0.78rem;
@@ -3172,7 +3796,7 @@
 .columnsOptionActive {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
 }
 
 /* ── Font color picker ───────────────────────────────────────────────────── */
@@ -3237,7 +3861,7 @@
 
 .newLinkInsertBtn {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   border: none;
   border-radius: 5px;
   padding: 0.35rem 0.5rem;
@@ -3415,3 +4039,49 @@
   background: var(--color-occurrence);
   box-shadow: 0 0 0 1px var(--color-occurrence);
 }
+
+/* Glossary cards (extensions/GlossaryCard.ts; the card itself is GlossaryCard.module.css). */
+/* Cards sit side by side: each is an inline block whose width plus its 1rem right gap is its share
+   of the column (data-card-width-shown: the stored width, or the one a drag is showing). */
+.editorContent [data-type="glossary-card"] {
+  position: relative;
+  display: inline-block;
+  vertical-align: top;
+  box-sizing: border-box;
+  margin: 0.25rem 1rem 0.25rem 0;
+  width: min(26rem, calc(100% - 1rem));   /* STANDARD_CARD_REM in GlossaryCard.ts */
+}
+.editorContent [data-type="glossary-card"][data-card-width-shown="third"] { width: calc(100% / 3 - 1rem - 0.5px); }
+.editorContent [data-type="glossary-card"][data-card-width-shown="half"]  { width: calc(50% - 1rem - 0.5px); }
+.editorContent [data-type="glossary-card"][data-card-width-shown="full"]  { width: 100%; margin-right: 0; }
+
+/* The right edge, to drag. Shown with the pill; always on touch. */
+.editorContent [data-card-resize] {
+  position: absolute;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  right: -0.5rem;
+  width: 0.75rem;
+  cursor: ew-resize;
+  touch-action: none;
+  opacity: 0;
+}
+.editorContent [data-card-resize]::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 2rem;
+  margin: -1rem 0 0 -2px;
+  border-radius: var(--radius-pill);
+  background: var(--color-border);
+}
+.editorContent [data-type="glossary-card"]:hover > [data-card-resize],
+.editorContent [data-type="glossary-card"]:global(.ProseMirror-selectednode) > [data-card-resize] { opacity: 1; }
+.editorContent [data-card-resize]:hover::after { background: var(--color-primary); }
+@media (hover: none) { .editorContent [data-card-resize] { opacity: 1; } }
+.editorContent [data-glossary-tools] { top: -6px; right: 8px; }
+.editorContent [data-type="glossary-card"]:hover > [data-glossary-tools],
+.editorContent [data-type="glossary-card"]:focus-within > [data-glossary-tools],
+.editorContent [data-type="glossary-card"]:global(.ProseMirror-selectednode) > [data-glossary-tools] { opacity: 1; }

@@ -41,7 +41,7 @@ import { ListsSection } from '@/components/ListsSection/ListsSection';
 import { OverviewSection } from '@/components/OverviewSection/OverviewSection';
 import { AddOverviewModal } from '@/components/AddOverviewModal/AddOverviewModal';
 import { ErrorBoundary } from '@/components/ErrorBoundary/ErrorBoundary';
-import { AccountIcon } from '@/components/Icons';
+import { AccountIcon, SettingsIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
 import { AddActivityModal } from '@/components/AddActivityModal/AddActivityModal';
 import { EditActivityTypeModal } from '@/components/EditActivityTypeModal/EditActivityTypeModal';
@@ -78,6 +78,7 @@ import { installSpecialCharInput } from '@/specialChars/fieldInput';
 import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog/ConfirmDialog';
 import { ToastHost } from '@/components/Toast/Toast';
+import { NavFlash } from '@/components/NavFlash/NavFlash';
 import { ContextMenuHost } from '@/components/ContextMenu/ContextMenuHost';
 import { toggleDictation } from '@/services/speech/dictation';
 import { AddNoteModal } from '@/components/AddNoteModal/AddNoteModal';
@@ -96,6 +97,7 @@ import { getOrderedEndeavours } from '@/utils/collections';
 import { isAppEnabled } from '@/config/apps';
 import type { CollectionId } from '@/types';
 import styles from './App.module.css';
+import { isTypingTarget } from '@/utils/typingTarget';
 
 if (import.meta.env.DEV) void import('@/agent/devHandle');
 
@@ -375,12 +377,12 @@ export default function App() {
       // typing, never navigate; it only acts as "back" below, once isTyping is confirmed false.
       if (matchesHotkeyPrimary(e, 'action-back')) {
         e.preventDefault();
-        navigateBack();
+        if (navigateBack()) useUIStore.getState().flashNav('back');
         return;
       }
       if (matchesHotkeyPrimary(e, 'action-forward')) {
         e.preventDefault();
-        navigateForward();
+        if (useUIStore.getState().travelHistory(1)) useUIStore.getState().flashNav('forward');
         return;
       }
       // The history browser: also from inside a text field (Alt+N types nothing there).
@@ -400,17 +402,14 @@ export default function App() {
       }
 
       // Don't fire when typing in inputs
-      const tag = (e.target as HTMLElement)?.tagName;
-      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-        || (e.target as HTMLElement)?.isContentEditable;
-      if (isTyping) return;
+      if (isTypingTarget(e)) return;
 
       // Backspace (action-back's secondary) reaches here, now that isTyping is confirmed
       // false. matchesHotkeyId also re-checks the primary binding, harmlessly redundant
       // with the bypass above since a typing-field target already returned by now.
       if (matchesHotkeyId(e, 'action-back')) {
         e.preventDefault();
-        navigateBack();
+        if (navigateBack()) useUIStore.getState().flashNav('back');
         return;
       }
 
@@ -581,7 +580,8 @@ export default function App() {
               className={styles.settingsBtn}
               onClick={openSettings}
               aria-label="Open settings"
-            >⚙</button>
+              title="Settings"
+            ><SettingsIcon className={styles.accountIcon} /></button>
           </div>
         </header>
 
@@ -676,6 +676,7 @@ export default function App() {
         <VoiceIndicator />
         <ConfirmDialogHost />
         <ToastHost />
+        <NavFlash />
         <ContextMenuHost />
         {quickAccessOpen && <QuickAccessPane />}
         {historyBrowserOpen && <HistoryBrowser />}

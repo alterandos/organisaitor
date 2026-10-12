@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTaskStore } from '@/store/taskStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
-import type { StructuredTagTypeDef } from '@/config/structuredTagTypes';
+import { isQuickField, type StructuredTagTypeDef } from '@/config/structuredTagTypes';
 import type { CollectionId } from '@/types';
 import styles from './StructuredTagPopover.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -68,7 +68,10 @@ export function StructuredTagPopover({
   useEscapeClose(onCancel);
   useCtrlEnterSubmit(() => handleSave());
 
-  const compactField = typeDef.fields[0];
+  // Lists, pictures and links are edited on the card (\definition, \concept…), not here; their
+  // values ride along untouched in `fields`.
+  const quickFields = typeDef.fields.filter(isQuickField);
+  const compactField = quickFields[0];
 
   return createPortal(
     <div
@@ -103,7 +106,7 @@ export function StructuredTagPopover({
         )
       ) : (
         <>
-          {typeDef.fields.map((f) => (
+          {quickFields.map((f) => (
             <div key={f.id} className={styles.fieldGroup}>
               <label className={styles.fieldLabel}>{f.name}</label>
               {f.type === 'textarea' ? (

@@ -56,7 +56,7 @@
 }
 .meridiemBtnActive {
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border-color: var(--color-primary);
 }
 

@@ -113,11 +113,11 @@
 .widget .useBtn {
   border-color: var(--color-primary);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   font-weight: 600;
 }
 
-.widget .useBtn:hover { border-color: var(--color-primary); background: var(--color-primary); color: #fff; filter: brightness(1.08); }
+.widget .useBtn:hover { border-color: var(--color-primary); background: var(--color-primary); color: var(--color-on-primary); filter: brightness(1.08); }
 
 .widget .deleteBtn { opacity: 0; }
 .widget th .deleteBtn { position: absolute; top: -9px; right: -6px; padding: 0 5px; }

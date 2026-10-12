@@ -3,7 +3,7 @@ import { Plugin, PluginKey, Selection, TextSelection, type EditorState, type Tra
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
-import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign } from './blockDesigns';
+import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
 
 // A breakdown in a note (`\breakdown`): a whole and the parts it's made of — the pillars of
 // democracy, the elements of a strategy, what makes a good habit. At least two parts.
@@ -123,27 +123,10 @@ const newPart = (state: EditorState) => state.schema.nodes.breakdownPart.create(
 export function insertBreakdown(state: EditorState, from: number, to: number): Transaction | null {
   const type = state.schema.nodes.breakdown;
   if (!type) return null;
-  const $start = state.doc.resolve(from);
-  while (from > $start.start() && /\s/.test(state.doc.textBetween(from - 1, from))) from--;
   const node = type.create(null, [state.schema.nodes.breakdownWhole.create(), ...Array.from({ length: DEFAULT_PARTS }, () => newPart(state))]);
-  const tr = state.tr.delete(from, to);
-  const $pos = tr.doc.resolve(from);
-  const d = $pos.depth;
-  let at: number | null = null;
-  if ($pos.parent.isTextblock && $pos.parent.content.size === 0 && d > 0
-    && $pos.node(d - 1).canReplaceWith($pos.index(d - 1), $pos.index(d - 1) + 1, type)) {
-    at = $pos.before(d);
-    tr.replaceWith(at, $pos.after(d), node);
-  } else {
-    for (let depth = d; depth > 0; depth--) {
-      const index = $pos.indexAfter(depth - 1);
-      if (!$pos.node(depth - 1).canReplaceWith(index, index, type)) continue;
-      at = $pos.after(depth);
-      tr.insert(at, node);
-      break;
-    }
-  }
-  if (at === null) return null;
+  const made = replaceTypedWithBlock(state, from, to, node);
+  if (!made) return null;
+  const { tr, at } = made;
   return tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView();
 }
 
@@ -366,7 +349,7 @@ function breakdownDecorations(state: EditorState): DecorationSet | null {
       const pp = pos + 1 + offset;
       const style: string[] = [`--i: ${i}`];
       if (variant === 'hub') { const { x, y } = hubPlacement(i, n); style.push(`--x: ${x}%`, `--y: ${y}%`); }
-      if (spectrum) style.push(`--part-color: hsl(${Math.round((210 + (i * 360) / n) % 360)} 62% 52%)`);
+      if (spectrum) style.push(`--part-color: ${spectrumColour(i / n)}`);
       decos.push(Decoration.node(pp, pp + part.nodeSize, { style: style.join('; ') }));
       if (n > MIN_PARTS) {
         decos.push(Decoration.widget(pp + part.nodeSize - 1, (view, getPos) => deleteWidget(view, getPos),

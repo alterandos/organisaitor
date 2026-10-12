@@ -21,6 +21,7 @@ import { LABELS } from '@/config/labels';
 import { log } from '@/utils/log';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { isTypingTarget } from '@/utils/typingTarget';
 // Sidebar group order. Anything that isn't a checklist or watchlist (custom types included) is Reference.
 const KIND_GROUPS: ListKind[] = ['checklist', 'watchlist', 'reference'];
 const groupOf = (l: List): ListKind => (l.kind === 'checklist' || l.kind === 'watchlist' ? l.kind : 'reference');
@@ -468,10 +469,7 @@ export function ListsSection() {
   // own content/tabs) responds to plain ↑/↓, mirroring Chronicle's tree/list/editor column focus.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-        || (e.target as HTMLElement)?.isContentEditable;
-      if (isTyping) return;
+      if (isTypingTarget(e)) return;
 
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === '`') {
         e.preventDefault();

@@ -93,7 +93,7 @@
   height: 3.5rem;
   border-radius: 50%;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   border: none;
   cursor: pointer;
   display: flex;

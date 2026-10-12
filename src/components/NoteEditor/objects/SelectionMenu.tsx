@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
 import { LABELS } from '@/config/labels';
+import { HUB_ICON, INBOX_ICON } from '@/config/itemIcons';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useNoteStore } from '@/store/noteStore';
 import { useSecretsVersion } from '@/services/noteSecrets';
@@ -15,6 +16,7 @@ import { BUILTIN_TAGS } from '../builtinTags';
 import { quoteFromSelection } from '../extensions/Quote';
 import { closeSelectionMenu, getSelectionMenu } from './selectionMenuState';
 import { objectTriggerStorage } from './NoteObjectTrigger';
+import { ReviewIcon } from '@/components/Icons';
 import styles from './NoteObjectMenu.module.css';
 
 const MENU_WIDTH = 344;
@@ -30,7 +32,7 @@ interface Props {
 interface Item {
   key:      string;
   group:    'suggested' | 'link' | 'mark' | 'turn';
-  icon:     string;
+  icon:     ReactNode;
   label:    string;
   detail?:  string;
   color?:   string;
@@ -119,8 +121,10 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
         key: `important-${lv.level}`, group: 'mark', icon: lv.icon, label: lv.label, color: lv.color,
         run: after(() => setImportance(view, range.from, range.to, lv.level)),
       })),
-      { key: 'review', group: 'mark', icon: '🔁', label: reviewing ? LABELS.importance.stopReviewing : LABELS.importance.reviewLater, run: after(() => toggleReview(view, range.from, range.to)) },
+      { key: 'review', group: 'mark', icon: <ReviewIcon />, label: reviewing ? LABELS.importance.stopReviewing : LABELS.importance.reviewLater, run: after(() => toggleReview(view, range.from, range.to)) },
       { key: 'quote', group: 'turn', icon: '❝', label: LABELS.noteBlocks.quote.turnInto, run: () => { closeSelectionMenu(view); quoteFromSelection(view, range.from, range.to); } },
+      { key: 'send-to-inbox', group: 'turn', icon: INBOX_ICON, label: LABELS.sendToInbox.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openSendToInbox?.(); } },
+      { key: 'add-to-hub', group: 'turn', icon: HUB_ICON, label: LABELS.hubs.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openAddToHub?.(); } },
     ];
     const q = query.trim().toLowerCase();
     const markItems = q ? marks.filter((m) => m.label.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) || m.label.toLowerCase().includes(q)) : marks;

@@ -46,13 +46,13 @@ export function MobileMoreSheet() {
         {LABELS.history.moreLabel}
       </button>
       <button className={styles.item} onClick={() => go(() => openManage())}>
-        Manage Library
+        {LABELS.places.manage}
       </button>
       <button className={styles.item} onClick={() => go(openSettings)}>
-        Settings
+        {LABELS.places.settings}
       </button>
       <button className={styles.item} onClick={() => go(openAccount)}>
-        Account
+        {LABELS.places.account}
       </button>
     </BottomSheet>
   );

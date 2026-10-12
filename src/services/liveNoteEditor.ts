@@ -17,3 +17,14 @@ export function liveNoteEditorFor(noteId: string, tabId: string | null): EditorV
   if (!live || live.view.isDestroyed || live.noteId !== noteId || live.tabId !== tabId) return null;
   return live.view;
 }
+
+// Which note and tab (null = the main tab) a view is showing, if it's the registered editor.
+export function liveNoteOf(view: EditorView): { noteId: string; tabId: string | null } | null {
+  if (!live || live.view !== view || view.isDestroyed) return null;
+  return { noteId: live.noteId, tabId: live.tabId };
+}
+
+// The note open in the editor right now (any tab), for reading its live text.
+export function liveNote(): { noteId: string; tabId: string | null; view: EditorView } | null {
+  return live && !live.view.isDestroyed ? live : null;
+}

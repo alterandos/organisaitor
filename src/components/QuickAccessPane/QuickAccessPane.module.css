@@ -129,6 +129,8 @@
   flex-shrink: 0;
 }
 
+.itemIcon svg { width: 1em; height: 1em; vertical-align: middle; }
+
 .itemText {
   display: flex;
   flex-direction: column;
@@ -155,4 +157,51 @@
   border-top: 1px solid var(--color-border);
   font-size: 0.72rem;
   color: var(--color-muted);
+}
+
+/* The Places row: one line that scrolls sideways (a swipeable strip on a phone). */
+.places {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: var(--space-5);
+}
+
+.place {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+
+.place:hover { background: var(--color-surface); border-color: var(--color-primary-border); }
+.place:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+.placeIcon { flex: none; width: 1em; height: 1em; }
+
+.placeBadge {
+  min-width: 1.3em;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--text-2xs);
+  text-align: center;
+}
+
+/* With a mouse, sideways scrolling is awkward: the row wraps instead. */
+@media (hover: hover) {
+  .places { flex-wrap: wrap; overflow-x: visible; }
 }

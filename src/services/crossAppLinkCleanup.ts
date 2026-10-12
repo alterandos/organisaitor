@@ -11,7 +11,9 @@ import { useTaskStore } from '@/store/taskStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useListStore } from '@/store/listStore';
+import type { Transaction } from '@tiptap/pm/state';
 import { stripArtifactLinksFromContent } from '@/utils/noteContent';
+import { editNoteContent } from '@/services/noteContentEdit';
 import { noteView, isNoteLocked } from '@/services/noteSecrets';
 import type { TaskId, NoteId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, CrossAppRef, CrossAppRefType } from '@/types';
 import type { ListId } from '@/types/lists';
@@ -22,17 +24,27 @@ function stripArtifactLinksFromNote(noteId: NoteId, targetType: string, targetId
   // An encrypted note's content is ciphertext-only until the vault is unlocked, so a LOCKED
   // note can't be rewritten — its now-dead mark stays. That's harmless: clicking it already
   // checks the target still exists before navigating. Unlocked, the view has plaintext and
-  // the store's update actions re-encrypt the result.
+  // the store's update actions re-encrypt the result. An open note's text is changed in its
+  // editor (services/noteContentEdit.ts), so the editor's next save doesn't put the mark back.
   if (isNoteLocked(raw)) return;
-  const note = noteView(raw);
-
-  const main = stripArtifactLinksFromContent(note.content, targetType, targetId);
-  if (main.changed) useNoteStore.getState().updateNote(noteId, { content: main.content });
-
-  for (const tab of note.tabs) {
-    const res = stripArtifactLinksFromContent(tab.content, targetType, targetId);
-    if (res.changed) useNoteStore.getState().updateNoteTabContent(noteId, tab.id, res.content);
-  }
+  const edit = {
+    inEditor: (tr: Transaction) => {
+      tr.doc.descendants((node, pos) => {
+        if (!node.isText) return true;
+        for (const m of node.marks) {
+          if (m.type.name === 'artifactLink' && m.attrs.targetType === targetType && m.attrs.targetId === targetId) tr.removeMark(pos, pos + node.nodeSize, m);
+        }
+        return false;
+      });
+      return true;
+    },
+    inJson: (json: string) => {
+      const res = stripArtifactLinksFromContent(json, targetType, targetId);
+      return res.changed ? res.content : null;
+    },
+  };
+  editNoteContent(noteId, null, edit);
+  for (const tab of noteView(raw).tabs) editNoteContent(noteId, tab.id, edit);
 }
 
 // Deletes a task and cleans up everything that would otherwise dangle: its shadow calendar

@@ -131,6 +131,6 @@
 .cancelBtn { background: transparent; color: var(--color-muted); }
 .cancelBtn:hover { background: var(--color-bg); }
 
-.saveBtn { background: var(--color-primary); color: white; border-color: transparent; }
+.saveBtn { background: var(--color-primary); color: var(--color-on-primary); border-color: transparent; }
 .saveBtn:hover:not(:disabled) { filter: brightness(1.08); }
 .saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }

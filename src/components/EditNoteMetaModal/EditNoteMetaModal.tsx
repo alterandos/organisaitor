@@ -11,12 +11,7 @@ import { formatDate } from '@/utils/date';
 import styles from './EditNoteMetaModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
-
-const ACCENT_COLORS = [
-  '#6366f1', '#8b5cf6', '#ec4899', '#ef4444',
-  '#f97316', '#eab308', '#10b981', '#14b8a6',
-  '#3b82f6', '#64748b',
-];
+import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 
 // Render a flat list of tags in depth-first tree order with indentation
 function buildTagList(
@@ -164,13 +159,14 @@ function EditNoteMetaForm({ note }: { note: Note }) {
                 onClick={() => setColor(null)}
                 title="No colour"
               >—</button>
-              {ACCENT_COLORS.map((c) => (
+              {SWATCH_HEXES.map((c) => (
                 <button
                   key={c}
                   className={`${styles.colorSwatch} ${color === c ? styles.colorSwatchActive : ''}`}
                   style={{ background: c }}
                   onClick={() => setColor(c)}
-                  title={c}
+                  title={swatchLabel(c)}
+                  aria-label={swatchLabel(c)}
                 />
               ))}
             </div>

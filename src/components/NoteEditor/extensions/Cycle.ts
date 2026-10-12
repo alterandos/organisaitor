@@ -4,7 +4,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { squareIconDataUrl } from '@/utils/imageCompress';
-import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, openBlockPopover, pillButton, popoverClass as pop, type BlockDesign } from './blockDesigns';
+import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, openBlockPopover, pillButton, popoverClass as pop, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
 
 // A cycle in a note (`\cycle`): stages that lead one to the next and from the last back to the
 // first — the water cycle, a habit loop, a product lifecycle. At least two stages.
@@ -157,27 +157,10 @@ const newStage = (state: EditorState, label = '') => state.schema.nodes.cycleSta
 export function insertCycle(state: EditorState, from: number, to: number): Transaction | null {
   const type = state.schema.nodes.cycle;
   if (!type) return null;
-  const $start = state.doc.resolve(from);
-  while (from > $start.start() && /\s/.test(state.doc.textBetween(from - 1, from))) from--;
   const node = type.create(null, [state.schema.nodes.cycleName.create(), ...Array.from({ length: DEFAULT_STAGES }, () => newStage(state))]);
-  const tr = state.tr.delete(from, to);
-  const $pos = tr.doc.resolve(from);
-  const d = $pos.depth;
-  let at: number | null = null;
-  if ($pos.parent.isTextblock && $pos.parent.content.size === 0 && d > 0
-    && $pos.node(d - 1).canReplaceWith($pos.index(d - 1), $pos.index(d - 1) + 1, type)) {
-    at = $pos.before(d);
-    tr.replaceWith(at, $pos.after(d), node);
-  } else {
-    for (let depth = d; depth > 0; depth--) {
-      const index = $pos.indexAfter(depth - 1);
-      if (!$pos.node(depth - 1).canReplaceWith(index, index, type)) continue;
-      at = $pos.after(depth);
-      tr.insert(at, node);
-      break;
-    }
-  }
-  if (at === null) return null;
+  const made = replaceTypedWithBlock(state, from, to, node);
+  if (!made) return null;
+  const { tr, at } = made;
   return tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView();
 }
 
@@ -761,7 +744,7 @@ function cycleDecorations(state: EditorState): DecorationSet | null {
       const sp = pos + 1 + offset;
       const style: string[] = [`--i: ${i}`];
       if (variant === 'ring') { const { x, y } = ringPlacement(i, n); style.push(`--x: ${x}%`, `--y: ${y}%`); }
-      if (spectrum) style.push(`--stage-color: hsl(${Math.round((210 + (i * 360) / n) % 360)} 62% 52%)`);
+      if (spectrum) style.push(`--stage-color: ${spectrumColour(i / n)}`);
       decos.push(Decoration.node(sp, sp + stage.nodeSize, { style: style.join('; ') }));
       decos.push(Decoration.widget(sp + 1, (view, getPos) => iconWidget(view, getPos, stage.attrs.icon, stage.attrs.image),
         { side: -1, key: `cycle-icon-${k}-${i}-${stage.attrs.icon ?? ''}-${(stage.attrs.image ?? '').length}`, ignoreSelection: true, stopEvent: () => true }));

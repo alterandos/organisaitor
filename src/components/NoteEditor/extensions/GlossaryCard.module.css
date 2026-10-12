@@ -1,0 +1,243 @@
+/* The Glossary card (GlossaryCardBody.tsx). Its block chrome (pill, frames, selection) is the
+   shared block styling in NoteEditor.module.css; this is the card inside it. */
+
+.card,
+.compact,
+.split { --gc-accent: var(--color-primary); }
+
+.card {
+  margin: var(--space-2) 0;
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-glossary-type="definition"] { --gc-accent: var(--color-swatch-green); }
+[data-glossary-type="concept"]    { --gc-accent: var(--color-swatch-indigo); }
+[data-glossary-type="acronym"]    { --gc-accent: var(--color-swatch-teal); }
+
+.head { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.kind {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gc-accent);
+}
+
+.head .term {
+  font-size: var(--text-xl);
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--color-text);
+}
+
+.head .acronymTerm {
+  font-size: var(--text-2xl);
+  letter-spacing: 0.12em;
+}
+
+/* The separator between the term and what it means. */
+.rule {
+  width: 3rem;
+  height: 3px;
+  margin: var(--space-3) 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--gc-accent);
+}
+
+.field + .field { margin-top: var(--space-4); }
+
+.label {
+  margin-bottom: var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.primary {
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--color-text);
+}
+
+/* Fields are edited in place: an input that reads as text until hovered or focused. */
+.input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.5;
+  resize: none;
+  field-sizing: content;
+}
+
+.input:hover { border-color: var(--color-border); }
+.input:focus { border-color: var(--color-primary-border); background: var(--color-surface-alt); outline: none; }
+.input::placeholder { color: var(--color-muted); }
+
+.listInput { min-height: 3.2em; }
+
+.list {
+  margin: 0;
+  padding-left: 1.2em;
+  line-height: 1.55;
+  cursor: text;
+}
+
+.list li + li { margin-top: var(--space-1); }
+
+.spelledOut {
+  font-size: var(--text-base);
+  line-height: 1.55;
+  cursor: text;
+}
+
+.spelled {
+  color: var(--gc-accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.imageField { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.image {
+  max-width: 100%;
+  max-height: 18rem;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+  align-self: flex-start;
+}
+
+.imageTools { display: flex; gap: var(--space-2); }
+
+.smallBtn,
+.addField {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.smallBtn:hover,
+.addField:hover { color: var(--color-text); border-color: var(--color-primary-border); }
+
+.more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-border);
+}
+
+.select {
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.links { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.linkRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+
+.relation { color: var(--color-muted); }
+
+.parts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.parts .label { margin: 0; }
+
+.entryLink {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.entryLink:hover { text-decoration: underline; }
+
+.remove {
+  padding: 0 var(--space-1);
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.remove:hover { color: var(--color-danger); }
+
+/* Compact: one line, the term and what it means. */
+.compact {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-1) 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--gc-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+}
+
+.compact .term { font-size: var(--text-base); font-weight: 650; flex: 0 1 auto; width: auto; field-sizing: content; min-width: 4ch; }
+.compact > :last-child { flex: 1; min-width: 0; }
+.dash { color: var(--color-muted); }
+
+.missing {
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* Split: the term in bold, a rule as tall as the text beside it, then what it means. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) 2px 1fr;
+  column-gap: var(--space-4);
+  align-items: stretch;
+  margin: var(--space-2) 0;
+  padding: var(--space-2) 0;
+}
+
+.splitTerm { align-self: start; }
+.split .term { font-weight: 700; font-size: var(--text-base); field-sizing: content; min-width: 6ch; }
+
+.splitRule {
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--gc-accent);
+}
+
+.splitBody { min-width: 0; }
+
+.webLink {
+  color: var(--color-primary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.webLink:hover { text-decoration: underline; }

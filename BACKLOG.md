@@ -595,6 +595,7 @@ Built: see CLAUDE.md "Note blocks" (under "Inline objects in notes") and "Note b
 - **Per-entry options**: an entry's dot colour or icon (a milestone, a warning), and marking an entry as "now" for a project timeline.
 - ~~**Ordering**~~: sorting by date built 2026-10-07 (`utils/timelineWhen.ts`, see "Timeline: sorted by date, and a horizontal style"). Still to do: moving entries by hand (Alt+Shift+↑/↓, drag on the dot) for "As typed" timelines; telling the user when a When couldn't be read (today it silently stays put); a per-timeline setting for day-first vs month-first dates when the locale guess is wrong.
 - **Turning a list into a timeline** (and back): a bulleted list whose items start with a date ("1914 – …") is the obvious source.
+- ~~**Code and maths blocks**~~: built 2026-10-09 (`\code`, `\maths`; see "Code and maths blocks" in implemented-features.md). Follow-ups: referring to a numbered equation from the text ("see (3)"); a code block that runs ("Running code in notes" under Proposed Ideas); more languages than lowlight's common set (each is one grammar import); maths in other fields (a task's notes) and in search (the LaTeX isn't searched today).
 - **More blocks**, each one node in `extensions/` + a `*Block.ts` in `objects/` + one `NOTE_BLOCK_KINDS` entry: a callout (`\callout`: an icon, a tint, text), a toggle/collapsible section, a pros/cons table, a definition list (`\term`), ~~a quote with source~~ (built 2026-10-07, `\quote`), a kanban-like board.
 - **Quote follow-ups:** a default style for new quotes in Settings (the user first suggested Settings; per-quote choice was built instead); quotes of more than one paragraph (today Shift+Enter line breaks); a Link field that opens the source; a "copy as citation" action (APA / MLA from the fields).
 
@@ -617,6 +618,7 @@ The pattern is in CLAUDE.md "Block designs". The user asked for it to be named a
 - **Cycle:** Spiral (each round a little further out, for iterations); Orbit (stages as dots on the ring, labels outside); Two-way (a back-and-forth pair of stages, for a cycle of exactly two).
 - **Hierarchy** (built 2026-10-07 with Tree, Columns, Outline): Radial (the root in the middle, levels as rings); Bracket (a tournament-style tree); collapsing a branch; dragging an item onto another to re-parent it. Built from the Glossary: see "Glossary auto-linking — follow-ups".
 - **Pyramid** (built 2026-10-07 with Pyramid, Funnel, Stacked): a 3-D look (shaded sides); notes on alternate sides; numbers on the layers.
+- **Frames:** colours (swatches + custom), shapes (square, rounded, pill, circle for square blocks), line style and thickness built 2026-10-09. Ideas: a gradient shade; a frame title (a label set into the outline); the same palette for the blocks' own part colours.
 - **A default design per block in Settings** (new quotes start as Card, …), if the per-block choice turns out to be repetitive.
 
 ### Special characters — more sets (logged 2026-10-08)
@@ -654,13 +656,18 @@ Built: "Linking to the Glossary as you type" (see `docs/features/implemented-fea
 
 Built: CLAUDE.md "Annotations" and the two 2026-10-07 entries in `docs/features/implemented-features.md` ("The Glossary…", "Important, built out…").
 - **Existing plain Definition/Concept marks** (made before 2026-10-07) have no record, so they aren't in the Glossary. Offer "Add to the Glossary" on them (right-click), or convert them on first open.
+- **Glossary cards and records — what's left after 2026-10-09** (built: "Glossary cards, richer records, acronyms as you type" in `implemented-features.md`).
+  - **Flashcards and testing yourself.** The records are ready for it. Study state (next due, step, results) goes on the record, in `fields`, reusing Review's intervals (`REVIEW_INTERVALS`), so one review system covers passages and terms. Not stored yet: nothing uses it until the flashcards exist.
+  - **"Other forms"** (irregular plurals and spellings: mitochondrion/mitochondria, colour/color) for linking as you type. The user thought it overkill unless argued for; `GlossaryAutolink` already takes regular plurals (-s, -es), so it's only for irregular forms. Not built; revisit if links are missed.
+  - **The Glossary view** shows the term and meaning only; pictures, key points and sub-concepts show on the card. Show them there, and nest sub-concepts under their parent.
+  - **A record whose card was removed before it was named** stays as an empty record (hidden from the Glossary). Clean these up, e.g. on the note's next save.
+  - **Recording an acronym as you type** offers only the "Long form (ABC)" pattern; "ABC (long form)" and "ABC - long form" are found when you mark the text, not offered as you type.
 - **One term defined in two notes** stays two entries. Merge, or show them as one term with two definitions.
-- **Quick Access (Ctrl+G) search for Glossary terms**: a `term` provider in `utils/quickAccess.ts` that opens the definition (`openNotePassage`).
 - **Edit a term from the Glossary view** (today: go to its note and use the popover).
 - **The margin label's hover card on touch**: a tap goes straight to the definition, so the meaning isn't seen on a phone. Log in `docs/android/10-gap-analysis.md` when Notes editing on Android (W7) is planned.
 - **Key points across a note's tabs** (the outline only sees the open tab), and across notes (an Overview source for Important passages).
 - **Review**: keyboard shortcuts in the Review view (avoid the bare digits, which navigate sections); a daily notification or badge when passages are due; an SM-2 style ease factor if the fixed ladder proves too blunt.
-- **Retrofit: `services/crossAppLinkCleanup.ts` writes stored note content without checking `liveNoteEditorFor`** (it predates the rule in CLAUDE.md "Annotations"), so stripping a dead link from the note that's open can be overwritten by the editor's next save. Route it through the live editor like `services/noteReview.ts` does.
+- ~~**Retrofit: `services/crossAppLinkCleanup.ts` writes stored note content without checking `liveNoteEditorFor`**~~ Done 2026-10-09: it goes through `editNoteContent`. (it predates the rule in CLAUDE.md "Annotations"), so stripping a dead link from the note that's open can be overwritten by the editor's next save. Route it through the live editor like `services/noteReview.ts` does.
 
 ### ~~Calendar: occurrences taken out of a series keep their link~~ — built 2026-10-06 (see "Calendar: a date taken out of a repeating series stays linked" in implemented-features.md; migration 044 pending)
 
@@ -1895,6 +1902,7 @@ When a user types a ticker that exists in multiple markets (e.g. VMM on NASDAQ a
 **Built.** `Ctrl+G` opens a search-and-jump overlay (`src/components/QuickAccessPane/`) from anywhere in the suite — search by title across Notes, Notebooks, Tasks, Lists, Endeavours, Trackers, and Routines, or (empty query) browse Recent/Frequent visit history with a user-adjustable "Show N" count (`settingsStore.quickAccessRecentCount`, 3–20, default 8). Full design/architecture is documented in CLAUDE.md's Implemented Features list under "Suite-wide Quick Access pane" — see there for the provider-registry shape (`src/utils/quickAccess.ts`), the visit-tracking store (`src/store/recentItemsStore.ts`), and exactly which app actions record a visit.
 
 **Deliberately not built in v1 (genuine future work, not oversights):**
+- **Pinning places** (agreed 2026-10-09 as a later step): the Places row (`config/places.ts`) orders by use today; let the user pin places to the front.
 - **Pinning.** The original ask's third leg ("pinned items") isn't built — only recent + frequent. `Note.pinned` already exists as a field (unused by this feature); Tasks/Lists/Endeavours/Trackers/Routines have no pin concept at all yet. Adding it means: a pin flag per entity type (or a separate lightweight `pinnedItemsStore` mirroring `recentItemsStore`'s shape, which would generalize better across types that don't already have a `pinned` field), a pinned section in `QuickAccessPane` above Recent/Frequent, and a way to pin from *outside* the pane too (e.g. a pin icon on task/list/note rows), not just from within it.
 - **Granular in-entity targets.** Today a "destination" is a whole Note/Task/List/etc., not a specific Calendar event, Portfolio ticker, Fitness activity, a specific Tracker entry, or a specific List item/Records entry. Extending this is additive, not a redesign: one new `QuickAccessProvider` + one new `QuickAccessTargetType` union member per type (see the provider registry in `src/utils/quickAccess.ts`) — this extensibility was a deliberate design goal of v1, not left for a rewrite.
 - **Portfolio/Fitness coverage** — no provider for tickers or activities yet, same "add a provider" extension path as above.
@@ -1906,6 +1914,34 @@ When a user types a ticker that exists in multiple markets (e.g. VMM on NASDAQ a
 **Why deferred:** Needs UX and data-model design decisions (above) before implementation; raised as a confirmed want, not yet scoped.
 
 ---
+
+### Flexible notes: inboxes (built 2026-10-09) and idea hubs (in design)
+
+The problem (the user's words, condensed): an idea jotted in a note changes purpose once it's taken further (handed to Claude to develop, say). It's now the stub of something new, sitting in the wrong place.
+
+**Built 2026-10-09: inboxes** (CLAUDE.md "Inboxes"; "Inboxes" in implemented-features.md). Decided with the user: the passage moves rather than being copied; there can be many inboxes, made anywhere (an `\inbox` block in a note, so a section at the bottom of the same note works too); Send to inbox picks one like Quick Access; the inbox's own order (newest, oldest, A–Z) instead of asking every time; a status per item; an optional task. A marker is left where the passage was, and it can be removed freely.
+Follow-ups:
+- Moving an item from one inbox to another (today: copy and paste, or delete and send again).
+- Drag between Board columns to change status (today: the status chip or right-click).
+- A keyboard shortcut for Send to inbox (it needs a `hotkeys.ts` entry with its touch path).
+- Sending from Android's own text-selection menu (today: the toolbar's `\` button, then Send to inbox).
+
+**Built 2026-10-13: idea hubs** (CLAUDE.md "Idea hubs"; "Idea hubs" in implemented-features.md). Decided with the user: a hub is a `\hub` block that can live in any note (several per note; a "hub note" is a note built around one), with a Hubs view to find them all; links grouped by relation in a List, with a canvas to come later as another design (the phone is mostly for reading, so a canvas being fiddly there is fine); links rather than live copies.
+Follow-ups:
+- **Canvas design**: the same hub's links as cards on a board, with labelled arrows (Heptabase, concept maps). One more value of `HUB_VARIANTS`; positions would be computed or stored as attributes on each `hubLink`.
+- **Live references** (Roam/Logseq block references): a passage shown in full inside the hub, editable there. Deferred by the user 2026-10-12, "links first".
+- Linking a whole block (a timeline, a quote) rather than its text; linking one hub into another (hubs of hubs).
+- "Add to hub" from the Glossary view's terms and from a note's row (today: the hub's + Link…).
+- Links between two items inside a hub ("A contradicts B"), not only item → hub.
+- Feeding hubs into Review; Claude suggesting links (the agent command layer).
+- A shared palette for relation colours, if relations get colours.
+
+### Running code in notes (Python / Jupyter) — nice to have, lowest priority (raised 2026-10-09)
+
+The user's view: only worth it if notes can use the computer's own Python (an Anaconda or Jupyter install), on desktop. Feasible on the Tauri desktop app only:
+- **Talk to a running Jupyter server** (`jupyter server` on localhost, with its token) through its REST and WebSocket kernel API. Any installed kernel (Python, R, Julia), with that environment's packages. Simplest and most capable.
+- **Or start Python from Tauri** (the shell plugin, or a small Rust sidecar that starts `python -m ipykernel` from a chosen interpreter path) and speak the kernel protocol.
+- Either way: a "Run" button on a code block (`\code` built 2026-10-09) whose output (text, tables, plots as images) is saved in an output part under the cell. Not possible on Android or the web build. Pyodide (Python inside the browser) works everywhere, but it is a ~10 MB+ download and can't use the installed packages; the user preferred the local install.
 
 ## Dark Mode — Suite-wide
 
@@ -2802,6 +2838,16 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **Glossary records and cards** (2026-10-13, CLAUDE.md) | Review: a new way of showing a Glossary record holds its id, not a copy | **Fully applied 2026-10-13** (cards and marked text). |
+| **Blocks with their own inputs take the typing** (2026-10-13, CLAUDE.md) | `src/test/patterns.test.ts` "blocks with their own inputs take the typing" | **Fully applied 2026-10-13** (maths, chart, Glossary card; the chart was a breach: typing over a selected chart deleted it). |
+| **Offer as you type** (`typingOffer.ts`, 2026-10-13, CLAUDE.md) | `src/test/patterns.test.ts` "offers made as you type come from one helper" | **Fully applied 2026-10-13** (Glossary linking, acronym offer). |
+| **Tests that fake the clock read "today" inside a test** (2026-10-13, CLAUDE.md "Testing") | `src/test/patterns.test.ts` "tests that fake the clock" | **Fully applied 2026-10-13** (one site fixed: `objects.test.ts`). |
+| **One colour palette** (`config/swatches.ts`; 2026-10-09, CLAUDE.md "Colours a person picks") | `src/test/patterns.test.ts` "colour pickers use config/swatches.ts" and "every palette colour has its --color-swatch token" | **Fully applied 2026-10-09**: ColorPicker, AddNoteTagModal, EditNoteTagModal, EditNoteMetaModal, FloatingToolbar's text colour and block frames all read it. |
+| **Typing check in key handlers** (`utils/typingTarget.ts` `isTypingTarget`; 2026-10-09, CLAUDE.md "Hotkeys rule") | `src/test/patterns.test.ts` "keyboard handlers ask isTypingTarget" | **Fully applied 2026-10-09** (App, CalendarView, ChronicleView, ListsSection, useItemActions). Exception: `services/speech/insertText.ts`, which asks where to insert, not whether someone is typing. |
+| **Putting a `\` block in, and spectrum colours** (`replaceTypedWithBlock` / `placeBlock`, `spectrumColour` in `blockDesigns.ts`; 2026-10-09) | `src/test/patterns.test.ts` "a block typed in with a backslash…" and "spectrum colours come from spectrumColour" | **Fully applied 2026-10-09** (all ten blocks; the hierarchy's level colours moved onto `spectrumColour`, keeping their hues). |
+| **Places** (`config/places.ts`: destinations that aren't items, each with a shared icon and its visit recorded in its uiStore open action; 2026-10-09, CLAUDE.md "Places") | `src/test/patterns.test.ts` "Places" | **Fully applied 2026-10-09** (8 places). |
+| **Text on a primary fill uses `--color-on-primary`** (2026-10-09, CLAUDE.md "Design tokens") | `src/test/patterns.test.ts` "text on a primary fill uses --color-on-primary" (rules that set the fill and the text together) | **Fully applied 2026-10-09** (70 rules in 49 files). Not caught by the check: white text in a rule whose primary fill is set by another selector (an `.active` modifier); move those as files are touched. |
+| **Review has its own icon, not 🔁** (2026-10-09; 🔁 is "repeats" in `config/itemIcons.ts`) | `src/test/patterns.test.ts` "Review is drawn with its own icon" | **Fully applied 2026-10-09** (6 sites; the margin marker through `createReviewIcon`). 🔁 stays for Routines in Quick Access: a routine does repeat. |
 | **Errors and logging: one approach** (`utils/log.ts`, global handlers, the four destinations; adopted 2026-10-09, CLAUDE.md "Errors and logging") | `npx vitest run src/test/patterns.test.ts -t "logs through"` (no `console.*` in `src/`; no empty `catch` without a reason; handlers installed) | **Fully applied 2026-10-09** for logging (63 `console.*` calls moved; 9 debug logs in `integrations/useTickerLookup.ts` deleted) and empty catches (6 given a reason). **Not audited:** whether every user-facing error message is plain words with a next step; whether every `catch` that logs should also tell the user (e.g. `tickerService` failures show only an empty result). Effort: an audit pass, small. |
 | **Design tokens** (`src/index.css`: `--color-*`, `--text-*`, `--space-*`, `--radius-*`, `--shadow-*`, `--z-*`; adopted 2026-10-09, CLAUDE.md "Design tokens and theming") | `npx vitest run src/test/patterns.test.ts -t "design tokens"` (a ratchet: counts may only go down) | **Replaced as files are touched, not swept** (the user's call). Baseline 2026-10-09 in `*.module.css`: 154 hex colours (some deliberate: FloatingToolbar, NoteBackdrop presets, brand colours; worth doing first: `#ef4444` ×14 → `--color-danger`), 1222 literal font sizes, 137 z-index, 306 radii, 123 shadows. Spacing literals aren't counted (too many legitimate 0/1px values to ratchet usefully). Supersedes the "CSS colours from variables" row. |
 | **Block designs** (note blocks offer several designs through `extensions/blockDesigns.ts`, 2026-10-07) | `src/test/patterns.test.ts` "every note block offers its designs through blockDesigns" | **Fully applied 2026-10-07** — timeline and quote moved onto it; the cycle built on it. |
@@ -2810,7 +2856,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 | **Icons beside text** (1em square of the text, centred on its first line, 2026-10-09) | `src/test/patterns.test.ts` "icons beside text are sized from the text" (checks DisclosureIcon and the heading arrow only) | Applied to the heading-fold arrow; DisclosureIcon is drawn to it everywhere. **Not audited:** other inline icons (link 🔗, flags) are emoji/characters that already scale with their text; review when the close/edit/link icons move into `components/Icons`. |
 | **Expand/collapse arrows are `DisclosureIcon`** (2026-10-09) | `src/test/patterns.test.ts` "expand/collapse arrows are DisclosureIcon" | **Fully applied 2026-10-09** (22 sites). Deliberate exceptions: dropdown triggers' ▾ (CollectionPicker's ▴/▾ is the one the test exempts by name), the right-click submenu ▸, the tracker field-type icon, ChronicleView's collapsed-column strips. |
 | **Icons come from one place (`components/Icons`)** (2026-10-07) | `src/test/patterns.test.ts` "suite-wide icons come from components/Icons"; for the rest, `grep -rln ">×<\|✎\|🔗" src/components --include=*.tsx` | Applied to the text-colour swatch and the item-action icons. **Not yet:** close × (in ~27 files), edit ✎ (~14), link 🔗 (~8) are typed as characters; give each an icon in `components/Icons` and switch the sites over. NoteEditor's ribbon SVGs are local on purpose (one place uses them). |
-| **Changes to a note from outside the editor go through `liveNoteEditorFor`** (2026-10-07) | `grep -rn "updateNote(\|updateNoteTabContent(" src/services` — each site must check `liveNoteEditorFor` first | `services/noteReview.ts` follows it. **Not yet:** `services/crossAppLinkCleanup.ts` (`stripArtifactLinksFromNote`), `services/shrinkNoteImages.ts` (closes the open note first instead, which is also safe). |
+| **Changes to a note from outside the editor go through `editNoteContent`** (`services/noteContentEdit.ts`; rule 2026-10-07, one function 2026-10-09) | `src/test/patterns.test.ts` "a note's content is changed from outside the editor only through editNoteContent" | **Fully applied 2026-10-09**: `noteReview.ts`, `crossAppLinkCleanup.ts`, `noteInbox.ts`. Exception: `shrinkNoteImages.ts` (closes the open note first). |
 | **Linked Glossary text drawn once per run, never per mark element** (2026-10-07) | `src/test/patterns.test.ts` "no CSS draws content on [data-concept-ref]" | **Fully applied 2026-10-07** — new. |
 | **Note blocks registered in `NOTE_BLOCK_KINDS`** (`\timeline`, 2026-10-06) | `src/test/patterns.test.ts` "every note block is in NOTE_BLOCK_KINDS" | **Fully applied 2026-10-06** — the timeline is the first note block; nothing existed before. |
 | **`/api/*` via `apiFetch()`; files via `saveFile()`** (Android W1, 2026-10-04) | `src/test/patterns.test.ts` "/api/* calls go through apiFetch"; for files, `grep -rn "\.download =" src` (only `utils/saveFile.ts`) | **Fully applied 2026-10-04** — every `/api/*` caller already used `apiFetch`; the only downloads (`backupExport.ts`) now call `saveFile`. No test for `saveFile` yet (grep only). |

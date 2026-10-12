@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { NodeSelection } from '@tiptap/pm/state';
@@ -7,7 +7,7 @@ import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { TimelineExtensions } from './Timeline';
 import { QuoteExtensions } from './Quote';
 import { CycleExtensions, canDeleteStage, deleteStage, ringArcEnds } from './Cycle';
-import { NoteBlockSelect, NOTE_BLOCK_NODES, blockAround } from './blockDesigns';
+import { NoteBlockSelect, NOTE_BLOCK_NODES, applyFrameAttrs, blockAround, frameMenuItem, frameOverflow, setBlockFrame } from './blockDesigns';
 import { noteClipboardText } from '../noteClipboardText';
 
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
@@ -81,5 +81,93 @@ describe('cycle stages', () => {
     // Both ends are between the two cards' centres.
     expect(shortFrom).toBeGreaterThan(0);
     expect(narrowTo).toBeLessThan(90);
+  });
+});
+
+describe('frames fit around what a block draws', () => {
+  const rect = (left: number, top: number, right: number, bottom: number) => new DOMRect(left, top, right - left, bottom - top);
+
+  it('measures the furthest any part reaches past the box', () => {
+    const box = rect(0, 0, 100, 100);
+    expect(frameOverflow(box, [rect(10, 10, 90, 90)])).toBe(0);
+    expect(frameOverflow(box, [rect(-14.2, 40, 20, 60), rect(80, 95, 120, 103)])).toBe(20);
+    expect(frameOverflow(box, [rect(-50, -50, -50, -50)])).toBe(0);   // an empty box doesn't count
+  });
+
+  it('an outlined ring whose side cards hang outside it gets a wider frame', () => {
+    vi.useFakeTimers();
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.matches('[data-type="cycle"]')) return rect(0, 0, 100, 100);
+      if (this.matches('[data-type="cycle-stage"]')) return rect(-18, 40, 10, 60);
+      return rect(10, 10, 20, 20);
+    };
+    try {
+      make(BLOCKS.cycle.replace('data-type="cycle"', 'data-type="cycle" data-variant="ring" data-outlined="true"'));
+      vi.advanceTimersByTime(50);
+      const ring = editor.view.dom.querySelector<HTMLElement>('[data-type="cycle"]')!;
+      expect(ring.style.getPropertyValue('--frame-overflow')).toBe('18px');
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('frame colours, shapes and lines', () => {
+  const quotePos = () => { let p = -1; editor.state.doc.descendants((n, pos) => { if (n.type.name === 'quoteBlock') p = pos; }); return p; };
+  const quote = () => editor.state.doc.nodeAt(quotePos())!;
+
+  it('choosing an outline option turns the outline on; a shade colour turns the shade on', () => {
+    make(BLOCKS.quote);
+    setBlockFrame(editor.view, quotePos(), { outlineColor: 'teal' });
+    expect(quote().attrs).toMatchObject({ outlined: true, outlineColor: 'teal', shaded: false });
+    setBlockFrame(editor.view, quotePos(), { shadeColor: '#336699' });
+    expect(quote().attrs).toMatchObject({ shaded: true, shadeColor: '#336699' });
+    setBlockFrame(editor.view, quotePos(), { frameShape: 'pill', outlineStyle: 'dashed', outlineWidth: 'thick' });
+    const dom = editor.view.dom.querySelector<HTMLElement>('[data-type="quote"]')!;
+    expect(dom.getAttribute('data-frame-shape')).toBe('pill');
+    expect(dom.getAttribute('data-outline-style')).toBe('dashed');
+    expect(dom.getAttribute('data-outline-width')).toBe('thick');
+    expect(dom.style.getPropertyValue('--frame-outline')).toBe('var(--color-swatch-teal)');
+    expect(dom.style.getPropertyValue('--frame-shade')).toBe('#336699');
+  });
+
+  it('round-trips through HTML, and a colour that is not a swatch or #rrggbb is dropped', () => {
+    make(BLOCKS.quote.replace('data-type="quote"', 'data-type="quote" data-outlined="true" data-outline-color="red" data-frame-shape="rounded" data-shade-color="red;background:url(x)"'));
+    expect(quote().attrs).toMatchObject({ outlined: true, outlineColor: 'red', frameShape: 'rounded', shadeColor: null });
+    const html = editor.getHTML();
+    editor.commands.setContent(html);
+    expect(quote().attrs).toMatchObject({ outlineColor: 'red', frameShape: 'rounded' });
+  });
+
+  it('a node view gets the same frame attributes (applyFrameAttrs), and loses them when cleared', () => {
+    const el = document.createElement('div');
+    applyFrameAttrs(el, { outlined: true, outlineColor: 'blue', frameShape: 'circle', outlineStyle: 'solid', outlineWidth: 'thin' });
+    expect(el.getAttribute('data-outlined')).toBe('true');
+    expect(el.getAttribute('data-frame-shape')).toBe('circle');
+    expect(el.style.getPropertyValue('--frame-outline')).toBe('var(--color-swatch-blue)');
+    applyFrameAttrs(el, { outlined: false, outlineColor: null, frameShape: 'square' });
+    expect(el.hasAttribute('data-outlined')).toBe(false);
+    expect(el.hasAttribute('data-frame-shape')).toBe(false);
+    expect(el.style.getPropertyValue('--frame-outline')).toBe('');
+  });
+
+  it('the right-click Frame menu offers a circle only for a block about as tall as it is wide', () => {
+    make(BLOCKS.quote);
+    const original = Element.prototype.getBoundingClientRect;
+    const shapes = () => {
+      const menu = frameMenuItem(editor.view, quotePos(), quote().attrs);
+      const shape = menu.submenu![1].find((i) => i.id === 'frame-shape')!;
+      return shape.submenu![0].map((i) => i.id);
+    };
+    try {
+      Element.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 400, 120);
+      expect(shapes()).not.toContain('frame-shape-circle');
+      Element.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 300, 290);
+      expect(shapes()).toContain('frame-shape-circle');
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+    }
   });
 });

@@ -22,7 +22,7 @@
 
 .addBtn {
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   border: none;
   width: 24px;
   height: 24px;

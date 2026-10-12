@@ -27,6 +27,8 @@ export const BLOCK_PART_NODES: Record<string, string> = {
   breakdown:  'breakdownPart',
   hierarchy:  'hierarchyItem',
   pyramid:    'pyramidLayer',
+  inbox:      'inboxItem',
+  hub:        'hubLink',
 };
 
 interface Picks { block: number | null; parts: number[] }

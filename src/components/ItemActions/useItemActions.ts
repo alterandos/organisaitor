@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { isTypingTarget } from '@/utils/typingTarget';
 
 interface Options {
   itemKey:     string | null;   // identity of the open item — the dialog resets when it changes
@@ -42,8 +43,7 @@ export function useItemActions({ itemKey, archived, canArchive = true, onClose, 
       if (dialog || !itemKey) return;
 
       if (e.key === 'Delete' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-        const el = e.target as HTMLElement | null;
-        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+        if (isTypingTarget(e)) return;
         e.preventDefault();
         setDialog('delete');
         return;

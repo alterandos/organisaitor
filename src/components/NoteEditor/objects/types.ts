@@ -65,7 +65,8 @@ export interface NoteBlockKind {
   aliases: string[];
   hint:    string;
   // Replaces the typed `\…` (from..to) with the block, the cursor inside it. Ends the session.
-  insert:  (view: EditorView, from: number, to: number) => void;
+  // `ctx` is where the note is (its id, tab, Endeavour), for a block that makes a record there.
+  insert:  (view: EditorView, from: number, to: number, ctx: NoteObjectContext | null) => void;
 }
 
 // Anything the `\` menu offers.

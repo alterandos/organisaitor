@@ -5,6 +5,7 @@ import { usePlatform } from '@/hooks/usePlatform';
 import { TagView } from './TagView';
 import { GlossaryView } from './GlossaryView';
 import { ReviewView } from './ReviewView';
+import { HubsView } from './HubsView';
 import { TagFAB } from './TagFAB';
 import { EditNoteTagModal } from '../EditNoteTagModal/EditNoteTagModal';
 import styles from './NotesSection.module.css';
@@ -16,6 +17,7 @@ export function NotesSection() {
   const noteTagViewActive = useUIStore((s) => s.noteTagViewActive);
   const glossaryOpen      = useUIStore((s) => s.notesGlossaryOpen);
   const reviewOpen        = useUIStore((s) => s.notesReviewOpen);
+  const hubsOpen          = useUIStore((s) => s.notesHubsOpen);
   const closeNoteTagView  = useUIStore((s) => s.closeNoteTagView);
   const editNoteTagOpen   = useUIStore((s) => s.editNoteTagOpen);
   const editingNoteTagId  = useUIStore((s) => s.editingNoteTagId);
@@ -25,7 +27,7 @@ export function NotesSection() {
 
   return (
     <div className={styles.container}>
-      {glossaryOpen ? <GlossaryView /> : reviewOpen ? <ReviewView /> : noteTagViewActive ? <TagView /> : isAndroid ? <MobileNotes /> : <ChronicleView />}
+      {glossaryOpen ? <GlossaryView /> : reviewOpen ? <ReviewView /> : hubsOpen ? <HubsView /> : noteTagViewActive ? <TagView /> : isAndroid ? <MobileNotes /> : <ChronicleView />}
       {!(isAndroid && editingNoteId) && <TagFAB />}
       {editNoteTagOpen && <EditNoteTagModal key={editingNoteTagId} />}
     </div>

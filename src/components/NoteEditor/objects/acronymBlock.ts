@@ -1,0 +1,15 @@
+import { LABELS } from '@/config/labels';
+import { insertGlossaryCard } from '../extensions/GlossaryCard';
+import type { NoteBlockKind } from './types';
+
+// `\acronym`: a new Acronym in the Glossary, shown as a card (extensions/GlossaryCard.ts) in place of
+// what was typed, the cursor in its term.
+export const acronymBlock: NoteBlockKind = {
+  family:  'block',
+  id:      'acronym',
+  label:   LABELS.noteBlocks.acronym.label,
+  icon:    '🔤',
+  aliases: ['abbr', 'abbreviation', 'initialism'],
+  hint:    LABELS.noteBlocks.acronym.hint,
+  insert:  (view, from, to, ctx) => insertGlossaryCard(view, from, to, 'acronym', ctx),
+};

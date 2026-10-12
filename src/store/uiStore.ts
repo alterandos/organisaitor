@@ -8,7 +8,7 @@ import { persistStorage } from '@/utils/persistStorage';
 import { todayIso } from '@/utils/date';
 import { getNotePrimaryNotebookId } from '@/utils/notes';
 import type { NoteId } from '@/types/notes';
-import type { PassageMark } from '@/utils/noteContent';
+import type { PassageFind } from '@/utils/noteContent';
 import { type NavPlace, pushPlace, travel } from '@/store/navHistory';
 
 export type AppView = 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
@@ -17,7 +17,8 @@ export type NotesColumn = 'tree' | 'list' | 'editor';
 export type MobileNotesHome = 'notebooks' | 'recent';
 
 // What the Overview section is showing: an Endeavour's automatic Overview, or a saved one.
-export type OverviewSelection = { kind: 'endeavour' | 'saved'; id: string } | null;
+// 'builtIn' is one of the Overviews every person has (id 'inboxes': All inboxes).
+export type OverviewSelection = { kind: 'endeavour' | 'saved' | 'builtIn'; id: string } | null;
 
 export type CalendarViewMode = 'month' | 'week' | 'day';
 
@@ -55,6 +56,11 @@ export interface PendingArtifactLink {
 // fine for a hygiene cap this generous.
 const MAX_NOTE_TAB_MEMORY = 500;
 const NOTE_TAB_MEMORY_TRIM_TO = 400;
+
+// Where the cursor and the scroll were in a note's tab when it was left, keyed `noteId:tabId`
+// (`noteId:main` for Main), so opening it again lands there. Same hygiene cap as notesTabMemory.
+export interface NoteCursor { from: number; to: number; scroll: number }
+export const noteCursorKey = (noteId: string, tabId: string | null) => `${noteId}:${tabId ?? 'main'}`;
 
 // How long calendarLastEditing stays eligible to auto-reopen when returning to Calendar.
 export const CALENDAR_LAST_EDITING_TTL_MS = 30 * 60_000;
@@ -264,6 +270,10 @@ interface UIState {
   navigateBack:      () => boolean;
   navigateForward:   () => void;
   travelHistory:     (steps: number) => boolean;
+  // A back/forward made from the keyboard, for the arrow and the history strip it shows
+  // (components/NavFlash). `seq` changes per move. Memory only.
+  navFlash:          { seq: number; direction: 'back' | 'forward' } | null;
+  flashNav:          (direction: 'back' | 'forward') => void;
   currentPlace:      () => NavPlace;
   historyBrowserOpen: boolean;
   openHistoryBrowser:  () => void;
@@ -429,8 +439,8 @@ interface UIState {
   // A passage to select and scroll to once the note is open (a Glossary entry's definition, a
   // reference to it, a Key point, a passage due for review). Set with openNote by
   // services/notePassage.ts; consumed by NoteEditor.
-  requestedNotePassage:      ({ noteId: string } & PassageMark) | null;
-  setRequestedNotePassage:   (p: ({ noteId: string } & PassageMark) | null) => void;
+  requestedNotePassage:      ({ noteId: string } & PassageFind) | null;
+  setRequestedNotePassage:   (p: ({ noteId: string } & PassageFind) | null) => void;
   // The Notes Glossary view (components/NotesSection/GlossaryView.tsx), in place of the tree.
   notesGlossaryOpen:       boolean;
   openNotesGlossary:       () => void;
@@ -439,6 +449,10 @@ interface UIState {
   notesReviewOpen:         boolean;
   openNotesReview:         () => void;
   closeNotesReview:        () => void;
+  // The Notes Hubs view (every idea hub across notes, components/NotesSection/HubsView.tsx).
+  notesHubsOpen:           boolean;
+  openNotesHubs:           () => void;
+  closeNotesHubs:          () => void;
   closeNote:               () => void;
   // Remembers which note (if any) was open in the Notes section so switching away and
   // back restores it — separate from editingNoteId, which also drives NoteEditorPane's
@@ -457,6 +471,8 @@ interface UIState {
   // when its note is deleted, so left unbounded it would grow forever.
   notesTabMemory:          Record<string, string | null>;
   setNoteTabMemory:        (noteId: string, tabId: string | null) => void;
+  noteCursorMemory:        Record<string, NoteCursor>;
+  setNoteCursor:           (key: string, cursor: NoteCursor) => void;
   showAddNote:             () => void;
   showAddNoteTag:          (parentId?: NoteTagId | null, kind?: 'area' | 'tag') => void;
   showTagPresets:          () => void;
@@ -623,7 +639,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   toggleEndeavourPicker: () => set((s) => ({ endeavourPickerOpen: !s.endeavourPickerOpen })),
   closePurposePicker:    () => set({ purposePickerOpen: false }),
   togglePurposePicker:   () => set((s) => ({ purposePickerOpen: !s.purposePickerOpen })),
-  openManage:            (section) => set({ manageOpen: true, manageSection: section ?? 'endeavours' }),
+  openManage:            (section) => { useRecentItemsStore.getState().recordVisit('place', 'manage'); set({ manageOpen: true, manageSection: section ?? 'endeavours' }); },
   closeManage:           () => set({ manageOpen: false }),
   toggleManage:          () => set((s) => ({ manageOpen: !s.manageOpen })),
   setManageSection:      (section) => set({ manageSection: section }),
@@ -652,19 +668,19 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeEditCollection: ()           => set({ editingCollection: null,       openModal: null              }),
 
   settingsOpen:  false,
-  openSettings:  () => set({ settingsOpen: true  }),
+  openSettings:  () => { useRecentItemsStore.getState().recordVisit('place', 'settings'); set({ settingsOpen: true }); },
   closeSettings: () => set({ settingsOpen: false }),
 
   accountOpen:  false,
-  openAccount:  () => set({ accountOpen: true  }),
+  openAccount:  () => { useRecentItemsStore.getState().recordVisit('place', 'account'); set({ accountOpen: true }); },
   closeAccount: () => set({ accountOpen: false }),
 
   integrationsOpen:  false,
-  openIntegrations:  () => set({ integrationsOpen: true  }),
+  openIntegrations:  () => { useRecentItemsStore.getState().recordVisit('place', 'integrations'); set({ integrationsOpen: true }); },
   closeIntegrations: () => set({ integrationsOpen: false }),
 
   recyclingBinOpen:  false,
-  openRecyclingBin:  () => set({ recyclingBinOpen: true  }),
+  openRecyclingBin:  () => { useRecentItemsStore.getState().recordVisit('place', 'recycling-bin'); set({ recyclingBinOpen: true }); },
   closeRecyclingBin: () => set({ recyclingBinOpen: false }),
 
   sortField: 'createdAt',
@@ -741,6 +757,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   navHistory: [],
   navForward: [],
+  navFlash: null,
+  flashNav: (direction) => set((s) => ({ navFlash: { seq: (s.navFlash?.seq ?? 0) + 1, direction } })),
   navigateBack:    () => get().travelHistory(-1),
   navigateForward: () => { get().travelHistory(1); },
   travelHistory: (steps) => {
@@ -753,7 +771,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   },
   currentPlace: () => capturePlace(get()),
   historyBrowserOpen:  false,
-  openHistoryBrowser:  () => set({ historyBrowserOpen: true }),
+  openHistoryBrowser:  () => { useRecentItemsStore.getState().recordVisit('place', 'history'); set({ historyBrowserOpen: true }); },
   closeHistoryBrowser: () => set({ historyBrowserOpen: false }),
 
   taskViewMode:    'overview',
@@ -926,11 +944,14 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   requestedNotePassage:     null,
   setRequestedNotePassage:  (p) => set({ requestedNotePassage: p }),
   notesGlossaryOpen:      false,
-  openNotesGlossary:      () => set({ notesGlossaryOpen: true, notesReviewOpen: false, noteTagViewActive: false }),
+  openNotesGlossary:      () => { useRecentItemsStore.getState().recordVisit('place', 'glossary'); set({ notesGlossaryOpen: true, notesReviewOpen: false, notesHubsOpen: false, noteTagViewActive: false }); },
   closeNotesGlossary:     () => set({ notesGlossaryOpen: false }),
   notesReviewOpen:        false,
-  openNotesReview:        () => set({ notesReviewOpen: true, notesGlossaryOpen: false, noteTagViewActive: false }),
+  openNotesReview:        () => { useRecentItemsStore.getState().recordVisit('place', 'review'); set({ notesReviewOpen: true, notesGlossaryOpen: false, notesHubsOpen: false, noteTagViewActive: false }); },
   closeNotesReview:       () => set({ notesReviewOpen: false }),
+  notesHubsOpen:          false,
+  openNotesHubs:          () => { useRecentItemsStore.getState().recordVisit('place', 'hubs'); set({ notesHubsOpen: true, notesGlossaryOpen: false, notesReviewOpen: false, noteTagViewActive: false }); },
+  closeNotesHubs:         () => set({ notesHubsOpen: false }),
   closeNote: () => set((s) => ({
     editingNoteId: null,
     ...(s.activeView === 'notes' && s.editingNoteId ? recordPlace(s) : {}),
@@ -939,6 +960,15 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   notesLastActiveTabId:   null,
   setNotesLastActiveTab:  (tabId) => set({ notesLastActiveTabId: tabId }),
   notesTabMemory:         {},
+  noteCursorMemory:       {},
+  setNoteCursor: (key, cursor) => set((s) => {
+    let noteCursorMemory = { ...s.noteCursorMemory, [key]: cursor };
+    const keys = Object.keys(noteCursorMemory);
+    if (keys.length > MAX_NOTE_TAB_MEMORY) {
+      noteCursorMemory = Object.fromEntries(keys.slice(-NOTE_TAB_MEMORY_TRIM_TO).map((k) => [k, noteCursorMemory[k]]));
+    }
+    return { noteCursorMemory };
+  }),
   setNoteTabMemory: (noteId, tabId) => set((s) => {
     let notesTabMemory = { ...s.notesTabMemory, [noteId]: tabId };
     const keys = Object.keys(notesTabMemory);
@@ -960,7 +990,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   noteTagViewActive:      false,
   noteTagViewTagIds:      [],
-  openNoteTagView:        (tagIds) => set({ noteTagViewActive: true, noteTagViewTagIds: tagIds, notesGlossaryOpen: false, notesReviewOpen: false }),
+  openNoteTagView:        (tagIds) => set({ noteTagViewActive: true, noteTagViewTagIds: tagIds, notesGlossaryOpen: false, notesReviewOpen: false, notesHubsOpen: false }),
   closeNoteTagView:       () => set({ noteTagViewActive: false, noteTagViewTagIds: [] }),
   noteTagViewReturn:    null,
   setNoteTagViewReturn: (ids) => set({ noteTagViewReturn: ids }),
@@ -999,12 +1029,13 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 }), {
   name:    'todo-ui-session',
   storage: persistStorage(),
-  version: 5,
+  version: 6,
   // v1 → v2: overviewSelection (Overview section, 2026-10-01).
   // v2 → v3: one history of places (navHistory/navForward) replaces sectionHistory and
   // notesHistory (2026-10-07); the old section stops carry over, the note stops are dropped.
   // v3 → v4: expandedNoteTagIds persisted, so the notebook tree reopens as it was left (2026-10-08).
   // v4 → v5: mobileNotesHome (Android Notes: notebooks or recent, 2026-10-09).
+  // v5 → v6: noteCursorMemory, where each note's tab was left (2026-10-13).
   migrate: (persisted, fromVersion) => {
     let state = (persisted ?? {}) as Record<string, unknown>;
     if (fromVersion < 2 && state.overviewSelection === undefined) state = { ...state, overviewSelection: null };
@@ -1017,6 +1048,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     }
     if (fromVersion < 4 && !Array.isArray(state.expandedNoteTagIds)) state = { ...state, expandedNoteTagIds: [] };
     if (fromVersion < 5 && state.mobileNotesHome === undefined) state = { ...state, mobileNotesHome: 'notebooks' };
+    if (fromVersion < 6 && state.noteCursorMemory === undefined) state = { ...state, noteCursorMemory: {} };
     return state as never;
   },
   partialize: (s) => ({
@@ -1029,6 +1061,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     notesLastEditingNoteId:   s.notesLastEditingNoteId,
     notesLastActiveTabId:     s.notesLastActiveTabId,
     notesTabMemory:           s.notesTabMemory,
+    noteCursorMemory:         s.noteCursorMemory,
     selectedNoteTagId:        s.selectedNoteTagId,
     expandedNoteTagIds:       s.expandedNoteTagIds,
     mobileNotesHome:          s.mobileNotesHome,

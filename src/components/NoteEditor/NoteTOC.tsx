@@ -7,7 +7,7 @@ import { headingTrail, scrollHostOf, watchReadingPosition } from './headingTrail
 import { formatDate } from '@/utils/date';
 import { LABELS } from '@/config/labels';
 import styles from './NoteTOC.module.css';
-import { DisclosureIcon } from '@/components/Icons';
+import { DisclosureIcon, ReviewIcon } from '@/components/Icons';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
@@ -169,7 +169,7 @@ export function NoteTOC({ editor, onClose, embedded }: Props) {
             <button key={`${p.passageId ?? ''}-${p.from}`} className={styles.point} onClick={() => goToPoint(p)} style={{ ['--level-color' as string]: lv.color }} title={lv.label}>
               <span className={styles.pointIcon} aria-hidden="true">{lv.icon}</span>
               <span className={styles.pointText}>{p.text}</span>
-              {p.reviewDue && <span className={styles.pointReview}>🔁 {LABELS.importance.due(formatDate(p.reviewDue))}</span>}
+              {p.reviewDue && <span className={styles.pointReview}><ReviewIcon className={styles.reviewIcon} />{LABELS.importance.due(formatDate(p.reviewDue))}</span>}
             </button>
           );
         })}

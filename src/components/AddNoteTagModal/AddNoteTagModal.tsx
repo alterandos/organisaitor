@@ -11,12 +11,7 @@ import styles from './AddNoteTagModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CreateKindSwitcher } from '@/components/CreateKindSwitcher/CreateKindSwitcher';
-
-const PRESET_COLORS = [
-  '#5b6ee1', '#2563eb', '#7c3aed', '#db2777',
-  '#dc2626', '#ea580c', '#d97706', '#16a34a',
-  '#0891b2', '#475569',
-];
+import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 
 function getDepth(tagId: string | null, noteTags: Record<string, { parentTagId: string | null }>): number {
   if (!tagId) return 0;
@@ -217,13 +212,13 @@ export function AddNoteTagModal() {
                 Color <span className={styles.optional}>(optional)</span>
               </label>
               <div className={styles.swatches}>
-                {PRESET_COLORS.map((c) => (
+                {SWATCH_HEXES.map((c) => (
                   <button
                     key={c}
                     className={`${styles.swatch} ${color === c ? styles.swatchActive : ''}`}
                     style={{ background: c }}
                     onClick={() => setColor(color === c ? null : c)}
-                    aria-label={c}
+                    aria-label={swatchLabel(c)}
                   />
                 ))}
               </div>

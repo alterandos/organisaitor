@@ -12,6 +12,7 @@
 // Providers read store state via getState() rather than hooks, since search/navigate are
 // plain functions called from event handlers, not components.
 
+import { createElement, type ReactNode } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
@@ -22,6 +23,9 @@ import { getNotebookIcon, getNoteBreadcrumb } from '@/utils/notes';
 import { LABELS } from '@/config/labels';
 import { noteView } from '@/services/noteSecrets';
 import { listView } from '@/services/listSecrets';
+import { glossaryEntries, glossaryEntry, type GlossaryEntry } from '@/services/glossary';
+import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { PLACES, placeById, type Place } from '@/config/places';
 import type { List } from '@/types/lists';
 import type { Note, NoteId, NoteTagId } from '@/types/notes';
 import type { ListId } from '@/types/lists';
@@ -33,7 +37,7 @@ export interface QuickAccessItem {
   entityId: string;
   title:    string;
   subtitle: string;
-  icon:     string;
+  icon:     ReactNode;   // an emoji, or a place's shared icon
 }
 
 interface QuickAccessProvider {
@@ -225,8 +229,39 @@ const scheduleProvider: QuickAccessProvider = {
   },
 };
 
+const placeItem = (p: Place): QuickAccessItem => ({
+  key: `place:${p.id}`, type: 'place', entityId: p.id, title: p.label, subtitle: LABELS.places.kind, icon: createElement(p.Icon),
+});
+
+const placeProvider: QuickAccessProvider = {
+  type: 'place',
+  typeLabel: LABELS.places.kind,
+  list: () => PLACES.map(placeItem),
+  resolve: (id) => { const p = placeById(id); return p ? placeItem(p) : null; },
+  navigate: (id) => placeById(id)?.open(),
+};
+
+// A Glossary term opens its definition in its note. Locked (encrypted) entries have no readable
+// term, so they aren't offered.
+const glossaryItem = (e: GlossaryEntry): QuickAccessItem => ({
+  key: `glossary:${e.id}`, type: 'glossary', entityId: e.id, title: e.term,
+  subtitle: e.noteTitle ? `${e.kindLabel} · ${e.noteTitle}` : e.kindLabel, icon: e.icon,
+});
+
+const glossaryProvider: QuickAccessProvider = {
+  type: 'glossary',
+  typeLabel: LABELS.glossary.title,
+  list: () => glossaryEntries().filter((e) => !e.locked).map(glossaryItem),
+  resolve: (id) => { const e = glossaryEntry(id); return e && !e.locked ? glossaryItem(e) : null; },
+  navigate: (id) => {
+    const e = glossaryEntry(id);
+    if (e) openNotePassage(e.noteId, definitionPassage(e.id));
+  },
+};
+
+// Places first, so typing a place's name puts it at the top.
 const PROVIDERS: QuickAccessProvider[] = [
-  noteProvider, notebookProvider, taskProvider, listProvider, endeavourProvider, trackerProvider, routineProvider, scheduleProvider,
+  placeProvider, glossaryProvider, noteProvider, notebookProvider, taskProvider, listProvider, endeavourProvider, trackerProvider, routineProvider, scheduleProvider,
 ];
 
 const providerByType: Record<QuickAccessTargetType, QuickAccessProvider> = Object.fromEntries(
@@ -255,6 +290,7 @@ export function resolveRecentItems(entries: RecentItemEntry[]): { items: QuickAc
   const items: QuickAccessItem[] = [];
   const stale: RecentItemEntry[] = [];
   for (const entry of entries) {
+    if (entry.type === 'place') continue;   // shown in the Places row, not among recent items
     const item = providerByType[entry.type]?.resolve(entry.entityId);
     if (item) items.push(item);
     else stale.push(entry);
@@ -273,4 +309,12 @@ export function pruneStaleRecentEntries(stale: RecentItemEntry[]): void {
 // cross-app links, hotkeys), not just visits made through this pane.
 export function navigateToQuickAccessItem(item: QuickAccessItem): void {
   providerByType[item.type]?.navigate(item.entityId);
+}
+
+// The Places row: most used first; places never opened keep their PLACES order.
+export function placesByUse(entries: Record<string, RecentItemEntry>): Place[] {
+  const uses = (p: Place) => entries[`place:${p.id}`]?.visitCount ?? 0;
+  return PLACES.map((p, i) => ({ p, i, n: uses(p) }))
+    .sort((a, b) => b.n - a.n || a.i - b.i)
+    .map(({ p }) => p);
 }

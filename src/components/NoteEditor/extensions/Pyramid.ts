@@ -3,7 +3,7 @@ import { Plugin, PluginKey, Selection, TextSelection, type EditorState, type Tra
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
-import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign } from './blockDesigns';
+import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
 
 // A pyramid in a note (`\pyramid`): layers that build on each other, the first at the top —
 // Maslow's needs, the food chain, a funnel from awareness to purchase. At least two layers.
@@ -111,27 +111,10 @@ const newLayer = (state: EditorState) => state.schema.nodes.pyramidLayer.create(
 export function insertPyramid(state: EditorState, from: number, to: number): Transaction | null {
   const type = state.schema.nodes.pyramid;
   if (!type) return null;
-  const $start = state.doc.resolve(from);
-  while (from > $start.start() && /\s/.test(state.doc.textBetween(from - 1, from))) from--;
   const node = type.create(null, Array.from({ length: DEFAULT_LAYERS }, () => newLayer(state)));
-  const tr = state.tr.delete(from, to);
-  const $pos = tr.doc.resolve(from);
-  const d = $pos.depth;
-  let at: number | null = null;
-  if ($pos.parent.isTextblock && $pos.parent.content.size === 0 && d > 0
-    && $pos.node(d - 1).canReplaceWith($pos.index(d - 1), $pos.index(d - 1) + 1, type)) {
-    at = $pos.before(d);
-    tr.replaceWith(at, $pos.after(d), node);
-  } else {
-    for (let depth = d; depth > 0; depth--) {
-      const index = $pos.indexAfter(depth - 1);
-      if (!$pos.node(depth - 1).canReplaceWith(index, index, type)) continue;
-      at = $pos.after(depth);
-      tr.insert(at, node);
-      break;
-    }
-  }
-  if (at === null) return null;
+  const made = replaceTypedWithBlock(state, from, to, node);
+  if (!made) return null;
+  const { tr, at } = made;
   return tr.setSelection(TextSelection.create(tr.doc, at + 3)).scrollIntoView();
 }
 
@@ -340,7 +323,7 @@ function pyramidDecorations(state: EditorState): DecorationSet | null {
       const room = variant === 'pyramid' && i === 0 ? bottom * 0.8 : (top + bottom) / 2;
       const style = [`--i: ${i}`, `--top: ${top * 100}%`, `--bottom: ${bottom * 100}%`, `--room: ${Math.round(room * 1000) / 10}%`];
       style.push(spectrum
-        ? `--layer-color: hsl(${Math.round((210 + (i * 300) / Math.max(1, n - 1)) % 360)} 62% 52%)`
+        ? `--layer-color: ${spectrumColour(i / Math.max(1, n - 1), 300)}`
         : `--layer-mix: ${Math.round(34 - (20 * i) / Math.max(1, n - 1))}%`);
       decos.push(Decoration.node(lp, lp + layer.nodeSize, { style: style.join('; ') }));
       if (n > MIN_LAYERS) {

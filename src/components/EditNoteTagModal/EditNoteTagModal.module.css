@@ -144,7 +144,7 @@
   padding: 0.625rem 1rem; border-radius: 4px; font-size: 0.95rem;
   font-weight: 500; cursor: pointer; transition: all 0.2s; border: none;
 }
-.btnPrimary { background: var(--color-primary); color: white; }
+.btnPrimary { background: var(--color-primary); color: var(--color-on-primary); }
 .btnPrimary:hover:not(:disabled) { background: var(--color-primary-hover); }
 .btnPrimary:disabled { background: var(--color-border); color: var(--color-muted); cursor: not-allowed; }
 .btnSecondary { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); }

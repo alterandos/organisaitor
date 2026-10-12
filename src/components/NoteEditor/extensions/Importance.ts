@@ -4,6 +4,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { nanoid } from 'nanoid';
 import { LABELS } from '@/config/labels';
+import { createReviewIcon } from '@/components/Icons';
 import { addDaysToIso, todayIso } from '@/utils/date';
 import { BUILTIN_TAGS } from '../builtinTags';
 import { IMPORTANCE_LEVELS, importanceLevel } from './importanceLevels';
@@ -124,7 +125,7 @@ export function nextReview(step: number | null, answer: ReviewAnswer, today = to
 // ── The margin markers ───────────────────────────────────────────────────────
 
 // A marker in the left margin beside every line block that holds an Important passage: the
-// highest level's icon, and 🔁 when one is on the review list. Absolutely placed at the start of
+// highest level's icon, and the Review icon when one is on the review list. Absolutely placed at the start of
 // the block, so it takes no room in the text.
 function markerDecorations(state: EditorState): DecorationSet | null {
   const decos: Decoration[] = [];
@@ -154,7 +155,8 @@ function marker(icon: string, label: string, color: string, review: boolean): HT
   el.contentEditable = 'false';
   el.setAttribute('data-importance-marker', '');
   el.style.setProperty('--importance-color', color);
-  el.textContent = review ? `${icon}🔁` : icon;
+  el.textContent = icon;
+  if (review) el.append(createReviewIcon());
   el.title = review ? `${label} · ${LABELS.importance.onReviewList}` : label;
   return el;
 }

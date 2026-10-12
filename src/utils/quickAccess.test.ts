@@ -5,7 +5,8 @@ import { useListStore } from '@/store/listStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
-import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem } from '@/utils/quickAccess';
+import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem, placesByUse } from '@/utils/quickAccess';
+import { PLACES } from '@/config/places';
 import type { TaskId } from '@/types';
 import type { NoteId } from '@/types/notes';
 
@@ -141,5 +142,55 @@ describe('schedules in Quick Access', () => {
   it('a deleted schedule resolves as stale', () => {
     const { stale } = resolveRecentItems([{ type: 'schedule', entityId: 'gone', lastVisitedAt: new Date().toISOString(), visitCount: 1 }]);
     expect(stale).toHaveLength(1);
+  });
+});
+
+describe('Places', () => {
+  it('the row keeps the registry order until places are used, then puts the most used first', () => {
+    expect(placesByUse({}).map((p) => p.id)).toEqual(PLACES.map((p) => p.id));
+    const ui = useUIStore.getState();
+    ui.openSettings();
+    ui.openSettings();
+    ui.openRecyclingBin();
+    const ids = placesByUse(useRecentItemsStore.getState().items).map((p) => p.id);
+    expect(ids.slice(0, 2)).toEqual(['settings', 'recycling-bin']);
+    expect(ids.slice(2)).toEqual(PLACES.map((p) => p.id).filter((id) => id !== 'settings' && id !== 'recycling-bin'));
+  });
+
+  it('opening the Glossary or Review from anywhere counts as a use', () => {
+    useUIStore.getState().openNotesGlossary();
+    useUIStore.getState().openNotesReview();
+    expect(useRecentItemsStore.getState().items['place:glossary']?.visitCount).toBe(1);
+    expect(useRecentItemsStore.getState().items['place:review']?.visitCount).toBe(1);
+  });
+
+  it('a place is found by name, ahead of items, and opens there', () => {
+    useNoteStore.getState().addNote({ title: 'Glossary of terms' });
+    const results = searchQuickAccessItems('glossary');
+    expect(results[0]).toMatchObject({ type: 'place', entityId: 'glossary' });
+    navigateToQuickAccessItem(results[0]);
+    expect(useUIStore.getState()).toMatchObject({ activeView: 'notes', notesGlossaryOpen: true });
+  });
+
+  it('places are never listed among the recent items, and never reported as stale', () => {
+    useUIStore.getState().openSettings();
+    const { items, stale } = resolveRecentItems(Object.values(useRecentItemsStore.getState().items));
+    expect(items).toEqual([]);
+    expect(stale).toEqual([]);
+  });
+});
+
+describe('Glossary terms in Quick Access', () => {
+  it('a term is searchable and opens its definition in its note', () => {
+    const noteId = useNoteStore.getState().addNote({ title: 'Finance' }) as NoteId;
+    const entryId = useNoteStore.getState().addStructuredTagEntry({
+      typeKey: 'acronym', tagId: 'tag-1', term: 'ASX', fields: { expansion: 'Australian Securities Exchange' }, noteId, collectionId: null,
+    });
+    const item = searchQuickAccessItems('asx').find((r) => r.type === 'glossary');
+    expect(item).toMatchObject({ entityId: entryId, title: 'ASX' });
+    expect(item!.subtitle).toContain('Finance');
+    navigateToQuickAccessItem(item!);
+    expect(useUIStore.getState()).toMatchObject({ activeView: 'notes' });
+    expect(useUIStore.getState().requestedNotePassage).toMatchObject({ noteId, value: entryId });
   });
 });

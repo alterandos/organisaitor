@@ -6,8 +6,15 @@ import { breakdownBlock } from './breakdownBlock';
 import { hierarchyBlock } from './hierarchyBlock';
 import { pyramidBlock } from './pyramidBlock';
 import { chartBlock } from './chartBlock';
+import { codeBlock } from './codeBlock';
+import { mathsBlock } from './mathsBlock';
+import { inboxBlock } from './inboxBlock';
+import { definitionBlock } from './definitionBlock';
+import { acronymBlock } from './acronymBlock';
+import { conceptBlock } from './conceptBlock';
+import { hubBlock } from './hubBlock';
 
 // THE registry of note blocks `\` can insert (CLAUDE.md "Inline objects in notes" → note blocks).
 // A new block is its node in extensions/ (registered in NoteEditor), a `*Block.ts` here, and one
 // entry below — a pattern test checks the entry.
-export const NOTE_BLOCK_KINDS: NoteBlockKind[] = [timelineBlock, quoteBlock, cycleBlock, breakdownBlock, hierarchyBlock, pyramidBlock, chartBlock];
+export const NOTE_BLOCK_KINDS: NoteBlockKind[] = [timelineBlock, quoteBlock, cycleBlock, breakdownBlock, hierarchyBlock, pyramidBlock, chartBlock, codeBlock, mathsBlock, inboxBlock, definitionBlock, acronymBlock, conceptBlock, hubBlock];

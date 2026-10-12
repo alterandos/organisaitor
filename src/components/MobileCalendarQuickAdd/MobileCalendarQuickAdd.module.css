@@ -118,7 +118,7 @@
   border: none;
   border-radius: 999px;
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;

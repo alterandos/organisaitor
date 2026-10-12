@@ -4,9 +4,11 @@ import { useOverviewStore } from '@/store/overviewStore';
 import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useOverviewSnapshot } from '@/overview/useOverviewSnapshot';
-import { runOverview, endeavourOverviewQuery } from '@/overview/engine';
+import { runOverview, endeavourOverviewQuery, INBOXES_QUERY } from '@/overview/engine';
+import { INBOX_ICON } from '@/config/itemIcons';
 import { SOURCE_BY_KEY } from '@/overview/sources';
 import { openOverviewRow } from '@/overview/open';
+import { canTickDone, tickOverviewRow } from '@/overview/done';
 import { getOrderedEndeavours } from '@/utils/collections';
 import { formatDeadline } from '@/utils/date';
 import { todayIsoInZone, resolveTimezone } from '@/utils/timezone';
@@ -71,25 +73,36 @@ function RowView({ row, showEndeavour, today }: { row: OverviewRow; showEndeavou
   const endeavour = row.endeavourId ? collections[row.endeavourId as CollectionId] : undefined;
   const overdue = row.status === 'open' && !!row.when && row.when < today;
   return (
-    <button className={`${styles.row} ${row.status !== 'open' ? styles.rowDone : ''}`} onClick={() => openOverviewRow(row)}>
-      <span className={styles.cellIcon} title={source.label}>{source.icon}</span>
-      <span className={styles.cellWhat}>
-        <span className={styles.title}>{row.title}</span>
-        {row.context && <span className={styles.context}>{row.context}</span>}
+    <div className={`${styles.row} ${row.status !== 'open' ? styles.rowDone : ''}`} data-status={row.status}>
+      <span className={styles.cellTick}>
+        {canTickDone(row) && (
+          <input type="checkbox" className={styles.tick} checked={row.status === 'done'}
+            aria-label={row.status === 'done' ? L.markNotDone(row.title) : L.markDone(row.title)}
+            title={row.status === 'done' ? L.markNotDone(row.title) : L.markDone(row.title)}
+            onChange={() => tickOverviewRow(row)} />
+        )}
       </span>
-      <span className={`${styles.cellWhen} ${overdue ? styles.overdue : ''}`}>
-        {row.when ? formatDeadline(row.when, row.time, clockFormat) : L.noDate}
-      </span>
-      <span className={styles.cellStatus}>
-        <span className={`${styles.status} ${styles[`status_${row.status}`]}`}>{L.status[row.status]}</span>
-      </span>
-      {showEndeavour && (
-        <span className={styles.cellEndeavour}>
-          {endeavour && <span className={styles.dot} style={endeavour.color ? { background: endeavour.color } : undefined} />}
-          {endeavour?.name ?? ''}
+      <button className={styles.rowOpen} onClick={() => openOverviewRow(row)}>
+        {/* A task's kind icon is a ticked box: beside the tick box it would read as a second one. */}
+        <span className={styles.cellIcon} title={source.label}>{row.source === 'task' && canTickDone(row) ? null : source.icon}</span>
+        <span className={styles.cellWhat}>
+          <span className={styles.title}>{row.title}</span>
+          {row.context && <span className={styles.context}>{row.context}</span>}
         </span>
-      )}
-    </button>
+        <span className={`${styles.cellWhen} ${overdue ? styles.overdue : ''}`}>
+          {row.when ? formatDeadline(row.when, row.time, clockFormat) : L.noDate}
+        </span>
+        <span className={styles.cellStatus}>
+          <span className={`${styles.status} ${styles[`status_${row.status}`]}`}>{row.status === 'done' && <span aria-hidden="true">✓ </span>}{L.status[row.status]}</span>
+        </span>
+        {showEndeavour && (
+          <span className={styles.cellEndeavour}>
+            {endeavour && <span className={styles.dot} style={endeavour.color ? { background: endeavour.color } : undefined} />}
+            {endeavour?.name ?? ''}
+          </span>
+        )}
+      </button>
+    </div>
   );
 }
 
@@ -115,14 +128,15 @@ export function OverviewSection() {
   const selectedEndeavour = selection?.kind === 'endeavour' ? collections[selection.id as CollectionId] : undefined;
   const selectedSaved = selection?.kind === 'saved' ? overviews[selection.id as OverviewId] : undefined;
   const endeavourQueryId = selectedEndeavour && !selectedEndeavour.archivedAt ? selectedEndeavour.id : null;
+  const inboxes = selection?.kind === 'builtIn' && selection.id === 'inboxes';
   const query: OverviewQuery | null = useMemo(
-    () => selectedSaved ?? (endeavourQueryId ? endeavourOverviewQuery(endeavourQueryId) : null),
-    [selectedSaved, endeavourQueryId],
+    () => (inboxes ? INBOXES_QUERY : selectedSaved ?? (endeavourQueryId ? endeavourOverviewQuery(endeavourQueryId) : null)),
+    [inboxes, selectedSaved, endeavourQueryId],
   );
 
   const result = useMemo(() => (query ? runOverview(query, snapshot, today) : null), [query, snapshot, today]);
 
-  const heading = selectedSaved
+  const heading = inboxes ? L.allInboxes : selectedSaved
     ? selectedSaved.name
     : selectedEndeavour ? L.endeavourTitle(selectedEndeavour.name) : '';
   const queryEndeavour = query?.collectionId ? collections[query.collectionId] : undefined;
@@ -138,6 +152,16 @@ export function OverviewSection() {
       <aside style={paneResize.style} className={styles.sidebar}>
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <div className={styles.sidebarHeader}>
+          <span className={styles.sidebarTitle}>{L.builtInHeading}</span>
+        </div>
+        <div className={`${styles.navItem} ${inboxes ? styles.navItemActive : ''}`}>
+          <button className={styles.navBtn} onClick={() => setSelection({ kind: 'builtIn', id: 'inboxes' })}>
+            <span aria-hidden="true">{INBOX_ICON}</span>
+            <TruncatedText text={L.allInboxes} className={styles.navName} />
+          </button>
+        </div>
+
+        <div className={`${styles.sidebarHeader} ${styles.sidebarHeaderSecond}`}>
           <span className={styles.sidebarTitle}>{L.endeavoursHeading}</span>
         </div>
         {endeavours.map((c) => {

@@ -17,6 +17,10 @@ export interface NoteObjectTriggerStorage {
   // Set by SelectionMenu while it's open: a key that reached the editor first (typed before the
   // menu's search box took focus) is handled by the menu. Returns whether it took the key.
   selectionMenuKey: ((event: KeyboardEvent) => boolean) | null;
+  // Set by NoteEditor: opens Send to inbox for the selection (the selection menu, right-click).
+  openSendToInbox: (() => void) | null;
+  // Set by NoteEditor: opens Add to hub for the selection.
+  openAddToHub: (() => void) | null;
 }
 
 export const objectTriggerStorage = (editor: { storage: unknown }): NoteObjectTriggerStorage =>
@@ -56,7 +60,7 @@ function handleSessionKey(view: EditorView, event: KeyboardEvent, storage: NoteO
     }
     const pick = (event.key === 'Tab' && !event.shiftKey && !mod)
       || (event.key === 'Enter' && !event.shiftKey && !mod && (s.query !== '' || s.navigated));
-    if (pick) { acceptKind(view, matches[s.highlight]); return consume(); }
+    if (pick) { acceptKind(view, matches[s.highlight], storage.getContext()); return consume(); }
     return false;
   }
 
@@ -77,7 +81,7 @@ export const NoteObjectTrigger = Extension.create<Record<string, never>, NoteObj
   name: 'noteObjectTrigger',
 
   addStorage() {
-    return { getContext: () => null, focusFields: null, selectionMenuKey: null };
+    return { getContext: () => null, focusFields: null, selectionMenuKey: null, openSendToInbox: null, openAddToHub: null };
   },
 
   addProseMirrorPlugins() {
@@ -105,7 +109,7 @@ export const NoteObjectTrigger = Extension.create<Record<string, never>, NoteObj
             // A space after a note block's keyword (`\timeline `, `\tl `) inserts the block.
             if (text === ' ' && from === s.to && s.interp.phase === 'picking') {
               const kind = chosenKind(s.interp.word);
-              if (kind && isBlockKind(kind)) { acceptKind(view, kind); return true; }
+              if (kind && isBlockKind(kind)) { acceptKind(view, kind, storage.getContext()); return true; }
             }
             return false;
           },

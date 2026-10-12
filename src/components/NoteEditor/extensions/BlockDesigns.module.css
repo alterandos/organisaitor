@@ -129,3 +129,56 @@
 }
 
 .tierRow + .tierRow { margin-top: 6px; }
+
+/* A note block's frame options (blockDesigns.ts openFrameOptions). */
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.row + .toggleRow,
+.swatches + .heading { margin-top: 12px; }
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-width: 15rem;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--swatch);
+  outline: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+/* The default: the theme's own quiet colour, shown as a struck-through circle. */
+.swatch[data-default] {
+  background: linear-gradient(135deg, transparent 45%, var(--color-muted) 45%, var(--color-muted) 55%, transparent 55%), var(--color-surface-alt);
+}
+
+.swatch[aria-pressed="true"],
+.customColour[data-current] { outline: 2px solid var(--color-primary); }
+
+.swatch:focus-visible,
+.customColour:focus-visible { outline: 2px dashed var(--color-primary); outline-offset: 2px; }
+
+.customColour {
+  width: 26px;
+  height: 24px;
+  padding: 0 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+}

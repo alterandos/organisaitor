@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useRecentItemsStore, type RecentItemEntry } from '@/store/recentItemsStore';
-import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem, type QuickAccessItem } from '@/utils/quickAccess';
+import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem, placesByUse, type QuickAccessItem } from '@/utils/quickAccess';
+import type { Place } from '@/config/places';
 import styles from './QuickAccessPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
@@ -61,6 +62,21 @@ export function QuickAccessPane() {
     closeQuickAccess();
   };
 
+  // Ordered when the pane opens, so the row doesn't reshuffle under the pointer.
+  const [places] = useState(() => placesByUse(useRecentItemsStore.getState().items));
+  const [badges] = useState(() => new Map(places.map((p) => [p.id, p.badge?.() ?? 0])));
+  const openPlace = (place: Place) => {
+    closeQuickAccess();
+    place.open();
+  };
+  // ← → move along the row; ↓ returns to the search box.
+  const handlePlaceKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const btn = e.currentTarget;
+    const next = e.key === 'ArrowRight' ? btn.nextElementSibling : e.key === 'ArrowLeft' ? btn.previousElementSibling : null;
+    if (next instanceof HTMLElement) { e.preventDefault(); next.focus(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); inputRef.current?.focus(); }
+  };
+
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -90,6 +106,18 @@ export function QuickAccessPane() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleInputKeyDown}
         />
+
+        {!trimmed && (
+          <div className={styles.places} role="group" aria-label={LABELS.places.title}>
+            {places.map((place) => (
+              <button key={place.id} type="button" className={styles.place} onClick={() => openPlace(place)} onKeyDown={handlePlaceKeyDown}>
+                <place.Icon className={styles.placeIcon} />
+                <span className={styles.placeLabel}>{place.label}</span>
+                {(badges.get(place.id) ?? 0) > 0 && <span className={styles.placeBadge}>{badges.get(place.id)}</span>}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!trimmed && (
           <div className={styles.controls}>
@@ -141,7 +169,7 @@ export function QuickAccessPane() {
           ))}
         </div>
 
-        <div className={styles.footer}>↑↓ navigate · Enter open · Esc close</div>
+        <div className={styles.footer}>↑↓ navigate · Tab to Places · Enter open · Esc close</div>
       </div>
     </div>,
     document.body

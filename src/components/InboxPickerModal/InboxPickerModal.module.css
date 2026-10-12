@@ -1,0 +1,10 @@
+/* The picker itself uses NotePickerModal's styles; this is only its own option row. */
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 1rem 0.6rem;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}

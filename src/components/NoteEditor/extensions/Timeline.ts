@@ -5,7 +5,7 @@ import { Fragment, type Node as PMNode, type ResolvedPos } from '@tiptap/pm/mode
 import { Mapping } from '@tiptap/pm/transform';
 import { LABELS } from '@/config/labels';
 import { readTimeline, type TimelineOrder } from '@/utils/timelineWhen';
-import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, pillButton, type BlockDesign } from './blockDesigns';
+import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, pillButton, type BlockDesign, replaceTypedWithBlock } from './blockDesigns';
 
 // A timeline in a note (`\timeline`): entries on a vertical line, each a short "when" label (free
 // text: "1914", "Day 3", "c. 1200 BC", "Q3") over ordinary rich text. Note-taking structure only;
@@ -132,27 +132,9 @@ export function insertTimeline(state: EditorState, from: number, to: number): Tr
   const type = state.schema.nodes.timeline;
   const node = type?.createAndFill();
   if (!node) return null;
-  // The space before a `\` typed after other words goes too ("History \timeline" → "History").
-  const $start = state.doc.resolve(from);
-  while (from > $start.start() && /\s/.test(state.doc.textBetween(from - 1, from))) from--;
-  const tr = state.tr.delete(from, to);
-  const $pos = tr.doc.resolve(from);
-  let at: number | null = null;
-  const d = $pos.depth;
-  if ($pos.parent.isTextblock && $pos.parent.content.size === 0 && d > 0
-    && $pos.node(d - 1).canReplaceWith($pos.index(d - 1), $pos.index(d - 1) + 1, type)) {
-    at = $pos.before(d);
-    tr.replaceWith(at, $pos.after(d), node);
-  } else {
-    for (let depth = d; depth > 0; depth--) {
-      const index = $pos.indexAfter(depth - 1);
-      if (!$pos.node(depth - 1).canReplaceWith(index, index, type)) continue;
-      at = $pos.after(depth);
-      tr.insert(at, node);
-      break;
-    }
-  }
-  if (at === null) return null;
+  const made = replaceTypedWithBlock(state, from, to, node);
+  if (!made) return null;
+  const { tr, at } = made;
   return tr.setSelection(TextSelection.create(tr.doc, at + 3)).scrollIntoView();
 }
 

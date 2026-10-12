@@ -25,6 +25,7 @@ import { ITEM_FLAG_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import styles from './CalendarView.module.css';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { isTypingTarget } from '@/utils/typingTarget';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -802,10 +803,7 @@ export function CalendarView() {
   // AddCalendarItemModal's form instead of switching views.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-        || (e.target as HTMLElement)?.isContentEditable;
-      if (isTyping) return;
+      if (isTypingTarget(e)) return;
       if (openModal || editingTaskId || editingCalendarEventId || editingCalendarReminderId || editingCalendarDeadlineId || dayPaneDate) return;
 
       if (e.key.toLowerCase() === 'o' && !e.ctrlKey && !e.altKey && !e.metaKey) {

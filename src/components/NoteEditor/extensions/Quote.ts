@@ -3,7 +3,7 @@ import { Plugin, PluginKey, Selection, TextSelection, type EditorState, type Tra
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
-import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, pillButton, type BlockDesign } from './blockDesigns';
+import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, pillButton, type BlockDesign, placeBlock, replaceTypedWithBlock } from './blockDesigns';
 
 // A quote in a note (`\quote`, or Quote on selected text): the words, and who said them, where
 // and when. Note-taking structure only, like the timeline (extensions/Timeline.ts).
@@ -145,36 +145,13 @@ function quoteNode(state: EditorState, text: string, fields: QuoteField[] = DEFA
   ]);
 }
 
-// Puts `node` in place of the empty textblock at `$pos`, or after the block it's in (or the
-// nearest container that can hold it). Returns where it went.
-function placeBlock(tr: Transaction, from: number, node: PMNode): number | null {
-  const $pos = tr.doc.resolve(from);
-  const d = $pos.depth;
-  if ($pos.parent.isTextblock && $pos.parent.content.size === 0 && d > 0
-    && $pos.node(d - 1).canReplaceWith($pos.index(d - 1), $pos.index(d - 1) + 1, node.type)) {
-    const at = $pos.before(d);
-    tr.replaceWith(at, $pos.after(d), node);
-    return at;
-  }
-  for (let depth = d; depth > 0; depth--) {
-    const index = $pos.indexAfter(depth - 1);
-    if (!$pos.node(depth - 1).canReplaceWith(index, index, node.type)) continue;
-    const at = $pos.after(depth);
-    tr.insert(at, node);
-    return at;
-  }
-  return null;
-}
-
 // `\quote`: replaces from..to (what was typed, and the space before it) with an empty quote,
 // the cursor in its text.
 export function insertQuote(state: EditorState, from: number, to: number): Transaction | null {
   if (!state.schema.nodes.quoteBlock) return null;
-  const $start = state.doc.resolve(from);
-  while (from > $start.start() && /\s/.test(state.doc.textBetween(from - 1, from))) from--;
-  const tr = state.tr.delete(from, to);
-  const at = placeBlock(tr, from, quoteNode(state, ''));
-  if (at === null) return null;
+  const made = replaceTypedWithBlock(state, from, to, quoteNode(state, ''));
+  if (!made) return null;
+  const { tr, at } = made;
   return tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView();
 }
 

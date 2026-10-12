@@ -107,7 +107,7 @@ export function NoteObjectMenu({ editor, getContext }: Props) {
                 className={`${styles.kind} ${i === session.highlight ? styles.kindActive : ''}`}
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => { if (i !== session.highlight) setHighlight(view, i); }}
-                onClick={() => { acceptKind(view, kind); view.focus(); }}
+                onClick={() => { acceptKind(view, kind, getContext()); view.focus(); }}
               >
                 <span className={styles.kindIcon} aria-hidden="true">{kind.icon}</span>
                 <span className={styles.kindText}>

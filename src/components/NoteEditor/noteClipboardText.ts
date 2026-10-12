@@ -2,6 +2,7 @@ import type { Fragment, Node as PMNode, Slice } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { effectiveLevels } from './extensions/hierarchyLayout';
 import { chartToTable, normalizeChart } from '@/charts/chartSpec';
+import { glossaryEntry } from '@/services/glossary';
 
 // The plain text a copy from a note puts on the clipboard (editorProps.clipboardTextSerializer).
 // Rich targets (Word, Docs, mail) take the HTML copy and keep everything; a plain-text target (a
@@ -9,7 +10,8 @@ import { chartToTable, normalizeChart } from '@/charts/chartSpec';
 // turned into bare lines. This writes it the way people type structure in plain text — Markdown:
 //   # Heading            - bullet            1. numbered          > quote
 //   tables as tab-separated rows (pastes into a spreadsheet as cells), code in ``` fences,
-//   timelines as "- When — what", quotes with their attribution, links as "text (url)".
+//   timelines as "- When — what", quotes with their attribution, links as "text (url)", maths as
+//   LaTeX in $…$ (inline) or $$…$$ (a block).
 // Copying a few words inside one block gives just those words, without the block's marker.
 
 const INDENT = '   ';
@@ -23,6 +25,10 @@ function inlineText(node: PMNode): string {
       out += link && link !== text && !text.includes(link) ? `${text} (${link})` : text;
     } else if (child.type.name === 'hardBreak') {
       out += '\n';
+    } else if (child.type.name === 'movedStub') {
+      out += `(${LABELS.sendToInbox.stub(String(child.attrs.title ?? ''))})`;
+    } else if (child.type.name === 'mathInline') {
+      out += `$${child.attrs.latex as string}$`;
     } else if (child.isInline) {
       out += child.textContent;
     }
@@ -115,6 +121,41 @@ function block(node: PMNode): string {
       });
       return lines.join('\n');
     }
+    case 'inbox': {
+      // Its name, then each item as a bullet with its status.
+      const lines: string[] = [];
+      node.forEach((child, _o, i) => {
+        if (i === 0) { const t = inlineText(child).trim(); if (t) lines.push(t); return; }
+        const parts: string[] = [];
+        child.forEach((b) => parts.push(block(b)));
+        const status = LABELS.noteBlocks.inbox.statuses[child.attrs.status as keyof typeof LABELS.noteBlocks.inbox.statuses] ?? '';
+        lines.push(prefixLines(`[${status}] ${parts.join('\n')}`, '- ', '  '));
+      });
+      return lines.join('\n');
+    }
+    case 'glossaryCard': {
+      // "Term — what it means", from the record the card shows.
+      const entry = glossaryEntry(node.attrs.entryId as string);
+      return entry && !entry.locked ? [entry.term, entry.meaning].filter(Boolean).join(' — ') : '';
+    }
+    case 'hub': {
+      // Its name, your take, then each link under its relation: "Causes: Money supply".
+      const lines: string[] = [];
+      node.forEach((child) => {
+        if (child.type.name === 'hubTitle' || child.type.name === 'hubTake') {
+          const t = inlineText(child).trim();
+          if (t) lines.push(t);
+          return;
+        }
+        const rel = LABELS.hubs.relations[child.attrs.relation as keyof typeof LABELS.hubs.relations]?.label ?? '';
+        lines.push(`- ${rel}: ${String(child.attrs.label ?? '')}`);
+      });
+      return lines.join('\n');
+    }
+    case 'mathBlock':
+      return `$$
+${node.attrs.latex as string}
+$$`;
     case 'chart': {
       // The title, then the data as a tab-separated table (pastes into a spreadsheet).
       const spec = normalizeChart(node.attrs.spec);

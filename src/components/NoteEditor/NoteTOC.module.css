@@ -179,11 +179,16 @@
 }
 
 .pointReview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   flex-basis: 100%;
   padding-left: 1.15rem;
   color: var(--color-muted);
   font-size: 0.7rem;
 }
+
+.reviewIcon { flex: none; width: 1em; height: 1em; }
 
 /* Contents takes what it needs (up to most of the pane); Key points the rest. */
 .headingsList { flex: 0 1 auto; max-height: 60%; }

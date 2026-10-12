@@ -48,7 +48,8 @@ export function glossaryEntries(): GlossaryEntry[] {
   const { structuredTagEntries, notes, noteTags } = useNoteStore.getState();
   return Object.values(structuredTagEntries)
     .map((e) => toGlossaryEntry(e, notes, noteTags))
-    .filter((e): e is GlossaryEntry => !!e)
+    // A card's record has no term until one is typed (`\definition`); it isn't listed until then.
+    .filter((e): e is GlossaryEntry => !!e && (e.locked || e.term.trim() !== ''))
     .sort((a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: 'base' }));
 }
 

@@ -15,6 +15,7 @@
   --color-primary-hover: #4a5cd0;
   --color-primary-subtle: rgba(91, 110, 225, 0.08);
   --color-primary-border: rgba(91, 110, 225, 0.25);
+  --color-on-primary: #fff;   /* text and icons on a --color-primary fill, both themes */
   --color-text: #1a1a2e;
   --color-muted: #6b7280;
   --color-border: #e5e7eb;
@@ -93,6 +94,39 @@
   --color-backdrop: rgba(0, 0, 0, 0.45);
   --color-overscroll: #e8e9ed; /* past the end of a note (NoteEditor's NoteBackdrop, when no backdrop is chosen) */
   --color-occurrence: rgba(250, 204, 21, 0.28); /* other mentions of the selected text in a note */
+
+  /* ── Code blocks (NoteEditor CodeBlock.ts): a dark panel in both themes, so one set. The syntax
+     colours each read at 4.5:1 on --color-code-bg. ── */
+  --color-code-bg:        #1e293b;
+  --color-code-terminal:  #0b1120;
+  --color-code-header:    #94a3b8;
+  --color-code-text:      #e2e8f0;
+  --color-code-gutter:    #64748b;
+  --color-code-comment:   #94a3b8;
+  --color-code-keyword:   #c4a7ff;
+  --color-code-string:    #a5e37f;
+  --color-code-number:    #fdba74;
+  --color-code-title:     #7dd3fc;
+  --color-code-type:      #fcd34d;
+  --color-code-attr:      #f9a8d4;
+  --color-code-deletion:  #fca5a5;
+  --color-code-addition:  #86efac;
+
+  /* ── Swatches: the suite's palette (config/swatches.ts), as drawn by the app for something it
+     stores by name (a block's frame): each reads as a line on --color-surface (3:1). Colours saved
+     as hex use the palette's mid-tones instead. Redefined for dark below. ── */
+  --color-swatch-grey:   #64748b;
+  --color-swatch-red:    #dc2626;
+  --color-swatch-orange: #ea580c;
+  --color-swatch-yellow: #ca8a04;
+  --color-swatch-lime:   #65a30d;
+  --color-swatch-green:  #16a34a;
+  --color-swatch-teal:   #0d9488;
+  --color-swatch-cyan:   #0891b2;
+  --color-swatch-blue:   #2563eb;
+  --color-swatch-indigo: #5b6ee1;
+  --color-swatch-purple: #7c3aed;
+  --color-swatch-pink:   #db2777;
 }
 
 [data-theme="dark"] {
@@ -129,6 +163,20 @@
   --tentative-blend-mode: normal;
   --color-blocked-wash:   rgba(255, 255, 255, 0.04);
   --color-blocked-stripe: rgba(255, 255, 255, 0.07);
+
+  /* ── Swatches (see :root) ── */
+  --color-swatch-grey:   #9ca3af;
+  --color-swatch-red:    #f87171;
+  --color-swatch-orange: #fb923c;
+  --color-swatch-yellow: #facc15;
+  --color-swatch-lime:   #a3e635;
+  --color-swatch-green:  #4ade80;
+  --color-swatch-teal:   #2dd4bf;
+  --color-swatch-cyan:   #22d3ee;
+  --color-swatch-blue:   #60a5fa;
+  --color-swatch-indigo: #818cf8;
+  --color-swatch-purple: #a78bfa;
+  --color-swatch-pink:   #f472b6;
 
   /* ── Shadows (heavier on dark) ── */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);

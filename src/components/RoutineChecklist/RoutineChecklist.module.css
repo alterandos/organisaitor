@@ -112,7 +112,7 @@
 }
 .completeBtn:hover:not(:disabled) {
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
 }
 .completeBtn:disabled {
   border-color: var(--color-border);

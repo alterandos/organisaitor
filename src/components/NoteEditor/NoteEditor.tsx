@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditor, useEditorState, EditorContent, getMarkRange } from '@tiptap/react';
-import { TextSelection } from '@tiptap/pm/state';
+import { Selection, TextSelection } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Table } from '@tiptap/extension-table';
@@ -15,7 +15,8 @@ import { ResizableImage } from './extensions/ResizableImage';
 import { HeadingNumbering } from './extensions/HeadingNumbering';
 import { SectionDocument, Section, ColumnBlock, Column, MAX_SECTION_COLUMNS } from './extensions/Section';
 import { useNoteStore } from '@/store/noteStore';
-import { useUIStore } from '@/store/uiStore';
+import { noteCursorKey, useUIStore } from '@/store/uiStore';
+import { scrollHostOf } from './headingTrail';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { NoteId, Note, CollectionId, StructuredTagEntryId } from '@/types';
 import { NoteTagMark } from './extensions/NoteTagMark';
@@ -28,7 +29,7 @@ import { confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs
 import { usePlatform } from '@/hooks/usePlatform';
 import { getNoteBacklinks } from '@/store/noteBacklinks';
 import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
-import { collectArtifactTargets } from '@/utils/noteContent';
+import { collectArtifactTargets, isNodeFind } from '@/utils/noteContent';
 import { linkTabIdFor, MAIN_TAB_ID, resolveNoteTab, titlePrefillFor, tabDatesText } from '@/utils/noteTabs';
 import { setNormalText } from './extensions/normalText';
 import { NoteTitle } from './extensions/NoteTitle';
@@ -40,12 +41,23 @@ import { BreakdownExtensions } from './extensions/Breakdown';
 import { HierarchyExtensions } from './extensions/Hierarchy';
 import { PyramidExtensions } from './extensions/Pyramid';
 import { ChartExtensions } from './extensions/Chart';
+import { CodeBlockExtensions } from './extensions/CodeBlock';
+import { MathExtensions } from './extensions/Maths';
+import { InboxExtensions } from './extensions/Inbox';
+import { HubExtensions } from './extensions/Hub';
+import { HubPickerModal } from '@/components/HubPickerModal/HubPickerModal';
+import { addLinkToHub, addPassageToHub, selectionTouchesHub } from '@/services/noteHubs';
+import { GlossaryCardExtensions } from './extensions/GlossaryCard';
+import { TrailingLine } from './extensions/TrailingLine';
+import { InboxPickerModal } from '@/components/InboxPickerModal/InboxPickerModal';
+import { selectionTouchesInbox, sendToInbox } from '@/services/noteInbox';
 import { NoteBlockSelect } from './extensions/blockDesigns';
 import { NoteBlockPicks } from './extensions/blockPicks';
 import { NoteBackdrop } from './NoteBackdrop';
 import { MobileNoteSidePanel } from './MobileNoteSidePanel';
 import { DisclosureIcon, PinIcon, TextColorIcon } from '@/components/Icons';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
+import { AcronymOffer } from './extensions/AcronymOffer';
 import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
 import { SpecialCharInput } from './extensions/SpecialCharInput';
 import { StickyHeadings } from './StickyHeadings';
@@ -80,6 +92,11 @@ import './extensions/breakdownMenu';
 import './extensions/hierarchyMenu';
 import './extensions/pyramidMenu';
 import './extensions/chartMenu';
+import './extensions/codeMenu';
+import './extensions/mathsMenu';
+import './extensions/glossaryCardMenu';
+import './extensions/inboxMenu';
+import './extensions/hubMenu';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { openExternalLink, normalizeLinkUrl } from '@/utils/links';
 import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
@@ -773,7 +790,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   }
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ document: false, link: { openOnClick: false, HTMLAttributes: { class: styles.link } } }),
+      StarterKit.configure({ document: false, codeBlock: false, link: { openOnClick: false, HTMLAttributes: { class: styles.link } } }),
       SectionDocument,
       Section,
       ColumnBlock,
@@ -805,9 +822,16 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       ...HierarchyExtensions,
       ...PyramidExtensions,
       ...ChartExtensions,
+      ...CodeBlockExtensions,
+      ...MathExtensions,
+      ...InboxExtensions,
+      ...HubExtensions,
+      ...GlossaryCardExtensions,
+      TrailingLine,
       NoteBlockSelect,
       NoteBlockPicks,
       GlossaryAutolink,
+      AcronymOffer,
       OccurrenceHighlight,
       SpecialCharInput,
       HeadingLevel,
@@ -997,6 +1021,33 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     },
   });
 
+  // ── Where a tab was left ─────────────────────────────────────────────────
+  // The cursor and the scroll of the open tab, kept (uiStore.noteCursorMemory) when the tab or
+  // the note is left, so opening it again lands there rather than at the end.
+
+  function rememberCursor() {
+    const id = currentNoteIdRef.current;
+    if (!id || !editor || editor.isDestroyed) return;
+    const { from, to } = editor.state.selection;
+    const scroll = scrollHostOf(editor.view.dom)?.scrollTop ?? 0;
+    useUIStore.getState().setNoteCursor(noteCursorKey(id, activeTabIdRef.current), { from, to, scroll });
+  }
+
+  // Back to where the open tab was left; a tab never opened starts at the end. Focuses the editor
+  // when asked (opening a note from the list, switching tabs).
+  function restoreCursor(focus: boolean) {
+    const id = currentNoteIdRef.current;
+    if (!id || !editor) return;
+    const saved = useUIStore.getState().noteCursorMemory[noteCursorKey(id, activeTabIdRef.current)];
+    if (!saved) { if (focus) editor.commands.focus('end'); return; }
+    const size = editor.state.doc.content.size;
+    const chain = editor.chain();
+    (focus ? chain.focus(undefined, { scrollIntoView: false }) : chain)
+      .setTextSelection({ from: Math.min(saved.from, size), to: Math.min(saved.to, size) }).run();
+    const host = scrollHostOf(editor.view.dom);
+    if (host) requestAnimationFrame(() => { host.scrollTop = saved.scroll; });
+  }
+
   // ── Tab switching ─────────────────────────────────────────────────────────
 
   const flushCurrentTab = () => {
@@ -1026,6 +1077,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   };
 
   const switchTab = (requestedTabId: string | null, opts?: { focusEditor?: boolean }) => {
+    rememberCursor();
     flushCurrentTab();
     const id = currentNoteIdRef.current;
     const latestNote = viewOf(id);
@@ -1040,7 +1092,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     // wants to be looking at (and likely editing) this tab's content next. A brand-new tab opts
     // out: its name box takes focus first, and Enter there moves into the editor. (Tiptap applies
     // focus a frame late, so focusing here would steal it back from the name box.)
-    if (opts?.focusEditor !== false) editor.commands.focus('end');
+    restoreCursor(opts?.focusEditor !== false);
   };
 
   // F2: rename the open tab. Reads only refs and module functions, so the editor-focused keydown
@@ -1112,6 +1164,37 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     }
   }
 
+  // Send to inbox (the selection menu, right-click): the picker, suggested from the selected words.
+  const [sendingToInbox, setSendingToInbox] = useState<string | null>(null);
+  function openSendToInbox() {
+    if (!editor || editor.state.selection.empty || !editor.isEditable) return;
+    if (selectionTouchesInbox(editor.state)) { void alertDialog(LABELS.sendToInbox.fromInside); return; }
+    const { from, to } = editor.state.selection;
+    setSendingToInbox(editor.state.doc.textBetween(from, to, ' ').slice(0, 500));
+  }
+
+  // Add to hub (the selection menu, right-click), and a hub's + Link… (its button asks through a
+  // 'hub-link-picker' event, since the hub is drawn outside React).
+  const [hubPicker, setHubPicker] = useState<{ mode: 'hub'; text: string } | { mode: 'link'; hubPos: number; text: string } | null>(null);
+  function openAddToHub() {
+    if (!editor || editor.state.selection.empty || !editor.isEditable) return;
+    if (selectionTouchesHub(editor.state)) { void alertDialog(LABELS.hubs.fromInside); return; }
+    const { from, to } = editor.state.selection;
+    setHubPicker({ mode: 'hub', text: editor.state.doc.textBetween(from, to, ' ').slice(0, 500) });
+  }
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    const onRequest = (e: Event) => {
+      const hubPos = (e as CustomEvent<{ hubPos: number }>).detail.hubPos;
+      const hub = editor.state.doc.nodeAt(hubPos);
+      if (hub?.type.name !== 'hub') return;
+      setHubPicker({ mode: 'link', hubPos, text: `${hub.child(0).textContent} ${hub.child(1).textContent}`.trim() });
+    };
+    dom.addEventListener('hub-link-picker', onRequest);
+    return () => dom.removeEventListener('hub-link-picker', onRequest);
+  }, [editor]);
+
   useContextMenuScope(editorContentRef, () => ({
     kind: 'note-editor',
     data: {
@@ -1124,6 +1207,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       },
       openCreate: () => toolbarActionsRef.current?.openCreateMenu(),
       insertTitle,
+      sendToInbox: openSendToInbox,
+      addToHub: openAddToHub,
     } satisfies NoteEditorMenuApi,
   }), !!editor && !noteLocked);
 
@@ -1177,6 +1262,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     // A debounced save from the previous note may still be pending. Write it now, while the
     // editor still holds that note's content — the timer would otherwise fire after setContent
     // below and save the NEW note's content under the OLD note's id.
+    if (currentNoteIdRef.current && currentNoteIdRef.current !== note?.id) rememberCursor();
     if (saveRef.current && currentNoteIdRef.current && currentNoteIdRef.current !== note?.id) flushCurrentTab();
     // On the very first run (the initial mount), the tab was already seeded above from
     // notesLastActiveTabId, so coming back to Notes from another app lands on the same tab,
@@ -1218,6 +1304,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     // lock placeholder anyway) rather than ever parsing anything derived from ciphertext.
     editor.commands.setContent(noteLocked ? '' : parseContent(nextContent));
     isLoadingRef.current = false;
+    if (!noteLocked) restoreCursor(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.id, editor]);
 
@@ -1249,15 +1336,22 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const requestedNotePassage = useUIStore((s) => s.requestedNotePassage);
   useEffect(() => {
     if (!editor || !note || !requestedNotePassage || requestedNotePassage.noteId !== note.id) return;
-    const { mark, attr, value } = requestedNotePassage;
+    const find = requestedNotePassage;
     useUIStore.getState().setRequestedNotePassage(null);
     let from = -1;
     let to = -1;
     let done = false;
     editor.state.doc.descendants((node, pos) => {
       if (done) return false;
+      // A node (an inbox item, a sent passage's marker): the cursor at its start.
+      if (isNodeFind(find)) {
+        if (node.type.name !== find.node || node.attrs[find.attr] !== find.value) return true;
+        from = to = Selection.near(editor.state.doc.resolve(node.isInline ? pos : pos + 1)).from;
+        done = true;
+        return false;
+      }
       if (!node.isText) return true;
-      if (node.marks.some((m) => m.type.name === mark && m.attrs[attr] === value)) {
+      if (node.marks.some((m) => m.type.name === find.mark && m.attrs[find.attr] === find.value)) {
         if (from < 0) from = pos;
         to = pos + node.nodeSize;
       } else if (from >= 0 && node.text?.trim()) {
@@ -1302,7 +1396,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // edit still sitting in its debounce first. Reads flushCurrentTab through a ref so the
   // cleanup calls the latest closure, not the one from the render that registered it.
   const flushOnUnmountRef = useRef<() => void>(() => {});
-  useEffect(() => { flushOnUnmountRef.current = () => { if (saveRef.current) flushCurrentTab(); }; });
+  useEffect(() => { flushOnUnmountRef.current = () => { rememberCursor(); if (saveRef.current) flushCurrentTab(); }; });
   useEffect(() => () => flushOnUnmountRef.current(), []);
   // Closing the window (or the tab going to the background) unmounts nothing, so without this the last
   // moment of typing — still inside the 1.5 s autosave debounce — would never reach the store, and so
@@ -1321,7 +1415,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // Focus the editor when the signal increments (Right arrow from nav column)
   useEffect(() => {
     if (!focusSignal) return;
-    editor?.commands.focus('end');
+    restoreCursor(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusSignal, editor]);
 
   // Capture-phase shortcuts that must intercept before Tiptap handles the same keys
@@ -1557,7 +1652,10 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // clear the pending request so it can't be picked up again.
   // The `\` objects' Enter needs to know where it's creating (see getObjectContext).
   useEffect(() => {
-    if (editor) objectTriggerStorage(editor).getContext = getObjectContext;
+    if (!editor) return;
+    objectTriggerStorage(editor).getContext = getObjectContext;
+    objectTriggerStorage(editor).openSendToInbox = openSendToInbox;
+    objectTriggerStorage(editor).openAddToHub = openAddToHub;
   });
 
   const pendingArtifactLink = useUIStore((s) => s.pendingArtifactLink);
@@ -2318,6 +2416,34 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
               {editor && <StickyHeadings editor={editor} />}
               {editor && <FloatingToolbar actionsRef={toolbarActionsRef} editor={editor} noteId={note.id} getLinkTabId={() => linkTabIdFor(viewOf(currentNoteIdRef.current), activeTabIdRef.current)} onStructuredTag={openStructuredTagCreate} />}
               {editor && <NoteObjectMenu editor={editor} getContext={getObjectContext} />}
+              {editor && hubPicker?.mode === 'hub' && (
+                <HubPickerModal
+                  mode="hub"
+                  suggestFrom={hubPicker.text}
+                  onClose={() => setHubPicker(null)}
+                  onPick={(target, relation) => {
+                    if (!editor.isDestroyed && note) addPassageToHub(editor.view, { noteId: note.id, tabId: activeTabIdRef.current }, target, relation);
+                  }}
+                />
+              )}
+              {editor && hubPicker?.mode === 'link' && (
+                <HubPickerModal
+                  mode="link"
+                  suggestFrom={hubPicker.text}
+                  excludeNoteId={note?.id ?? null}
+                  onClose={() => setHubPicker(null)}
+                  onPick={(choice, relation) => { if (!editor.isDestroyed) addLinkToHub(editor.view, hubPicker.hubPos, choice, relation); }}
+                />
+              )}
+              {editor && sendingToInbox !== null && (
+                <InboxPickerModal
+                  suggestFrom={sendingToInbox}
+                  onClose={() => setSendingToInbox(null)}
+                  onSend={(target, makeTask) => {
+                    if (!editor.isDestroyed && note) void sendToInbox(editor.view, { noteId: note.id, tabId: activeTabIdRef.current }, target, { makeTask });
+                  }}
+                />
+              )}
               {editor && (
                 <SelectionMenu
                   editor={editor}

@@ -176,7 +176,7 @@
 .presetBtnActive {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
 }
 .presetBtnActive:hover { background: var(--color-primary-hover); }
 
@@ -203,7 +203,7 @@
 .dayBtnActive {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
 }
 
 .repeatHint {
@@ -294,7 +294,7 @@
   border: none;
   border-radius: var(--radius-md);
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 500;

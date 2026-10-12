@@ -101,14 +101,29 @@ export interface PassageMark {
   value: string;
 }
 
-// Whether a stored content JSON string has `mark` with `attr === value` anywhere.
-export function contentHasMark(contentJson: string, find: PassageMark): boolean {
+// A passage found by a node instead of a mark: a block (an inbox item) or an inline node (the
+// marker a sent passage leaves behind) whose `attr === value`.
+export interface PassageNode {
+  node:  string;
+  attr:  string;
+  value: string;
+}
+
+export type PassageFind = PassageMark | PassageNode;
+
+export const isNodeFind = (find: PassageFind): find is PassageNode => 'node' in find;
+
+// Whether a stored content JSON string has the passage anywhere: `mark` with `attr === value` on
+// some text, or a `node` with `attr === value`.
+export function contentHasMark(contentJson: string, find: PassageFind): boolean {
   if (!contentJson || !contentJson.includes(find.value)) return false;
   let found = false;
   try {
     const walk = (node: TiptapNode) => {
       if (found) return;
-      if (node.marks?.some((m) => m.type === find.mark && m.attrs?.[find.attr] === find.value)) { found = true; return; }
+      if (isNodeFind(find)) {
+        if (node.type === find.node && (node.attrs as Record<string, unknown> | undefined)?.[find.attr] === find.value) { found = true; return; }
+      } else if (node.marks?.some((m) => m.type === find.mark && m.attrs?.[find.attr] === find.value)) { found = true; return; }
       node.content?.forEach(walk);
     };
     walk(JSON.parse(contentJson));

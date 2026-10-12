@@ -615,12 +615,17 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
     expect(hits, describeHits(hits)).toEqual([]);
   });
 
-  it('every `\` object kind is in NOTE_OBJECT_KINDS and only the registry builds the menu', () => {
-    const kindFiles = SOURCE_FILES.filter((f) => /NoteEditor[\/]objects[\/].*Kind\.ts$/.test(f));
+  // Repaired 2026-10-09: written with its backslashes lost, it matched no file on Windows and so
+  // passed without checking anything. The guard below stops it passing empty-handed again.
+  it('every `\\` object kind (objects/*Kind.ts) is in NOTE_OBJECT_KINDS', () => {
+    const kindFiles = SOURCE_FILES.filter((f) => /NoteEditor[/\\]objects[/\\][^/\\]*Kind\.ts$/.test(f));
+    expect(kindFiles.length).toBeGreaterThan(0);
     const registry = fs.readFileSync(path.join(SRC, 'components/NoteEditor/objects/kinds.ts'), 'utf8');
+    const list = registry.slice(registry.indexOf('=', registry.indexOf('NOTE_OBJECT_KINDS')));
+    const listed = list.slice(0, list.indexOf(']') + 1);
     const missing = kindFiles
       .map((f) => path.basename(f, '.ts'))
-      .filter((name) => !new RegExp(`NOTE_OBJECT_KINDS[^=]*=\s*\[[^\]]*\b${name}\b`).test(registry));
+      .filter((name) => !new RegExp(`\\b${name}\\b`).test(listed));
     expect(missing).toEqual([]);
   });
 
@@ -730,7 +735,7 @@ describe('pattern: styles use the design tokens in index.css (CLAUDE.md "Design 
   // agreed (2026-10-09). Replace them as files are touched; the counts may only go down. When
   // this fails because a count went DOWN, lower the number here to lock the gain in. When it
   // fails because one went UP, use the token (var(--text-sm), var(--space-3), var(--z-toast)…).
-  const BASELINE = { hex: 154, fontSize: 1218, zIndex: 137, radius: 305, shadow: 123 };
+  const BASELINE = { hex: 124, fontSize: 1218, zIndex: 136, radius: 303, shadow: 123 };
   const CSS = walk(SRC, ['.css']).filter((f) => f.endsWith('.module.css'))
     .map((f) => fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''));
   const count = (re: RegExp) => CSS.reduce((n, s) => n + (s.match(re) ?? []).length, 0);
@@ -747,4 +752,129 @@ describe('pattern: styles use the design tokens in index.css (CLAUDE.md "Design 
       expect(now[key]).toBeLessThanOrEqual(BASELINE[key]);
     });
   }
+});
+
+// ── Shared helpers that replaced copies (2026-10-09) ────────────────────────────────
+describe('pattern: one shared helper where copies used to be', () => {
+  // Keyboard handlers decide "is the person typing?" with utils/typingTarget.ts, which also sees
+  // into a custom element's shadow root (MathLive). speech/insertText.ts finds where to insert
+  // dictated text, a different question.
+  it('keyboard handlers ask isTypingTarget, never test tagName/isContentEditable themselves', () => {
+    const files = SOURCE_FILES.filter((f) => !/utils[/\\]typingTarget\.ts$/.test(f) && !/speech[/\\]insertText\.ts$/.test(f));
+    const hits = findMatches(files, /isContentEditable|tagName === 'TEXTAREA'|contentEditable === 'true'/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  it('a block typed in with a backslash is placed by replaceTypedWithBlock / placeBlock (blockDesigns.ts)', () => {
+    const files = SOURCE_FILES.filter((f) => !/extensions[/\\]blockDesigns\.ts$/.test(f));
+    const hits = findMatches(files, /canReplaceWith\(\$pos\.index\(d - 1\)/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  // A note's text changed from outside its editor goes through services/noteContentEdit.ts (through
+  // the open editor when the text is open). NoteEditor's own save, the store, and shrinkNoteImages
+  // (which closes the open note first) are the only other writers.
+  it("a note's content is changed from outside the editor only through editNoteContent", () => {
+    const allowed = /(services[/\\]noteContentEdit|services[/\\]shrinkNoteImages|NoteEditor[/\\]NoteEditor|store[/\\]noteStore)\.tsx?$/;
+    const files = SOURCE_FILES.filter((f) => !allowed.test(f));
+    const hits = findMatches(files, /updateNoteTabContent\(|updateNote\([^)]*\{\s*content\b/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  // One palette (config/swatches.ts): a picker never keeps its own list of colours.
+  it('colour pickers use config/swatches.ts, never a local list of colours', () => {
+    const files = SOURCE_FILES.filter((f) => !/config[/\\]swatches\.ts$/.test(f));
+    const hits = findMatches(files, /const [A-Z_]*COLOU?RS\s*=\s*\[/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  it('every palette colour has its --color-swatch token in both themes', async () => {
+    const { SWATCH_IDS } = await import('../config/swatches');
+    const css = fs.readFileSync(path.join(SRC, 'index.css'), 'utf8');
+    const dark = css.slice(css.indexOf('[data-theme="dark"]'));
+    const light = css.slice(0, css.indexOf('[data-theme="dark"]'));
+    const missing = SWATCH_IDS.flatMap((id) => [
+      ...(light.includes(`--color-swatch-${id}:`) ? [] : [`${id} (light)`]),
+      ...(dark.includes(`--color-swatch-${id}:`) ? [] : [`${id} (dark)`]),
+    ]);
+    expect(missing).toEqual([]);
+  });
+
+  it("a block's spectrum colours come from spectrumColour (blockDesigns.ts)", () => {
+    const files = SOURCE_FILES.filter((f) => /NoteEditor[/\\]extensions[/\\]/.test(f) && !/blockDesigns\.ts$/.test(f));
+    const hits = findMatches(files, /hsl\(\$\{/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: text on a primary fill uses --color-on-primary (CLAUDE.md "Design tokens")', () => {
+  it('no rule that fills with --color-primary hard-codes white text', () => {
+    const fill = /background(?:-color)?\s*:\s*var\(--color-primary(?:-hover)?\)\s*;/;
+    const white = /(?<![-\w])color\s*:\s*(?:white|#fff|#ffffff)\b/i;
+    const hits: string[] = [];
+    for (const f of walk(SRC, ['.css']).filter((x) => x.endsWith('.module.css'))) {
+      const css = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const block of css.match(/\{[^{}]*\}/g) ?? []) {
+        if (fill.test(block) && white.test(block)) hits.push(`${path.relative(ROOT, f)}: ${block.slice(0, 80)}`);
+      }
+    }
+    expect(hits, hits.join(' | ')).toEqual([]);
+  });
+});
+
+describe('pattern: Places (CLAUDE.md "Places")', () => {
+  const placesSrc = fs.readFileSync(path.join(SRC, 'config', 'places.ts'), 'utf8');
+  const uiSrc = fs.readFileSync(path.join(SRC, 'store', 'uiStore.ts'), 'utf8');
+  const ids = [...placesSrc.matchAll(/\{ id: '([a-z-]+)'/g)].map((m) => m[1]);
+
+  it('every place is counted when opened, from anywhere (its uiStore open action records the visit)', () => {
+    expect(ids.length).toBeGreaterThan(0);
+    const missing = ids.filter((id) => !uiSrc.includes(`recordVisit('place', '${id}')`));
+    expect(missing).toEqual([]);
+  });
+
+  it('Review is drawn with its own icon, never 🔁 (which is "repeats")', () => {
+    const sites = [
+      'components/NoteEditor/extensions/Importance.ts', 'components/NoteEditor/extensions/annotationMenu.ts',
+      'components/NoteEditor/objects/SelectionMenu.tsx', 'components/NoteEditor/NoteTOC.tsx',
+      'components/NotesSection/ReviewView.tsx', 'components/NotesSection/TagFAB.tsx',
+    ];
+    const hits = sites.filter((f) => fs.readFileSync(path.join(SRC, f), 'utf8').includes('🔁'));
+    expect(hits).toEqual([]);
+  });
+
+  it('every place draws its icon from components/Icons, never an emoji typed in the registry', () => {
+    expect(placesSrc).toMatch(/from '@\/components\/Icons'/);
+    expect(placesSrc).not.toMatch(/icon:\s*'/);
+    expect(placesSrc).not.toMatch(/\p{Extended_Pictographic}/u);
+  });
+});
+
+describe('pattern: tests that fake the clock read "today" inside a test (CLAUDE.md "Testing")', () => {
+  it('no todayIso() / new Date() / Date.now() at file or describe level in a test file that sets the time', () => {
+    const files = walk(SRC, ['.ts', '.tsx']).filter((f) => /\.test\.tsx?$/.test(f) && /setSystemTime\(/.test(fs.readFileSync(f, 'utf8')));
+    const hits = findMatches(files, /^ {0,2}(?:const|let|var) \w+(?::[^=]+)? = (?:todayIso\(\)|new Date\(\)|Date\.now\(\))/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: blocks with their own inputs take the typing (CLAUDE.md "Blocks with their own inputs")', () => {
+  it('every one-unit (atom) note block that draws inputs of its own hands typed keys to them via typeIntoBlockPlugin', () => {
+    const dir = path.join(SRC, 'components/NoteEditor/extensions');
+    const offenders = fs.readdirSync(dir).filter((f) => /\.ts$/.test(f) && !/\.test\.ts$/.test(f)).filter((f) => {
+      const src = fs.readFileSync(path.join(dir, f), 'utf8');
+      const atomWithView = /atom: true/.test(src) && /addNodeView\(/.test(src);
+      const ownInputs = /createRoot\(|MathfieldElement|ChartWidget|createElement\('(?:input|textarea|select)'\)/.test(src);
+      return atomWithView && ownInputs && !/typeIntoBlockPlugin\(/.test(src);
+    });
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('pattern: offers made as you type come from one helper (CLAUDE.md "Offer as you type")', () => {
+  it('only extensions/typingOffer.ts builds an offer chip', () => {
+    const files = SOURCE_FILES.filter((f) => !/typingOffer\.ts$/.test(f) && !/\.test\.tsx?$/.test(f));
+    const hits = findMatches(files, /setAttribute\('data-autolink-chip'/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
 });

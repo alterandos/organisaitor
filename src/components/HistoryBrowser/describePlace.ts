@@ -114,6 +114,7 @@ export function describePlace(p: NavPlace): PlaceSummary {
     case 'overview': {
       const sel = p.overview;
       if (!sel) return plain(section);
+      if (sel.kind === 'builtIn') return plain(LABELS.overview.allInboxes, section);
       const name = sel.kind === 'saved'
         ? useOverviewStore.getState().overviews[sel.id as OverviewId]?.name
         : useTaskStore.getState().collections[sel.id as CollectionId]?.name;

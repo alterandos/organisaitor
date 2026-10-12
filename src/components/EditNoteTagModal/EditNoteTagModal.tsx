@@ -10,12 +10,7 @@ import type { NoteTagId, NoteTagFieldDef, NoteTagFieldType, CollectionId } from 
 import styles from './EditNoteTagModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
-
-const PRESET_COLORS = [
-  '#5b6ee1', '#2563eb', '#7c3aed', '#db2777',
-  '#dc2626', '#ea580c', '#d97706', '#16a34a',
-  '#0891b2', '#475569',
-];
+import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 
 const FIELD_TYPES: { value: NoteTagFieldType; label: string }[] = [
   { value: 'text',    label: 'Text'   },
@@ -130,13 +125,13 @@ export function EditNoteTagModal() {
                   onClick={() => setColor(null)}
                   title="None"
                 >✕</button>
-                {PRESET_COLORS.map((c) => (
+                {SWATCH_HEXES.map((c) => (
                   <button
                     key={c}
                     className={`${styles.swatch} ${color === c ? styles.swatchActive : ''}`}
                     style={{ background: c }}
                     onClick={() => setColor(color === c ? null : c)}
-                    aria-label={c}
+                    aria-label={swatchLabel(c)}
                   />
                 ))}
               </div>

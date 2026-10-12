@@ -7,6 +7,7 @@ import { nextReview, REVIEW_INTERVALS, type ReviewAnswer } from '../NoteEditor/e
 import { importanceLevel } from '../NoteEditor/extensions/importanceLevels';
 import { formatDate, todayIso } from '@/utils/date';
 import { LABELS } from '@/config/labels';
+import { ReviewIcon } from '@/components/Icons';
 import styles from './ReviewView.module.css';
 
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
@@ -46,7 +47,7 @@ export function ReviewView() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.title}>🔁 {L.title}</span>
+        <span className={styles.title}><ReviewIcon className={styles.titleIcon} />{L.title}</span>
         {queue.length > 0 && <span className={styles.progress}>{L.progress(Math.min(index + 1, queue.length), queue.length)}</span>}
         <button type="button" className={styles.closeBtn} onClick={close} title={LABELS.glossary.back}>×</button>
       </div>

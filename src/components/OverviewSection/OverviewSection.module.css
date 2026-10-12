@@ -213,19 +213,40 @@
   overflow: hidden;
 }
 
+/* A row: the tick box (rows that can be done), then the button that opens the item, which takes
+   the remaining columns as a subgrid so every row's cells line up. */
 .row {
   display: grid;
-  grid-template-columns: 1.5rem minmax(0, 1fr) 9rem 5.5rem minmax(0, 10rem);
+  grid-template-columns: 1.25rem 1.5rem minmax(0, 1fr) 9rem 5.5rem minmax(0, 10rem);
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  background: none;
-  border: none;
+  column-gap: 0.75rem;
+  padding: 0 0 0 0.75rem;
   border-bottom: 1px solid var(--color-border);
-  font-family: inherit;
   font-size: 0.88rem;
   color: var(--color-text);
+}
+
+.rowOpen {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
   text-align: left;
+  cursor: pointer;
+}
+
+.cellTick { display: flex; align-items: center; justify-content: center; }
+
+.tick {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--color-success-text);
   cursor: pointer;
 }
 
@@ -233,6 +254,8 @@
 .row:hover { background: var(--color-bg); }
 
 .rowDone .title { color: var(--color-muted); }
+/* Done (not just past): struck through, as done items are everywhere else. */
+.row[data-status="done"] .title { text-decoration: line-through; text-decoration-color: var(--color-muted); }
 
 .cellIcon { text-align: center; }
 
@@ -290,6 +313,6 @@
   .shell { flex-direction: column; }
   .sidebar { width: 100%; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--color-border); }
   .main { padding: 1rem; }
-  .row { grid-template-columns: 1.5rem minmax(0, 1fr) auto; }
+  .row { grid-template-columns: 1.25rem 1.5rem minmax(0, 1fr) auto; }
   .cellStatus, .cellEndeavour { display: none; }
 }

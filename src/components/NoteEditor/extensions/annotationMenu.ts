@@ -1,4 +1,6 @@
+import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
+import { ReviewIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
 import { glossaryEntry } from '@/services/glossary';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
@@ -55,7 +57,7 @@ registerContextMenuProvider({
           run: () => setImportance(view, passage.from, passage.to, lv.level),
         }))],
       },
-      { id: 'review', label: passage.reviewDue ? I.stopReviewing : I.reviewLater, icon: '🔁', run: () => toggleReview(view, passage.from, passage.to) },
+      { id: 'review', label: passage.reviewDue ? I.stopReviewing : I.reviewLater, icon: createElement(ReviewIcon), run: () => toggleReview(view, passage.from, passage.to) },
       { id: 'remove', label: LABELS.contextMenu.removeImportant, icon: '✕', run: () => setImportance(view, passage.from, passage.to, null) },
     ];
   },

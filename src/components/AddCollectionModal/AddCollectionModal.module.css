@@ -157,7 +157,7 @@
 .chipSelected {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
 }
 
 /* ── Milestones preview ────────────────────────────────────────────────────── */
@@ -239,7 +239,7 @@
   border: none;
   border-radius: var(--radius-md);
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 500;

@@ -94,6 +94,26 @@ describe('NoteEditor tab restore on note switch', () => {
     expect(editorText()).toContain('TAB2-A');
   });
 
+  it('going back to a note (or a tab) puts the cursor where it was left, not at the end', async () => {
+    useUIStore.setState({ activeView: 'notes' });
+    act(() => { useUIStore.getState().openNote('note-b'); });
+    render(<StrictMode><NoteEditor /></StrictMode>);
+    act(() => { liveEditor().commands.setTextSelection({ from: 3, to: 5 }); });   // "IN" of MAIN-B
+
+    act(() => { useUIStore.getState().openNote('note-a'); });
+    expect(useUIStore.getState().noteCursorMemory['note-b:main']).toMatchObject({ from: 3, to: 5 });
+    act(() => { useUIStore.getState().navigateBack(); });
+    expect(editorText()).toContain('MAIN-B');
+    expect(liveEditor().state.selection).toMatchObject({ from: 3, to: 5 });
+
+    // A tab keeps its own place.
+    act(() => { useUIStore.getState().openNote('note-a'); });
+    act(() => { liveEditor().commands.setTextSelection(2); });
+    await userEvent.click(screen.getByText('Second'));
+    await userEvent.click(screen.getByText('Main'));
+    expect(liveEditor().state.selection.from).toBe(2);
+  });
+
   it('returning to Notes on a remembered tab (first mount) shows that tab\'s content', async () => {
     useUIStore.setState({
       activeView: 'notes', editingNoteId: 'note-a', notesLastEditingNoteId: 'note-a', notesLastActiveTabId: 't2',

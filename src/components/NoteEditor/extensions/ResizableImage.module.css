@@ -125,7 +125,7 @@
 
 .primary {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
 }
 
 .primary:hover:not(:disabled) { background: var(--color-primary); filter: brightness(1.08); }

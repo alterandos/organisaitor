@@ -7,7 +7,9 @@ import { persistStorage } from '@/utils/persistStorage';
 // added by any app's provider (src/utils/quickAccess.ts) without a circular import — mirrors
 // how src/types/notes.ts/lists.ts stay standalone. Extend this union + add a matching
 // QuickAccessProvider when a new destination type is wanted (see quickAccess.ts).
-export type QuickAccessTargetType = 'note' | 'notebook' | 'task' | 'list' | 'endeavour' | 'tracker' | 'routine' | 'schedule';
+// 'place' is a Places-row destination (config/places.ts), counted so the row orders by use; it
+// isn't listed among the recent items. 'glossary' (a term) is searched, never recorded.
+export type QuickAccessTargetType = 'note' | 'notebook' | 'task' | 'list' | 'endeavour' | 'tracker' | 'routine' | 'schedule' | 'place' | 'glossary';
 
 export interface RecentItemEntry {
   type:          QuickAccessTargetType;

@@ -17,6 +17,7 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { DisclosureIcon } from '@/components/Icons';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { isTypingTarget } from '@/utils/typingTarget';
 
 // ── Column order — extend here to add new panels in future ────────────────
 
@@ -444,8 +445,7 @@ export function ChronicleView() {
     const handler = (e: KeyboardEvent) => {
       const uiState = useUIStore.getState();
       if (uiState.openModal) return;
-      const el = document.activeElement as HTMLElement | null;
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.contentEditable === 'true')) return;
+      if (isTypingTarget(document.activeElement)) return;
 
       const col = uiState.notesFocusedColumn;
       const noteState = useNoteStore.getState();

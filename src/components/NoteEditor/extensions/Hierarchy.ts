@@ -4,7 +4,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import {
-  blockFrameAttributes, blockPill, designButtons, frameButtons, openBlockPopover, pillButton, popoverClass, selectButton, type BlockDesign,
+  blockFrameAttributes, blockPill, designButtons, frameButtons, openBlockPopover, pillButton, popoverClass, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour,
 } from './blockDesigns';
 import { MAX_LEVEL, effectiveLevels, hierarchyLayout, subtreeEnd } from './hierarchyLayout';
 
@@ -109,27 +109,10 @@ type Command = (state: EditorState, dispatch?: (tr: Transaction) => void) => boo
 export function insertHierarchy(state: EditorState, from: number, to: number): Transaction | null {
   const type = state.schema.nodes.hierarchy;
   if (!type) return null;
-  const $start = state.doc.resolve(from);
-  while (from > $start.start() && /\s/.test(state.doc.textBetween(from - 1, from))) from--;
   const node = type.create(null, DEFAULT_LEVELS.map((level) => state.schema.nodes.hierarchyItem.create({ level })));
-  const tr = state.tr.delete(from, to);
-  const $pos = tr.doc.resolve(from);
-  const d = $pos.depth;
-  let at: number | null = null;
-  if ($pos.parent.isTextblock && $pos.parent.content.size === 0 && d > 0
-    && $pos.node(d - 1).canReplaceWith($pos.index(d - 1), $pos.index(d - 1) + 1, type)) {
-    at = $pos.before(d);
-    tr.replaceWith(at, $pos.after(d), node);
-  } else {
-    for (let depth = d; depth > 0; depth--) {
-      const index = $pos.indexAfter(depth - 1);
-      if (!$pos.node(depth - 1).canReplaceWith(index, index, type)) continue;
-      at = $pos.after(depth);
-      tr.insert(at, node);
-      break;
-    }
-  }
-  if (at === null) return null;
+  const made = replaceTypedWithBlock(state, from, to, node);
+  if (!made) return null;
+  const { tr, at } = made;
   return tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView();
 }
 
@@ -363,7 +346,8 @@ function tiersWidget(view: EditorView, getPos: () => number | undefined, names: 
   return wrap;
 }
 
-const levelColor = (level: number) => `hsl(${Math.round((210 + level * 47) % 360)} 58% 50%)`;
+// Each level 47° further round the wheel, however deep the tree goes.
+const levelColor = (level: number) => spectrumColour(level * 47 / 360);
 
 function hierarchyDecorations(state: EditorState): DecorationSet | null {
   const decos: Decoration[] = [];

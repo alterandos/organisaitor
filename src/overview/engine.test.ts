@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTask } from '@/services/taskService';
-import { runOverview, endeavourOverviewQuery, DEFAULT_QUERY } from './engine';
+import { runOverview, endeavourOverviewQuery, DEFAULT_QUERY, INBOXES_QUERY } from './engine';
 import type { OverviewSnapshot } from './sources';
 import type { CalendarEvent, Collection, Task, TrackerEntry } from '@/types';
 import type { List, ListItem } from '@/types/lists';
@@ -25,7 +25,7 @@ const item = (id: string, listId: string, title: string, extra: Partial<ListItem
   isEncrypted: false, encryptedPayload: null, createdAt: T, updatedAt: T, ...extra,
 });
 const note = (id: string, title: string, extra: Partial<Note> = {}) =>
-  ({ id, title, tagIds: [], collectionId: null, archivedAt: null, ...extra }) as unknown as Note;
+  ({ id, title, tagIds: [], collectionId: null, archivedAt: null, content: '', tabs: [], ...extra }) as unknown as Note;
 
 function snap(parts: Partial<OverviewSnapshot> = {}): OverviewSnapshot {
   return {
@@ -145,5 +145,33 @@ describe('filters, sort and grouping', () => {
     expect(res.groups.map((g) => [g.key, g.rows.map((r) => r.title)])).toEqual([
       ['task', ['Task']], ['event', ['Lecture']], ['list', ['Reading']],
     ]);
+  });
+});
+
+describe('inbox items (the inbox note block)', () => {
+  const inboxJson = (inboxId: string, title: string, items: { id: string; text: string; status: string; sentAt: string }[]) => JSON.stringify({
+    type: 'doc', content: [{ type: 'section', content: [{
+      type: 'inbox', attrs: { inboxId }, content: [
+        { type: 'inboxTitle', content: [{ type: 'text', text: title }] },
+        ...items.map((it) => ({ type: 'inboxItem', attrs: { itemId: it.id, status: it.status, sentAt: it.sentAt }, content: [{ type: 'paragraph', content: [{ type: 'text', text: it.text }] }] })),
+      ],
+    }] }],
+  });
+
+  it('every item in every readable inbox is a row; Built counts as done; a locked note gives none', () => {
+    const open = note('n1', 'Learning', { content: inboxJson('I1', 'Ideas', [
+      { id: 'a', text: 'Spaced review', status: 'idea', sentAt: '2026-09-30T10:00:00.000Z' },
+      { id: 'b', text: 'Done thing', status: 'built', sentAt: '2026-09-29T10:00:00.000Z' },
+    ]), tabs: [], collectionId: 'c1' as never });
+    const locked = note('n2', 'Secret', { content: inboxJson('I2', 'Hidden', [{ id: 'c', text: 'x', status: 'idea', sentAt: T }]), tabs: [] });
+    const s = snap({ notes: byId(open, locked), lockedNoteIds: new Set(['n2']) });
+    const rows = runOverview(INBOXES_QUERY, s, TODAY).groups.flatMap((g) => g.rows);
+    expect(rows.map((r) => [r.title, r.status, r.when, r.endeavourId])).toEqual([
+      ['Spaced review', 'open', '2026-09-30', 'c1'],
+      ['Done thing', 'done', '2026-09-29', 'c1'],
+    ]);
+    expect(rows[0].context).toBe('Learning › Ideas · Idea');
+    expect(rows[0].id).toBe('n1:a');
+    expect(titles(s, q({ sources: ['inboxItem'] }))).toEqual(['Spaced review']);   // open only by default
   });
 });

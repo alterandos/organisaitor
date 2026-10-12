@@ -13,6 +13,7 @@ import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
 import { getStructuredTagType } from '@/config/structuredTagTypes';
 import styles from './FloatingToolbar.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 
 // What the toolbar can be asked to open from outside its own hotkeys (NoteEditor's right-click
 // menu): the same functions Ctrl+L and Ctrl+Q call.
@@ -55,11 +56,6 @@ interface TagItem {
   typeKey?: string | null;
   isBuiltin?: boolean;
 }
-
-const BASIC_COLORS = [
-  '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
-  '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#94a3b8',
-];
 
 // The "Create ▸" menu (Ctrl+Q / the "+" toolbar button). Task and Calendar item are wired —
 // List/Tracker are documented stubs (see BACKLOG.md "Cross-app built-in
@@ -415,13 +411,14 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
             onClick={() => { editor.chain().focus().unsetColor().run(); setShowColorPicker(false); }}
             title="Default color"
           >Ø</button>
-          {BASIC_COLORS.map((c) => (
+          {SWATCH_HEXES.map((c) => (
             <button
               key={c}
               className={styles.colorSwatch}
               style={{ background: c }}
               onClick={() => { editor.chain().focus().setColor(c).run(); setShowColorPicker(false); }}
-              title={c}
+              title={swatchLabel(c)}
+              aria-label={swatchLabel(c)}
             />
           ))}
         </div>

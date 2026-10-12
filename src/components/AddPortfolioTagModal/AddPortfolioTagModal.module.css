@@ -20,6 +20,6 @@
 .actions { display: flex; justify-content: flex-end; gap: 0.625rem; margin-top: 1.25rem; }
 .cancelBtn { padding: 0.6rem 1.2rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: transparent; cursor: pointer; font-size: 0.9rem; font-family: inherit; color: var(--color-muted); transition: background 150ms ease; }
 .cancelBtn:hover { background: var(--color-bg); }
-.submitBtn { padding: 0.6rem 1.2rem; border: none; border-radius: var(--radius-md); background: var(--color-primary); color: white; cursor: pointer; font-size: 0.9rem; font-weight: 500; font-family: inherit; transition: filter 150ms ease; }
+.submitBtn { padding: 0.6rem 1.2rem; border: none; border-radius: var(--radius-md); background: var(--color-primary); color: var(--color-on-primary); cursor: pointer; font-size: 0.9rem; font-weight: 500; font-family: inherit; transition: filter 150ms ease; }
 .submitBtn:hover:not(:disabled) { filter: brightness(1.1); }
 .submitBtn:disabled { opacity: 0.45; cursor: not-allowed; }

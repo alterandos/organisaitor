@@ -15,6 +15,11 @@ export const endeavourOverviewQuery = (collectionId: CollectionId): OverviewQuer
   sources: [], collectionId, status: 'open', when: 'any', windowDays: null, search: '', sort: 'when-asc', groupBy: 'source',
 });
 
+// "All inboxes": everything waiting in every inbox, newest first, Built ones too.
+export const INBOXES_QUERY: OverviewQuery = {
+  sources: ['inboxItem'], collectionId: null, status: 'all', when: 'any', windowDays: null, search: '', sort: 'when-desc', groupBy: 'none',
+};
+
 export const DEFAULT_QUERY: OverviewQuery = {
   sources: [], collectionId: null, status: 'open', when: 'upcoming', windowDays: 14, search: '', sort: 'when-asc', groupBy: 'none',
 };

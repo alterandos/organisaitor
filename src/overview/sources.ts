@@ -1,8 +1,9 @@
 import { LABELS } from '@/config/labels';
-import { ITEM_TYPE_ICON } from '@/config/itemIcons';
+import { INBOX_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { addDaysToIso } from '@/utils/date';
 import { expandRepeat } from '@/utils/recurrence';
 import { getNoteEffectiveCollectionId } from '@/utils/notes';
+import { collectInboxes, localDay } from '@/utils/noteInboxes';
 import type {
   CalendarDeadline, CalendarEvent, CalendarReminder, Collection, RepeatConfig, Task, TrackerEntry,
 } from '@/types';
@@ -48,13 +49,16 @@ export interface OverviewSourceDef {
 const row = (source: OverviewSourceKey, id: string, r: Omit<OverviewRow, 'key' | 'source' | 'id'>): OverviewRow =>
   ({ key: `${source}:${id}`, source, id, ...r });
 
-// A calendar item's main date and whether it's still ahead: the next occurrence for a repeating
-// one (within two years), else its own date — "past" once its last day has gone by.
-function calendarWhen(date: string, endDate: string | null, repeat: RepeatConfig | null, today: string): { when: string; status: OverviewStatus } {
+// A calendar item's main date and whether it's still ahead: the next occurrence not yet marked
+// done for a repeating one (within two years), else its own date — "done" once marked done
+// (`doneDates`, reminders and deadlines), "past" once its last day has gone by.
+export function calendarWhen(date: string, endDate: string | null, repeat: RepeatConfig | null, today: string, doneDates: string[] = []): { when: string; status: OverviewStatus } {
+  const done = new Set(doneDates);
   if (repeat) {
-    const next = expandRepeat(date, repeat, today, addDaysToIso(today, 730))[0];
+    const next = expandRepeat(date, repeat, today, addDaysToIso(today, 730)).find((d) => !done.has(d));
     return next ? { when: next, status: 'open' } : { when: date, status: 'past' };
   }
+  if (done.has(date)) return { when: date, status: 'done' };
   return { when: date, status: (endDate ?? date) < today ? 'past' : 'open' };
 }
 
@@ -93,7 +97,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     rows: (snap, today) => ({
       locked: [],
       rows: Object.values(snap.reminders).filter((r) => r.reminderType !== 'task').map((r) => {
-        const w = calendarWhen(r.date, null, r.repeat, today);
+        const w = calendarWhen(r.date, null, r.repeat, today, r.doneDates);
         return row('reminder', r.id, {
           title: r.title, when: w.when, time: r.time,
           status: r.archivedAt ? 'archived' : w.status,
@@ -107,7 +111,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     rows: (snap, today) => ({
       locked: [],
       rows: Object.values(snap.deadlines).filter((d) => d.deadlineType !== 'task').map((d) => {
-        const w = calendarWhen(d.date, null, d.repeat, today);
+        const w = calendarWhen(d.date, null, d.repeat, today, d.doneDates);
         return row('deadline', d.id, {
           title: d.title, when: w.when, time: d.time,
           status: d.archivedAt ? 'archived' : w.status,
@@ -183,6 +187,30 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
         });
       }),
     }),
+  },
+  {
+    // What's waiting in every inbox (the `\inbox` note block): an item's first line, the day it
+    // arrived, its status (Built counts as done), the note and inbox it's in. Its Endeavour is its note's.
+    key: 'inboxItem', icon: INBOX_ICON, label: LABELS.overview.sources.inboxItem,
+    rows: (snap) => {
+      const readable = Object.values(snap.notes).filter((n) => !snap.lockedNoteIds.has(n.id));
+      return {
+        locked: [],
+        rows: collectInboxes(readable).flatMap((inbox) => {
+          const note = snap.notes[inbox.noteId];
+          const endeavourId = note ? getNoteEffectiveCollectionId(note, snap.noteTags) : null;
+          const where = `${inbox.noteTitle || '(Untitled)'} › ${inbox.title || LABELS.noteBlocks.inbox.defaultTitle}`;
+          return inbox.items.filter((it) => it.itemId).map((it) => row('inboxItem', `${inbox.noteId}:${it.itemId}`, {
+            title: it.text || LABELS.noteBlocks.inbox.itemPlaceholder,
+            when: it.sentAt ? localDay(it.sentAt) : null,
+            time: null,
+            status: it.status === 'built' ? 'done' : 'open',
+            endeavourId,
+            context: `${where} · ${LABELS.noteBlocks.inbox.statuses[it.status]}`,
+          }));
+        }),
+      };
+    },
   },
 ];
 

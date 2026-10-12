@@ -5,7 +5,7 @@ import type { EditorView } from '@tiptap/pm/view';
 import { LABELS } from '@/config/labels';
 import { CHART_KINDS, STACKABLE, type ChartKind, type ChartSpec, type ChartStacking, emptyChart, normalizeChart } from '@/charts/chartSpec';
 import { ChartWidget, isEmptyChart } from '@/charts/ChartWidget';
-import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign } from './blockDesigns';
+import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, typeIntoBlockPlugin, type BlockDesign, replaceTypedWithBlock } from './blockDesigns';
 
 // A chart in a note (`\chart`): one atom node holding a library-neutral ChartSpec (`spec`) and the
 // chart type (`variant`, the block's design). Everything about charts that isn't about notes (the
@@ -64,27 +64,10 @@ export const Chart = Node.create({
 export function insertChart(state: EditorState, from: number, to: number): Transaction | null {
   const type = state.schema.nodes.chart;
   if (!type) return null;
-  const $start = state.doc.resolve(from);
-  while (from > $start.start() && /\s/.test(state.doc.textBetween(from - 1, from))) from--;
   const node = type.create({ spec: emptyChart() });
-  const tr = state.tr.delete(from, to);
-  const $pos = tr.doc.resolve(from);
-  const d = $pos.depth;
-  let at: number | null = null;
-  if ($pos.parent.isTextblock && $pos.parent.content.size === 0 && d > 0
-    && $pos.node(d - 1).canReplaceWith($pos.index(d - 1), $pos.index(d - 1) + 1, type)) {
-    at = $pos.before(d);
-    tr.replaceWith(at, $pos.after(d), node);
-  } else {
-    for (let depth = d; depth > 0; depth--) {
-      const index = $pos.indexAfter(depth - 1);
-      if (!$pos.node(depth - 1).canReplaceWith(index, index, type)) continue;
-      at = $pos.after(depth);
-      tr.insert(at, node);
-      break;
-    }
-  }
-  if (at === null) return null;
+  const made = replaceTypedWithBlock(state, from, to, node);
+  if (!made) return null;
+  const { tr, at } = made;
   return tr.setSelection(NodeSelection.create(tr.doc, at)).scrollIntoView();
 }
 
@@ -173,9 +156,7 @@ class ChartView {
     const a = this.node.attrs;
     this.dom.setAttribute('data-variant', a.variant as string);
     this.dom.toggleAttribute('data-chart-editing', this.widget.editing);
-    for (const f of ['outlined', 'shaded'] as const) {
-      if (a[f]) this.dom.setAttribute(`data-${f}`, 'true'); else this.dom.removeAttribute(`data-${f}`);
-    }
+    applyFrameAttrs(this.dom, a);
     const L = LABELS.noteBlocks.chart;
     const C = LABELS.charts;
     const view = this.editor.view;
@@ -225,10 +206,13 @@ class ChartView {
   destroy() { this.widget.destroy(); }
 }
 
-// Enter on a selected chart opens its table.
+// Enter on a selected chart opens its table; so does typing on it (it used to replace the chart).
 export const ChartBehaviour = Extension.create({
   name: 'chartBehaviour',
   priority: 110,
+  addProseMirrorPlugins() {
+    return [typeIntoBlockPlugin(['chart'], (view, pos) => openChartData(view, pos))];
+  },
   addKeyboardShortcuts() {
     return {
       Enter: () => {
