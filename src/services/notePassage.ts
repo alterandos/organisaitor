@@ -34,6 +34,7 @@ export function openNotePassage(noteId: string, findOrFinds: PassageFind | Passa
   ui.closeNotesGlossary();
   ui.closeNotesReview();
   ui.closeNotesHubs();
+  ui.closeNotesMap();
   ui.openNote(noteId, tabId);
   ui.setRequestedNotePassage({ noteId, ...find });
   return true;

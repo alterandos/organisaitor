@@ -1,0 +1,132 @@
+/* The Notes Map (MapView.tsx): a header like the Glossary's and Hubs', then the canvas. */
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.header {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: 650;
+}
+
+.titleIcon { width: 1em; height: 1em; flex: none; }
+
+.scope {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.scope button {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.scope button + button { border-left: 1px solid var(--color-border); }
+.scope button:disabled { opacity: 0.5; cursor: default; }
+.scope .on { background: var(--color-primary-subtle); color: var(--color-primary); font-weight: 600; }
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.note { color: var(--color-muted); font-size: var(--text-xs); }
+
+.closeBtn {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted);
+  font-size: var(--text-lg);
+  cursor: pointer;
+}
+
+.closeBtn:hover { background: var(--color-bg); color: var(--color-text); }
+
+.empty { padding: var(--space-5); color: var(--color-muted); font-size: var(--text-sm); }
+
+.canvas {
+  flex: 1;
+  min-height: 0;
+  --xy-background-color: var(--color-bg);
+  --xy-edge-stroke: var(--color-border-strong);
+  --xy-controls-button-background-color: var(--color-surface);
+  --xy-controls-button-color: var(--color-text);
+  --xy-controls-button-border-color: var(--color-border);
+}
+
+.node {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.node:hover { border-color: var(--color-primary); }
+
+.noteNode { border-color: var(--color-primary-border); }
+
+.itemNode {
+  border-style: dashed;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  font-size: var(--text-xs);
+}
+
+.focus {
+  border-width: 2px;
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+  font-weight: 600;
+}
+
+.done .label { text-decoration: line-through; opacity: 0.7; }
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handle { opacity: 0; pointer-events: none; }
+
+.noteEdge :global(.react-flow__edge-path) { stroke: var(--color-primary); stroke-opacity: 0.55; }
+.itemEdge :global(.react-flow__edge-path) { stroke: var(--color-border-strong); stroke-dasharray: 4 3; }

@@ -453,6 +453,10 @@ interface UIState {
   notesHubsOpen:           boolean;
   openNotesHubs:           () => void;
   closeNotesHubs:          () => void;
+  // The Notes Map (how notes link to each other and to items in other apps, components/NotesSection/MapView.tsx).
+  notesMapOpen:            boolean;
+  openNotesMap:            () => void;
+  closeNotesMap:           () => void;
   closeNote:               () => void;
   // Remembers which note (if any) was open in the Notes section so switching away and
   // back restores it — separate from editingNoteId, which also drives NoteEditorPane's
@@ -944,14 +948,17 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   requestedNotePassage:     null,
   setRequestedNotePassage:  (p) => set({ requestedNotePassage: p }),
   notesGlossaryOpen:      false,
-  openNotesGlossary:      () => { useRecentItemsStore.getState().recordVisit('place', 'glossary'); set({ notesGlossaryOpen: true, notesReviewOpen: false, notesHubsOpen: false, noteTagViewActive: false }); },
+  openNotesGlossary:      () => { useRecentItemsStore.getState().recordVisit('place', 'glossary'); set({ notesGlossaryOpen: true, notesReviewOpen: false, notesHubsOpen: false, notesMapOpen: false, noteTagViewActive: false }); },
   closeNotesGlossary:     () => set({ notesGlossaryOpen: false }),
   notesReviewOpen:        false,
-  openNotesReview:        () => { useRecentItemsStore.getState().recordVisit('place', 'review'); set({ notesReviewOpen: true, notesGlossaryOpen: false, notesHubsOpen: false, noteTagViewActive: false }); },
+  openNotesReview:        () => { useRecentItemsStore.getState().recordVisit('place', 'review'); set({ notesReviewOpen: true, notesGlossaryOpen: false, notesHubsOpen: false, notesMapOpen: false, noteTagViewActive: false }); },
   closeNotesReview:       () => set({ notesReviewOpen: false }),
   notesHubsOpen:          false,
-  openNotesHubs:          () => { useRecentItemsStore.getState().recordVisit('place', 'hubs'); set({ notesHubsOpen: true, notesGlossaryOpen: false, notesReviewOpen: false, noteTagViewActive: false }); },
+  openNotesHubs:          () => { useRecentItemsStore.getState().recordVisit('place', 'hubs'); set({ notesHubsOpen: true, notesGlossaryOpen: false, notesReviewOpen: false, notesMapOpen: false, noteTagViewActive: false }); },
   closeNotesHubs:         () => set({ notesHubsOpen: false }),
+  notesMapOpen:           false,
+  openNotesMap:           () => { useRecentItemsStore.getState().recordVisit('place', 'map'); set({ notesMapOpen: true, notesGlossaryOpen: false, notesReviewOpen: false, notesHubsOpen: false, noteTagViewActive: false }); },
+  closeNotesMap:          () => set({ notesMapOpen: false }),
   closeNote: () => set((s) => ({
     editingNoteId: null,
     ...(s.activeView === 'notes' && s.editingNoteId ? recordPlace(s) : {}),
@@ -990,7 +997,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   noteTagViewActive:      false,
   noteTagViewTagIds:      [],
-  openNoteTagView:        (tagIds) => set({ noteTagViewActive: true, noteTagViewTagIds: tagIds, notesGlossaryOpen: false, notesReviewOpen: false, notesHubsOpen: false }),
+  openNoteTagView:        (tagIds) => set({ noteTagViewActive: true, noteTagViewTagIds: tagIds, notesGlossaryOpen: false, notesReviewOpen: false, notesHubsOpen: false, notesMapOpen: false }),
   closeNoteTagView:       () => set({ noteTagViewActive: false, noteTagViewTagIds: [] }),
   noteTagViewReturn:    null,
   setNoteTagViewReturn: (ids) => set({ noteTagViewReturn: ids }),

@@ -21,7 +21,12 @@ export interface NoteObjectTriggerStorage {
   openSendToInbox: (() => void) | null;
   // Set by NoteEditor: opens Add to hub for the selection.
   openAddToHub: (() => void) | null;
+  // Set by NoteEditor: opens the note picker to link from..to to a note (`[[`, `\ref`, Link to a
+  // note…; an empty range inserts the target's name) or to embed a passage there (`\embed`).
+  openNoteLinkPicker: ((request: NoteLinkRequest) => void) | null;
 }
+
+export interface NoteLinkRequest { purpose: 'link' | 'embed'; from: number; to: number }
 
 export const objectTriggerStorage = (editor: { storage: unknown }): NoteObjectTriggerStorage =>
   (editor.storage as Record<string, NoteObjectTriggerStorage>).noteObjectTrigger;
@@ -81,7 +86,7 @@ export const NoteObjectTrigger = Extension.create<Record<string, never>, NoteObj
   name: 'noteObjectTrigger',
 
   addStorage() {
-    return { getContext: () => null, focusFields: null, selectionMenuKey: null, openSendToInbox: null, openAddToHub: null };
+    return { getContext: () => null, focusFields: null, selectionMenuKey: null, openSendToInbox: null, openAddToHub: null, openNoteLinkPicker: null };
   },
 
   addProseMirrorPlugins() {

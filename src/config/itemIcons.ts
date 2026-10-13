@@ -16,9 +16,16 @@ export const ITEM_TYPE_ICON: Record<CrossAppRefType, string> = {
 
 // An inbox and what's in it (the `\inbox` note block, Send to inbox, the Overview source).
 export const INBOX_ICON = '📥';
+export const QUESTION_ICON = '❓';
+// A question's status, where it shows as an icon (its Compact design).
+export const QUESTION_STATUS_ICON = { open: '❓', answered: '✅', dropped: '➖' } as const;
 
 // An idea hub (the `\hub` note block, Add to hub, a passage's place in a hub).
 export const HUB_ICON = '🧭';
+
+// A link to another note or a passage of it (`[[`, `\ref`), and an embedded passage (`\embed`).
+export const NOTE_LINK_ICON = '🔗';
+export const EMBED_ICON = '❞';
 
 // Flags an item can carry, shown as small icons beside it.
 export const ITEM_FLAG_ICON = {

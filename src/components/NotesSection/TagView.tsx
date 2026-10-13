@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { TERM_RICH } from '@/config/structuredTagTypes';
+import { richToPlain } from '@/utils/richText';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews, useEntryViews } from '@/store/noteViews';
 import { useUIStore } from '@/store/uiStore';
@@ -272,9 +274,9 @@ export function TagView() {
                                 <div key={se.id} className={styles.segment} onClick={() => handleNoteClick(entry.noteId)}>
                                   <span className={styles.segmentQuote}>{se.isEncrypted ? '🔒 ' : ''}{se.term}</span>
                                   {Object.entries(se.fields)
-                                    .filter(([, v]) => v)
+                                    .filter(([fieldId, v]) => v && fieldId !== TERM_RICH)
                                     .map(([fieldId, value]) => (
-                                      <span key={fieldId}> — {String(value)}</span>
+                                      <span key={fieldId}> — {Array.isArray(value) ? value.map((x) => richToPlain(String(x))).join(', ') : richToPlain(String(value))}</span>
                                     ))}
                                 </div>
                               ))}

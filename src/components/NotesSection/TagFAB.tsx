@@ -4,7 +4,7 @@ import { useUIStore } from '@/store/uiStore';
 import { BUILTIN_TAGS, type BuiltinTag } from '../NoteEditor/builtinTags';
 import { dueReviews } from '@/services/noteReview';
 import { LABELS } from '@/config/labels';
-import { GlossaryIcon, HubIcon, ReviewIcon } from '@/components/Icons';
+import { GlossaryIcon, HubIcon, MapIcon, ReviewIcon } from '@/components/Icons';
 import styles from './TagFAB.module.css';
 
 export function TagFAB() {
@@ -21,6 +21,7 @@ export function TagFAB() {
   const openNotesGlossary = useUIStore((s) => s.openNotesGlossary);
   const openNotesReview   = useUIStore((s) => s.openNotesReview);
   const openNotesHubs     = useUIStore((s) => s.openNotesHubs);
+  const openNotesMap      = useUIStore((s) => s.openNotesMap);
   const notesRecord       = useNoteStore((s) => s.notes);
   // Counted when the panel opens (and when notes change while it's open), never on every render.
   const dueCount = useMemo(() => (open ? (void notesRecord, dueReviews().length) : 0), [open, notesRecord]);
@@ -64,6 +65,9 @@ export function TagFAB() {
             </button>
             <button className={styles.viewBtn} onClick={() => { setOpen(false); openNotesHubs(); }} title={LABELS.hubs.viewHint}>
               <HubIcon className={styles.viewIcon} />{LABELS.hubs.title}
+            </button>
+            <button className={styles.viewBtn} onClick={() => { setOpen(false); openNotesMap(); }} title={LABELS.noteMap.hint}>
+              <MapIcon className={styles.viewIcon} />{LABELS.noteMap.title}
             </button>
           </div>
           <div className={styles.panelHeader}>

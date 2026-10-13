@@ -3,6 +3,7 @@ import { useListStore } from '@/store/listStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { openInboxItem } from '@/services/noteInbox';
+import { openNotePassage } from '@/services/notePassage';
 import type { OverviewRow } from '@/types/overview';
 
 // Opens an Overview row in its own app — the same places a cross-app link goes (openArtifactTarget)
@@ -28,6 +29,11 @@ export function openOverviewRow(row: OverviewRow): void {
     case 'inboxItem': {
       const [noteId, itemId] = row.id.split(':');
       openInboxItem(noteId, itemId);
+      return;
+    }
+    case 'question': {
+      const [noteId, qid] = row.id.split(':');
+      openNotePassage(noteId, { node: 'questionBlock', attr: 'qid', value: qid });
       return;
     }
     case 'trackerEntry': {

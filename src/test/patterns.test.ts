@@ -755,6 +755,26 @@ describe('pattern: styles use the design tokens in index.css (CLAUDE.md "Design 
 });
 
 // ── Shared helpers that replaced copies (2026-10-09) ────────────────────────────────
+describe('pattern: every block shows Delete in its pill (Block designs)', () => {
+  it("no CSS hides a block's Delete button: it shows whenever the pill does, on hover", () => {
+    const css = walk(SRC, ['.css']);
+    const hits = findMatches(css, /\[data-block-delete\][^{]*\{[^}]*display:\s*none/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: formatted text in block fields (utils/richText.ts)', () => {
+  it('every dangerouslySetInnerHTML is given sanitized text', () => {
+    const hits = findMatches(SOURCE_FILES, /dangerouslySetInnerHTML=\{\{\s*__html:(?!\s*sanitizeInlineHtml\()/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+  it('a field is read with its formatting only by the card that draws it; everything else reads it plain', () => {
+    const allowed = /(GlossaryCardBody\.tsx|structuredTagTypes\.ts)$/;
+    const hits = findMatches(SOURCE_FILES.filter((f) => !allowed.test(f)), /\bfieldRich(List)?\(/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
 describe('pattern: one shared helper where copies used to be', () => {
   // Keyboard handlers decide "is the person typing?" with utils/typingTarget.ts, which also sees
   // into a custom element's shadow root (MathLive). speech/insertText.ts finds where to insert
@@ -776,7 +796,8 @@ describe('pattern: one shared helper where copies used to be', () => {
   // (which closes the open note first) are the only other writers.
   it("a note's content is changed from outside the editor only through editNoteContent", () => {
     const allowed = /(services[/\\]noteContentEdit|services[/\\]shrinkNoteImages|NoteEditor[/\\]NoteEditor|store[/\\]noteStore)\.tsx?$/;
-    const files = SOURCE_FILES.filter((f) => !allowed.test(f));
+    // Shared test fixtures (src/test/) seed a note's content; that isn't a change made to a note.
+    const files = SOURCE_FILES.filter((f) => !allowed.test(f) && !/src[/\\]test[/\\]/.test(f));
     const hits = findMatches(files, /updateNoteTabContent\(|updateNote\([^)]*\{\s*content\b/, { skipComments: true });
     expect(hits, describeHits(hits)).toEqual([]);
   });
@@ -876,5 +897,21 @@ describe('pattern: offers made as you type come from one helper (CLAUDE.md "Offe
     const files = SOURCE_FILES.filter((f) => !/typingOffer\.ts$/.test(f) && !/\.test\.tsx?$/.test(f));
     const hits = findMatches(files, /setAttribute\('data-autolink-chip'/);
     expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: the editor library\'s classes are :global in scoped CSS (CLAUDE.md "Design tokens and theming")', () => {
+  it('no .ProseMirror-… class in a *.module.css outside :global(…), where CSS Modules would rename it and the rule would match nothing', () => {
+    const hits: string[] = [];
+    for (const f of walk(SRC, ['.css']).filter((x) => x.endsWith('.module.css'))) {
+      fs.readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+        for (const m of line.matchAll(/\.ProseMirror-[\w-]+/g)) {
+          const before = line.slice(0, m.index);
+          const open = before.lastIndexOf(':global(');
+          if (open < 0 || before.indexOf(')', open) >= 0) hits.push(`${path.relative(ROOT, f)}:${i + 1}`);
+        }
+      });
+    }
+    expect(hits).toEqual([]);
   });
 });

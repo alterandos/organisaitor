@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acronymLetterPositions, acronymPairAtEnd, deduceAcronym, inferAcronymFromSelection, longFormAfter, longFormBefore, looksLikeAcronym } from '@/utils/acronymInference';
+import { acronymCandidates, acronymLetterPositions, acronymPairJustTyped, deduceAcronym, inferAcronymFromSelection, longFormAfter, longFormBefore, looksLikeAcronym } from '@/utils/acronymInference';
 
 describe('inferAcronymFromSelection — the acronym selected', () => {
   it('"Long form (TERM)" keeps only the words the letters come from, not the whole sentence', () => {
@@ -105,10 +105,30 @@ describe('the matching rules', () => {
     expect(acronymLetterPositions('ASX', 'nothing like it')).toBeNull();
   });
 
-  it('a pair just closed with a bracket, for the as-you-type offer', () => {
-    expect(acronymPairAtEnd('We watched the Australian Broadcasting Corporation (ABC)')).toEqual({ term: 'ABC', expansion: 'Australian Broadcasting Corporation', termFrom: 52 });
-    expect(acronymPairAtEnd('Some words (ABC)')).toBeNull();
-    expect(acronymPairAtEnd('apple banana carrot (abc)')).toBeNull();
+  it('a pair just finished, in any pattern, for the as-you-type offer', () => {
+    expect(acronymPairJustTyped('We watched the Australian Broadcasting Corporation (ABC)')).toEqual({ term: 'ABC', expansion: 'Australian Broadcasting Corporation', termFrom: 52 });
+    expect(acronymPairJustTyped('Shares trade on the ASX (Australian Stock Exchange)')).toMatchObject({ term: 'ASX', expansion: 'Australian Stock Exchange', termFrom: 20 });
+    expect(acronymPairJustTyped('ASX - Australian Stock Exchange ')).toMatchObject({ term: 'ASX', expansion: 'Australian Stock Exchange', termFrom: 0 });
+    expect(acronymPairJustTyped('An API stands for Application Programming Interface.')).toMatchObject({ term: 'API', expansion: 'Application Programming Interface' });
+    expect(acronymPairJustTyped('the Australian Stock Exchange - ASX ')).toMatchObject({ term: 'ASX', expansion: 'Australian Stock Exchange' });
+  });
+
+  it('nothing for a pair that isn\'t what was just finished, or whose letters don\'t fit', () => {
+    expect(acronymPairJustTyped('The ABC (Australian Broadcasting Corporation) said so and more ')).toBeNull();
+    expect(acronymPairJustTyped('Old news. Some words (ABC)')).toBeNull();
+    expect(acronymPairJustTyped('apple banana carrot (xyz)')).toBeNull();
+    expect(acronymPairJustTyped('ASX - Australian Stock ')).toBeNull();
+  });
+
+  it('lower-case acronyms count only next to brackets, and are recorded in capitals', () => {
+    expect(acronymPairJustTyped('the australian broadcasting corporation (abc)')).toMatchObject({ term: 'ABC', expansion: 'australian broadcasting corporation' });
+    expect(acronymPairJustTyped('the adc (analog to digital converter)')).toMatchObject({ term: 'ADC', expansion: 'analog to digital converter' });
+    expect(acronymPairJustTyped('the adc - analog to digital converter ')).toBeNull();   // no brackets: not taken as one
+    expect(acronymPairJustTyped('the ADC (analog digital converter)')).toMatchObject({ term: 'ADC' });
+    expect(acronymPairJustTyped('cat - cool and tall ')).toBeNull();
+    expect(inferAcronymFromSelection('abc', 'the australian broadcasting corporation (abc)')).toEqual({ term: 'ABC', expansion: 'australian broadcasting corporation' });
+    expect(inferAcronymFromSelection('australian broadcasting corporation (abc)', 'x')).toEqual({ term: 'ABC', expansion: 'australian broadcasting corporation' });
+    expect(acronymCandidates('the (abc) and DoD (the)').map((c) => c.word)).toEqual(['the', 'abc', 'DoD', 'the']);   // candidates only: the letters still have to fit
   });
 
   it('what looks like an acronym', () => {

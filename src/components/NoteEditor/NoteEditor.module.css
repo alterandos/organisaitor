@@ -1258,6 +1258,13 @@
   gap: 1px;
 }
 
+/* The designs, then a rule, then the block's other settings, so the two read as separate groups. */
+.editorContent [data-block-tools] > [data-block-designs]:not(:last-child) {
+  margin-right: 3px;
+  padding-right: 3px;
+  border-right: 1px solid var(--color-border);
+}
+
 .editorContent [data-block-design] { width: 26px; }
 .editorContent [data-timeline-tools] [data-tl-tool="order"] { padding: 0 9px 0 7px; }
 
@@ -1340,7 +1347,7 @@
 
 /* ProseMirror's <br> in an empty block would break the attribution line; the placeholder gives
    the empty field its height instead. */
-.editorContent [data-qb-field][data-qb-empty] > br.ProseMirror-trailingBreak { display: none; }
+.editorContent [data-qb-field][data-qb-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
 
 /* Placeholders: after the (empty) text, so the caret sits before them. */
 .editorContent [data-qb-empty]::after {
@@ -2694,8 +2701,7 @@
 
 /* The pill's Delete shows only while the block is selected (blockDesigns.ts selectButton). */
 .editorContent [data-block-select-group] { display: flex; gap: 1px; }
-.editorContent [data-block-tools] [data-block-delete] { display: none; width: 26px; }
-.editorContent [data-note-block]:global(.ProseMirror-selectednode) > [data-block-tools] [data-block-delete] { display: inline-flex; }
+.editorContent [data-block-tools] [data-block-delete] { width: 26px; }
 .editorContent [data-block-tools] [data-block-delete]:hover { color: var(--color-danger); }
 
 /* Parts picked with Ctrl+click (blockPicks.ts). */
@@ -3492,22 +3498,37 @@
   text-underline-offset: 3px;
 }
 
+/* An offer (typingOffer.ts) hangs below the line from a zero-width anchor, so it never pushes text
+   about or covers the line being typed. */
+.editorContent [data-offer-anchor] {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 1em;
+  vertical-align: text-bottom;
+}
+
 .editorContent [data-autolink-chip] {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  z-index: var(--z-sticky);
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: 6px;
   padding: 1px 8px 1px 4px;
   border: 1px solid var(--color-primary-border);
   border-radius: 99px;
-  background: var(--color-primary-subtle);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
   color: var(--color-muted);
   font-size: 0.72rem;
   line-height: 1.5;
-  vertical-align: 0.1em;
+  width: max-content;   /* its anchor has no width; without this it squeezes onto several lines */
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+  transform: translateX(-0.5rem);
   animation: autolinkIn 0.18s ease-out;
 }
 
@@ -3523,9 +3544,21 @@
 
 .editorContent [data-autolink-chip] b { color: var(--color-primary); font-weight: 600; }
 
+/* Typed on past an offer: it stays under the end of its words, fading out evenly over its time
+   (--linger, set by typingOffer.ts). */
+.editorContent [data-autolink-chip][data-lingering] {
+  transform: translateX(-50%);
+  animation: autolinkLinger var(--linger, 4s) linear forwards;
+}
+
+@keyframes autolinkLinger {
+  from { opacity: 1; }
+  to   { opacity: 0.1; }
+}
+
 @keyframes autolinkIn {
-  from { opacity: 0; transform: translateY(2px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* Hovering linked text: its term's card under it, with a way to where it's defined. */
@@ -3574,6 +3607,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .editorContent [data-autolink-chip], .editor [data-concept-hovercard] { animation: none; }
+  .editorContent [data-autolink-chip][data-lingering] { animation: none; opacity: 0.85; }
 }
 
 /* The card: what the term means, on hover. */
@@ -4082,6 +4116,265 @@
 .editorContent [data-card-resize]:hover::after { background: var(--color-primary); }
 @media (hover: none) { .editorContent [data-card-resize] { opacity: 1; } }
 .editorContent [data-glossary-tools] { top: -6px; right: 8px; }
+/* A Compact card is one short line: its pill sits above it rather than over the meaning. */
+.editorContent [data-type="glossary-card"][data-variant="compact"] > [data-glossary-tools] { top: -22px; }
 .editorContent [data-type="glossary-card"]:hover > [data-glossary-tools],
 .editorContent [data-type="glossary-card"]:focus-within > [data-glossary-tools],
 .editorContent [data-type="glossary-card"]:global(.ProseMirror-selectednode) > [data-glossary-tools] { opacity: 1; }
+
+/* ── Questions (extensions/Question.ts) ─────────────────────────────────────── */
+/* Drawn as the Glossary cards are (GlossaryCard.module.css), so the two read as one family: Card is
+   a box with a small coloured kind line, the question large, a short accent rule, then the parts
+   with small labels; Compact is one bordered line, an icon, the question, a thin accent rule, the
+   answer. The accent follows the status: orange open, green answered, grey dropped. */
+
+.editorContent [data-type="question"] { --qn-accent: var(--color-swatch-orange); position: relative; }
+.editorContent [data-type="question"][data-status="answered"] { --qn-accent: var(--color-swatch-green); }
+.editorContent [data-type="question"][data-status="dropped"]  { --qn-accent: var(--color-swatch-grey); }
+.editorContent [data-type="question"][data-status="dropped"] > [data-qn-text] { color: var(--color-muted); text-decoration: line-through; }
+
+/* Card */
+.editorContent [data-type="question"][data-variant="card"] {
+  margin: var(--space-2) 0;
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.editorContent [data-type="question"][data-variant="card"]::before {
+  content: attr(data-qn-heading);
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--qn-accent);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.editorContent [data-type="question"][data-variant="card"] > [data-qn-text] {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  line-height: 1.3;
+}
+.editorContent [data-type="question"][data-variant="card"] > [data-qn-text]::after {
+  content: '';
+  display: block;
+  width: 3rem;
+  height: 3px;
+  margin: var(--space-3) 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--qn-accent);
+}
+
+/* A part: its name small above it. */
+.editorContent [data-qn-field] { margin-top: var(--space-3); }
+.editorContent [data-qn-field]::before {
+  content: attr(data-qn-label);
+  display: block;
+  margin-bottom: 2px;
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.editorContent [data-qn-field][data-qn-field="lead"] + [data-qn-field="lead"] { margin-top: var(--space-1); }
+.editorContent [data-qn-field="lead"] + [data-qn-field="lead"]::before { display: none; }
+.editorContent [data-qn-field="lead"] { padding-left: 1rem; position: relative; }
+
+.editorContent [data-qn-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-qn-empty]::after {
+  content: attr(data-qn-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* Compact: the question and its answer on one line; why it matters and the leads, if any, on a
+   smaller line beneath (nothing is hidden). */
+.editorContent [data-type="question"][data-variant="compact"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  margin: var(--space-1) 0;
+  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.editorContent [data-type="question"][data-variant="compact"]::before {
+  content: attr(data-qn-icon);
+  flex: none;
+  font-size: var(--text-md);
+  line-height: 1;
+}
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-text] {
+  flex: 0 1 auto;
+  min-width: 7.5rem;
+  font-weight: 650;
+}
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field] { margin-top: 0; }
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="answer"] {
+  order: 1;
+  flex: 1;
+  min-width: 8rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+/* The answer's rule takes the place of its label. */
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="answer"]::before {
+  content: '';
+  flex: none;
+  align-self: stretch;
+  width: 2px;
+  margin: var(--space-1) 0;
+  border-radius: var(--radius-pill);
+  background: var(--qn-accent);
+  opacity: 0.7;
+}
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="why"],
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="lead"] {
+  order: 2;
+  flex-basis: 100%;
+  padding-left: calc(var(--text-md) + var(--space-3));
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="why"]::before,
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="lead"]::before {
+  display: inline;
+  margin-right: var(--space-2);
+}
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-answered-by] { order: 3; flex-basis: 100%; margin-top: 0; padding-left: calc(var(--text-md) + var(--space-3)); }
+
+.editorContent [data-qn-answered-by] { margin-top: var(--space-3); color: var(--color-muted); font-size: var(--text-sm); }
+.editorContent [data-qn-answered-by] button { padding: 0; border: none; background: none; color: var(--color-primary); font: inherit; font-weight: 600; cursor: pointer; }
+
+/* The pill: status, parts, follow-up, answer with a card. */
+.editorContent [data-question-tools] { top: -14px; right: 0; }
+.editorContent [data-question-tools] [data-qn-statuses],
+.editorContent [data-question-tools] [data-qn-fields] { display: flex; gap: 1px; }
+.editorContent [data-question-tools] [data-qn-tool] { padding: 0 8px; font-weight: 600; }
+.editorContent [data-question-tools] [data-qn-tool="status"][aria-pressed="false"] { opacity: 0.55; }
+.editorContent [data-type="question"]:hover > [data-question-tools],
+.editorContent [data-type="question"][data-qn-current] > [data-question-tools],
+.editorContent [data-type="question"]:global(.ProseMirror-selectednode) > [data-question-tools] { opacity: 1; }
+
+/* ── Comparisons (extensions/Compare.ts) ────────────────────────────────────── */
+
+.editorContent [data-type="compare"] {
+  position: relative;
+  display: flex;
+  gap: var(--space-5);
+  margin: 1rem 0;
+}
+
+.editorContent [data-cmp-side] { position: relative; flex: 1 1 0; min-width: 0; }
+.editorContent [data-cmp-title] {
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--color-border);
+  font-weight: 700;
+}
+.editorContent [data-cmp-point] { position: relative; padding-left: 1rem; }
+.editorContent [data-cmp-point]::before { content: '•'; position: absolute; left: 0.25rem; color: var(--color-muted); }
+.editorContent [data-cmp-point] + [data-cmp-point] { margin-top: var(--space-1); }
+.editorContent [data-cmp-crit] { font-weight: 600; }
+
+.editorContent [data-cmp-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-cmp-empty]::after { content: attr(data-cmp-placeholder); color: var(--color-muted); opacity: 0.6; font-weight: 400; pointer-events: none; }
+
+/* Versus: "vs" in a circle between the sides. */
+.editorContent [data-type="compare"][data-variant="versus"] > [data-cmp-side] + [data-cmp-side]::before {
+  content: 'vs';
+  position: absolute;
+  top: 0;
+  left: calc(-1 * var(--space-5) / 2 - 0.9rem);
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: var(--color-surface-alt);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.8rem;
+  text-align: center;
+}
+
+/* Pros / cons: the first side green ticks, the second red crosses, any more neutral. */
+.editorContent [data-type="compare"][data-variant="proscons"] > [data-cmp-side]:nth-child(1 of [data-cmp-side]) > [data-cmp-title] { border-color: var(--color-success); color: var(--color-success-text); }
+.editorContent [data-type="compare"][data-variant="proscons"] > [data-cmp-side]:nth-child(1 of [data-cmp-side]) > [data-cmp-point]::before { content: '✓'; color: var(--color-success); }
+.editorContent [data-type="compare"][data-variant="proscons"] > [data-cmp-side]:nth-child(2 of [data-cmp-side]) > [data-cmp-title] { border-color: var(--color-danger); color: var(--color-danger); }
+.editorContent [data-type="compare"][data-variant="proscons"] > [data-cmp-side]:nth-child(2 of [data-cmp-side]) > [data-cmp-point]::before { content: '✗'; color: var(--color-danger); }
+
+/* Table: a grid; a row per criterion (headers in the first column), a column per side. The sides
+   step aside (display: contents) so their titles and points are placed in the grid directly. */
+.editorContent [data-type="compare"][data-variant="table"] {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) repeat(var(--cmp-sides, 2), minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.editorContent [data-type="compare"][data-variant="table"] > [data-cmp-side] { display: contents; }
+.editorContent [data-type="compare"][data-variant="table"] [data-cmp-title],
+.editorContent [data-type="compare"][data-variant="table"] [data-cmp-point],
+.editorContent [data-type="compare"][data-variant="table"] [data-cmp-row-head] {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border);
+}
+.editorContent [data-type="compare"][data-variant="table"] [data-cmp-title] { background: var(--color-surface-alt); }
+.editorContent [data-type="compare"][data-variant="table"] [data-cmp-point]::before { content: none; }
+.editorContent [data-type="compare"][data-variant="table"] [data-cmp-crit] { color: var(--color-muted); font-weight: 500; }
+.editorContent [data-cmp-row-head] { grid-column: 1; border-left: none !important; color: var(--color-muted); font-size: var(--text-sm); font-weight: 600; }
+
+.editorContent [data-compare-tools] { top: -14px; right: 0; }
+.editorContent [data-compare-tools] [data-cmp-tool] { padding: 0 8px; font-weight: 600; }
+.editorContent [data-type="compare"]:hover > [data-compare-tools],
+.editorContent [data-type="compare"][data-cmp-current] > [data-compare-tools],
+.editorContent [data-type="compare"]:global(.ProseMirror-selectednode) > [data-compare-tools] { opacity: 1; }
+
+@media (max-width: 600px) {
+  .editorContent [data-type="compare"]:not([data-variant="table"]) { flex-direction: column; }
+  .editorContent [data-type="compare"][data-variant="versus"] > [data-cmp-side] + [data-cmp-side]::before { position: static; display: block; margin: 0 auto var(--space-2); }
+}
+
+/* ── Diagrams (extensions/Diagram.ts; the canvas is src/diagrams/DiagramWidget.module.css) ── */
+.editorContent [data-type="diagram"] { position: relative; margin: 1rem 0; }
+.editorContent [data-diagram-tools] { top: -14px; right: 0; z-index: var(--z-sticky); }
+.editorContent [data-type="diagram"]:hover > [data-diagram-tools],
+.editorContent [data-type="diagram"]:focus-within > [data-diagram-tools],
+.editorContent [data-type="diagram"]:global(.ProseMirror-selectednode) > [data-diagram-tools] { opacity: 1; }
+.editorContent [data-diagram-loading] { padding: var(--space-6); color: var(--color-muted); text-align: center; }
+
+/* The cursor in the gap between two blocks (where typing or Enter starts a new line): a line in
+   the text colour, so it shows in both themes (ProseMirror's own is a thin black line). Beside a
+   card in a row, it's upright, the height of the card. */
+.editorContent :global(.ProseMirror-gapcursor)::after {
+  width: 2.5rem;
+  border-top: 2px solid var(--color-text);
+}
+.editorContent [data-type="glossary-card"] + :global(.ProseMirror-gapcursor) {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 3rem;
+  margin-right: 0.75rem;
+  vertical-align: top;
+}
+.editorContent [data-type="glossary-card"] + :global(.ProseMirror-gapcursor)::after {
+  top: 0.25rem;
+  width: 0;
+  height: 100%;
+  border-top: 0;
+  border-left: 2px solid var(--color-text);
+}

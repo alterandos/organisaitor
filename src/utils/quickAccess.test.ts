@@ -9,6 +9,7 @@ import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, na
 import { PLACES } from '@/config/places';
 import type { TaskId } from '@/types';
 import type { NoteId } from '@/types/notes';
+import { defineInItsNote } from '@/test/glossaryFixtures';
 
 beforeEach(() => {
   useTaskStore.setState(useTaskStore.getInitialState(), true);
@@ -186,6 +187,7 @@ describe('Glossary terms in Quick Access', () => {
     const entryId = useNoteStore.getState().addStructuredTagEntry({
       typeKey: 'acronym', tagId: 'tag-1', term: 'ASX', fields: { expansion: 'Australian Securities Exchange' }, noteId, collectionId: null,
     });
+    defineInItsNote(entryId);
     const item = searchQuickAccessItems('asx').find((r) => r.type === 'glossary');
     expect(item).toMatchObject({ entityId: entryId, title: 'ASX' });
     expect(item!.subtitle).toContain('Finance');

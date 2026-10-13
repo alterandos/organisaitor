@@ -3,6 +3,7 @@ import { LABELS } from '@/config/labels';
 import { effectiveLevels } from './extensions/hierarchyLayout';
 import { chartToTable, normalizeChart } from '@/charts/chartSpec';
 import { glossaryEntry } from '@/services/glossary';
+import { diagramToText, normalizeDiagram } from '@/diagrams/diagramSpec';
 
 // The plain text a copy from a note puts on the clipboard (editorProps.clipboardTextSerializer).
 // Rich targets (Word, Docs, mail) take the HTML copy and keep everything; a plain-text target (a
@@ -131,6 +132,27 @@ function block(node: PMNode): string {
         const status = LABELS.noteBlocks.inbox.statuses[child.attrs.status as keyof typeof LABELS.noteBlocks.inbox.statuses] ?? '';
         lines.push(prefixLines(`[${status}] ${parts.join('\n')}`, '- ', '  '));
       });
+      return lines.join('\n');
+    }
+    case 'diagram':
+      // Each arrow as "A → B", then any box on its own.
+      return diagramToText(normalizeDiagram(node.attrs.spec));
+    case 'compareBlock': {
+      // Each side as a title and its points: "Renting:\n- Price: $1,800", sides one after another.
+      const sides: string[] = [];
+      node.forEach((side) => {
+        const lines = [`${inlineText(side.child(0)) || LABELS.noteBlocks.compare.side}:`];
+        side.forEach((point, _o, i) => { if (i > 0 && point.textContent.trim()) lines.push(`- ${inlineText(point)}`); });
+        sides.push(lines.join('\n'));
+      });
+      return sides.join(`\n${LABELS.noteBlocks.compare.versus}\n`);
+    }
+    case 'questionBlock': {
+      // "Q: What is osmosis? (Answered)" then each part on its own line, as "- Lead: …".
+      const L = LABELS.noteBlocks.question;
+      const status = node.attrs.status === 'open' ? '' : ` (${L.statuses[node.attrs.status as 'answered' | 'dropped']})`;
+      const lines = [`Q: ${inlineText(node.child(0))}${status}`];
+      node.forEach((part, _o, i) => { if (i > 0 && part.textContent.trim()) lines.push(`- ${L.fields[part.attrs.field as 'why' | 'lead' | 'answer']}: ${inlineText(part)}`); });
       return lines.join('\n');
     }
     case 'glossaryCard': {

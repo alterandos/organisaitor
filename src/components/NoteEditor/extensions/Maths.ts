@@ -5,7 +5,7 @@ import type { EditorView } from '@tiptap/pm/view';
 import type { MathfieldElement } from 'mathlive';
 import { LABELS } from '@/config/labels';
 import { log, errorMessage } from '@/utils/log';
-import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
+import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, registerEnterableBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 
 // Maths in a note (`\maths`): typed the way Word's equation editor works — `x^2` gives a
 // superscript, `h_0` a subscript, `/` a fraction, `alpha` or `\alpha` gives α, `\int`, `\sum`,
@@ -124,9 +124,18 @@ export function setMathSettings(view: EditorView, pos: number, attrs: Partial<{ 
 // Opens the maths at `pos` for typing (after `\maths`, Enter on a selected one, the right-click menu).
 // `text` is typed into it: keys that reached the note while the maths was selected but its editor
 // didn't have focus yet (MathLive takes focus 60 ms late, and loads late the first time).
-export function editMathAt(view: EditorView, pos: number, text?: string): void {
-  (view.nodeDOM(pos) as HTMLElement | null)?.dispatchEvent(new CustomEvent('math-edit', { detail: { text } }));
+export function editMathAt(view: EditorView, pos: number, text?: string, edge?: 'start' | 'end'): void {
+  (view.nodeDOM(pos) as HTMLElement | null)?.dispatchEvent(new CustomEvent('math-edit', { detail: { text, edge } }));
 }
+
+// Arrowing into maths (blockDesigns.ts registerEnterableBlock) opens it with the cursor at that edge.
+const enterMath = (view: EditorView, pos: number, edge: 'start' | 'end') => {
+  const node = view.state.doc.nodeAt(pos);
+  if (node?.isBlock) view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
+  editMathAt(view, pos, undefined, edge);
+};
+registerEnterableBlock('mathBlock', enterMath);
+registerEnterableBlock('mathInline', enterMath);
 
 
 export function mathPosAt(view: EditorView, el: Element): number | null {
@@ -180,6 +189,7 @@ class MathView {
   private field: MathfieldElement | null = null;
   private wantFocus = false;
   private pendingText = '';
+  private focusEdge: 'start' | 'end' | null = null;
   private destroyed = false;
 
   constructor(node: PMNode, editor: Editor, getPos: () => number | undefined) {
@@ -197,8 +207,10 @@ class MathView {
     if (block) { this.pill = document.createElement('div'); this.dom.append(this.pill); }
     this.dom.append(this.holder);
     this.dom.addEventListener('math-edit', (e) => {
+      const detail = (e as CustomEvent<{ text?: string; edge?: 'start' | 'end' }>).detail;
       this.wantFocus = true;
-      this.pendingText += (e as CustomEvent<{ text?: string }>).detail?.text ?? '';
+      this.focusEdge = detail?.edge ?? null;
+      this.pendingText += detail?.text ?? '';
       this.typePending();
       this.focusField();
     });
@@ -264,6 +276,8 @@ class MathView {
     if (!this.wantFocus || !this.field || !this.field.isConnected) return;
     this.wantFocus = false;
     this.field.focus();
+    if (this.focusEdge) this.field.executeCommand(this.focusEdge === 'start' ? 'moveToMathfieldStart' : 'moveToMathfieldEnd');
+    this.focusEdge = null;
   }
 
   private commit(latex: string) {

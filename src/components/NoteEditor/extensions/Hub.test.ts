@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import { TextSelection } from '@tiptap/pm/state';
+import { NodeSelection, TextSelection } from '@tiptap/pm/state';
+import { GlossaryCardExtensions } from './GlossaryCard';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { HubExtensions } from './Hub';
 import { NoteBlockSelect } from './blockDesigns';
@@ -35,7 +36,7 @@ function make(content = '<p></p>') {
   noteId = useNoteStore.getState().addNote({ title: 'Econ' });
   editor = new Editor({
     element: document.createElement('div'),
-    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, ...HubExtensions, NoteBlockSelect],
+    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, ...HubExtensions, ...GlossaryCardExtensions, NoteBlockSelect],
     content,
   });
   objectTriggerStorage(editor).getContext = () => ({ noteId, collectionId: null, now: new Date() });
@@ -108,6 +109,18 @@ describe('hub block', () => {
 });
 
 describe('add to hub', () => {
+  it('a selected Glossary card goes in as its term, so the hub shows what it is; nothing is marked', () => {
+    const entryId = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Osmosis', fields: { meaning: 'Water across a membrane' }, noteId: 'x' as NoteId, collectionId: null });
+    make(`<div data-type="glossary-card" data-entry-id="${entryId}"></div>${HUB}`);
+    let cardPos = -1;
+    editor.state.doc.descendants((n, pos) => { if (n.type.name === 'glossaryCard') cardPos = pos; });
+    editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, cardPos)));
+    expect(addPassageToHub(editor.view, here(), hubHere(), 'related')).toBe(true);
+    const [link] = links();
+    expect(link.attrs).toMatchObject({ kind: 'glossary', entryId, label: 'Osmosis', relation: 'related' });
+    expect(marksOf()).toEqual([]);
+  });
+
   it('within a note: the passage stays, gets a mark and one marker; the hub gets a preview link', () => {
     make(`<p>Rates rose sharply in 2022.</p>${HUB}`);
     select('Rates rose sharply');

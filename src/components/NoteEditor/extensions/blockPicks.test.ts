@@ -43,7 +43,7 @@ const blocks = () => { const out: string[] = []; editor.state.doc.forEach((s) =>
 
 describe('picking parts of a note block', () => {
   it('every note block names its part type, except the ones with no parts (chart, maths, Glossary card: one atom; code: one text)', () => {
-    const NO_PARTS = new Set(['chart', 'codeBlock', 'mathBlock', 'glossaryCard']);
+    const NO_PARTS = new Set(['chart', 'codeBlock', 'mathBlock', 'glossaryCard', 'diagram']);
     const missing = [...NOTE_BLOCK_NODES].filter((b) => !NO_PARTS.has(b) && !BLOCK_PART_NODES[b]);
     expect(missing).toEqual([]);
   });

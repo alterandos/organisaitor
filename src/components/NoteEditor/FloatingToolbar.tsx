@@ -7,10 +7,11 @@ import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { normalizeLinkUrl } from '@/utils/links';
 import { inferTaskFromSelection, inferCalendarItemFromSelection } from '@/utils/textToTask';
-import type { NoteId, StructuredTagEntryId } from '@/types/notes';
+import type { NoteId } from '@/types/notes';
 import type { CrossAppRefType } from '@/types';
 import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
 import { getStructuredTagType } from '@/config/structuredTagTypes';
+import { deleteGlossaryEntryAsked } from '@/services/glossaryDelete';
 import styles from './FloatingToolbar.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
@@ -325,8 +326,8 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
       const { from, to } = editor.state.selection;
       const builtinTag = BUILTIN_TAGS.find((t) => t.id === item.id);
       if (builtinTag) onStructuredTag(builtinTag, from, to);
-      // Collapse the selection so this toolbar hides once the create popover opens on top
-      // of it — same reason selectCreateOption does this for the Task create-menu.
+      // Collapse the selection so this toolbar hides once the card is made below
+      // the paragraph — same reason selectCreateOption does this for the Task create-menu.
       editor.commands.setTextSelection(to);
       return;
     }
@@ -337,10 +338,11 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
     }).run();
   };
 
+  // Removing an old marked definition deletes its Glossary record and every link to it (asked).
   const removeTag = () => {
     const entryId = editor.getAttributes('noteTag').structuredEntryId as string | null;
+    if (entryId) { void deleteGlossaryEntryAsked(entryId, editor.schema); return; }
     editor.chain().focus().unsetMark('noteTag').run();
-    if (entryId) useNoteStore.getState().deleteStructuredTagEntry(entryId as StructuredTagEntryId);
   };
 
   // Only unmarks the text. Whether the task/event link itself should go too is asked by the editor

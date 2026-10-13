@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
 import { LABELS } from '@/config/labels';
-import { HUB_ICON, INBOX_ICON } from '@/config/itemIcons';
+import { HUB_ICON, INBOX_ICON, NOTE_LINK_ICON } from '@/config/itemIcons';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useNoteStore } from '@/store/noteStore';
 import { useSecretsVersion } from '@/services/noteSecrets';
@@ -124,6 +124,7 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
       { key: 'review', group: 'mark', icon: <ReviewIcon />, label: reviewing ? LABELS.importance.stopReviewing : LABELS.importance.reviewLater, run: after(() => toggleReview(view, range.from, range.to)) },
       { key: 'quote', group: 'turn', icon: '❝', label: LABELS.noteBlocks.quote.turnInto, run: () => { closeSelectionMenu(view); quoteFromSelection(view, range.from, range.to); } },
       { key: 'send-to-inbox', group: 'turn', icon: INBOX_ICON, label: LABELS.sendToInbox.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openSendToInbox?.(); } },
+      { key: 'link-to-note', group: 'turn', icon: NOTE_LINK_ICON, label: LABELS.noteLinks.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openNoteLinkPicker?.({ purpose: 'link', from: range.from, to: range.to }); } },
       { key: 'add-to-hub', group: 'turn', icon: HUB_ICON, label: LABELS.hubs.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openAddToHub?.(); } },
     ];
     const q = query.trim().toLowerCase();

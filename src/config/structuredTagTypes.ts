@@ -8,6 +8,7 @@
 // docs/features/implemented-features.md.
 
 import { inferAcronymFromSelection } from '@/utils/acronymInference';
+import { richToPlain } from '@/utils/richText';
 import { inferDefinitionFromSelection } from '@/utils/definitionInference';
 
 // How a field's value is held in StructuredTagEntry.fields, and so how it's shown and edited.
@@ -31,10 +32,21 @@ export interface GlossaryLink { kind: string; entryId: string }
 
 // Readers for a field's value, whatever was stored (an older or hand-edited record may hold
 // something else; it reads as empty).
-export const fieldText = (fields: Record<string, unknown>, id: string): string =>
+// Text fields may hold a little formatting (utils/richText.ts). These read them plain, for
+// everything but the card itself; fieldRich / fieldRichList keep the formatting, for the card.
+export const fieldRich = (fields: Record<string, unknown>, id: string): string =>
   typeof fields[id] === 'string' ? (fields[id] as string) : '';
-export const fieldList = (fields: Record<string, unknown>, id: string): string[] =>
+export const fieldRichList = (fields: Record<string, unknown>, id: string): string[] =>
   Array.isArray(fields[id]) ? (fields[id] as unknown[]).filter((v): v is string => typeof v === 'string') : [];
+export const fieldText = (fields: Record<string, unknown>, id: string): string => richToPlain(fieldRich(fields, id));
+export const fieldList = (fields: Record<string, unknown>, id: string): string[] => fieldRichList(fields, id).map(richToPlain);
+// The term with its formatting (H₂O), kept beside the plain term the rest of the app reads;
+// ignored once the term has been changed elsewhere without it.
+export const TERM_RICH = 'termRich';
+export const termRich = (entry: { term: string; fields: Record<string, unknown> }): string | null => {
+  const rich = fieldRich(entry.fields, TERM_RICH);
+  return rich && richToPlain(rich) === entry.term ? rich : null;
+};
 export const fieldLinks = (fields: Record<string, unknown>, id: string): GlossaryLink[] =>
   Array.isArray(fields[id])
     ? (fields[id] as unknown[]).filter((v): v is GlossaryLink => !!v && typeof (v as GlossaryLink).kind === 'string' && typeof (v as GlossaryLink).entryId === 'string')

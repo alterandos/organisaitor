@@ -1,0 +1,95 @@
+/* Links between notes (NoteLink.ts), their hover card, and embedded passages (NoteEmbed.ts). The
+   embed's block chrome (pill, frames, selection) is the shared block styling in NoteEditor.module.css. */
+
+/* A note link reads as a link, but in the note colour with a dotted line, so it can't be mistaken
+   for a web link (solid underline). */
+.link {
+  color: var(--color-primary);
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link:hover { text-decoration-style: solid; }
+
+.preview {
+  position: fixed;
+  z-index: var(--z-link-preview);
+  width: min(26rem, calc(100vw - 16px));
+  max-height: 18rem;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.previewTitle {
+  display: block;
+  max-width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewTitle:hover { text-decoration: underline; }
+
+.previewBody > :first-child,
+.embedBody > :first-child { margin-top: 0; }
+
+.previewBody > :last-child,
+.embedBody > :last-child { margin-bottom: 0; }
+
+.previewBody :is(h1, h2, h3, h4, h5, h6) { margin: var(--space-2) 0 var(--space-1); font-size: var(--text-md); }
+
+.previewBody p { margin: 0 0 var(--space-2); line-height: 1.5; }
+
+.previewEmpty { color: var(--color-muted); font-style: italic; }
+
+/* ── Embedded passages ── */
+
+.embed {
+  position: relative;
+  margin: var(--space-3) 0;
+}
+
+.embedSource {
+  display: inline-block;
+  margin-top: var(--space-2);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.embedSource:hover { color: var(--color-primary); text-decoration: underline; }
+
+.embed[data-variant="quote"] {
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
+  border-left: 3px solid var(--color-primary-border);
+}
+
+.embed[data-variant="card"] {
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-alt);
+}
+
+.embed[data-variant="plain"] .embedSource { margin-top: var(--space-1); }

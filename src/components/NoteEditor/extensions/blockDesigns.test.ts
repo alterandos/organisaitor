@@ -7,7 +7,7 @@ import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { TimelineExtensions } from './Timeline';
 import { QuoteExtensions } from './Quote';
 import { CycleExtensions, canDeleteStage, deleteStage, ringArcEnds } from './Cycle';
-import { NoteBlockSelect, NOTE_BLOCK_NODES, applyFrameAttrs, blockAround, frameMenuItem, frameOverflow, setBlockFrame } from './blockDesigns';
+import { NoteBlockSelect, NOTE_BLOCK_NODES, applyFrameAttrs, blockAround, frameButtons, frameMenuItem, frameOverflow, setBlockFrame } from './blockDesigns';
 import { noteClipboardText } from '../noteClipboardText';
 
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
@@ -92,6 +92,14 @@ describe('frames fit around what a block draws', () => {
     expect(frameOverflow(box, [rect(10, 10, 90, 90)])).toBe(0);
     expect(frameOverflow(box, [rect(-14.2, 40, 20, 60), rect(80, 95, 120, 103)])).toBe(20);
     expect(frameOverflow(box, [rect(-50, -50, -50, -50)])).toBe(0);   // an empty box doesn't count
+  });
+
+  it('a bigger block (a cycle) keeps its Outline; only card blocks go without', () => {
+    make(BLOCKS.cycle);
+    let pos = -1;
+    editor.state.doc.descendants((n, p) => { if (pos < 0 && n.type.name === 'cycle') pos = p; });
+    const frames = frameButtons(editor.view, () => pos + 1, editor.state.doc.nodeAt(pos)!.attrs);
+    expect([...frames.querySelectorAll('[data-block-frame]')].map((b) => b.getAttribute('data-block-frame'))).toEqual(['outlined', 'shaded', 'options']);
   });
 
   it('an outlined ring whose side cards hang outside it gets a wider frame', () => {

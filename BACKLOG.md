@@ -3,6 +3,8 @@
 Items here are confirmed requirements that are not yet implemented.
 Format: brief description + context/motivation.
 
+**Priority (added 2026-10-13, at the user's request):** an entry may carry **`Priority: High`**, **`Medium`** or **`Low`** on its first line. No mark means not yet prioritised; the user will fill these in over time. Don't infer a priority the user hasn't given.
+
 > **Do this first, before starting any backlog item (the user's instruction, 2026-10-09): audit this file against what's built.** It has grown to ~2,900 lines and some entries are already built, superseded or duplicated. Go through it section by section: check each item against the code and `docs/features/implemented-features.md` (search by feature name), then mark built items done with a pointer to their feature entry (or remove them), merge duplicates, and flag anything stale or unclear for the user. Record the outcome here, then delete this note. This was deferred from the CLAUDE.md audit of 2026-10-09 because it's a session of its own.
 
 ---
@@ -155,6 +157,23 @@ Three related requests about the navigation columns (Notes' notebook tree, Lists
 Built for `ChronicleView.tsx`'s notebook tree, following the `ListsSection` precedent (a small pill badge, hidden at zero). Resolved the "direct vs. recursive" design question in favor of **direct notes only** — matches `getTopLevelNotes`' own scope (what you'd see if you opened that notebook), and is the simpler, more predictable reading. `Sidebar`'s section-header counts were pre-existing, unrelated to this change.
 
 ---
+
+## Notes — from the comparison with other note apps (logged 2026-10-13)
+
+- **Version history for notes** — **Priority: Low.** See and restore earlier versions of a note (Notion, Craft, Evernote). The user's view: the automatic backups are enough for now; logged because it's a real safety net.
+- **Handwriting (ink) in notes** — not prioritised yet; the user: "very important, but a future thing". OneNote, Goodnotes and Apple Notes are the references. Needs its own design pass (pen input on Android and touch screens, storage, search).
+- ~~**A mind-map view of how notes and everything else link to each other**~~ — **v1 built 2026-10-13** as the **Map** Place (see "The Notes Map" in implemented-features.md). Agreed with the user: a Place like the Glossary, not a section. Next, not built:
+  - Colour or group nodes by notebook; filter by notebook or tag.
+  - Arrange it yourself and keep the arrangement (a canvas: drag notes, add free boxes and arrows), possibly sharing the Diagram block's drawing (Obsidian Canvas, Heptabase whiteboards).
+  - Glossary terms and idea hubs as nodes; links between items of other apps (task links).
+  - A smaller map of the open note in its side panel.
+- ~~**Marking a definition and the cards look different**~~ — **settled 2026-10-13**: the popover is retired; marking selected text makes a card (see "Marking text as a definition makes a card" in implemented-features.md).
+- ~~**Typed links between notes with backlinks, and embedding a passage from another note**~~ — **built 2026-10-13** (see "Links between notes, embedded passages" in implemented-features.md). Next, not built:
+  - Typing after `[[` filters right there in the text (Obsidian-style), instead of in the picker.
+  - Linking to a passage inside a block (a list item, a quote's text, a timeline entry); today a passage is a paragraph or a heading.
+  - Unlinked mentions that also catch a note's other names (aliases), and a "Link all" button.
+  - A link that names a passage which has since gone offers to relink it (today the card says it's gone).
+  - Editing an embedded passage in place (today it's read-only, with "Copy as text here").
 
 ## Notes App — Central knowledge hub with cross-suite linking
 
@@ -2838,6 +2857,12 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **No Outline on card blocks** (`CARD_BLOCK_NODES`, 2026-10-13, CLAUDE.md "Block designs") | Review: a block drawn with its own border is in `CARD_BLOCK_NODES` | **Applied 2026-10-13** (Glossary card, question). |
+| **Delete in every block's pill on hover** (2026-10-13, CLAUDE.md "Block designs") | `src/test/patterns.test.ts` "every block shows Delete in its pill" | **Fully applied 2026-10-13** (one CSS rule; the Glossary card's own exception removed). |
+| **Card and Compact look the same for cards and questions** (2026-10-13, CLAUDE.md "Glossary records and cards") | Review: the two stylesheets keep the same measurements | **Applied 2026-10-13** to Glossary cards and questions. |
+| **Block fields: Enter and arrows move through them; arrowing into a block enters it** (2026-10-13, CLAUDE.md "Blocks with their own inputs") | Review: an atom block with inputs registers `registerEnterableBlock` and its fields hand Enter and the arrows on | **Applied 2026-10-13** to Glossary cards and maths. Deliberately not: chart, diagram, embed (selected whole). |
+| **Formatted text in block fields** (`utils/richText.ts`, 2026-10-13, CLAUDE.md "Glossary records and cards") | `src/test/patterns.test.ts` "formatted text in block fields" | **Fully applied 2026-10-13** (Glossary cards; `TagView` fixed to read fields plain). |
+| **ProseMirror's classes are `:global` in CSS Modules** (2026-10-13, CLAUDE.md "Coding conventions") | `src/test/patterns.test.ts` "the editor library's classes are :global in scoped CSS" | **Fully applied 2026-10-13** (two sites fixed earlier the same day: `.ProseMirror-selectednode`, `.ProseMirror-trailingBreak`). |
 | **Glossary records and cards** (2026-10-13, CLAUDE.md) | Review: a new way of showing a Glossary record holds its id, not a copy | **Fully applied 2026-10-13** (cards and marked text). |
 | **Blocks with their own inputs take the typing** (2026-10-13, CLAUDE.md) | `src/test/patterns.test.ts` "blocks with their own inputs take the typing" | **Fully applied 2026-10-13** (maths, chart, Glossary card; the chart was a breach: typing over a selected chart deleted it). |
 | **Offer as you type** (`typingOffer.ts`, 2026-10-13, CLAUDE.md) | `src/test/patterns.test.ts` "offers made as you type come from one helper" | **Fully applied 2026-10-13** (Glossary linking, acronym offer). |

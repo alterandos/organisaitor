@@ -29,6 +29,8 @@ export const BLOCK_PART_NODES: Record<string, string> = {
   pyramid:    'pyramidLayer',
   inbox:      'inboxItem',
   hub:        'hubLink',
+  questionBlock: 'questionField',
+  compareBlock: 'compareSide',
 };
 
 interface Picks { block: number | null; parts: number[] }

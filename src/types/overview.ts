@@ -8,7 +8,7 @@ import type { CollectionId } from '@/types';
 export type OverviewId = string & { readonly _brand: 'OverviewId' };
 
 // One per source in OVERVIEW_SOURCES. A new app contributes a new key.
-export type OverviewSourceKey = 'task' | 'event' | 'reminder' | 'deadline' | 'note' | 'list' | 'listItem' | 'trackerEntry' | 'inboxItem';
+export type OverviewSourceKey = 'task' | 'event' | 'reminder' | 'deadline' | 'note' | 'list' | 'listItem' | 'trackerEntry' | 'inboxItem' | 'question';
 
 // open = still to do / upcoming; done = completed / ticked / logged; past = a calendar item whose
 // date has gone by (not "done", just over); archived = sunset.

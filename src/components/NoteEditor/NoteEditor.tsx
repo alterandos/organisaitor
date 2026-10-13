@@ -18,7 +18,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { noteCursorKey, useUIStore } from '@/store/uiStore';
 import { scrollHostOf } from './headingTrail';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { NoteId, Note, CollectionId, StructuredTagEntryId } from '@/types';
+import type { NoteId, Note, CollectionId } from '@/types';
 import { NoteTagMark } from './extensions/NoteTagMark';
 import { ArtifactLinkMark } from './extensions/ArtifactLinkMark';
 import { NoteBacklinks } from './NoteBacklinks';
@@ -46,9 +46,14 @@ import { MathExtensions } from './extensions/Maths';
 import { InboxExtensions } from './extensions/Inbox';
 import { HubExtensions } from './extensions/Hub';
 import { HubPickerModal } from '@/components/HubPickerModal/HubPickerModal';
-import { addLinkToHub, addPassageToHub, selectionTouchesHub } from '@/services/noteHubs';
-import { GlossaryCardExtensions } from './extensions/GlossaryCard';
+import { addLinkToHub, addPassageToHub, selectedCardEntry, selectionTouchesHub } from '@/services/noteHubs';
+import { glossaryEntry } from '@/services/glossary';
+import { GlossaryCardExtensions, cardFromSelection, insertCardAfter } from './extensions/GlossaryCard';
+import { deleteGlossaryEntryAsked } from '@/services/glossaryDelete';
 import { TrailingLine } from './extensions/TrailingLine';
+import { QuestionExtensions } from './extensions/Question';
+import { CompareExtensions } from './extensions/Compare';
+import { DiagramExtensions } from './extensions/Diagram';
 import { InboxPickerModal } from '@/components/InboxPickerModal/InboxPickerModal';
 import { selectionTouchesInbox, sendToInbox } from '@/services/noteInbox';
 import { NoteBlockSelect } from './extensions/blockDesigns';
@@ -95,17 +100,26 @@ import './extensions/chartMenu';
 import './extensions/codeMenu';
 import './extensions/mathsMenu';
 import './extensions/glossaryCardMenu';
+import './extensions/questionMenu';
+import './extensions/compareMenu';
+import './extensions/diagramMenu';
 import './extensions/inboxMenu';
 import './extensions/hubMenu';
+import './extensions/noteLinkMenu';
+import { BlockIds } from './extensions/BlockIds';
+import { NoteLinkExtensions, applyNoteLink } from './extensions/NoteLink';
+import { NoteEmbedExtensions, insertEmbedAt } from './extensions/NoteEmbed';
+import { NoteLinkPicker } from './NoteLinkPicker';
+import { formatFocusedBlockField } from './blockFieldFormat';
+import { NoteLinksFrom } from './NoteLinksFrom';
+import type { NoteLinkRequest } from './objects/NoteObjectTrigger';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { openExternalLink, normalizeLinkUrl } from '@/utils/links';
 import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
 import { getStructuredTagType } from '@/config/structuredTagTypes';
-import { StructuredTagPopover } from './StructuredTagPopover';
-import { getNoteBreadcrumb } from '@/utils/notes';
 import { selectActiveCollectionId } from '@/store/uiStore';
 import { onVaultStatus, registerBeforeLock } from '@/services/vault';
-import { noteView, entryView, isNoteLocked } from '@/services/noteSecrets';
+import { noteView, isNoteLocked } from '@/services/noteSecrets';
 import { useNoteView } from '@/store/noteViews';
 import styles from './NoteEditor.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -366,21 +380,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   const renameMainTab   = useNoteStore((s) => s.renameMainTab);
   const reorderNoteTabs = useNoteStore((s) => s.reorderNoteTabs);
 
-  // Structured tag entries (Acronym today — see src/config/structuredTagTypes.ts)
-  const addStructuredTagEntry     = useNoteStore((s) => s.addStructuredTagEntry);
-  const updateStructuredTagEntry  = useNoteStore((s) => s.updateStructuredTagEntry);
-  const deleteStructuredTagEntry  = useNoteStore((s) => s.deleteStructuredTagEntry);
-  const [structuredTagRequest, setStructuredTagRequest] = useState<{
-    mode: 'create' | 'edit';
-    tag: BuiltinTag;
-    top: number; left: number;
-    range: { from: number; to: number } | null;   // create mode only — where to apply the mark
-    entryId: string | null;                        // edit mode only
-    initialTerm: string;
-    initialFields: Record<string, string>;
-    initialCollectionId: string | null;
-    meta?: { createdAt: string; updatedAt: string; breadcrumb: string };
-  } | null>(null);
+  // An old marked definition being hovered (from before the cards): offers "Show as a card".
   const [structuredTagHover, setStructuredTagHover] = useState<HTMLElement | null>(null);
   const clearStructuredHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -598,111 +598,25 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     }
   }, [cancelHoverClear, scheduleHoverClear, cancelSectionHoverClear, scheduleSectionHoverClear]);
 
-  // ── Structured tag entries (Acronym today) ─────────────────────────────────
-  // Reads everything dynamic via .getState() rather than closured hook values, since
-  // openStructuredTagCreate is called from the editor-focused keydown effect below, whose
-  // dependency array is just [editor] — same "never goes stale" convention already used by
-  // ChronicleView's keyboard-nav effect for the identical reason.
+  // ── Glossary records from selected words ─────────────────────────────────
+  // Marking text as a Definition, Concept or Acronym (the tag picker, Ctrl+2/3/8, `\` on a selection)
+  // makes a card from it (cardFromSelection); the popover it used to open was retired 2026-10-13.
+  // Reads everything dynamic via refs and getState(), since it's called from the editor-focused
+  // keydown effect, whose dependency array is just [editor].
   const openStructuredTagCreate = (tag: BuiltinTag, from: number, to: number) => {
     if (!editor) return;
-    const typeDef = getStructuredTagType(tag.typeKey);
-    if (!typeDef) return;
-    const selectedText = editor.state.doc.textBetween(from, to, ' ');
-    const contextText = editor.state.doc.resolve(from).parent.textContent;
-    const inferred = typeDef.infer?.(selectedText, contextText) ?? { term: selectedText, fields: {} };
-    const coords = editor.view.coordsAtPos(to);
-    const currentNote = currentNoteIdRef.current ? useNoteStore.getState().notes[currentNoteIdRef.current as NoteId] : null;
-    setStructuredTagRequest({
-      mode: 'create',
-      tag,
-      top: coords.bottom + 8,
-      left: coords.left,
-      range: { from, to },
-      entryId: null,
-      initialTerm: inferred.term,
-      initialFields: inferred.fields,
-      initialCollectionId: currentNote?.collectionId ?? selectActiveCollectionId(useUIStore.getState()),
-    });
+    cardFromSelection(editor.view, from, to, tag.typeKey, objectTriggerStorage(editor).getContext());
   };
 
-  const openStructuredTagEditFromEl = (el: HTMLElement) => {
+  // An old marked definition (from before the cards): its card, after the paragraph it's in.
+  const showMarkAsCard = (el: HTMLElement) => {
     const entryId = el.getAttribute('data-structured-entry-id');
-    const tagId   = el.getAttribute('data-tag-id');
-    if (!entryId || !tagId) return;
-    const noteState = useNoteStore.getState();
-    const rawEntry = noteState.structuredTagEntries[entryId as StructuredTagEntryId];
-    const entry = rawEntry ? entryView(rawEntry) : undefined;
-    const tag   = BUILTIN_TAGS.find((t) => t.id === tagId);
-    const typeDef = tag ? getStructuredTagType(tag.typeKey) : undefined;
-    if (!entry || !tag || !typeDef) return;
-    const rect = el.getBoundingClientRect();
-    const entryNote = noteState.notes[entry.noteId];
-    setStructuredTagRequest({
-      mode: 'edit',
-      tag,
-      top: rect.bottom + 8,
-      left: rect.left,
-      range: null,
-      entryId: entry.id,
-      initialTerm: entry.term,
-      initialFields: entry.fields as Record<string, string>,
-      initialCollectionId: entry.collectionId,
-      meta: {
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt,
-        breadcrumb: entryNote ? getNoteBreadcrumb(entryNote, noteState.noteTags) : 'Unknown note',
-      },
-    });
+    if (!editor || !entryId) return;
+    let pos: number;
+    try { pos = editor.view.posAtDOM(el, 0); } catch { return; }
+    const tr = insertCardAfter(editor.state, pos, entryId);
+    if (tr) editor.view.dispatch(tr);
     setStructuredTagHover(null);
-  };
-
-  const handleStructuredTagSave = (data: { term: string; fields: Record<string, string>; collectionId: string | null }) => {
-    if (!structuredTagRequest || !editor) return;
-    if (structuredTagRequest.mode === 'create' && structuredTagRequest.range) {
-      const { from, to } = structuredTagRequest.range;
-      const entryId = addStructuredTagEntry({
-        typeKey:      structuredTagRequest.tag.typeKey,
-        tagId:        structuredTagRequest.tag.id,
-        term:         data.term,
-        fields:       data.fields,
-        noteId:       (currentNoteIdRef.current ?? '') as NoteId,
-        collectionId: data.collectionId as CollectionId | null,
-      });
-      editor.chain().focus().setTextSelection({ from, to }).setMark('noteTag', {
-        tagId: structuredTagRequest.tag.id,
-        color: structuredTagRequest.tag.color,
-        typeKey: structuredTagRequest.tag.typeKey,
-        structuredEntryId: entryId,
-      }).run();
-    } else if (structuredTagRequest.mode === 'edit' && structuredTagRequest.entryId) {
-      updateStructuredTagEntry(structuredTagRequest.entryId as StructuredTagEntryId, {
-        term: data.term, fields: data.fields, collectionId: data.collectionId as CollectionId | null,
-      });
-    }
-    setStructuredTagRequest(null);
-  };
-
-  // Removes the noteTag mark everywhere it appears in the CURRENTLY LOADED note's content —
-  // the only note whose live doc this component can reach. If the entry's own note isn't
-  // the one currently open, its mark is left as-is (orphaned) until that note is next
-  // opened; acceptable for v1, same scope note as the cross-note dedup question flagged in
-  // CLAUDE.md/BACKLOG.md for this feature.
-  const handleStructuredTagDelete = () => {
-    if (!structuredTagRequest?.entryId || !editor) return;
-    const targetEntryId = structuredTagRequest.entryId;
-    deleteStructuredTagEntry(targetEntryId as StructuredTagEntryId);
-    const ranges: { from: number; to: number }[] = [];
-    editor.state.doc.descendants((node, pos) => {
-      if (node.isText && node.marks.some((m) => m.type.name === 'noteTag' && m.attrs.structuredEntryId === targetEntryId)) {
-        ranges.push({ from: pos, to: pos + node.nodeSize });
-      }
-    });
-    if (ranges.length > 0) {
-      let chain = editor.chain().focus();
-      ranges.forEach(({ from, to }) => { chain = chain.setTextSelection({ from, to }).unsetMark('noteTag'); });
-      chain.run();
-    }
-    setStructuredTagRequest(null);
   };
 
   // Close table picker / note menu when clicking outside
@@ -827,7 +741,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       ...InboxExtensions,
       ...HubExtensions,
       ...GlossaryCardExtensions,
+      ...QuestionExtensions,
+      ...CompareExtensions,
+      ...DiagramExtensions,
       TrailingLine,
+      BlockIds,
+      ...NoteLinkExtensions,
+      ...NoteEmbedExtensions,
       NoteBlockSelect,
       NoteBlockPicks,
       GlossaryAutolink,
@@ -1173,6 +1093,20 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     setSendingToInbox(editor.state.doc.textBetween(from, to, ' ').slice(0, 500));
   }
 
+  // Link to a note, or embed a passage (`[[`, `\ref`, `\embed`, Link to a note…): the note picker,
+  // then the passage; the answer goes in at the range captured when it opened.
+  const [noteLinkRequest, setNoteLinkRequest] = useState<(NoteLinkRequest & { text: string }) | null>(null);
+  function openNoteLinkPicker(request: NoteLinkRequest) {
+    if (!editor || !editor.isEditable) return;
+    const text = request.from < request.to ? editor.state.doc.textBetween(request.from, request.to, ' ').slice(0, 500) : (note?.title ?? '');
+    setNoteLinkRequest({ ...request, text });
+  }
+  function linkSelectionToNote() {
+    if (!editor || editor.state.selection.empty) return;
+    const { from, to } = editor.state.selection;
+    openNoteLinkPicker({ purpose: 'link', from, to });
+  }
+
   // Add to hub (the selection menu, right-click), and a hub's + Link… (its button asks through a
   // 'hub-link-picker' event, since the hub is drawn outside React).
   const [hubPicker, setHubPicker] = useState<{ mode: 'hub'; text: string } | { mode: 'link'; hubPos: number; text: string } | null>(null);
@@ -1180,7 +1114,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     if (!editor || editor.state.selection.empty || !editor.isEditable) return;
     if (selectionTouchesHub(editor.state)) { void alertDialog(LABELS.hubs.fromInside); return; }
     const { from, to } = editor.state.selection;
-    setHubPicker({ mode: 'hub', text: editor.state.doc.textBetween(from, to, ' ').slice(0, 500) });
+    const card = selectedCardEntry(editor.state);
+    setHubPicker({ mode: 'hub', text: card ? (glossaryEntry(card)?.term ?? '') : editor.state.doc.textBetween(from, to, ' ').slice(0, 500) });
   }
   useEffect(() => {
     if (!editor) return;
@@ -1209,6 +1144,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       insertTitle,
       sendToInbox: openSendToInbox,
       addToHub: openAddToHub,
+      linkToNote: linkSelectionToNote,
     } satisfies NoteEditorMenuApi,
   }), !!editor && !noteLocked);
 
@@ -1548,8 +1484,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             if (tag.typeKey === 'important') { cycleImportance(editor.view); return; }
             if (editor.isActive('noteTag', { tagId: tag.id })) {
               const entryId = editor.getAttributes('noteTag').structuredEntryId as string | null;
-              editor.chain().focus().unsetMark('noteTag').run();
-              if (entryId) deleteStructuredTagEntry(entryId as StructuredTagEntryId);
+              if (entryId) void deleteGlossaryEntryAsked(entryId, editor.schema);
+              else editor.chain().focus().unsetMark('noteTag').run();
             } else if (getStructuredTagType(tag.typeKey)) {
               const { from, to } = editor.state.selection;
               openStructuredTagCreate(tag, from, to);
@@ -1656,6 +1592,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     objectTriggerStorage(editor).getContext = getObjectContext;
     objectTriggerStorage(editor).openSendToInbox = openSendToInbox;
     objectTriggerStorage(editor).openAddToHub = openAddToHub;
+    objectTriggerStorage(editor).openNoteLinkPicker = openNoteLinkPicker;
   });
 
   const pendingArtifactLink = useUIStore((s) => s.pendingArtifactLink);
@@ -1955,13 +1892,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             <button
               className={`${styles.toolbarBtn} ${editor?.isActive('superscript') ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => editor?.chain().focus().toggleSuperscript().run()}
+              onClick={() => { if (!formatFocusedBlockField('superscript')) editor?.chain().focus().toggleSuperscript().run(); }}
               title="Superscript (Ctrl+Shift+=)"
             >x²</button>
             <button
               className={`${styles.toolbarBtn} ${editor?.isActive('subscript') ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => editor?.chain().focus().toggleSubscript().run()}
+              onClick={() => { if (!formatFocusedBlockField('subscript')) editor?.chain().focus().toggleSubscript().run(); }}
               title="Subscript (Ctrl+Shift+-)"
             >x₂</button>
 
@@ -2435,6 +2372,23 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                   onPick={(choice, relation) => { if (!editor.isDestroyed) addLinkToHub(editor.view, hubPicker.hubPos, choice, relation); }}
                 />
               )}
+              {editor && noteLinkRequest && (
+                <NoteLinkPicker
+                  purpose={noteLinkRequest.purpose}
+                  schema={editor.schema}
+                  suggestFrom={noteLinkRequest.text}
+                  onClose={() => { setNoteLinkRequest(null); if (!editor.isDestroyed) editor.view.focus(); }}
+                  onPick={(picked) => {
+                    if (editor.isDestroyed) return;
+                    const { purpose, from, to } = noteLinkRequest;
+                    if (purpose === 'link') applyNoteLink(editor.view, from, to, picked);
+                    else {
+                      const tr = insertEmbedAt(editor.state, from, { noteId: picked.noteId, tabId: picked.tabId, blockId: picked.blockId });
+                      if (tr) { editor.view.dispatch(tr); editor.view.focus(); }
+                    }
+                  }}
+                />
+              )}
               {editor && sendingToInbox !== null && (
                 <InboxPickerModal
                   suggestFrom={sendingToInbox}
@@ -2454,6 +2408,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                 />
               )}
               <EditorContent editor={editor} innerRef={editorContentRef} className={styles.editor} />
+              {editor && note && !noteLocked && <NoteLinksFrom note={note} schema={editor.schema} />}
             </>
           )}
           <NoteBackdrop />
@@ -2503,8 +2458,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
         );
       })(), document.body)}
 
-      {/* ── Structured tag hover: edit pencil (portal, position:fixed) ────── */}
-      {structuredTagHover && !structuredTagRequest && createPortal((() => {
+      {/* ── An old marked definition, hovered: show it as a card (portal, position:fixed) ── */}
+      {structuredTagHover && createPortal((() => {
         const rect = structuredTagHover.getBoundingClientRect();
         return (
           <button
@@ -2513,35 +2468,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
             style={{ position: 'fixed', top: rect.top - 24, left: rect.left }}
             onMouseEnter={() => { if (clearStructuredHoverRef.current) clearTimeout(clearStructuredHoverRef.current); }}
             onMouseLeave={() => { clearStructuredHoverRef.current = setTimeout(() => setStructuredTagHover(null), 180); }}
-            onClick={() => openStructuredTagEditFromEl(structuredTagHover)}
-            title="Edit"
+            onClick={() => showMarkAsCard(structuredTagHover)}
+            title={LABELS.glossaryCard.showAsCard}
           >
-            ✎
+            ▭ {LABELS.glossaryCard.showAsCard}
           </button>
         );
       })(), document.body)}
-
-      {structuredTagRequest && (() => {
-        const typeDef = getStructuredTagType(structuredTagRequest.tag.typeKey);
-        if (!typeDef) return null;
-        return (
-          <StructuredTagPopover
-            top={structuredTagRequest.top}
-            left={structuredTagRequest.left}
-            typeDef={typeDef}
-            tagColor={structuredTagRequest.tag.color}
-            tagIcon={structuredTagRequest.tag.icon}
-            mode={structuredTagRequest.mode}
-            initialTerm={structuredTagRequest.initialTerm}
-            initialFields={structuredTagRequest.initialFields}
-            initialCollectionId={structuredTagRequest.initialCollectionId}
-            meta={structuredTagRequest.meta}
-            onSave={handleStructuredTagSave}
-            onCancel={() => setStructuredTagRequest(null)}
-            onDelete={structuredTagRequest.mode === 'edit' ? handleStructuredTagDelete : undefined}
-          />
-        );
-      })()}
 
       {/* ── Table hover controls (portal, position:fixed) ─────────────────── */}
       {tableHover && createPortal((() => {

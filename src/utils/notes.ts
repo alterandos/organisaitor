@@ -75,7 +75,7 @@ export function getNotePrimaryNotebookId(
 
 // Breadcrumb string for a note's location in the notebook tree (e.g. "Notes > Exchanges >
 // Australia") — used wherever a note needs to show its context to the user without a full
-// tree UI (e.g. StructuredTagPopover's "Location" field, the cross-app note picker). Takes the
+// tree UI (e.g. the cross-app note picker). Takes the
 // first notebook tagId that resolves to a real ancestor chain (annotation tags are only a
 // fallback — they aren't a location); a note with no notebook tag at all reads "Uncategorized".
 export function getNoteBreadcrumb(

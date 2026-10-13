@@ -76,3 +76,17 @@ export function HubIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+// The Notes Map: notes as points joined by their links.
+export function MapIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="5" cy="7" r="2" />
+      <circle cx="12" cy="4" r="2" />
+      <circle cx="19" cy="10" r="2" />
+      <circle cx="8" cy="18" r="2" />
+      <circle cx="17" cy="19" r="2" />
+      <path d="M6.8 6.1 10.2 4.9M13.8 5l3.6 3.6M6.5 8.8 7.6 16M10 18.3l5 .5M18.4 12l-.9 5" />
+    </Icon>
+  );
+}

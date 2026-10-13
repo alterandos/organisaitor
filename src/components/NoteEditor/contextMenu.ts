@@ -16,6 +16,7 @@ export interface NoteEditorMenuApi {
   insertTitle: () => void;   // Ctrl+H, H
   sendToInbox: () => void;   // Send to inbox… for the selection
   addToHub:    () => void;   // Add to hub… for the selection
+  linkToNote:  () => void;   // Link to a note… for the selection (not Ctrl+L: that's a web link)
 }
 
 const api = (scope: ContextMenuScope) => scope.data as NoteEditorMenuApi;

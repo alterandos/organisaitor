@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { EditorState, Transaction } from '@tiptap/pm/state';
+import { NodeSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import type { Transform } from '@tiptap/pm/transform';
 import type { EditorView } from '@tiptap/pm/view';
@@ -117,7 +117,16 @@ export function stripHubRefFromContent(json: string, linkId: string): string | n
   return changed ? JSON.stringify(doc) : null;
 }
 
-// Adds the editor's selection to a hub, as a passage with `relation`. Returns whether it did.
+// The Glossary card that is the selection, if it is one: added to a hub as its term, not as text.
+export function selectedCardEntry(state: EditorState): string | null {
+  const sel = state.selection;
+  return sel instanceof NodeSelection && sel.node.type.name === 'glossaryCard' ? (sel.node.attrs.entryId as string | null) : null;
+}
+
+// Adds the editor's selection to a hub, as a passage with `relation`; a selected Glossary card goes
+// in as its term (the link shows what it is, and opens the definition), as the hub's own + Link…
+// would add it (fixed 2026-10-13: it used to go in as an empty passage, opening only its note).
+// Returns whether it did.
 export function addPassageToHub(view: EditorView, source: NoteText, target: HubTarget, relation: HubRelation): boolean {
   const { state } = view;
   const { from, to, empty } = state.selection;
@@ -134,8 +143,12 @@ export function addPassageToHub(view: EditorView, source: NoteText, target: HubT
   const label = isEncrypted(source.noteId) && !isEncrypted(hub.noteId)
     ? L.encryptedPassage
     : text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS - 1)}…` : text;
-  const link = schema.nodes.hubLink.create({ linkId, relation, kind: 'passage', noteId: source.noteId, tabId: source.tabId, label });
-  const mark = schema.marks.hubRef.create({ hubId: hub.hubId, linkId, hubNoteId: hub.noteId, hubTitle: hub.title });
+  const cardEntry = selectedCardEntry(state);
+  const link = cardEntry
+    ? schema.nodes.hubLink.create({ linkId, relation, kind: 'glossary', entryId: cardEntry, label: glossaryEntry(cardEntry)?.term ?? '' })
+    : schema.nodes.hubLink.create({ linkId, relation, kind: 'passage', noteId: source.noteId, tabId: source.tabId, label });
+  // A passage is marked where it is; a card isn't text, and the term link finds its definition.
+  const mark = cardEntry ? null : schema.marks.hubRef.create({ hubId: hub.hubId, linkId, hubNoteId: hub.noteId, hubTitle: hub.title });
 
   const putIn = (tr: Transform): boolean => {
     if (createdHub) { tr.insert(endOf(tr.doc, schema.nodes.hub), newHub(state, hub.hubId, [link])); return true; }
@@ -146,12 +159,12 @@ export function addPassageToHub(view: EditorView, source: NoteText, target: HubT
   };
 
   if (hub.noteId === source.noteId && hub.tabId === source.tabId) {
-    const tr = state.tr.addMark(from, to, mark);
+    const tr = mark ? state.tr.addMark(from, to, mark) : state.tr;
     if (!putIn(tr)) { void alertDialog(L.failed); return false; }
     view.dispatch(tr);
   } else {
     if (!editNoteText(hub.noteId, hub.tabId, schema, putIn)) { void alertDialog(L.failed); return false; }
-    view.dispatch(view.state.tr.addMark(from, to, mark));
+    if (mark) view.dispatch(view.state.tr.addMark(from, to, mark));
   }
 
   const title = hub.title || L.untitled;

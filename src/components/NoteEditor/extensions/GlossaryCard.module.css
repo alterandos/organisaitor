@@ -1,9 +1,9 @@
 /* The Glossary card (GlossaryCardBody.tsx). Its block chrome (pill, frames, selection) is the
-   shared block styling in NoteEditor.module.css; this is the card inside it. */
+   shared block styling in NoteEditor.module.css; this is the card inside it. Its Card and Compact
+   designs match the question block's (NoteEditor.module.css "Questions"): keep them in step. */
 
 .card,
-.compact,
-.split { --gc-accent: var(--color-primary); }
+.compact { --gc-accent: var(--color-primary); }
 
 .card {
   margin: var(--space-2) 0;
@@ -29,9 +29,9 @@
 }
 
 .head .term {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);   /* as a question's (NoteEditor.module.css "Questions"): one family */
   font-weight: 650;
-  line-height: 1.25;
+  line-height: 1.3;
   color: var(--color-text);
 }
 
@@ -49,7 +49,7 @@
   background: var(--gc-accent);
 }
 
-.field + .field { margin-top: var(--space-4); }
+.field + .field { margin-top: var(--space-3); }
 
 .label {
   margin-bottom: var(--space-1);
@@ -90,6 +90,36 @@
 
 .listInput { min-height: 3.2em; }
 
+/* A field of formatted text (GlossaryCardBody RichField): a contentEditable that reads as the
+   inputs do. Its placeholder shows while it's empty. */
+.rich {
+  min-height: 1.5em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.rich:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-muted);
+  pointer-events: none;
+}
+
+.rich code,
+.richShown code {
+  padding: 0 0.25em;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  font-size: 0.9em;
+}
+
+.richShown { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* A list edited as lines: each line is an item, with its bullet. */
+.richList .rich { padding-left: 1.4em; }
+.richList .rich > div { display: list-item; list-style: disc; }
+.richList .rich:empty::before { margin-left: -1.4em; }
+
 .list {
   margin: 0;
   padding-left: 1.2em;
@@ -125,8 +155,7 @@
 
 .imageTools { display: flex; gap: var(--space-2); }
 
-.smallBtn,
-.addField {
+.smallBtn {
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
@@ -136,17 +165,51 @@
   cursor: pointer;
 }
 
-.smallBtn:hover,
-.addField:hover { color: var(--color-text); border-color: var(--color-primary-border); }
+.smallBtn:hover { color: var(--color-text); border-color: var(--color-primary-border); }
 
+/* The fields not on the card yet ("+ Explanation"): small pills floating beside the card while
+   it's hovered, on the side with room (GlossaryCard.ts morePillSide sets data-more-side on the
+   block). They never sit over the text below; with no room either side, and on touch, they don't
+   float: the pill's "+ Add" offers them instead. Hidden (not removed) so they can be measured. */
 .more {
+  position: absolute;
+  top: var(--space-3);
+  left: 100%;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px dashed var(--color-border);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  width: max-content;
+  padding-left: var(--space-2);   /* a bridge, so the pointer can cross from the card */
+  visibility: hidden;
 }
+
+:global([data-more-side="left"]) .more {
+  left: auto;
+  right: 100%;
+  align-items: flex-end;
+  padding-left: 0;
+  padding-right: var(--space-2);
+}
+
+:global([data-type="glossary-card"][data-more-side="right"]:hover) .more,
+:global([data-type="glossary-card"][data-more-side="left"]:hover) .more { visibility: visible; }
+
+@media (hover: none) { .more { display: none; } }
+
+.addField {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  line-height: 1.6;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.addField:hover { color: var(--color-text); border-color: var(--color-primary-border); background: var(--color-primary-subtle); }
 
 .select {
   max-width: 100%;
@@ -189,21 +252,47 @@
 
 .remove:hover { color: var(--color-danger); }
 
-/* Compact: one line, the term and what it means. */
+/* Compact: one line. The kind's icon, the term, a thin rule in the kind's colour, the meaning. */
 .compact {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-3);
   margin: var(--space-1) 0;
-  padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--gc-accent);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-alt);
+  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
-.compact .term { font-size: var(--text-base); font-weight: 650; flex: 0 1 auto; width: auto; field-sizing: content; min-width: 4ch; }
-.compact > :last-child { flex: 1; min-width: 0; }
-.dash { color: var(--color-muted); }
+.compactIcon {
+  flex: none;
+  font-size: var(--text-md);
+  line-height: 1;
+}
+
+.compact .term {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 7.5rem;   /* so the rules of Compact cards in a run line up */
+  max-width: 40%;
+  font-size: var(--text-base);
+  font-weight: 650;
+  field-sizing: content;
+}
+
+.pipe {
+  flex: none;
+  align-self: stretch;
+  width: 2px;
+  margin: var(--space-1) 0;
+  border-radius: var(--radius-pill);
+  background: var(--gc-accent);
+  opacity: 0.7;
+}
+
+.compactMeaning { flex: 1; min-width: 0; }
+.compactMeaning .primary { color: var(--color-text); }
 
 .missing {
   padding: var(--space-3) var(--space-4);
@@ -212,27 +301,6 @@
   color: var(--color-muted);
   font-size: var(--text-sm);
 }
-
-/* Split: the term in bold, a rule as tall as the text beside it, then what it means. */
-.split {
-  display: grid;
-  grid-template-columns: minmax(6rem, auto) 2px 1fr;
-  column-gap: var(--space-4);
-  align-items: stretch;
-  margin: var(--space-2) 0;
-  padding: var(--space-2) 0;
-}
-
-.splitTerm { align-self: start; }
-.split .term { font-weight: 700; font-size: var(--text-base); field-sizing: content; min-width: 6ch; }
-
-.splitRule {
-  width: 2px;
-  border-radius: var(--radius-pill);
-  background: var(--gc-accent);
-}
-
-.splitBody { min-width: 0; }
 
 .webLink {
   color: var(--color-primary);

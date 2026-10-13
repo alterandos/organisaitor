@@ -13,6 +13,7 @@ src/
   contextMenu/               — right-click menus (see "Right-click menus"): types.ts (item / scope / provider / context), registry.ts (registerContextMenuProvider, scopes by element, resolveContextMenu), useContextMenuScope.ts
   specialChars/              — `//name` → a character, in every text field (see "Special characters"): charSets.ts (THE table: Greek today; findCharTrigger, matchChars, exactChar), charPicker.ts (the list under the cursor, shared), fieldInput.ts (installSpecialCharInput: one set of document listeners for every input and textarea, installed from App.tsx)
   charts/                    — charts for any app (see "Charts"): chartSpec.ts (ChartSpec, THE library-neutral description of a chart, and the pure data helpers: pasted tables, 100% stacking, waterfall steps), chartAdapter.ts (THE only module that knows Chart.js: toChartConfig, drawChart, which loads the library on first use), ChartWidget.ts + .module.css (THE chart-with-data-editor: the drawing, the data table, the paste box; plain DOM so any host can use it)
+  diagrams/                  — diagrams for every app: diagramSpec.ts (THE stored description), diagramLayout.ts (dagre: Flow and Flowchart layouts), DiagramWidget.tsx (React Flow; lazy-loaded) — see CLAUDE.md "Diagrams"
   overview/                  — the Overview engine (see "Overview"): sources.ts (OVERVIEW_SOURCES — THE registry, one entry per app/item kind, pure functions over a store snapshot), engine.ts (runOverview: filter/sort/group; endeavourOverviewQuery), useOverviewSnapshot.ts (the React hook that builds the snapshot, encrypted notes/lists resolved through their views), open.ts (openOverviewRow — jump to a row's source), done.ts (the Overview's one edit: ticking a task, reminder or deadline row done)
   types/trash.ts             — Recycling Bin types (TrashEntry, TrashableKind, DeletedBy); not re-exported from index.ts — see "Recycling Bin" above
   agent/                     — the AI agent command layer (see "Agent command layer" below and docs/ai/02-command-layer.md): access.ts (THE boundary: what an agent can read and do), commands/*.ts, run.ts (runCommand), registry.ts (toolDefinitions), batch.ts (snapshot/diff/revert), errors.ts, devHandle.ts (dev-only console handle)
@@ -64,6 +65,8 @@ src/
   services/noteInbox.ts     — inboxes: sendToInbox (moves the selection into an inbox, leaving a marker; Undo), makeItemTask, openInboxItem / openItemSource, listInboxes — see "Inboxes"
   services/noteHubs.ts      — idea hubs: addPassageToHub (marks the passage, links it in the hub; Undo), addLinkToHub (a Glossary term or a note), setLinkRelation, removeLink (takes the passage's mark off), openHub / openHubLink / openHubFromMarker, listHubs
   services/noteContentEdit.ts — editNoteContent(noteId, tabId, { inEditor, inJson }): THE way to change a note's content from outside the editor (through the open editor if that text is open, else the stored JSON); editNoteText(…, schema, edit) when the editor's schema is at hand
+  services/glossaryDelete.ts — deleting a Glossary record: asks (saying how many links go too), then removes every link to it in every note
+  services/noteLinkTargets.ts — what a note link or embed points at: noteDocFor, linkTarget (the passage as it reads now), ensureBlockId, openNoteLink
   services/liveNoteEditor.ts — which note/tab is open in the editor (registered by NoteEditor): liveNoteEditorFor(noteId, tabId), liveNoteOf(view). A change to a note's content from outside the editor goes through that view when it's open
   services/clearLocalData.ts — clearSyncedLocalData(): empties every CLOUD-SYNCED store + the account-specific selection ids (each reset from its own getInitialState()). Local-only stores (fitness, routine instances, settings, hotkeys, portfolio columnConfig) are deliberately left; add a store here in the same change that gives it cloud sync
   services/shrinkNoteImages.ts — shrinkNoteImages(): recompresses every large inline image in every note and tab (skips locked encrypted notes; closes the open note first so the editor can't autosave its old copy over the result); Settings → Storage's button
@@ -82,6 +85,12 @@ src/
   components/HubPickerModal/ — Add to hub (which hub) and a hub's + Link… (which Glossary term or note), each with how it relates
   components/NotesSection/HubsView.tsx — the Hubs view: every hub across notes, searchable (a Place)
   utils/noteHubs.ts         — hubs read from stored note content (hubsInContent, collectHubs), RELATIONS, linkInsertIndex
+  components/NotesSection/MapView.tsx — the Map (a Place): notes joined by their links, and optionally the items linked to them; lazy (React Flow, dagre)
+  utils/noteMap.ts          — the Map's graph (buildNoteMap, noteTargetsIn), pure
+  utils/richText.ts         — a little formatting in a block's own fields: sanitizeInlineHtml, richToPlain, richLines (Glossary cards)
+  components/NoteEditor/blockFieldFormat.ts — formatFocusedBlockField: the ribbon's formatting buttons on a focused card field
+  utils/noteLinks.ts        — links between notes read from stored content: linksToNote, unlinkedMentions, mentionRange, passagesOf, findBlock, passageRange
+  src/test/glossaryFixtures.ts — defineInItsNote: puts a test record's card in its note (a record only counts while its note defines it)
   components/InboxPickerModal/ — Send to inbox: the picker (inboxes ranked by the selected words, New inbox here, Also make a task)
   config/itemLinkKinds.ts   — ITEM_LINK_KINDS: THE registry of task-link kinds (Waiting on / Follow-up of / Related — icon, labels, blocks, symmetric); see "ItemLink" in Type system
   utils/taskLinks.ts        — the task-link rules, pure: taskRelations (both directions), openBlockers/isBlocked/openBlockersDeep, unlockedBy, canAddLink (self/duplicate/loop), makeItemLink
@@ -120,7 +129,8 @@ src/
     scheduleBlocks.ts        — createScheduleBlock(): the one place a ScheduleBlock's defaults live (used by AddScheduleModal and the agent commands)
     date.ts                  — todayIso(), formatDate(), timeAddMinutes(), addDaysToIso(), computeLinkedEndTime() (auto-derives a linked end time from a start time — see Timepicker rebuild in Implemented features), etc.
     id.ts                    — typed nanoid wrappers
-    notes.ts                 — Note/NoteTag Endeavour resolution: getEffectiveCollectionId, resolveNoteInheritedCollectionId, getNoteEffectiveCollectionId, getVisibleNoteTagIds, getNoteBreadcrumb (location string for StructuredTagPopover)
+    notes.ts                 — Note/NoteTag Endeavour resolution: getEffectiveCollectionId, resolveNoteInheritedCollectionId, getNoteEffectiveCollectionId, getVisibleNoteTagIds, getNoteBreadcrumb (a note's location as a string, e.g. in the note picker)
+    noteQuestions.ts         — questions in notes (collectQuestions, for the Overview) and questionSubject ("What is osmosis?" → "osmosis")
     acronymInference.ts      — rules-based acronym finding (Schwartz & Hearst, refined): inferAcronymFromSelection, deduceAcronym (first letters), acronymLetterPositions (which letters spell it), acronymPairAtEnd (for the as-you-type offer)
     collections.ts           — getOrderedEndeavours(collectionsRecord): Projects then Lists, in CollectionFilterPicker's render order; shared by the picker and the Ctrl+E digit-select hotkey
     fitnessFormat.ts         — Fitness display formatting (metric only, Phase 1): formatDistance, formatDuration, formatSpeed, computeAverageSpeedMps. Stored data is always SI (meters/seconds/m·s⁻¹); conversion happens only here, at render time
@@ -242,6 +252,13 @@ src/
       extensions/OccurrenceHighlight.ts — selecting a word or phrase faintly marks its other mentions in the tab (whole words when the selection is whole words); decorations only
       extensions/GlossaryAutolink.ts — offers to link a Glossary term as it's typed (once per note per term); Enter/Tab, Backspace undoes
       extensions/GlossaryCard.ts — the Glossary card block (`\definition`, `\acronym`, `\concept`): a node pointing at a record by entryId; designs Card / Compact; GlossaryCardBody.tsx draws and edits the record by field kind; glossaryCardMenu.ts (design, frame, "Show as a card" on marked text)
+      extensions/NoteLink.ts — links between notes (`noteLink` mark: `[[`, `\ref`, Link to a note…), click to open, hover card; noteLinkMenu.ts (right-click for links and embeds); NoteLink.module.css
+      extensions/NoteEmbed.ts — `\embed`: a passage from another note shown live (designs Quote / Card / Plain)
+      extensions/BlockIds.ts — the lasting `blockId` on paragraphs and headings that links and embeds point at
+      NoteLinkPicker.tsx — the note picker, then which passage (for links and embeds)
+      NoteLinksFrom.tsx — the note's foot: notes linking here, unlinked mentions
+      objects/noteRefTrigger.ts, objects/embedBlock.ts — the `\ref` and `\embed` keywords
+      extensions/Question.ts, Compare.ts, Diagram.ts — the question, comparison and diagram blocks (their menus: questionMenu.ts, compareMenu.ts, diagramMenu.ts)
       extensions/typingOffer.ts — THE "offer as you type" chip (typingOfferPlugin): Enter/Tab accept, Esc or typing on passes over, Backspace undoes; used by GlossaryAutolink and AcronymOffer
       extensions/TrailingLine.ts — always an empty line after a block that ends a section or column
       extensions/AcronymOffer.ts — offers to record "Long form (ABC)" as an acronym as it's typed
@@ -257,7 +274,6 @@ src/
       contextMenu.ts         — the editor's right-click providers (clipboard, link/create, Style ▸, select all) on the `note-editor` scope; NoteEditorMenuApi is what NoteEditor hands them
       builtinTags.ts         — 8 built-in annotation tag definitions (Important/Concept/Definition/Example/Question/Reference/Learn Later/Acronym) — typeKey drives both Learn Later's future create-task action and Acronym's structured-tag-entry behaviour
       NoteBacklinks.tsx      — the "Linked from" bar under a note's title: single pill / "🔗 N" chip + list, each pill openable, draggable into the text, or insertable at the cursor (derived from other items' crossAppRefs via store/noteBacklinks.ts — nothing stored); artifactLinkInsert.ts holds the insert/drop helpers
-    StructuredTagPopover.tsx — create/edit popover shared by every structured tag type (Acronym today): compact term+field preview with Enter-to-accept, "More options" expands in place to show every field + Endeavour + (edit mode) location/timestamps
     NoteEditorPane/          — slide-in pane wrapping NoteEditor for non-Notes sections
     AddNoteModal/            — quick-add note (Ctrl+Space) with hierarchical tag picker
     ContextMenu/             — ContextMenuHost (THE contextmenu listener, mounted once in App.tsx) + ContextMenu (the menu: sections, submenus, keyboard); content comes from src/contextMenu/

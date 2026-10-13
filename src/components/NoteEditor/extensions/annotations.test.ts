@@ -15,6 +15,7 @@ import { answerReview, dueReviews, reviewItems } from '@/services/noteReview';
 import { registerLiveNoteEditor } from '@/services/liveNoteEditor';
 import { collectReviewPassages, contentHasMark, countConceptRefs, updatePassageInContent } from '@/utils/noteContent';
 import type { NoteId } from '@/types';
+import { defineInItsNote } from '@/test/glossaryFixtures';
 
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
 Range.prototype.getClientRects = noRects;
@@ -152,7 +153,8 @@ describe('text linked to a Glossary term', () => {
     const noteA = notes.addNote({ title: 'Biology' });
     const noteB = notes.addNote({ title: 'Revision' });
     const id = notes.addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Photosynthesis', fields: { meaning: 'How plants make sugar' }, noteId: noteA as NoteId, collectionId: null });
-    notes.addStructuredTagEntry({ typeKey: 'concept', tagId: 'builtin-concept', term: 'Energy', fields: { summary: 'Capacity to do work' }, noteId: noteA as NoteId, collectionId: null });
+    defineInItsNote(id);
+    defineInItsNote(notes.addStructuredTagEntry({ typeKey: 'concept', tagId: 'builtin-concept', term: 'Energy', fields: { summary: 'Capacity to do work' }, noteId: noteA as NoteId, collectionId: null }));
     make();
     const r = rangeOf('photosynthesis');
     linkConceptRef(editor.view, r.from, r.to, { id, typeKey: 'definition' });

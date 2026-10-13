@@ -99,6 +99,27 @@ function bestCandidate(short: string, candidates: string[]): string | null {
 }
 
 const maxWords = (n: number) => Math.min(n + 5, n * 2);
+
+// THE rule for which words could be an acronym, for marking text and for the as-you-type offer
+// alike: shaped like one (looksLikeAcronym) anywhere, or lower case (2–8 letters or digits) in
+// brackets ("long form (abc)") or just before them ("abc (long form)"), where the brackets show it's
+// meant as one. A lower-case one is only paired by
+// the bracket patterns, so an ordinary word ("cat - cool and tall") is never taken for one.
+export interface AcronymCandidate { word: string; index: number; lowerCase: boolean }
+export function acronymCandidates(text: string): AcronymCandidate[] {
+  return [...text.matchAll(/[^\s()[\]{},;:!?"“”'‘’]+/gu)].flatMap((m): AcronymCandidate[] => {
+    const word = stripPunct(m[0]);
+    if (!word) return [];
+    const index = (m.index ?? 0) + m[0].indexOf(word);
+    if (looksLikeAcronym(word)) return [{ word, index, lowerCase: false }];
+    const bracketed = /\(\s*$/.test(text.slice(0, index)) && /^\s*\)/.test(text.slice(index + word.length));
+    const beforeBracket = /^\s*\(/.test(text.slice(index + word.length));
+    return (bracketed || beforeBracket) && /^[\p{Ll}\p{N}]{2,8}$/u.test(word) && /\p{L}/u.test(word) ? [{ word, index, lowerCase: true }] : [];
+  });
+}
+
+// How an acronym is recorded: as written, or in capitals when it was written in lower case.
+export const acronymTerm = (word: string) => (/\p{Lu}/u.test(word) ? word : word.toUpperCase());
 const words = (text: string) => text.trim().split(/\s+/).filter(Boolean);
 const tidy = (text: string) => text.trim().replace(/^[\s,;:(\-–—]+|[\s.,;:)\-–—]+$/g, '').trim();
 
@@ -126,6 +147,11 @@ const headOfClause = (text: string) => text.split(/[.;!?(),\n]/)[0] ?? '';
 
 // Every place `term` stands alone in the context, tried in turn until one gives a long form.
 function findInContext(term: string, context: string): string | null {
+  return findInContextAt(term, context)?.expansion ?? null;
+}
+
+// The same, with where in `context` the acronym it paired is.
+function findInContextAt(term: string, context: string, bracketsOnly = false): { expansion: string; at: number } | null {
   if (!acronymLetters(term)) return null;
   const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(term)}(?![\\p{L}\\p{N}])`, 'gu');
   const hits = [...context.matchAll(re)].map((m) => m.index ?? 0);
@@ -149,9 +175,9 @@ function findInContext(term: string, context: string): string | null {
       return m ? longFormBefore(term, tailOfClause(m[1])) : null;
     },
   ];
-  for (const attempt of tries) for (const at of hits) {
+  for (const attempt of bracketsOnly ? tries.slice(0, 2) : tries) for (const at of hits) {
     const found = attempt(at);
-    if (found) return found;
+    if (found) return { expansion: found, at };
   }
   return null;
 }
@@ -164,22 +190,24 @@ export function inferAcronymFromSelection(selectedText: string, contextText: str
 
   // One word: it's the acronym (brackets dropped); the context says what it stands for.
   if (ws.length === 1) {
-    const term = stripPunct(trimmed) || trimmed;
-    return { term, expansion: findInContext(term, contextText) };
+    const word = stripPunct(trimmed) || trimmed;
+    return { term: acronymTerm(word), expansion: findInContext(word, contextText) };
   }
 
   // Several words with an acronym among them: the acronym, and the rest of the selection as
   // its long form if the letters match (either side of it), else the context's.
-  const candidates = ws.map((w, i) => ({ w: stripPunct(w), i })).filter(({ w }) => looksLikeAcronym(w));
-  for (const { w, i } of [...candidates].reverse()) {
-    const expansion = longFormBefore(w, ws.slice(0, i).join(' ')) ?? longFormAfter(w, ws.slice(i + 1).join(' '));
-    if (expansion) return { term: w, expansion };
+  const candidates = acronymCandidates(trimmed);
+  for (const c of [...candidates].reverse()) {
+    const before = trimmed.slice(0, c.index).replace(/[\s(]+$/u, '');
+    const after = trimmed.slice(c.index + c.word.length).replace(/^[\s)\-–—:]+/u, '');
+    const expansion = longFormBefore(c.word, before) ?? (c.lowerCase ? null : longFormAfter(c.word, after));
+    if (expansion) return { term: acronymTerm(c.word), expansion };
   }
-  for (const { w } of candidates) {
-    const expansion = findInContext(w, contextText);
-    if (expansion) return { term: w, expansion };
+  for (const c of candidates) {
+    const found = findInContextAt(c.word, contextText, c.lowerCase);
+    if (found) return { term: acronymTerm(c.word), expansion: found.expansion };
   }
-  if (candidates.length) return { term: candidates[candidates.length - 1].w, expansion: null };
+  if (candidates.length) return { term: acronymTerm(candidates[candidates.length - 1].word), expansion: null };
 
   // Only the long form was selected: look for its acronym in brackets straight after it, or
   // after a dash or colon straight before it.
@@ -210,11 +238,23 @@ export function deduceAcronym(phrase: string): string | null {
   return use.map((w) => [...w][0].toUpperCase()).join('');
 }
 
-// Text that has just been closed with "Long form (TERM)": the acronym, its long form, and where
-// the acronym starts in `text`. For offering to record it as you type (AcronymOffer.ts).
-export function acronymPairAtEnd(text: string): { term: string; expansion: string; termFrom: number } | null {
-  const m = text.match(/\(\s*([^()\s]{2,12})\s*\)$/u);
-  if (!m || m.index === undefined || !looksLikeAcronym(m[1])) return null;
-  const expansion = longFormBefore(m[1], tailOfClause(text.slice(0, m.index)));
-  return expansion ? { term: m[1], expansion, termFrom: m.index + m[0].indexOf(m[1]) } : null;
+// A pair that `text` has just finished, in any of the patterns above: "Long form (ABC)", "ABC (long
+// form)", "ABC - long form", "ABC stands for long form", "Long form - ABC". For offering it as you
+// type (AcronymOffer.ts), so `text` is what's before the cursor, ending with what was just typed (a
+// space, a bracket, a full stop). Only the sentence being written is looked at, and only a pair
+// that reaches its end, so an older pair earlier in the paragraph isn't offered again.
+export function acronymPairJustTyped(text: string): { term: string; expansion: string; termFrom: number } | null {
+  const body = text.slice(0, -1);
+  const start = Math.max(body.lastIndexOf('. '), body.lastIndexOf('! '), body.lastIndexOf('? '), body.lastIndexOf('\n')) + 1;
+  const clause = text.slice(start);
+  const end = clause.replace(/[\s.,;:!?]+$/u, '').length;
+  for (const { word, lowerCase } of acronymCandidates(clause).reverse()) {
+    const found = findInContextAt(word, clause, lowerCase);
+    if (!found) continue;
+    const longEnd = clause.lastIndexOf(found.expansion) + found.expansion.length;
+    const pairEnd = Math.max(found.at + word.length, longEnd);
+    if (clause.slice(pairEnd, end).replace(/[)\s]/gu, '') !== '') continue;   // the pair isn't what was just finished
+    return { term: acronymTerm(word), expansion: found.expansion, termFrom: start + found.at };
+  }
+  return null;
 }

@@ -1,6 +1,12 @@
 import { Extension } from '@tiptap/core';
-import { NodeSelection, Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
+import { NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import type { Node as PMNode } from '@tiptap/pm/model';
+import { GapCursor } from '@tiptap/pm/gapcursor';
+import type { ResolvedPos } from '@tiptap/pm/model';
+
+// Whether the gap cursor may stand at a position (between two blocks, where a line could go):
+// prosemirror-gapcursor's own check, which it keeps out of its typings.
+const gapAllowed = ($pos: ResolvedPos): boolean => (GapCursor as unknown as { valid: (p: ResolvedPos) => boolean }).valid($pos);
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { ContextMenuItem } from '@/contextMenu/types';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
@@ -185,10 +191,18 @@ export function setBlockFrame(view: EditorView, pos: number, settings: FrameSett
   const node = view.state.doc.nodeAt(pos);
   if (!node || !NOTE_BLOCK_NODES.has(node.type.name)) return;
   const next: FrameSettings = { ...settings };
+  if (!takesOutline(node.type.name)) next.outlined = false;
   if (next.outlined === undefined && ('outlineColor' in next || 'frameShape' in next || 'outlineStyle' in next || 'outlineWidth' in next)) next.outlined = true;
   if (next.shaded === undefined && 'shadeColor' in next) next.shaded = true;
   view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...next }));
 }
+
+// Blocks drawn as a card, with a border of their own (a Glossary card, a question): they take a
+// Shade but no Outline, which drew a second, larger border around theirs (decided with the user
+// 2026-10-13; the bigger blocks, a cycle or a timeline, keep it). A new card-like block joins here.
+export const CARD_BLOCK_NODES = new Set(['glossaryCard', 'questionBlock']);
+export const takesOutline = (nodeName: string | undefined): boolean => !nodeName || !CARD_BLOCK_NODES.has(nodeName);
+const framesFor = (nodeName: string | undefined): BlockFrame[] => BLOCK_FRAMES.filter((f) => f !== 'outlined' || takesOutline(nodeName));
 
 export function toggleBlockFrame(view: EditorView, pos: number, frame: BlockFrame): void {
   const node = view.state.doc.nodeAt(pos);
@@ -214,7 +228,9 @@ const FRAME_ICONS: Record<BlockFrame | 'options', string> = {
 export function frameButtons(view: EditorView, getPos: () => number | undefined, attrs: Record<string, unknown>): HTMLElement {
   const group = document.createElement('span');
   group.setAttribute('data-block-frames', '');
-  for (const frame of BLOCK_FRAMES) {
+  const at = getPos();
+  const nodeName = at === undefined ? undefined : view.state.doc.nodeAt(at - 1)?.type.name;
+  for (const frame of framesFor(nodeName)) {
     const b = pillButton(LABELS.noteBlocks.frames[frame], () => { const p = getPos(); if (p !== undefined) toggleBlockFrame(view, p - 1, frame); });
     b.setAttribute('data-block-frame', frame);
     b.setAttribute('aria-pressed', String(!!attrs[frame]));
@@ -259,6 +275,10 @@ export function openFrameOptions(view: EditorView, pos: number, anchor: DOMRect)
         return row;
       };
       const shapes = FRAME_SHAPES.filter((s) => s !== 'circle' || a.frameShape === 'circle' || circleFits(view.nodeDOM(pos) as Element | null));
+      if (!takesOutline(node.type.name)) {
+        box.replaceChildren(toggleRow(L.shade, !!a.shaded, () => set({ shaded: !a.shaded })), swatchRow(frameColour(a.shadeColor), (c) => set({ shadeColor: c })));
+        return;
+      }
       box.replaceChildren(
         toggleRow(L.outline, !!a.outlined, () => set({ outlined: !a.outlined })),
         swatchRow(frameColour(a.outlineColor), (c) => set({ outlineColor: c })),
@@ -435,6 +455,18 @@ export function frameMenuItem(view: EditorView, pos: number, attrs: Record<strin
   ];
   const dom = view.nodeDOM(pos) as Element | null;
   const shapes = FRAME_SHAPES.filter((s) => s !== 'circle' || attrs.frameShape === 'circle' || circleFits(dom));
+  const nodeName = view.state.doc.nodeAt(pos)?.type.name;
+  if (!takesOutline(nodeName)) {
+    return {
+      id: 'block-frame',
+      label: LABELS.noteBlocks.frame,
+      icon: '▢',
+      submenu: [
+        [{ id: 'frame-shaded', label: LABELS.noteBlocks.frames.shaded, icon: tick(!!attrs.shaded), run: () => toggleBlockFrame(view, pos, 'shaded') }],
+        [{ id: 'frame-shade-colour', label: L.shadeColour, icon: '◍', submenu: colours('shadeColor', frameColour(attrs.shadeColor)) }],
+      ],
+    };
+  }
   return {
     id: 'block-frame',
     label: LABELS.noteBlocks.frame,
@@ -466,7 +498,7 @@ export function frameMenuItem(view: EditorView, pos: number, attrs: Record<strin
 // its pill, Select whole block in its right-click menu, or Esc while the cursor is inside it. A
 // block's root node is in NOTE_BLOCK_NODES and its DOM carries data-note-block.
 
-export const NOTE_BLOCK_NODES = new Set(['timeline', 'quoteBlock', 'cycle', 'breakdown', 'hierarchy', 'pyramid', 'chart', 'codeBlock', 'mathBlock', 'inbox', 'glossaryCard', 'hub']);
+export const NOTE_BLOCK_NODES = new Set(['timeline', 'quoteBlock', 'cycle', 'breakdown', 'hierarchy', 'pyramid', 'chart', 'codeBlock', 'mathBlock', 'inbox', 'glossaryCard', 'questionBlock', 'compareBlock', 'diagram', 'hub']);
 
 // The note block the selection is inside (the outermost, if blocks were ever nested), or null.
 export function blockAround(state: EditorState): number | null {
@@ -535,7 +567,7 @@ export const NoteBlockSelect = Extension.create({
   priority: 90,
 
   addProseMirrorPlugins() {
-    return [frameFitPlugin()];
+    return [frameFitPlugin(), arrowIntoBlockPlugin()];
   },
 
   addKeyboardShortcuts() {
@@ -551,6 +583,142 @@ export const NoteBlockSelect = Extension.create({
     };
   },
 });
+
+// ── Arrowing into and out of a block ─────────────────────────────────────────
+// A block that is one unit (an atom) but has its own inputs (a Glossary card's fields, maths) is
+// entered by the arrow keys like text, rather than selected whole (asked for by the user
+// 2026-10-13): arrowing down or right into it puts the cursor at the start of its first input,
+// up or left at the end of its last. Its inputs hand the arrows back at their edges through
+// moveFromBlock, so the cursor carries on into the text (or the next such block) around it. A block
+// takes part by registering how to enter it; blocks without inputs (a chart, a diagram, an embed)
+// are still selected whole, as before.
+
+export type EnterBlock = (view: EditorView, pos: number, edge: 'start' | 'end') => void;
+const ENTERABLE = new Map<string, EnterBlock>();
+export function registerEnterableBlock(nodeName: string, enter: EnterBlock): void { ENTERABLE.set(nodeName, enter); }
+export const enterableBlock = (node: PMNode | null | undefined): EnterBlock | undefined => (node ? ENTERABLE.get(node.type.name) : undefined);
+
+// Leaves the block at `pos` (from one of its inputs' edges) forwards or backwards: to the gap
+// beside it when the next thing is another block (a place to stand between two blocks, where
+// typing or Enter starts a new line: asked for by the user 2026-10-13), else to the nearest place
+// for the cursor (a new line after the last block).
+export function moveFromBlock(view: EditorView, pos: number, forward: boolean): void {
+  const node = view.state.doc.nodeAt(pos);
+  if (!node) return;
+  const edge = forward ? pos + node.nodeSize : pos;
+  const $edge = view.state.doc.resolve(edge);
+  const next = forward ? $edge.nodeAfter : $edge.nodeBefore;
+  if (next && !next.isTextblock && gapAllowed($edge)) {
+    view.dispatch(view.state.tr.setSelection(new GapCursor($edge)).scrollIntoView());
+    view.focus();
+    return;
+  }
+  const enter = enterableBlock(next);
+  if (enter && next) { enter(view, forward ? edge : edge - next.nodeSize, forward ? 'start' : 'end'); return; }
+  let tr = view.state.tr;
+  const found = Selection.findFrom($edge, forward ? 1 : -1, false);
+  if (found) tr = tr.setSelection(found);
+  else if (forward) {
+    const paragraph = view.state.schema.nodes.paragraph;
+    if (!paragraph || !$edge.parent.canReplaceWith($edge.index(), $edge.index(), paragraph)) return;
+    tr = tr.insert(edge, paragraph.create()).setSelection(TextSelection.create(tr.doc, edge + 1));
+  } else return;
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
+const ARROWS: Record<string, { forward: boolean; vertical: boolean }> = {
+  ArrowDown: { forward: true, vertical: true }, ArrowRight: { forward: true, vertical: false },
+  ArrowUp: { forward: false, vertical: true }, ArrowLeft: { forward: false, vertical: false },
+};
+
+// The block an arrow key would move the cursor into, if it's one to enter: an inline one right
+// beside the cursor, or the block right after (before) the line the cursor is at the end (start) of.
+export function blockArrowedInto(view: EditorView, key: string): { pos: number; enter: EnterBlock } | null {
+  const arrow = ARROWS[key];
+  const sel = view.state.selection;
+  if (!arrow) return null;
+  // From the gap between two blocks: into the one on that side.
+  if (sel instanceof GapCursor) {
+    const node = arrow.forward ? sel.$from.nodeAfter : sel.$from.nodeBefore;
+    const enter = enterableBlock(node);
+    return enter && node ? { pos: arrow.forward ? sel.from : sel.from - node.nodeSize, enter } : null;
+  }
+  if (!(sel instanceof TextSelection) || !sel.empty) return null;
+  const $from = sel.$from;
+  if (!arrow.vertical) {
+    const beside = arrow.forward ? $from.nodeAfter : $from.nodeBefore;
+    const enter = enterableBlock(beside);
+    if (enter && beside) return { pos: arrow.forward ? $from.pos : $from.pos - beside.nodeSize, enter };
+  }
+  if (!$from.parent.isTextblock || $from.depth === 0) return null;
+  const atEdge = arrow.vertical
+    ? view.endOfTextblock(arrow.forward ? 'down' : 'up')
+    : $from.parentOffset === (arrow.forward ? $from.parent.content.size : 0);
+  if (!atEdge) return null;
+  const $edge = view.state.doc.resolve(arrow.forward ? $from.after() : $from.before());
+  const node = arrow.forward ? $edge.nodeAfter : $edge.nodeBefore;
+  const enter = enterableBlock(node);
+  if (!enter || !node) return null;
+  return { pos: arrow.forward ? $edge.pos : $edge.pos - node.nodeSize, enter };
+}
+
+// Where a click beside or between blocks lands: the gap after the block it's beside (to its right,
+// in a row of cards) or below (before the next one). Null when the click is on a block or text.
+export function gapAtClick(view: EditorView, x: number, y: number, target: Element): number | null {
+  if (target.closest('[data-note-block]') || target.closest('p, h1, h2, h3, h4, h5, h6, li')) return null;
+  const blocks = Array.from(view.dom.querySelectorAll('[data-note-block]')).filter((el) => !el.parentElement?.closest('[data-note-block]'));
+  let best: { el: Element; d: number } | null = null;
+  for (const el of blocks) {
+    const r = el.getBoundingClientRect();
+    const right = x >= r.right && y >= r.top && y <= r.bottom ? x - r.right : Infinity;
+    const below = y >= r.bottom && x >= r.left - 4 && x <= r.right + 4 ? y - r.bottom : Infinity;
+    const d = Math.min(right, below);
+    if (d < 24 && (!best || d < best.d)) best = { el, d };
+  }
+  if (!best) return null;
+  let pos: number;
+  try { pos = view.posAtDOM(best.el, 0); } catch { return null; }
+  for (const p of [pos, pos - 1]) {
+    const node = view.state.doc.nodeAt(p);
+    if (node && !node.isTextblock && node.isBlock && (view.nodeDOM(p) === best.el)) {
+      const after = p + node.nodeSize;
+      return gapAllowed(view.state.doc.resolve(after)) ? after : null;
+    }
+  }
+  return null;
+}
+
+function arrowIntoBlockPlugin(): Plugin {
+  return new Plugin({
+    key: new PluginKey('arrowIntoBlock'),
+    props: {
+      handleClick: (view, _pos, e) => {
+        const at = gapAtClick(view, e.clientX, e.clientY, e.target as Element);
+        if (at === null) return false;
+        view.dispatch(view.state.tr.setSelection(new GapCursor(view.state.doc.resolve(at))));
+        return true;
+      },
+      handleKeyDown: (view, e) => {
+        // Enter in the gap between two blocks: a new line there.
+        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && view.state.selection instanceof GapCursor) {
+          const paragraph = view.state.schema.nodes.paragraph;
+          const at = view.state.selection.from;
+          if (!paragraph) return false;
+          const tr = view.state.tr.insert(at, paragraph.create());
+          view.dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 1)).scrollIntoView());
+          return true;
+        }
+        if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return false;
+        const into = blockArrowedInto(view, e.key);
+        if (!into) return false;
+        e.preventDefault();
+        into.enter(view, into.pos, ARROWS[e.key].forward ? 'start' : 'end');
+        return true;
+      },
+    },
+  });
+}
 
 registerContextMenuProvider({
   id: 'note-editor.block-select',

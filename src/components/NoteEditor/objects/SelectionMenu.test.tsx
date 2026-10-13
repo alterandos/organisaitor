@@ -13,6 +13,7 @@ import { SelectionMenu } from './SelectionMenu';
 import { getSelectionMenu } from './selectionMenuState';
 import { useNoteStore } from '@/store/noteStore';
 import type { NoteId } from '@/types';
+import { defineInItsNote } from '@/test/glossaryFixtures';
 
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
 Range.prototype.getClientRects = noRects;
@@ -27,6 +28,7 @@ function setup() {
   const notes = useNoteStore.getState();
   const noteId = notes.addNote({ title: 'Biology' }) as NoteId;
   const entryId = notes.addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Photosynthesis', fields: { meaning: 'How plants make sugar' }, noteId, collectionId: null });
+  defineInItsNote(entryId);
   const host = document.createElement('div');
   document.body.append(host);
   editor = new Editor({

@@ -1,8 +1,9 @@
 import { LABELS } from '@/config/labels';
-import { INBOX_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
+import { INBOX_ICON, QUESTION_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { addDaysToIso } from '@/utils/date';
 import { expandRepeat } from '@/utils/recurrence';
 import { getNoteEffectiveCollectionId } from '@/utils/notes';
+import { collectQuestions } from '@/utils/noteQuestions';
 import { collectInboxes, localDay } from '@/utils/noteInboxes';
 import type {
   CalendarDeadline, CalendarEvent, CalendarReminder, Collection, RepeatConfig, Task, TrackerEntry,
@@ -187,6 +188,27 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
         });
       }),
     }),
+  },
+  {
+    // Questions in notes (`\question`): open until answered; dropped ones are left out like archived
+    // items. Dated by their follow-up, if they have one. Their Endeavour is their note's.
+    key: 'question', icon: QUESTION_ICON, label: LABELS.overview.sources.question,
+    rows: (snap) => {
+      const readable = Object.values(snap.notes).filter((n) => !snap.lockedNoteIds.has(n.id));
+      return {
+        locked: [],
+        rows: collectQuestions(readable).map((q) => {
+          const note = snap.notes[q.noteId];
+          return row('question', `${q.noteId}:${q.qid}`, {
+            title: q.text || LABELS.noteBlocks.question.label,
+            when: q.followUp, time: null,
+            status: q.status === 'answered' ? 'done' : q.status === 'dropped' ? 'archived' : 'open',
+            endeavourId: note ? getNoteEffectiveCollectionId(note, snap.noteTags) : null,
+            context: q.noteTitle || '(Untitled)',
+          });
+        }),
+      };
+    },
   },
   {
     // What's waiting in every inbox (the `\inbox` note block): an item's first line, the day it

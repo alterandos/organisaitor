@@ -10,6 +10,7 @@ import { GlossaryAutolink, forgetPassedOver } from './GlossaryAutolink';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { useNoteStore } from '@/store/noteStore';
 import type { NoteId } from '@/types';
+import { defineInItsNote } from '@/test/glossaryFixtures';
 
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
 Range.prototype.getClientRects = noRects;
@@ -24,6 +25,7 @@ beforeEach(() => {
   const notes = useNoteStore.getState();
   const noteX = notes.addNote({ title: 'Biology' }) as NoteId;
   entryId = notes.addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Eukaryote', fields: { meaning: 'A cell with a nucleus' }, noteId: noteX, collectionId: null });
+  defineInItsNote(entryId);
 });
 afterEach(() => editor?.destroy());
 

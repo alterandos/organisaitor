@@ -26,7 +26,13 @@ vi.mock('mathlive', () => {
     set menuItems(v: unknown[]) { if (!this.isConnected) throw new Error('Mathfield not mounted'); this.items = v; }
     readOnly = false;
     setValue(v: string) { this.value = v; }
-    executeCommand(c: [string, string]) { if (c[0] === 'typedText') this.value += c[1]; return true; }
+    // As MathLive: a command is a selector string, or [selector, ...arguments].
+    commands: string[] = [];
+    executeCommand(c: string | [string, string]) {
+      if (typeof c === 'string') { this.commands.push(c); return true; }
+      if (c[0] === 'typedText') this.value += c[1];
+      return true;
+    }
     connectedCallback() { this.tabIndex = 0; }
   }
   customElements.define('math-field', MathfieldElement);
@@ -159,5 +165,23 @@ describe('maths', () => {
     expect(field().value).toBe('y');
     editor.commands.undo();
     expect(field().value).toBe('\\int_0^1 x\\,dx');
+  });
+
+  it('arrowing into maths opens it, the cursor at the edge it was entered from', async () => {
+    make('<p>Before</p><div data-type="math" data-latex="x+1"></div><p>After</p>');
+    await settle();
+    await loaded();
+    const commands = () => (field() as unknown as { commands: string[] }).commands;
+    const press = (key: string) => editor.view.someProp('handleKeyDown', (f) => f(editor.view, new KeyboardEvent('keydown', { key, cancelable: true })));
+    editor.commands.setTextSelection(find('mathBlock') - 1);   // the end of "Before"
+    expect(press('ArrowRight')).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.activeElement).toBe(field());
+    expect(commands().at(-1)).toBe('moveToMathfieldStart');
+    const after = find('mathBlock') + editor.state.doc.nodeAt(find('mathBlock'))!.nodeSize + 1;
+    editor.commands.setTextSelection(after);
+    expect(press('ArrowLeft')).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(commands().at(-1)).toBe('moveToMathfieldEnd');
   });
 });
