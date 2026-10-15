@@ -20,18 +20,8 @@ import { noteClipboardText } from '../noteClipboardText';
 // nothing to pick. Deleting can't leave a block with fewer parts than its schema allows (a cycle
 // keeps two stages): picking every part deletes the whole block, anything in between is refused.
 
-export const BLOCK_PART_NODES: Record<string, string> = {
-  timeline:   'timelineItem',
-  quoteBlock: 'quoteField',
-  cycle:      'cycleStage',
-  breakdown:  'breakdownPart',
-  hierarchy:  'hierarchyItem',
-  pyramid:    'pyramidLayer',
-  inbox:      'inboxItem',
-  hub:        'hubLink',
-  questionBlock: 'questionField',
-  compareBlock: 'compareSide',
-};
+export { BLOCK_PART_NODES } from '../blockNodes';
+import { BLOCK_PART_NODES } from '../blockNodes';
 
 interface Picks { block: number | null; parts: number[] }
 const EMPTY: Picks = { block: null, parts: [] };

@@ -231,45 +231,6 @@
   color: var(--color-primary);
 }
 
-.repeatConfig {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  margin-top: 0.25rem;
-}
-
-.repeatRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.repeatSmall {
-  font-size: 0.82rem;
-  color: var(--color-muted);
-  white-space: nowrap;
-  min-width: 2.5rem;
-}
-
-.repeatNum {
-  width: 4rem;
-  font-size: 0.9rem;
-  font-family: inherit;
-  color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 0.3rem 0.5rem;
-  outline: none;
-  transition: border-color 140ms ease;
-}
-.repeatNum:focus { border-color: var(--color-primary); }
-
 /* Android: always full-screen, regardless of viewport width — overrides the narrow-browser
    bottom-sheet fallback above (higher specificity wins over the bare .pane inside @media). */
 :global(.platform-android) .pane {

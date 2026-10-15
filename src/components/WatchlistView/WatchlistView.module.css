@@ -472,6 +472,7 @@
 
 /* ── Right sidebar (chart view) ──────────────────────────────────────────────── */
 .rightSidebar {
+  position: relative;
   width: 220px;
   flex-shrink: 0;
   border-left: 1px solid var(--color-border);

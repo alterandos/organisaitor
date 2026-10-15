@@ -5,7 +5,7 @@
 
 ## External calendar sync (Google, Phase 1 — read-only ingest, unidirectional, this app becomes the source of truth once an event is pulled in)
 
-Researched first (see BACKLOG.md "External calendar sync" for the original viability analysis), then confirmed with the user before building: architecturally almost identical to the Strava integration already in this app (same nonce-in-`state`-param redirect-identity fix, same "client never sees tokens" boundary, same edge-function shape) — see "Strava integration — built" for the pattern this directly reuses. The one place it's genuinely more than "more of the same" is that a user can connect **multiple accounts of the same provider** (e.g. two Google accounts), which Strava's schema never had to support.
+Researched first (see "Original viability analysis" at the end of this file), then confirmed with the user before building: architecturally almost identical to the Strava integration already in this app (same nonce-in-`state`-param redirect-identity fix, same "client never sees tokens" boundary, same edge-function shape) — see "Strava integration — built" for the pattern this directly reuses. The one place it's genuinely more than "more of the same" is that a user can connect **multiple accounts of the same provider** (e.g. two Google accounts), which Strava's schema never had to support.
 
 **Scope, as confirmed with the user:**
 - **One-way only**: Google → this app. Nothing created or edited in this app ever pushes back to Google. No conflict resolution needed at all, which is most of why this is simpler than a "real" two-way sync would be.
@@ -56,3 +56,104 @@ Not usable until a Google Cloud project exists with the Calendar API enabled and
 ### Not built (documented staged plan, see BACKLOG.md)
 
 Microsoft/Outlook (Phase 2, same shape via Microsoft Graph); two-way sync (Phase 3 — real conflict resolution, push subscriptions); a server-side cron for true "even when the app is closed" sync; per-block/per-connection configurable sync window; CalDAV support for "other" providers.
+
+---
+
+## Original viability analysis (2026-09-16)
+
+*Moved verbatim from BACKLOG.md on 2026-10-14. Its phase list is current as of the move except where marked built; the open phases are tracked in BACKLOG.md "Calendar" → "External calendar sync — next phases".*
+
+Asked: how viable is syncing in Google Calendar, Microsoft/Outlook, or other external
+calendars, and how would it be architected? Short answer: **viable, and this codebase
+already has a working template for exactly this shape of integration** — the Strava
+integration (see "Strava integration — built" in CLAUDE.md) is architecturally almost
+identical to what a Google/Microsoft calendar sync would need. The honest cost estimate
+is "about as much work as Strava was, plus recurrence-rule translation, plus — only if
+two-way sync is wanted — webhook subscriptions." None of it is built yet; this is
+analysis only, per the request.
+
+**Feasibility.** Both Google Calendar API and Microsoft Graph (Outlook/Microsoft 365)
+are mature, well-documented REST APIs with OAuth2 Authorization Code flows, and both
+support reading events, writing events, and near-real-time push notifications of
+changes. CalDAV is a vendor-neutral third option (iCloud and most self-hosted calendar
+servers speak it) but is a lower-level, more awkward protocol than either vendor's own
+REST API — worth supporting eventually for "other," but Google/Microsoft's native APIs
+should come first since they cover the large majority of real users.
+
+**Architecture — directly reusing the Strava pattern already in this repo:**
+- OAuth2 per provider: public client id inlined via `VITE_GOOGLE_CLIENT_ID` /
+  `VITE_MICROSOFT_CLIENT_ID`; the client secret stays server-only in Vercel env vars
+  (never `VITE_`-prefixed), same reasoning as `STRAVA_CLIENT_SECRET`.
+- Token storage: a new Supabase table per provider (`calendar_google_connection`,
+  `calendar_microsoft_connection`), same shape as `fitness_strava_connection` —
+  `user_id` (PK), `access_token`, `refresh_token`, `expires_at`, `scope`, RLS on
+  `user_id`, never read client-side directly.
+- The same "redirect-identity problem" Strava solved applies identically: the OAuth
+  callback is a full browser navigation with no way to attach a Supabase auth header,
+  so the same fix (a single-use nonce in the OAuth `state` param, redeemed
+  server-side in the callback — originally the access token itself, replaced 2026-09-20) carries over unchanged.
+- Edge functions mirroring `api/strava-oauth-callback.ts` / `strava-status.ts` /
+  `strava-sync.ts`: `api/google-calendar-oauth-callback.ts` / `-status.ts` / `-sync.ts`,
+  same three-endpoint shape, same "secrets never reach the client" boundary.
+
+**Where it's genuinely harder than Strava, not just "more of the same":**
+- **Read-only ingest vs. two-way sync is the real fork.** Strava is read-only by nature
+  (activities are logged externally, pulled in). A calendar integration could stay
+  read-only too (pull Google/Outlook events into the calendar view as a new
+  non-editable layer, "open in Google Calendar" instead of an edit pane) — this is the
+  cheap, low-risk option and should be Phase 1. Full two-way sync (app-created events
+  pushed out, edits reconciled both directions) is a much bigger undertaking: it needs
+  conflict resolution (same class of problem `mergeRecords()`/soft-delete tombstones
+  solve for cross-device sync in this app, but now against a third party's own
+  optimistic-concurrency model instead of Supabase), and near-real-time updates need
+  push subscriptions (Google Calendar "watch" channels, Microsoft Graph
+  subscriptions) — both expire and need periodic renewal, which is genuinely new
+  machinery this app doesn't have anywhere yet (Strava is manual "Sync now" only, no
+  webhook).
+- **`CalendarEvent` needs the same extensibility fields `Activity` already has for
+  exactly this reason.** `Activity.source`/`sourceId`/`sourceRaw` (added ahead of the
+  Strava sync actually being built) is precisely the shape a synced `CalendarEvent`
+  would need too — `source: 'default' | 'google' | 'microsoft'`, `sourceId` (the
+  provider's event id, for upsert-by-source so re-syncing never duplicates), and
+  `sourceRaw` (the full provider payload, so surfacing more fields later isn't a
+  re-sync). None of this exists on `CalendarEvent` today; adding it is a small, safe,
+  additive migration (same category as `009_task_scheduled.sql`), best done right
+  before this feature actually starts, not speculatively now.
+- **Recurrence model mismatch.** Google/Microsoft both use full RFC 5545 `RRULE`
+  recurrence, which is considerably more expressive than this app's `RepeatConfig`
+  (`freq`/`interval`/`endKind`/`count`/`until`/`daysOfWeek` — deliberately scoped down,
+  see the Schedule feature's own note on cribbing a subset of RFC 5545 for the same
+  reason). A read-only Phase 1 can sidestep this by having the provider expand
+  recurring events into concrete instances server-side (both APIs support this) rather
+  than importing the rule itself. Two-way sync can't avoid it — translating between the
+  two recurrence models losslessly in both directions is real, non-trivial work.
+- **Free/busy-only vs. full event detail** is a product decision, not just a technical
+  one — a privacy-friendlier "just show blocked time" overlay is easy with either API's
+  free/busy endpoint and avoids pulling full titles/notes/attendees at all.
+
+**Recommended incremental path**, mirroring how Strava itself was scoped:
+1. ~~Phase 1 — Google Calendar, read-only, manual sync.~~ **Built — see CLAUDE.md
+   "External calendar sync."** Ended up slightly different from this original sketch in
+   two ways, both confirmed with the user before building: synced events are **fully
+   editable real `CalendarEvent` rows** (this app becomes the source of truth once one is
+   imported), not a read-only overlay layer — and sync runs **automatically while the app
+   is open** (on load + every 15 minutes), not only on a manual "Sync now" click, though
+   the manual button still exists as a fallback/reassurance. `CalendarEvent.source`/
+   `sourceId` became four fields (`source`/`sourceConnectionId`/`sourceCalendarId`/
+   `sourceEventId`) rather than two, specifically to support multiple connections of the
+   same provider (two Google accounts), a real requirement that wasn't anticipated in this
+   original analysis.
+2. **Phase 2 — Microsoft/Outlook via Graph API**, same shape as Phase 1. Not started.
+3. **Phase 2.5 — a real server-side cron for "syncs even when the app is fully closed."**
+   Deliberately not built alongside Phase 1 — it needs a Supabase **service-role**
+   credential, a category of secret this app has never needed anywhere else (every
+   existing edge function, Strava included, authenticates as the signed-in user via RLS).
+   Worth it only if the 15-minutes-while-open cadence proves too laggy in practice.
+4. **Phase 3 (much bigger, only if Phase 1/2 usage justifies it) — two-way sync**:
+   push subscriptions + renewal, conflict resolution (this app *not* being the source of
+   truth anymore, unlike Phase 1's model), RRULE translation (Phase 1 sidesteps this by
+   asking Google to expand recurring events server-side instead).
+5. **Not built, no phase assigned yet**: CalDAV support for "other" providers (self-hosted
+   calendar servers, iCloud); a "mark as attended" / attendance concept (this is sync
+   provenance, not Schedule commitment mode — the two are unrelated); per-connection
+   configurable sync window (currently a fixed 1-month-back/6-months-forward constant).

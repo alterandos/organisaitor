@@ -98,7 +98,7 @@ function PassageStep({ purpose, schema, noteId, tabId, onPick, onBack, onClose }
     if (c.kind === 'whole') { onClose(); onPick({ noteId, tabId, blockId: null, name: title }); return; }
     const blockId = c.passage.blockId ?? ensureBlockId(noteId, tabId, c.passage.pos, schema);
     onClose();
-    onPick({ noteId, tabId, blockId, name: c.passage.kind === 'heading' ? c.passage.text : title });
+    onPick({ noteId, tabId, blockId, name: c.passage.kind === 'paragraph' ? title : c.passage.kind === 'block' ? (c.passage.text || c.passage.label || title) : c.passage.text });
   };
 
   // Capture phase, as in the other pickers: the pane underneath binds Ctrl+Enter to its own action.
@@ -145,7 +145,8 @@ function PassageStep({ purpose, schema, noteId, tabId, onPick, onBack, onClose }
           {choices.map((c, i) => {
             const active = i === highlight;
             const text = c.kind === 'whole' ? L.wholeNote : c.passage.text.length > SNIPPET ? `${c.passage.text.slice(0, SNIPPET)}…` : c.passage.text;
-            const level = c.kind === 'passage' && c.passage.kind === 'heading' ? c.passage.level : 0;
+            const level = c.kind === 'passage' && (c.passage.kind === 'heading' || c.passage.kind === 'part') ? c.passage.level : 0;
+            const kind = c.kind === 'passage' ? c.passage.kind : null;
             return (
               <div
                 key={c.kind === 'whole' ? 'whole' : c.passage.pos}
@@ -157,9 +158,10 @@ function PassageStep({ purpose, schema, noteId, tabId, onPick, onBack, onClose }
               >
                 <button type="button" className={styles.resultMain} onClick={() => pick(c)}>
                   <span
-                    className={c.kind === 'whole' ? own.whole : level ? own.heading : own.paragraph}
-                    style={level ? { paddingLeft: `${(level - 1) * 0.75}rem` } : undefined}
+                    className={c.kind === 'whole' ? own.whole : kind === 'heading' ? own.heading : kind === 'block' ? own.block : kind === 'part' ? own.part : own.paragraph}
+                    style={kind === 'heading' ? { paddingLeft: `${(level - 1) * 0.75}rem` } : undefined}
                   >
+                    {kind === 'block' && c.kind === 'passage' && <span className={own.blockKind}>{c.passage.label}</span>}
                     {text}
                   </span>
                 </button>

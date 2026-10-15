@@ -5,8 +5,8 @@ import { useTrashStore } from '@/store/trashStore';
 import { useToastStore } from '@/store/toastStore';
 import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { toggleTaskWithLists } from '@/services/taskListLinks';
-import { toggleTaskCompletion } from '@/services/taskCompletion';
-import { nextOccurrenceDate, nextOccurrenceOf, repeatSummary } from '@/services/recurringTasks';
+import { toggleTaskCompletion, skipOccurrenceWithUndo, taskCompletionOptions } from '@/services/taskCompletion';
+import { nextOccurrenceDate, nextOccurrenceOf, repeatSummary, skipOccurrence, skipTarget } from '@/services/recurringTasks';
 import { write as agentWrite } from '@/agent/access';
 import type { RepeatConfig, TaskId } from '@/types';
 
@@ -101,5 +101,51 @@ describe('completing a recurring task', () => {
     const id = makeWeeklyReview();
     agentWrite.toggleTask(id);
     expect(nextOccurrenceOf(id)?.deadline).toBe('2026-10-12');
+  });
+});
+
+describe('skip this one', () => {
+  function makeWeeklyReview(): TaskId {
+    const id = addTaskWithCalendar({ title: 'Weekly review', deadline: '2026-10-05', repeat: weekly });
+    addTaskWithCalendar({ title: 'Inbox', parentId: id });
+    return id;
+  }
+
+  it('moves the occurrence to the next date without completing it; its calendar deadline and sub-tasks follow', () => {
+    const id = makeWeeklyReview();
+    const [inbox] = tasks()[id].subtaskIds;
+    useTaskStore.getState().toggleTask(inbox);
+    const deadlineId = tasks()[id].calendarDeadlineId!;
+    expect(skipTarget(id)).toBe('2026-10-12');
+    skipOccurrence(id);
+    expect(tasks()[id]).toMatchObject({ deadline: '2026-10-12', completed: false });
+    expect(useCalendarStore.getState().deadlines[deadlineId].date).toBe('2026-10-12');
+    expect(tasks()[inbox].completed).toBe(false);
+    expect(nextOccurrenceOf(id)).toBeNull();        // no second task: the same one moved
+  });
+
+  it('"after N times" counts the skipped one; the last one has nothing to skip to', () => {
+    const id = addTaskWithCalendar({ title: 'Course', deadline: '2026-10-05', repeat: { ...weekly, endKind: 'count', count: 2 } });
+    skipOccurrence(id);
+    expect(tasks()[id].repeat?.count).toBe(1);
+    expect(skipTarget(id)).toBeNull();
+    expect(skipOccurrence(id)).toBeNull();
+    expect(taskCompletionOptions(id).some((o) => o.label.startsWith('Skip'))).toBe(false);
+  });
+
+  it('is offered on hover for a repeating task, and its toast Undo puts everything back', () => {
+    const id = makeWeeklyReview();
+    expect(taskCompletionOptions(id).some((o) => o.label.startsWith('Skip this one'))).toBe(true);
+    skipOccurrenceWithUndo(id);
+    const toast = useToastStore.getState().current!;
+    expect(toast.message).toContain('Weekly review');
+    toast.actions[0].onClick();
+    expect(tasks()[id].deadline).toBe('2026-10-05');
+    expect(tasks()[id].repeat).toEqual(weekly);
+  });
+
+  it('not for a task that does not repeat', () => {
+    const id = addTaskWithCalendar({ title: 'Once', deadline: '2026-10-05' });
+    expect(skipTarget(id)).toBeNull();
   });
 });

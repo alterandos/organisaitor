@@ -4,7 +4,8 @@ import { useEditorState, type Editor } from '@tiptap/react';
 import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import type { NoteObjectContext } from './types';
-import { isBlockKind } from './types';
+import { isBlockKind, type PickableKind } from './types';
+import { categoryLabel } from './blockCategories';
 import { getSession } from './session';
 import { acceptKind, commitSession, dismissSession, resolveDraft, setHighlight, setOverride } from './actions';
 import { objectTriggerStorage } from './NoteObjectTrigger';
@@ -90,15 +91,18 @@ export function NoteObjectMenu({ editor, getContext }: Props) {
 
   let content: React.ReactNode;
   if (session.interp.phase === 'picking') {
-    const { matches } = session.interp;
+    const { matches, word } = session.interp;
+    // With nothing typed after the `\`, blocks are listed under their categories.
+    const browsing = word === '';
+    const groupOf = (k: PickableKind) => (!isBlockKind(k) ? 'items' : browsing ? k.category : 'blocks');
     content = (
       <>
         <ul className={styles.kinds} role="listbox">
           {matches.map((kind, i) => (
             <Fragment key={kind.id}>
-              {(i === 0 || isBlockKind(kind) !== isBlockKind(matches[i - 1])) && (
+              {(i === 0 || groupOf(kind) !== groupOf(matches[i - 1])) && (
                 <li role="presentation" className={styles.group}>
-                  {isBlockKind(kind) ? LABELS.noteObjects.groupBlocks : LABELS.noteObjects.groupItems}
+                  {isBlockKind(kind) ? (browsing ? categoryLabel(kind.category) : LABELS.noteObjects.groupBlocks) : LABELS.noteObjects.groupItems}
                 </li>
               )}
               <li

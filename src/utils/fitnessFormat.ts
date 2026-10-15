@@ -1,5 +1,5 @@
 // Display formatting only — stored data is always SI (meters, seconds, m/s).
-// Metric-only for Phase 1 (see BACKLOG.md "Fitness App" — imperial toggle is deferred).
+// Metric-only for Phase 1 (see BACKLOG.md "Fitness — open items" — imperial toggle is deferred).
 
 export function formatDistance(meters: number | null): string {
   if (meters === null) return '—';

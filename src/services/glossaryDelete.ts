@@ -4,7 +4,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { noteView } from '@/services/noteSecrets';
 import { glossaryEntry } from '@/services/glossary';
 import { editNoteText } from '@/services/noteContentEdit';
-import { liveNote } from '@/services/liveNoteEditor';
+import { liveNoteFor } from '@/services/liveNoteEditor';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { LABELS } from '@/config/labels';
 import type { NoteId, StructuredTagEntryId } from '@/types';
@@ -19,13 +19,13 @@ import type { NoteId, StructuredTagEntryId } from '@/types';
 // note's open tab is counted from its live text (its latest typing may not be saved yet).
 export function linksToEntry(entryId: string): { noteId: string; count: number }[] {
   const out: { noteId: string; count: number }[] = [];
-  const live = liveNote();
   const linked = new RegExp(`"type":"(?:conceptRef|noteTag)","attrs":{[^}]*"(?:entryId|structuredEntryId)":"${entryId}"`, 'g');
   for (const raw of Object.values(useNoteStore.getState().notes)) {
     const n = noteView(raw);
     let count = 0;
+    const live = liveNoteFor(n.id);
     for (const tab of [null, ...n.tabs.map((t) => t.id)]) {
-      if (live && live.noteId === n.id && live.tabId === tab) {
+      if (live && live.tabId === tab) {
         live.view.state.doc.descendants((node) => {
           if (node.isText && node.marks.some((m) => (m.type.name === 'conceptRef' && m.attrs.entryId === entryId) || (m.type.name === 'noteTag' && m.attrs.structuredEntryId === entryId))) count++;
         });
@@ -76,8 +76,8 @@ export function deleteGlossaryEntryNow(entryId: string, schema: Schema): void {
     const n = noteView(raw);
     for (const tabId of [null, ...n.tabs.map((t) => t.id)]) {
       const content = tabId ? n.tabs.find((t) => t.id === tabId)?.content : n.content;
-      const open = liveNote();
-      const isOpen = open?.noteId === n.id && open.tabId === tabId;
+      const open = liveNoteFor(n.id);
+      const isOpen = !!open && open.tabId === tabId;
       if (!isOpen && !content?.includes(entryId)) continue;
       editNoteText(n.id as NoteId, tabId, schema, (tr) => removeLinksTo(tr, entryId));
     }

@@ -199,8 +199,8 @@ title, above the list) — same sort keys/directions as desktop, CSS-only layout
 
 ## 6. Notifications (cross-reference only)
 
-Task deadline notifications are specified in `docs/android/05-notifications.md` (once written;
-until then, see BACKLOG.md §6d "Task deadlines"). Nothing Tasks-app-specific needs to be added
+Task deadline notifications are specified in `docs/android/05-notifications.md` (the original spec is §6d "Task deadlines" in
+`12-original-capacitor-plan.md`). Nothing Tasks-app-specific needs to be added
 here — the trigger condition, schedule time, and cancel-on-complete/delete rules are already
 fully specified there and apply unchanged.
 

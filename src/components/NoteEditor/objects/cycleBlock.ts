@@ -5,6 +5,7 @@ import type { NoteBlockKind } from './types';
 // `\cycle`: a cycle (extensions/Cycle.ts) in place of what was typed.
 export const cycleBlock: NoteBlockKind = {
   family:  'block',
+  category: 'structure',
   id:      'cycle',
   label:   LABELS.noteBlocks.cycle.label,
   icon:    '🔄',

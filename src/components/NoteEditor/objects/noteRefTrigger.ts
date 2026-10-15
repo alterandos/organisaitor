@@ -10,6 +10,7 @@ import type { NoteBlockKind } from './types';
 // block family only because that's the `\` menu's "Add to the note" group.
 export const noteRefTrigger: NoteBlockKind = {
   family:  'block',
+  category: 'container',
   id:      'ref',
   label:   LABELS.noteLinks.label,
   icon:    NOTE_LINK_ICON,

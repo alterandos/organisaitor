@@ -33,3 +33,27 @@
 }
 
 .handle:focus-visible { outline: none; }
+
+/* SplitDivider: the line between two panes sharing a space. A 7px grab strip centred on a 1px
+   line; the line thickens in the primary colour on hover, while dragging and on keyboard focus. */
+.divider {
+  position: relative;
+  touch-action: none;
+  z-index: var(--z-sticky);
+}
+.dividerX { width: 7px; margin: 0 -3px; cursor: col-resize; }
+.dividerY { height: 7px; margin: -3px 0; cursor: row-resize; }
+.divider::after {
+  content: '';
+  position: absolute;
+  background: var(--color-border);
+  transition: background 0.12s;
+}
+.dividerX::after { top: 0; bottom: 0; left: 3px; width: 1px; }
+.dividerY::after { left: 0; right: 0; top: 3px; height: 1px; }
+.divider:hover::after,
+.divider:focus-visible::after,
+.divider:active::after { background: var(--color-primary); }
+.dividerX:hover::after, .dividerX:focus-visible::after, .dividerX:active::after { left: 2px; width: 3px; }
+.dividerY:hover::after, .dividerY:focus-visible::after, .dividerY:active::after { top: 2px; height: 3px; }
+.divider:focus-visible { outline: none; }

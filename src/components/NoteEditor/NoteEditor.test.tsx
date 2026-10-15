@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StrictMode } from 'react';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Selection } from '@tiptap/pm/state';
 import { NoteEditor } from './NoteEditor';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
@@ -108,10 +109,30 @@ describe('NoteEditor tab restore on note switch', () => {
 
     // A tab keeps its own place.
     act(() => { useUIStore.getState().openNote('note-a'); });
+    await userEvent.click(screen.getByText('Main'));
     act(() => { liveEditor().commands.setTextSelection(2); });
     await userEvent.click(screen.getByText('Second'));
     await userEvent.click(screen.getByText('Main'));
     expect(liveEditor().state.selection.from).toBe(2);
+  });
+
+  it('a note with nothing remembered opens on its last tab, with the cursor at the end', () => {
+    useUIStore.setState({ activeView: 'notes' });
+    act(() => { useUIStore.getState().openNote('note-b'); });
+    render(<StrictMode><NoteEditor /></StrictMode>);
+    act(() => { useUIStore.getState().openNote('note-a'); });
+    expect(editorText()).toContain('TAB2-A');
+    expect(document.querySelector('[class*="tabActive"]')?.textContent).toContain('Second');
+    const { state } = liveEditor();
+    expect(state.selection.from).toBe(Selection.atEnd(state.doc).from);   // the end of the text
+  });
+
+  it('a note whose last-open tab was Main still opens on Main (only an unvisited note goes to its last tab)', () => {
+    useUIStore.setState({ activeView: 'notes', notesTabMemory: { 'note-a': null } });
+    act(() => { useUIStore.getState().openNote('note-b'); });
+    render(<StrictMode><NoteEditor /></StrictMode>);
+    act(() => { useUIStore.getState().openNote('note-a'); });
+    expect(editorText()).toContain('MAIN-A');
   });
 
   it('returning to Notes on a remembered tab (first mount) shows that tab\'s content', async () => {

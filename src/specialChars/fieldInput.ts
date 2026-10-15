@@ -1,4 +1,4 @@
-import { exactChar, findCharTrigger, matchChars, TRIGGER, type CharMatch } from './charSets';
+import { exactChar, findCharTrigger, findShortcut, matchChars, TRIGGER, type CharMatch } from './charSets';
 import { hideCharPicker, showCharPicker, type CaretBox } from './charPicker';
 
 // `//name` in every ordinary text field (inputs and textareas, anywhere in the app): one set of
@@ -8,6 +8,9 @@ import { hideCharPicker, showCharPicker, type CaretBox } from './charPicker';
 //
 // While a name is being typed a list of characters shows under the cursor: ↑/↓ move, Enter or Tab
 // puts the character in, Esc keeps the text. Typing the whole name and a space does it too.
+//
+// Shortcuts (`-->` → →, `<=` → ≤, `^2` → ²; SHORTCUTS in charSets.ts) replace as they're typed,
+// except in URL, email and search fields; Backspace straight after puts the typed text back.
 
 const TEXT_TYPES = new Set(['text', 'search', 'url', 'email', 'tel', '']);
 
@@ -19,6 +22,10 @@ const isField = (t: EventTarget | null): t is Field =>
 
 interface Open { field: Field; start: number; end: number; matches: CharMatch[]; selected: number }
 let open: Open | null = null;
+
+const NO_SHORTCUTS = new Set(['url', 'email', 'search']);
+// The last shortcut made, so Backspace straight after can put the typed text back.
+let lastShortcut: { field: Field; at: number; char: string; typed: string } | null = null;
 
 function close() {
   open = null;
@@ -51,6 +58,17 @@ function onInput(e: Event) {
   const caret = field.selectionStart ?? 0;
   if (field.selectionEnd !== caret) { close(); return; }
   const before = field.value.slice(0, caret);
+  lastShortcut = null;
+  // A shortcut just completed by typing (not by pasting, or our own replace(), which is a plain Event).
+  if (e instanceof InputEvent && e.inputType === 'insertText' && !(field instanceof HTMLInputElement && NO_SHORTCUTS.has(field.type))) {
+    const s = findShortcut(before);
+    if (s) {
+      close();
+      replace(field, s.start, caret, s.char);
+      lastShortcut = { field, at: s.start + s.char.length, char: s.char, typed: s.typed };
+      return;
+    }
+  }
   // The whole name and a space: the character, keeping the space.
   if (before.endsWith(' ')) {
     const t = findCharTrigger(before.slice(0, -1));
@@ -67,6 +85,16 @@ function onInput(e: Event) {
 // Capture on window, so these keys are seen before anything else (the Escape stack, a form's
 // Enter, a pane's Ctrl+Enter) while the list is up.
 function onKeyDown(e: KeyboardEvent) {
+  const s = lastShortcut;
+  if (s && e.key === 'Backspace' && e.target === s.field && !e.ctrlKey && !e.altKey && !e.metaKey
+      && s.field.selectionStart === s.at && s.field.selectionEnd === s.at
+      && s.field.value.slice(s.at - s.char.length, s.at) === s.char) {
+    e.preventDefault();
+    lastShortcut = null;
+    replace(s.field, s.at - s.char.length, s.at, s.typed);
+    return;
+  }
+  if (e.key !== 'Shift') lastShortcut = null;
   if (!open || e.target !== open.field) return;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault();
@@ -94,6 +122,7 @@ export function installSpecialCharInput(): () => void {
   document.addEventListener('scroll', onLeave, true);
   return () => {
     close();
+    lastShortcut = null;
     document.removeEventListener('input', onInput, true);
     window.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('focusout', onLeave, true);

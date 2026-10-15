@@ -2,7 +2,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { isNoteLocked, noteView } from '@/services/noteSecrets';
-import { liveNote } from '@/services/liveNoteEditor';
+import { liveNoteFor } from '@/services/liveNoteEditor';
 import { contentHasMark, isNodeFind, type PassageFind } from '@/utils/noteContent';
 import { MAIN_TAB_ID } from '@/utils/noteTabs';
 import type { NoteId } from '@/types';
@@ -20,8 +20,8 @@ export function openNotePassage(noteId: string, findOrFinds: PassageFind | Passa
   let tabId = MAIN_TAB_ID;
   let find = finds[0];
   // The open text first: it may hold changes not saved to the store yet.
-  const open = liveNote();
-  const inOpen = open?.noteId === noteId ? finds.find((f) => docHasPassage(open.view.state.doc, f)) : undefined;
+  const open = liveNoteFor(noteId);
+  const inOpen = open ? finds.find((f) => docHasPassage(open.view.state.doc, f)) : undefined;
   if (open && inOpen) { tabId = open.tabId ?? MAIN_TAB_ID; find = inOpen; }
   else outer: for (const f of finds) {
     for (const c of contents) {
@@ -41,10 +41,11 @@ export function openNotePassage(noteId: string, findOrFinds: PassageFind | Passa
 }
 
 // Where a Glossary entry is defined: the passage its structured tag marks, else its card
-// (`\definition`, extensions/GlossaryCard.ts).
+// (`\definition`, extensions/GlossaryCard.ts), else its chip (extensions/GlossaryChip.ts).
 export const definitionPassage = (entryId: string): PassageFind[] => [
   { mark: 'noteTag', attr: 'structuredEntryId', value: entryId },
   { node: 'glossaryCard', attr: 'entryId', value: entryId },
+  { node: 'glossaryChip', attr: 'entryId', value: entryId },
 ];
 
 // Whether a document holds the passage (a node, or text with the mark).
@@ -65,8 +66,8 @@ export function docHasPassage(doc: PMNode, find: PassageFind): boolean {
 // Whether a note holds the passage anywhere: in the open editor's text if it's open there (which
 // may be ahead of the store), else in its stored tabs. Locked notes can't be read: false.
 export function noteHasPassage(noteId: string, find: PassageFind): boolean {
-  const open = liveNote();
-  if (open?.noteId === noteId && docHasPassage(open.view.state.doc, find)) return true;
+  const open = liveNoteFor(noteId);
+  if (open && docHasPassage(open.view.state.doc, find)) return true;
   const raw = useNoteStore.getState().notes[noteId as NoteId];
   if (!raw || isNoteLocked(raw)) return false;
   const note = noteView(raw);

@@ -6,6 +6,7 @@ import type { NoteBlockKind } from './types';
 // inline inside text. Its editor opens straight away.
 export const mathsBlock: NoteBlockKind = {
   family:  'block',
+  category: 'visual',
   id:      'maths',
   label:   LABELS.noteBlocks.maths.label,
   icon:    '∑',

@@ -45,7 +45,7 @@ export interface TaskActions {
 
   // Collections (projects, lists, trackers …)
   addCollection:    (input: CreateCollectionInput) => CollectionId;
-  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'completed' | 'completedAt' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt'>>) => void;
+  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt'>>) => void;
   deleteCollection: (id: CollectionId) => void;
 
   // Purposes
@@ -239,8 +239,6 @@ export const useTaskStore = create<TaskStore>()(
             purposeIds:   input.purposeIds   ?? [],
             tagIds:       input.tagIds       ?? [],
             deadline:     input.deadline     ?? null,
-            completed:    false,
-            completedAt:  null,
             fieldSchema:  input.fieldSchema  ?? [],
             routineTasks: input.routineTasks ?? [],
             repeatConfig: input.repeatConfig ?? null,

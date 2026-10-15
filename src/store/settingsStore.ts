@@ -23,6 +23,12 @@ const DEFAULT_THEME: 'light' | 'dark' | 'system' =
 // specifically be hidden while confirmed events keep showing). See CLAUDE.md "Tentative events".
 export type CalendarLayerKey = 'events' | 'reminders' | 'deadlines' | 'taskScheduled' | 'taskDeadlines' | 'tentative';
 export type CalendarLayerVisibility = Record<CalendarLayerKey, boolean>;
+// How a note's colour shows on its title bar and tab bar: nothing, a line under each, a frame
+// round the note, or a faint wash over the bars and page.
+export const NOTE_COLOR_BARS = ['off', 'underline', 'outline', 'tint'] as const;
+export type NoteColorBars = typeof NOTE_COLOR_BARS[number];
+// What `/` makes in maths: a fraction, or a plain slash (extensions/Maths.ts).
+export type MathSlash = 'fraction' | 'slash';
 
 export const STICKY_SCALE_MIN = 0.8;
 export const STICKY_SCALE_MAX = 1.6;
@@ -91,6 +97,17 @@ interface SettingsState {
   // The trail's text size, as a multiple of its default (STICKY_SCALE_MIN–MAX).
   stickyHeadingsScale: number;
   stepStickyHeadingsScale: (dir: 1 | -1) => void;
+  // Words from the Dictionary underlined in notes, their meaning on hover (extensions/DictionaryWords.ts).
+  dictionaryHighlight: boolean;
+  toggleDictionaryHighlight: () => void;
+  // How a note's colour (Note.color) shows in the note: on its title bar and tab bar, and
+  // separately on its headings (2026-10-16).
+  noteColorBars: NoteColorBars;
+  setNoteColorBars: (v: NoteColorBars) => void;
+  noteColorHeadings: boolean;
+  toggleNoteColorHeadings: () => void;
+  mathSlash: MathSlash;
+  setMathSlash: (v: MathSlash) => void;
   setNoteHeadingStyle: (s: 'academic' | 'highlight') => void;
 
   noteEditorZoom:      number;   // multiplier on editor font size; 1.0 = default, range 0.7–2.0
@@ -163,6 +180,14 @@ export const useSettingsStore = create<SettingsState>()(
         stickyHeadingsScale: Math.round(Math.max(STICKY_SCALE_MIN, Math.min(STICKY_SCALE_MAX, s.stickyHeadingsScale + dir * STICKY_SCALE_STEP)) * 10) / 10,
       })),
       setNoteHeadingStyle: (s) => set({ noteHeadingStyle: s }),
+      dictionaryHighlight: true,
+      toggleDictionaryHighlight: () => set((s) => ({ dictionaryHighlight: !s.dictionaryHighlight })),
+      noteColorBars:       'underline',
+      setNoteColorBars:    (noteColorBars) => set({ noteColorBars }),
+      noteColorHeadings:   true,
+      toggleNoteColorHeadings: () => set((s) => ({ noteColorHeadings: !s.noteColorHeadings })),
+      mathSlash:           'fraction',
+      setMathSlash:        (mathSlash) => set({ mathSlash }),
 
       noteEditorZoom:      1.0,
       nudgeNoteEditorZoom: (delta) => set((s) => ({
@@ -224,7 +249,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 10,
+      version: 13,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -286,6 +311,15 @@ export const useSettingsStore = create<SettingsState>()(
           delete old.chronicleTreeWidth;
           delete old.chronicleListWidth;
         }
+        // v10 → v11: dictionaryHighlight (the Dictionary, 2026-10-15) — on by default.
+        if (version < 11 && state.dictionaryHighlight === undefined) state.dictionaryHighlight = true;
+        // v11 → v12: how a note's colour shows (note colours, 2026-10-16).
+        if (version < 12) {
+          if (state.noteColorBars === undefined) state.noteColorBars = 'underline';
+          if (state.noteColorHeadings === undefined) state.noteColorHeadings = true;
+        }
+        // v12 → v13: what `/` makes in maths (2026-10-16).
+        if (version < 13 && state.mathSlash === undefined) state.mathSlash = 'fraction';
         return state;
       },
     }

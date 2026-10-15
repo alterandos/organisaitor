@@ -7,4 +7,5 @@ export { DisclosureIcon } from './DisclosureIcon';
 export { createReviewIcon } from './reviewIcon';
 export { GlossaryIcon, HistoryIcon, HubIcon, IntegrationsIcon, LibraryIcon, MapIcon, ReviewIcon, SettingsIcon } from './PlaceIcons';
 export { createDisclosureIcon } from './disclosureDom';
+export { ColorDotIcon } from './ColorDotIcon';
 export { TextColorIcon } from './TextColorIcon';

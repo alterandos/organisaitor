@@ -4,10 +4,13 @@ import { useListStore } from '@/store/listStore';
 import type { TaskId } from '@/types';
 import type { ListId } from '@/types/lists';
 
-const confirm = vi.hoisted(() => ({ answer: true, calls: [] as { title: string; message?: string }[] }));
+const confirm = vi.hoisted(() => ({ answer: true, calls: [] as { title: string; message?: string }[], choices: [] as { title: string }[] }));
+const toasts = vi.hoisted(() => [] as { message: string }[]);
 vi.mock('@/components/ConfirmDialog/dialogs', () => ({
   confirmDialog: vi.fn(async (opts: { title: string; message?: string }) => { confirm.calls.push(opts); return confirm.answer; }),
+  choiceDialog:  vi.fn(async (opts: { title: string }) => { confirm.choices.push(opts); return 'confirm'; }),
 }));
+vi.mock('@/components/Toast/showToast', () => ({ showToast: vi.fn((t: { message: string }) => { toasts.push(t); }) }));
 
 const { checklistProgress, toggleTaskWithLists, toggleChecklistItemWithTasks } = await import('./taskListLinks');
 
@@ -16,6 +19,8 @@ beforeEach(() => {
   useListStore.setState(useListStore.getInitialState(), true);
   confirm.answer = true;
   confirm.calls = [];
+  confirm.choices = [];
+  toasts.length = 0;
 });
 
 function checklist(titles: string[], opts: { reusable?: boolean } = {}) {
@@ -122,5 +127,17 @@ describe('toggleChecklistItemWithTasks', () => {
     await toggleChecklistItemWithTasks(ids[0]);
     await toggleChecklistItemWithTasks(ids[0]);
     expect(confirm.calls).toHaveLength(0);
+  });
+
+  it('completes through toggleTaskCompletion: the Completed toast shows, and a blocked task still asks', async () => {
+    const { listId, ids } = checklist(['Milk']);
+    const t = taskLinkedTo(listId);
+    const blocker = useTaskStore.getState().addTask({ title: 'Get paid' });
+    useTaskStore.getState().addItemLink(t, 'dependsOn', blocker);
+    await toggleChecklistItemWithTasks(ids[0]);
+    expect(confirm.choices).toHaveLength(1);
+    expect(confirm.choices[0].title).toContain('Weekly shop');
+    expect(task(t).completed).toBe(true);
+    expect(toasts.map((x) => x.message).join()).toContain('Weekly shop');
   });
 });

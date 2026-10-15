@@ -143,6 +143,19 @@ const BUILTIN_LIST_TYPES: ListType[] = [
       { id: 'lf-keypts',   name: 'Key points',          type: 'text'   },
     ],
   },
+  // The Dictionary (services/dictionary.ts): everyday words kept from notes, their meaning fetched
+  // when added unless written in. Made the first time a word is added to it.
+  {
+    id: 'lt-dictionary' as ListTypeId,
+    name: 'Dictionary', icon: '📕', color: '#b45309', kind: 'reference', isBuiltIn: true,
+    defaultFields: [
+      { id: 'lf-meaning', name: 'Meaning',        type: 'text' },
+      { id: 'lf-pos',     name: 'Part of speech', type: 'text' },
+      { id: 'lf-example', name: 'Example',        type: 'text' },
+      { id: 'lf-source',  name: 'Source',         type: 'text' },
+      { id: 'lf-added',   name: 'Date added',     type: 'date' },
+    ],
+  },
   {
     id: 'lt-custom' as ListTypeId,
     name: 'Custom', icon: '📋', color: '#64748b', kind: 'reference', isBuiltIn: true,

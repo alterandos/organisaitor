@@ -6,6 +6,7 @@ import type { NoteBlockKind } from './types';
 // `\inbox`: an inbox (extensions/Inbox.ts) in place of what was typed, the cursor in its name.
 export const inboxBlock: NoteBlockKind = {
   family:  'block',
+  category: 'container',
   id:      'inbox',
   label:   LABELS.noteBlocks.inbox.label,
   icon:    INBOX_ICON,

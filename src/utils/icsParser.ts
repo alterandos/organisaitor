@@ -9,6 +9,9 @@ export interface ICSEvent {
   // "floating" time (RFC 5545's term for a wall-clock time with no zone attached at all) or an
   // all-day value — floating/all-day need no re-projection, they mean whatever the app's zone says.
   tzid:      string | null;
+  // STATUS:TENTATIVE in the source, imported as the app's tentative event. (A CANCELLED event
+  // isn't imported at all.)
+  tentative: boolean;
 }
 
 // Recognizes the common Google/Outlook/Apple "Contacts" birthday export shape (e.g.
@@ -126,7 +129,7 @@ export function parseICS(raw: string): ICSEvent[] {
   const horizonStr = toDateStr(horizon);
 
   let inEvent = false;
-  let ev: Partial<ICSEvent> & { rrule?: ParsedRRule | null; exdates?: Set<string> } = {};
+  let ev: Partial<ICSEvent> & { rrule?: ParsedRRule | null; exdates?: Set<string>; cancelled?: boolean } = {};
 
   const pushEvent = (date: string) => {
     events.push({
@@ -137,13 +140,14 @@ export function parseICS(raw: string): ICSEvent[] {
       notes:     ev.notes     ?? null,
       location:  ev.location  ?? null,
       tzid:      ev.tzid      ?? null,
+      tentative: ev.tentative ?? false,
     });
   };
 
   for (const line of lines) {
     if (line.trim() === 'BEGIN:VEVENT') { inEvent = true; ev = { exdates: new Set() }; continue; }
     if (line.trim() === 'END:VEVENT') {
-      if (inEvent && ev.title && ev.date) {
+      if (inEvent && ev.title && ev.date && !ev.cancelled) {
         if (ev.rrule) {
           for (const date of expandRecurrences(ev.date, ev.rrule, horizonStr, ev.exdates ?? new Set())) {
             pushEvent(date);
@@ -170,6 +174,12 @@ export function parseICS(raw: string): ICSEvent[] {
       case 'SUMMARY':
         ev.title = unescape(val.trim());
         break;
+      case 'STATUS': {
+        const s = val.trim().toUpperCase();
+        ev.tentative = s === 'TENTATIVE';
+        ev.cancelled = s === 'CANCELLED';
+        break;
+      }
       case 'LOCATION':
         ev.location = unescape(val.trim()) || null;
         break;

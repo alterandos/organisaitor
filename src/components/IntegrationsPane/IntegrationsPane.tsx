@@ -109,6 +109,7 @@ function CalendarImportCard() {
         notes:      item.notes,
         location:   item.location,
         eventType:  row.eventType,
+        status:     item.tentative ? 'tentative' : 'confirmed',
         collectionId,
       });
     }

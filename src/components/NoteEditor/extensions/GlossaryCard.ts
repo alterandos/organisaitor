@@ -15,6 +15,7 @@ import type { NoteObjectContext } from '../objects/types';
 import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, moveFromBlock, openBlockPopover, pillButton, placeBlock, registerEnterableBlock, popoverClass as pop, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { deleteForever, trashedBy } from '@/services/trash';
 import { GlossaryCardBody } from './GlossaryCardBody';
+import { cardToChip, insertGlossaryChip } from './GlossaryChip';
 
 // A Glossary card in a note (`\definition`, `\acronym`, `\concept`): one atom node that points at a
 // Glossary record (StructuredTagEntry) by `entryId`, never a copy of it. Marked text in a sentence
@@ -32,6 +33,15 @@ const D = LABELS.glossaryCard.designs;
 export const GLOSSARY_CARD_DESIGNS: BlockDesign<GlossaryCardVariant>[] = [
   { id: 'card',    label: D.card,    icon: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M4.5 5.5h5M4.5 8h7M4.5 10.5h6"/></svg>' },
   { id: 'compact', label: D.compact, icon: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="8" r="1.3"/><path d="M5.5 8h2.5M10 5v6M12 8h2.5"/></svg>' },
+];
+
+// The Inline design: not a value of the card's `variant` but the chip (GlossaryChip.ts), the same
+// record shown inside a line of text. Offered beside Card and Compact in the pill and Design ▸;
+// picking it turns the card into a chip (cardToChip), and "Show as a card" turns it back.
+export type GlossaryCardDesign = GlossaryCardVariant | 'inline';
+export const GLOSSARY_CARD_DESIGNS_WITH_INLINE: BlockDesign<GlossaryCardDesign>[] = [
+  ...GLOSSARY_CARD_DESIGNS,
+  { id: 'inline', label: D.inline, icon: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h2.5M12 8h2.5"/><rect x="5" y="5.5" width="6" height="5" rx="2.5"/></svg>' },
 ];
 
 // How wide a card is. Standard is one width for every card, so cards in a row sit side by side
@@ -98,15 +108,33 @@ export function newGlossaryRecord(typeKey: string, ctx: NoteObjectContext): stri
 
 // `\definition` (and the others): a new record and its card in place of what was typed, the
 // cursor in the card's term.
+// Where it goes follows the card category (objects/blockCategories.ts): after text on the line, or
+// on a bullet, it goes in as a chip right there (GlossaryChip.ts); on an empty line, as the card.
 export function insertGlossaryCard(view: EditorView, from: number, to: number, typeKey: string, ctx: NoteObjectContext | null): void {
   const type = view.state.schema.nodes.glossaryCard;
   if (!type || !ctx) return;
   const entryId = newGlossaryRecord(typeKey, ctx);
   if (!entryId) return;
+  if (goesInline(view.state, from, to)) { insertGlossaryChip(view, from, to, entryId); return; }
   const made = replaceTypedWithBlock(view.state, from, to, type.create({ entryId }));
   if (!made) return;
   view.dispatch(made.tr.setSelection(NodeSelection.create(made.tr.doc, made.at)).scrollIntoView());
   focusGlossaryCard(view, made.at);
+}
+
+// Whether a card-family block typed at from..to goes in as a chip: there's other text on the line,
+// or the line is a list item.
+export function goesInline(state: EditorState, from: number, to: number): boolean {
+  const $from = state.doc.resolve(from);
+  const parent = $from.parent;
+  if (!parent.isTextblock || !state.schema.nodes.glossaryChip) return false;
+  const rest = parent.textBetween(0, $from.parentOffset) + parent.textBetween(state.doc.resolve(to).parentOffset, parent.content.size);
+  if (rest.trim() !== '') return true;
+  let other = false;   // a chip, maths or other inline thing on the line besides what was typed
+  parent.forEach((child, offset) => { const at = $from.start() + offset; if (!child.isText && (at < from || at >= to)) other = true; });
+  if (other) return true;
+  for (let d = $from.depth - 1; d > 0; d--) if ($from.node(d).type.name === 'listItem') return true;
+  return false;
 }
 
 // Selected words made into a Glossary card: the one way to make a Definition, Concept or Acronym
@@ -393,7 +421,12 @@ class GlossaryCardView {
     const view = this.editor.view;
     const getPos = this.pillPos;
     const bar = blockPill('data-glossary-tools');
-    const pick = (v: GlossaryCardVariant) => { const p = this.getPos(); if (p !== undefined && view.editable) setGlossaryCardVariant(view, p, v); };
+    const pick = (v: GlossaryCardDesign) => {
+      const p = this.getPos();
+      if (p === undefined || !view.editable) return;
+      if (v === 'inline') cardToChip(view, p);
+      else setGlossaryCardVariant(view, p, v);
+    };
     // Width isn't in the pill (taken out 2026-10-13: a rare choice, and stepping through widths by
     // clicking was clunky): drag the card's right edge, or Width ▸ in its right-click menu.
     const W = LABELS.glossaryCard;
@@ -422,7 +455,7 @@ class GlossaryCardView {
       add.setAttribute('data-card-tool', 'add');
       parts.push(add);
     }
-    bar.append(designButtons(GLOSSARY_CARD_DESIGNS, a.variant as GlossaryCardVariant, pick), ...parts, frameButtons(view, getPos, a), selectButton(view, getPos));
+    bar.append(designButtons(GLOSSARY_CARD_DESIGNS_WITH_INLINE, a.variant as GlossaryCardDesign, pick), ...parts, frameButtons(view, getPos, a), selectButton(view, getPos));
     this.pill.replaceWith(bar);
     this.pill = bar;
     this.root.render(createElement(GlossaryCardBody, {
@@ -482,7 +515,7 @@ const CONFIRMED = 'glossaryCardDeleteConfirmed';
 function cardEntries(doc: PMNode): Map<string, number> {
   const out = new Map<string, number>();
   doc.descendants((n) => {
-    if (n.type.name === 'glossaryCard' && n.attrs.entryId) out.set(n.attrs.entryId, (out.get(n.attrs.entryId) ?? 0) + 1);
+    if ((n.type.name === 'glossaryCard' || n.type.name === 'glossaryChip') && n.attrs.entryId) out.set(n.attrs.entryId, (out.get(n.attrs.entryId) ?? 0) + 1);
     else if (n.isText) for (const m of n.marks) if (m.type.name === 'noteTag' && m.attrs.structuredEntryId) out.set(m.attrs.structuredEntryId, (out.get(m.attrs.structuredEntryId) ?? 0) + 1);
     return !n.isTextblock || n.childCount > 0;
   });

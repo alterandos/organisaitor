@@ -27,3 +27,21 @@
   color: var(--color-muted);
   font-size: var(--text-sm);
 }
+
+/* A note block (its kind first, as a small chip) and its parts (indented under it). */
+.block { font-weight: 600; }
+.blockKind {
+  display: inline-block;
+  margin-right: 0.45rem;
+  padding: 0 0.4rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 0.1em;
+}
+.part { padding-left: 1rem; color: var(--color-text); }
+

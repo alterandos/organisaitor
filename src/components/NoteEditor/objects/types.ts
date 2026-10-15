@@ -1,3 +1,4 @@
+import type { BlockCategory } from './blockCategories';
 import type { CollectionId, CrossAppRef, CrossAppRefType } from '@/types';
 import type { EditorView } from '@tiptap/pm/view';
 
@@ -59,6 +60,7 @@ export type AnyNoteObjectKind = NoteObjectKind<any>;
 // writing happens in the block. Registered in NOTE_BLOCK_KINDS (blockKinds.ts).
 export interface NoteBlockKind {
   family:  'block';
+  category: BlockCategory;   // objects/blockCategories.ts: how it's placed and how it's offered
   id:      string;      // the canonical keyword: `\timeline`
   label:   string;
   icon:    string;

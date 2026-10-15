@@ -6,10 +6,11 @@ import type { NoteBlockKind } from './types';
 // first side's title.
 export const compareBlock: NoteBlockKind = {
   family:  'block',
+  category: 'weighing',
   id:      'compare',
   label:   LABELS.noteBlocks.compare.label,
-  icon:    '⚖️',
-  aliases: ['comparison', 'vs', 'versus', 'proscons', 'pros', 'cons'],
+  icon:    '⇄',
+  aliases: ['comparison', 'vs', 'versus'],
   hint:    LABELS.noteBlocks.compare.hint,
   insert:  (view, from, to) => {
     const tr = insertCompare(view.state, from, to);

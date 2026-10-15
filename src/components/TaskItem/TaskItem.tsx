@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { createElement, useEffect, useRef } from 'react';
 import { checklistProgress, linkedListIds } from '@/services/taskListLinks';
-import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
+import { toggleTaskCompletion, taskCompletionOptions, skipOption } from '@/services/taskCompletion';
 import { HoverOptions } from '@/components/HoverOptions/HoverOptions';
 import { useListStore } from '@/store/listStore';
 import type { Priority, Task } from '@/types';
@@ -17,6 +17,8 @@ import { openBlockers } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
 import { ITEM_FLAG_ICON } from '@/config/itemIcons';
 import { repeatSummary } from '@/services/recurringTasks';
+import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
+import { ArchiveIcon, CheckCircleIcon, RestoreIcon, TrashIcon } from '@/components/Icons';
 import styles from './TaskItem.module.css';
 
 // Two 80px actions (Archive, Delete) behind the row on a left swipe.
@@ -62,6 +64,32 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
     enabled:      isAndroid,
     onSwipeRight: () => { hapticLight(); void toggleTaskCompletion(task.id); },
     leftRevealPx: SWIPE_LEFT_REVEAL,
+  });
+
+  // Right-click: the row's own actions (a `task-row` scope, CLAUDE.md "Right-click menus"; another
+  // feature can add to it with a `task-row` provider). Archive and delete act at once with an Undo
+  // toast, as a swipe does (decision D2); the pane's footer keeps its confirm dialog.
+  useContextMenuScope(rowRef, () => {
+    const t = useTaskStore.getState().tasks[task.id] ?? task;
+    const ui = useUIStore.getState();
+    return {
+      kind: 'task-row',
+      data: { taskId: t.id },
+      items: () => [
+        { id: 'open', label: LABELS.contextMenu.openTask, run: () => ui.openTaskPane(t.id) },
+        ...(t.archived ? [] : [{
+          id: 'complete', label: t.completed ? LABELS.itemActions.reopen : LABELS.itemActions.complete,
+          icon: createElement(CheckCircleIcon), run: () => toggleTaskCompletion(t.id),
+        }]),
+        ...skipOption(t.id).map((o) => ({ id: 'skip', label: o.label, run: o.onClick })),
+        ...(t.parentId || t.archived ? [] : [{ id: 'subtask', label: LABELS.contextMenu.addSubtask, run: () => ui.showAddSubtask(t.id) }]),
+        ...(t.archived ? [] : [{ id: 'follow-up', label: LABELS.contextMenu.addFollowUp, run: () => ui.showAddFollowUp(t.id) }]),
+        t.archived
+          ? { id: 'restore', label: LABELS.itemActions.restore, icon: createElement(RestoreIcon), run: () => useTaskStore.getState().restoreTask(t.id) }
+          : { id: 'archive', label: LABELS.itemActions.archive, icon: createElement(ArchiveIcon), run: () => archiveTaskWithUndo(t.id) },
+        { id: 'delete', label: LABELS.swipeActions.delete, icon: createElement(TrashIcon), destructive: true, run: () => deleteTaskWithUndo(t.id) },
+      ],
+    };
   });
 
   useEffect(() => {

@@ -4,9 +4,11 @@ import { GLOSSARY_TYPES } from '@/config/structuredTagTypes';
 import { glossaryEntry } from '@/services/glossary';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
-import { GLOSSARY_CARD_DESIGNS, GLOSSARY_CARD_WIDTHS, cardWidth, focusGlossaryCard, glossaryCardPosAt, insertCardAfter, setGlossaryCardVariant, setGlossaryCardWidth, type GlossaryCardVariant } from './GlossaryCard';
+import { GLOSSARY_CARD_DESIGNS_WITH_INLINE, GLOSSARY_CARD_WIDTHS, cardWidth, focusGlossaryCard, glossaryCardPosAt, insertCardAfter, setGlossaryCardVariant, setGlossaryCardWidth, type GlossaryCardDesign } from './GlossaryCard';
+import { cardToChip, chipToCard, glossaryChipPosAt, openChip } from './GlossaryChip';
 
-// Right-click on a Glossary card: edit it, its design and frame. On marked text that has a
+// Right-click on a Glossary card: edit it, its design (Inline makes it a chip) and frame. On a chip:
+// open its card, or show it as a card block. On marked text that has a
 // Glossary record (a Definition, Concept or Acronym in a sentence): show it as a card too.
 
 registerContextMenuProvider({
@@ -21,7 +23,7 @@ registerContextMenuProvider({
     if (pos === null || !node) return [];
     return [
       { id: 'glossary-card-edit', label: LABELS.glossaryCard.edit, icon: '✎', shortcut: 'Enter', run: () => focusGlossaryCard(view, pos) },
-      designMenuItem(GLOSSARY_CARD_DESIGNS, node.attrs.variant as GlossaryCardVariant, (v) => setGlossaryCardVariant(view, pos, v)),
+      designMenuItem(GLOSSARY_CARD_DESIGNS_WITH_INLINE, node.attrs.variant as GlossaryCardDesign, (v) => (v === 'inline' ? cardToChip(view, pos) : setGlossaryCardVariant(view, pos, v))),
       {
         id: 'glossary-card-width', label: LABELS.glossaryCard.width, icon: '↔',
         submenu: [GLOSSARY_CARD_WIDTHS.map((w) => ({
@@ -53,5 +55,21 @@ registerContextMenuProvider({
       id: 'glossary-show-as-card', label: LABELS.glossaryCard.showAsCard, icon: '▭',
       run: () => { const tr = insertCardAfter(view.state, pos, entryId); if (tr) view.dispatch(tr); },
     }];
+  },
+});
+
+registerContextMenuProvider({
+  id: 'note-editor.glossary-chip',
+  kind: 'note-editor',
+  order: 6,
+  when: (ctx) => !!ctx.target.closest('[data-type="glossary-chip"]'),
+  items: (ctx, scope) => {
+    const view = (scope.data as NoteEditorMenuApi).editor.view;
+    const pos = glossaryChipPosAt(view, ctx.target);
+    if (pos === null) return [];
+    return [
+      { id: 'glossary-chip-open', label: LABELS.glossaryCard.edit, icon: '✎', shortcut: 'Enter', run: () => openChip(view, pos) },
+      { id: 'glossary-chip-card', label: LABELS.glossaryCard.showAsCard, icon: '▭', run: () => chipToCard(view, pos) },
+    ];
   },
 });

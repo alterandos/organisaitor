@@ -40,7 +40,7 @@ describe('AddCollectionModal prefill', () => {
   it('edit mode shows the item\'s existing values', () => {
     const a: Collection = {
       id: 'c1' as never, kind: 'project', name: 'Project A', description: 'Desc A', color: null,
-      purposeIds: [], tagIds: [], deadline: '2030-01-01', completed: false, completedAt: null,
+      purposeIds: [], tagIds: [], deadline: '2030-01-01',
       fieldSchema: [], routineTasks: [], repeatConfig: null, collectionId: null, archivedAt: null,
       createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
     };
@@ -54,7 +54,7 @@ describe('AddCollectionModal prefill', () => {
   it('switching directly from editing A to editing B shows B\'s values, not A\'s leftovers', () => {
     const a: Collection = {
       id: 'c1' as never, kind: 'project', name: 'Project A', description: 'Desc A', color: null,
-      purposeIds: [], tagIds: [], deadline: '', completed: false, completedAt: null,
+      purposeIds: [], tagIds: [], deadline: '',
       fieldSchema: [], routineTasks: [], repeatConfig: null, collectionId: null, archivedAt: null,
       createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
     };

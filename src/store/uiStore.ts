@@ -15,6 +15,11 @@ export type AppView = 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 
 // Notes' three columns (ChronicleView). Which one has keyboard focus decides what N/Space creates.
 export type NotesColumn = 'tree' | 'list' | 'editor';
 export type MobileNotesHome = 'notebooks' | 'recent';
+// Notes side by side (2026-10-16): one note, two side by side, three (two stacked on the left and
+// a column on the right) or four quadrants. Desktop only.
+export const NOTE_LAYOUTS = ['single', 'two', 'three', 'four'] as const;
+export type NoteLayout = typeof NOTE_LAYOUTS[number];
+export const notePaneCount = (l: NoteLayout): number => ({ single: 1, two: 2, three: 3, four: 4 })[l];
 
 // What the Overview section is showing: an Endeavour's automatic Overview, or a saved one.
 // 'builtIn' is one of the Overviews every person has (id 'inboxes': All inboxes).
@@ -458,6 +463,19 @@ interface UIState {
   openNotesMap:            () => void;
   closeNotesMap:           () => void;
   closeNote:               () => void;
+  // Notes side by side. `notePanes` holds the note in each pane (null: empty) while the layout
+  // isn't single; the focused pane's note is always editingNoteId, so everything that opens a
+  // note opens it there. A note is in one pane at most: opening one that's already in another
+  // pane moves the focus there instead. `noteSplit` is where the dividers are (fractions).
+  noteLayout:              NoteLayout;
+  notePanes:               (string | null)[];
+  focusedNotePane:         number;
+  noteSplit:               { x: number; y: number };
+  setNoteLayout:           (layout: NoteLayout) => void;
+  focusNotePane:           (index: number) => void;
+  openNoteInPane:          (index: number, noteId: string, tabId?: string) => void;
+  closeNotePane:           (index: number) => void;
+  setNoteSplit:            (split: Partial<{ x: number; y: number }>) => void;
   // Remembers which note (if any) was open in the Notes section so switching away and
   // back restores it — separate from editingNoteId, which also drives NoteEditorPane's
   // cross-app quick-view in other sections and must still clear on section switch.
@@ -923,6 +941,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   openNote: (id, tabId, opts) => set((s) => {
     const requestedNoteTab = tabId ? { noteId: id, tabId } : null;
     if (id === s.editingNoteId) return { requestedNoteTab };
+    // Side by side: a note already in another pane is shown there (a note is in one pane at most);
+    // otherwise it opens in the focused pane.
+    const split = s.noteLayout !== 'single' && s.activeView === 'notes';
+    const inPane = split ? s.notePanes.indexOf(id) : -1;
+    if (inPane >= 0) return { focusedNotePane: inPane, editingNoteId: id, requestedNoteTab };
+    const panes = split ? { notePanes: s.notePanes.map((p, i) => (i === s.focusedNotePane ? id : p)) } : {};
     // The note being left is a stop, only in Notes itself (editingNoteId also drives the
     // quick-view pane in other sections, which isn't a place you were).
     const history = (opts?.mode ?? 'push') === 'push' && s.activeView === 'notes' && s.editingNoteId ? recordPlace(s) : {};
@@ -941,7 +965,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       ? expandNotebookAncestors(s.expandedNoteTagIds, notebookId, noteTags)
       : s.expandedNoteTagIds;
 
-    return { editingNoteId: id, requestedNoteTab, ...history, selectedNoteTagId, expandedNoteTagIds };
+    return { editingNoteId: id, requestedNoteTab, ...history, selectedNoteTagId, expandedNoteTagIds, ...panes };
   }),
   requestedNoteTab:       null,
   clearRequestedNoteTab:  () => set({ requestedNoteTab: null }),
@@ -962,7 +986,41 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeNote: () => set((s) => ({
     editingNoteId: null,
     ...(s.activeView === 'notes' && s.editingNoteId ? recordPlace(s) : {}),
+    ...(s.noteLayout !== 'single' ? { notePanes: s.notePanes.map((p, i) => (i === s.focusedNotePane ? null : p)) } : {}),
   })),
+  noteLayout:      'single',
+  notePanes:       [],
+  focusedNotePane: 0,
+  noteSplit:       { x: 0.5, y: 0.5 },
+  setNoteLayout: (layout) => set((s) => {
+    if (layout === 'single') return { noteLayout: layout, focusedNotePane: 0 };
+    const n = notePaneCount(layout);
+    // The open note first (it's where you are), then the notes that were beside it before.
+    const rest = s.notePanes.filter((p, i) => p && p !== s.editingNoteId && (s.noteLayout === 'single' || i !== s.focusedNotePane));
+    const panes = s.noteLayout === 'single' ? [s.editingNoteId, ...rest] : [...s.notePanes];
+    while (panes.length < n) panes.push(null);
+    const kept = panes.slice(0, n);
+    const focused = Math.min(s.noteLayout === 'single' ? 0 : s.focusedNotePane, n - 1);
+    if (s.editingNoteId && !kept.includes(s.editingNoteId)) kept[focused] = s.editingNoteId;
+    return { noteLayout: layout, notePanes: kept, focusedNotePane: focused };
+  }),
+  focusNotePane: (index) => set((s) => {
+    if (s.noteLayout === 'single' || index === s.focusedNotePane) return {};
+    return { focusedNotePane: index, editingNoteId: s.notePanes[index] ?? null };
+  }),
+  openNoteInPane: (index, noteId, tabId) => {
+    const s = get();
+    if (s.noteLayout === 'single') return s.openNote(noteId, tabId);
+    const elsewhere = s.notePanes.indexOf(noteId);
+    if (elsewhere >= 0 && elsewhere !== index) { s.focusNotePane(elsewhere); return; }
+    set({ focusedNotePane: index, editingNoteId: s.notePanes[index] ?? null });
+    get().openNote(noteId, tabId);
+  },
+  closeNotePane: (index) => set((s) => {
+    const notePanes = s.notePanes.map((p, i) => (i === index ? null : p));
+    return index === s.focusedNotePane ? { notePanes, editingNoteId: null } : { notePanes };
+  }),
+  setNoteSplit: (split) => set((s) => ({ noteSplit: { ...s.noteSplit, ...split } })),
   notesLastEditingNoteId: null,
   notesLastActiveTabId:   null,
   setNotesLastActiveTab:  (tabId) => set({ notesLastActiveTabId: tabId }),
@@ -1036,13 +1094,14 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 }), {
   name:    'todo-ui-session',
   storage: persistStorage(),
-  version: 6,
+  version: 7,
   // v1 → v2: overviewSelection (Overview section, 2026-10-01).
   // v2 → v3: one history of places (navHistory/navForward) replaces sectionHistory and
   // notesHistory (2026-10-07); the old section stops carry over, the note stops are dropped.
   // v3 → v4: expandedNoteTagIds persisted, so the notebook tree reopens as it was left (2026-10-08).
   // v4 → v5: mobileNotesHome (Android Notes: notebooks or recent, 2026-10-09).
   // v5 → v6: noteCursorMemory, where each note's tab was left (2026-10-13).
+  // v6 → v7: notes side by side: noteLayout, notePanes, noteSplit (2026-10-16).
   migrate: (persisted, fromVersion) => {
     let state = (persisted ?? {}) as Record<string, unknown>;
     if (fromVersion < 2 && state.overviewSelection === undefined) state = { ...state, overviewSelection: null };
@@ -1056,6 +1115,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     if (fromVersion < 4 && !Array.isArray(state.expandedNoteTagIds)) state = { ...state, expandedNoteTagIds: [] };
     if (fromVersion < 5 && state.mobileNotesHome === undefined) state = { ...state, mobileNotesHome: 'notebooks' };
     if (fromVersion < 6 && state.noteCursorMemory === undefined) state = { ...state, noteCursorMemory: {} };
+    if (fromVersion < 7) state = { noteLayout: 'single', notePanes: [], noteSplit: { x: 0.5, y: 0.5 }, ...state };
     return state as never;
   },
   partialize: (s) => ({
@@ -1072,6 +1132,10 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     selectedNoteTagId:        s.selectedNoteTagId,
     expandedNoteTagIds:       s.expandedNoteTagIds,
     mobileNotesHome:          s.mobileNotesHome,
+    noteLayout:               s.noteLayout,
+    notePanes:                s.notePanes,
+    focusedNotePane:          s.focusedNotePane,
+    noteSplit:                s.noteSplit,
     listsLastActiveListId:    s.listsLastActiveListId,
     listsLastActiveTabId:     s.listsLastActiveTabId,
     overviewSelection:        s.overviewSelection,

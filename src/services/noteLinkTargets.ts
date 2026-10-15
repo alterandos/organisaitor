@@ -10,6 +10,7 @@ import { findBlock, passageRange } from '@/utils/noteLinks';
 import { MAIN_TAB_ID } from '@/utils/noteTabs';
 import type { PassageFind } from '@/utils/noteContent';
 import type { NoteId } from '@/types';
+import { LINKABLE_BLOCK_NODES } from '@/components/NoteEditor/blockNodes';
 
 // What a link between notes points at (the `noteLink` mark, the `noteEmbed` block): reading the
 // target note's text (live when it's open in the editor), giving a passage a lasting id the first
@@ -72,10 +73,8 @@ export function ensureBlockId(noteId: string, tabId: string | null | undefined, 
   return ok ? id : null;
 }
 
-const passageFinds = (blockId: string): PassageFind[] => [
-  { node: 'paragraph', attr: 'blockId', value: blockId },
-  { node: 'heading', attr: 'blockId', value: blockId },
-];
+const passageFinds = (blockId: string): PassageFind[] => ['paragraph', 'heading', ...LINKABLE_BLOCK_NODES]
+  .map((node) => ({ node, attr: 'blockId', value: blockId }));
 
 // Opens what a link points at: the note at its passage, or the note on its tab.
 export function openNoteLink(noteId: string, tabId: string | null | undefined, blockId: string | null | undefined): void {

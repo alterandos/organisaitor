@@ -1,13 +1,15 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { LINKABLE_BLOCK_NODES } from '../blockNodes';
 
-// A lasting id on a paragraph or heading (`blockId`), so a link or an embed from another note can
-// point at that passage however the text around it changes. Given only when something first
+// A lasting id on a paragraph or heading, and (since 2026-10-15) on any note block and any block's
+// part (`blockId`), so a link or an embed from another note can point at it however the text
+// around it changes. Given only when something first
 // points at the passage (services/noteLinkTargets.ts ensureBlockId), never to every paragraph.
 // Splitting a paragraph leaves the id on its first half; copying one would duplicate the id, so a
 // repeat is cleared (the first in the note keeps it), kept out of undo.
 
-const PASSAGE_NODES = ['paragraph', 'heading'];
+const PASSAGE_NODES = ['paragraph', 'heading', ...LINKABLE_BLOCK_NODES];
 
 export const BlockIds = Extension.create({
   name: 'blockIds',

@@ -46,6 +46,7 @@ src/
     settingsStore.ts         — user preferences
     authStore.ts             — Supabase session
     recentItemsStore.ts      — Quick Access (Ctrl+G) recent/frequent visit history, keyed by `${QuickAccessTargetType}:${entityId}`
+    stickyStore.ts           — where each sticky note sits on this device's screen (fractions of the window) and its design (sticky / pin / staple / tape)
     dialogStore.ts           — queue of pending confirm/alert requests (memory-only) behind `confirmDialog()` / `choiceDialog()` / `alertDialog()` in components/ConfirmDialog/dialogs.ts
     overviewStore.ts         — saved Overviews (persisted `overviews-storage`, synced `overviews`); deleteOverview goes to the Recycling Bin
     toastStore.ts            — the one toast showing (memory-only) behind `showToast()` in components/Toast/showToast.ts — see "Toasts"
@@ -63,11 +64,13 @@ src/
   services/notePassage.ts   — openNotePassage(noteId, { mark | node, attr, value }); noteHasPassage / docHasPassage (the open editor's text first): THE way to open a note at a passage (finds the tab; NoteEditor selects it). definitionPassage(entryId)
   services/noteReview.ts    — Review later: reviewItems/dueReviews (Important passages on the review list, from stored content) and answerReview (writes the schedule back, through the editor if that text is open)
   services/noteInbox.ts     — inboxes: sendToInbox (moves the selection into an inbox, leaving a marker; Undo), makeItemTask, openInboxItem / openItemSource, listInboxes — see "Inboxes"
+  dictionary.ts / dictionaryActions.ts — the Dictionary: words kept in a built-in list, meanings fetched (Free Dictionary API, Wiktionary), use counts
   services/noteHubs.ts      — idea hubs: addPassageToHub (marks the passage, links it in the hub; Undo), addLinkToHub (a Glossary term or a note), setLinkRelation, removeLink (takes the passage's mark off), openHub / openHubLink / openHubFromMarker, listHubs
   services/noteContentEdit.ts — editNoteContent(noteId, tabId, { inEditor, inJson }): THE way to change a note's content from outside the editor (through the open editor if that text is open, else the stored JSON); editNoteText(…, schema, edit) when the editor's schema is at hand
+  services/stickyNotes.ts   — sticky notes: notes in the Stickies notebook (presetKey 'stickies'); addSticky, setStickyText (plain text, through editNoteContent), plainTextOf, removeSticky (to the Recycling Bin, Undo)
   services/glossaryDelete.ts — deleting a Glossary record: asks (saying how many links go too), then removes every link to it in every note
   services/noteLinkTargets.ts — what a note link or embed points at: noteDocFor, linkTarget (the passage as it reads now), ensureBlockId, openNoteLink
-  services/liveNoteEditor.ts — which note/tab is open in the editor (registered by NoteEditor): liveNoteEditorFor(noteId, tabId), liveNoteOf(view). A change to a note's content from outside the editor goes through that view when it's open
+  services/liveNoteEditor.ts — THE registry of open note editors (one per pane side by side): registerOpenNoteEditor, the one in front via registerLiveNoteEditor/liveNote(); liveNoteEditorFor(noteId, tabId), liveNoteFor(noteId), liveNotes(), liveNoteOf(view), flushOpenNoteEditors(). A change to a note's content from outside the editor goes through that view when it's open
   services/clearLocalData.ts — clearSyncedLocalData(): empties every CLOUD-SYNCED store + the account-specific selection ids (each reset from its own getInitialState()). Local-only stores (fitness, routine instances, settings, hotkeys, portfolio columnConfig) are deliberately left; add a store here in the same change that gives it cloud sync
   services/shrinkNoteImages.ts — shrinkNoteImages(): recompresses every large inline image in every note and tab (skips locked encrypted notes; closes the open note first so the editor can't autosave its old copy over the result); Settings → Storage's button
   services/oauthState.ts    — mintOAuthState(provider): the single-use nonce used as the OAuth `state` for Strava/Google connect (migration 032; on Android it also records the client, migration 041, falling back if that isn't run); never put a credential in an OAuth URL. openOAuthFlow(provider, url): THE way a connect button starts the flow — a page navigation on web/desktop, the in-app browser on Android (resolves when the flow returns or the browser closes)
@@ -167,8 +170,10 @@ src/
     useMarkdownHotkeys.ts    — "light rich text" for plain-<textarea> notes fields (Task/Calendar): Ctrl+B/Ctrl+I wrap the selection in Markdown bold/italic syntax (utils/markdownTextEdit.ts's pure toggleWrap), Ctrl+L opens components/MarkdownLinkPrompt to insert a `[text](url)` link. Attached directly to the textarea element, not `document`. See "Light rich text" in Implemented features
   components/
     NavSidebar/              — left nav: section switcher, settings, account icons (desktop/web only — hidden on Android in favour of MobileNav); navItems.tsx holds CORE_NAV_ITEMS and SECTION_ICONS (THE icon per section)
-    NavFlash/                — what a keyboard back/forward shows for a moment: a fading arrow in the middle and a strip of the stops around you at the bottom (uiStore.navFlash, set by App.tsx's Alt+←/→ and Backspace)
+    NavFlash/                — what a keyboard back/forward (Alt+←/→, Backspace) shows: the compact history carousel (HistoryCarousel) centred on where you went, a small arrow at its side; stays while Alt is held, fades after (uiStore.navFlash, set by App.tsx).
+    StickyNotes/             — the sticky notes over Notes (desktop): paper that stays where it's dragged, four designs, its text written in place; right-click: open, design, remove; mounted by NotesSection
     HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores; PlaceCard.tsx is THE card for a place, shared with the phone's recent notes (MobileNotes)
+      HistoryCarousel.tsx    — THE history carousel (cards fanned either side of the centred one), drawn full size by the history browser and compact by NavFlash.
     MobileNav/               — Android-only bottom tab bar: Tasks/Calendar/Records/Lists/More
     MobileMoreSheet/         — Android-only overflow sheet for MobileNav's More tab: Notes/Portfolio/Fitness/Manage Library/Settings/Account
     MobileQuickAddBar/       — Android-only bottom-anchored task quick-add (title + Due/Priority/Endeavour chips), replaces QuickAddInput on Android
@@ -178,8 +183,8 @@ src/
     TaskList/                — main task list + collapsible Routines section
     TaskItem/                — single task row; shows subtask progress pill
     TaskPane/                — slide-in task detail/edit pane
-    ResizeHandle/            — THE draggable edge of every side panel and column: usePaneWidth (widths in settingsStore.paneWidths) + ResizeHandle
-    Icons/                   — THE suite's shared UI icons (see "Icons come from one place"): index.ts, ActionIcons.tsx (TrashIcon/ArchiveIcon/RestoreIcon/CheckCircleIcon), TextColorIcon.tsx, DisclosureIcon.tsx (the expand/collapse arrow) + disclosureDom.ts (the same arrow for plain-DOM code)
+    ResizeHandle/            — THE draggable edge of every side panel and column: usePaneWidth (widths in settingsStore.paneWidths) + ResizeHandle; SplitDivider, the line between panes of a split view (fractions)
+    Icons/                   — THE suite's shared UI icons (see "Icons come from one place"): index.ts, ActionIcons.tsx (TrashIcon/ArchiveIcon/RestoreIcon/CheckCircleIcon), TextColorIcon.tsx, ColorDotIcon.tsx (one colour as a dot: a note colour in a menu), DisclosureIcon.tsx (the expand/collapse arrow) + disclosureDom.ts (the same arrow for plain-DOM code)
     ItemActions/             — the SHARED archive/restore + delete pattern every item pane uses (Task, Calendar event, Calendar reminder; future apps' panes should too) — see "Shared item actions" in Implemented features: icons from components/Icons, ItemActionFooter (optional Complete/Mark-incomplete toggle for task-backed items), ItemActionDialog (archive-with-reason + delete-confirm, portaled z-102), ArchivedBanner, useItemActions hook (dialog state + Escape + Ctrl+Enter + hotkeys)
     AddTaskModal/            — create task (basic + advanced sections)
     AddTaskButton/           — speed-dial FAB (view-aware)
@@ -241,6 +246,16 @@ src/
       extensions/Quote.ts            — the `\quote` note block: QuoteBlock (variant, hidden), QuoteText, QuoteField (QUOTE_FIELDS), insertQuote / quoteFromSelection, setQuoteVariant / toggleQuoteField, keys and the pill; quoteMenu.ts is its right-click provider
       extensions/Cycle.ts            — the `\cycle` note block (at least two stages, each owning the arrow to the next; arrows' direction and name; icons/pictures; designs Ring / Flow / Steps); cycleMenu.ts is its right-click provider
       extensions/Breakdown.ts        — the `\breakdown` note block (a whole and at least two parts; designs Hub / Pillars / Tree; spectrum colours); breakdownMenu.ts is its right-click provider
+      extensions/Conclusion.ts       — the `\conclusion` note block (reasons that lead to it, then the conclusion; designs Arrow / Brace / Therefore / Total line / Funnel); conclusionMenu.ts is its right-click provider
+      extensions/Types.ts            — the `\types` note block (a category and its kinds, each with an icon slot; designs Field guide / Umbrella / "Is a" / Compact); typesMenu.ts is its right-click provider
+      extensions/IdKey.ts            — the `\key` identification key (numbered steps of choices, each leading to an answer or another step; designs Couplets / Question cards); idKeyMenu.ts is its right-click provider
+      extensions/ProsCons.ts         — the `\proscons` note block (a subject, weighted pros and cons, a verdict; designs T-chart / Scales / Ledger) and the points lists the options block shares; prosConsMenu.ts its right-click provider
+      extensions/Options.ts          — the `\options` note block (a goal and its options, each with status, score and pros/cons; designs Fork / Side by side / Ranked / Tiles / Either-or); optionsMenu.ts its right-click provider
+      extensions/designCycle.ts      — Ctrl+] / Ctrl+[ for every block's designs; BLOCK_DESIGN_LISTS is THE map of each block's designs
+      noteColorMenu.ts               — a note's colour: setNoteColor, and the Note colour ▸ submenu on a note row's and the editor's right-click
+      extensions/DictionaryWords.ts  — marks Dictionary words in a note (italic on a faint shade) and shows their meaning on hover
+      blockNodes.ts                  — THE lists of note blocks, their parts and what can be linked (plain data)
+      extensions/blockIcons.ts       — THE icon slot for a block's part (emoji or a square picture): the cycle's stages and the types
       extensions/Hierarchy.ts        — the `\hierarchy` note block (`\tree`, `\taxonomy`): items stored flat with a level, written as an outline (Enter, Tab / Shift+Tab move an item and its children a level); level names (`tiers`) beside the rows or over the columns; designs Tree / Columns / Outline. hierarchyLayout.ts reads the tree (spans, siblings) purely; hierarchyMenu.ts is its right-click provider
       extensions/Chart.ts            — the `\chart` note block: one atom node (`variant` = chart type, `spec` = a ChartSpec) whose view is the block's pill around the shared ChartWidget (src/charts/); chartMenu.ts is its right-click provider
       extensions/Pyramid.ts          — the `\pyramid` note block (`\funnel`, `\maslow`): at least two layers, top first, each a label drawn on its shape and a note beside it; designs Pyramid / Funnel / Stacked; pyramidMenu.ts is its right-click provider
@@ -251,7 +266,10 @@ src/
       extensions/SpecialCharInput.ts — `//name` → a character in the note editor (the same table, list and keys as fieldInput.ts, through ProseMirror; not in code)
       extensions/OccurrenceHighlight.ts — selecting a word or phrase faintly marks its other mentions in the tab (whole words when the selection is whole words); decorations only
       extensions/GlossaryAutolink.ts — offers to link a Glossary term as it's typed (once per note per term); Enter/Tab, Backspace undoes
-      extensions/GlossaryCard.ts — the Glossary card block (`\definition`, `\acronym`, `\concept`): a node pointing at a record by entryId; designs Card / Compact; GlossaryCardBody.tsx draws and edits the record by field kind; glossaryCardMenu.ts (design, frame, "Show as a card" on marked text)
+      extensions/GlossaryCard.ts — the Glossary card block (`\definition`, `\acronym`, `\concept`): a node pointing at a record by entryId; designs Card / Compact; GlossaryCardBody.tsx draws and edits the record by field kind; glossaryCardMenu.ts (design, frame, "Show as a card" on marked text and on a chip)
+      extensions/GlossaryChip.ts — the Glossary record inside a line (the card's Inline design): a chip pointing at the record; its card opens below on a click; cardToChip / chipToCard
+      extensions/ListItem.ts — the list item, allowed to start with a block
+      objects/blockCategories.ts — THE categories of note block (card, structure, weighing, visual, container): placement and the `\` menu's groups
       extensions/NoteLink.ts — links between notes (`noteLink` mark: `[[`, `\ref`, Link to a note…), click to open, hover card; noteLinkMenu.ts (right-click for links and embeds); NoteLink.module.css
       extensions/NoteEmbed.ts — `\embed`: a passage from another note shown live (designs Quote / Card / Plain)
       extensions/BlockIds.ts — the lasting `blockId` on paragraphs and headings that links and embeds point at
@@ -275,6 +293,7 @@ src/
       builtinTags.ts         — 8 built-in annotation tag definitions (Important/Concept/Definition/Example/Question/Reference/Learn Later/Acronym) — typeKey drives both Learn Later's future create-task action and Acronym's structured-tag-entry behaviour
       NoteBacklinks.tsx      — the "Linked from" bar under a note's title: single pill / "🔗 N" chip + list, each pill openable, draggable into the text, or insertable at the cursor (derived from other items' crossAppRefs via store/noteBacklinks.ts — nothing stored); artifactLinkInsert.ts holds the insert/drop helpers
     NoteEditorPane/          — slide-in pane wrapping NoteEditor for non-Notes sections
+    NoteSplitView/           — notes side by side: NoteSplitView (the panes in a grid, the shared ribbon, empty panes' "Choose a note…"), NoteViewMenu (the ribbon's View ▾), openBeside ("Open beside" on a note row)
     AddNoteModal/            — quick-add note (Ctrl+Space) with hierarchical tag picker
     ContextMenu/             — ContextMenuHost (THE contextmenu listener, mounted once in App.tsx) + ContextMenu (the menu: sections, submenus, keyboard); content comes from src/contextMenu/
     CreateKindSwitcher/      — the Note / Notebook / Tag (…) strip at the top of a creation pane; kinds from config/createKinds.ts

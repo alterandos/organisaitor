@@ -26,6 +26,18 @@ describe('parseICS', () => {
     });
   });
 
+  it('reads STATUS: TENTATIVE becomes tentative, CANCELLED is left out, anything else is confirmed', () => {
+    const raw = ics(
+      'BEGIN:VEVENT', 'SUMMARY:Maybe lunch', 'DTSTART:20260315T120000Z', 'STATUS:TENTATIVE', 'END:VEVENT',
+      'BEGIN:VEVENT', 'SUMMARY:Called off', 'DTSTART:20260316T120000Z', 'STATUS:CANCELLED', 'END:VEVENT',
+      'BEGIN:VEVENT', 'SUMMARY:Standup', 'DTSTART:20260317T090000Z', 'STATUS:CONFIRMED', 'END:VEVENT',
+      'BEGIN:VEVENT', 'SUMMARY:No status', 'DTSTART:20260318T090000Z', 'END:VEVENT',
+    );
+    expect(parseICS(raw).map((e) => [e.title, e.tentative])).toEqual([
+      ['Maybe lunch', true], ['Standup', false], ['No status', false],
+    ]);
+  });
+
   it('parses an all-day event (VALUE=DATE)', () => {
     const raw = ics('BEGIN:VEVENT', 'SUMMARY:Conference', 'DTSTART;VALUE=DATE:20260401', 'END:VEVENT');
     const [ev] = parseICS(raw);

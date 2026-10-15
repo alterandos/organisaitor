@@ -104,7 +104,7 @@ Trackers and routines get an optional **"Remind me"**: a time plus days of the w
 - **Skipped automatically** if today is already logged (a routine instance completed, or a tracker entry exists for today), so the prompt only comes when it's still needed.
 - **Log ✓ from the notification** for one-tap shapes: a single-boolean tracker, or a routine whose steps you tick all at once. Rating or multi-field trackers open straight into the quick-log (Records W5).
 - Edited in `EditTrackerPane`/`EditRoutinePane` on every platform.
-- This replaces BACKLOG §6's global "routine default time" and per-routine `reminderTime`. A per-item setting matches how events, reminders and deadlines already work.
+- This replaces the original plan's (`12-original-capacitor-plan.md` §6) global "routine default time" and per-routine `reminderTime`. A per-item setting matches how events, reminders and deadlines already work.
 
 ### N8. In-app history stays the bell
 `NotificationCenter` remains the record of what fired (and the snooze/done panel) on every platform. On Android, OS notifications are additional to it, not a replacement. To check: the bell's placement in the mobile header (gap I5).

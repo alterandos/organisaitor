@@ -11,6 +11,8 @@ import { TickerChart } from './TickerChart';
 import styles from './WatchlistView.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 function formatPrice(price: number): string {
   if (price >= 1) {
@@ -202,6 +204,7 @@ export function WatchlistView() {
   const zoom                    = useSettingsStore((s) => s.chartTickerRowZoom);
 
   usePriceRefresh();
+  const sidebarResize = usePaneWidth('portfolio-chart-sidebar', { edge: 'left', min: 180, max: 520 });
 
   const [activeTagIds,            setActiveTagIds]            = useState<PortfolioTagId[]>([]);
   const [activeExchanges,         setActiveExchanges]         = useState<string[]>([]);
@@ -653,7 +656,8 @@ export function WatchlistView() {
             onClose={() => selectItem(null)}
           />
 
-          <div className={styles.rightSidebar}>
+          <div className={styles.rightSidebar} style={sidebarResize.style}>
+            {sidebarResize.handle && <ResizeHandle {...sidebarResize.handle} />}
             {/* ── Sidebar toolbar ── */}
             <div className={styles.sidebarHeader}>
               <button

@@ -3,7 +3,7 @@ import { Plugin, PluginKey, Selection, TextSelection, type EditorState, type Tra
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
-import { squareIconDataUrl } from '@/utils/imageCompress';
+import { choiceRow, iconSlot, popoverHeading } from './blockIcons';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, openBlockPopover, pillButton, popoverClass as pop, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
 
 // A cycle in a note (`\cycle`): stages that lead one to the next and from the last back to the
@@ -15,7 +15,7 @@ import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectBut
 //   cycleStage   one stage: its label, then a short note. It owns the arrow to the NEXT stage
 //                (the last stage's goes back to the first): arrow = forward / both / back, and
 //                arrowLabel (the step's name, "Evaporation"). Optional icon (an emoji) or image
-//                (a small square picture, utils/imageCompress squareIconDataUrl).
+//                (a small square picture; the slot is extensions/blockIcons.ts).
 //   cycleLabel / cycleText   the stage's two lines
 //
 // Keys: Enter goes name → first stage → its note → a new stage; Enter in an empty stage leaves
@@ -546,122 +546,27 @@ function openArrowEditor(view: EditorView, stagePosAt: number, anchor: DOMRect):
   });
 }
 
-const ICON_CHOICES = ['☀️', '💧', '☁️', '🌧️', '❄️', '🌊', '🌱', '🌳', '🍂', '🔥', '⚡', '🌍', '♻️', '🔄', '⚙️', '🏭', '📦', '🚚', '🛒', '💰', '📈', '📉', '💡', '🧠', '✍️', '🔍', '🧪', '✅', '🎯', '❤️', '😴', '🏃'];
-
-async function setStageImage(view: EditorView, pos: number, file: File | undefined | null): Promise<void> {
-  if (!file || !file.type.startsWith('image/')) return;
-  const image = await squareIconDataUrl(file);
-  setStageAttrs(view, pos, { image, icon: null });
-}
-
-function openIconPicker(view: EditorView, cyclePos: number, stagePosAt: number, anchor: DOMRect): void {
-  const cycle = view.state.doc.nodeAt(cyclePos);
-  const stage = view.state.doc.nodeAt(stagePosAt);
-  if (!cycle || !stage) return;
-  const L = LABELS.noteBlocks.cycle;
-  openBlockPopover(anchor, (close) => {
-    const done = () => { close(); view.focus(); };
-    const box = document.createElement('div');
-    const heading = (text: string) => { const h = document.createElement('div'); h.className = pop.heading; h.textContent = text; return h; };
-    const grid = document.createElement('div');
-    grid.className = pop.emojiGrid;
-    for (const emoji of ICON_CHOICES) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = pop.emoji;
-      b.textContent = emoji;
-      b.addEventListener('click', () => { setStageAttrs(view, stagePosAt, { icon: emoji, image: null }); done(); });
-      grid.append(b);
-    }
-    const input = document.createElement('input');
-    input.className = pop.input;
-    input.placeholder = L.iconPaste;
-    input.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      const first = [...new Intl.Segmenter().segment(input.value.trim())][0]?.segment;
-      if (first) setStageAttrs(view, stagePosAt, { icon: first, image: null });
-      done();
-    });
-    const actions = document.createElement('div');
-    actions.className = pop.row;
-    const file = document.createElement('input');
-    file.type = 'file';
-    file.accept = 'image/*';
-    file.hidden = true;
-    file.addEventListener('change', () => { void setStageImage(view, stagePosAt, file.files?.[0]).then(done); });
-    const choose = document.createElement('button');
-    choose.type = 'button';
-    choose.className = pop.link;
-    choose.textContent = `${L.iconChoose} ${L.iconDrop}`;
-    choose.addEventListener('click', () => file.click());
-    actions.append(choose, file);
-    if (stage.attrs.icon || stage.attrs.image) {
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = `${pop.link} ${pop.danger}`;
-      remove.textContent = L.iconRemove;
-      remove.addEventListener('click', () => { setStageAttrs(view, stagePosAt, { icon: null, image: null }); done(); });
-      actions.append(remove);
-    }
-    const choiceRow = <T extends string>(values: readonly T[], labels: Record<T, string>, current: T, set: (v: T) => void) => {
-      const row = document.createElement('div');
-      row.className = pop.row;
-      for (const v of values) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = pop.choice;
-        b.textContent = labels[v];
-        b.setAttribute('aria-pressed', String(v === current));
-        b.addEventListener('click', () => { set(v); done(); });
-        row.append(b);
-      }
-      return row;
-    };
-    box.append(
-      heading(L.iconTitle), grid, input, actions,
-      heading(L.iconShape), choiceRow(ICON_SHAPES, L.shapes, cycle.attrs.iconShape, (v) => setCycleSettings(view, cyclePos, { iconShape: v })),
-      heading(L.iconSize), choiceRow(ICON_SIZES, L.sizes, cycle.attrs.iconSize, (v) => setCycleSettings(view, cyclePos, { iconSize: v })),
-    );
-    return box;
-  });
-}
-
+// The stage's icon slot (extensions/blockIcons.ts), with the cycle's own icon shape and size
+// in its picker.
 function iconWidget(view: EditorView, getPos: () => number | undefined, icon: string | null, image: string | null): HTMLElement {
-  const slot = document.createElement('div');
-  slot.contentEditable = 'false';
-  slot.setAttribute('data-cycle-icon', icon || image ? 'set' : 'empty');
-  slot.title = LABELS.noteBlocks.cycle.iconAdd;
-  if (image) {
-    const img = document.createElement('img');
-    img.src = image;
-    img.alt = '';
-    img.draggable = false;
-    slot.append(img);
-  } else if (icon) {
-    slot.textContent = icon;
-  } else {
-    slot.textContent = '+';
-  }
+  const L = LABELS.noteBlocks.cycle;
   // The widget sits at the start of the stage's content: the stage is just before it.
-  const stageAt = () => { const p = getPos(); return p === undefined ? null : p - 1; };
-  slot.addEventListener('mousedown', (e) => e.preventDefault());
-  slot.addEventListener('click', (e) => {
-    e.preventDefault();
-    const sp = stageAt();
-    if (sp === null || !view.editable) return;
-    const $s = view.state.doc.resolve(sp);
-    openIconPicker(view, $s.before($s.depth), sp, slot.getBoundingClientRect());
-  });
-  slot.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); slot.setAttribute('data-drop', ''); } });
-  slot.addEventListener('dragleave', () => slot.removeAttribute('data-drop'));
-  slot.addEventListener('drop', (e) => {
-    e.preventDefault();
-    slot.removeAttribute('data-drop');
-    const sp = stageAt();
-    if (sp !== null && view.editable) void setStageImage(view, sp, e.dataTransfer?.files?.[0]);
-  });
-  return slot;
+  const stageAt = () => { const p = getPos(); return p === undefined || !view.editable ? null : p - 1; };
+  return iconSlot({
+    icon, image, attr: 'data-cycle-icon',
+    partPos: stageAt,
+    set: (sp, v) => setStageAttrs(view, sp, v),
+    extra: (sp, done) => {
+      const $s = view.state.doc.resolve(sp);
+      const cyclePos = $s.before($s.depth);
+      const cycle = view.state.doc.nodeAt(cyclePos);
+      if (!cycle) return [];
+      return [
+        popoverHeading(L.iconShape), choiceRow(ICON_SHAPES, L.shapes, cycle.attrs.iconShape, (v) => setCycleSettings(view, cyclePos, { iconShape: v }), done),
+        popoverHeading(L.iconSize), choiceRow(ICON_SIZES, L.sizes, cycle.attrs.iconSize, (v) => setCycleSettings(view, cyclePos, { iconSize: v }), done),
+      ];
+    },
+  }, () => view.focus());
 }
 
 // The × in a stage's corner (only while the cycle has more than two stages).

@@ -5,6 +5,7 @@ import type { NoteBlockKind } from './types';
 // `\chart`: a chart (extensions/Chart.ts) in place of what was typed, its table open.
 export const chartBlock: NoteBlockKind = {
   family:  'block',
+  category: 'visual',
   id:      'chart',
   label:   LABELS.noteBlocks.chart.label,
   icon:    '📊',

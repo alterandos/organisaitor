@@ -8,6 +8,7 @@ import { BlockIds } from './BlockIds';
 import { NoteLinkExtensions, applyNoteLink, unlinkNoteLinkAt } from './NoteLink';
 import { NoteEmbedExtensions, copyEmbedAsText, insertEmbedAt } from './NoteEmbed';
 import { NoteBlockSelect } from './blockDesigns';
+import { TypesExtensions } from './Types';
 import { NoteObjectTrigger, objectTriggerStorage, type NoteLinkRequest } from '../objects/NoteObjectTrigger';
 import { registerLiveNoteEditor } from '@/services/liveNoteEditor';
 import { ensureBlockId, linkTarget, noteDocFor } from '@/services/noteLinkTargets';
@@ -21,7 +22,7 @@ Range.prototype.getClientRects = noRects;
 Range.prototype.getBoundingClientRect = () => new DOMRect();
 Element.prototype.getClientRects = noRects;
 
-const EXTENSIONS = [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, BlockIds, ...NoteLinkExtensions, ...NoteEmbedExtensions, NoteBlockSelect];
+const EXTENSIONS = [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, BlockIds, ...NoteLinkExtensions, ...NoteEmbedExtensions, NoteBlockSelect, ...TypesExtensions];
 
 let editor: Editor;
 let noteId: string;
@@ -242,3 +243,52 @@ describe('what links to a note, and where it is mentioned', () => {
     expect(doc.textBetween(from, to, '|')).toBe('A|a1|A.1|a2');
   });
 });
+
+describe('links to note blocks and their parts (2026-10-15)', () => {
+  const TYPES_HTML = '<p>Intro</p><div data-type="types" data-variant="guide"><div data-ty-category>Birds</div>'
+    + '<div data-type="types-item"><div data-ty-name>Raptors</div><div data-ty-trait>Hooked beak</div><div data-ty-example></div></div>'
+    + '<div data-type="types-item"><div data-ty-name>Waterfowl</div><div data-ty-trait></div><div data-ty-example></div></div></div>';
+
+  it('a block and each of its parts are passages a link can point at', () => {
+    make();
+    const target = storedNote('Birds', TYPES_HTML);
+    const doc = noteDocFor(target, null, editor.schema)!;
+    const passages = passagesOf(doc);
+    expect(passages.map((p) => [p.kind, p.label ?? '', p.text])).toEqual([
+      ['paragraph', '', 'Intro'],
+      ['block', 'Types', 'BirdsRaptorsHooked beakWaterfowl'],
+      ['part', '', 'RaptorsHooked beak'],
+      ['part', '', 'Waterfowl'],
+    ]);
+  });
+
+  it('a block gets a lasting id, and a link to it previews the block itself', () => {
+    make();
+    const target = storedNote('Birds', TYPES_HTML);
+    const block = passagesOf(noteDocFor(target, null, editor.schema)!).find((p) => p.kind === 'block')!;
+    const id = ensureBlockId(target, null, block.pos, editor.schema)!;
+    expect(id).toBeTruthy();
+    const preview = linkTarget(target, null, id, editor.schema);
+    expect(preview.state).toBe('ok');
+    expect(preview.fragment.map((n) => n.type.name)).toEqual(['types']);
+    // A part too: the second type.
+    const part = passagesOf(noteDocFor(target, null, editor.schema)!).filter((p) => p.kind === 'part')[1];
+    const partId = ensureBlockId(target, null, part.pos, editor.schema)!;
+    expect(linkTarget(target, null, partId, editor.schema).fragment.map((n) => n.textContent)).toEqual(['Waterfowl']);
+  });
+});
+
+describe('Ctrl+Backslash opens the note link picker', () => {
+  it('at the cursor, or for the selected text', () => {
+    make('<p>Some words</p>');
+    editor.commands.setTextSelection(3);
+    const view = editor.view;
+    const press = () => view.someProp('handleKeyDown', (f) => f(view, new KeyboardEvent('keydown', { key: '\\', ctrlKey: true, bubbles: true, cancelable: true })));
+    expect(press()).toBe(true);
+    expect(requests.at(-1)).toMatchObject({ purpose: 'link', from: 3, to: 3 });
+    editor.commands.setTextSelection({ from: 3, to: 7 });
+    press();
+    expect(requests.at(-1)).toMatchObject({ purpose: 'link', from: 3, to: 7 });
+  });
+});
+

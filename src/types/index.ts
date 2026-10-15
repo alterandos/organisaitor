@@ -132,9 +132,9 @@ export interface Collection {
   color:       string | null;
   purposeIds:  PurposeId[];
   tagIds:      TagId[];
+  // A project has no "completed" state of its own: finishing its last task offers to archive it
+  // (decided 2026-10-14). The old completed / completed_at columns stay in Supabase, unused.
   deadline:    string | null;  // meaningful for kind='project'
-  completed:   boolean;        // meaningful for kind='project'
-  completedAt: string | null;
   fieldSchema:  FieldSchema[];  // meaningful for kind='tracker'
   routineTasks: RoutineTask[];  // meaningful for kind='routine'
   repeatConfig: RepeatConfig | null;  // meaningful for kind='routine'

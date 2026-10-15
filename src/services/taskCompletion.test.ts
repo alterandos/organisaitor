@@ -34,6 +34,28 @@ describe('toggleTaskCompletion', () => {
     expect(useUIStore.getState().pendingFollowUpOf).toBe(a);
   });
 
+  it("a project's last open task offers to archive the project, with Undo", async () => {
+    const p = useTaskStore.getState().addCollection({ kind: 'project', name: 'Move house' });
+    const t1 = useTaskStore.getState().addTask({ title: 'Pack', collectionId: p });
+    const t2 = useTaskStore.getState().addTask({ title: 'Book van', collectionId: p });
+    await toggleTaskCompletion(t1);
+    expect(useToastStore.getState().current!.actions.map((x) => x.label)).not.toContain('Archive the project');
+    await toggleTaskCompletion(t2);
+    const toast = useToastStore.getState().current!;
+    expect(toast.detail).toContain('Move house');
+    toast.actions.find((x) => x.label === 'Archive the project')!.onClick();
+    expect(useTaskStore.getState().collections[p].archivedAt).not.toBeNull();
+    useToastStore.getState().current!.actions.find((x) => x.label === 'Undo')!.onClick();
+    expect(useTaskStore.getState().collections[p].archivedAt).toBeNull();
+  });
+
+  it('a list Endeavour (not a project) is never offered for archiving', async () => {
+    const l = useTaskStore.getState().addCollection({ kind: 'list', name: 'Errands' });
+    const t1 = useTaskStore.getState().addTask({ title: 'Post office', collectionId: l });
+    await toggleTaskCompletion(t1);
+    expect(useToastStore.getState().current!.actions.map((x) => x.label)).not.toContain('Archive the project');
+  });
+
   it('a blocked task asks first; Cancel leaves everything open', async () => {
     const a = add('Get referral');
     const b = add('Book specialist');

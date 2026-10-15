@@ -1,15 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useUIStore } from '@/store/uiStore';
-import type { NavPlace } from '@/store/navHistory';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
-import { formatRelativeTime } from '@/utils/date';
 import { describePlace } from './describePlace';
-import { PlaceCard, PlaceCardBadge } from './PlaceCard';
+import { HistoryCarousel, type HistoryCard } from './HistoryCarousel';
 import styles from './HistoryBrowser.module.css';
 
-// Alt+N: the app's history (store/navHistory.ts) as a carousel of cards — oldest on the left,
+// Alt+N: the app's history (store/navHistory.ts) as a carousel of cards (HistoryCarousel) — oldest on the left,
 // where you are in the middle, anything you went back from on the right. Scroll, ← →, swipe or
 // to move; Enter, or a click on any card, goes there (travelHistory, so the stops in
 // between stay in history). Cards are read live when it opens (describePlace).
@@ -18,14 +16,12 @@ const VISIBLE = 4;         // cards drawn either side of the centred one
 const WHEEL_STEP = 60;     // wheel distance per card
 const SWIPE_STEP = 90;     // drag distance per card
 
-interface Card { place: NavPlace; offset: number }   // offset: steps from where you are
-
 export function HistoryBrowser() {
   const close = useUIStore((s) => s.closeHistoryBrowser);
   useEscapeClose(close);
 
   // Read once on open: history doesn't change while the browser is up.
-  const [cards] = useState<Card[]>(() => {
+  const [cards] = useState<HistoryCard[]>(() => {
     const s = useUIStore.getState();
     const back = [...s.navHistory].reverse();
     return [
@@ -85,29 +81,7 @@ export function HistoryBrowser() {
         <p className={styles.hint}>{LABELS.history.hint}</p>
       </header>
 
-      <div className={styles.stage}>
-        {cards.map((card, i) => {
-          const d = i - sel;
-          if (Math.abs(d) > VISIBLE) return null;
-          const s = summaries[i];
-          const { place, offset } = card;
-          return (
-            <PlaceCard
-              key={i}
-              place={place}
-              summary={s}
-              selected={d === 0}
-              className={styles.card}
-              style={{ ['--d' as string]: d, ['--ad' as string]: Math.abs(d), ['--s' as string]: Math.sign(d) }}
-              onClick={() => { if (!drag.current?.moved) go(i); }}
-              badge={offset === 0
-                ? <PlaceCardBadge here>{LABELS.history.here}</PlaceCardBadge>
-                : <PlaceCardBadge>{offset > 0 ? LABELS.history.forward : formatRelativeTime(place.at)}</PlaceCardBadge>}
-              footer={d === 0 && offset !== 0 ? <>{LABELS.history.open} ↵</> : undefined}
-            />
-          );
-        })}
-      </div>
+      <HistoryCarousel cards={cards} summaries={summaries} sel={sel} visible={VISIBLE} onPick={(i) => { if (!drag.current?.moved) go(i); }} />
 
       <div className={styles.dots} aria-hidden="true">
         {cards.map((c, i) => (

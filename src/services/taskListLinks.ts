@@ -92,8 +92,14 @@ export async function toggleChecklistItemWithTasks(itemId: ListItemId): Promise<
       confirmLabel: LABELS.listLinks.completeConfirm,
       cancelLabel:  LABELS.listLinks.completeCancel,
     });
-    // Re-checked after the wait: the task may have been completed or deleted meanwhile.
+    // Re-checked after the wait: the task may have been completed or deleted meanwhile. Completed
+    // through toggleTaskCompletion like every other UI path, so a blocked task still asks and the
+    // Completed toast (with Undo, and the next occurrence of a repeating task) still shows. Loaded
+    // here rather than imported at the top: taskCompletion imports this module.
     const current = useTaskStore.getState().tasks[task.id];
-    if (ok && current && !current.completed) toggleTaskWithLists(task.id);
+    if (ok && current && !current.completed) {
+      const { toggleTaskCompletion } = await import('@/services/taskCompletion');
+      await toggleTaskCompletion(task.id);
+    }
   }
 }

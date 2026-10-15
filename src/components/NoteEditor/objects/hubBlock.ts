@@ -6,6 +6,7 @@ import type { NoteBlockKind } from './types';
 // `\hub`: an idea hub (extensions/Hub.ts) in place of what was typed, the cursor in its name.
 export const hubBlock: NoteBlockKind = {
   family:  'block',
+  category: 'container',
   id:      'hub',
   label:   LABELS.hubs.label,
   icon:    HUB_ICON,

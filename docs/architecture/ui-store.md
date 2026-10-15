@@ -101,6 +101,13 @@ setCalendarSelectedDate(v: string)
 // reopens as it was left; ids of deleted notebooks are harmless and ignored)
 expandedNoteTagIds: NoteTagId[], toggleNoteTagExpanded(id)
 
+// Notes side by side (components/NoteSplitView; persisted since v7). The pane in front always
+// holds editingNoteId; a note is in one pane at most (openNote on one already showing focuses it).
+noteLayout: 'single' | 'two' | 'three' | 'four', setNoteLayout(layout)
+notePanes: (noteId | null)[], focusedNotePane: number, focusNotePane(i)
+openNoteInPane(i, noteId, tabId?), closeNotePane(i)
+noteSplit: { x, y }, setNoteSplit(partial)   // where the dividers are, as fractions
+
 // Android: what Notes opens on with no note open (MobileNotes) — persisted since v5
 mobileNotesHome: 'notebooks' | 'recent', setMobileNotesHome(home)
 

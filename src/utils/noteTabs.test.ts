@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAIN_TAB_ID, resolveNoteTab, tabDatesText, titlePrefillFor } from './noteTabs';
+import { lastTabId, MAIN_TAB_ID, resolveNoteTab, tabDatesText, titlePrefillFor } from './noteTabs';
 
 const note = { content: 'MAIN', tabs: [{ id: 't2', name: 'Second', content: 'TAB2' }] };
 
@@ -42,3 +42,15 @@ describe('tabDatesText (a tab\'s hover in the tab bar)', () => {
   });
 });
 
+describe('lastTabId', () => {
+  const tabs = [{ id: 't2', name: 'B', content: '' }, { id: 't3', name: 'C', content: '' }];
+  it('the last tab in the default order; Main (null) when there are no other tabs', () => {
+    expect(lastTabId({ tabs, tabOrder: [] })).toBe('t3');
+    expect(lastTabId({ tabs: [], tabOrder: [] })).toBeNull();
+  });
+  it('follows a reordered tab bar, and skips ids of tabs that no longer exist', () => {
+    expect(lastTabId({ tabs, tabOrder: ['t3', MAIN_TAB_ID, 't2'] })).toBe('t2');
+    expect(lastTabId({ tabs, tabOrder: ['t2', 't3', MAIN_TAB_ID] })).toBeNull();
+    expect(lastTabId({ tabs, tabOrder: [MAIN_TAB_ID, 't2', 'gone'] })).toBe('t2');
+  });
+});

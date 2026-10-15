@@ -1,12 +1,17 @@
-import { Extension } from '@tiptap/core';
+import { Extension, InputRule } from '@tiptap/core';
 import { Plugin, PluginKey, TextSelection, type EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { exactChar, findCharTrigger, matchChars, type CharMatch } from '@/specialChars/charSets';
+import { exactChar, findCharTrigger, findShortcut, matchChars, SHORTCUTS, type CharMatch } from '@/specialChars/charSets';
 import { hideCharPicker, showCharPicker } from '@/specialChars/charPicker';
 
 // `//name` in the note editor: the same characters, list and keys as every other text field
 // (src/specialChars/fieldInput.ts), through ProseMirror, since the editor owns its text. Not in
 // code, where `//` is a comment.
+//
+// The shortcuts (`-->` → →, `<=` → ≤, `^2` → ²; SHORTCUTS in charSets.ts) are an input rule, so
+// Backspace straight after puts the typed text back (Tiptap's undoInputRule) and code is skipped.
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const SHORTCUT_FIND = new RegExp(`(?:${SHORTCUTS.map((s) => escapeRe(s.typed)).join('|')}|(?:\\^|[⁰¹²³⁴⁵⁶⁷⁸⁹])[0-9])$`);
 
 interface Typing { from: number; to: number; matches: CharMatch[] }
 
@@ -27,6 +32,17 @@ export const SpecialCharInput = Extension.create({
   name: 'specialCharInput',
   // Before the other typing helpers (the `\` menu, Glossary links), so its keys win while it's up.
   priority: 140,
+
+  addInputRules() {
+    return [new InputRule({
+      find: SHORTCUT_FIND,
+      handler: ({ state, range, match }) => {
+        const s = findShortcut(match[0]);
+        if (!s) return null;
+        state.tr.insertText(s.char, range.from + s.start, range.to);
+      },
+    })];
+  },
 
   addProseMirrorPlugins() {
     let selected = 0;

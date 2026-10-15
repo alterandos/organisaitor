@@ -1,6 +1,6 @@
 // Automatic local backup — a background safety net, independent of Supabase sync entirely.
 // Confirmed requirement (2026-09-15 sync-gap incident; sharpened 2026-09-25 after a real note
-// content overwrite — see BACKLOG.md "Automatic local backup rotation"). Change-volume
+// content overwrite — see "Automatic local backup rotation" in docs/features/implemented-features.md). Change-volume
 // triggered ONLY, no time-based trigger (confirmed with the user 2026-09-25): a snapshot fires
 // once enough has actually changed, never just because a clock interval elapsed.
 //

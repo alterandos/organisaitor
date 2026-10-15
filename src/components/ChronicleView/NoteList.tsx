@@ -12,6 +12,7 @@ import type { Note } from '@/types/notes';
 import styles from './NoteList.module.css';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import '@/components/NoteEditor/noteColorMenu';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 
 interface NoteListProps {

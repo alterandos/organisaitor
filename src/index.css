@@ -75,6 +75,22 @@
 
   /* ── Stacking tiers: an overlay summoned from anywhere sits above every modal ── */
   --z-sticky:        5;      /* content pinned while its container scrolls (sticky headings) */
+  /* A mark the app draws over words to say what they are (a Dictionary word): a neutral tint of the
+     text, so it never competes with a colour a person picked (CLAUDE.md "Colours a person picks"). */
+  --color-text-mark: color-mix(in srgb, var(--color-text) 7%, transparent);
+  --z-sticky-note:   90;     /* sticky notes in Notes: above the notes, below panes and dialogs */
+  /* Sticky notes are paper: the same light paper and dark ink in both themes (a deliberate
+     exception to theming, like FloatingToolbar). The paper takes the note's colour when it has one. */
+  --sticky-paper:    #fef08a;
+  --sticky-ink:      #292524;
+  --sticky-ink-soft: #57534e;
+  --sticky-pin:      #dc2626;
+  --sticky-pin-light: #f87171;
+  --sticky-pin-shadow: 1px 2px 2px rgba(0, 0, 0, 0.3);
+  --sticky-metal:    #a8a29e;
+  --sticky-tape:     rgba(255, 255, 255, 0.55);
+  --sticky-tape-edge: rgba(0, 0, 0, 0.06);
+  --sticky-shadow:   0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 14px rgba(0, 0, 0, 0.16);
   --z-pane:          100;    /* slide-in panes and most modals */
   --z-pane-modal:    102;    /* a modal or dialog opened from inside a pane */
   --z-quick-access:  400;
@@ -194,6 +210,8 @@
   cursor: col-resize !important;
   user-select: none !important;
 }
+:root[data-resizing="rows"],
+:root[data-resizing="rows"] * { cursor: row-resize !important; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

@@ -103,7 +103,7 @@ const setHover = (view: EditorView, from: number | null) => {
 const SVG = 'http://www.w3.org/2000/svg';
 
 // What a term's card says: the term, its kind, what it means, and where it's defined.
-function cardContent(entry: ReturnType<typeof glossaryEntry>): Node[] {
+export function entryCardContent(entry: ReturnType<typeof glossaryEntry>): Node[] {
   const L = LABELS.glossary;
   if (!entry) return [document.createTextNode(L.missingDetail)];
   const head = document.createElement('strong');
@@ -197,7 +197,7 @@ class ConceptMarginView {
     const card = document.createElement('div');
     card.setAttribute('data-concept-hovercard', '');
     card.style.setProperty('--concept-color', colorOf(g.typeKey));
-    card.append(...cardContent(entry));
+    card.append(...entryCardContent(entry));
     if (entry) {
       const go = document.createElement('button');
       go.type = 'button';
@@ -339,7 +339,7 @@ class ConceptMarginView {
     // The card: the meaning, on hover.
     const card = document.createElement('span');
     card.setAttribute('data-concept-card', '');
-    card.append(...cardContent(entry));
+    card.append(...entryCardContent(entry));
     label.append(card);
     label.title = '';
     label.addEventListener('mousedown', (e) => e.preventDefault());

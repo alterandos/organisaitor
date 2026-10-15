@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
-import type { CalendarReminderId, RepeatFreq, RepeatConfig } from '@/types';
+import type { CalendarReminderId } from '@/types';
+import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -51,17 +52,10 @@ export function CalendarReminderPane() {
     onRestore: () => { if (editingId) restoreReminder(editingId as CalendarReminderId); },
   });
 
-  const repeat = reminder?.repeat ?? null;
   const [title,          setTitle]          = useState(() => reminder?.title ?? '');
   const [notes,          setNotes]          = useState(() => reminder?.notes ?? '');
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
-  const [repeatOn,       setRepeatOn]       = useState(!!repeat);
-  const [repeatFreq,     setRepeatFreq]     = useState<RepeatFreq>(repeat?.freq ?? 'weekly');
-  const [repeatInterval, setRepeatInterval] = useState(repeat?.interval ?? 1);
-  const [repeatEndKind,  setRepeatEndKind]  = useState<RepeatConfig['endKind']>(repeat?.endKind ?? 'forever');
-  const [repeatCount,    setRepeatCount]    = useState(repeat?.count ?? 10);
-  const [repeatUntil,    setRepeatUntil]    = useState(repeat?.until ?? '');
 
   if (!reminder) return null;
 
@@ -112,13 +106,6 @@ export function CalendarReminderPane() {
       .filter((r) => !next.some((n) => n.type === r.type && n.id === r.id))
       .forEach((ref) => unlinkCrossAppRef('reminder', id, ref));
     updateReminder(id, { crossAppRefs: next });
-  };
-
-  const saveRepeat = (on: boolean, freq: RepeatFreq, interval: number, endKind: RepeatConfig['endKind'], count: number, until: string) => {
-    const r: RepeatConfig | null = on
-      ? { freq, interval, endKind, count: endKind === 'count' ? count : null, until: endKind === 'until' ? until || null : null, exceptions: reminder.repeat?.exceptions }
-      : null;
-    updateReminder(id, { repeat: r });
   };
 
   return (
@@ -231,90 +218,7 @@ export function CalendarReminderPane() {
 
           {/* ── Repeat ── */}
           <div className={styles.field}>
-            <label className={`${styles.label} ${styles.checkLabel}`}>
-              <input
-                type="checkbox"
-                checked={repeatOn}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  setRepeatOn(on);
-                  saveRepeat(on, repeatFreq, repeatInterval, repeatEndKind, repeatCount, repeatUntil);
-                }}
-              />
-              Repeat
-            </label>
-            {repeatOn && (
-              <div className={styles.repeatConfig}>
-                <div className={styles.repeatRow}>
-                  <span className={styles.repeatSmall}>Every</span>
-                  <input
-                    type="number"
-                    className={styles.repeatNum}
-                    min={1}
-                    value={repeatInterval}
-                    onChange={(e) => {
-                      const v = Math.max(1, Number(e.target.value));
-                      setRepeatInterval(v);
-                      saveRepeat(true, repeatFreq, v, repeatEndKind, repeatCount, repeatUntil);
-                    }}
-                  />
-                  <select
-                    className={styles.select}
-                    value={repeatFreq}
-                    onChange={(e) => {
-                      const f = e.target.value as RepeatFreq;
-                      setRepeatFreq(f);
-                      saveRepeat(true, f, repeatInterval, repeatEndKind, repeatCount, repeatUntil);
-                    }}
-                  >
-                    <option value="daily">day(s)</option>
-                    <option value="weekly">week(s)</option>
-                    <option value="monthly">month(s)</option>
-                    <option value="yearly">year(s)</option>
-                  </select>
-                </div>
-                <div className={styles.repeatRow}>
-                  <span className={styles.repeatSmall}>Ends</span>
-                  <select
-                    className={styles.select}
-                    value={repeatEndKind}
-                    onChange={(e) => {
-                      const k = e.target.value as RepeatConfig['endKind'];
-                      setRepeatEndKind(k);
-                      saveRepeat(true, repeatFreq, repeatInterval, k, repeatCount, repeatUntil);
-                    }}
-                  >
-                    <option value="forever">Never</option>
-                    <option value="count">After N times</option>
-                    <option value="until">On date</option>
-                  </select>
-                  {repeatEndKind === 'count' && (
-                    <input
-                      type="number"
-                      className={styles.repeatNum}
-                      min={1}
-                      value={repeatCount}
-                      onChange={(e) => {
-                        const v = Math.max(1, Number(e.target.value));
-                        setRepeatCount(v);
-                        saveRepeat(true, repeatFreq, repeatInterval, 'count', v, repeatUntil);
-                      }}
-                    />
-                  )}
-                  {repeatEndKind === 'until' && (
-                    <input
-                      type="date"
-                      className={styles.dateInput}
-                      value={repeatUntil}
-                      onChange={(e) => {
-                        setRepeatUntil(e.target.value);
-                        saveRepeat(true, repeatFreq, repeatInterval, 'until', repeatCount, e.target.value);
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
+            <RepeatField value={reminder.repeat ?? null} onChange={(r) => updateReminder(id, { repeat: r })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
           </div>
 
           <div className={styles.field}>

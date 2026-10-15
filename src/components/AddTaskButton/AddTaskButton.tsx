@@ -5,6 +5,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { todayIso } from '@/utils/date';
 import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
+import { addSticky } from '@/services/stickyNotes';
 import styles from './AddTaskButton.module.css';
 
 type TaskDialType      = 'tag' | 'collection' | 'purpose' | 'task';
@@ -43,11 +44,12 @@ const LISTS_OPTIONS: { type: ListsDialType; label: string; color: string; icon: 
   { type: 'list-item', label: 'Add item',  color: '#5b6ee1', icon: '+' },
 ];
 
-type NotesDialType = 'note' | 'notebook' | 'custom-tag' | 'tag-preset';
+type NotesDialType = 'note' | 'notebook' | 'custom-tag' | 'tag-preset' | 'sticky';
 const NOTES_OPTIONS: { type: NotesDialType; label: string; color: string; icon: string }[] = [
   { type: 'notebook',   label: 'Notebook',   color: '#8b5cf6', icon: '📓' },
   { type: 'custom-tag', label: 'Custom tag', color: '#10b981', icon: '#' },
   { type: 'tag-preset', label: 'Tag presets', color: '#64748b', icon: '✦' },
+  { type: 'sticky',     label: LABELS.stickies.add, color: '#ca8a04', icon: '🗒️' },
   { type: 'note',       label: 'Note',       color: '#5b6ee1', icon: '+' },
 ];
 
@@ -141,6 +143,7 @@ export function AddTaskButton() {
     if (type === 'note') showAddNote();
     else if (type === 'notebook') showAddNoteTag(null, 'area');
     else if (type === 'tag-preset') showTagPresets();
+    else if (type === 'sticky') addSticky();
     else showAddNoteTag(null, 'tag');
   };
 

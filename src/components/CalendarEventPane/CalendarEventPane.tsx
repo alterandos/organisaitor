@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
-import type { CalendarEventId, NotifyUnit, RepeatFreq, RepeatConfig } from '@/types';
+import type { CalendarEventId, NotifyUnit } from '@/types';
+import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -55,18 +56,11 @@ export function CalendarEventPane() {
     onRestore:  () => { if (editingId) restoreEvent(editingId as CalendarEventId); },
   });
 
-  const repeat = event?.repeat ?? null;
   const [title,          setTitle]          = useState(() => event?.title ?? '');
   const [notes,          setNotes]          = useState(() => event?.notes ?? '');
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
   const [notifyAtTime,   setNotifyAtTime]   = useState(event?.notifyAtTime ?? '12:00');
-  const [repeatOn,       setRepeatOn]       = useState(!!repeat);
-  const [repeatFreq,     setRepeatFreq]     = useState<RepeatFreq>(repeat?.freq ?? 'weekly');
-  const [repeatInterval, setRepeatInterval] = useState(repeat?.interval ?? 1);
-  const [repeatEndKind,  setRepeatEndKind]  = useState<RepeatConfig['endKind']>(repeat?.endKind ?? 'forever');
-  const [repeatCount,    setRepeatCount]    = useState(repeat?.count ?? 10);
-  const [repeatUntil,    setRepeatUntil]    = useState(repeat?.until ?? '');
   // See AddCalendarItemModal's identical ref for why this exists — prevents the linked-end-time
   // cascade from getting "stuck" on its own previous guess while a start time is typed digit by
   // digit. A pre-existing endTime here counts as genuinely user-set (it was saved), not one of our
@@ -150,13 +144,6 @@ export function CalendarEventPane() {
   // this is just a URL. A location that's already a link (isLocationUrl) is used as-is.
   const locationMapsUrl = (loc: string) =>
     isLocationUrl(loc) ? loc : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}`;
-
-  const saveRepeat = (on: boolean, freq: RepeatFreq, interval: number, endKind: RepeatConfig['endKind'], count: number, until: string) => {
-    const r: RepeatConfig | null = on
-      ? { freq, interval, endKind, count: endKind === 'count' ? count : null, until: endKind === 'until' ? until || null : null, exceptions: event.repeat?.exceptions }
-      : null;
-    updateEvent(id, { repeat: r });
-  };
 
   return (
     <>
@@ -393,90 +380,7 @@ export function CalendarEventPane() {
 
           {/* ── Repeat — not offered on a task's scheduled event: the task itself doesn't repeat ── */}
           {!isTaskShadow && <div className={styles.field}>
-            <label className={`${styles.label} ${styles.checkLabel}`}>
-              <input
-                type="checkbox"
-                checked={repeatOn}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  setRepeatOn(on);
-                  saveRepeat(on, repeatFreq, repeatInterval, repeatEndKind, repeatCount, repeatUntil);
-                }}
-              />
-              Repeat
-            </label>
-            {repeatOn && (
-              <div className={styles.repeatConfig}>
-                <div className={styles.repeatRow}>
-                  <span className={styles.repeatSmall}>Every</span>
-                  <input
-                    type="number"
-                    className={styles.repeatNum}
-                    min={1}
-                    value={repeatInterval}
-                    onChange={(e) => {
-                      const v = Math.max(1, Number(e.target.value));
-                      setRepeatInterval(v);
-                      saveRepeat(true, repeatFreq, v, repeatEndKind, repeatCount, repeatUntil);
-                    }}
-                  />
-                  <select
-                    className={styles.select}
-                    value={repeatFreq}
-                    onChange={(e) => {
-                      const f = e.target.value as RepeatFreq;
-                      setRepeatFreq(f);
-                      saveRepeat(true, f, repeatInterval, repeatEndKind, repeatCount, repeatUntil);
-                    }}
-                  >
-                    <option value="daily">day(s)</option>
-                    <option value="weekly">week(s)</option>
-                    <option value="monthly">month(s)</option>
-                    <option value="yearly">year(s)</option>
-                  </select>
-                </div>
-                <div className={styles.repeatRow}>
-                  <span className={styles.repeatSmall}>Ends</span>
-                  <select
-                    className={styles.select}
-                    value={repeatEndKind}
-                    onChange={(e) => {
-                      const k = e.target.value as RepeatConfig['endKind'];
-                      setRepeatEndKind(k);
-                      saveRepeat(true, repeatFreq, repeatInterval, k, repeatCount, repeatUntil);
-                    }}
-                  >
-                    <option value="forever">Never</option>
-                    <option value="count">After N times</option>
-                    <option value="until">On date</option>
-                  </select>
-                  {repeatEndKind === 'count' && (
-                    <input
-                      type="number"
-                      className={styles.repeatNum}
-                      min={1}
-                      value={repeatCount}
-                      onChange={(e) => {
-                        const v = Math.max(1, Number(e.target.value));
-                        setRepeatCount(v);
-                        saveRepeat(true, repeatFreq, repeatInterval, 'count', v, repeatUntil);
-                      }}
-                    />
-                  )}
-                  {repeatEndKind === 'until' && (
-                    <input
-                      type="date"
-                      className={styles.dateInput}
-                      value={repeatUntil}
-                      onChange={(e) => {
-                        setRepeatUntil(e.target.value);
-                        saveRepeat(true, repeatFreq, repeatInterval, 'until', repeatCount, e.target.value);
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
+            <RepeatField value={event.repeat ?? null} onChange={(r) => updateEvent(id, { repeat: r })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
           </div>}
 
           <div className={styles.field}>

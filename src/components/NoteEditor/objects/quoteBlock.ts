@@ -5,6 +5,7 @@ import type { NoteBlockKind } from './types';
 // `\quote`: a quote (extensions/Quote.ts) in place of what was typed.
 export const quoteBlock: NoteBlockKind = {
   family:  'block',
+  category: 'visual',
   id:      'quote',
   label:   LABELS.noteBlocks.quote.label,
   icon:    '❝',

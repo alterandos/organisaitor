@@ -6,6 +6,8 @@ interface Props {
   value:    RepeatConfig | null;
   onChange: (repeat: RepeatConfig | null) => void;
   hint?:    string;
+  // The host's own label style for the "Repeat" checkbox, so it matches the fields around it.
+  labelClassName?: string;
 }
 
 const FREQS: RepeatFreq[] = ['daily', 'weekly', 'monthly', 'yearly'];
@@ -13,14 +15,14 @@ const DEFAULT: RepeatConfig = { freq: 'weekly', interval: 1, endKind: 'forever',
 
 // A repeat rule: on/off, every N days/weeks/months/years, ending never / after N times / on a
 // date. Controlled: every change hands back the whole rule (null = doesn't repeat). Used by the
-// task pane and the add-task modal; the calendar panes have their own copies (BACKLOG.md
-// "Pattern retrofit backlog").
-export function RepeatField({ value, onChange, hint }: Props) {
+// task pane, the add-task modal, the add-calendar-item modal and the event, reminder and deadline
+// panes: THE repeat editor (pattern test "one repeat-rule editor"). Routines pick weekdays instead.
+export function RepeatField({ value, onChange, hint, labelClassName }: Props) {
   const L = LABELS.recurring;
   const set = (patch: Partial<RepeatConfig>) => onChange({ ...(value ?? DEFAULT), ...patch });
   return (
     <div className={styles.field}>
-      <label className={styles.toggle}>
+      <label className={labelClassName ?? styles.toggle}>
         <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked ? { ...DEFAULT } : null)} />
         {L.repeat}
       </label>

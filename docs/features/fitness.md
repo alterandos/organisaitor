@@ -5,7 +5,7 @@
 
 ## Fitness App (Phase 1 — manual entry + customisable activity types + Strava import)
 
-Full spec: BACKLOG.md → "Fitness App — Physical Exercise Tracking". New suite app (nav hotkey `7`/`Ctrl+7`, "extras" group below the `<hr>` divider in NavSidebar, alongside Portfolio) — physical activity tracking, built to later import automatically from Strava without a data-model change. Also the first app built against the **add-on tier** (see "Add-on app architecture" below) — code-split and gated through `isAppEnabled()`, same as Portfolio now is.
+Full original spec: "Original spec" at the end of this file. New suite app (nav hotkey `7`/`Ctrl+7`, "extras" group below the `<hr>` divider in NavSidebar, alongside Portfolio) — physical activity tracking, built to later import automatically from Strava without a data-model change. Also the first app built against the **add-on tier** (see "Add-on app architecture" below) — code-split and gated through `isAppEnabled()`, same as Portfolio now is.
 
 **Separate-but-linkable, following the Lists/Portfolio precedent, not the aspirational one:** CLAUDE.md's suite architecture describes Purposes as a fully shared cross-app entity, but in practice neither Portfolio nor Notes actually reuse the Organizer's `Purpose`/`PurposeId` — each rolled its own (Portfolio has its own `InvestmentPurposeId`, Notes has none at all). Fitness deliberately breaks from that and **does** import the shared `PurposeId` type (one type-only import in `src/types/fitness.ts`, same lightweight-coupling pattern `notes.ts` already uses for `CollectionId`) — chosen because the user explicitly asked for suite-wide connections and cross-app Purpose tagging is the cheapest, least-coupled way to get it. Everything else about Fitness (its own store, own component tree, own config) follows the Lists/Portfolio pattern of zero further coupling: `src/types/fitness.ts` is **not** re-exported through `src/types/index.ts` (import it directly as `@/types/fitness`, same as `@/types/lists` / `@/types/portfolio`); ID generation is local `nanoid()` in `fitnessStore.ts`, not routed through the shared `utils/id.ts` helpers. `ColorPicker` is the one shared UI primitive Fitness reuses directly — it's a genuine design-system component (like the platform layer is meant to provide), not an Organizer domain concept, so reusing it doesn't compromise separation.
 
@@ -96,3 +96,156 @@ OAuth2 Authorization Code flow, `activity:read` scope, manual "Sync now" trigger
 **Also found while testing this way: `GOOGLE_CLIENT_SECRET` in `.env.local` is easy to typo (`GOOGLE_CLIENT_SEECRET` was caught once) since nothing validates the key name — a silent `undefined` in the edge function, not an obvious error, if it's ever misspelled again.**
 
 **Not yet done:** real end-to-end OAuth test on the Vercel deployment (Strava specifically — Google Calendar sync's *local* `vercel dev` round-trip has now been exercised, per the update above, but neither has been confirmed against the actual production deployment yet).
+
+---
+
+## Original spec
+
+*Moved verbatim from BACKLOG.md on 2026-10-14. Some status lines are out of date: migration `012` has been applied (see `docs/supabase/migrations.md`). Open items are tracked in BACKLOG.md "Fitness — open items".*
+
+**Status: Phase 1 built and extended** — manual entry, a customisable activity-type registry (8 built-in types, user-editable name/icon/color/custom fields, delete-guarded for built-ins), and add-on-app architecture (code-split + gated) are all live. See CLAUDE.md "Fitness App" for the full implementation writeup — this section stays as the spec/history record, CLAUDE.md is authoritative for current behaviour. **Strava import (the "Strava integration architecture" section below) is not built** — blocked on registering a Strava API application, a manual/external prerequisite; see the setup guide at the end of this section. Raised as a new suite app, analogous to Portfolio and Notes — lives in the "extras" nav group below the `<hr>` divider, not inside the Organizer, and is the first app built against the add-on tier (see "Add-on app architecture" below). Name "Fitness" shipped as-is (not just a placeholder anymore, but still just one line in `src/config/labels.ts` to rename).
+
+#### Vision
+
+A place to track physical activity (runs, hikes, and beyond), either logged manually or imported automatically from Strava. Started deliberately narrow — two activity types (Run, Hike), three visible fields (distance, moving time, average speed) — then extended once real usage showed the narrowness needed an escape hatch: activity types are now a user-customisable registry (8 built-ins, add/edit/delete custom types, per-type custom fields), not a closed union. Everything Strava provides beyond the three visible stats (elevation, heart rate, splits, GPS route, kudos...) is still captured and stored from day one so surfacing it later is a UI change, not a re-sync.
+
+#### Terminology
+
+Fits the existing Suite → App → Section → View → Tool → Entity hierarchy (see main CLAUDE.md):
+- **App**: Fitness
+- **Entity**: `Activity` — one logged workout (a run, a hike). Deliberately named to match Strava's own vocabulary, minimizing translation friction in the sync code.
+
+#### Data model (Phase 1)
+
+**As built:** not an actual separate npm package (the suite isn't a literal monorepo yet — that part of the architecture doc is aspirational; Notes/Lists/Portfolio aren't separate packages either). Followed the real established pattern instead: own type file (`src/types/fitness.ts`, not re-exported through `src/types/index.ts` — same as Lists/Portfolio), own store (`src/store/fitnessStore.ts`, localStorage via `persist`, no Supabase table yet — same "start local" choice already made for Notes/Lists), own branded `ActivityId`. Nothing here required a change to `taskStore`, `trackerStore`, or any Organizer type. Supabase tables are Phase 2, arriving alongside the Strava sync work below (which needs one for OAuth tokens regardless).
+
+```typescript
+type ActivityId = string & { readonly _brand: 'ActivityId' };
+type ActivityTypeId = string & { readonly _brand: 'ActivityTypeId' };
+
+// Extensible — new sources (Garmin, Apple Health, Google Fit, CSV import...) just add
+// a union member and a new sync function; the Activity shape itself doesn't change.
+type ActivitySource = 'manual' | 'strava';
+
+// User-customisable registry, not a closed union — built (see "as extended" below).
+// Built-ins use fixed ids ('run', 'hike', ...) so Strava's sport_type maps directly;
+// custom types get a random id.
+interface ActivityType {
+  id: ActivityTypeId; name: string; icon: string; color: string | null;
+  tracksDistance: boolean;             // Distance field shown/hidden per type (fixed a
+                                        // real bug — Yoga/Strength don't have a distance)
+  fieldSchema: ActivityFieldSchema[];  // Fitness-local field schema, same shape family
+                                        // as Records' FieldSchema but not shared with it
+  isBuiltIn: boolean; archivedAt: string | null; createdAt: string; updatedAt: string;
+}
+
+interface Activity {
+  id:                ActivityId;
+  type:              ActivityTypeId;          // references ActivityType above
+  title:             string;                  // defaults to the Strava activity name, editable
+  startedAt:         string;                  // ISO 8601 timestamp
+  timezone:          string | null;
+
+  // Canonical units are SI (meters, seconds, m/s) regardless of display preference —
+  // conversion to km/mi or min/km etc. happens at render time only.
+  distanceMeters:    number | null;
+  movingTimeSeconds: number | null;
+  elapsedTimeSeconds: number | null;           // stored now, not shown in UI until Phase 2
+  averageSpeedMps:   number | null;
+
+  // Keyed by ActivityFieldSchema.id — now genuinely populated by the selected
+  // ActivityType's custom fields (as extended, below), plus still the extensibility
+  // valve for Phase 2+ Strava-only fields (elevation gain, heart rate, splits...).
+  data:              Record<string, unknown>;
+
+  notes:             string | null;
+  purposeIds:        PurposeId[];              // cross-app Purpose tagging (shared platform layer)
+
+  // Import tracking
+  source:            ActivitySource;
+  sourceId:          string | null;            // e.g. Strava activity id; null for manual entries
+  sourceRaw:         Record<string, unknown> | null; // full raw payload from the source, verbatim —
+                                                 // lets Phase 2 surface new fields without re-syncing
+
+  archivedAt:        string | null;             // same sunset pattern as Collection/Purpose, not delete
+  createdAt:         string;
+  updatedAt:         string;
+  userId:            string;
+}
+```
+
+`(source, sourceId)` needs a uniqueness constraint (app-side and DB-side) so re-running a sync never creates duplicates — re-syncing an already-imported activity should update it in place, not insert a second row.
+
+#### Cross-linking to Records (futureproofing, not built in Phase 1)
+
+The explicit ask: manual Fitness entries and Records trackers should be linkable later, without redesigning either. Use the **same embedded `crossAppRefs` mechanism the rest of the suite uses** (see CLAUDE.md / docs/features/implemented-features.md "Cross-app linking"): a `crossAppRefs: CrossAppRef[]` field on each side, with `services/crossAppLinkCleanup.ts` keeping both directions free of dead links. (An early plan to use a normalized `cross_app_links` table was dropped — the table was never used and migration 031 removes it.) The only prerequisite is that `Activity` has a stable typed ID today, which it does. Nothing else needs to be built now; this section exists so Phase 1 doesn't accidentally close off the option.
+
+#### UI scope — Phase 1 only
+
+- [x] New top-level nav item, "extras" group (below the divider, with Portfolio) — hotkey `7` / `Ctrl+7`.
+- [x] Activity list (all activities, newest first) showing: type icon, title, date, **distance, moving time, average speed** — nothing else, even though more is stored.
+- [x] Manual "Add activity" form: type, title, date, distance, moving time. Built as auto-computed-only (not separately editable) — average speed shows as a live "Average speed: X km/h" preview derived from distance/time, no override field. Simpler than the original "editable" wording here; revisit if a real need for manual override shows up (e.g. importing a GPS-corrected speed that doesn't match distance/time exactly).
+- [x] Editing/deleting an activity works the same regardless of `source` — a synced activity can be edited or deleted locally like a manual one (edits are **not** pushed back to Strava; this is one-way import only). Not yet exercised with real Strava data since import isn't built, but the modal already branches on `editingActivity.source === 'strava'` to show a badge.
+- [x] **Extended beyond original Phase 1 scope**: activity type is now a customisable registry, not just Run/Hike. 8 built-in types (Run, Hike, Walk, Ride, Swim, Strength, Yoga, Other); the create/edit form shows the top-3-by-usage as pills plus a "More…" dropdown of everything; a Customise (⚙) button opens per-type editing (name/icon/color/custom fields), mirroring `EditTrackerPane`'s field editor. See CLAUDE.md for the full writeup.
+- [x] **Bug fix — per-type `tracksDistance`**: the first cut of the customisable-types work still showed Distance on every type, including Yoga and Strength, which don't have one. Added `ActivityType.tracksDistance: boolean` (seed defaults: `false` for Strength/Yoga, `true` for everything else), user-editable via a checkbox in `EditActivityTypeModal`; the Distance field is now conditionally rendered in `AddActivityModal`, not just optional. Moving time stays universal. `fitnessStore` bumped to v3 for the backfill.
+- [x] **`N` (no modifier) now also triggers the section-aware new-item hotkey**, alongside the existing `Space` and `Ctrl+N` — app-wide, not Fitness-specific, but requested alongside this app's other changes. See CLAUDE.md hotkeys table.
+- [x] A "Connect Strava" action and a manual "Sync now" button, in `FitnessSection`'s `StravaConnect` subcomponent. Built — see "Strava integration architecture" below for what shipped and what's still outstanding.
+
+#### Strava integration architecture (built)
+
+Followed the planned shape: the Portfolio app's ticker data proxy through Vercel Edge Functions (`api/ticker-quote.ts` etc.) was the existing pattern, extended with a token **exchange** step (authorization code → access + refresh token) that has to happen server-side since it needs the app's client secret.
+
+**Vercel Edge Functions** (`api/*.ts`, `export const config = { runtime: 'edge' }`):
+- `api/_lib/strava.ts` — `exchangeStravaCode`/`refreshStravaToken` (POST to Strava's token endpoint with `STRAVA_CLIENT_SECRET` — a plain, non-`VITE_`-prefixed Vercel env var, so it never reaches the client; `VITE_FMP_API_KEY` remains the cautionary example of what not to do) and `mapSportType()` (Strava `sport_type` → our built-in `ActivityTypeId`s, unrecognised → `'other'`).
+- `api/_lib/supabaseEdge.ts` — `getUserClient(accessToken)` / `bearerToken(req)` helpers shared by the three endpoints below.
+- `api/strava-oauth-callback.ts` — receives the `code` Strava redirects back with, identifies the user by redeeming the single-use `state` nonce (see below; the original access-token-in-`state` design was replaced 2026-09-20), exchanges the code for tokens, upserts `fitness_strava_connection`, redirects to `/?strava=connected` or `/?strava=error&reason=…`.
+- `api/strava-status.ts` — Bearer-authenticated GET, returns connection metadata only (never tokens).
+- `api/strava-sync.ts` — Bearer-authenticated POST, called by "Sync now". Refreshes the token if near-expired, fetches the 200 most recent activities from Strava, maps and returns them — does not touch Supabase or localStorage itself; the client does the upsert.
+- The "Connect Strava" button is a plain link to Strava's authorize URL (built client-side in `src/services/strava.ts`), no server code needed for that half.
+
+**The redirect-identity problem, solved:** Strava's callback is a full browser navigation, so there's no way to attach a Supabase `Authorization` header to it. *(Superseded 2026-09-20: `state` is now a single-use nonce, migration 032 — see `docs/features/fitness.md`.)* Originally fixed by passing the user's current Supabase access token through the OAuth **`state`** parameter — `api/strava-oauth-callback.ts` read it back out, called `supabase.auth.getUser()` to identify the user, and wrote as that user, so RLS applies normally. No service-role key anywhere in this codebase.
+
+**Supabase table — built and applied to live:**
+- `fitness_strava_connection` (`supabase/migrations/012_fitness_strava.sql`) — one row per user: `user_id`, `athlete_id`, `access_token`, `refresh_token`, `expires_at`, `scope`, timestamps. RLS scoped to the owning user. **This migration has been written but not yet executed against the live Supabase project** — that's the one remaining step before Connect will work end-to-end.
+
+**Deviation from the original plan — no `fitness_activities` Supabase table (yet):** the original spec called for a second table mirroring `Activity` server-side. What actually got built keeps activities exactly where they already lived — `fitnessStore`, localStorage-only — and `syncStrava()` just upserts synced activities into that same local store via the pre-existing `upsertBySource()`. Simpler for Phase 1 (matches "start local, Supabase sync is a later phase" already true of `noteStore`/`listStore`), but it means synced activities don't survive a `localStorage.clear()` or show up on a second device without a re-sync. Revisit alongside whenever Fitness gets real Supabase sync (see "Not yet done" below).
+
+**Verification status:** everything client-side (button rendering, signed-out guard, `?strava=connected`/`?strava=error` query-param handling, auto-navigation to the Fitness section on redirect) was build-verified and Playwright-tested against the local dev server. The edge functions themselves only execute on an actual Vercel deployment — the real OAuth round-trip and token exchange have **not** been tested end-to-end yet.
+
+**Not yet done:**
+- Run `012_fitness_strava.sql` against the live Supabase project (blocks Connect from working at all right now)
+- Real end-to-end OAuth test against the Vercel deployment
+- Supabase sync for `Activity`/`ActivityType` records themselves (see deviation note above)
+
+**Phase 2+ (not now):** Strava webhook subscription (push instead of manual sync — needs a validation handshake endpoint and a public receiver, `api/strava-webhook.ts`), automatic throttled sync on app load, mapping additional Strava `sport_type` values onto the activity-type registry beyond what's covered today, promoting `ActivityFieldSchema` into the shared platform layer if Records ever wants the same shape (not needed yet — Lists' `ListFieldSchema` has stayed independent too, so there's no pressure to do this preemptively), exercise plans (structure likely mirrors `RoutineTask[]` + `RepeatConfig` from Routines — a plan is an ordered template, not a log entry), imports from other sources (Garmin, Apple Health, Google Fit, manual CSV).
+
+#### Add-on app architecture (built)
+
+Fitness is the first app built against the suite's future "core bundle (nav items 1–5) + optional/paid add-ons (Portfolio, Fitness, below the nav divider)" model. `src/config/apps.ts` defines `APP_TIERS` and `isAppEnabled(view)` — the single gating point NavSidebar, App.tsx's routing, and the `6`/`7` hotkeys all check. `isAppEnabled` always returns `true` today (no entitlement backend exists), but every caller already treats it as something that can say no, so wiring a real purchase/entitlement check later is a one-function change. `PortfolioSection` and `FitnessSection` are also now `React.lazy()`-loaded (confirmed via build output: separate chunks, ~200KB off the main bundle) instead of statically bundled — the "code-splitting ensures each app's bundle only loads when needed" line in the suite architecture doc was aspirational until this; it's now real for the two add-on apps. See CLAUDE.md "Add-on app architecture" for the full writeup.
+
+#### Strava API setup guide (for the user — external prerequisite)
+
+Needed before any of the Strava integration architecture above can be built or tested:
+
+1. Go to https://www.strava.com/settings/api (requires a Strava account, log in first).
+2. Fill in the "My API Application" form:
+   - **Application Name**: anything recognizable, e.g. "Organisaitor Fitness" (shown on Strava's consent screen when connecting).
+   - **Category**: pick whatever fits closest (e.g. "Training").
+   - **Club**: leave blank.
+   - **Website**: the deployed app URL (Vercel production URL).
+   - **Authorization Callback Domain**: the bare domain only, no `https://` and no path (e.g. `my-todo.vercel.app`, not `https://my-todo.vercel.app/api/strava-oauth-callback`) — Strava enforces this format.
+3. Submit. Strava issues a **Client ID** (safe to share, not secret) and a **Client Secret** (treat like a password).
+4. Client ID: fine to paste in chat when ready to build the OAuth pieces. Client Secret: do **not** paste it in chat — add it directly as a Vercel environment variable (Project Settings → Environment Variables) once told the exact variable name to use; it must **not** have a `VITE_` prefix, or it ships to the browser.
+5. ✅ Done — Client ID `270097` registered, `VITE_STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` set in Vercel and deployed. This unblocked the OAuth build above.
+
+#### Decisions (resolved)
+
+1. **OAuth scope**: start with `activity:read` (public activities only). `activity:read_all` (private activities included) is an explicit future expansion, not a Phase 1 blocker — re-running the OAuth connect flow with a wider scope is a small change when wanted.
+2. **Display units**: metric (km, km/h) by default. Stored data is SI (meters, m/s) regardless, so an imperial toggle later is a render-layer-only change.
+3. **Sync trigger for Phase 1**: manual "Sync now" button only. No automatic/throttled background sync in Phase 1.
+
+#### Remaining prerequisites (not decisions — actions needed before/while building)
+
+4. ~~**Strava API app registration**~~ — done (client id `270097`, env vars set in Vercel).
+5. **Run `012_fitness_strava.sql` against the live Supabase project** — the table doesn't exist yet, so "Connect Strava" will fail at the token-upsert step until this runs.
+6. **Tauri desktop OAuth**: the callback endpoint is a Vercel URL, which works naturally for the web/PWA build. Since tokens live in Supabase (not local device storage), the intended answer is "connect once via the web app, and the desktop build picks up the same connection through the synced `fitness_strava_connection` row" — flagged here so it's a deliberate decision, not an oversight, when this gets built.

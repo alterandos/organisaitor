@@ -6,6 +6,7 @@ import type { NoteBlockKind } from './types';
 // `\question`: a question (extensions/Question.ts) in place of what was typed, the cursor in it.
 export const questionBlock: NoteBlockKind = {
   family:  'block',
+  category: 'card',
   id:      'question',
   label:   LABELS.noteBlocks.question.label,
   icon:    QUESTION_ICON,

@@ -134,8 +134,8 @@ src/components/RecordsTrackerRow/RecordsTrackerRow.module.css
 
 ## 6. Notifications (cross-reference only)
 
-Routine logging reminders are specified in `docs/android/05-notifications.md` (once written;
-until then, BACKLOG.md §6d "Routine logging reminders") — including the per-routine custom
+Routine logging reminders are specified in `docs/android/05-notifications.md` (N7; the original spec is §6d "Routine logging reminders" in
+`12-original-capacitor-plan.md`) — including the per-routine custom
 reminder time field (`Collection.reminderTime`, which does not exist yet). **Correction: BACKLOG's
 draft says implementing it means bumping `taskStore` "to v6" — that version number is stale.**
 `taskStore` is at **v8** today (confirmed in `src/store/taskStore.ts`, and documented in

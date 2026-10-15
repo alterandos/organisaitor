@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNo
 import { useNoteStore } from '@/store/noteStore';
 import { entryView, isEntryLocked, useSecretsVersion } from '@/services/noteSecrets';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
-import { GLOSSARY_TYPES, TERM_RICH, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, type GlossaryLink, type StructuredTagFieldDef } from '@/config/structuredTagTypes';
+import { GLOSSARY_TYPES, TERM_RICH, factsFromText, factsToText, fieldFacts, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, type Fact, type GlossaryLink, type StructuredTagFieldDef } from '@/config/structuredTagTypes';
 import { GLOSSARY_RELATIONS, glossaryRelation } from '@/config/glossaryRelations';
 import { LABELS } from '@/config/labels';
 import { compressImageBlob } from '@/utils/imageCompress';
@@ -263,6 +263,39 @@ function UrlList({ items, onCommit, placeholder, editable, label, autoFocus }: {
   );
 }
 
+// Facts (a profile's Habitat, Family, Born…): typed one per line as "Label: value", shown as two
+// columns of label and value.
+function FactsField({ facts, onCommit, placeholder, editable, label, autoFocus }: {
+  facts: Fact[]; onCommit: (v: Fact[]) => void; placeholder?: string; editable: boolean; label: string; autoFocus: boolean;
+}) {
+  const [editing, setEditing] = useState(autoFocus);
+  const d = useDraft(factsToText(facts), (text) => onCommit(factsFromText(text)));
+  if (editable && (editing || facts.length === 0)) {
+    return (
+      <textarea className={`${styles.input} ${styles.listInput}`} value={d.value} placeholder={placeholder} aria-label={label} rows={3} autoFocus={editing}
+        data-card-input="" onChange={(e) => d.change(e.target.value)} onBlur={() => { d.blur(); setEditing(false); }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+          const t = e.currentTarget;
+          const atEnd = t.selectionStart === t.value.length;
+          if (atEnd && (t.value === '' || t.value.endsWith('\n'))) { d.change(t.value.replace(/\n+$/, '')); return; }
+          e.stopPropagation();
+        }} />
+    );
+  }
+  return (
+    <dl className={styles.facts} tabIndex={editable ? 0 : undefined} data-card-input={editable ? '' : undefined}
+      onFocus={() => editable && setEditing(true)} onClick={() => editable && setEditing(true)}>
+      {facts.map((f, i) => (
+        <Fragment key={i}>
+          <dt>{f.label}</dt>
+          <dd>{f.value}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
 function ImageField({ src, term, onCommit, editable }: { src: string; term: string; onCommit: (v: string) => void; editable: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   async function choose(file: File | undefined) {
@@ -509,6 +542,8 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
         return <LinksField self={entry} all={all} editable={editable} onCommit={(v) => setField(f.id, v)} />;
       case 'urls':
         return <UrlList items={fieldList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} />;
+      case 'facts':
+        return <FactsField facts={fieldFacts(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} />;
     }
   }
 

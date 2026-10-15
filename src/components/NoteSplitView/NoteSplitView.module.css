@@ -1,0 +1,119 @@
+/* Notes side by side (NoteSplitView.tsx): the shared ribbon on top, then the panes in a grid whose
+   column and row sizes come from the dividers (inline, the only dynamic values). Each layout names
+   its areas: a–d are panes, v the vertical divider, h / hl / hr the horizontal ones. */
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-surface);
+}
+
+.ribbon {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.ribbonTools {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  overflow-x: auto;
+}
+
+.grid {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+}
+.grid[data-layout="two"]   { grid-template-areas: "a v b"; }
+.grid[data-layout="three"] { grid-template-areas: "a v c" "h v c" "b v c"; }
+.grid[data-layout="four"]  { grid-template-areas: "a v b" "hl v hr" "c v d"; }
+
+.pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 2px solid transparent;
+}
+/* The pane in front: what the ribbon acts on (marked by a line as well as by the ribbon). */
+.paneFocused { border-top-color: var(--color-primary); }
+
+.dividerCell { display: flex; align-items: stretch; justify-content: stretch; }
+.dividerCell > * { flex: 1; }
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 100%;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+.choose {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+.choose:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* View ▾ (NoteViewMenu.tsx). */
+.menuAnchor { position: relative; flex-shrink: 0; }
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.menuButton:hover,
+.menuButtonOn { background: var(--color-surface-alt); color: var(--color-text); }
+.menuIcon { width: 1.1em; height: 1.1em; flex-shrink: 0; }
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: var(--z-pane);
+  min-width: 15rem;
+  padding: var(--space-1) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.menuItem:hover { background: var(--color-surface-alt); }
+.menuItemOn { font-weight: 600; }
+.menuCheck { margin-left: auto; color: var(--color-primary); }

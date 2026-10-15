@@ -54,3 +54,26 @@ describe('//name in the note editor', () => {
     expect(editor.getText()).toBe('https://alpha ');
   });
 });
+
+describe('shortcuts in the note editor (-->, <=, >=, !=, ^2)', () => {
+  it('replace as they are typed', () => {
+    make();
+    type('a --> b <= c >= d != e <-- f x^2 y^23');
+    expect(editor.getText()).toBe('a → b ≤ c ≥ d ≠ e ← f x² y²³');
+  });
+
+  it('Backspace straight after puts the typed text back', () => {
+    make();
+    type('a <=');
+    expect(editor.getText()).toBe('a ≤');
+    press('Backspace');
+    expect(editor.getText()).toBe('a <=');
+  });
+
+  it('not in code', () => {
+    make('<pre><code></code></pre>');
+    type('if (a <= b) x^2 -->');
+    expect(editor.getText()).toContain('if (a <= b) x^2 -->');
+  });
+});
+

@@ -30,12 +30,19 @@ import { usePlatform } from '@/hooks/usePlatform';
 import { getNoteBacklinks } from '@/store/noteBacklinks';
 import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
 import { collectArtifactTargets, isNodeFind } from '@/utils/noteContent';
-import { linkTabIdFor, MAIN_TAB_ID, resolveNoteTab, titlePrefillFor, tabDatesText } from '@/utils/noteTabs';
+import { lastTabId, linkTabIdFor, MAIN_TAB_ID, resolveNoteTab, titlePrefillFor, tabDatesText } from '@/utils/noteTabs';
 import { setNormalText } from './extensions/normalText';
 import { NoteTitle } from './extensions/NoteTitle';
 import { DuplicateLine } from './extensions/DuplicateLine';
 import { TimelineExtensions } from './extensions/Timeline';
 import { QuoteExtensions } from './extensions/Quote';
+import { ConclusionExtensions } from './extensions/Conclusion';
+import { TypesExtensions } from './extensions/Types';
+import { IdKeyExtensions } from './extensions/IdKey';
+import { ProsConsExtensions } from './extensions/ProsCons';
+import { OptionsExtensions } from './extensions/Options';
+import { DesignCycle } from './extensions/designCycle';
+import { DictionaryWords } from './extensions/DictionaryWords';
 import { CycleExtensions } from './extensions/Cycle';
 import { BreakdownExtensions } from './extensions/Breakdown';
 import { HierarchyExtensions } from './extensions/Hierarchy';
@@ -49,6 +56,7 @@ import { HubPickerModal } from '@/components/HubPickerModal/HubPickerModal';
 import { addLinkToHub, addPassageToHub, selectedCardEntry, selectionTouchesHub } from '@/services/noteHubs';
 import { glossaryEntry } from '@/services/glossary';
 import { GlossaryCardExtensions, cardFromSelection, insertCardAfter } from './extensions/GlossaryCard';
+import { GlossaryChipExtensions } from './extensions/GlossaryChip';
 import { deleteGlossaryEntryAsked } from '@/services/glossaryDelete';
 import { TrailingLine } from './extensions/TrailingLine';
 import { QuestionExtensions } from './extensions/Question';
@@ -60,7 +68,8 @@ import { NoteBlockSelect } from './extensions/blockDesigns';
 import { NoteBlockPicks } from './extensions/blockPicks';
 import { NoteBackdrop } from './NoteBackdrop';
 import { MobileNoteSidePanel } from './MobileNoteSidePanel';
-import { DisclosureIcon, PinIcon, TextColorIcon } from '@/components/Icons';
+import { ColorDotIcon, DisclosureIcon, PinIcon, TextColorIcon } from '@/components/Icons';
+import { SWATCHES, swatchLabel } from '@/config/swatches';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { AcronymOffer } from './extensions/AcronymOffer';
 import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
@@ -75,11 +84,14 @@ import { ConceptRefMark, ConceptMargin } from './extensions/ConceptRef';
 import { Importance, cycleImportance } from './extensions/Importance';
 import { SelectionMenu } from './objects/SelectionMenu';
 import './extensions/annotationMenu';
-import { registerLiveNoteEditor } from '@/services/liveNoteEditor';
+import { liveNote, registerLiveNoteEditor, registerOpenNoteEditor } from '@/services/liveNoteEditor';
 import { LABELS } from '@/config/labels';
 import { compressImageBlob } from '@/utils/imageCompress';
 import { FloatingToolbar, type FloatingToolbarActions } from './FloatingToolbar';
 import './contextMenu';
+import { NoteViewMenu } from '@/components/NoteSplitView/NoteViewMenu';
+import { NoteListItem } from './extensions/ListItem';
+import { setNoteColor } from './noteColorMenu';
 import type { NoteEditorMenuApi } from './contextMenu';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { NoteTOC } from './NoteTOC';
@@ -96,6 +108,11 @@ import './extensions/cycleMenu';
 import './extensions/breakdownMenu';
 import './extensions/hierarchyMenu';
 import './extensions/pyramidMenu';
+import './extensions/conclusionMenu';
+import './extensions/typesMenu';
+import './extensions/idKeyMenu';
+import './extensions/prosConsMenu';
+import './extensions/optionsMenu';
 import './extensions/chartMenu';
 import './extensions/codeMenu';
 import './extensions/mathsMenu';
@@ -342,6 +359,10 @@ const SWIPE_OPEN_PX         = 48;   // and opens the panel after this much leftw
 interface NoteEditorProps {
   focusSignal?: number;  // Increment to grab keyboard focus in the editor
   onNavReturn?: () => void;  // Ctrl+Left: return focus to the navigation columns
+  // One pane of notes side by side (components/NoteSplitView): the note shown here, whether it's
+  // the pane in front (its toolbar goes in the shared ribbon; the others show none) and where the
+  // ribbon is. Without it the editor shows uiStore's open note, with its own toolbar.
+  pane?: { index: number; noteId: string | null; focused: boolean; ribbon: HTMLElement | null };
 }
 
 // Scrolls the editor so the text at pos sits near the top of the view (a fifth of the way down),
@@ -358,10 +379,14 @@ function showNearTop(view: import('@tiptap/pm/view').EditorView, pos: number) {
   } catch { /* not laid out */ }
 }
 
-export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
+export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) {
   const { isAndroid }       = usePlatform();
-  const editingNoteId       = useUIStore((s) => s.editingNoteId);
-  const closeNote           = useUIStore((s) => s.closeNote);
+  const openNoteId          = useUIStore((s) => s.editingNoteId);
+  const editingNoteId       = pane ? pane.noteId : openNoteId;
+  const closeOpenNote       = useUIStore((s) => s.closeNote);
+  const closeNote           = pane ? () => useUIStore.getState().closeNotePane(pane.index) : closeOpenNote;
+  // Only the editor in front writes the "last open" memory (the note and tab Notes reopens on).
+  const inFront             = !pane || pane.focused;
   const noteTagViewReturn   = useUIStore((s) => s.noteTagViewReturn);
   const setNoteTagViewReturn = useUIStore((s) => s.setNoteTagViewReturn);
   const openNoteTagView     = useUIStore((s) => s.openNoteTagView);
@@ -393,6 +418,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // the way up, unless pinned; the editing tools sit behind its ⌄; the side panel holds the tabs,
   // contents, "Linked from" and details.
   const headingPinned       = useSettingsStore((s) => s.noteHeadingPinned);
+  const noteColorBars       = useSettingsStore((s) => s.noteColorBars);
+  const noteColorHeadings   = useSettingsStore((s) => s.noteColorHeadings);
   const setHeadingPinned    = useSettingsStore((s) => s.setNoteHeadingPinned);
   const [toolsOpen, setToolsOpen]         = useState(false);
   const [panelOpen, setPanelOpen]         = useState(false);
@@ -671,6 +698,15 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     const id = setTimeout(() => document.addEventListener('click', handler), 0);
     return () => { clearTimeout(id); document.removeEventListener('click', handler); };
   }, [noteMenuOpen]);
+  useEscapeClose(() => setNoteMenuOpen(false), noteMenuOpen);
+
+
+  // Side by side, the toolbar of the note in front goes in the shared ribbon above the panes, and
+  // the other panes show none: one ribbon, acting on the note last clicked in.
+  const placeToolbar = (toolbar: React.ReactElement) => {
+    if (!pane) return toolbar;
+    return pane.focused && pane.ribbon ? createPortal(toolbar, pane.ribbon) : null;
+  };
 
   // Ctrl+scroll to zoom the editor
   const onWheel = useCallback((e: WheelEvent) => {
@@ -704,7 +740,8 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   }
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ document: false, codeBlock: false, link: { openOnClick: false, HTMLAttributes: { class: styles.link } } }),
+      StarterKit.configure({ document: false, codeBlock: false, listItem: false, link: { openOnClick: false, HTMLAttributes: { class: styles.link } } }),
+      NoteListItem,
       SectionDocument,
       Section,
       ColumnBlock,
@@ -731,6 +768,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       DuplicateLine,
       ...TimelineExtensions,
       ...QuoteExtensions,
+      ...ConclusionExtensions,
+      ...TypesExtensions,
+      ...IdKeyExtensions,
+      ...ProsConsExtensions,
+      ...OptionsExtensions,
+      DesignCycle,
+      DictionaryWords,
       ...CycleExtensions,
       ...BreakdownExtensions,
       ...HierarchyExtensions,
@@ -741,6 +785,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       ...InboxExtensions,
       ...HubExtensions,
       ...GlossaryCardExtensions,
+      ...GlossaryChipExtensions,
       ...QuestionExtensions,
       ...CompareExtensions,
       ...DiagramExtensions,
@@ -953,13 +998,20 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     useUIStore.getState().setNoteCursor(noteCursorKey(id, activeTabIdRef.current), { from, to, scroll });
   }
 
-  // Back to where the open tab was left; a tab never opened starts at the end. Focuses the editor
-  // when asked (opening a note from the list, switching tabs).
+  // Back to where the open tab was left; a tab never opened starts at the end, scrolled to the
+  // bottom (focused or not). Focuses the editor when asked (opening a note from the list,
+  // switching tabs).
   function restoreCursor(focus: boolean) {
     const id = currentNoteIdRef.current;
     if (!id || !editor) return;
     const saved = useUIStore.getState().noteCursorMemory[noteCursorKey(id, activeTabIdRef.current)];
-    if (!saved) { if (focus) editor.commands.focus('end'); return; }
+    if (!saved) {
+      if (focus) editor.commands.focus('end');
+      else editor.commands.setTextSelection(Selection.atEnd(editor.state.doc).from);
+      const end = scrollHostOf(editor.view.dom);
+      if (end) requestAnimationFrame(() => { end.scrollTop = end.scrollHeight; });
+      return;
+    }
     const size = editor.state.doc.content.size;
     const chain = editor.chain();
     (focus ? chain.focus(undefined, { scrollIntoView: false }) : chain)
@@ -982,6 +1034,9 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
       updateNote(id as NoteId, { content });
     }
   };
+  // The latest flushCurrentTab, for the open-editors registry (saved before the layout changes).
+  const flushRef = useRef(flushCurrentTab);
+  useEffect(() => { flushRef.current = flushCurrentTab; });
 
   // THE way the active tab changes: state, ref and uiStore's per-note memory together. The memory
   // is written here, when the tab becomes active, not when the note is left — the old leave-time
@@ -992,7 +1047,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     activeTabIdRef.current = tabId;
     if (!noteId) return;
     const ui = useUIStore.getState();
-    ui.setNotesLastActiveTab(tabId);
+    if (inFront) ui.setNotesLastActiveTab(tabId);
     if ((ui.notesTabMemory[noteId] ?? null) !== tabId) ui.setNoteTabMemory(noteId, tabId);
   };
 
@@ -1212,7 +1267,9 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
     // The tab and the content loaded below come from one resolveNoteTab call so they can't
     // disagree — they once did (main content loaded under a restored tab 2, and the next save
     // wrote main over tab 2; see resolveNoteTab).
-    const rememberedTabId = note ? (useUIStore.getState().notesTabMemory[note.id] ?? null) : null;
+    // A note never opened before (nothing remembered) opens on its last tab, at the end.
+    const tabMemory = useUIStore.getState().notesTabMemory;
+    const rememberedTabId = note ? (note.id in tabMemory ? tabMemory[note.id] ?? null : lastTabId(note)) : null;
     const wantedTabId = hasRestoredTabRef.current ? rememberedTabId : activeTabId;
     const { tabId: nextTabId, content: nextContent } = note ? resolveNoteTab(note, wantedTabId) : { tabId: null, content: '' };
     hasRestoredTabRef.current = true;
@@ -1262,10 +1319,14 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   // What's open, for changes made from outside the editor (services/liveNoteEditor.ts).
   useEffect(() => {
     if (!editor || !note || noteLocked) return;
-    const entry = { noteId: note.id, tabId: activeTabId, view: editor.view };
-    registerLiveNoteEditor(entry);
-    return () => registerLiveNoteEditor(null);
-  }, [editor, note?.id, activeTabId, noteLocked]); // eslint-disable-line react-hooks/exhaustive-deps
+    const entry = { noteId: note.id, tabId: activeTabId, view: editor.view, flush: () => flushRef.current() };
+    const offOpen = registerOpenNoteEditor(entry);
+    if (inFront) registerLiveNoteEditor(entry);
+    return () => {
+      offOpen();
+      if (inFront && liveNote()?.view === entry.view) registerLiveNoteEditor(null);
+    };
+  }, [editor, note?.id, activeTabId, noteLocked, inFront]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Something asked to show a passage of this note (services/notePassage.ts): select its first run
   // of marked text and bring it into view. After the tab effect above, so it searches the right tab.
@@ -1727,7 +1788,13 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
   }
 
   return (
-    <div className={styles.container} ref={containerRef}>
+    <div
+      className={styles.container}
+      ref={containerRef}
+      style={note?.color ? { ['--note-color' as string]: note.color } : undefined}
+      data-note-color={note?.color && noteColorBars !== 'off' ? noteColorBars : undefined}
+      data-note-color-headings={note?.color && noteColorHeadings ? '' : undefined}
+    >
       {/* ── Title bar ────────────────────────────────────────────────────── */}
       <div
         className={`${styles.titleBar} ${isAndroid ? styles.titleBarMobile : ''}`}
@@ -1802,7 +1869,7 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
           </>
         )}
 
-        {(!isAndroid || toolsOpen) && (
+        {(!isAndroid || toolsOpen) && placeToolbar(
           <div className={styles.toolbar}>
             {/* Heading style selector */}
             <select
@@ -2038,6 +2105,9 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
 
             <div className={styles.toolbarDivider} />
 
+            {/* View: one note, or several side by side (side by side, it's in the shared ribbon instead) */}
+            {!isAndroid && !pane && <NoteViewMenu />}
+
             {/* Note options menu */}
             <div className={styles.popoverAnchor}>
               <button
@@ -2093,6 +2163,22 @@ export function NoteEditor({ focusSignal, onNavReturn }: NoteEditorProps) {
                   >
                     {note?.isEncrypted ? '🔓 Remove encryption' : '🔒 Encrypt this note'}
                   </button>
+                  <div className={styles.noteMenuColors} role="group" aria-label={LABELS.noteColors.menu}>
+                    <span className={styles.noteMenuLabel}>{LABELS.noteColors.menu}</span>
+                    <div className={styles.noteMenuSwatches}>
+                      {[null, ...SWATCHES.map((sw) => sw.hex)].map((hex) => (
+                        <button
+                          key={hex ?? 'none'}
+                          type="button"
+                          className={`${styles.noteMenuSwatch} ${(note?.color ?? null) === hex ? styles.noteMenuSwatchOn : ''}`}
+                          aria-pressed={(note?.color ?? null) === hex}
+                          title={hex ? swatchLabel(hex) : LABELS.noteColors.none}
+                          aria-label={hex ? swatchLabel(hex) : LABELS.noteColors.none}
+                          onClick={() => { const id = currentNoteIdRef.current; if (id) setNoteColor(id, hex); }}
+                        ><ColorDotIcon color={hex} /></button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

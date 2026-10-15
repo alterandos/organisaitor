@@ -2,7 +2,9 @@ import type { Editor } from '@tiptap/core';
 
 // Font size (the style ribbon's size box, and Ctrl+Shift+< / Ctrl+Shift+>): a step up or down a
 // fixed ladder, like word processors' grow/shrink font. Stored as the textStyle mark's fontSize
-// (Tiptap's FontSize), in px; with nothing selected it applies to what's typed next.
+// (Tiptap's FontSize), in px. With nothing selected it applies to the whole paragraph (or block
+// line) the cursor is in, and the cursor stays where it was (asked for 2026-10-15); in an empty
+// one, to what's typed next.
 
 export const FONT_SIZES = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48];
 
@@ -20,8 +22,14 @@ export function currentFontSize(editor: Editor): number {
 }
 
 export function setFontSize(editor: Editor, px: number | null): void {
-  if (px === null) editor.chain().focus().unsetFontSize().run();
-  else editor.chain().focus().setFontSize(`${px}px`).run();
+  const { empty, $from, from: cursor } = editor.state.selection;
+  const wholeLine = empty && $from.parent.isTextblock && $from.parent.content.size > 0;
+  const chain = editor.chain().focus();
+  if (wholeLine) chain.setTextSelection({ from: $from.start(), to: $from.end() });
+  if (px === null) chain.unsetFontSize();
+  else chain.setFontSize(`${px}px`);
+  if (wholeLine) chain.setTextSelection(cursor);
+  chain.run();
 }
 
 // One step up (+1) or down (-1) the ladder from the current size; nothing past either end.

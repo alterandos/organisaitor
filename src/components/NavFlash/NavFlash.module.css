@@ -1,85 +1,57 @@
-/* The back/forward flash (NavFlash.tsx): never takes a click, sits above the page, below dialogs. */
+/* The back/forward flash (NavFlash.tsx): the compact history carousel in the middle of the screen,
+   a small arrow at its side. Never takes a click; sits above the page, below dialogs; the page
+   isn't blurred. */
 .layer {
   position: fixed;
   inset: 0;
   z-index: var(--z-history);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
+  transition: opacity 120ms ease;
 }
 
-/* The arrow: in the middle, grows a little and fades. */
+.layerHidden { opacity: 0; }
+
+.carousel {
+  position: relative;
+  width: 100%;
+  animation: navIn 200ms ease-out;
+}
+
+@keyframes navIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* The arrow: small, beside the middle card on the side you went towards, drifting that way. */
 .arrow {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 7rem;
-  height: 7rem;
-  margin: -3.5rem 0 0 -3.5rem;
-  padding: 1.6rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0.6rem;
   box-sizing: border-box;
   border-radius: 50%;
-  background: var(--color-surface);
-  color: var(--color-primary);
-  box-shadow: var(--shadow-lg);
-  opacity: 0;
-  animation: navArrow 650ms ease-out;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: var(--shadow-md);
+  animation: navArrow 700ms ease-out forwards;
 }
 
 .arrow svg { width: 100%; height: 100%; }
 
-/* It drifts the way you went: left for back, right for forward. */
-.arrow[data-direction="back"]    { --drift: -1.5rem; }
-.arrow[data-direction="forward"] { --drift: 1.5rem; }
+/* Centred on the middle card's edge: its left edge for back, its right for forward. */
+.arrow[data-direction="back"]    { --edge: calc(-1 * min(7rem, 30vw)); --drift: -0.75rem; }
+.arrow[data-direction="forward"] { --edge: min(7rem, 30vw); --drift: 0.75rem; }
 
 @keyframes navArrow {
-  0%   { opacity: 0;    transform: translateX(0) scale(0.85); }
-  25%  { opacity: 0.95; transform: translateX(0) scale(1); }
-  100% { opacity: 0;    transform: translateX(var(--drift)) scale(1.05); }
+  0%   { opacity: 0; transform: translate(-50%, -50%) translateX(var(--edge)) scale(0.8); }
+  30%  { opacity: 1; transform: translate(-50%, -50%) translateX(var(--edge)) scale(1); }
+  100% { opacity: 1; transform: translate(-50%, -50%) translateX(calc(var(--edge) + var(--drift))) scale(1); }
 }
-
-/* The strip: the stops either side of where you are, small, at the bottom. */
-.strip {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--mobile-nav-h, 0px) + var(--space-6));
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  max-width: calc(100vw - 2 * var(--space-5));
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-md);
-  transform: translateX(-50%);
-  transition: opacity 300ms ease, transform 300ms ease;
-}
-
-.stripHidden { opacity: 0; transform: translate(-50%, 0.5rem); }
-
-.stop {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  max-width: 11rem;
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  color: var(--color-muted);
-  font-size: var(--text-xs);
-  opacity: 0.75;
-}
-
-.here {
-  color: var(--color-text);
-  background: var(--color-primary-subtle);
-  border-color: var(--color-primary-border);
-  font-weight: 600;
-  opacity: 1;
-}
-
-.icon { display: inline-flex; width: 1em; height: 1em; flex: none; }
-.icon svg { width: 100%; height: 100%; }
-.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .srOnly {
   position: absolute;
@@ -91,8 +63,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arrow { animation-name: navArrowFade; }
-  .strip { transition: opacity 300ms ease; }
-  .stripHidden { transform: translateX(-50%); }
-  @keyframes navArrowFade { 0%, 100% { opacity: 0; } 25% { opacity: 0.95; } }
+  .carousel { animation: none; }
+  .arrow { animation: none; transform: translate(-50%, -50%) translateX(var(--edge)); }
 }

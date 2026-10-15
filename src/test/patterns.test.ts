@@ -440,6 +440,15 @@ describe('pattern: right-click menus go through the context-menu registry', () =
   });
 });
 
+describe('pattern: one repeat-rule editor (RepeatField)', () => {
+  it('only components/RepeatField draws the "every N … / ends …" editor', () => {
+    // Its tell is the "Ends" choice. Routines pick weekdays instead, a different control.
+    const files = SOURCE_FILES.filter((f) => f.endsWith('.tsx') && !/components[/\\]RepeatField[/\\]/.test(f));
+    const hits = findMatches(files, /<option value="forever"|value=\{\w*\.?endKind\}|setRepeatEndKind/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
 describe('pattern: the UI completes tasks through toggleTaskCompletion', () => {
   // services/taskCompletion.ts is where "waiting on other tasks?" is asked and the Completed toast
   // (+ Follow-up / Undo) is shown. A component calling the lower layers directly would silently
@@ -667,12 +676,25 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
       'CalendarEventPane/CalendarEventPane.tsx', 'CalendarReminderPane/CalendarReminderPane.tsx', 'CalendarDeadlinePane/CalendarDeadlinePane.tsx',
       'EditRoutinePane/EditRoutinePane.tsx', 'EditTrackerPane/EditTrackerPane.tsx', 'NoteEditorPane/NoteEditorPane.tsx',
       'IntegrationsPane/IntegrationsPane.tsx', 'SettingsPane/SettingsPane.tsx', 'CalendarView/CalendarView.tsx', 'Sidebar/Sidebar.tsx',
+      'WatchlistView/WatchlistView.tsx',
     ];
     const missing = PANES.filter((f) => !/usePaneWidth\(/.test(fs.readFileSync(path.join(SRC, 'components', f), 'utf8')));
     expect(missing).toEqual([]);
     const files = [...walk(SRC, ['.css']), ...SOURCE_FILES].filter((f) => !/components[/\\]ResizeHandle[/\\]/.test(f) && !/src[/\\]index\.css$/.test(f));
     const handRolled = findMatches(files, /col-resize/);
     expect(handRolled, describeHits(handRolled)).toEqual([]);
+  });
+
+  it('Ctrl+[ / Ctrl+] reach every block with designs: each *_DESIGNS list is in designCycle.ts', () => {
+    const dir = path.join(SRC, 'components/NoteEditor/extensions');
+    const cycle = fs.readFileSync(path.join(dir, 'designCycle.ts'), 'utf8');
+    const missing: string[] = [];
+    for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.ts') && !x.endsWith('.test.ts'))) {
+      for (const m of fs.readFileSync(path.join(dir, f), 'utf8').matchAll(/export const ([A-Z_]+_DESIGNS): BlockDesign</g)) {
+        if (!new RegExp(`\\b${m[1]}\\b`).test(cycle)) missing.push(`${f}: ${m[1]}`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 
   it('every note block offers its designs through blockDesigns (Block designs)', () => {
@@ -913,5 +935,38 @@ describe('pattern: the editor library\'s classes are :global in scoped CSS (CLAU
       });
     }
     expect(hits).toEqual([]);
+  });
+});
+
+describe('pattern: marks on text keep out of the palette (CLAUDE.md "Colours a person picks")', () => {
+  // The marks the app draws over words to say what they are. A new one joins this list.
+  const TEXT_MARKS = ['[data-dict-word]', '[data-hub-ref]', '[data-autolink]', '[data-concept-ref]', '[data-concept-hover]'];
+  it('no rule for a text mark uses a palette colour (--color-swatch-*), which is kept for colours a person picks', () => {
+    const hits: string[] = [];
+    for (const f of walk(SRC, ['.css'])) {
+      const css = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        if (TEXT_MARKS.some((s) => m[1].includes(s)) && /--color-swatch-/.test(m[2])) hits.push(`${path.relative(ROOT, f)}: ${m[1].trim()}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+  it('a Dictionary word is shaded with the neutral text-mark token', () => {
+    const css = fs.readFileSync(path.join(SRC, 'components', 'NoteEditor', 'NoteEditor.module.css'), 'utf8');
+    const rule = css.match(/\.editorContent \[data-dict-word\] \{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toContain('var(--color-text-mark)');
+  });
+});
+
+describe('pattern: every note block has a category (CLAUDE.md "Note blocks")', () => {
+  it('each objects/*Block.ts names one of BLOCK_CATEGORIES', () => {
+    const cats = fs.readFileSync(path.join(SRC, 'components/NoteEditor/objects/blockCategories.ts'), 'utf8');
+    const ids = [...cats.matchAll(/\{ id: '(\w+)',/g)].map((m) => m[1]);
+    const bad = SOURCE_FILES.filter((f) => /NoteEditor[/\\]objects[/\\].*Block\.ts$/.test(f)).filter((f) => {
+      const m = fs.readFileSync(f, 'utf8').match(/category: '(\w+)'/);
+      return !m || !ids.includes(m[1]);
+    }).map((f) => path.basename(f));
+    expect(ids.length).toBeGreaterThan(0);
+    expect(bad).toEqual([]);
   });
 });

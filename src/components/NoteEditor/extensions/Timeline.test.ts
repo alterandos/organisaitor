@@ -10,6 +10,8 @@ import { getSession } from '../objects/session';
 import { chosenKind, interpretQuery, matchPickable } from '../objects/kinds';
 import { NOTE_BLOCK_KINDS } from '../objects/blockKinds';
 import { NOTE_OBJECT_KINDS } from '../objects/kinds';
+import { categoryOrder } from '../objects/blockCategories';
+import { NoteListItem } from './ListItem';
 
 // jsdom has no layout; ProseMirror's scroll-into-view asks for rects.
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
@@ -71,7 +73,10 @@ const cursorIn = () => editor.state.selection.$from.parent.type.name;
 
 describe('`\\` offers note blocks', () => {
   it('lists objects then blocks, and a block keyword chooses it', () => {
-    expect(matchPickable('').map((k) => k.id)).toEqual([...NOTE_OBJECT_KINDS, ...NOTE_BLOCK_KINDS].map((k) => k.id));
+    // Nothing typed: objects, then the blocks grouped by category (in registry order within one).
+    const byCategory = [...NOTE_BLOCK_KINDS].sort((a, b) => categoryOrder(a.category) - categoryOrder(b.category));
+    expect(matchPickable('').map((k) => k.id)).toEqual([...NOTE_OBJECT_KINDS, ...byCategory].map((k) => k.id));
+    expect(byCategory[0].category).toBe('card');
     expect(matchPickable('ti').map((k) => k.id)).toEqual(['timeline']);
     expect(chosenKind('tl')?.id).toBe('timeline');
     expect(chosenKind('rem')?.id).toBe('reminder');
@@ -93,6 +98,34 @@ describe('`\\` offers note blocks', () => {
     press('Enter');
     expect(outline()).toEqual(['paragraph:History', 'timeline[ | ]']);
     expect(cursorIn()).toBe('timelineWhen');
+  });
+});
+
+describe('a block on a bullet', () => {
+  function makeList(content: string) {
+    editor = new Editor({
+      element: document.createElement('div'),
+      extensions: [StarterKit.configure({ document: false, listItem: false }), NoteListItem, SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, ...TimelineExtensions],
+      content,
+    });
+    objectTriggerStorage(editor).getContext = () => ({ noteId: 'note-1', collectionId: null, now: new Date(2026, 9, 6, 9) });
+    let at = 0;
+    editor.state.doc.descendants((n, pos, parent) => { if (n.type.name === 'paragraph' && parent?.type.name === 'listItem') at = pos + 1 + n.content.size; });
+    editor.commands.setTextSelection(at);
+  }
+  const lastItem = () => { let out = ''; editor.state.doc.descendants((n) => { if (n.type.name === 'listItem') out = [...Array(n.childCount).keys()].map((i) => n.child(i).type.name).join(','); }); return out; };
+
+  it('on an empty bullet the block takes the bullet\'s line, not a line under an empty bullet', () => {
+    makeList('<ul><li><p>one</p></li><li><p></p></li></ul>');
+    type('\\timeline ');
+    expect(lastItem()).toBe('timeline');
+    expect(cursorIn()).toBe('timelineWhen');
+  });
+
+  it('after text on a bullet the block goes below the text, inside the bullet', () => {
+    makeList('<ul><li><p>one</p></li></ul>');
+    type(' \\tl ');
+    expect(lastItem()).toBe('paragraph,timeline');
   });
 });
 

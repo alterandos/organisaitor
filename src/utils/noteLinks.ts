@@ -1,4 +1,6 @@
 import type { Node as PMNode } from '@tiptap/pm/model';
+import { BLOCK_PART_NODES, NOTE_BLOCK_NODES } from '@/components/NoteEditor/blockNodes';
+import { LABELS } from '@/config/labels';
 import type { Note } from '@/types/notes';
 
 // Links between notes (the `noteLink` mark: `[[`, `\ref`, Link to a note…) and the passages they can
@@ -120,19 +122,49 @@ export function mentionRange(doc: PMNode, title: string): { from: number; to: nu
 
 export interface Passage {
   pos:     number;
-  kind:    'heading' | 'paragraph';
-  level:   number;            // a heading's level; 0 for a paragraph
+  kind:    'heading' | 'paragraph' | 'block' | 'part';
+  level:   number;            // a heading's level; 1 for a block's part; 0 otherwise
   text:    string;
   blockId: string | null;
+  label:   string | null;     // a block's kind ("Types"), for a block
 }
 
-// The headings and paragraphs of a note that a link or an embed can point at, in order.
+const PART_NODES = new Set(Object.values(BLOCK_PART_NODES));
+const SUMMARY = 80;
+
+// What a block is called (its `\` menu label), for the picker and a link's name.
+export function blockLabel(name: string): string {
+  const B = LABELS.noteBlocks;
+  const names: Record<string, string> = {
+    timeline: B.timeline.label, quoteBlock: B.quote.label, conclusion: B.conclusion.label, types: B.types.label,
+    idKey: B.idKey.label, prosCons: B.prosCons.label, options: B.options.label, cycle: B.cycle.label,
+    breakdown: B.breakdown.label, hierarchy: B.hierarchy.label, pyramid: B.pyramid.label, chart: B.chart.label,
+    codeBlock: B.code.label, mathBlock: B.maths.label, inbox: B.inbox.label, glossaryCard: B.definition.label,
+    questionBlock: B.question.label, compareBlock: B.compare.label, diagram: B.diagram.label, hub: LABELS.hubs.label,
+  };
+  return names[name] ?? name;
+}
+
+// The headings and paragraphs of a note that a link or an embed can point at, in order, and every
+// note block and its parts (2026-10-15: "should be able to link any block").
 export function passagesOf(doc: PMNode): Passage[] {
   const out: Passage[] = [];
   doc.descendants((node, pos) => {
+    const name = node.type.name;
+    const blockId = (node.attrs.blockId as string | null) ?? null;
+    if (NOTE_BLOCK_NODES.has(name)) {
+      const words = node.textContent.trim().replace(/\s+/g, ' ');
+      out.push({ pos, kind: 'block', level: 0, text: words.length > SUMMARY ? `${words.slice(0, SUMMARY)}…` : words, blockId, label: blockLabel(name) });
+      return true;
+    }
+    if (PART_NODES.has(name)) {
+      const text = node.textContent.trim();
+      if (text) out.push({ pos, kind: 'part', level: 1, text, blockId, label: null });
+      return false;
+    }
     if (node.type.name === 'heading' || node.type.name === 'paragraph') {
       const text = node.textContent.trim();
-      if (text) out.push({ pos, kind: node.type.name === 'heading' ? 'heading' : 'paragraph', level: node.type.name === 'heading' ? (node.attrs.level as number) : 0, text, blockId: (node.attrs.blockId as string | null) ?? null });
+      if (text) out.push({ pos, kind: node.type.name === 'heading' ? 'heading' : 'paragraph', level: node.type.name === 'heading' ? (node.attrs.level as number) : 0, text, blockId, label: null });
       return false;
     }
     return true;

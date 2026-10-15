@@ -28,6 +28,9 @@ function inlineText(node: PMNode): string {
       out += '\n';
     } else if (child.type.name === 'movedStub') {
       out += `(${LABELS.sendToInbox.stub(String(child.attrs.title ?? ''))})`;
+    } else if (child.type.name === 'glossaryChip') {
+      const entry = glossaryEntry(child.attrs.entryId as string);
+      out += entry && !entry.locked ? entry.term : '';
     } else if (child.type.name === 'mathInline') {
       out += `$${child.attrs.latex as string}$`;
     } else if (child.isInline) {
@@ -182,6 +185,73 @@ $$`;
       // The title, then the data as a tab-separated table (pastes into a spreadsheet).
       const spec = normalizeChart(node.attrs.spec);
       return [spec.title, chartToTable(spec)].filter(Boolean).join('\n');
+    }
+    case 'prosCons': {
+      // "Should I move? / + Cheaper rent (2) / − Far from friends / Verdict: …".
+      const lines = [inlineText(node.child(0)).trim()].filter(Boolean);
+      for (const i of [1, 2]) node.child(i).forEach((p) => {
+        const text = inlineText(p).trim();
+        if (text) lines.push(`${i === 1 ? '+' : '−'} ${text}${(p.attrs.weight as number) > 1 ? ` (${p.attrs.weight})` : ''}`);
+      });
+      const verdict = inlineText(node.child(3)).trim();
+      if (verdict) lines.push(`${LABELS.noteBlocks.prosCons.verdictPlaceholder}: ${verdict}`);
+      return lines.join('\n');
+    }
+    case 'options': {
+      // "Options for cutting emissions:" then "- Carbon tax — price it (Chosen)" and its +/− points.
+      const L = LABELS.noteBlocks.options;
+      const lines = [`${inlineText(node.child(0)).trim() || L.label}:`];
+      node.forEach((item, _o, i) => {
+        if (i === 0) return;
+        const name = inlineText(item.child(0)).trim();
+        const note = inlineText(item.child(1)).trim();
+        if (!name && !note) return;
+        const status = item.attrs.status === 'considering' ? '' : ` (${L.statuses[item.attrs.status as 'chosen' | 'ruled']})`;
+        lines.push(`- ${name}${note ? ` — ${note}` : ''}${status}`);
+        for (const li of [2, 3]) item.child(li).forEach((p) => {
+          const text = inlineText(p).trim();
+          if (text) lines.push(`  ${li === 2 ? '+' : '−'} ${text}`);
+        });
+      });
+      return lines.join('\n');
+    }
+    case 'idKey': {
+      // "Key: Garden birds", then "1. Does it have a hooked beak?" and "   1a. Yes ……… Raptor".
+      const lines = [LABELS.noteBlocks.idKey.heading(inlineText(node.child(0)).trim())];
+      node.forEach((step, _o, si) => {
+        if (si === 0) return;
+        const question = inlineText(step.child(0)).trim();
+        lines.push(`${si}.${question ? ` ${question}` : ''}`);
+        step.forEach((lead, _o2, li) => {
+          if (li === 0) return;
+          const choice = inlineText(lead.child(0)).trim();
+          const result = inlineText(lead.child(1)).trim();
+          const n = /^\d+$/.test(result) ? ` → ${result}` : result ? ` … ${result}` : '';
+          lines.push(`   ${si}${'abcdefghijklmnopqrstuvwxyz'[li - 1] ?? ''}. ${choice}${n}`);
+        });
+      });
+      return lines.join('\n');
+    }
+    case 'types': {
+      // "Birds, types:" then "- Raptors — hooked beak, keen sight (e.g. golden eagle)".
+      const L = LABELS.noteBlocks.types;
+      const lines = [L.typesOf(inlineText(node.child(0)).trim() || L.categoryPlaceholder)];
+      node.forEach((item, _o, i) => {
+        if (i === 0) return;
+        const [name, trait, example] = [0, 1, 2].map((f) => inlineText(item.child(f)).trim());
+        if (!name && !trait) return;
+        lines.push(`- ${name}${trait ? ` — ${trait}` : ''}${example ? ` (${L.examplePrefix} ${example})` : ''}`);
+      });
+      return lines.join('\n');
+    }
+    case 'conclusion': {
+      // "∵ It rained all week." per reason, then "∴ The river will flood." — the logic signs.
+      const lines: string[] = [];
+      node.forEach((part, _o, i) => {
+        const text = inlineText(part).trim();
+        if (text) lines.push(`${i === node.childCount - 1 ? '∴' : '∵'} ${text}`);
+      });
+      return lines.join('\n');
     }
     case 'pyramid': {
       // "Pyramid, top to bottom:" then "1. Self-actualisation — becoming who you can be".

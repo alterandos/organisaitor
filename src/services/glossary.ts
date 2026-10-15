@@ -4,7 +4,7 @@ import { BUILTIN_TAGS } from '@/components/NoteEditor/builtinTags';
 import { GLOSSARY_TYPES, glossaryMeaning } from '@/config/structuredTagTypes';
 import { countConceptRefs } from '@/utils/noteContent';
 import { getNoteNotebookPath } from '@/utils/notes';
-import { liveNote } from '@/services/liveNoteEditor';
+import { liveNotes } from '@/services/liveNoteEditor';
 import type { NoteTag } from '@/types/notes';
 import type { Note, StructuredTagEntry } from '@/types/notes';
 import type { NoteId, StructuredTagEntryId } from '@/types';
@@ -51,17 +51,17 @@ export function toGlossaryEntry(raw: StructuredTagEntry, notes: Record<NoteId, N
 // yet); a locked note can't be read, so its records count as there.
 function stillDefined(entries: StructuredTagEntry[], notes: Record<NoteId, Note>): Set<string> {
   const out = new Set<string>();
-  const live = liveNote();
+  const live = liveNotes();
   const inLive = new Set<string>();
-  live?.view.state.doc.descendants((n) => {
-    if (n.type.name === 'glossaryCard' && n.attrs.entryId) inLive.add(n.attrs.entryId as string);
+  for (const l of live) l.view.state.doc.descendants((n) => {
+    if ((n.type.name === 'glossaryCard' || n.type.name === 'glossaryChip') && n.attrs.entryId) inLive.add(n.attrs.entryId as string);
     if (n.isText) for (const m of n.marks) if (m.type.name === 'noteTag' && m.attrs.structuredEntryId) inLive.add(m.attrs.structuredEntryId as string);
     return true;
   });
   for (const e of entries) {
     const raw = notes[e.noteId];
     if (!raw) continue;
-    if (live?.noteId === e.noteId && inLive.has(e.id)) { out.add(e.id); continue; }
+    if (live.some((l) => l.noteId === e.noteId) && inLive.has(e.id)) { out.add(e.id); continue; }
     if (isNoteLocked(raw)) { out.add(e.id); continue; }
     const n = noteView(raw);
     if ([n.content, ...n.tabs.map((t) => t.content)].some((c) => c?.includes(e.id))) out.add(e.id);

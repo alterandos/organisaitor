@@ -251,7 +251,7 @@ export default function App() {
 
   useNotificationChecker();
   useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initAutoBackup(); migrateTaskDeadlineShadows(); }, []);
-  // `//name` → a Greek letter (and later other characters) in every text field (src/specialChars/).
+  // `//name` → a character (Greek, arrows, maths, super/subscripts) in every text field (src/specialChars/).
   useEffect(() => installSpecialCharInput(), []);
 
   const setSession = useAuthStore((s) => s.setSession);

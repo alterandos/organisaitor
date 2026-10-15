@@ -4,6 +4,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 import type { MathfieldElement } from 'mathlive';
 import { LABELS } from '@/config/labels';
+import { useSettingsStore, type MathSlash } from '@/store/settingsStore';
 import { log, errorMessage } from '@/utils/log';
 import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, registerEnterableBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 
@@ -45,6 +46,37 @@ export function loadMathLive(): Promise<MathLive> {
     return m;
   });
   return loading;
+}
+
+// ── Typing in maths ──────────────────────────────────────────────────────────
+
+// Words that become a symbol as they're typed, on top of MathLive's own (`alpha`, `~~` for ≈, `xx`
+// for ×, `!=`…): the ones people looked for and didn't find (2026-10-16). The same names as the
+// `//name` special characters elsewhere in the app.
+export const MATH_SHORTCUTS: Record<string, string> = {
+  approx: '\\approx',
+  cdot:   '\\cdot',
+  dot:    '\\cdot',
+  neq:    '\\neq',
+  equiv:  '\\equiv',
+  propto: '\\propto',
+};
+
+type KeyBinding = { key: string; ifMode?: string; command: unknown };
+const FRACTION = ['insert', '\\frac{#@}{#?}'];
+const SLASH = ['insert', '/'];
+const SLASH_KEYS = new Set(['/', 'alt+/', '[Slash]', 'alt+[Slash]']);
+
+// What `/` does in maths (Settings → Notes, settingsStore.mathSlash): a fraction (as in Word's
+// equation editor) or a plain slash; Alt+/ always gives the other. They take the place of
+// MathLive's own bindings for those keys: kept beside them, MathLive reports the pair as ambiguous
+// and Alt+/ did nothing (checked in Chromium 2026-10-16).
+export function slashBindings(mode: MathSlash): KeyBinding[] {
+  const [plain, alt] = mode === 'slash' ? [SLASH, FRACTION] : [FRACTION, SLASH];
+  return [
+    { key: '/', ifMode: 'math', command: plain },
+    { key: 'alt+/', ifMode: 'math', command: alt },
+  ];
 }
 
 // ── The nodes ────────────────────────────────────────────────────────────────
@@ -191,6 +223,11 @@ class MathView {
   private pendingText = '';
   private focusEdge: 'start' | 'end' | null = null;
   private destroyed = false;
+  private baseBindings: KeyBinding[] = [];
+  private offSettings = useSettingsStore.subscribe((st, prev) => {
+    if (st.mathSlash === prev.mathSlash || !this.field) return;
+    this.field.keybindings = [...this.baseBindings, ...slashBindings(st.mathSlash)] as typeof this.field.keybindings;
+  });
 
   constructor(node: PMNode, editor: Editor, getPos: () => number | undefined) {
     this.node = node;
@@ -230,6 +267,9 @@ class MathView {
     field.setAttribute('aria-label', LABELS.noteBlocks.maths.fieldLabel);
     field.placeholder = `\\text{${LABELS.noteBlocks.maths.placeholder}}`;
     field.menuItems = [];
+    field.inlineShortcuts = { ...field.inlineShortcuts, ...MATH_SHORTCUTS };
+    this.baseBindings = (field.keybindings as KeyBinding[]).filter((b) => !SLASH_KEYS.has(b.key));
+    field.keybindings = [...this.baseBindings, ...slashBindings(useSettingsStore.getState().mathSlash)] as typeof field.keybindings;
     field.readOnly = !this.editor.isEditable;
     field.value = this.node.attrs.latex as string;
     field.addEventListener('input', () => this.commit(field.value));
@@ -324,7 +364,7 @@ class MathView {
 
   ignoreMutation() { return true; }
 
-  destroy() { this.destroyed = true; }
+  destroy() { this.destroyed = true; this.offSettings(); }
 }
 
 // Enter on a selected maths opens it for typing, and typing on a selected maths types into it

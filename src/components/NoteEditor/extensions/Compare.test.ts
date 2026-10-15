@@ -90,10 +90,10 @@ describe('comparison block', () => {
     type('\\compare Renting');
     press('Enter');
     type('Flexible');
-    setCompareVariant(editor.view, cPos(), 'proscons');
+    setCompareVariant(editor.view, cPos(), 'table');
     for (const content of [editor.getJSON(), editor.getHTML()]) {
       editor.commands.setContent(content);
-      expect(block().attrs.variant).toBe('proscons');
+      expect(block().attrs.variant).toBe('table');
       expect(sides()).toEqual([['Renting', 'Flexible'], ['', '']]);
     }
     expect(noteClipboardText(editor.state.doc.slice(0, editor.state.doc.content.size))).toBe('Renting:\n- Flexible\nvs\nSide:');

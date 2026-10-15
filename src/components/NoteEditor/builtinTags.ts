@@ -21,6 +21,7 @@ export const BUILTIN_TAGS: BuiltinTag[] = [
   { id: 'builtin-important',   name: 'Important',   icon: '⭐', color: '#f59e0b', typeKey: 'important'   },
   { id: 'builtin-concept',     name: 'Concept',     icon: '💡', color: '#6366f1', typeKey: 'concept'     },
   { id: 'builtin-definition',  name: 'Definition',  icon: '📖', color: '#10b981', typeKey: 'definition'  },
+  { id: 'builtin-profile',     name: 'Profile',     icon: '🪪', color: '#8b5cf6', typeKey: 'profile'     },
   { id: 'builtin-example',     name: 'Example',     icon: '📋', color: '#f97316', typeKey: 'example'     },
   { id: 'builtin-question',    name: 'Question',    icon: '❓', color: '#ef4444', typeKey: 'question'    },
   { id: 'builtin-reference',   name: 'Reference',   icon: '📚', color: '#0891b2', typeKey: 'reference'   },

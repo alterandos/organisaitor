@@ -565,6 +565,37 @@
 }
 .noteMenuItem:hover { background: var(--color-surface-alt); }
 
+/* The note's colour, in the Note ▾ menu: No colour, then the palette. */
+.noteMenuColors {
+  padding: var(--space-2) 0.875rem;
+  border-top: 1px solid var(--color-border);
+}
+.noteMenuLabel {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+.noteMenuSwatches {
+  display: grid;
+  grid-template-columns: repeat(7, 1.5rem);
+  gap: 2px;
+}
+.noteMenuSwatch {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-size: var(--text-lg);
+  cursor: pointer;
+}
+.noteMenuSwatch:hover { background: var(--color-surface-alt); }
+.noteMenuSwatchOn { border-color: var(--color-text); }
+
 /* ── Editor + TOC layout ─────────────────────────────────────────────────── */
 
 .editorArea {
@@ -1476,6 +1507,983 @@
 .editorContent [data-type="quote"]:hover > [data-quote-tools],
 .editorContent [data-type="quote"][data-qb-current] > [data-quote-tools] {
   opacity: 1;
+}
+
+/* ── Conclusion (extensions/Conclusion.ts, `\conclusion`) ───────────────────────
+   A conclusion and, optionally, the reasons written in it that lead to it. Five designs, each its
+   own [data-variant] block, each drawing the reasons as feeding the conclusion; the text, the
+   placeholders and the pill are shared. data-cc-reasons is on the block when it has reasons.
+   --cc-mid is the middle of a part's first line; --cc-rail where the arrow's rail runs. */
+
+.editorContent [data-type="conclusion"] {
+  --cc-color: var(--color-primary);
+  --cc-mid: 0.8em;
+  --cc-rail: 0.55rem;
+  position: relative;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.editorContent [data-cc-reason],
+.editorContent [data-cc-text] {
+  position: relative;
+  color: var(--color-text);
+}
+.editorContent [data-cc-text] { font-weight: 600; }
+
+.editorContent [data-cc-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-cc-empty]::after {
+  content: attr(data-cc-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.editorContent [data-conclusion-tools] { top: -14px; right: 0; }
+.editorContent [data-type="conclusion"]:hover > [data-conclusion-tools],
+.editorContent [data-type="conclusion"][data-cc-current] > [data-conclusion-tools] { opacity: 1; }
+
+/* ·· Arrow: a rail down from what's above (or from each reason), turning to point at the text ·· */
+
+.editorContent [data-variant="arrow"] > [data-cc-reason],
+.editorContent [data-variant="arrow"] > [data-cc-text] { padding-left: 2.1rem; }
+
+/* Each reason: the rail runs down its left (from its middle, on the first) and a tick joins it. */
+.editorContent [data-variant="arrow"] > [data-cc-reason] {
+  background: linear-gradient(var(--cc-color), var(--cc-color)) no-repeat var(--cc-rail) 0 / 2px 100%;
+}
+.editorContent [data-variant="arrow"] > [data-cc-reason][data-cc-first] {
+  background-position-y: var(--cc-mid);
+  background-size: 2px calc(100% - var(--cc-mid));
+}
+.editorContent [data-variant="arrow"] > [data-cc-reason]::before {
+  content: '';
+  position: absolute;
+  left: var(--cc-rail);
+  top: calc(var(--cc-mid) - 1px);
+  width: 0.9rem;
+  border-top: 2px solid color-mix(in srgb, var(--cc-color) 55%, transparent);
+  pointer-events: none;
+}
+
+/* The turn and the head, at the conclusion: from above the block, or from the last reason. */
+.editorContent [data-cc-arrow] {
+  position: absolute;
+  left: var(--cc-rail);
+  top: -0.7rem;
+  width: 1rem;
+  height: calc(0.7rem + var(--cc-mid));
+  border-left: 2px solid var(--cc-color);
+  border-bottom: 2px solid var(--cc-color);
+  border-bottom-left-radius: var(--radius-sm);
+  pointer-events: none;
+}
+.editorContent [data-cc-reasons] [data-cc-arrow] { top: 0; height: var(--cc-mid); }
+.editorContent [data-cc-arrow]::after {
+  content: '';
+  position: absolute;
+  right: -7px;
+  bottom: -6px;
+  border-left: 7px solid var(--cc-color);
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+
+/* ·· Brace: a horizontal } over the text, gathering what's above into it ······················ */
+
+.editorContent [data-variant="brace"] > [data-cc-text] { text-align: center; }
+.editorContent [data-cc-brace] {
+  display: flex;
+  align-items: flex-start;
+  height: 18px;
+  margin: 0.2rem 0 0.4rem;
+  color: var(--cc-color);
+  user-select: none;
+}
+.editorContent [data-cc-brace] svg {
+  flex: 0 0 auto;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  overflow: visible;
+}
+.editorContent [data-cc-brace] [data-cc-curl] { width: 18px; }
+.editorContent [data-cc-brace] [data-cc-point] { width: 24px; }
+.editorContent [data-cc-brace] i {
+  flex: 1 1 auto;
+  height: 0;
+  margin-top: 9.4px;
+  border-top: 2px solid currentColor;
+}
+
+/* ·· Therefore: ∵ (because) before each reason, ∴ (therefore) before the conclusion ··········· */
+
+.editorContent [data-variant="therefore"] > [data-cc-reason],
+.editorContent [data-variant="therefore"] > [data-cc-text] { padding-left: 2rem; }
+.editorContent [data-variant="therefore"] > [data-cc-reason]::before,
+.editorContent [data-variant="therefore"] > [data-cc-text]::before {
+  position: absolute;
+  left: 0.3rem;
+  top: 0;
+  font-size: 1.3em;
+  font-weight: 700;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.editorContent [data-variant="therefore"] > [data-cc-reason]::before { content: '∵'; color: color-mix(in srgb, var(--cc-color) 55%, var(--color-muted)); }
+.editorContent [data-variant="therefore"] > [data-cc-text]::before { content: '∴'; color: var(--cc-color); }
+.editorContent [data-variant="therefore"][data-cc-reasons] > [data-cc-text] { margin-top: 0.3rem; }
+
+/* ·· Total line: the reasons like figures, a double rule, the result ·························· */
+
+.editorContent [data-variant="total"] > [data-cc-text] {
+  margin-top: 0.3rem;
+  padding-top: 0.45rem;
+  border-top: 3px double color-mix(in srgb, var(--color-text) 65%, transparent);
+  font-weight: 700;
+}
+
+/* ·· Funnel: the reasons as bands of a funnel narrowing to the conclusion at its spout ········ */
+
+.editorContent [data-variant="funnel"] {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 44rem;
+  margin-inline: auto;
+}
+/* The band is the reason itself, clipped; its padding keeps the text inside the narrower edge. */
+.editorContent [data-variant="funnel"] > [data-cc-reason] {
+  padding: 0.5rem calc((100% - var(--bottom)) / 2 + 0.75rem);
+  font-size: var(--text-md);
+  text-align: center;
+  background: color-mix(in srgb, var(--cc-color) 16%, var(--color-surface));
+  clip-path: polygon(calc(50% - var(--top) / 2) 0, calc(50% + var(--top) / 2) 0, calc(50% + var(--bottom) / 2) 100%, calc(50% - var(--bottom) / 2) 100%);
+}
+.editorContent [data-variant="funnel"] > [data-cc-text] {
+  align-self: center;
+  width: 42%;
+  min-width: min(12rem, 100%);
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--cc-color) 30%, var(--color-surface));
+  text-align: center;
+}
+/* No reasons: a small funnel above the text, pouring into it. */
+.editorContent [data-variant="funnel"]:not([data-cc-reasons])::before {
+  content: '';
+  align-self: center;
+  width: 3.4rem;
+  height: 0.9rem;
+  background: color-mix(in srgb, var(--cc-color) 35%, var(--color-surface));
+  clip-path: polygon(0 0, 100% 0, 62% 100%, 38% 100%);
+}
+
+/* ── Types (extensions/Types.ts, `\types`) ───────────────────────────────────────
+   A category and its kinds ("is a kind of", not the breakdown's "is part of"). Four designs, each
+   its own [data-variant] block; the fields, placeholders, icon slot, × and pill are shared.
+   --ty-n is how many types; the first and last type carry data-ty-first / data-ty-last. */
+
+.editorContent [data-type="types"] {
+  --ty-color: var(--color-primary);
+  --ty-line: color-mix(in srgb, var(--ty-color) 55%, var(--color-border-strong));
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.editorContent [data-ty-category] {
+  font-weight: 700;
+  color: var(--color-text);
+}
+.editorContent [data-ty-category][data-ty-suffix]::after {
+  content: ' · ' attr(data-ty-suffix);
+  color: var(--color-muted);
+  font-weight: 500;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.editorContent [data-type="types-item"] { position: relative; }
+.editorContent [data-ty-name] { font-weight: 650; color: var(--color-text); }
+.editorContent [data-ty-trait] { color: var(--color-muted); font-size: var(--text-sm); line-height: 1.4; }
+.editorContent [data-ty-example] { color: var(--color-muted); font-size: var(--text-sm); font-style: italic; }
+.editorContent [data-ty-example]:not([data-ty-empty])::before { content: 'e.g. '; font-style: normal; }
+.editorContent [data-ty-hide] { display: none; }
+
+.editorContent [data-ty-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-ty-empty]::after {
+  content: attr(data-ty-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  font-style: normal;
+  pointer-events: none;
+}
+
+/* The icon slot: shown when set; while empty, only on hover, while editing, and always on touch. */
+.editorContent [data-ty-icon] {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xl);
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+}
+.editorContent [data-ty-icon] img { width: 100%; height: 100%; object-fit: cover; }
+.editorContent [data-ty-icon="empty"] {
+  display: none;
+  border: 1px dashed var(--color-border-strong);
+  color: var(--color-muted);
+  font-size: var(--text-base);
+}
+.editorContent [data-type="types"][data-ty-current] [data-ty-icon="empty"],
+.editorContent [data-type="types-item"]:hover > [data-ty-icon="empty"] { display: grid; }
+.editorContent [data-ty-icon][data-drop] { outline: 2px solid var(--ty-color); }
+
+.editorContent [data-ty-delete] {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+.editorContent [data-type="types-item"]:hover > [data-ty-delete] { opacity: 1; }
+.editorContent [data-ty-delete]:hover { background: var(--color-surface-alt); color: var(--color-danger); }
+
+.editorContent [data-types-tools] { top: -14px; right: 0; }
+.editorContent [data-type="types"]:hover > [data-types-tools],
+.editorContent [data-type="types"][data-ty-current] > [data-types-tools] { opacity: 1; }
+
+@media (hover: none) {
+  .editorContent [data-ty-icon="empty"] { display: grid; }
+  .editorContent [data-ty-delete] { opacity: 1; }
+}
+
+/* ·· Field guide: a card per type, like a field guide's plate ································ */
+
+.editorContent [data-type="types"][data-variant="guide"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: 0.6rem;
+}
+.editorContent [data-variant="guide"] > [data-ty-category] { grid-column: 1 / -1; margin-bottom: 0.15rem; }
+.editorContent [data-variant="guide"] > [data-type="types-item"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--ty-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.editorContent [data-variant="guide"] [data-ty-icon] { margin-bottom: 0.2rem; }
+
+/* ·· Umbrella: an arched canopy named for the category, the types hanging beneath ············ */
+
+.editorContent [data-type="types"][data-variant="umbrella"] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.1rem 0.75rem;
+  width: fit-content;
+  min-width: min(26rem, 100%);
+  max-width: 100%;
+  margin-inline: auto;
+}
+.editorContent [data-variant="umbrella"] > [data-ty-category] {
+  flex: 0 0 100%;
+  position: relative;
+  padding: 1.1rem 1rem 0.6rem;
+  text-align: center;
+  font-size: var(--text-lg);
+}
+.editorContent [data-variant="umbrella"] > [data-ty-category]::before {
+  content: '';
+  position: absolute;
+  inset: 0 4% 0;
+  border: 2px solid var(--ty-line);
+  border-bottom: none;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: color-mix(in srgb, var(--ty-color) 7%, transparent);
+  pointer-events: none;
+}
+.editorContent [data-variant="umbrella"] > [data-type="types-item"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 13rem;
+  padding: 0.45rem 0.85rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--ty-color) 35%, var(--color-border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--ty-color) 8%, var(--color-surface));
+  text-align: center;
+}
+/* Each type hangs from the canopy on a short line. */
+.editorContent [data-variant="umbrella"] > [data-type="types-item"]::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -1.1rem;
+  height: 1.1rem;
+  border-left: 2px solid var(--ty-line);
+}
+.editorContent [data-variant="umbrella"] [data-ty-icon] { width: 1.9rem; height: 1.9rem; font-size: var(--text-lg); }
+
+/* ·· "Is a" fork: each type joined to the category by the hollow-triangle "is a kind of" arrow ··· */
+
+.editorContent [data-type="types"][data-variant="isa"] {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 3.2rem;
+  row-gap: 0.35rem;
+  align-items: center;
+}
+.editorContent [data-variant="isa"] > [data-ty-category] {
+  grid-column: 1;
+  grid-row: 1 / span var(--ty-n);
+  position: relative;
+  max-width: 14rem;
+  padding: 0.5rem 0.8rem;
+  border: 1.5px solid var(--ty-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+/* The arrow at the category: a hollow triangle on its edge, and the line out to the trunk. */
+.editorContent [data-variant="isa"] > [data-ty-category]::before {
+  content: '◁';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translate(0, -52%);
+  color: var(--ty-line);
+  font-size: var(--text-base);
+  line-height: 1;
+  background: var(--color-bg);
+}
+.editorContent [data-variant="isa"] > [data-type="types-item"] {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 0.6rem;
+  align-items: center;
+  padding: 0.3rem 0.4rem 0.3rem 0;
+}
+.editorContent [data-variant="isa"] > [data-type="types-item"] > :not([data-ty-icon], [data-ty-delete]) { grid-column: 2; }
+.editorContent [data-variant="isa"] [data-ty-icon] { grid-row: 1 / span 3; width: 1.9rem; height: 1.9rem; font-size: var(--text-lg); }
+.editorContent [data-variant="isa"] [data-ty-icon="empty"] { display: none; }
+.editorContent [data-type="types"][data-variant="isa"][data-ty-current] [data-ty-icon="empty"],
+.editorContent [data-variant="isa"] > [data-type="types-item"]:hover > [data-ty-icon="empty"] { display: grid; }
+/* The trunk: a vertical line down the gap (from the first type's middle to the last's), each type's
+   branch off it, and the line from the trunk's middle back to the category's arrow. */
+.editorContent [data-variant="isa"] > [data-type="types-item"]::before {
+  content: '';
+  position: absolute;
+  left: -1.6rem;
+  top: calc(-0.35rem / 2);
+  bottom: calc(-0.35rem / 2);
+  border-left: 2px solid var(--ty-line);
+}
+.editorContent [data-variant="isa"] > [data-type="types-item"][data-ty-first]::before { top: 50%; }
+.editorContent [data-variant="isa"] > [data-type="types-item"][data-ty-last]::before { bottom: 50%; }
+.editorContent [data-variant="isa"] > [data-type="types-item"][data-ty-first][data-ty-last]::before { display: none; }
+.editorContent [data-variant="isa"] > [data-type="types-item"]::after {
+  content: '';
+  position: absolute;
+  left: -1.6rem;
+  top: 50%;
+  width: 1.4rem;
+  border-top: 2px solid var(--ty-line);
+}
+.editorContent [data-variant="isa"] > [data-ty-category]::after {
+  content: '';
+  position: absolute;
+  left: calc(100% + 0.95rem);
+  top: 50%;
+  width: calc(3.2rem - 1.6rem - 0.95rem + 1px);
+  border-top: 2px solid var(--ty-line);
+}
+
+/* ·· Compact: the category and a line of chips (what sets each apart is its hover title) ········ */
+
+.editorContent [data-type="types"][data-variant="compact"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.editorContent [data-variant="compact"] > [data-ty-category] { margin-right: 0.3rem; }
+.editorContent [data-variant="compact"] > [data-ty-category][data-ty-suffix]::after { content: ', ' attr(data-ty-suffix) ':'; text-transform: none; letter-spacing: 0; font-size: inherit; }
+.editorContent [data-variant="compact"] > [data-type="types-item"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--ty-color) 35%, var(--color-border));
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ty-color) 8%, var(--color-surface));
+}
+.editorContent [data-variant="compact"] [data-ty-icon] { width: 1.2rem; height: 1.2rem; font-size: var(--text-sm); border-radius: var(--radius-pill); }
+.editorContent [data-variant="compact"]:not([data-ty-current]) [data-ty-trait],
+.editorContent [data-variant="compact"]:not([data-ty-current]) [data-ty-example] { display: none; }
+.editorContent [data-variant="compact"] [data-ty-delete] { position: static; opacity: 0; width: 14px; height: 14px; }
+.editorContent [data-variant="compact"] > [data-type="types-item"]:hover > [data-ty-delete] { opacity: 1; }
+
+/* ── Identification key (extensions/IdKey.ts, `\key`) ──────────────────────────────
+   Numbered steps of choices; each choice leads to an answer or to another step. Two designs, each
+   its own [data-variant] block; numbering (data-ik-num on a step, data-ik-label on a choice), the
+   answer / go-to / bad-step looks, placeholders and the pill are shared. */
+
+.editorContent [data-type="idkey"] {
+  --ik-color: var(--color-primary);
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.editorContent [data-ik-title] {
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.editorContent [data-type="idkey-step"] { position: relative; }
+.editorContent [data-ik-question] { color: var(--color-text); font-style: italic; }
+.editorContent [data-ik-hide] { display: none; }
+.editorContent [data-type="idkey-lead"] { position: relative; }
+.editorContent [data-ik-choice] { color: var(--color-text); }
+
+/* A result: an answer stands out; a step to go to reads as "→ 2"; a step that doesn't exist is flagged. */
+.editorContent [data-ik-answer] { font-weight: 650; color: var(--color-text); }
+.editorContent [data-ik-goto] { color: var(--ik-color); font-weight: 650; }
+.editorContent [data-ik-goto]::before { content: '→ '; }
+.editorContent [data-ik-bad] {
+  color: var(--color-danger);
+  text-decoration: underline wavy color-mix(in srgb, var(--color-danger) 60%, transparent);
+  text-underline-offset: 3px;
+}
+.editorContent [data-ik-goto-btn] {
+  margin-left: 0.25rem;
+  padding: 0 0.3rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ik-color);
+  font: inherit;
+  cursor: pointer;
+}
+.editorContent [data-ik-goto-btn]:hover { background: var(--color-primary-subtle); }
+
+.editorContent [data-ik-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-ik-empty]::after {
+  content: attr(data-ik-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  font-style: normal;
+  pointer-events: none;
+}
+
+.editorContent [data-idkey-tools] { top: -14px; right: 0; }
+.editorContent [data-type="idkey"]:hover > [data-idkey-tools],
+.editorContent [data-type="idkey"][data-ik-current] > [data-idkey-tools] { opacity: 1; }
+
+/* ·· Couplets: the printed key — "1a. Hooked beak ……… Raptor", the choices of a step together ···· */
+
+.editorContent [data-type="idkey"][data-variant="couplets"] { max-width: 46rem; }
+.editorContent [data-variant="couplets"] > [data-type="idkey-step"] {
+  padding: 0.3rem 0 0.35rem 2.4rem;
+  border-top: 1px solid var(--color-border);
+}
+.editorContent [data-variant="couplets"] > [data-type="idkey-step"]:last-child { border-bottom: 1px solid var(--color-border); }
+.editorContent [data-variant="couplets"] > [data-type="idkey-step"]::before {
+  content: attr(data-ik-num);
+  position: absolute;
+  left: 0.4rem;
+  top: 0.3rem;
+  min-width: 1.4rem;
+  color: var(--ik-color);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.editorContent [data-variant="couplets"] [data-ik-question] { margin-bottom: 0.1rem; color: var(--color-muted); font-size: var(--text-sm); }
+.editorContent [data-variant="couplets"] [data-type="idkey-lead"] {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.1rem 0;
+}
+.editorContent [data-variant="couplets"] [data-type="idkey-lead"]::before {
+  content: attr(data-ik-label) '.';
+  flex: 0 0 auto;
+  min-width: 1.9rem;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.editorContent [data-variant="couplets"] [data-ik-choice] { flex: 0 1 auto; min-width: 2rem; }
+.editorContent [data-ik-leader] {
+  flex: 1 1 1.5rem;
+  min-width: 1.5rem;
+  align-self: flex-end;
+  margin-bottom: 0.35em;
+  border-bottom: 2px dotted color-mix(in srgb, var(--color-text) 30%, transparent);
+}
+.editorContent [data-variant="couplets"] [data-ik-result] { flex: 0 1 auto; max-width: 50%; }
+
+/* ·· Question cards: a card per step, its question on top, each choice leading to its result ····· */
+
+.editorContent [data-variant="cards"] > [data-type="idkey-step"] {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 0.9rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--ik-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.editorContent [data-variant="cards"] > [data-type="idkey-step"]::before {
+  content: attr(data-ik-step-label);
+  display: block;
+  margin-bottom: 0.15rem;
+  color: var(--ik-color);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.editorContent [data-variant="cards"] [data-ik-question] { margin-bottom: 0.45rem; font-size: var(--text-lg); font-style: normal; font-weight: 600; }
+.editorContent [data-variant="cards"] [data-type="idkey-lead"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.65rem;
+  border-top: 1px dashed var(--color-border);
+}
+.editorContent [data-variant="cards"] [data-ik-result] {
+  justify-self: end;
+  padding: 0.1rem 0.6rem;
+  border-radius: var(--radius-pill);
+}
+.editorContent [data-variant="cards"] [data-ik-answer] { background: color-mix(in srgb, var(--ik-color) 16%, var(--color-surface)); }
+.editorContent [data-variant="cards"] [data-ik-goto] { border: 1px solid color-mix(in srgb, var(--ik-color) 45%, var(--color-border)); }
+
+/* ── Pros and cons (extensions/ProsCons.ts, `\proscons`) ─────────────────────────────
+   One thing weighed: its pros and cons (each point weighted 1–3, the dots before it) and a
+   verdict. Three designs; the lists' look (shared with the options block's options) is below them.
+   data-pc-lean / data-pc-net on the block come from the summed weights. Colour is never the only
+   signal: pros carry +, cons −. */
+
+.editorContent [data-type="proscons"] {
+  --pc-pro: var(--color-success);
+  --pc-con: var(--color-danger);
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.editorContent [data-pc-subject] { margin-bottom: 0.6rem; font-weight: 700; font-size: var(--text-lg); color: var(--color-text); }
+.editorContent [data-pc-verdict] {
+  margin-top: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  font-weight: 600;
+  color: var(--color-text);
+}
+.editorContent [data-pc-verdict]:not([data-pc-empty])::before {
+  content: '⟹ ';
+  color: var(--color-primary);
+}
+.editorContent [data-pc-hide] { display: none; }
+
+.editorContent [data-pc-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-pc-empty]::after {
+  content: attr(data-pc-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* A list: its heading (Pros / Cons) from data-pc-label, then the points, each with + or − and its
+   weight dots. */
+.editorContent [data-type="proscons-list"] { position: relative; }
+.editorContent [data-type="proscons-list"]::before {
+  content: attr(data-pc-label);
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.editorContent [data-type="proscons-list"][data-side="pro"]::before { color: var(--pc-pro, var(--color-success)); }
+.editorContent [data-type="proscons-list"][data-side="con"]::before { color: var(--pc-con, var(--color-danger)); }
+.editorContent [data-pc-point] {
+  position: relative;
+  padding: 0.12rem 0 0.12rem 2.6rem;
+  color: var(--color-text);
+}
+.editorContent [data-pc-point]::before {
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  width: 0.9rem;
+  font-weight: 800;
+  text-align: center;
+}
+.editorContent [data-side="pro"] > [data-pc-point]::before { content: '+'; color: var(--color-success); }
+.editorContent [data-side="con"] > [data-pc-point]::before { content: '−'; color: var(--color-danger); }
+
+.editorContent [data-pc-weight] {
+  position: absolute;
+  left: 1.05rem;
+  top: calc(0.12rem + 0.78em);
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+.editorContent [data-pc-weight] i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+}
+.editorContent [data-side="pro"] [data-pc-weight] i[data-on] { background: var(--color-success); }
+.editorContent [data-side="con"] [data-pc-weight] i[data-on] { background: var(--color-danger); }
+
+.editorContent [data-proscons-tools] { top: -14px; right: 0; }
+.editorContent [data-type="proscons"]:hover > [data-proscons-tools],
+.editorContent [data-type="proscons"][data-pc-current] > [data-proscons-tools] { opacity: 1; }
+
+/* ·· T-chart: the two lists side by side, a rule between ······································ */
+
+.editorContent [data-type="proscons"][data-variant="tchart"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 1.5rem;
+}
+.editorContent [data-variant="tchart"] > [data-pc-subject],
+.editorContent [data-variant="tchart"] > [data-pc-verdict] { grid-column: 1 / -1; }
+.editorContent [data-variant="tchart"] > [data-pc-subject] { padding-bottom: 0.45rem; border-bottom: 2px solid var(--color-border-strong); }
+.editorContent [data-variant="tchart"] > [data-type="proscons-list"] { padding-top: 0.35rem; }
+.editorContent [data-variant="tchart"] > [data-type="proscons-list"][data-side="con"] {
+  padding-left: 1.5rem;
+  margin-left: -0.75rem;
+  border-left: 2px solid var(--color-border-strong);
+}
+
+/* ·· Scales: a balance tipping towards the heavier side, a list under each pan ················· */
+
+.editorContent [data-type="proscons"][data-variant="scales"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 2rem;
+  max-width: 44rem;
+  margin-inline: auto;
+}
+.editorContent [data-variant="scales"] > [data-pc-subject] { grid-column: 1 / -1; text-align: center; }
+.editorContent [data-variant="scales"] > [data-pc-verdict] { grid-column: 1 / -1; text-align: center; }
+.editorContent [data-pc-scales] {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: min(22rem, 100%);
+  margin: 0 0 0.25rem;
+  color: var(--color-muted);
+}
+.editorContent [data-pc-scales] svg { display: block; width: 100%; height: auto; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.editorContent [data-pc-scales] [data-beam] { transform-origin: 100px 20px; transform: rotate(var(--tilt, 0deg)); transition: transform 0.45s cubic-bezier(0.34, 1.4, 0.64, 1); }
+.editorContent [data-pc-scales] [data-pan="pro"] { stroke: var(--color-success); }
+.editorContent [data-pc-scales] [data-pan="con"] { stroke: var(--color-danger); }
+.editorContent [data-pc-scales] circle { fill: currentColor; }
+.editorContent [data-variant="scales"] > [data-type="proscons-list"]::before { text-align: center; }
+/* Which way it leans, in words too (colour is never the only signal). */
+.editorContent [data-type="proscons"][data-variant="scales"]::after {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  justify-self: center;
+  content: attr(data-pc-net);
+  margin: -0.15rem 0 0.4rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.editorContent [data-variant="scales"] > [data-type="proscons-list"] { grid-row: 4; }
+.editorContent [data-variant="scales"] > [data-pc-verdict] { grid-row: 5; }
+
+/* ·· Ledger: one column, + then −, and the running total ······································· */
+
+.editorContent [data-type="proscons"][data-variant="ledger"] { display: flex; flex-direction: column; max-width: 34rem; }
+.editorContent [data-variant="ledger"] > [data-pc-verdict] { order: 2; }
+.editorContent [data-variant="ledger"] > [data-type="proscons-list"]::before { display: none; }
+.editorContent [data-variant="ledger"] > [data-type="proscons-list"] > [data-pc-point] { border-bottom: 1px dotted var(--color-border); }
+.editorContent [data-variant="ledger"] > [data-pc-verdict] { margin-top: 0.5rem; }
+.editorContent [data-type="proscons"][data-variant="ledger"]::after {
+  content: attr(data-pc-net);
+  order: 1;
+  display: block;
+  margin-top: 0.35rem;
+  padding-top: 0.3rem;
+  border-top: 3px double color-mix(in srgb, var(--color-text) 65%, transparent);
+  font-weight: 700;
+  text-align: right;
+}
+.editorContent [data-type="proscons"][data-variant="ledger"][data-pc-lean="pro"]::after { color: var(--color-success-text); }
+.editorContent [data-type="proscons"][data-variant="ledger"][data-pc-lean="con"]::after { color: var(--color-danger); }
+
+/* ── Options (extensions/Options.ts, `\options`) ────────────────────────────────────
+   The different ways to one end. Five designs: three weigh the options (status chip, pros / cons,
+   score), two just list them (data-op-plain on the block; pros, cons, status and score hidden,
+   kept). --rank is an option's place by score (Ranked). */
+
+.editorContent [data-type="options"] {
+  --op-color: var(--color-primary);
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.editorContent [data-op-goal] { font-weight: 700; font-size: var(--text-lg); color: var(--color-text); }
+.editorContent [data-type="options-item"] { position: relative; }
+.editorContent [data-op-name] { font-weight: 650; color: var(--color-text); }
+.editorContent [data-op-note] { color: var(--color-muted); font-size: var(--text-sm); line-height: 1.4; }
+.editorContent [data-op-hide] { display: none; }
+.editorContent [data-type="options-item"] > [data-type="proscons-list"] { margin-top: 0.4rem; font-size: var(--text-sm); }
+.editorContent [data-type="options-item"] > [data-type="proscons-list"]::before { font-size: var(--text-2xs); margin-bottom: 0.1rem; }
+
+.editorContent [data-op-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-op-empty]::after {
+  content: attr(data-op-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* The status chip: words, and a look per status (chosen stands out, ruled out fades). */
+.editorContent [data-op-status] {
+  align-self: flex-start;
+  margin-bottom: 0.3rem;
+  padding: 0.05rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.editorContent [data-op-status="chosen"] { border-color: var(--op-color); background: var(--op-color); color: var(--color-on-primary); }
+.editorContent [data-op-status="chosen"]::before { content: '✓ '; }
+.editorContent [data-op-status="ruled"] { text-decoration: line-through; }
+.editorContent [data-type="options-item"]:has(> [data-op-status="ruled"]) { opacity: 0.55; }
+.editorContent [data-type="options-item"]:has(> [data-op-status="ruled"]) > [data-op-name] { text-decoration: line-through; }
+
+.editorContent [data-op-delete] {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+.editorContent [data-type="options-item"]:hover > [data-op-delete] { opacity: 1; }
+.editorContent [data-op-delete]:hover { background: var(--color-surface-alt); color: var(--color-danger); }
+
+.editorContent [data-options-tools] { top: -14px; right: 0; }
+.editorContent [data-type="options"]:hover > [data-options-tools],
+.editorContent [data-type="options"][data-op-current] > [data-options-tools] { opacity: 1; }
+
+@media (hover: none) {
+  .editorContent [data-op-delete] { opacity: 1; }
+}
+
+/* The cards the weighing designs share. */
+.editorContent [data-variant="fork"] > [data-type="options-item"],
+.editorContent [data-variant="side"] > [data-type="options-item"],
+.editorContent [data-variant="tiles"] > [data-type="options-item"] {
+  display: flex;
+  flex-direction: column;
+  padding: 0.7rem 0.85rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.editorContent [data-type="options-item"]:has(> [data-op-status="chosen"]) {
+  border-color: var(--op-color);
+  outline: 1px solid var(--op-color);
+  box-shadow: var(--shadow-md);
+}
+
+/* ·· Fork in the road: the goal, then a line splitting into the option cards ·················· */
+
+.editorContent [data-type="options"][data-variant="fork"] {
+  display: grid;
+  grid-template-columns: repeat(var(--op-n), minmax(0, 20rem));
+  justify-content: center;
+  gap: 1.8rem 0.8rem;
+}
+@media (max-width: 640px) {
+  .editorContent [data-type="options"][data-variant="fork"] { grid-template-columns: minmax(0, 1fr); }
+}
+.editorContent [data-variant="fork"] > [data-op-goal] {
+  grid-column: 1 / -1;
+  justify-self: center;
+  position: relative;
+  padding: 0.5rem 1rem;
+  border: 1.5px solid var(--op-color);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--op-color) 8%, var(--color-surface));
+  text-align: center;
+}
+/* The trunk down from the goal, and each card's branch up to the crossbar. */
+.editorContent [data-variant="fork"] > [data-op-goal]::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  height: 0.9rem;
+  border-left: 2px solid color-mix(in srgb, var(--op-color) 55%, var(--color-border-strong));
+}
+.editorContent [data-variant="fork"] > [data-type="options-item"]::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(-0.9rem - 1px);
+  height: 0.9rem;
+  border-left: 2px solid color-mix(in srgb, var(--op-color) 55%, var(--color-border-strong));
+}
+.editorContent [data-variant="fork"] > [data-type="options-item"]::after {
+  content: '';
+  position: absolute;
+  left: -0.4rem;
+  right: -0.4rem;
+  top: calc(-0.9rem - 1px);
+  border-top: 2px solid color-mix(in srgb, var(--op-color) 55%, var(--color-border-strong));
+}
+.editorContent [data-variant="fork"] > [data-type="options-item"]:nth-child(1 of [data-type="options-item"])::after { left: 50%; }
+.editorContent [data-variant="fork"] > [data-type="options-item"][data-op-last]::after { right: 50%; }
+
+/* ·· Side by side: equal columns, pros and cons under each ································· */
+
+.editorContent [data-type="options"][data-variant="side"] {
+  display: grid;
+  grid-template-columns: repeat(var(--op-n), minmax(11rem, 1fr));
+  gap: 0.75rem;
+  overflow-x: auto;
+}
+.editorContent [data-variant="side"] > [data-op-goal] { grid-column: 1 / -1; }
+
+/* ·· Ranked: best score first, a score bar each ·············································· */
+
+.editorContent [data-type="options"][data-variant="ranked"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-width: 40rem;
+}
+.editorContent [data-variant="ranked"] > [data-op-goal] { order: -1; margin-bottom: 0.2rem; }
+.editorContent [data-variant="ranked"] > [data-type="options-item"] {
+  order: var(--rank);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.editorContent [data-variant="ranked"] > [data-type="options-item"] > :not([data-op-status], [data-op-score], [data-op-delete]) { grid-column: 2; }
+.editorContent [data-variant="ranked"] [data-op-status] { grid-column: 1; grid-row: 1 / span 4; margin: 0; }
+.editorContent [data-op-score] {
+  grid-column: 3;
+  grid-row: 1 / span 4;
+  display: flex;
+  gap: 2px;
+}
+.editorContent [data-op-score] button {
+  width: 0.9rem;
+  height: 0.5rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-border);
+  cursor: pointer;
+}
+.editorContent [data-op-score] button[data-on] { background: var(--op-color); }
+
+/* ·· Tiles: equal tiles, nothing weighed ···················································· */
+
+.editorContent [data-type="options"][data-variant="tiles"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.6rem;
+}
+.editorContent [data-variant="tiles"] > [data-op-goal] { grid-column: 1 / -1; }
+.editorContent [data-variant="tiles"] > [data-type="options-item"] { border-top: 3px solid var(--op-color); }
+
+/* ·· Either / or: the options in a row, joined by "or" ········································ */
+
+.editorContent [data-type="options"][data-variant="either"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.6rem 2.2rem;
+}
+.editorContent [data-variant="either"] > [data-op-goal] { flex: 0 0 100%; }
+.editorContent [data-variant="either"] > [data-type="options-item"] {
+  max-width: 16rem;
+  padding: 0.45rem 0.85rem;
+  border: 1.5px solid color-mix(in srgb, var(--op-color) 40%, var(--color-border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--op-color) 6%, var(--color-surface));
+}
+.editorContent [data-variant="either"] > [data-type="options-item"]:not([data-op-last])::after {
+  content: attr(data-op-or);
+  position: absolute;
+  left: calc(100% + 0.55rem);
+  top: 0.45rem;
+  color: var(--color-muted);
+  font-style: italic;
+  font-weight: 600;
 }
 
 /* ── Cycle (extensions/Cycle.ts, `\cycle`) ─────────────────────────────────────
@@ -4307,12 +5315,6 @@
   text-align: center;
 }
 
-/* Pros / cons: the first side green ticks, the second red crosses, any more neutral. */
-.editorContent [data-type="compare"][data-variant="proscons"] > [data-cmp-side]:nth-child(1 of [data-cmp-side]) > [data-cmp-title] { border-color: var(--color-success); color: var(--color-success-text); }
-.editorContent [data-type="compare"][data-variant="proscons"] > [data-cmp-side]:nth-child(1 of [data-cmp-side]) > [data-cmp-point]::before { content: '✓'; color: var(--color-success); }
-.editorContent [data-type="compare"][data-variant="proscons"] > [data-cmp-side]:nth-child(2 of [data-cmp-side]) > [data-cmp-title] { border-color: var(--color-danger); color: var(--color-danger); }
-.editorContent [data-type="compare"][data-variant="proscons"] > [data-cmp-side]:nth-child(2 of [data-cmp-side]) > [data-cmp-point]::before { content: '✗'; color: var(--color-danger); }
-
 /* Table: a grid; a row per criterion (headers in the first column), a column per side. The sides
    step aside (display: contents) so their titles and points are placed in the grid directly. */
 .editorContent [data-type="compare"][data-variant="table"] {
@@ -4377,4 +5379,98 @@
   height: 100%;
   border-top: 0;
   border-left: 2px solid var(--color-text);
+}
+
+/* Ctrl+] / Ctrl+[ (extensions/designCycle.ts): the new design's name, beside the block for a
+   moment. Fixed, outside the editor, placed by JS. */
+.designFlash {
+  position: fixed;
+  z-index: var(--z-toast);
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+.designFlash[data-hidden] { opacity: 0; }
+
+/* A word from the Dictionary (extensions/DictionaryWords.ts): italic on a faint rounded shade (not
+   an underline, which read as a spelling mark); its card on hover. The shade is a neutral tint of the
+   text colour, so it never competes with a block's, a card's or a highlight's own colour, and it has
+   no vertical padding, so the line keeps its height. */
+.editorContent [data-dict-word] {
+  font-style: italic;
+  background: var(--color-text-mark);
+  border-radius: var(--radius-sm);
+  padding: 0 0.15em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  cursor: help;
+}
+
+
+/* ── A note's colour (Note.color; settingsStore.noteColorBars / noteColorHeadings) ─────────────
+   So notes are easy to tell apart. --note-color is set on the container only when the note has a
+   colour. The bars: a line under the title bar (thicker) and the tab bar (thinner); or a frame
+   round the note; or a faint wash over the bars and page. The headings: an underline in the
+   colour, thicker for higher levels. A note's colour is one the person picked, from the palette. */
+.container[data-note-color="underline"] .titleBar { border-bottom: 3px solid var(--note-color); }
+.container[data-note-color="underline"] .tabBar   { border-bottom: 1.5px solid var(--note-color); }
+.container[data-note-color="outline"] { outline: 2px solid var(--note-color); outline-offset: -2px; }
+.container[data-note-color="tint"] .titleBar,
+.container[data-note-color="tint"] .tabBar {
+  background: color-mix(in srgb, var(--note-color) 14%, var(--color-surface));
+}
+.container[data-note-color="tint"] { background: color-mix(in srgb, var(--note-color) 5%, var(--color-surface)); }
+
+.container[data-note-color-headings] .editorContent :is(h2, h3, h4, h5) {
+  text-decoration-line: underline;
+  text-decoration-color: var(--note-color);
+  text-underline-offset: 0.22em;
+}
+.container[data-note-color-headings] .editorContent h1 { border-bottom: 3px solid var(--note-color); }
+.container[data-note-color-headings] .editorContent h2 { text-decoration-thickness: 2.5px; }
+.container[data-note-color-headings] .editorContent h3 { text-decoration-thickness: 1.75px; }
+.container[data-note-color-headings] .editorContent :is(h4, h5) { text-decoration-thickness: 1px; }
+
+/* ── A Glossary record inside a line (extensions/GlossaryChip.ts) ────────────
+   The card family's Inline design: the kind's icon, the term in bold, the start of the meaning,
+   in a pill tinted with the kind's accent (--gc-accent, set per type in GlossaryCard.module.css).
+   No vertical padding, so the line keeps its height. Its card opens on the line below. */
+.editorContent [data-type="glossary-chip"] {
+  display: inline;
+  padding: 0 0.4em;
+  border: 1px solid color-mix(in srgb, var(--gc-accent, var(--color-primary)) 45%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--gc-accent, var(--color-primary)) 9%, transparent);
+  font-size: 0.94em;
+  cursor: pointer;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  user-select: none;
+}
+.editorContent [data-type="glossary-chip"]:hover { background: color-mix(in srgb, var(--gc-accent, var(--color-primary)) 16%, transparent); }
+.editorContent [data-type="glossary-chip"]:global(.ProseMirror-selectednode) { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.editorContent [data-type="glossary-chip"] [data-chip-icon] { margin-right: 0.25em; }
+.editorContent [data-type="glossary-chip"] [data-chip-meaning] {
+  display: inline-block;
+  max-width: 16em;
+  margin-left: 0.4em;
+  overflow: hidden;
+  color: var(--color-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.editorContent [data-glossary-chip-card] {
+  display: block;
+  max-width: 26rem;
+  margin: var(--space-1) 0 var(--space-2);
+  white-space: normal;
+  cursor: auto;
 }

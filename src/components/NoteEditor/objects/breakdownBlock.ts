@@ -5,6 +5,7 @@ import type { NoteBlockKind } from './types';
 // `\breakdown`: a breakdown (extensions/Breakdown.ts) in place of what was typed.
 export const breakdownBlock: NoteBlockKind = {
   family:  'block',
+  category: 'structure',
   id:      'breakdown',
   label:   LABELS.noteBlocks.breakdown.label,
   icon:    '🧩',

@@ -20,6 +20,22 @@ describe('inferTaskFromSelection — dates', () => {
     expect(inferTaskFromSelection('Submit report tomorrow', TODAY).deadline).toBe('2026-09-25');
   });
 
+  it('yesterday', () => {
+    const out = inferTaskFromSelection('standup yesterday 9am', TODAY);
+    expect(out.deadline).toBe('2026-09-23');
+    expect(out.title).toBe('standup');
+  });
+
+  it('a day of the month on its own ("on the 1st"): the next time it comes round', () => {
+    expect(inferTaskFromSelection('Pay rent on the 1st', TODAY).deadline).toBe('2026-10-01');
+    expect(inferTaskFromSelection('Invoice by the 30th', TODAY).deadline).toBe('2026-09-30');
+    expect(inferTaskFromSelection('Invoice the 24th', TODAY).deadline).toBe('2026-09-24'); // today counts
+    expect(inferTaskFromSelection('Close the books on the 31st', TODAY).deadline).toBe('2026-10-31'); // no 31 September
+    expect(inferTaskFromSelection('Pay rent on the 1st', TODAY).title).toBe('Pay rent');
+    // "the 5th of March" is still read as one whole date.
+    expect(inferTaskFromSelection('Due the 5th of March, 2027', TODAY).deadline).toBe('2027-03-05');
+  });
+
   it('ISO date', () => {
     expect(inferTaskFromSelection('Due 2027-01-05', TODAY).deadline).toBe('2027-01-05');
   });
@@ -264,6 +280,12 @@ describe('inferCalendarItemFromSelection — event type, tentative, important, r
     const out = cal(text);
     expect(out.repeat).toEqual(repeat);
     expect(out.title).toBe(title);
+  });
+
+  it('"every month on the 1st" repeats monthly from the next 1st', () => {
+    const out = cal('Pay rent every month on the 1st');
+    expect(out).toMatchObject({ date: '2026-10-01', repeat: { freq: 'monthly', interval: 1 } });
+    expect(out.title).toBe('Pay rent');
   });
 
   it('no cue → no extras', () => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import { useSettingsStore, NOTE_COLOR_BARS } from '@/store/settingsStore';
 import { LABELS } from '@/config/labels';
 import { HOTKEYS, HOTKEY_GROUPS } from '@/config/hotkeys';
 import { useHotkeyOverridesStore, findConflicts, getEffectiveBinding } from '@/store/hotkeyOverridesStore';
@@ -164,6 +164,14 @@ export function SettingsPane() {
   const hideBlockedTasks        = useSettingsStore((s) => s.hideBlockedTasks);
   const toggleHideBlockedTasks  = useSettingsStore((s) => s.toggleHideBlockedTasks);
   const stickyHeadings          = useSettingsStore((s) => s.stickyHeadings);
+  const dictionaryHighlight     = useSettingsStore((s) => s.dictionaryHighlight);
+  const noteColorBars           = useSettingsStore((s) => s.noteColorBars);
+  const setNoteColorBars        = useSettingsStore((s) => s.setNoteColorBars);
+  const noteColorHeadings       = useSettingsStore((s) => s.noteColorHeadings);
+  const toggleNoteColorHeadings = useSettingsStore((s) => s.toggleNoteColorHeadings);
+  const mathSlash               = useSettingsStore((s) => s.mathSlash);
+  const setMathSlash            = useSettingsStore((s) => s.setMathSlash);
+  const toggleDictionaryHighlight = useSettingsStore((s) => s.toggleDictionaryHighlight);
   const toggleStickyHeadings    = useSettingsStore((s) => s.toggleStickyHeadings);
 
   const shadePastDays              = useSettingsStore((s) => s.shadePastDays);
@@ -312,6 +320,42 @@ export function SettingsPane() {
 
               <SettingRow name={LABELS.noteHeadings.sticky} desc={LABELS.noteHeadings.stickyDesc}>
                 <Toggle on={stickyHeadings} onToggle={toggleStickyHeadings} label={LABELS.noteHeadings.sticky} />
+              </SettingRow>
+
+              <SettingRow name={LABELS.dictionary.setting} desc={LABELS.dictionary.settingDesc}>
+                <Toggle on={dictionaryHighlight} onToggle={toggleDictionaryHighlight} label={LABELS.dictionary.setting} />
+              </SettingRow>
+
+              <SettingRow name={LABELS.noteColors.bars} desc={LABELS.noteColors.barsDesc}>
+                <div className={styles.themeToggle} role="group" aria-label={LABELS.noteColors.bars}>
+                  {NOTE_COLOR_BARS.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={`${styles.themeBtn} ${noteColorBars === v ? styles.themeBtnActive : ''}`}
+                      aria-pressed={noteColorBars === v}
+                      onClick={() => setNoteColorBars(v)}
+                    >{LABELS.noteColors.barStyles[v]}</button>
+                  ))}
+                </div>
+              </SettingRow>
+
+              <SettingRow name={LABELS.noteColors.headings} desc={LABELS.noteColors.headingsDesc}>
+                <Toggle on={noteColorHeadings} onToggle={toggleNoteColorHeadings} label={LABELS.noteColors.headings} />
+              </SettingRow>
+
+              <SettingRow name={LABELS.mathSlash.setting} desc={LABELS.mathSlash.desc}>
+                <div className={styles.themeToggle} role="group" aria-label={LABELS.mathSlash.setting}>
+                  {(['fraction', 'slash'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={`${styles.themeBtn} ${mathSlash === v ? styles.themeBtnActive : ''}`}
+                      aria-pressed={mathSlash === v}
+                      onClick={() => setMathSlash(v)}
+                    >{LABELS.mathSlash[v]}</button>
+                  ))}
+                </div>
               </SettingRow>
             </section>
           )}

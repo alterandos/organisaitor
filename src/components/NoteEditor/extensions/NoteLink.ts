@@ -162,6 +162,21 @@ export const NoteLinkBehaviour = Extension.create({
   name: 'noteLinkBehaviour',
   priority: 120,
 
+  // Ctrl+\ (asked for 2026-10-15): the same picker as `[[`, linking the selected text when there
+  // is some, else putting a link in at the cursor.
+  addKeyboardShortcuts() {
+    return {
+      'Mod-\\': () => {
+        const { from, to, $from } = this.editor.state.selection;
+        if ($from.parent.type.spec.code) return false;
+        const open = objectTriggerStorage(this.editor).openNoteLinkPicker;
+        if (!open) return false;
+        open({ purpose: 'link', from, to });
+        return true;
+      },
+    };
+  },
+
   addProseMirrorPlugins() {
     const editor = this.editor;
     return [new Plugin({

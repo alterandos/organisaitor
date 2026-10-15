@@ -25,3 +25,13 @@
 }
 
 .disclosureOpen { transform: rotate(90deg); }
+
+/* ColorDotIcon: a 1em-wide dot, a little smaller than the text it sits by. */
+.colorDot {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.colorDotNone { border: 1.5px solid var(--color-muted); }

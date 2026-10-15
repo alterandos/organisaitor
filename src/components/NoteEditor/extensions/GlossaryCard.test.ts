@@ -80,7 +80,7 @@ const textOf = (el: HTMLElement) => (el instanceof HTMLTextAreaElement || el ins
 const typeInto = (el: HTMLElement, text: string) => act(async () => { el.textContent = text; el.dispatchEvent(new Event('input', { bubbles: true })); });
 
 describe('Glossary cards', () => {
-  it.each(['definition', 'acronym', 'concept'])('`\\%s` makes a record in this note and a card that points at it', async (kind) => {
+  it.each(['definition', 'acronym', 'concept', 'profile'])('`\\%s` makes a record in this note and a card that points at it', async (kind) => {
     await make();
     type(`\\${kind} `);
     await flush();
@@ -88,6 +88,15 @@ describe('Glossary cards', () => {
     const made = entry(cards()[0].entryId);
     expect(made).toMatchObject({ typeKey: kind, noteId, term: '' });
     expect(entries()).toHaveLength(1);
+  });
+
+  it('a profile shows its facts as label / value rows', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'profile', tagId: 'builtin-profile', term: 'Golden eagle', fields: { summary: 'A large bird of prey', facts: [{ label: 'Family', value: 'Accipitridae' }, { label: 'Wingspan', value: '1.8–2.3 m' }] }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
+    await flush();
+    const dl = editor.view.dom.querySelector('[data-type="glossary-card"] dl');
+    expect([...(dl?.querySelectorAll('dt') ?? [])].map((e) => e.textContent)).toEqual(['Family', 'Wingspan']);
+    expect([...(dl?.querySelectorAll('dd') ?? [])].map((e) => e.textContent)).toEqual(['Accipitridae', '1.8–2.3 m']);
   });
 
   it('the cursor lands in the new card\'s term once it is drawn, and a key typed on a selected card goes there, never replacing it', async () => {

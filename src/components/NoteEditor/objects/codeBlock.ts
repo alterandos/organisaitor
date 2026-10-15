@@ -6,6 +6,7 @@ import type { NoteBlockKind } from './types';
 // as in Markdown.
 export const codeBlock: NoteBlockKind = {
   family:  'block',
+  category: 'visual',
   id:      'code',
   label:   LABELS.noteBlocks.code.label,
   icon:    '⌨',

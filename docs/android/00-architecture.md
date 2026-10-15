@@ -23,13 +23,13 @@ A Claude agent picking this up must read, in order, before touching code:
    architecture (single Vite build, single binary, shared platform layer, `isAppEnabled()`
    add-on gating). Everything in this Android document assumes and extends that architecture —
    it is not repeated here except where Android forces a difference.
-2. **`BACKLOG.md` → "Android App — Capacitor"** (near the end of the file) — an earlier planning
+2. **`docs/android/12-original-capacitor-plan.md`** (moved verbatim from BACKLOG.md on 2026-10-14) — an earlier planning
    pass that got the vehicle decision right (Capacitor, not a rewrite) and wrote a genuinely
    detailed notifications spec, but predates the Fitness app, the Schedule feature, the
    add-on-tier system (`isAppEnabled()`/`APP_TIERS`), and says nothing about monetization or
    ads. **This document (`docs/android/`) supersedes that section for architecture decisions**
-   — where the two disagree, this one wins. The notification spec in BACKLOG.md §6 is still
-   materially correct and is carried forward (with deltas) in `docs/android/05-notifications.md`
+   — where the two disagree, this one wins. Its notification spec (§6) was carried forward (with deltas) into
+   `docs/android/05-notifications.md`, which is now the record
    rather than being restated in full here — don't discard it.
 3. This file, in full, before writing any Android-specific code.
 
@@ -654,8 +654,7 @@ Deltas since BACKLOG.md §4 was written:
 
 Desktop's dark mode is already fully implemented (`src/index.css` CSS variables, `data-theme`
 attribute, FOUC-prevention script, `settingsStore.theme`) — this is *not* rebuilt for Android,
-it's reused as-is. The one Android-specific delta, already decided in BACKLOG.md §Dark Mode line
-1348 and still correct: **Android's default theme is `'dark'`, not `'system'`** (every other
+it's reused as-is. The one Android-specific delta, decided in the original BACKLOG.md dark-mode plan (since removed as built) and still correct: **Android's default theme is `'dark'`, not `'system'`** (every other
 platform defaults to `'system'`). Implementation: `settingsStore`'s initial state / migration
 picks the default conditionally —
 

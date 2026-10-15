@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import type { CalendarItemKind, CalendarEventType, EventStatus, NotifyUnit, RepeatFreq, RepeatConfig } from '@/types';
+import type { CalendarItemKind, CalendarEventType, EventStatus, NotifyUnit, RepeatConfig } from '@/types';
+import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -65,12 +66,9 @@ export function AddCalendarItemModal() {
   const [notifyBeforeValue, setNotifyBeforeValue] = useState(1);
   const [notifyBeforeUnit,  setNotifyBeforeUnit]  = useState<NotifyUnit>('hours');
   const [notifyAtTime,      setNotifyAtTime]      = useState('12:00');
-  const [repeatOn,          setRepeatOn]          = useState(!!prefillExtra?.repeat);
-  const [repeatFreq,        setRepeatFreq]        = useState<RepeatFreq>(prefillExtra?.repeat?.freq ?? 'weekly');
-  const [repeatInterval,    setRepeatInterval]    = useState(prefillExtra?.repeat?.interval ?? 1);
-  const [repeatEndKind,     setRepeatEndKind]     = useState<RepeatConfig['endKind']>('forever');
-  const [repeatCount,       setRepeatCount]       = useState(10);
-  const [repeatUntil,       setRepeatUntil]       = useState('');
+  const [repeat,            setRepeat]            = useState<RepeatConfig | null>(() => prefillExtra?.repeat
+    ? { freq: prefillExtra.repeat.freq, interval: prefillExtra.repeat.interval, endKind: 'forever', count: null, until: null }
+    : null);
   // Opened when a note selection inferred something that lives in the extra options (repeat,
   // tentative, important), so the guess is visible rather than silently applied.
   const [formExpanded,      setFormExpanded]      = useState(!!(prefillExtra?.repeat || prefillExtra?.tentative || prefillExtra?.important));
@@ -84,17 +82,6 @@ export function AddCalendarItemModal() {
   const endAutoRef = useRef(!prefillExtra?.endTime);
 
   const allCollections = Object.values(collectionsRecord);
-
-  function buildRepeat(): RepeatConfig | null {
-    if (!repeatOn) return null;
-    return {
-      freq:     repeatFreq,
-      interval: repeatInterval,
-      endKind:  repeatEndKind,
-      count:    repeatEndKind === 'count' ? repeatCount : null,
-      until:    repeatEndKind === 'until' ? repeatUntil || null : null,
-    };
-  }
 
   // Abandoning the modal must drop a pending Notes "Create ▸ Calendar item" link request, or a
   // later unrelated creation could pick it up (same reason AddTaskModal does this).
@@ -136,10 +123,7 @@ export function AddCalendarItemModal() {
     if (type === 'birthday') {
       setStartTime('');
       setEndTime('');
-      setRepeatOn(true);
-      setRepeatFreq('yearly');
-      setRepeatInterval(1);
-      setRepeatEndKind('forever');
+      setRepeat({ freq: 'yearly', interval: 1, endKind: 'forever', count: null, until: null });
     }
   };
 
@@ -168,7 +152,7 @@ export function AddCalendarItemModal() {
         notifyBeforeValue: notifyBeforeOn ? notifyBeforeValue : null,
         notifyBeforeUnit,
         notifyAtTime,
-        repeat: buildRepeat(),
+        repeat,
         status,
         important,
         background: endDate && endDate > date ? background : false,
@@ -184,7 +168,7 @@ export function AddCalendarItemModal() {
         notes,
         links,
         collectionId,
-        repeat: buildRepeat(),
+        repeat,
         status,
         important,
         crossAppRefs,
@@ -200,7 +184,7 @@ export function AddCalendarItemModal() {
         notes,
         links,
         collectionId,
-        repeat: buildRepeat(),
+        repeat,
         status,
         important,
         crossAppRefs,
@@ -470,68 +454,7 @@ export function AddCalendarItemModal() {
               )}
 
               <div className={styles.field}>
-                <label className={styles.label}>
-                  <input
-                    type="checkbox"
-                    checked={repeatOn}
-                    onChange={(e) => setRepeatOn(e.target.checked)}
-                    className={styles.checkboxInput}
-                  />
-                  Repeat
-                </label>
-                {repeatOn && (
-                  <div className={styles.repeatConfig}>
-                    <div className={styles.repeatRow}>
-                      <span className={styles.repeatSmall}>Every</span>
-                      <input
-                        type="number"
-                        className={styles.repeatNum}
-                        min={1}
-                        value={repeatInterval}
-                        onChange={(e) => setRepeatInterval(Math.max(1, Number(e.target.value)))}
-                      />
-                      <select
-                        className={styles.select}
-                        value={repeatFreq}
-                        onChange={(e) => setRepeatFreq(e.target.value as RepeatFreq)}
-                      >
-                        <option value="daily">day(s)</option>
-                        <option value="weekly">week(s)</option>
-                        <option value="monthly">month(s)</option>
-                        <option value="yearly">year(s)</option>
-                      </select>
-                    </div>
-                    <div className={styles.repeatRow}>
-                      <span className={styles.repeatSmall}>Ends</span>
-                      <select
-                        className={styles.select}
-                        value={repeatEndKind}
-                        onChange={(e) => setRepeatEndKind(e.target.value as RepeatConfig['endKind'])}
-                      >
-                        <option value="forever">Never</option>
-                        <option value="count">After N times</option>
-                        <option value="until">On date</option>
-                      </select>
-                      {repeatEndKind === 'count' && (
-                        <input
-                          type="number"
-                          className={styles.repeatNum}
-                          min={1}
-                          value={repeatCount}
-                          onChange={(e) => setRepeatCount(Math.max(1, Number(e.target.value)))}
-                        />
-                      )}
-                      {repeatEndKind === 'until' && (
-                        <input
-                          type="date"
-                          className={styles.dateInput}
-                          value={repeatUntil}
-                          onChange={(e) => setRepeatUntil(e.target.value)}
-                        />
-                      )}
-                    </div>
-                  </div>
-                )}
+                <RepeatField value={repeat} onChange={setRepeat} labelClassName={styles.label} />
               </div>
 
               <div className={styles.field}>

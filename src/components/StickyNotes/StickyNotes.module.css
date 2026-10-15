@@ -1,0 +1,147 @@
+/* Sticky notes (StickyNotes.tsx): paper on top of Notes. The layer takes no clicks itself, only
+   its notes do. Four designs (data-design), each a way the paper is held on: a sticky note (a
+   slight tilt and a lifted corner), a pin, a staple, sticky tape. Paper and ink are the --sticky-*
+   tokens, the same in both themes. */
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sticky-note);
+  pointer-events: none;
+}
+
+.sticky {
+  --paper: var(--sticky-paper);
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  width: 13rem;
+  min-height: 9rem;
+  padding: var(--space-5) var(--space-3) var(--space-3);
+  background: var(--paper);
+  color: var(--sticky-ink);
+  box-shadow: var(--sticky-shadow);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+.dragging { cursor: grabbing; }
+
+.text {
+  flex: 1;
+  min-height: 6rem;
+  max-height: 22rem;
+  field-sizing: content;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  resize: none;
+  cursor: text;
+}
+.text::placeholder { color: var(--sticky-ink-soft); }
+.text:focus-visible { outline: 1px dashed var(--sticky-ink-soft); outline-offset: 3px; }
+
+.message {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--sticky-ink-soft);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+.readOnly {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--sticky-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* Tools: top right, shown while the note is hovered or something in it has focus. */
+.tools {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.sticky:hover .tools,
+.sticky:focus-within .tools { opacity: 1; }
+.tool {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--sticky-ink-soft);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.tool:hover { background: color-mix(in srgb, var(--sticky-ink) 10%, transparent); color: var(--sticky-ink); }
+.tool:focus-visible { outline: 2px solid var(--sticky-ink-soft); }
+.tool svg { width: 0.9rem; height: 0.9rem; }
+
+/* Sticky note: square paper, tilted a little, its bottom right corner lifted. */
+.sticky[data-design="sticky"] {
+  transform: rotate(-1.2deg);
+  border-bottom-right-radius: 1.25rem 0.5rem;
+}
+
+/* Pinned: a round pin at the top middle. */
+.sticky[data-design="pin"]::before {
+  content: '';
+  position: absolute;
+  top: 0.35rem;
+  left: 50%;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-left: -0.425rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--sticky-pin-light), var(--sticky-pin) 60%);
+  box-shadow: var(--sticky-pin-shadow);
+}
+
+/* Stapled: a staple across the top left corner. */
+.sticky[data-design="staple"] { transform: rotate(0.8deg); }
+.sticky[data-design="staple"]::before {
+  content: '';
+  position: absolute;
+  top: 0.6rem;
+  left: 0.5rem;
+  width: 1.4rem;
+  height: 0.3rem;
+  border: 2px solid var(--sticky-metal);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  transform: rotate(-35deg);
+}
+
+/* Taped: a strip of translucent tape across the top. */
+.sticky[data-design="tape"] { transform: rotate(-0.6deg); }
+.sticky[data-design="tape"]::before {
+  content: '';
+  position: absolute;
+  top: -0.55rem;
+  left: 50%;
+  width: 4.5rem;
+  height: 1.4rem;
+  margin-left: -2.25rem;
+  background: var(--sticky-tape);
+  outline: 1px solid var(--sticky-tape-edge);
+  transform: rotate(-3deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tools { transition: none; }
+}

@@ -8,6 +8,7 @@ import { MathExtensions, loadMathLive, setMathSettings } from './Maths';
 import { NoteBlockSelect } from './blockDesigns';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { noteClipboardText } from '../noteClipboardText';
+import { useSettingsStore } from '@/store/settingsStore';
 
 // jsdom can't run MathLive's editor: a stand-in <math-field> with the same surface (value, mode,
 // setValue, its input and move-out events), and the same timing where it matters (a property that
@@ -25,6 +26,9 @@ vi.mock('mathlive', () => {
     get menuItems() { if (!this.isConnected) throw new Error('Mathfield not mounted'); return this.items; }
     set menuItems(v: unknown[]) { if (!this.isConnected) throw new Error('Mathfield not mounted'); this.items = v; }
     readOnly = false;
+    // As MathLive: its own shortcuts and bindings (read last-first), `/` making a fraction.
+    inlineShortcuts: Record<string, string> = { '~~': '\\approx' };
+    keybindings: { key: string; ifMode?: string; command: unknown }[] = [{ key: '/', ifMode: 'math', command: ['insert', '\\frac{#@}{#?}'] }];
     setValue(v: string) { this.value = v; }
     // As MathLive: a command is a selector string, or [selector, ...arguments].
     commands: string[] = [];
@@ -136,6 +140,22 @@ describe('maths', () => {
     field().mode = 'latex';
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     expect(editor.state.selection.toJSON()).toEqual(before);
+  });
+
+  it('≈ and ⋅ by name; / makes a fraction or a slash as Settings says, Alt+/ the other', async () => {
+    useSettingsStore.setState(useSettingsStore.getInitialState(), true);
+    make('<div data-type="math" data-latex="x"></div>');
+    await loaded();
+    const f = field() as unknown as { inlineShortcuts: Record<string, string>; keybindings: { key: string; command: unknown }[] };
+    expect(f.inlineShortcuts).toMatchObject({ '~~': '\\approx', approx: '\\approx', cdot: '\\cdot', dot: '\\cdot' });
+    const last = (key: string) => [...f.keybindings].reverse().find((b) => b.key === key)?.command;
+    expect(last('/')).toEqual(['insert', '\\frac{#@}{#?}']);
+    expect(last('alt+/')).toEqual(['insert', '/']);
+    useSettingsStore.getState().setMathSlash('slash');
+    expect(last('/')).toEqual(['insert', '/']);
+    expect(last('alt+/')).toEqual(['insert', '\\frac{#@}{#?}']);
+    // In place of MathLive's own (kept beside them, MathLive called the pair ambiguous).
+    expect(f.keybindings.filter((b) => b.key === '/')).toHaveLength(1);
   });
 
   it('plain keys typed in maths never reach the app (its hotkeys)', async () => {

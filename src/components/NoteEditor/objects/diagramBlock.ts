@@ -5,6 +5,7 @@ import type { NoteBlockKind } from './types';
 // `\diagram`: a diagram (extensions/Diagram.ts) in place of what was typed.
 export const diagramBlock: NoteBlockKind = {
   family:  'block',
+  category: 'visual',
   id:      'diagram',
   label:   LABELS.noteBlocks.diagram.label,
   icon:    '🔀',

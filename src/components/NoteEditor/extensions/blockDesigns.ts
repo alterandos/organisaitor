@@ -498,7 +498,8 @@ export function frameMenuItem(view: EditorView, pos: number, attrs: Record<strin
 // its pill, Select whole block in its right-click menu, or Esc while the cursor is inside it. A
 // block's root node is in NOTE_BLOCK_NODES and its DOM carries data-note-block.
 
-export const NOTE_BLOCK_NODES = new Set(['timeline', 'quoteBlock', 'cycle', 'breakdown', 'hierarchy', 'pyramid', 'chart', 'codeBlock', 'mathBlock', 'inbox', 'glossaryCard', 'questionBlock', 'compareBlock', 'diagram', 'hub']);
+export { NOTE_BLOCK_NODES } from '../blockNodes';
+import { NOTE_BLOCK_NODES } from '../blockNodes';
 
 // The note block the selection is inside (the outermost, if blocks were ever nested), or null.
 export function blockAround(state: EditorState): number | null {

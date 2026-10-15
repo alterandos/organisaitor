@@ -1,3 +1,4 @@
+import { StickyNotes } from '@/components/StickyNotes/StickyNotes';
 import { lazy, Suspense } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { ChronicleView } from '../ChronicleView/ChronicleView';
@@ -34,6 +35,7 @@ export function NotesSection() {
     <div className={styles.container}>
       {glossaryOpen ? <GlossaryView /> : reviewOpen ? <ReviewView /> : hubsOpen ? <HubsView /> : mapOpen ? <Suspense fallback={null}><MapView /></Suspense> : noteTagViewActive ? <TagView /> : isAndroid ? <MobileNotes /> : <ChronicleView />}
       {!(isAndroid && editingNoteId) && <TagFAB />}
+      {!isAndroid && <StickyNotes />}
       {editNoteTagOpen && <EditNoteTagModal key={editingNoteTagId} />}
     </div>
   );

@@ -31,7 +31,7 @@ interface Props {
 }
 
 // Notes and lists are the wired targets. The other planned ones (List item, Tracker entry — see
-// BACKLOG.md "Cross-app built-in tag types") would add their own picker dialog the same way; this
+// BACKLOG.md "Notes — open items") would add their own picker dialog the same way; this
 // stays the one generic { value; onChange; onNavigate? } widget and picks the dialog by type.
 const ICON_BY_TYPE: Record<string, string> = { note: '📝', list: '📋', event: '📅', listItem: '📃', trackerEntry: '📊' };
 

@@ -1,3 +1,4 @@
+import { categoryOrder } from './blockCategories';
 import type { AnyNoteObjectKind, NoteBlockKind, PickableKind } from './types';
 import { isBlockKind } from './types';
 import { reminderKind } from './reminderKind';
@@ -44,7 +45,10 @@ export function matchKinds(word: string, kinds: PickableKind[] = NOTE_OBJECT_KIN
 // What the menu offers for a partly typed keyword: the matching objects, then the matching blocks
 // (the menu shows them as two groups, in this order).
 export function matchPickable(word: string, kinds: AnyNoteObjectKind[] = NOTE_OBJECT_KINDS, blocks: NoteBlockKind[] = NOTE_BLOCK_KINDS): PickableKind[] {
-  return [...matchKinds(word, kinds), ...matchKinds(word, blocks)];
+  const found = matchKinds(word, blocks);
+  // Nothing typed yet: the blocks by category (objects/blockCategories.ts), so the menu reads as groups.
+  if (!word) found.sort((a, b) => categoryOrder(a.category) - categoryOrder(b.category));
+  return [...matchKinds(word, kinds), ...found];
 }
 
 // The kind a keyword followed by a space chooses: one it names exactly, or the only one it starts.

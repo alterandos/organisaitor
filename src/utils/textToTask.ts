@@ -123,6 +123,7 @@ function findDateCandidates(text: string, today: Date): DateCandidate[] {
   // 1. Relative terms — unambiguous, checked first.
   claim(/\btoday\b/gi, () => ({ ...ymd(atMidnight(today)), yearExplicit: true }));
   claim(/\btomorrow\b/gi, () => ({ ...ymd(addDays(today, 1)), yearExplicit: true }));
+  claim(/\byesterday\b/gi, () => ({ ...ymd(addDays(today, -1)), yearExplicit: true }));
   claim(/\btonight\b/gi, () => ({ ...ymd(atMidnight(today)), yearExplicit: true }));
   claim(/\bnext\s+weekend\b/gi, () => ({ ...ymd(addDays(today, nextWeekdayOffset(today, 6, false) + 7)), yearExplicit: true }));
   claim(/\bthis\s+weekend\b/gi, () => ({ ...ymd(addDays(today, nextWeekdayOffset(today, 6, false))), yearExplicit: true }));
@@ -186,6 +187,20 @@ function findDateCandidates(text: string, today: Date): DateCandidate[] {
     let y = parseInt(m[3], 10);
     if (m[3].length === 2) y += 2000;
     return { y, m: dm.month - 1, d: dm.day, yearExplicit: true };
+  });
+
+  // 7. A day of the month on its own: "on the 1st", "by the 15th". The next time that day comes
+  // round (today counts). Needs "the" and an ordinal, so a bare "15" never matches. A day the
+  // month doesn't have ("the 31st" in September) moves on to the next month that has it.
+  claim(/\b(?:(?:on|by|before)\s+)?the\s+(\d{1,2})(?:st|nd|rd|th)\b/gi, (m) => {
+    const d = parseInt(m[1], 10);
+    if (d < 1 || d > 31) return null;
+    const start = atMidnight(today);
+    for (let k = 0; k < 13; k++) {
+      const c = new Date(start.getFullYear(), start.getMonth() + k, d);
+      if (c.getDate() === d && c >= start) return { ...ymd(c), yearExplicit: true };
+    }
+    return null;
   });
 
   return candidates.sort((a, b) => a.index - b.index);

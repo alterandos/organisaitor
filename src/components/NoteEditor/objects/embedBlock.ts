@@ -9,6 +9,7 @@ import type { NoteBlockKind } from './types';
 // goes, then the note picker chooses the note and the passage; the block is put in after that.
 export const embedBlock: NoteBlockKind = {
   family:  'block',
+  category: 'container',
   id:      'embed',
   label:   LABELS.noteLinks.embedLabel,
   icon:    EMBED_ICON,

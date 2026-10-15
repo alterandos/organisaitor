@@ -1,3 +1,4 @@
+import { NoteSplitView } from '@/components/NoteSplitView/NoteSplitView';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import type { RefObject } from 'react';
 import { useNoteStore } from '@/store/noteStore';
@@ -399,6 +400,7 @@ export function ChronicleView() {
   const notes             = useNoteStore((s) => s.notes);
   const selectedNoteTagId = useUIStore((s) => s.selectedNoteTagId);
   const editingNoteId     = useUIStore((s) => s.editingNoteId);
+  const noteLayout        = useUIStore((s) => s.noteLayout);
   const showAddNoteTag   = useUIStore((s) => s.showAddNoteTag);
   const showAddNote       = useUIStore((s) => s.showAddNote);
   const activeCollectionId = useUIStore(selectActiveCollectionId) as CollectionId | null;
@@ -458,6 +460,10 @@ export function ChronicleView() {
         e.preventDefault();
         if (col !== 'editor') {
           lastNavColRef.current = col as Exclude<ColId, 'editor'>;
+          // Into the note: the nav columns fold away to give it the room (2026-10-14); Ctrl+` back
+          // opens them again (onNavReturn below).
+          setTreeCollapsed(true);
+          setListCollapsed(true);
           setEditorFocusSignal((s) => s + 1);
           uiState.setNotesFocusedColumn('editor');
         }
@@ -637,10 +643,15 @@ export function ChronicleView() {
         className={`${styles.panel} ${styles.editorPanel} ${focusedCol === 'editor' ? styles.panelFocused : ''}`}
         onClick={() => setFocusedCol('editor')}
       >
-        {editingNoteId ? (
+        {noteLayout !== 'single' ? (
+          <NoteSplitView
+            focusSignal={editorFocusSignal}
+            onNavReturn={() => { setTreeCollapsed(false); setListCollapsed(false); setFocusedCol(lastNavColRef.current); }}
+          />
+        ) : editingNoteId ? (
           <NoteEditor
             focusSignal={editorFocusSignal}
-            onNavReturn={() => setFocusedCol(lastNavColRef.current)}
+            onNavReturn={() => { setTreeCollapsed(false); setListCollapsed(false); setFocusedCol(lastNavColRef.current); }}
           />
         ) : selectedNoteTagId && noteTags[selectedNoteTagId] ? (
           <NotebookLocationView

@@ -45,6 +45,10 @@ const customListTypes = (types: Record<string, ListType>) =>
 
 // Suppresses outbound sync while stores are being hydrated from Supabase.
 let hydrating = false;
+// True while a load is in flight. Changes made meanwhile are recorded in the pending queue but not
+// pushed until the load's merge is done: pushed earlier, a delete would leave the queue before the
+// merge, and the snapshot fetched before it would bring the row back.
+let loading = false;
 let unsubscribers: Array<() => void> = [];
 let currentUserId: string | null = null;
 
@@ -361,8 +365,11 @@ export function initSync(userId: string): Promise<void> {
 async function runInitSync(userId: string): Promise<void> {
   stopSync();
   loadPending(userId);
-  hydrating = true;
+  loading = true;
   setStatus('syncing');
+  // Watching from the start, so a change made while the tables download (a delete in the first
+  // seconds after opening the app) is recorded; it used to go untracked and the load undid it.
+  setupSubscriptions(userId);
 
   try {
     const [results, markerRes] = await Promise.all([
@@ -407,9 +414,11 @@ async function runInitSync(userId: string): Promise<void> {
         restoreCutoff = Date.parse(restoredAt!);
         dropPendingBefore(restoreCutoff);
       }
+      hydrating = true;
       try {
         hydrateStores(remote);
       } finally {
+        hydrating = false;
         restoreCutoff = null;
       }
       queueLocalOnlyAndNewer(remote);
@@ -425,10 +434,9 @@ async function runInitSync(userId: string): Promise<void> {
     log.error('sync', 'init failed', msg);
     setStatus('error', msg);
   } finally {
-    hydrating = false;
+    loading = false;
   }
 
-  setupSubscriptions(userId);
   if (pendingCount() > 0) void flushPending(userId);
 }
 
@@ -672,7 +680,7 @@ function trackChanges(userId: string, table: keyof typeof TABLE_DEFS, prev: Reco
   for (const id of Object.keys(prev)) if (!(id in next)) ids.push(id);
   if (ids.length === 0) return;
   markDirty(table, ids);
-  void pushIds(userId, table, ids);
+  if (!loading) void pushIds(userId, table, ids);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -727,7 +735,7 @@ function setupSubscriptions(userId: string): void {
 
   // Retry what didn't get through: when the browser reports it is back online, and on a timer while
   // anything is still waiting.
-  onlineListener = () => { if (currentUserId && pendingCount() > 0) void flushPending(currentUserId); };
+  onlineListener = () => { if (currentUserId && !loading && pendingCount() > 0) void flushPending(currentUserId); };
   window.addEventListener('online', onlineListener);
-  retryTimer = setInterval(() => { if (currentUserId && pendingCount() > 0) void flushPending(currentUserId); }, RETRY_EVERY_MS);
+  retryTimer = setInterval(() => { if (currentUserId && !loading && pendingCount() > 0) void flushPending(currentUserId); }, RETRY_EVERY_MS);
 }

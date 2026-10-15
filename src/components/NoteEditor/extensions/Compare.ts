@@ -22,7 +22,9 @@ import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButto
 // empty last point leaves the comparison. Tab / Shift+Tab move to the next / previous side.
 // Backspace at the start of an empty point removes it.
 
-export const COMPARE_VARIANTS = ['versus', 'proscons', 'table'] as const;
+// 'proscons' was a design until 2026-10-15, when pros and cons became their own block
+// (extensions/ProsCons.ts); a comparison stored with it is drawn as Versus.
+export const COMPARE_VARIANTS = ['versus', 'table'] as const;
 export type CompareVariant = typeof COMPARE_VARIANTS[number];
 
 const oneOf = <T extends string>(values: readonly T[], v: string | null, fallback: T): T =>
@@ -36,7 +38,7 @@ export const CompareBlock = Node.create({
   addAttributes() {
     return {
       ...blockFrameAttributes(),
-      variant: { default: 'versus', parseHTML: (el) => oneOf(COMPARE_VARIANTS, el.getAttribute('data-variant'), 'versus'), renderHTML: (a) => ({ 'data-variant': a.variant }) },
+      variant: { default: 'versus', parseHTML: (el) => oneOf(COMPARE_VARIANTS, el.getAttribute('data-variant'), 'versus'), renderHTML: (a) => ({ 'data-variant': (COMPARE_VARIANTS as readonly string[]).includes(a.variant) ? a.variant : 'versus' }) },
     };
   },
   parseHTML() { return [{ tag: 'div[data-type="compare"]' }]; },
@@ -246,7 +248,6 @@ export const compareDelete: Command = (state) => {
 
 const DESIGN_ICONS: Record<CompareVariant, string> = {
   versus:   '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4h5M1.5 7h4M1.5 10h5M9.5 4h5M9.5 7h4M9.5 10h5"/><path d="M8 2.5v11" stroke-dasharray="1.5 1.5"/></svg>',
-  proscons: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5.5l1.2 1.2L5.5 4.3M2 10.5l1.2 1.2 2.3-2.4"/><path d="M10 4.5l3 3M13 4.5l-3 3M10 9.5l3 3M13 9.5l-3 3"/></svg>',
   table:    '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><path d="M1.5 6h13M1.5 9.5h13M5.5 2.5v11M10 2.5v11"/></svg>',
 };
 export const COMPARE_DESIGNS: BlockDesign<CompareVariant>[] = COMPARE_VARIANTS.map((id) => ({ id, label: LABELS.noteBlocks.compare.designs[id], icon: DESIGN_ICONS[id] }));

@@ -5,6 +5,7 @@ import type { NoteBlockKind } from './types';
 // `\hierarchy`: a hierarchy (extensions/Hierarchy.ts) in place of what was typed.
 export const hierarchyBlock: NoteBlockKind = {
   family:  'block',
+  category: 'structure',
   id:      'hierarchy',
   label:   LABELS.noteBlocks.hierarchy.label,
   icon:    '🌳',

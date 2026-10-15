@@ -6,6 +6,7 @@ import type { NoteBlockKind } from './types';
 // what was typed, the cursor in its term.
 export const conceptBlock: NoteBlockKind = {
   family:  'block',
+  category: 'card',
   id:      'concept',
   label:   LABELS.noteBlocks.concept.label,
   icon:    '💡',

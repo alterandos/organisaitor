@@ -63,6 +63,17 @@ describe('settingsStore migration', () => {
     expect(state.calendarLayerVisibility).toMatchObject({ events: true, tentative: true, deadlines: true });
   });
 
+  it('v11 -> v13 backfills how a note colour shows and what / makes in maths and keeps everything else', async () => {
+    seed('todo-settings', { clockFormat: '24h', dictionaryHighlight: false }, 11);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    const state = useSettingsStore.getState();
+    expect(state.dictionaryHighlight).toBe(false);
+    expect(state.noteColorBars).toBe('underline');
+    expect(state.noteColorHeadings).toBe(true);
+    expect(state.mathSlash).toBe('fraction');
+  });
+
   it('v5 -> v6 backfills the notification settings and keeps everything else', async () => {
     seed('todo-settings', { clockFormat: '24h', hideBlockedTasks: true }, 5);
     const { useSettingsStore } = await import('@/store/settingsStore');

@@ -28,6 +28,18 @@ export function tabNameOf(note: NoteWithTabs, tabId: string | undefined): string
   return note.tabs.find((t) => t.id === tabId)?.name ?? null;
 }
 
+// The last tab in the tab bar's order (Note.tabOrder, else Main then the tabs): where a note opens
+// when it has no remembered tab, so going into it lands at the end of what was written last
+// (asked for 2026-10-14). null = the main tab.
+export function lastTabId(note: Pick<Note, 'tabs' | 'tabOrder'>): string | null {
+  const order = note.tabOrder?.length ? note.tabOrder : [MAIN_TAB_ID, ...note.tabs.map((t) => t.id)];
+  for (let i = order.length - 1; i >= 0; i--) {
+    if (order[i] === MAIN_TAB_ID) return null;
+    if (note.tabs.some((t) => t.id === order[i])) return order[i];
+  }
+  return null;
+}
+
 // The tab to show and the content that belongs to it, always as a pair. The editor saves whatever
 // it is showing under whichever tab it thinks is active, so loading one tab's content while another
 // tab is marked active overwrites that tab (reported 2026-09-30: Alt+Left/Right restored a note's

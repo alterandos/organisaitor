@@ -56,7 +56,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
   it('Collection', () => {
     const c: Collection = {
       id: 'c1' as CollectionId, kind: 'tracker', name: 'Tracker', description: 'desc', color: '#fff',
-      purposeIds: ['p1' as PurposeId], tagIds: ['tag1' as TagId], deadline: null, completed: false, completedAt: null,
+      purposeIds: ['p1' as PurposeId], tagIds: ['tag1' as TagId], deadline: null,
       fieldSchema: [{ id: 'f1', name: 'Weight', type: 'number' }], routineTasks: [], repeatConfig: null,
       collectionId: null, archivedAt: null, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
     };

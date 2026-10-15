@@ -6,6 +6,7 @@ import type { NoteBlockKind } from './types';
 // ends the session by itself.
 export const timelineBlock: NoteBlockKind = {
   family:  'block',
+  category: 'structure',
   id:      'timeline',
   label:   LABELS.noteBlocks.timeline.label,
   icon:    '🕰️',

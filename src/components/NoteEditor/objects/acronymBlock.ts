@@ -6,6 +6,7 @@ import type { NoteBlockKind } from './types';
 // what was typed, the cursor in its term.
 export const acronymBlock: NoteBlockKind = {
   family:  'block',
+  category: 'card',
   id:      'acronym',
   label:   LABELS.noteBlocks.acronym.label,
   icon:    '🔤',

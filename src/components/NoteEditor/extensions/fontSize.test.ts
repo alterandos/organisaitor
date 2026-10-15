@@ -45,6 +45,18 @@ describe('font size', () => {
     stepFontSize(editor, 1);
     expect(currentFontSize(editor)).toBe(28);
   });
+
+  it('with nothing selected, steps the whole paragraph the cursor is in, and leaves the cursor there', () => {
+    make('<p>First line</p><p>Second line</p>');
+    editor.commands.setTextSelection(4);
+    stepFontSize(editor, 1);
+    expect(editor.getHTML()).toContain('<p><span style="font-size: 18px;">First line</span></p><p>Second line</p>');
+    expect(editor.state.selection.empty).toBe(true);
+    expect(editor.state.selection.from).toBe(4);
+    stepFontSize(editor, -1);
+    setFontSize(editor, null);
+    expect(editor.getHTML()).not.toContain('font-size');
+  });
 });
 
 describe('Subtitle and Author', () => {

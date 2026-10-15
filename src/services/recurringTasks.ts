@@ -1,5 +1,5 @@
 import { useTaskStore } from '@/store/taskStore';
-import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
+import { addTaskWithCalendar, updateTaskLinked } from '@/services/taskCalendarLinks';
 import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
 import { deleteForever, trashedBy } from '@/services/trash';
 import { expandRepeat } from '@/utils/recurrence';
@@ -97,6 +97,51 @@ export function spawnNextOccurrence(taskId: TaskId, today = todayIso()): TaskId 
     });
   }
   return id;
+}
+
+// Where skipping this occurrence would move it to, or null (not repeating, a sub-task, done,
+// archived, or the rule has no date left).
+export function skipTarget(taskId: TaskId, today = todayIso()): string | null {
+  const task = useTaskStore.getState().tasks[taskId];
+  if (!task?.repeat || task.completed || task.archived || task.parentId) return null;
+  return nextOccurrenceDate(task.deadline ?? task.scheduledAt ?? today, task.repeat, today);
+}
+
+// "Skip this one" (decided with the user 2026-10-14): the occurrence isn't done, it moves to the
+// rule's next date, and counts as used ("after N times" counts it down). Its deadline and
+// scheduled day move together, its calendar entries follow (updateTaskLinked), and its sub-tasks
+// move with it, reset to undone. Returns a function that puts everything back, for the toast's
+// Undo; null when there's nothing to skip to.
+export function skipOccurrence(taskId: TaskId, today = todayIso()): (() => void) | null {
+  const tasks = useTaskStore.getState().tasks;
+  const task = tasks[taskId];
+  const next = skipTarget(taskId, today);
+  if (!task || !task.repeat || !next) return null;
+  const basis = task.deadline ?? task.scheduledAt ?? today;
+  const delta = daysBetween(basis, next);
+  const hasDate = !!(task.deadline || task.scheduledAt);
+  const repeat: RepeatConfig = task.repeat.endKind === 'count'
+    ? { ...task.repeat, count: Math.max(1, (task.repeat.count ?? 1) - 1) }
+    : task.repeat;
+  const before = { deadline: task.deadline, scheduledAt: task.scheduledAt, repeat: task.repeat };
+  const subsBefore = (task.subtaskIds ?? []).map((id) => tasks[id]).filter((s): s is Task => !!s && !s.archived)
+    .map((s) => ({ id: s.id, deadline: s.deadline, scheduledAt: s.scheduledAt, completed: s.completed }));
+  updateTaskLinked(taskId, {
+    deadline:    hasDate ? shift(task.deadline, delta) : next,
+    scheduledAt: shift(task.scheduledAt, delta),
+    repeat,
+  });
+  for (const s of subsBefore) {
+    if (s.completed) useTaskStore.getState().toggleTask(s.id);
+    updateTaskLinked(s.id, { deadline: shift(s.deadline, delta), scheduledAt: shift(s.scheduledAt, delta) });
+  }
+  return () => {
+    updateTaskLinked(taskId, before);
+    for (const s of subsBefore) {
+      updateTaskLinked(s.id, { deadline: s.deadline, scheduledAt: s.scheduledAt });
+      if (s.completed && !useTaskStore.getState().tasks[s.id]?.completed) useTaskStore.getState().toggleTask(s.id);
+    }
+  };
 }
 
 // Undo of a completion (the Completed toast): the occurrence it created goes, sub-tasks and

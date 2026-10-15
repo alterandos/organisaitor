@@ -5,6 +5,7 @@ import type { NoteBlockKind } from './types';
 // `\pyramid`: a pyramid (extensions/Pyramid.ts) in place of what was typed.
 export const pyramidBlock: NoteBlockKind = {
   family:  'block',
+  category: 'structure',
   id:      'pyramid',
   label:   LABELS.noteBlocks.pyramid.label,
   icon:    '🔺',

@@ -18,8 +18,11 @@ import { inferDefinitionFromSelection } from '@/utils/definitionInference';
 //   parent          an entry id string (a concept's broader concept; its sub-concepts are derived)
 //   links           GlossaryLink[]     (typed links to other entries, config/glossaryRelations.ts)
 //   urls            string[]           (web addresses: supporting documents, further reading)
+//   facts           Fact[]             (label / value rows the user names: Family, Habitat, Born…)
 // A new kind of field is a member here, a reader below, and a renderer in GlossaryCardBody.
-export type StructuredTagFieldType = 'text' | 'textarea' | 'list' | 'image' | 'parent' | 'links' | 'urls';
+export type StructuredTagFieldType = 'text' | 'textarea' | 'list' | 'image' | 'parent' | 'links' | 'urls' | 'facts';
+
+export interface Fact { label: string; value: string }
 
 export interface StructuredTagFieldDef {
   id:           string;   // stable key in StructuredTagEntry.fields
@@ -51,6 +54,20 @@ export const fieldLinks = (fields: Record<string, unknown>, id: string): Glossar
   Array.isArray(fields[id])
     ? (fields[id] as unknown[]).filter((v): v is GlossaryLink => !!v && typeof (v as GlossaryLink).kind === 'string' && typeof (v as GlossaryLink).entryId === 'string')
     : [];
+
+export const fieldFacts = (fields: Record<string, unknown>, id: string): Fact[] =>
+  Array.isArray(fields[id])
+    ? (fields[id] as unknown[]).filter((v): v is Fact => !!v && typeof (v as Fact).label === 'string' && typeof (v as Fact).value === 'string')
+    : [];
+
+// Facts as typed: one per line, "Label: value" (a line with no colon is a value with no label).
+export function factsFromText(text: string): Fact[] {
+  return text.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
+    const i = line.indexOf(':');
+    return i > 0 ? { label: line.slice(0, i).trim(), value: line.slice(i + 1).trim() } : { label: '', value: line };
+  });
+}
+export const factsToText = (facts: Fact[]): string => facts.map((f) => (f.label ? `${f.label}: ${f.value}` : f.value)).join('\n');
 
 // The fields the quick create/edit popover shows; the card shows and edits every field.
 export const isQuickField = (f: StructuredTagFieldDef) => f.type === 'text' || f.type === 'textarea';
@@ -120,10 +137,26 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       return { term, fields: { summary: meaning } };
     },
   },
+  // A card about a thing (2026-10-15): a species, a person, a place, a book, a company — anything
+  // with a picture and facts of its own, rather than a term with a meaning. In the Glossary, so the
+  // same thing can be shown in several notes, linked to, and its name linked as you type.
+  {
+    key:   'profile',
+    label: 'Profile',
+    fields: [
+      { id: 'summary',  name: 'In short', type: 'textarea', placeholder: 'What it is, in a sentence' },
+      { id: 'image',    name: 'Picture',  type: 'image' },
+      { id: 'facts',    name: 'Facts',    type: 'facts',    placeholder: 'One per line, e.g. Habitat: wetlands' },
+      { id: 'about',    name: 'About',    type: 'textarea', placeholder: 'More about it' },
+      { id: 'related',  name: 'Related',  type: 'links' },
+      { id: 'sources',  name: 'Sources',  type: 'list',     placeholder: 'A book, a link…' },
+      { id: 'weblinks', name: 'Links',    type: 'urls',     placeholder: 'A web address, one per line' },
+    ],
+  },
 ];
 
 // The types that make up the Glossary, and the field each one's meaning is in.
-export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', concept: 'summary', acronym: 'expansion' };
+export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', concept: 'summary', acronym: 'expansion', profile: 'summary' };
 
 export const glossaryMeaning = (entry: { typeKey: string; fields: Record<string, unknown> }): string =>
   fieldText(entry.fields, GLOSSARY_TYPES[entry.typeKey] ?? '');

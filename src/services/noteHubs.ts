@@ -117,10 +117,10 @@ export function stripHubRefFromContent(json: string, linkId: string): string | n
   return changed ? JSON.stringify(doc) : null;
 }
 
-// The Glossary card that is the selection, if it is one: added to a hub as its term, not as text.
+// The Glossary card (or chip) that is the selection, if it is one: added to a hub as its term, not as text.
 export function selectedCardEntry(state: EditorState): string | null {
   const sel = state.selection;
-  return sel instanceof NodeSelection && sel.node.type.name === 'glossaryCard' ? (sel.node.attrs.entryId as string | null) : null;
+  return sel instanceof NodeSelection && (sel.node.type.name === 'glossaryCard' || sel.node.type.name === 'glossaryChip') ? (sel.node.attrs.entryId as string | null) : null;
 }
 
 // Adds the editor's selection to a hub, as a passage with `relation`; a selected Glossary card goes

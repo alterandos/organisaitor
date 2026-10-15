@@ -46,10 +46,20 @@ const fake = vi.hoisted(() => {
     next?.resolve();
   }
 
+  // Makes every select() wait until releaseSelects() — for testing changes made while a load is
+  // still downloading.
+  let selectGate: Promise<void> | null = null;
+  let openGate: (() => void) | null = null;
+  function holdSelects() { selectGate = new Promise<void>((r) => { openGate = r; }); }
+  function releaseSelects() { openGate?.(); selectGate = null; openGate = null; }
+
   function from(table: string) {
     return {
       select: () => ({
-        eq: () => Promise.resolve({ data: tables[table]?.rows ?? [], error: tables[table]?.selectError ?? null }),
+        eq: async () => {
+          if (selectGate) await selectGate;
+          return { data: tables[table]?.rows ?? [], error: tables[table]?.selectError ?? null };
+        },
       }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       upsert: async (rows: any[]) => {
@@ -71,7 +81,7 @@ const fake = vi.hoisted(() => {
     };
   }
 
-  return { reset, from, upserts, updates, upsertErrors, deferNextUpsert, resolveNext };
+  return { reset, from, upserts, updates, upsertErrors, deferNextUpsert, resolveNext, holdSelects, releaseSelects };
 });
 
 vi.mock('@/services/supabase', () => ({ supabase: { from: (t: string) => fake.from(t) } }));
@@ -351,6 +361,44 @@ describe('offline pending-changes queue (sync survives being offline)', () => {
     const pending = pendingState();
     expect(pending.userId).toBe(USER);
     expect(pending.tables).toEqual({});
+  });
+});
+
+describe('changes made while a load is still downloading', () => {
+  it('a delete made mid-load stays deleted, and its tombstone is pushed after the merge', async () => {
+    const id = useTaskStore.getState().addTask({ title: 'Delete me' }) as TaskId;
+    fake.reset({
+      collections: { rows: [KEEP_ALIVE_COLLECTION] },
+      tasks: { rows: [taskRow({ id, title: 'Delete me' })] },   // the snapshot still has it
+    });
+    fake.holdSelects();
+    const load = initSync(USER);
+    await settle();
+    useTaskStore.getState().deleteTask(id);
+    await settle();
+    expect(fake.updates.tasks).toBeUndefined();                 // not pushed while loading
+    fake.releaseSelects();
+    await load;
+    await tick();
+    expect(useTaskStore.getState().tasks[id]).toBeUndefined();  // the load didn't bring it back
+    expect((fake.updates.tasks ?? []).some((u) => u.ids.includes(id))).toBe(true);
+  });
+
+  it('an edit made mid-load survives the merge and is pushed', async () => {
+    const id = useTaskStore.getState().addTask({ title: 'Old' }) as TaskId;
+    fake.reset({
+      collections: { rows: [KEEP_ALIVE_COLLECTION] },
+      tasks: { rows: [taskRow({ id, title: 'Old', updated_at: '2020-01-01T00:00:00.000Z' })] },
+    });
+    fake.holdSelects();
+    const load = initSync(USER);
+    await settle();
+    useTaskStore.getState().updateTask(id, { title: 'Typed while loading' });
+    fake.releaseSelects();
+    await load;
+    await tick();
+    expect(useTaskStore.getState().tasks[id].title).toBe('Typed while loading');
+    expect((fake.upserts.tasks ?? []).some((r) => r.id === id && r.title === 'Typed while loading')).toBe(true);
   });
 });
 

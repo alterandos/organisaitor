@@ -3,6 +3,7 @@
 
 const COLLECTION = 'Endeavour';
 const COLLECTION_PLURAL = 'Endeavours';
+const LABELS_PROJECT = 'project';   // lower-case, inside a sentence (collectionKind.project is the title-case form)
 
 export const LABELS = {
   collection:       COLLECTION,
@@ -291,7 +292,7 @@ export const LABELS = {
   },
   // The Glossary card (`\definition`, `cronym`, `\concept`; NoteEditor/extensions/GlossaryCard.ts).
   glossaryCard: {
-    termPlaceholder: { definition: 'Term', acronym: 'Acronym', concept: 'Concept' } as Record<string, string>,
+    termPlaceholder: { definition: 'Term', acronym: 'Acronym', concept: 'Concept', profile: 'Name' } as Record<string, string>,
     add:          'Add',
     remove:       'Remove',
     addImage:     'Add a picture',
@@ -307,7 +308,8 @@ export const LABELS = {
     locked:       'Encrypted: unlock to see it.',
     showAsCard:   'Show as a card',
     edit:         'Edit',
-    designs:      { card: 'Card', compact: 'Compact' },
+    designs:      { card: 'Card', compact: 'Compact', inline: 'Inline' },
+    chipLabel:    (kind: string, term: string) => `${kind}: ${term}. Click to open the card`,
     addField:     '+ Add',
     addFieldTitle: 'Add a field to this card',
     addFieldHeading: 'Add to the card',
@@ -436,6 +438,50 @@ export const LABELS = {
   },
   // Collapsing headings and the sticky heading trail (NoteEditor/extensions/HeadingFold.ts,
   // NoteEditor/StickyHeadings.tsx).
+  // Notes side by side (components/NoteSplitView): the ribbon's View ▾ and the panes.
+  noteViews: {
+    menu:      'View',
+    menuTitle: 'Show one note, or several side by side',
+    layouts:   { single: 'One note', two: 'Two side by side', three: 'Three: two stacked and a column', four: 'Four quadrants' },
+    choose:    'Choose a note…',
+    empty:     'No note here yet',
+    closePane: 'Close this pane',
+    openBeside: 'Open beside',
+  },
+  // Sticky notes (services/stickyNotes.ts): small notes that stay on the screen in Notes.
+  stickies: {
+    notebook:   'Stickies',
+    untitled:   'Sticky note',
+    add:        'New sticky note',
+    removed:    'Sticky note removed',
+    open:       'Open as a note',
+    remove:     'Remove sticky note',
+    design:     'Design',
+    designs:    { sticky: 'Sticky note', pin: 'Pinned', staple: 'Stapled', tape: 'Taped' },
+    nextDesign: (name: string) => `Design: ${name}. Click for the next`,
+    placeholder: 'Write something…',
+    text:       'Sticky note text',
+    locked:     'Encrypted and locked on this device',
+    formatted:  'This note has formatting, so it is edited in the note itself.',
+    region:     'Sticky notes',
+  },
+  // What `/` makes in maths (settingsStore.mathSlash).
+  mathSlash: {
+    setting:  'In maths, / makes',
+    desc:     'A fraction (as in Word’s equation editor) or a plain slash. Alt+/ always gives the other',
+    fraction: 'A fraction',
+    slash:    'A slash',
+  },
+  // A note's colour (Note.color), shown in the note so notes are easy to tell apart (2026-10-16).
+  noteColors: {
+    menu:        'Note colour',
+    none:        'No colour',
+    bars:        'Note colour on the bars',
+    barsDesc:    'How a note’s colour shows on its title bar and tab bar',
+    barStyles:   { off: 'Off', underline: 'Underline', outline: 'Outline', tint: 'Tint' },
+    headings:    'Note colour on headings',
+    headingsDesc: 'Underline a coloured note’s headings in its colour, thicker for higher levels',
+  },
   noteHeadings: {
     settingsSection: 'Notes',
     family:      'Headings',
@@ -556,6 +602,13 @@ export const LABELS = {
     teal: 'Teal', cyan: 'Cyan', blue: 'Blue', indigo: 'Indigo', purple: 'Purple', pink: 'Pink',
   },
   noteBlocks: {
+    categories: {
+      card:      'Cards',
+      structure: 'Structures',
+      weighing:  'Weighing up',
+      visual:    'Visual and data',
+      container: 'Containers and links',
+    },
     design: 'Design',
     selectBlock: 'Select block',
     deleteBlock: 'Delete block',
@@ -697,12 +750,6 @@ export const LABELS = {
       arrowPlaceholder:  'e.g. Evaporation',
       arrowEdit:         'Change this arrow: direction, or a name for the step',
       saveHint:          'Enter to save · Esc to close',
-      iconTitle:         'Icon',
-      iconAdd:           'Add an icon or a picture',
-      iconChoose:        'Choose a picture…',
-      iconDrop:          'or drop one on the icon',
-      iconRemove:        'Remove',
-      iconPaste:         'Or type any emoji',
       iconShape:         'Icon shape',
       iconSize:          'Icon size',
       shapes:            { circle: 'Circle', rounded: 'Rounded', square: 'Square' },
@@ -734,7 +781,7 @@ export const LABELS = {
       titlePlaceholder: (i: number) => (i === 0 ? 'One side' : i === 1 ? 'The other side' : 'Another side'),
       pointPlaceholder: 'A point (Criterion: … lines it up)',
       versus:           'vs',
-      designs:          { versus: 'Versus', proscons: 'Pros / cons', table: 'Table' },
+      designs:          { versus: 'Versus', table: 'Table' },
     },
     question: {
       label:           'Question',
@@ -773,6 +820,93 @@ export const LABELS = {
       showField:       (f: string) => `Show ${f}`,
       hideField:       (f: string) => `Hide ${f} (what it says is kept)`,
     },
+    // The icon slot on a block's part (extensions/blockIcons.ts): the cycle's stages, the types.
+    blockIcon: {
+      title:  'Icon',
+      add:    'Add an icon or a picture',
+      choose: 'Choose a picture…',
+      drop:   'or drop one on the icon',
+      remove: 'Remove',
+      paste:  'Or type any emoji',
+    },
+    types: {
+      label:              'Types',
+      hint:               'A category and its kinds: types of bird, of rock, of contract',
+      designs:            { guide: 'Field guide', umbrella: 'Umbrella', isa: '“Is a” fork', compact: 'Compact' },
+      categoryPlaceholder: 'Category (e.g. Birds)',
+      namePlaceholder:    'Type',
+      traitPlaceholder:   'What sets it apart',
+      examplePlaceholder: 'An example',
+      examplePrefix:      'e.g.',
+      kindsOf:            'types',
+      addType:            'Add a type',
+      addTypeShort:       'Type',
+      deleteType:         'Remove this type',
+      typesOf:            (category: string) => `${category}, types:`,
+    },
+    idKey: {
+      label:               'Identification key',
+      hint:                'Tell what something is, a step at a time (a field guide’s key)',
+      designs:             { couplets: 'Couplets', cards: 'Question cards' },
+      titlePlaceholder:    'What it identifies (e.g. Garden birds)',
+      questionPlaceholder: 'A question (optional)',
+      choicePlaceholder:   'What you see',
+      resultPlaceholder:   'The answer, or a step number',
+      step:                'Step',
+      addStep:             'Add a step',
+      addChoice:           'Add a choice to this step',
+      deleteStep:          'Remove this step',
+      goTo:                (n: number) => `Go to step ${n}`,
+      noSuchStep:          (n: number) => `There’s no step ${n} to go to`,
+      heading:             (title: string) => `Key: ${title}`,
+    },
+    profile: {
+      label: 'Profile',
+      hint:  'A card about a thing: a species, a person, a place, a book… with a picture and key facts',
+    },
+    prosCons: {
+      label:              'Pros and cons',
+      hint:               'Weigh one thing up: what’s for it, what’s against, and a verdict',
+      designs:            { tchart: 'T-chart', scales: 'Scales', ledger: 'Ledger' },
+      subjectPlaceholder: 'What are you weighing up?',
+      pros:               'Pros',
+      cons:               'Cons',
+      proPlaceholder:     'For it…',
+      conPlaceholder:     'Against it…',
+      verdictPlaceholder: 'Verdict',
+      weight:             'Weight',
+      weightN:            (w: number) => ['', 'Minor', 'Fair', 'Major'][w] ?? String(w),
+      weightTitle:        (w: number) => `Weight ${w} of 3: click to change`,
+      net:                (n: number) => (n > 0 ? `Net +${n}` : n < 0 ? `Net −${-n}` : 'Even'),
+    },
+    options: {
+      label:           'Options',
+      hint:            'The different ways to one end, weighed or simply listed',
+      designs:         { fork: 'Fork in the road', side: 'Side by side', ranked: 'Ranked', tiles: 'Tiles', either: 'Either / or' },
+      goalPlaceholder: 'What are the options for?',
+      namePlaceholder: 'An option',
+      notePlaceholder: 'What it means',
+      statuses:        { considering: 'Considering', chosen: 'Chosen', ruled: 'Ruled out' },
+      status:          'Status',
+      statusTitle:     'Change its status',
+      scoreTitle:      (s: number) => `Score ${s} of 5`,
+      setScore:        (s: number) => `Score it ${s} of 5 (click again to clear)`,
+      option:          'Option',
+      addOption:       'Add an option',
+      deleteOption:    'Remove this option',
+      or:              'or',
+    },
+    designNow: (label: string) => `Design: ${label}`,
+    conclusion: {
+      label:       'Conclusion',
+      hint:        'What follows from what came before',
+      turnInto:    'Conclusion',
+      placeholder: 'So…',
+      styles:      { arrow: 'Arrow', brace: 'Brace', therefore: 'Therefore (∴)', total: 'Total line', funnel: 'Funnel' },
+      reason:            'Reason',
+      addReason:         'Add a reason that leads to it',
+      reasonPlaceholder: 'Because…',
+    },
   },
 
   // Shared by every item pane that can be archived/deleted (Task, Calendar event, Calendar
@@ -801,6 +935,7 @@ export const LABELS = {
   // the visible label in the long-press sheet on Android.
   // Right-click menus (src/contextMenu/, CLAUDE.md "Right-click menus").
   resizePane: 'Drag to resize · double-click to reset',
+  resizeSplit: 'Drag to resize · double-click to make them even',
   contextMenu: {
     cut:          'Cut',
     removeImportant: 'Not important',
@@ -817,6 +952,9 @@ export const LABELS = {
     clipboardBlocked: 'The clipboard couldn’t be read here (the browser may have blocked access). Use Ctrl+V, or Ctrl+Shift+V for plain text.',
     openNote:     'Open',
     noteDetails:  'Edit details',
+    openTask:     'Open',
+    addSubtask:   'Add a sub-task',
+    addFollowUp:  'Add a follow-up',
   },
 
   // The "what are you creating?" switcher at the top of a creation pane (config/createKinds.ts),
@@ -1072,7 +1210,23 @@ export const LABELS = {
   },
   specialChars: {
     hint: '↑↓ choose · Enter or Tab puts it in · Esc keeps the text',
-    none: 'No letter by that name',
+    none: 'Nothing by that name',
+  },
+  // The Dictionary (services/dictionary.ts): everyday words kept from notes.
+  dictionary: {
+    listName:             'Dictionary',
+    add:                  'Add to dictionary',
+    added:                (word: string) => `Added “${word}” to the Dictionary`,
+    already:              (word: string) => `“${word}” is already in the Dictionary`,
+    notFound:             'No meaning found online: write one in Lists.',
+    noMeaning:            'No meaning yet: write one in the Dictionary list.',
+    openList:             'Open the Dictionary',
+    example:              (text: string) => `“${text}”`,
+    uses:                 (n: number) => (n === 1 ? 'Used once in your notes' : `Used ${n} times in your notes`),
+    setting:              'Dictionary words',
+    settingDesc:          'Mark words from your Dictionary wherever they appear in a note, and show their meaning on hover',
+    sourceFreeDictionary: 'Free Dictionary API',
+    sourceWiktionary:     'Wiktionary (CC BY-SA)',
   },
   noteTabDates: {
     text:        (created: string, modified: string) => `Created ${created} · Modified ${modified}`,
@@ -1177,6 +1331,9 @@ export const LABELS = {
     summaryUntil: (d: string) => `until ${d}`,
     hint:       'When you complete it, the next one appears, dated by this rule. With no date, it starts today.',
     toastNext:  (when: string) => `Next one: ${when}`,
+    // "Skip this one": the occurrence moves to the rule's next date without being done.
+    skip:        (when: string) => `Skip this one (moves to ${when})`,
+    toastSkipped: (task: string, when: string) => `Skipped “${task}”: next one ${when}`,
     rowTitle:   (rule: string) => `Repeats: ${rule}`,
   },
 
@@ -1215,6 +1372,10 @@ export const LABELS = {
     toastUnlocked:   (titles: string[]) => `Unlocked: ${titles.join(', ')}`,
     toastFollowUp:   '+ Follow-up',
     toastUndo:       'Undo',
+    // Completing the last open task of a project offers to archive the project (2026-10-14).
+    toastProjectDone:     (project: string) => `That was the last open task in “${project}”`,
+    toastArchiveProject:  `Archive the ${LABELS_PROJECT}`,
+    toastProjectArchived: (project: string) => `Archived “${project}”`,
     // Hovering a task's Complete button (services/taskCompletion.ts taskCompletionOptions).
     menu: {
       completeWithFollowUp: 'Complete + add follow-up',
