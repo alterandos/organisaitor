@@ -10,6 +10,7 @@ import { listTimezones, resolveTimezone, SYSTEM_TIMEZONE } from '@/utils/timezon
 import { rezoneAllCalendarData } from '@/services/timezoneMigration';
 import { StorageSection } from './StorageSection';
 import { NotificationsSection } from './NotificationsSection';
+import { TypingShortcutsSection } from './TypingShortcutsSection';
 import { SettingRow, Toggle } from './SettingControls';
 import { usePlatform } from '@/hooks/usePlatform';
 import styles from './SettingsPane.module.css';
@@ -277,6 +278,7 @@ export function SettingsPane() {
             </div>
           </section>
 
+          <TypingShortcutsSection />
           {isAndroid && <NotificationsSection />}
           <StorageSection />
 

@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { captureBindingFromEvent, formatBinding, matchesBinding, parseBinding } from '@/utils/hotkeyBinding';
-import { HOTKEYS } from '@/config/hotkeys';
+import { HOTKEYS, altDigitSection } from '@/config/hotkeys';
+
+describe('altDigitSection: Alt+0–7 goes to a section, from a text field too', () => {
+  const key = (code: string, mods: Partial<KeyboardEvent> = {}) =>
+    ({ altKey: true, ctrlKey: false, metaKey: false, shiftKey: false, code, ...mods }) as KeyboardEvent;
+  it('maps the top-row digits to the sections in nav order', () => {
+    expect(altDigitSection(key('Digit0'))).toBe('overview');
+    expect(altDigitSection(key('Digit5'))).toBe('notes');
+    expect(altDigitSection(key('Digit7'))).toBe('fitness');
+    expect(altDigitSection(key('Digit8'))).toBeNull();
+  });
+  it('leaves other combinations alone (AltGr is Ctrl+Alt; Alt+number pad types a character)', () => {
+    expect(altDigitSection(key('Digit1', { altKey: false }))).toBeNull();
+    expect(altDigitSection(key('Digit1', { ctrlKey: true }))).toBeNull();
+    expect(altDigitSection(key('Digit1', { shiftKey: true }))).toBeNull();
+    expect(altDigitSection(key('Numpad1'))).toBeNull();
+  });
+});
 
 function makeKeyEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
   return { ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, key: '', ...overrides } as KeyboardEvent;

@@ -74,6 +74,25 @@ describe('settingsStore migration', () => {
     expect(state.mathSlash).toBe('fraction');
   });
 
+  it('v13 -> v14 backfills an empty list of typing shortcuts and keeps everything else', async () => {
+    seed('todo-settings', { clockFormat: '12h', mathSlash: 'slash' }, 13);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    const state = useSettingsStore.getState();
+    expect(state.textShortcuts.map((s) => s.typed)).toContain('govt');
+    expect(state.mathSlash).toBe('slash');
+  });
+
+  it("v14 -> v15 adds the starter shortcuts beside the person's own, never a second for the same word", async () => {
+    seed('todo-settings', { textShortcuts: [{ id: 'mine', typed: 'Govt', text: 'Government of Wales' }] }, 14);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    const list = useSettingsStore.getState().textShortcuts;
+    expect(list.filter((s) => s.typed.toLowerCase() === 'govt')).toEqual([{ id: 'mine', typed: 'Govt', text: 'Government of Wales' }]);
+    expect(list.map((s) => s.typed)).toEqual(expect.arrayContaining(['tech', 'b/w', 'eg', 'ie']));
+    expect(list.map((s) => s.typed)).not.toContain('asap');
+  });
+
   it('v5 -> v6 backfills the notification settings and keeps everything else', async () => {
     seed('todo-settings', { clockFormat: '24h', hideBlockedTasks: true }, 5);
     const { useSettingsStore } = await import('@/store/settingsStore');

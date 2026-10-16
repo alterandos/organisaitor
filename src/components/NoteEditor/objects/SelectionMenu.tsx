@@ -18,11 +18,11 @@ import { conclusionFromSelection } from '../extensions/Conclusion';
 import { addWordFromSelection } from '@/services/dictionaryActions';
 import { closeSelectionMenu, getSelectionMenu } from './selectionMenuState';
 import { objectTriggerStorage } from './NoteObjectTrigger';
-import { ReviewIcon } from '@/components/Icons';
+import { ReviewIcon, UnsureIcon } from '@/components/Icons';
+import { flagRange } from '../extensions/UnsureFlag';
+import { useFloatingPlacement } from '@/utils/floatingPlacement';
 import styles from './NoteObjectMenu.module.css';
 
-const MENU_WIDTH = 344;
-const ROOM_NEEDED = 300;
 const MAX_TERMS = 7;
 
 interface Props {
@@ -63,7 +63,12 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  // Under the cursor, or above it; too tall either way, the list scrolls (utils/floatingPlacement.ts).
+  const anchorBox = (() => {
+    if (view.isDestroyed) return null;
+    try { const r = view.coordsAtPos(range.to); return { left: r.left - 6, right: r.left - 6, top: r.top, bottom: r.bottom }; } catch { return null; }
+  })();
+  const { ref: menuRef, style: position } = useFloatingPlacement<HTMLDivElement>(anchorBox, { gap: 6 });
   const entriesVersion = useNoteStore((s) => s.structuredTagEntries);
   const secretsVersion = useSecretsVersion((s) => s.version);
 
@@ -123,6 +128,7 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
         key: `important-${lv.level}`, group: 'mark', icon: lv.icon, label: lv.label, color: lv.color,
         run: after(() => setImportance(view, range.from, range.to, lv.level)),
       })),
+      { key: 'unsure', group: 'mark', icon: <UnsureIcon />, label: LABELS.unsureFlag.flag, run: after(() => { const tr = flagRange(view.state.tr, range.from, range.to); if (tr) view.dispatch(tr); }) },
       { key: 'review', group: 'mark', icon: <ReviewIcon />, label: reviewing ? LABELS.importance.stopReviewing : LABELS.importance.reviewLater, run: after(() => toggleReview(view, range.from, range.to)) },
       { key: 'quote', group: 'turn', icon: '❝', label: LABELS.noteBlocks.quote.turnInto, run: () => { closeSelectionMenu(view); quoteFromSelection(view, range.from, range.to); } },
       { key: 'conclusion', group: 'turn', icon: '∴', label: LABELS.noteBlocks.conclusion.turnInto, run: () => { closeSelectionMenu(view); conclusionFromSelection(view, range.from, range.to); } },
@@ -166,13 +172,7 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
     return () => { storage.selectionMenuKey = null; };
   }, [editor]);
 
-  let rect: { left: number; top: number; bottom: number };
-  try { rect = view.coordsAtPos(range.to); } catch { return null; }
-  const below = window.innerHeight - rect.bottom >= ROOM_NEEDED || rect.top < ROOM_NEEDED;
-  const position = {
-    left: Math.max(8, Math.min(rect.left - 6, window.innerWidth - MENU_WIDTH - 8)),
-    ...(below ? { top: rect.bottom + 6 } : { bottom: window.innerHeight - rect.top + 6 }),
-  };
+  if (!anchorBox) return null;
 
   const L = LABELS.selectionMenu;
   const groupLabel = { suggested: L.suggested, link: L.linkGroup, mark: L.markGroup, turn: L.turnGroup };

@@ -1,4 +1,3 @@
-import { Children } from 'react';
 import { usePlatform } from '@/hooks/usePlatform';
 import { LABELS } from '@/config/labels';
 import { useRowHoverActions } from './useRowHoverActions';
@@ -30,7 +29,6 @@ export function RowOptionsMenu({ rowRef, title, icon, children }: {
 }) {
   const { isAndroid } = usePlatform();
   const { anchorRef, open, rowHandlers, openNow, menuHandlers } = useRowHoverActions<HTMLButtonElement>({ longPressRef: rowRef });
-  const count = Children.toArray(children).length;
   useContextMenuScope(rowRef, () => ({ kind: 'row', data: { title }, items: () => rowActionItems(children) }));
   return (
     <span className={`${styles.slot} ${open ? styles.slotOpen : ''}`}>
@@ -53,7 +51,6 @@ export function RowOptionsMenu({ rowRef, title, icon, children }: {
         anchorRef={anchorRef}
         open={open}
         align="dropdown"
-        estimatedHeight={count * 24 + 6}
         className={styles.menuColumn}
         title={title}
         {...menuHandlers}

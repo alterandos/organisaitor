@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { placeElement } from '@/utils/floatingPlacement';
 import { createPortal } from 'react-dom';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import type { ContextMenuItem, ContextMenuSection } from '@/contextMenu/types';
@@ -131,20 +132,19 @@ function MenuPanel({ level, depth, onEscape, onHover, onChoose }: {
   const ref = useRef<HTMLDivElement>(null);
   useEscapeClose(onEscape);
 
-  // Fit the panel on screen once its size is known: flip left of the click (or of the parent
-  // item, for a submenu) when it would run off the right, up when it would run off the bottom.
-  // Written straight to the element's style — a DOM measurement, not React state.
+  // Fit the panel on screen once its size is known (utils/floatingPlacement.ts): at the click,
+  // flipping left or up when it would run off; a submenu beside its parent item, flipping to the
+  // left. Too tall for the window, it scrolls. Written straight to the element's style — a DOM
+  // measurement, not React state.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
-    const margin = 4;
-    let left = level.anchor ? level.anchor.right - 2 : level.x;
-    let top = level.anchor ? level.anchor.top - 4 : level.y;
-    if (left + width > window.innerWidth - margin) left = level.anchor ? level.anchor.left - width + 2 : level.x - width;
-    if (top + height > window.innerHeight - margin) top = level.anchor ? window.innerHeight - margin - height : level.y - height;
-    el.style.left = `${Math.max(margin, left)}px`;
-    el.style.top = `${Math.max(margin, top)}px`;
+    if (level.anchor) {
+      const a = level.anchor;
+      placeElement(el, { left: a.left + 2, right: a.right - 2, top: a.top - 4, bottom: a.bottom }, { placement: 'beside', gap: 0, margin: 4 });
+    } else {
+      placeElement(el, { left: level.x, right: level.x, top: level.y, bottom: level.y }, { gap: 0, margin: 4 });
+    }
     el.style.visibility = 'visible';
   }, [level.anchor, level.x, level.y]);
 

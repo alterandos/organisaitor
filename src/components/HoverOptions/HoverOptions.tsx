@@ -45,7 +45,6 @@ function WithOptions({ options, align = 'start', children }: Props) {
           anchorRef={anchorRef}
           open={open}
           align={align}
-          estimatedHeight={options.length * 32 + 8}
           className={styles.menu}
           {...menuHandlers}
         >

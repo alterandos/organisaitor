@@ -1,6 +1,5 @@
-import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state';
-import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import type { EditorState } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { nanoid } from 'nanoid';
 import { LABELS } from '@/config/labels';
@@ -8,9 +7,11 @@ import { createReviewIcon } from '@/components/Icons';
 import { addDaysToIso, todayIso } from '@/utils/date';
 import { BUILTIN_TAGS } from '../builtinTags';
 import { IMPORTANCE_LEVELS, importanceLevel } from './importanceLevels';
+import { openBlockPopover, popoverClass } from './blockDesigns';
+import { registerMarginSource } from './MarginColumn';
 
 // Important passages, built out (2026-10-07): three levels (Important, Very important, Critical),
-// a marker in the margin beside each, a Key points list (NoteTOC), and Review later — a light
+// its icon in the margin column (extensions/MarginColumn.ts), a Key points list (NoteTOC), and Review later — a light
 // spaced-repetition list of passages to come back to (NotesSection/ReviewView). All of it lives
 // on the Important tag's own mark (NoteTagMark: level, passageId, reviewDue, reviewStep), so it
 // syncs and encrypts with the note and needs no store of its own.
@@ -122,51 +123,52 @@ export function nextReview(step: number | null, answer: ReviewAnswer, today = to
   return { due: addDaysToIso(today, REVIEW_INTERVALS[next]), step: next };
 }
 
-// ── The margin markers ───────────────────────────────────────────────────────
+// ── In the margin column ─────────────────────────────────────────────────────
 
-// A marker in the left margin beside every line block that holds an Important passage: the
-// highest level's icon, and the Review icon when one is on the review list. Absolutely placed at the start of
-// the block, so it takes no room in the text.
-function markerDecorations(state: EditorState): DecorationSet | null {
-  const decos: Decoration[] = [];
-  state.doc.descendants((node, pos) => {
-    if (!node.isTextblock) return true;
-    let level = 0;
-    let review = false;
-    node.forEach((child) => {
-      const m = child.marks.find(isImportant);
-      if (!m) return;
-      level = Math.max(level, importanceLevel(m.attrs.level).level);
-      if (m.attrs.reviewDue) review = true;
-    });
-    if (level > 0) {
-      const info = IMPORTANCE_LEVELS[level - 1];
-      decos.push(Decoration.widget(pos + 1, () => marker(info.icon, info.label, info.color, review), {
-        side: -1, key: `important-${level}-${review}`, ignoreSelection: true, marks: [],
-      }));
-    }
-    return false;
-  });
-  return decos.length ? DecorationSet.create(state.doc, decos) : null;
-}
-
-function marker(icon: string, label: string, color: string, review: boolean): HTMLElement {
-  const el = document.createElement('span');
-  el.contentEditable = 'false';
-  el.setAttribute('data-importance-marker', '');
-  el.style.setProperty('--importance-color', color);
-  el.textContent = icon;
-  if (review) el.append(createReviewIcon());
-  el.title = review ? `${label} · ${LABELS.importance.onReviewList}` : label;
-  return el;
-}
-
-const importanceKey = new PluginKey('importance');
-
-export const Importance = Extension.create({
-  name: 'importance',
-
-  addProseMirrorPlugins() {
-    return [new Plugin({ key: importanceKey, props: { decorations: markerDecorations } })];
-  },
-});
+// Each Important passage in the margin column (extensions/MarginColumn.ts, which replaced the
+// markers in the left margin 2026-10-17): its level's icon, and the Review icon when it's on the
+// review list. A click offers the level, Review later and Remove, as its right-click menu does.
+registerMarginSource('important', (state) => collectImportantPassages(state.doc).map((p) => {
+  const info = importanceLevel(p.level);
+  const review = !!p.reviewDue;
+  return {
+    key: `important-${p.passageId ?? p.from}`,
+    from: p.from,
+    to: p.to,
+    icon: () => {
+      const span = document.createElement('span');
+      span.textContent = info.icon;
+      if (review) span.append(createReviewIcon());
+      return span;
+    },
+    color: info.color,
+    title: review ? `${info.label} · ${LABELS.importance.onReviewList}` : info.label,
+    open: (view, anchor) => openBlockPopover(anchor, (close) => {
+      const I = LABELS.importance;
+      const box = document.createElement('div');
+      const row = (buttons: [string, boolean, () => void][]) => {
+        const r = document.createElement('div');
+        r.className = popoverClass.row;
+        for (const [text, pressed, run] of buttons) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = popoverClass.choice;
+          b.textContent = text;
+          b.setAttribute('aria-pressed', String(pressed));
+          b.addEventListener('mousedown', (e) => e.preventDefault());
+          b.addEventListener('click', () => { close(); run(); view.focus(); });
+          r.append(b);
+        }
+        return r;
+      };
+      box.append(
+        row(IMPORTANCE_LEVELS.map((lv) => [`${lv.icon} ${lv.label}`, lv.level === p.level, () => setImportance(view, p.from, p.to, lv.level)])),
+        row([
+          [review ? I.stopReviewing : I.reviewLater, false, () => toggleReview(view, p.from, p.to)],
+          [LABELS.contextMenu.removeImportant, false, () => setImportance(view, p.from, p.to, null)],
+        ]),
+      );
+      return box;
+    }),
+  };
+}));

@@ -26,6 +26,7 @@ import { QUOTE_DESIGNS } from './Quote';
 import { TIMELINE_DESIGNS } from './Timeline';
 import { TYPES_DESIGNS } from './Types';
 import { PROSCONS_DESIGNS } from './ProsCons';
+import { ARGUMENT_DESIGNS } from './Argument';
 import { OPTIONS_DESIGNS } from './Options';
 
 // Ctrl+] / Ctrl+[ (asked for 2026-10-15): the next / previous design of the note block the cursor
@@ -52,6 +53,7 @@ export const BLOCK_DESIGN_LISTS: Record<string, readonly BlockDesign<string>[]> 
   questionBlock: QUESTION_DESIGNS,
   compareBlock:  COMPARE_DESIGNS,
   prosCons:      PROSCONS_DESIGNS,
+  argument:      ARGUMENT_DESIGNS,
   options:       OPTIONS_DESIGNS,
   diagram:       DIAGRAM_DESIGNS,
   hub:           HUB_DESIGNS,

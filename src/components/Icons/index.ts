@@ -5,6 +5,8 @@
 export { AccountIcon, ArchiveIcon, CheckCircleIcon, ImageIcon, PinIcon, RestoreIcon, TrashIcon } from './ActionIcons';
 export { DisclosureIcon } from './DisclosureIcon';
 export { createReviewIcon } from './reviewIcon';
+export { createUnsureIcon } from './unsureIcon';
+export { UnsureIcon } from './FlagIcons';
 export { GlossaryIcon, HistoryIcon, HubIcon, IntegrationsIcon, LibraryIcon, MapIcon, ReviewIcon, SettingsIcon } from './PlaceIcons';
 export { createDisclosureIcon } from './disclosureDom';
 export { ColorDotIcon } from './ColorDotIcon';

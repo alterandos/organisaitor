@@ -159,10 +159,14 @@ export function pointAt($pos: ResolvedPos): { point: PMNode; pos: number; list: 
   return { point: $pos.parent, pos: $pos.before(d), list: $pos.node(d - 1), listPos: $pos.before(d - 1), index: $pos.index(d - 1) };
 }
 
+// What a list is called, and its points' placeholders: Pros / Cons here; the argument block
+// (extensions/Argument.ts) calls the same lists its evidence for and against.
+export interface ListWords { pros: string; cons: string; proPlaceholder: string; conPlaceholder: string }
+
 // Decorations for one list (the side's heading lives in CSS, from data-side): each point's weight
 // dots, its placeholder, and a running total for the ledger.
-export function listDecorations(decos: Decoration[], list: PMNode, listPos: number, key: string): void {
-  const L = LABELS.noteBlocks.prosCons;
+export function listDecorations(decos: Decoration[], list: PMNode, listPos: number, key: string, words: ListWords = LABELS.noteBlocks.prosCons): void {
+  const L = words;
   const side = list.attrs.side as Side;
   decos.push(Decoration.node(listPos, listPos + list.nodeSize, { 'data-pc-label': side === 'pro' ? L.pros : L.cons }));
   let p = listPos + 1;

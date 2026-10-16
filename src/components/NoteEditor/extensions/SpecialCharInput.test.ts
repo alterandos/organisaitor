@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { SpecialCharInput } from './SpecialCharInput';
+import { useSettingsStore } from '@/store/settingsStore';
 
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
 Range.prototype.getClientRects = noRects;
@@ -100,3 +101,37 @@ describe('shortcuts in the note editor (-->, <=, >=, !=, ^2)', () => {
   });
 });
 
+
+describe('the person’s own typing shortcuts in the note editor (govt → government)', () => {
+  afterEach(() => { useSettingsStore.setState({ textShortcuts: [] }); });
+  const withShortcuts = () => useSettingsStore.setState({
+    textShortcuts: [{ id: 'a', typed: 'govt', text: 'government' }, { id: 'b', typed: 'tech', text: 'technology' }],
+  });
+
+  it('replaces the word once it ends, keeping the space or punctuation, in its case', () => {
+    withShortcuts();
+    make();
+    type('the govt and Tech, TECH. technical ');
+    expect(editor.getText()).toBe('the government and Technology, TECHNOLOGY. technical ');
+  });
+
+  it('Backspace or Ctrl+Z straight after puts back what was typed', () => {
+    withShortcuts();
+    make();
+    type('govt ');
+    expect(editor.getText()).toBe('government ');
+    expect(ctrlZ()).toBe(true);
+    expect(editor.getText()).toBe('govt ');
+    type('tech ');
+    expect(press('Backspace')).toBe(true);
+    expect(editor.getText()).toBe('govt tech ');
+  });
+
+  it('not in code', () => {
+    withShortcuts();
+    make('<pre><code></code></pre>');
+    type('govt ');
+    expect(editor.getText()).toContain('govt ');
+    expect(editor.getText()).not.toContain('government');
+  });
+});

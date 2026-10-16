@@ -7,7 +7,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { SectionDocument, Section, ColumnBlock, Column } from '../extensions/Section';
 import { NoteTagMark } from '../extensions/NoteTagMark';
 import { ConceptRefMark, collectRefGroups } from '../extensions/ConceptRef';
-import { Importance, collectImportantPassages } from '../extensions/Importance';
+import { collectImportantPassages } from '../extensions/Importance';
 import { NoteObjectTrigger } from './NoteObjectTrigger';
 import { SelectionMenu } from './SelectionMenu';
 import { getSelectionMenu } from './selectionMenuState';
@@ -33,7 +33,7 @@ function setup() {
   document.body.append(host);
   editor = new Editor({
     element: host,
-    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteTagMark, ConceptRefMark, Importance, NoteObjectTrigger],
+    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteTagMark, ConceptRefMark, NoteObjectTrigger],
     content: '<p>Plants use photosynthesis to make sugar.</p>',
   });
   editor.view.coordsAtPos = () => ({ left: 0, right: 0, top: 0, bottom: 0 });

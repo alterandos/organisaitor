@@ -1,4 +1,5 @@
 import { Extension } from '@tiptap/core';
+import { placeElement } from '@/utils/floatingPlacement';
 import { NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { GapCursor } from '@tiptap/pm/gapcursor';
@@ -814,11 +815,7 @@ export function openBlockPopover(anchor: DOMRect, build: (close: () => void) => 
   }
   el.append(build(close));
   document.body.append(el);
-  const width = el.offsetWidth || 240;
-  const height = el.offsetHeight || 120;
-  const below = window.innerHeight - anchor.bottom > height + 12 || anchor.top < height + 12;
-  el.style.left = `${Math.max(8, Math.min(anchor.left + anchor.width / 2 - width / 2, window.innerWidth - width - 8))}px`;
-  el.style.top = `${below ? anchor.bottom + 6 : anchor.top - height - 6}px`;
+  placeElement(el, anchor, { gap: 6, align: 'center' });
   setTimeout(() => document.addEventListener('mousedown', onDown, true), 0);
   return close;
 }

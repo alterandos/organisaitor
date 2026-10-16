@@ -1,5 +1,6 @@
 import { LABELS } from '@/config/labels';
 import type { CharMatch } from './charSets';
+import { placeElement } from '@/utils/floatingPlacement';
 import styles from './CharPicker.module.css';
 
 // The little list of characters under the cursor while `//name` is being typed: one for the whole
@@ -52,9 +53,7 @@ export function showCharPicker(at: CaretBox, matches: CharMatch[], selected: num
   hint.textContent = LABELS.specialChars.hint;
   el.append(hint);
   // Below the cursor, or above it when there's no room.
-  el.style.left = `${Math.max(8, Math.min(at.left, window.innerWidth - el.offsetWidth - 8))}px`;
-  const below = at.bottom + 6 + el.offsetHeight < window.innerHeight;
-  el.style.top = `${below ? at.bottom + 6 : Math.max(8, at.top - el.offsetHeight - 6)}px`;
+  placeElement(el, { left: at.left, right: at.left, top: at.top, bottom: at.bottom }, { gap: 6 });
   el.querySelector(`.${styles.selected}`)?.scrollIntoView({ block: 'nearest' });
 }
 

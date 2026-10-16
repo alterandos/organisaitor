@@ -1,4 +1,5 @@
-import { exactChar, findCharTrigger, findShortcut, matchChars, TRIGGER, type CharMatch } from './charSets';
+import { exactChar, findCharTrigger, findShortcut, findUserShortcut, matchChars, TRIGGER, type CharMatch } from './charSets';
+import { useSettingsStore } from '@/store/settingsStore';
 import { hideCharPicker, showCharPicker, type CaretBox } from './charPicker';
 
 // `//name` in every ordinary text field (inputs and textareas, anywhere in the app): one set of
@@ -11,7 +12,9 @@ import { hideCharPicker, showCharPicker, type CaretBox } from './charPicker';
 //
 // Shortcuts (`-->` → →, `<=` → ≤, `^2` → ²; SHORTCUTS in charSets.ts) replace as they're typed,
 // except in URL, email and search fields; Backspace or Ctrl+Z straight after puts the typed text
-// back (the browser's own undo doesn't see a replace made by script).
+// back (the browser's own undo doesn't see a replace made by script). The person's own shortcuts
+// (`govt` → government, Settings → Typing shortcuts) work the same way once the word is finished.
+// A field inside `data-no-shortcuts` (the fields where those shortcuts are written) gets none.
 
 const TEXT_TYPES = new Set(['text', 'search', 'url', 'email', 'tel', '']);
 
@@ -61,8 +64,9 @@ function onInput(e: Event) {
   const before = field.value.slice(0, caret);
   lastShortcut = null;
   // A shortcut just completed by typing (not by pasting, or our own replace(), which is a plain Event).
-  if (e instanceof InputEvent && e.inputType === 'insertText' && !(field instanceof HTMLInputElement && NO_SHORTCUTS.has(field.type))) {
-    const s = findShortcut(before);
+  if (e instanceof InputEvent && e.inputType === 'insertText' && !(field instanceof HTMLInputElement && NO_SHORTCUTS.has(field.type))
+      && !field.closest('[data-no-shortcuts]')) {
+    const s = findShortcut(before) ?? findUserShortcut(before, useSettingsStore.getState().textShortcuts);
     if (s) {
       close();
       replace(field, s.start, caret, s.char);

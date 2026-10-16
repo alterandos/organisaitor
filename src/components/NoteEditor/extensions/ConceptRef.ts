@@ -8,16 +8,18 @@ import { glossaryEntry } from '@/services/glossary';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
 import { LABELS } from '@/config/labels';
 import { BUILTIN_TAGS } from '../builtinTags';
+import { openBlockPopover, popoverClass } from './blockDesigns';
+import { refreshMarginColumns, registerMarginSource } from './MarginColumn';
 
 // Text that refers to a Glossary entry (a Definition, Concept or Acronym defined somewhere in
-// Notes): highlighted in the entry's colour, with a brace in the margin beside it pointing at a
-// label naming the entry. Hover the label for the meaning; click it to go to where it's defined.
+// Notes): highlighted in the entry's colour; hovering it shows the term's card. Its icon is in the
+// margin column (extensions/MarginColumn.ts; the brace and label beside it were replaced
+// 2026-10-17): click it for the card, Go to definition, or Remove the link.
 // Made with `\` on a selection (objects/selectionMenu.ts).
 //
 // The mark is data only. Like linked text (objects/artifactGroups.ts), what it looks like beyond
 // a background is drawn once per run of marked text, never per mark element: ProseMirror splits
-// a mark into a piece per line and around bold words, so per-element drawing would repeat. The
-// braces and labels live in a layer beside the editor, measured from the text's positions.
+// a mark into a piece per line and around bold words, so per-element drawing would repeat.
 
 const colorOf = (typeKey: string | null) => BUILTIN_TAGS.find((t) => t.typeKey === typeKey)?.color ?? '#6366f1';
 
@@ -89,18 +91,13 @@ export function unlinkConceptRef(view: EditorView, group: RefGroup): void {
   view.dispatch(view.state.tr.removeMark(group.from, group.to, view.state.schema.marks.conceptRef));
 }
 
-// ── The margin ───────────────────────────────────────────────────────────────
+// ── The card on hover, and the margin column ─────────────────────────────────
 
 const conceptKey = new PluginKey<{ hover: number | null }>('conceptRef');
-const WIDE_MIN = 680;      // narrower than this, the margin shows only each label's icon
-const LABEL_H = 24;
-const LABEL_GAP = 6;
 
 const setHover = (view: EditorView, from: number | null) => {
   if (conceptKey.getState(view.state)?.hover !== from) view.dispatch(view.state.tr.setMeta(conceptKey, { hover: from }));
 };
-
-const SVG = 'http://www.w3.org/2000/svg';
 
 // What a term's card says: the term, its kind, what it means, and where it's defined.
 export function entryCardContent(entry: ReturnType<typeof glossaryEntry>): Node[] {
@@ -118,45 +115,70 @@ export function entryCardContent(entry: ReturnType<typeof glossaryEntry>): Node[
   return [head, kind, meaning, where];
 }
 
+// A term's card in a popover, from its icon in the margin column: what it means, Go to the
+// definition, and (for linked text) Remove the link.
+export function openEntryPopover(view: EditorView, entryId: string, typeKey: string | null, anchor: DOMRect, unlink?: () => void): void {
+  const entry = glossaryEntry(entryId);
+  const L = LABELS.glossary;
+  openBlockPopover(anchor, (close) => {
+    const box = document.createElement('div');
+    box.setAttribute('data-concept-popover', '');
+    box.style.setProperty('--concept-color', colorOf(typeKey));
+    box.append(...entryCardContent(entry));
+    const actions = document.createElement('div');
+    actions.className = popoverClass.row;
+    const button = (text: string, run: () => void) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = popoverClass.choice;
+      b.textContent = text;
+      b.addEventListener('mousedown', (e) => e.preventDefault());
+      b.addEventListener('click', () => { close(); run(); });
+      actions.append(b);
+    };
+    if (entry) button(L.goToDefinition, () => openNotePassage(entry.noteId, definitionPassage(entry.id)));
+    if (unlink) button(L.removeLink, () => { unlink(); view.focus(); });
+    box.append(actions);
+    return box;
+  });
+}
+
+// Each run of linked text in the margin column: the term's icon, in its kind's colour.
+registerMarginSource('glossary-link', (state) => collectRefGroups(state.doc).map((g) => {
+  const entry = glossaryEntry(g.entryId);
+  const L = LABELS.glossary;
+  return {
+    key: `glossary-${g.entryId}-${g.from}`,
+    from: g.from,
+    to: g.to,
+    icon: () => document.createTextNode(entry ? (entry.locked ? '🔒' : entry.icon) : '?'),
+    color: colorOf(g.typeKey),
+    title: entry ? `${entry.term || L.untitled} · ${entry.kindLabel}` : L.missing,
+    open: (view, anchor) => openEntryPopover(view, g.entryId, g.typeKey, anchor, () => unlinkConceptRef(view, g)),
+  };
+}));
+
 const HOVER_SHOW_MS = 350;
 const HOVER_HIDE_MS = 250;
 
-// A right-facing brace of height h and width w, its tip at (w, h/2).
-function bracePath(w: number, h: number): string {
-  const r = Math.min(5, h / 4);
-  const m = h / 2;
-  const x = w / 2;
-  return `M0,0 Q${x},0 ${x},${r} L${x},${m - r} Q${x},${m} ${w},${m} Q${x},${m} ${x},${m + r} L${x},${h - r} Q${x},${h} 0,${h}`;
-}
-
-class ConceptMarginView {
-  private layer: HTMLDivElement;
-  private frame = 0;
-  private labels = new Map<number, HTMLElement>();
-  private observer: ResizeObserver | null = null;
-  private unsubscribe: () => void;
+// Hovering linked words shows the term's card under them, with a way to its definition.
+class ConceptHoverView {
   private view: EditorView;
-
-  constructor(view: EditorView) {
-    this.view = view;
-    this.layer = document.createElement('div');
-    this.layer.setAttribute('data-concept-margin-layer', '');
-    view.dom.parentElement?.appendChild(this.layer);
-    this.observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.schedule());
-    this.observer?.observe(view.dom);
-    const offEntries = useNoteStore.subscribe((s, p) => { if (s.structuredTagEntries !== p.structuredTagEntries || s.notes !== p.notes) this.schedule(); });
-    const offSecrets = useSecretsVersion.subscribe(() => this.schedule());
-    this.unsubscribe = () => { offEntries(); offSecrets(); };
-    view.dom.addEventListener('mouseover', this.onTextOver);
-    view.dom.addEventListener('mouseout', this.onTextOut);
-    this.schedule();
-  }
-
-  // ── The card on the linked text: hover a linked word for its meaning, and a way to its definition.
   private card: HTMLElement | null = null;
   private cardFor: number | null = null;
   private showTimer: ReturnType<typeof setTimeout> | undefined;
   private hideTimer: ReturnType<typeof setTimeout> | undefined;
+  private unsubscribe: () => void;
+
+  constructor(view: EditorView) {
+    this.view = view;
+    // A term renamed or a vault unlocked changes what the margin column shows.
+    const offEntries = useNoteStore.subscribe((s, p) => { if (s.structuredTagEntries !== p.structuredTagEntries || s.notes !== p.notes) refreshMarginColumns(); });
+    const offSecrets = useSecretsVersion.subscribe(() => refreshMarginColumns());
+    this.unsubscribe = () => { offEntries(); offSecrets(); };
+    view.dom.addEventListener('mouseover', this.onTextOver);
+    view.dom.addEventListener('mouseout', this.onTextOut);
+  }
 
   private onTextOver = (e: MouseEvent) => {
     const el = (e.target as Element).closest?.('[data-concept-ref]');
@@ -223,137 +245,19 @@ class ConceptMarginView {
     this.cardFor = g.from;
   }
 
-  update(view: EditorView, prev: EditorState) {
-    this.view = view;
-    if (view.state.doc !== prev.doc) this.schedule();
-    this.showHover();
-  }
+  update(view: EditorView) { this.view = view; }
 
   destroy() {
-    cancelAnimationFrame(this.frame);
     clearTimeout(this.showTimer);
     clearTimeout(this.hideTimer);
     this.hideCard();
     this.view.dom.removeEventListener('mouseover', this.onTextOver);
     this.view.dom.removeEventListener('mouseout', this.onTextOut);
-    this.observer?.disconnect();
     this.unsubscribe();
-    this.layer.remove();
-    delete (this.view.dom as HTMLElement).dataset.conceptMargin;
-  }
-
-  private schedule() {
-    if (this.frame || typeof requestAnimationFrame === 'undefined') return;
-    this.frame = requestAnimationFrame(() => { this.frame = 0; this.draw(); });
-  }
-
-  private showHover() {
-    const hover = conceptKey.getState(this.view.state)?.hover ?? null;
-    for (const [from, el] of this.labels) el.toggleAttribute('data-hover', from === hover);
-  }
-
-  private draw() {
-    const view = this.view;
-    if (view.isDestroyed) return;
-    const dom = view.dom as HTMLElement;
-    const groups = collectRefGroups(view.state.doc);
-    this.labels.clear();
-    if (groups.length === 0) {
-      this.layer.replaceChildren();
-      delete dom.dataset.conceptMargin;
-      return;
-    }
-    const mode = dom.clientWidth >= WIDE_MIN ? 'wide' : 'compact';
-    if (dom.dataset.conceptMargin !== mode) dom.dataset.conceptMargin = mode;
-
-    // Layout positions, in the layer's own (unzoomed) pixels: the editor may be CSS-zoomed.
-    const layerRect = this.layer.getBoundingClientRect();
-    const zoom = this.layer.offsetWidth ? layerRect.width / this.layer.offsetWidth || 1 : 1;
-    const domRect = dom.getBoundingClientRect();
-    const textRight = (domRect.left - layerRect.left) / zoom + dom.clientWidth - parseFloat(getComputedStyle(dom).paddingRight || '0');
-    const braceX = textRight + 8;
-    const labelX = braceX + 18;
-
-    const out = document.createDocumentFragment();
-    let nextFree = -Infinity;
-    for (const g of groups) {
-      let top: number;
-      let bottom: number;
-      try {
-        top = (view.coordsAtPos(g.from, 1).top - layerRect.top) / zoom;
-        bottom = (view.coordsAtPos(g.to, -1).bottom - layerRect.top) / zoom;
-      } catch { continue; }
-      const h = Math.max(bottom - top, 14);
-      const mid = top + h / 2;
-      const labelTop = Math.max(mid - LABEL_H / 2, nextFree);
-      nextFree = labelTop + LABEL_H + LABEL_GAP;
-      const color = colorOf(g.typeKey);
-
-      // The brace, and a leader from its tip to the label when the label had to move down.
-      const svgTop = Math.min(top, labelTop);
-      const svgBottom = Math.max(top + h, labelTop + LABEL_H);
-      const svg = document.createElementNS(SVG, 'svg');
-      svg.setAttribute('data-concept-brace', '');
-      svg.setAttribute('width', '20');
-      svg.setAttribute('height', String(svgBottom - svgTop));
-      svg.style.cssText = `left: ${braceX}px; top: ${svgTop}px; --concept-color: ${color}`;
-      const brace = document.createElementNS(SVG, 'path');
-      brace.setAttribute('d', bracePath(10, h));
-      brace.setAttribute('transform', `translate(0 ${top - svgTop})`);
-      svg.append(brace);
-      const labelMid = labelTop + LABEL_H / 2;
-      if (Math.abs(labelMid - mid) > 2) {
-        const leader = document.createElementNS(SVG, 'path');
-        leader.setAttribute('d', `M10,${mid - svgTop} C15,${mid - svgTop} 13,${labelMid - svgTop} 18,${labelMid - svgTop}`);
-        svg.append(leader);
-      }
-      out.append(svg);
-
-      const label = this.makeLabel(g, color, mode);
-      label.style.left = `${labelX}px`;
-      label.style.top = `${labelTop}px`;
-      this.labels.set(g.from, label);
-      out.append(label);
-    }
-    this.layer.replaceChildren(out);
-    this.showHover();
-  }
-
-  private makeLabel(g: RefGroup, color: string, mode: 'wide' | 'compact'): HTMLElement {
-    const L = LABELS.glossary;
-    const entry = glossaryEntry(g.entryId);
-    const label = document.createElement('button');
-    label.type = 'button';
-    label.setAttribute('data-concept-label', mode);
-    label.style.setProperty('--concept-color', color);
-    const icon = document.createElement('span');
-    icon.setAttribute('data-concept-icon', '');
-    icon.textContent = entry ? (entry.locked ? '🔒' : entry.icon) : '?';
-    label.append(icon);
-    if (mode === 'wide') {
-      const term = document.createElement('span');
-      term.setAttribute('data-concept-term', '');
-      term.textContent = entry ? entry.term || L.untitled : L.missing;
-      label.append(term);
-    }
-    // The card: the meaning, on hover.
-    const card = document.createElement('span');
-    card.setAttribute('data-concept-card', '');
-    card.append(...entryCardContent(entry));
-    label.append(card);
-    label.title = '';
-    label.addEventListener('mousedown', (e) => e.preventDefault());
-    label.addEventListener('mouseenter', () => setHover(this.view, g.from));
-    label.addEventListener('mouseleave', () => setHover(this.view, null));
-    label.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (entry) openNotePassage(entry.noteId, definitionPassage(entry.id));
-    });
-    return label;
   }
 }
 
-// The referring text of the hovered run (from either side: its text or its label) is outlined.
+// The referring text of the hovered run is outlined.
 function hoverDecorations(state: EditorState): DecorationSet | null {
   const hover = conceptKey.getState(state)?.hover;
   if (hover === null || hover === undefined) return null;
@@ -376,7 +280,7 @@ export const ConceptMargin = Extension.create({
           return value.hover !== null && tr.docChanged ? { hover: null } : value;
         },
       },
-      view: (view) => new ConceptMarginView(view),
+      view: (view) => new ConceptHoverView(view),
       props: {
         decorations: hoverDecorations,
         handleDOMEvents: {

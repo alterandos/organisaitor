@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { nanoid } from 'nanoid';
 import { Capacitor } from '@capacitor/core';
 import type { ClockFormat } from '@/utils/date';
 import { persistStorage } from '@/utils/persistStorage';
 import type { NoteBackdrop } from '@/config/noteBackdrops';
+import { DEFAULT_TEXT_SHORTCUTS, missingDefaultShortcuts, type TextShortcut } from '@/specialChars/charSets';
 
 // Every other platform defaults to 'system'; Android defaults to 'dark' (see
 // docs/android/00-architecture.md §5c). Only affects a brand-new install with no
@@ -29,6 +31,7 @@ export const NOTE_COLOR_BARS = ['off', 'underline', 'outline', 'tint'] as const;
 export type NoteColorBars = typeof NOTE_COLOR_BARS[number];
 // What `/` makes in maths: a fraction, or a plain slash (extensions/Maths.ts).
 export type MathSlash = 'fraction' | 'slash';
+export type NoteMarginColumn = 'auto' | 'open' | 'closed';
 
 export const STICKY_SCALE_MIN = 0.8;
 export const STICKY_SCALE_MAX = 1.6;
@@ -51,6 +54,13 @@ interface SettingsState {
   // Voice dictation language: a BCP-47 code, or 'system' (the browser's language).
   speechLanguage:    string;
   setSpeechLanguage: (lang: string) => void;
+
+  // The person's own typing shortcuts (`govt` → government), in every text field and the note
+  // editor (specialChars/charSets.ts findUserShortcut). Managed in Settings → Typing shortcuts.
+  textShortcuts:      TextShortcut[];
+  addTextShortcut:    (typed: string, text: string) => void;
+  updateTextShortcut: (id: string, patch: Partial<Pick<TextShortcut, 'typed' | 'text'>>) => void;
+  removeTextShortcut: (id: string) => void;
 
   // ── Portfolio — chart view ────────────────────────────────────────────────────
   chartTickerRowZoom:    number;   // multiplier on the compact row size; 1.0 = default (40% smaller than original)
@@ -108,6 +118,10 @@ interface SettingsState {
   toggleNoteColorHeadings: () => void;
   mathSlash: MathSlash;
   setMathSlash: (v: MathSlash) => void;
+  // The margin column beside a note (extensions/MarginColumn.ts): 'auto' opens it on a wide note
+  // and keeps it collapsed on a narrow one (side by side, a phone); open / closed once chosen.
+  noteMarginColumn: NoteMarginColumn;
+  setNoteMarginColumn: (v: NoteMarginColumn) => void;
   setNoteHeadingStyle: (s: 'academic' | 'highlight') => void;
 
   noteEditorZoom:      number;   // multiplier on editor font size; 1.0 = default, range 0.7–2.0
@@ -165,6 +179,11 @@ export const useSettingsStore = create<SettingsState>()(
       speechLanguage:    'system',
       setSpeechLanguage: (lang) => set({ speechLanguage: lang }),
 
+      textShortcuts:      [...DEFAULT_TEXT_SHORTCUTS],
+      addTextShortcut:    (typed, text) => set((s) => ({ textShortcuts: [...s.textShortcuts, { id: nanoid(8), typed, text }] })),
+      updateTextShortcut: (id, patch) => set((s) => ({ textShortcuts: s.textShortcuts.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
+      removeTextShortcut: (id) => set((s) => ({ textShortcuts: s.textShortcuts.filter((t) => t.id !== id) })),
+
       chartTickerRowZoom:    1.0,
       setChartTickerRowZoom: (z) => set({ chartTickerRowZoom: Math.max(0.5, Math.min(3.0, Math.round(z * 10) / 10)) }),
 
@@ -188,6 +207,8 @@ export const useSettingsStore = create<SettingsState>()(
       toggleNoteColorHeadings: () => set((s) => ({ noteColorHeadings: !s.noteColorHeadings })),
       mathSlash:           'fraction',
       setMathSlash:        (mathSlash) => set({ mathSlash }),
+      noteMarginColumn:    'auto',
+      setNoteMarginColumn: (noteMarginColumn) => set({ noteMarginColumn }),
 
       noteEditorZoom:      1.0,
       nudgeNoteEditorZoom: (delta) => set((s) => ({
@@ -249,7 +270,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 13,
+      version: 16,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -320,6 +341,12 @@ export const useSettingsStore = create<SettingsState>()(
         }
         // v12 → v13: what `/` makes in maths (2026-10-16).
         if (version < 13 && state.mathSlash === undefined) state.mathSlash = 'fraction';
+        // v13 → v14: the person's own typing shortcuts (2026-10-17).
+        if (version < 14 && state.textShortcuts === undefined) state.textShortcuts = [];
+        // v14 → v15: the starter set of typing shortcuts, beside any the person already made (2026-10-17).
+        if (version < 15) state.textShortcuts = [...(state.textShortcuts ?? []), ...missingDefaultShortcuts(state.textShortcuts ?? [])];
+        // v15 → v16: the margin column beside a note (2026-10-17).
+        if (version < 16 && state.noteMarginColumn === undefined) state.noteMarginColumn = 'auto';
         return state;
       },
     }

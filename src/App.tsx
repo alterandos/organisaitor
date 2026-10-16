@@ -96,6 +96,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { hexToRgba } from '@/utils/color';
 import { getOrderedEndeavours } from '@/utils/collections';
 import { isAppEnabled } from '@/config/apps';
+import { altDigitSection } from '@/config/hotkeys';
 import type { CollectionId } from '@/types';
 import styles from './App.module.css';
 import { isTypingTarget } from '@/utils/typingTarget';
@@ -399,6 +400,14 @@ export default function App() {
       if (matchesHotkeyId(e, 'action-quick-access')) {
         e.preventDefault();
         toggleQuickAccess();
+        return;
+      }
+
+      // Alt+0–7: that section, from inside a text field too (Alt+digit types nothing there).
+      const altSection = altDigitSection(e);
+      if (altSection) {
+        e.preventDefault();
+        if ((altSection !== 'portfolio' && altSection !== 'fitness') || isAppEnabled(altSection)) setActiveView(altSection);
         return;
       }
 

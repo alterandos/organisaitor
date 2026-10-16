@@ -16,6 +16,7 @@ export const BLOCK_CATEGORIES = [
   { id: 'weighing',  inline: false },   // weighing things up: compare, pros and cons, options
   { id: 'visual',    inline: false },   // drawn or typeset: chart, diagram, maths, code, quote
   { id: 'container', inline: false },   // holds or points at other things: inbox, hub, embed, a note link
+  { id: 'mark',      inline: false },   // marks the text that's there, adding no block: unsure
 ] as const;
 
 export type BlockCategory = typeof BLOCK_CATEGORIES[number]['id'];

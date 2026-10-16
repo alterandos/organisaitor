@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useFloatingPlacement } from '@/utils/floatingPlacement';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useUIStore } from '@/store/uiStore';
 import { usePriceStore } from '@/store/priceStore';
@@ -213,44 +214,44 @@ export function WatchlistView() {
   const [activeSectors,           setActiveSectors]           = useState<string[]>([]);
   const [holdingFilter,           setHoldingFilter]           = useState(false);
   const [filterOpen,              setFilterOpen]              = useState(false);
-  const [filterPanelPos,          setFilterPanelPos]          = useState({ top: 0, right: 0 });
+  const [filterPanelPos,          setFilterPanelPos]          = useState<DOMRect | null>(null);
   const [selectedItemId,          setSelectedItemId]          = useState<WatchlistItemId | null>(null);
   const [sortCol,                 setSortCol]                 = useState<WatchlistColumnId | null>(null);
   const [sortDir,                 setSortDir]                 = useState<'asc' | 'desc'>('asc');
   const [colSelectorOpen,         setColSelectorOpen]         = useState(false);
-  const [panelPos,                setPanelPos]                = useState({ top: 0, right: 0 });
+  const [panelPos,                setPanelPos]                = useState<DOMRect | null>(null);
   const [dragCol,                 setDragCol]                 = useState<WatchlistColumnId | null>(null);
   const [dragOver,                setDragOver]                = useState<WatchlistColumnId | null>(null);
   // Sidebar sort
   const [sidebarSortBy,           setSidebarSortBy]           = useState<SidebarSortBy>('default');
   const [sortPanelOpen,           setSortPanelOpen]           = useState(false);
-  const [sortPanelPos,            setSortPanelPos]            = useState({ top: 0, right: 0 });
+  const [sortPanelPos,            setSortPanelPos]            = useState<DOMRect | null>(null);
   // Sidebar group
   const [sidebarGroupBy,          setSidebarGroupBy]          = useState<GroupBy>('none');
   const [sidebarGroupPanelOpen,   setSidebarGroupPanelOpen]   = useState(false);
-  const [sidebarGroupPanelPos,    setSidebarGroupPanelPos]    = useState({ top: 0, right: 0 });
+  const [sidebarGroupPanelPos,    setSidebarGroupPanelPos]    = useState<DOMRect | null>(null);
   const [sidebarCollapsedGroups,  setSidebarCollapsedGroups]  = useState<Set<string>>(new Set());
   // Table group
   const [tableGroupBy,            setTableGroupBy]            = useState<GroupBy>('none');
   const [tableGroupPanelOpen,     setTableGroupPanelOpen]     = useState(false);
-  const [tableGroupPanelPos,      setTableGroupPanelPos]      = useState({ top: 0, right: 0 });
+  const [tableGroupPanelPos,      setTableGroupPanelPos]      = useState<DOMRect | null>(null);
   const [tableCollapsedGroups,    setTableCollapsedGroups]    = useState<Set<string>>(new Set());
   const [tagEditItemId,           setTagEditItemId]           = useState<WatchlistItemId | null>(null);
-  const [tagPopoverPos,           setTagPopoverPos]           = useState({ top: 0, left: 0 });
+  const [tagPopoverPos,           setTagPopoverPos]           = useState<DOMRect | null>(null);
   const [tableAtBottom,           setTableAtBottom]           = useState(false);
 
-  const colSelectorRef       = useRef<HTMLDivElement>(null);
+  const { ref: colSelectorRef, style: colSelectorStyle } = useFloatingPlacement<HTMLDivElement>(colSelectorOpen ? panelPos : null, { align: 'end', gap: 4 });
   const colBtnRef            = useRef<HTMLButtonElement>(null);
   const filterBtnRef         = useRef<HTMLButtonElement>(null);
-  const filterPanelRef       = useRef<HTMLDivElement>(null);
+  const { ref: filterPanelRef, style: filterPanelStyle } = useFloatingPlacement<HTMLDivElement>(filterOpen ? filterPanelPos : null, { align: 'end', gap: 4 });
   const sortBtnRef           = useRef<HTMLButtonElement>(null);
-  const sortPanelRef         = useRef<HTMLDivElement>(null);
+  const { ref: sortPanelRef, style: sortPanelStyle } = useFloatingPlacement<HTMLDivElement>(sortPanelOpen ? sortPanelPos : null, { align: 'end', gap: 4 });
   const sidebarGroupBtnRef   = useRef<HTMLButtonElement>(null);
-  const sidebarGroupPanelRef = useRef<HTMLDivElement>(null);
+  const { ref: sidebarGroupPanelRef, style: sidebarGroupPanelStyle } = useFloatingPlacement<HTMLDivElement>(sidebarGroupPanelOpen ? sidebarGroupPanelPos : null, { align: 'end', gap: 4 });
   const tableGroupBtnRef     = useRef<HTMLButtonElement>(null);
-  const tableGroupPanelRef   = useRef<HTMLDivElement>(null);
+  const { ref: tableGroupPanelRef, style: tableGroupPanelStyle } = useFloatingPlacement<HTMLDivElement>(tableGroupPanelOpen ? tableGroupPanelPos : null, { align: 'end', gap: 4 });
   const dragColRef           = useRef<WatchlistColumnId | null>(null);
-  const tagPopoverRef        = useRef<HTMLDivElement>(null);
+  const { ref: tagPopoverRef, style: tagPopoverStyle } = useFloatingPlacement<HTMLDivElement>(tagEditItemId ? tagPopoverPos : null, { gap: 4 });
   const tableContainerRef    = useRef<HTMLDivElement>(null);
 
   const selectItem = (id: WatchlistItemId | null) => {
@@ -269,7 +270,8 @@ export function WatchlistView() {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [colSelectorOpen]);
+  }, [colSelectorOpen, colSelectorRef]);
+  useEscapeClose(() => setColSelectorOpen(false), colSelectorOpen);
 
   useEffect(() => {
     if (!filterOpen) return;
@@ -279,7 +281,8 @@ export function WatchlistView() {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [filterOpen]);
+  }, [filterOpen, filterPanelRef]);
+  useEscapeClose(() => setFilterOpen(false), filterOpen);
 
   useEffect(() => {
     if (!sortPanelOpen) return;
@@ -289,7 +292,8 @@ export function WatchlistView() {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [sortPanelOpen]);
+  }, [sortPanelOpen, sortPanelRef]);
+  useEscapeClose(() => setSortPanelOpen(false), sortPanelOpen);
 
   useEffect(() => {
     if (!sidebarGroupPanelOpen) return;
@@ -299,7 +303,8 @@ export function WatchlistView() {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [sidebarGroupPanelOpen]);
+  }, [sidebarGroupPanelOpen, sidebarGroupPanelRef]);
+  useEscapeClose(() => setSidebarGroupPanelOpen(false), sidebarGroupPanelOpen);
 
   useEffect(() => {
     if (!tableGroupPanelOpen) return;
@@ -309,7 +314,8 @@ export function WatchlistView() {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [tableGroupPanelOpen]);
+  }, [tableGroupPanelOpen, tableGroupPanelRef]);
+  useEscapeClose(() => setTableGroupPanelOpen(false), tableGroupPanelOpen);
 
   useEffect(() => {
     if (!tagEditItemId) return;
@@ -320,7 +326,7 @@ export function WatchlistView() {
     return () => {
       document.removeEventListener('mousedown', handleMouse);
     };
-  }, [tagEditItemId]);
+  }, [tagEditItemId, tagPopoverRef]);
 
   useEscapeClose(() => setTagEditItemId(null), !!tagEditItemId);
 
@@ -336,7 +342,7 @@ export function WatchlistView() {
   const openColSelector = () => {
     if (!colSelectorOpen && colBtnRef.current) {
       const r = colBtnRef.current.getBoundingClientRect();
-      setPanelPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+      setPanelPos(r);
     }
     setColSelectorOpen((v) => !v);
   };
@@ -344,7 +350,7 @@ export function WatchlistView() {
   const openFilterPanel = () => {
     if (!filterOpen && filterBtnRef.current) {
       const r = filterBtnRef.current.getBoundingClientRect();
-      setFilterPanelPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+      setFilterPanelPos(r);
     }
     setFilterOpen((v) => !v);
   };
@@ -352,7 +358,7 @@ export function WatchlistView() {
   const openSortPanel = () => {
     if (!sortPanelOpen && sortBtnRef.current) {
       const r = sortBtnRef.current.getBoundingClientRect();
-      setSortPanelPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+      setSortPanelPos(r);
     }
     setSortPanelOpen((v) => !v);
   };
@@ -360,7 +366,7 @@ export function WatchlistView() {
   const openSidebarGroupPanel = () => {
     if (!sidebarGroupPanelOpen && sidebarGroupBtnRef.current) {
       const r = sidebarGroupBtnRef.current.getBoundingClientRect();
-      setSidebarGroupPanelPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+      setSidebarGroupPanelPos(r);
     }
     setSidebarGroupPanelOpen((v) => !v);
   };
@@ -368,7 +374,7 @@ export function WatchlistView() {
   const openTableGroupPanel = () => {
     if (!tableGroupPanelOpen && tableGroupBtnRef.current) {
       const r = tableGroupBtnRef.current.getBoundingClientRect();
-      setTableGroupPanelPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+      setTableGroupPanelPos(r);
     }
     setTableGroupPanelOpen((v) => !v);
   };
@@ -559,13 +565,7 @@ export function WatchlistView() {
             onClick={(e) => {
               e.stopPropagation();
               if (isTagOpen) { setTagEditItemId(null); return; }
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              const left = Math.min(rect.left, window.innerWidth - 268);
-              const POPOVER_HEIGHT = 180;
-              const top = window.innerHeight - rect.bottom >= POPOVER_HEIGHT
-                ? rect.bottom + 4
-                : Math.max(8, rect.top - POPOVER_HEIGHT - 4);
-              setTagPopoverPos({ top, left });
+              setTagPopoverPos((e.currentTarget as HTMLElement).getBoundingClientRect());
               setTagEditItemId(item.id as WatchlistItemId);
             }}
           >
@@ -768,7 +768,7 @@ export function WatchlistView() {
           <div
             ref={filterPanelRef}
             className={styles.filterPanel}
-            style={{ top: filterPanelPos.top, right: filterPanelPos.right }}
+            style={filterPanelStyle}
           >
             {tags.length > 0 && (
               <div className={styles.filterSection}>
@@ -883,7 +883,7 @@ export function WatchlistView() {
           <div
             ref={sortPanelRef}
             className={styles.menuPanel}
-            style={{ top: sortPanelPos.top, right: sortPanelPos.right }}
+            style={sortPanelStyle}
           >
             <div className={styles.menuPanelTitle}>Sort by</div>
             {SIDEBAR_SORTS.map((opt) => (
@@ -901,7 +901,7 @@ export function WatchlistView() {
           <div
             ref={sidebarGroupPanelRef}
             className={styles.menuPanel}
-            style={{ top: sidebarGroupPanelPos.top, right: sidebarGroupPanelPos.right }}
+            style={sidebarGroupPanelStyle}
           >
             <div className={styles.menuPanelTitle}>Group by</div>
             {GROUP_BY_OPTIONS.map((opt) => (
@@ -1050,7 +1050,7 @@ export function WatchlistView() {
         <div
           ref={colSelectorRef}
           className={styles.colSelectorPanel}
-          style={{ top: panelPos.top, right: panelPos.right }}
+          style={colSelectorStyle}
         >
           <div className={styles.colSelectorTitle}>Columns — drag to reorder</div>
           {allColsSorted.map((col) => (
@@ -1082,7 +1082,7 @@ export function WatchlistView() {
         <div
           ref={tableGroupPanelRef}
           className={styles.menuPanel}
-          style={{ top: tableGroupPanelPos.top, right: tableGroupPanelPos.right }}
+          style={tableGroupPanelStyle}
         >
           <div className={styles.menuPanelTitle}>Group by</div>
           {GROUP_BY_OPTIONS.map((opt) => (
@@ -1102,7 +1102,7 @@ export function WatchlistView() {
           <div
             ref={tagPopoverRef}
             className={styles.tagPopover}
-            style={{ top: tagPopoverPos.top, left: tagPopoverPos.left }}
+            style={tagPopoverStyle}
           >
             <div className={styles.tagPopoverHeader}>
               <span className={styles.tagPopoverTitle}>Tags</span>

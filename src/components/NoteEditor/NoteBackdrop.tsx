@@ -17,6 +17,7 @@ import {
   backdropPictureId, noteNotebookId, resolveNoteBackdrop, resolveNotebookFallback, type ShownBackdrop,
 } from '@/utils/noteBackdrop';
 import { errorMessage } from '@/utils/log';
+import { useFloatingPlacement } from '@/utils/floatingPlacement';
 import styles from './NoteBackdrop.module.css';
 
 // The room below the end of a note (80% of the visible height, so the last lines can be brought
@@ -109,7 +110,7 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
   const noteTags = useNoteStore((s) => s.noteTags);
   const rawNote = useNoteStore((s) => (note ? s.notes[note.id] : undefined));
   const appWide = useSettingsStore((s) => s.noteBackdrop);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const { ref: panelRef, style: place } = useFloatingPlacement<HTMLDivElement>(anchor, { align: 'center' });
   const fileRef = useRef<HTMLInputElement>(null);
   useEscapeClose(onClose);
 
@@ -117,7 +118,7 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
     const onDown = (e: MouseEvent) => { if (!panelRef.current?.contains(e.target as Node)) onClose(); };
     const t = setTimeout(() => document.addEventListener('mousedown', onDown), 0);
     return () => { clearTimeout(t); document.removeEventListener('mousedown', onDown); };
-  }, [onClose]);
+  }, [onClose, panelRef]);
 
   const L = LABELS.noteBackdrop;
   const noteBookId = rawNote ? noteNotebookId(rawNote, noteTags) : null;
@@ -184,11 +185,6 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
       deletePictureEverywhere(p.id);
     }
   }
-
-  const PANEL_W = 320;
-  const left = Math.max(8, Math.min(anchor.left + anchor.width / 2 - PANEL_W / 2, window.innerWidth - PANEL_W - 8));
-  const above = anchor.top > window.innerHeight / 2;
-  const place = above ? { left, bottom: Math.max(8, window.innerHeight - anchor.top + 8) } : { left, top: anchor.bottom + 8 };
 
   return createPortal(
     <div ref={panelRef} className={styles.panel} style={place} role="dialog" aria-label={L.title}>

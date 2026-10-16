@@ -4,12 +4,14 @@ import { useUIStore } from '@/store/uiStore';
 import { BUILTIN_TAGS, type BuiltinTag } from '../NoteEditor/builtinTags';
 import { dueReviews } from '@/services/noteReview';
 import { LABELS } from '@/config/labels';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { GlossaryIcon, HubIcon, MapIcon, ReviewIcon } from '@/components/Icons';
 import styles from './TagFAB.module.css';
 
 export function TagFAB() {
   const [open, setOpen]    = useState(false);
   const closeTimer         = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEscapeClose(() => setOpen(false), open);
 
   const noteTagsRecord       = useNoteStore((s) => s.noteTags);
   const noteTagViewTagIds    = useUIStore((s) => s.noteTagViewTagIds);

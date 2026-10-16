@@ -40,6 +40,7 @@ import { ConclusionExtensions } from './extensions/Conclusion';
 import { TypesExtensions } from './extensions/Types';
 import { IdKeyExtensions } from './extensions/IdKey';
 import { ProsConsExtensions } from './extensions/ProsCons';
+import { ArgumentExtensions } from './extensions/Argument';
 import { OptionsExtensions } from './extensions/Options';
 import { DesignCycle } from './extensions/designCycle';
 import { DictionaryWords } from './extensions/DictionaryWords';
@@ -72,6 +73,8 @@ import { ColorDotIcon, DisclosureIcon, PinIcon, TextColorIcon } from '@/componen
 import { SWATCHES, swatchLabel } from '@/config/swatches';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { AcronymOffer } from './extensions/AcronymOffer';
+import { UnsureFlagExtensions } from './extensions/UnsureFlag';
+import './extensions/unsureMenu';
 import { BlockOffers } from './extensions/BlockOffers';
 import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
 import { SpecialCharInput } from './extensions/SpecialCharInput';
@@ -82,7 +85,8 @@ import { NoteSubtitle, NoteAuthor } from './extensions/NoteBylines';
 import { FONT_SIZES, currentFontSize, setFontSize, stepFontSize } from './extensions/fontSize';
 import { noteClipboardText } from './noteClipboardText';
 import { ConceptRefMark, ConceptMargin } from './extensions/ConceptRef';
-import { Importance, cycleImportance } from './extensions/Importance';
+import { cycleImportance } from './extensions/Importance';
+import { MarginColumn } from './extensions/MarginColumn';
 import { SelectionMenu } from './objects/SelectionMenu';
 import './extensions/annotationMenu';
 import { liveNote, registerLiveNoteEditor, registerOpenNoteEditor } from '@/services/liveNoteEditor';
@@ -113,6 +117,7 @@ import './extensions/conclusionMenu';
 import './extensions/typesMenu';
 import './extensions/idKeyMenu';
 import './extensions/prosConsMenu';
+import './extensions/argumentMenu';
 import './extensions/optionsMenu';
 import './extensions/chartMenu';
 import './extensions/codeMenu';
@@ -652,6 +657,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     const id = setTimeout(() => document.addEventListener('click', handler), 0);
     return () => { clearTimeout(id); document.removeEventListener('click', handler); };
   }, [tablePickerOpen]);
+  useEscapeClose(() => setTablePickerOpen(false), tablePickerOpen);
 
   useEffect(() => {
     if (!columnsPickerOpen) return;
@@ -659,6 +665,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     const id = setTimeout(() => document.addEventListener('click', handler), 0);
     return () => { clearTimeout(id); document.removeEventListener('click', handler); };
   }, [columnsPickerOpen]);
+  useEscapeClose(() => setColumnsPickerOpen(false), columnsPickerOpen);
 
   useEffect(() => {
     if (!colorPickerOpen) return;
@@ -666,6 +673,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     const id = setTimeout(() => document.addEventListener('click', handler), 0);
     return () => { clearTimeout(id); document.removeEventListener('click', handler); };
   }, [colorPickerOpen]);
+  useEscapeClose(() => setColorPickerOpen(false), colorPickerOpen);
 
   useEffect(() => {
     if (!newLinkPane) return;
@@ -788,6 +796,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       ...TypesExtensions,
       ...IdKeyExtensions,
       ...ProsConsExtensions,
+      ...ArgumentExtensions,
       ...OptionsExtensions,
       DesignCycle,
       DictionaryWords,
@@ -813,6 +822,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       NoteBlockPicks,
       GlossaryAutolink,
       AcronymOffer,
+      ...UnsureFlagExtensions,
       BlockOffers,
       OccurrenceHighlight,
       SpecialCharInput,
@@ -820,7 +830,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       HeadingFold,
       ConceptRefMark,
       ConceptMargin,
-      Importance,
+      MarginColumn,
     ],
     content: '',
     editorProps: {

@@ -10,6 +10,8 @@ import { glossaryEntry } from '@/services/glossary';
 import { GlossaryCardBody } from './GlossaryCardBody';
 import { blockPill, designButtons, placeBlock, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { entryCardContent } from './ConceptRef';
+import { registerMarginSource, type MarginItem } from './MarginColumn';
+import { BUILTIN_TAGS } from '../builtinTags';
 
 // A Glossary record shown inside a line of text (the card family's Inline design, agreed with the
 // user 2026-10-16): a chip with the kind's icon, the term and the start of the meaning. Like the
@@ -369,3 +371,24 @@ export const GlossaryChipBehaviour = Extension.create({
 });
 
 export const GlossaryChipExtensions = [GlossaryChip, GlossaryChipBehaviour];
+
+// Each chip (an inline card) in the margin column too (extensions/MarginColumn.ts): its kind's icon;
+// a click opens its card below the line, as clicking the chip does.
+registerMarginSource('glossary-chip', (state) => {
+  const out: MarginItem[] = [];
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'glossaryChip') return true;
+    const entry = glossaryEntry(node.attrs.entryId as string);
+    out.push({
+      key: `chip-${node.attrs.entryId}-${pos}`,
+      from: pos,
+      to: pos + node.nodeSize,
+      icon: () => document.createTextNode(entry ? (entry.locked ? '🔒' : entry.icon) : '?'),
+      color: BUILTIN_TAGS.find((t) => t.typeKey === entry?.typeKey)?.color ?? 'var(--color-muted)',
+      title: entry ? `${entry.term || LABELS.glossary.untitled} · ${entry.kindLabel}` : LABELS.glossary.missing,
+      open: (view) => toggleChip(view, pos),
+    });
+    return false;
+  });
+  return out;
+});

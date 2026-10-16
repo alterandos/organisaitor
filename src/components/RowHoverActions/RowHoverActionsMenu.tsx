@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { usePlatform } from '@/hooks/usePlatform';
 import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 import { RowActionsSheetContext } from './rowActionsContext';
+import { useFloatingPlacement } from '@/utils/floatingPlacement';
 import styles from './RowHoverActions.module.css';
 
 // The floating panel half of the RowHoverActions pattern — see useRowHoverActions.ts for the
@@ -28,50 +29,25 @@ interface Props {
   // 'start': left edges line up — for a trigger at the left of its row (a task's checkbox).
   // 'dropdown': centred under the anchor (a row's "⋯", whose actions drop down as a narrow column).
   align?: 'start' | 'end' | 'dropdown';
-  // For a taller menu (a vertical list of labelled options) so "is there room below" is right.
-  estimatedHeight?: number;
   className?: string;
 }
 
-// Rough estimate, not a measured value — these menus are always a short row of icon buttons
-// (never wrapping/multi-line), so a fixed threshold for "is there room below" is accurate
-// enough without a two-pass measure-then-position render.
-const ESTIMATED_MENU_HEIGHT = 40;
-
-type Pos = { left: number; top: number; transform: string };
-
-export function RowHoverActionsMenu({ anchorRef, open, onMouseEnter, onMouseLeave, onClose, children, title, align = 'end', estimatedHeight = ESTIMATED_MENU_HEIGHT, className }: Props) {
+export function RowHoverActionsMenu({ anchorRef, open, onMouseEnter, onMouseLeave, onClose, children, title, align = 'end', className }: Props) {
   const { isAndroid } = usePlatform();
-  const [pos, setPos] = useState<Pos | null>(null);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  // Below the anchor unless there isn't room, then above; too tall either way, it scrolls
+  // (utils/floatingPlacement.ts, measured, so a long list of options is placed right).
+  const { ref, style } = useFloatingPlacement<HTMLDivElement>(anchor, align === 'dropdown'
+    ? { align: 'center', gap: 2, margin: 4 }
+    : { align, gap: 4, margin: 4 });
 
   // A genuine external-system read (DOM layout via getBoundingClientRect, which only exists
-  // once the anchor has actually painted) — not state derivable from props/state alone, so
-  // this is the codebase's documented exception shape (see CLAUDE.md's list of similar
-  // eslint-disable sites) rather than the "copy item state into a form" anti-pattern the rule
-  // is normally guarding against. Reading `.current` itself is only ever done here, in an
-  // effect — never directly in the render body (that trips `react-hooks/refs` instead).
+  // once the anchor has actually painted): the documented exception shape. Reading `.current`
+  // is only ever done here, in an effect, never in the render body (`react-hooks/refs`).
   useEffect(() => {
     const el = open && !isAndroid ? anchorRef.current : null;
-    const next = el ? ((): Pos => {
-      const rect = el.getBoundingClientRect();
-      if (align === 'dropdown') {
-        const below = window.innerHeight - rect.bottom >= estimatedHeight + 2 || rect.top < estimatedHeight + 2;
-        return {
-          left: rect.left + rect.width / 2,
-          top: below ? rect.bottom + 2 : rect.top - 2,
-          transform: `translate(-50%, ${below ? '0' : '-100%'})`,
-        };
-      }
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const below = spaceBelow >= estimatedHeight + 4 || rect.top < estimatedHeight + 4;
-      return {
-        left: align === 'start' ? rect.left : rect.right,
-        top: below ? rect.bottom + 4 : rect.top - 4,
-        transform: `translate(${align === 'start' ? '0' : '-100%'}, ${below ? '0' : '-100%'})`,
-      };
-    })() : null;
-    setPos(next);
-  }, [open, isAndroid, anchorRef, align, estimatedHeight]);
+    setAnchor(el ? el.getBoundingClientRect() : null);
+  }, [open, isAndroid, anchorRef]);
 
   if (isAndroid) {
     if (!open) return null;
@@ -84,12 +60,13 @@ export function RowHoverActionsMenu({ anchorRef, open, onMouseEnter, onMouseLeav
     );
   }
 
-  if (!open || !pos) return null;
+  if (!open || !anchor) return null;
 
   return createPortal(
     <div
+      ref={ref}
       className={`${styles.menu} ${className ?? ''}`}
-      style={{ left: pos.left, top: pos.top, transform: pos.transform }}
+      style={style}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >

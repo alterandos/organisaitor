@@ -14,7 +14,12 @@
   font-size: 0.85rem;
   overflow: hidden;
   animation: menuIn 0.12s ease-out;
+  /* Its height is capped to the room on screen (utils/floatingPlacement.ts): the list shrinks and
+     scrolls, the search box and the parts around it stay. */
+  display: flex;
+  flex-direction: column;
 }
+.menu > * { flex: none; }
 
 @keyframes menuIn {
   from { opacity: 0; transform: translateY(-3px); }
@@ -28,6 +33,7 @@
   max-height: 260px;
   overflow-y: auto;
 }
+.menu > .kinds { flex: 0 1 auto; min-height: 0; }
 
 /* A group's heading: "Create and link" (objects), "Add to the note" (blocks). */
 .group {

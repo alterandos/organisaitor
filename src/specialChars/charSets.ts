@@ -173,3 +173,75 @@ export function findShortcut(before: string): { start: number; char: string; typ
   }
   return findFormula(before);
 }
+
+// ── The person's own shortcuts: a word that becomes longer text (`govt` → government) ───────────
+// Managed in Settings → Typing shortcuts (settingsStore.textShortcuts, the user's ask, 2026-10-17).
+// Unlike the shortcuts above, these replace only once the word is finished (a space or punctuation
+// typed after it), so `tech` doesn't fire halfway through "technical". A shortcut written in lower
+// case also matches it capitalised (`Govt` → Government) or in capitals (`GOVT` → GOVERNMENT), as
+// word processors' autocorrect does. Backspace or Ctrl+Z straight after puts the typed text back.
+export interface TextShortcut { id: string; typed: string; text: string }
+
+// The starter set, everyone's from the start (the user's list, 2026-10-17; they vetoed asap, imo,
+// tbc, diff and prob). Installed once: a new install starts with them, an existing one got them in
+// settingsStore v15, and one the person deletes never comes back. The ids are fixed, so the
+// migration can tell them apart.
+export const DEFAULT_TEXT_SHORTCUTS: readonly TextShortcut[] = ([
+  ['govt', 'government'], ['tech', 'technology'], ['b/w', 'between'], ['w/', 'with'], ['w/o', 'without'],
+  ['b/c', 'because'], ['abt', 'about'], ['approx', 'approximately'], ['esp', 'especially'],
+  ['dept', 'department'], ['mgmt', 'management'], ['intl', 'international'], ['natl', 'national'],
+  ['org', 'organisation'], ['env', 'environment'], ['ppl', 'people'], ['thru', 'through'], ['tho', 'though'],
+  ['wrt', 'with respect to'], ['tbd', 'to be decided'], ['yr', 'year'], ['yrs', 'years'], ['hrs', 'hours'],
+  ['mins', 'minutes'], ['ref', 'reference'], ['info', 'information'], ['eg', 'e.g.'], ['ie', 'i.e.'],
+] as const).map(([typed, text]) => ({ id: `default-${typed}`, typed, text }));
+
+// The defaults not already there (by what's typed), for the one-off install.
+export const missingDefaultShortcuts = (list: readonly TextShortcut[]): TextShortcut[] =>
+  DEFAULT_TEXT_SHORTCUTS.filter((d) => !list.some((s) => s.typed.toLowerCase() === d.typed.toLowerCase()));
+
+export const SHORTCUT_TYPED_MAX = 30;
+export const SHORTCUT_TEXT_MAX = 500;
+const ENDS_WORD = /[\s.,;:!?)\]}"'”’…]/u;
+// What may not come straight before a shortcut: a letter or digit (inside a word), or a
+// character of a web address, email or path (`example.org`, `a@b.org`, `docs/govt`).
+const NOT_BEFORE = /[\p{L}\p{N}./@_:\\]/u;
+
+function inCase(word: string, typed: string, text: string): string | null {
+  if (word === typed) return text;
+  if (typed !== typed.toLowerCase() || word.toLowerCase() !== typed) return null;
+  if (word.length > 1 && word === word.toUpperCase()) return text.toUpperCase();
+  if (word[0] !== word[0].toLowerCase()) return text.charAt(0).toUpperCase() + text.slice(1);
+  return null;
+}
+
+// The shortcut `before` has just finished (it ends with the space or punctuation just typed):
+// what to replace from `start` to the end, and with what (the text, then that same character).
+// The longest match wins.
+export function findUserShortcut(before: string, list: readonly TextShortcut[]): { start: number; char: string; typed: string } | null {
+  const end = before.slice(-1);
+  if (!list.length || !end || !ENDS_WORD.test(end)) return null;
+  const body = before.slice(0, -1);
+  let best: { start: number; char: string; typed: string } | null = null;
+  for (const s of list) {
+    if (!s.typed || body.length < s.typed.length || (best && best.typed.length > s.typed.length)) continue;
+    const start = body.length - s.typed.length;
+    if (start > 0 && NOT_BEFORE.test(body[start - 1])) continue;
+    const word = body.slice(start);
+    const text = inCase(word, s.typed, s.text);
+    // Ending in the punctuation just typed already (`eg.` → e.g.), it doesn't get it twice.
+    if (text !== null) best = { start, char: /\s/.test(end) || !text.endsWith(end) ? text + end : text, typed: word + end };
+  }
+  return best;
+}
+
+// Why a shortcut can't be saved, or null when it can. `id` is the one being edited (it may keep
+// its own `typed`).
+export function textShortcutProblem(typed: string, text: string, list: readonly TextShortcut[], id?: string): 'typedEmpty' | 'typedSpace' | 'typedLong' | 'textEmpty' | 'textLong' | 'duplicate' | null {
+  if (!typed) return 'typedEmpty';
+  if (/\s/.test(typed)) return 'typedSpace';
+  if (typed.length > SHORTCUT_TYPED_MAX) return 'typedLong';
+  if (!text.trim()) return 'textEmpty';
+  if (text.length > SHORTCUT_TEXT_MAX) return 'textLong';
+  if (list.some((s) => s.id !== id && s.typed.toLowerCase() === typed.toLowerCase())) return 'duplicate';
+  return null;
+}

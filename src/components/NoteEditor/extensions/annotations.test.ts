@@ -5,7 +5,9 @@ import StarterKit from '@tiptap/starter-kit';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { NoteTagMark } from './NoteTagMark';
 import { ConceptRefMark, collectRefGroups, linkConceptRef, unlinkConceptRef } from './ConceptRef';
-import { Importance, collectImportantPassages, cycleImportance, nextReview, setImportance, toggleReview } from './Importance';
+import { marginItems } from './MarginColumn';
+import { IMPORTANCE_LEVELS } from './importanceLevels';
+import { collectImportantPassages, cycleImportance, nextReview, setImportance, toggleReview } from './Importance';
 import { NoteObjectTrigger } from '../objects/NoteObjectTrigger';
 import { getSelectionMenu } from '../objects/selectionMenuState';
 import { insertObjectTrigger } from '../objects/actions';
@@ -29,7 +31,7 @@ beforeEach(() => useNoteStore.setState(useNoteStore.getInitialState(), true));
 function make(content = '<p>Plants use photosynthesis to make sugar from light.</p>') {
   editor = new Editor({
     element: document.createElement('div'),
-    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteTagMark, ConceptRefMark, Importance, NoteObjectTrigger],
+    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteTagMark, ConceptRefMark, NoteObjectTrigger],
     content,
   });
 }
@@ -60,14 +62,15 @@ describe('Important levels', () => {
     expect(ids.size).toBe(1);
   });
 
-  it('draws one margin marker per line, with the highest level', () => {
+  it('each Important passage is an item in the margin column, with its level', () => {
     make('<p>One two three</p>');
     let r = rangeOf('One');
     setImportance(editor.view, r.from, r.to, 1);
     r = rangeOf('three');
     setImportance(editor.view, r.from, r.to, 3);
-    const markers = [...editor.view.dom.querySelectorAll('[data-importance-marker]')].map((m) => m.textContent);
-    expect(markers).toEqual(['❗']);
+    const items = marginItems(editor.state).filter((i) => i.key.startsWith('important-'));
+    expect(items.map((i) => editor.state.doc.textBetween(i.from, i.to))).toEqual(['One', 'three']);
+    expect(items[1].title).toBe(IMPORTANCE_LEVELS[2].label);
   });
 
   it('Review later puts it on the list (due tomorrow); Got it pushes it further out each time', () => {

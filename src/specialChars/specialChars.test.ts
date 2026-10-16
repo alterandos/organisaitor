@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SPECIAL_CHARS, exactChar, findCharTrigger, findShortcut, matchChars } from './charSets';
+import { SPECIAL_CHARS, exactChar, findCharTrigger, findShortcut, findUserShortcut, matchChars, textShortcutProblem } from './charSets';
 import { installSpecialCharInput } from './fieldInput';
 
 Element.prototype.scrollIntoView = () => {};   // jsdom has none
@@ -164,5 +164,42 @@ describe('in any text field', () => {
     expect(field.value).toBe('//pi');
     expect(e.defaultPrevented).toBe(true);
     expect(reached).toBe(false);
+  });
+});
+
+describe('the person’s own shortcuts (findUserShortcut, textShortcutProblem)', () => {
+  const list = [{ id: 'a', typed: 'govt', text: 'government' }, { id: 'b', typed: 'e.g', text: 'for example' }, { id: 'c', typed: 'UK', text: 'United Kingdom' }];
+  it('fires once the word ends, keeping what ended it, and only on a whole word', () => {
+    expect(findUserShortcut('the govt ', list)).toEqual({ start: 4, char: 'government ', typed: 'govt ' });
+    expect(findUserShortcut('(govt)', list)).toEqual({ start: 1, char: 'government)', typed: 'govt)' });
+    expect(findUserShortcut('the govt', list)).toBeNull();
+    expect(findUserShortcut('xgovt ', list)).toBeNull();
+    // Never inside a web address, email or path.
+    expect(findUserShortcut('see uk.govt ', list)).toBeNull();
+    expect(findUserShortcut('docs/govt ', list)).toBeNull();
+    expect(findUserShortcut('me@govt.', list)).toBeNull();
+    expect(findUserShortcut('non-govt ', list)?.char).toBe('government ');
+    expect(findUserShortcut('e.g,', list)).toEqual({ start: 0, char: 'for example,', typed: 'e.g,' });
+  });
+  it('a replacement ending in the punctuation just typed gets it once: eg. → e.g.', () => {
+    const eg = [{ id: 'e', typed: 'eg', text: 'e.g.' }];
+    expect(findUserShortcut('see eg.', eg)?.char).toBe('e.g.');
+    expect(findUserShortcut('see eg ', eg)?.char).toBe('e.g. ');
+    expect(findUserShortcut('see eg,', eg)?.char).toBe('e.g.,');
+  });
+
+  it('a lower-case shortcut follows the case it was typed in; any other is exact', () => {
+    expect(findUserShortcut('Govt ', list)?.char).toBe('Government ');
+    expect(findUserShortcut('GOVT ', list)?.char).toBe('GOVERNMENT ');
+    expect(findUserShortcut('gOvt ', list)).toBeNull();
+    expect(findUserShortcut('UK ', list)?.char).toBe('United Kingdom ');
+    expect(findUserShortcut('uk ', list)).toBeNull();
+  });
+  it('says why a shortcut cannot be saved', () => {
+    expect(textShortcutProblem('', 'x', list)).toBe('typedEmpty');
+    expect(textShortcutProblem('a b', 'x', list)).toBe('typedSpace');
+    expect(textShortcutProblem('Govt', 'x', list)).toBe('duplicate');
+    expect(textShortcutProblem('govt', 'gov', list, 'a')).toBeNull();
+    expect(textShortcutProblem('pls', '  ', list)).toBe('textEmpty');
   });
 });

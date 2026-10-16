@@ -9,10 +9,9 @@ import { categoryLabel } from './blockCategories';
 import { getSession } from './session';
 import { acceptKind, commitSession, dismissSession, resolveDraft, setHighlight, setOverride } from './actions';
 import { objectTriggerStorage } from './NoteObjectTrigger';
+import { useFloatingPlacement } from '@/utils/floatingPlacement';
 import styles from './NoteObjectMenu.module.css';
 
-const MENU_WIDTH = 344;
-const ROOM_NEEDED = 260;
 
 interface Props {
   editor:     Editor;
@@ -25,12 +24,17 @@ interface Props {
 // agree.
 export function NoteObjectMenu({ editor, getContext }: Props) {
   const session = useEditorState({ editor, selector: ({ editor: ed }) => (ed ? getSession(ed.state) : null) });
-  const menuRef = useRef<HTMLDivElement>(null);
+  const view = editor.view;
+  // Under the cursor, or above it; too tall either way, the list scrolls (utils/floatingPlacement.ts).
+  const anchorBox = (() => {
+    if (!session || view.isDestroyed) return null;
+    try { const r = view.coordsAtPos(session.anchor); return { left: r.left - 6, right: r.left - 6, top: r.top, bottom: r.bottom }; } catch { return null; }
+  })();
+  const { ref: menuRef, style: position } = useFloatingPlacement<HTMLDivElement>(anchorBox, { gap: 6 });
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [, reposition] = useReducer((n: number) => n + 1, 0);
 
   const visible = !!session && (session.interp.phase === 'composing' || session.interp.matches.length > 0);
-  const view = editor.view;
   const dismiss = () => { if (!view.isDestroyed) dismissSession(view); };
 
   // Android's back button (and Escape while focus is in a field) close it like any overlay.
@@ -76,13 +80,7 @@ export function NoteObjectMenu({ editor, getContext }: Props) {
   const ctx = getContext();
   if (!ctx) return null;
 
-  let rect: { left: number; top: number; bottom: number };
-  try { rect = view.coordsAtPos(session.anchor); } catch { return null; }
-  const below = window.innerHeight - rect.bottom >= ROOM_NEEDED || rect.top < ROOM_NEEDED;
-  const position = {
-    left: Math.max(8, Math.min(rect.left - 6, window.innerWidth - MENU_WIDTH - 8)),
-    ...(below ? { top: rect.bottom + 6 } : { bottom: window.innerHeight - rect.top + 6 }),
-  };
+  if (!anchorBox) return null;
 
   const backToText = () => view.focus();
   const commit = (mode: 'quick' | 'full') => {

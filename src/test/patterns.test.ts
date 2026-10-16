@@ -151,6 +151,57 @@ describe('pattern: anything that closes on an outside click also closes on Escap
     });
     expect(bad.map(rel)).toEqual([]);
   });
+
+  // Tightened 2026-10-17, when the Notes ribbon's table, columns and colour dropdowns and five
+  // Portfolio panels were found closing on an outside click but not on Escape: their files each
+  // had ONE useEscapeClose (for another overlay), which the check above accepted. Now every
+  // outside-click listener on the document (click, mousedown or pointerdown, .ts files too) needs
+  // an Escape registration of its own.
+  it('every outside-click listener on the document has its own Escape registration', () => {
+    // Listeners that aren't an overlay closing: App.tsx opens external links, useLongPress
+    // swallows the click its release makes.
+    const NOT_OVERLAYS = new Set(['src/App.tsx', 'src/hooks/useLongPress.ts']);
+    const bad = SOURCE_FILES.filter((f) => !NOT_OVERLAYS.has(rel(f))).flatMap((f) => {
+      const src = fs.readFileSync(f, 'utf8');
+      const listeners = (src.match(/document\.addEventListener\(['"](?:click|mousedown|pointerdown)['"]/g) ?? []).length;
+      const escapes = (src.match(/\b(?:useEscapeClose|registerEscapeClose)\(/g) ?? []).length;
+      return listeners > escapes ? [`${rel(f)}: ${listeners} outside-click listener(s), ${escapes} Escape registration(s)`] : [];
+    });
+    expect(bad, bad.join(', ')).toEqual([]);
+  });
+});
+
+describe('pattern: floating panels are placed by utils/floatingPlacement.ts', () => {
+  // Adopted 2026-10-17 (CLAUDE.md "Floating panels are always fully on screen"). A panel that
+  // works out its own place from the window's height can open with its bottom off the screen
+  // (the backdrop picker did). Every older site moved to the helper on 2026-10-17; NOT_YET is
+  // kept for a site found later, listed in BACKLOG.md's Pattern retrofit backlog. Not panels:
+  // StickyNotes (a note dragged on screen) and TaskPane (a textarea's height).
+  const NOT_YET = new Set<string>([]);
+  const NOT_PANELS = new Set(['src/components/StickyNotes/StickyNotes.tsx', 'src/components/TaskPane/TaskPane.tsx', 'src/utils/floatingPlacement.ts']);
+
+  it('no new file places a panel from window.innerHeight itself', () => {
+    const bad = SOURCE_FILES.map(rel)
+      .filter((f) => !NOT_YET.has(f) && !NOT_PANELS.has(f))
+      .filter((f) => /window\.innerHeight/.test(fs.readFileSync(path.join(SRC, '..', f), 'utf8')));
+    expect(bad, bad.join(', ')).toEqual([]);
+  });
+
+  it('the not-yet list holds only files that still need moving', () => {
+    const done = [...NOT_YET].filter((f) => !/window\.innerHeight/.test(fs.readFileSync(path.join(SRC, '..', f), 'utf8')));
+    expect(done, `${done.join(', ')}: remove from NOT_YET and from BACKLOG.md`).toEqual([]);
+  });
+});
+
+describe('pattern: marks show in the margin through the margin column (extensions/MarginColumn.ts)', () => {
+  // Adopted 2026-10-17 (CLAUDE.md "The margin column"): a kind of mark registers a source with
+  // registerMarginSource; nothing else draws beside the text (the old Important markers and the
+  // Glossary braces and labels each drew their own, and didn't line up).
+  it('only MarginColumn.ts draws the margin, and the old margin pieces are gone', () => {
+    const bad = SOURCE_FILES.map(rel).filter((f) => f !== 'src/components/NoteEditor/extensions/MarginColumn.ts')
+      .filter((f) => /['"]data-margin-(column|strip|row|icon|tick|bracket)['"]|data-importance-marker|data-concept-label|data-concept-margin/.test(fs.readFileSync(path.join(SRC, '..', f), 'utf8')));
+    expect(bad, bad.join(', ')).toEqual([]);
+  });
 });
 
 describe('pattern: overlay components call useEscapeClose', () => {
@@ -971,7 +1022,7 @@ describe('pattern: the editor library\'s classes are :global in scoped CSS (CLAU
 
 describe('pattern: marks on text keep out of the palette (CLAUDE.md "Colours a person picks")', () => {
   // The marks the app draws over words to say what they are. A new one joins this list.
-  const TEXT_MARKS = ['[data-dict-word]', '[data-hub-ref]', '[data-autolink]', '[data-concept-ref]', '[data-concept-hover]'];
+  const TEXT_MARKS = ['[data-dict-word]', '[data-hub-ref]', '[data-autolink]', '[data-concept-ref]', '[data-concept-hover]', '[data-unsure-flag]', '[data-unsure-marker]'];
   it('no rule for a text mark uses a palette colour (--color-swatch-*), which is kept for colours a person picks', () => {
     const hits: string[] = [];
     for (const f of walk(SRC, ['.css'])) {

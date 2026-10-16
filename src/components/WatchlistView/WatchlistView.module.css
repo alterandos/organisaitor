@@ -76,6 +76,7 @@
   z-index: 50;
   min-width: 200px;
   padding: 0.4rem 0;
+  overflow-y: auto;   /* height capped to the room on screen (utils/floatingPlacement.ts) */
 }
 
 .colSelectorTitle {
@@ -832,6 +833,7 @@
   box-shadow: 0 6px 28px rgba(0,0,0,0.16);
   min-width: 160px;
   padding: 0.3rem 0;
+  overflow-y: auto;   /* height capped to the room on screen (utils/floatingPlacement.ts) */
 }
 
 .menuPanelTitle {
@@ -952,7 +954,8 @@
   min-width: 200px;
   max-width: 264px;
   padding: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;   /* height capped to the room on screen (utils/floatingPlacement.ts) */
 }
 
 .tagPopoverHeader {

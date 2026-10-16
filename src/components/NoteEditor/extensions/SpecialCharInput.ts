@@ -1,7 +1,8 @@
 import { Extension, InputRule } from '@tiptap/core';
 import { Plugin, PluginKey, TextSelection, type EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { exactChar, findCharTrigger, findShortcut, matchChars, SHORTCUTS, type CharMatch } from '@/specialChars/charSets';
+import { exactChar, findCharTrigger, findShortcut, findUserShortcut, matchChars, SHORTCUTS, type CharMatch } from '@/specialChars/charSets';
+import { useSettingsStore } from '@/store/settingsStore';
 import { hideCharPicker, showCharPicker } from '@/specialChars/charPicker';
 
 // `//name` in the note editor: the same characters, list and keys as every other text field
@@ -13,6 +14,9 @@ import { hideCharPicker, showCharPicker } from '@/specialChars/charPicker';
 // does this for every input rule, as word processors do for an automatic change) and code is
 // skipped. Chemical formulas (`CO2` → CO₂, CHEMICAL_FORMULAS) go through the same rule.
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// The person's own shortcuts (`govt` → government) fire as the word ends: a run of text, then the
+// space or punctuation just typed (findUserShortcut decides). Undone the same way.
+const USER_SHORTCUT_FIND = /\S+[\s.,;:!?)\]}"'”’…]$/u;
 const SHORTCUT_FIND = new RegExp(`(?:${SHORTCUTS.map((s) => escapeRe(s.typed)).join('|')}|(?:\\^|[⁰¹²³⁴⁵⁶⁷⁸⁹])[0-9]|(?:^|[^\\p{L}\\p{N}])[A-Z][A-Za-z0-9₀-₉]*)$`, 'u');
 
 interface Typing { from: number; to: number; matches: CharMatch[] }
@@ -44,6 +48,13 @@ export const SpecialCharInput = Extension.create({
       find: SHORTCUT_FIND,
       handler: ({ state, range, match }) => {
         const s = findShortcut(match[0]);
+        if (!s) return null;
+        state.tr.insertText(s.char, range.from + s.start, range.to);
+      },
+    }), new InputRule({
+      find: USER_SHORTCUT_FIND,
+      handler: ({ state, range, match }) => {
+        const s = findUserShortcut(match[0], useSettingsStore.getState().textShortcuts);
         if (!s) return null;
         state.tr.insertText(s.char, range.from + s.start, range.to);
       },

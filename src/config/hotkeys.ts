@@ -22,6 +22,7 @@
 // sibling CLAUDE.md) and reassigning it would be surprising almost everywhere at once.
 
 import { LABELS } from '@/config/labels';
+import type { AppView } from '@/store/uiStore';
 
 export interface HotkeyDef {
   id:           string;
@@ -46,6 +47,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'nav-notes',     group: 'Navigation', primary: '5', secondary: 'Ctrl+5', action: 'Notes section',     customizable: true, touch: 'More tab → Notes' },
   { id: 'nav-portfolio', group: 'Navigation', primary: '6', secondary: 'Ctrl+6', action: 'Portfolio section', customizable: true, touch: 'More tab → Portfolio' },
   { id: 'nav-fitness',   group: 'Navigation', primary: '7', secondary: 'Ctrl+7', action: 'Fitness section',   customizable: true, touch: 'More tab → Fitness' },
+  { id: 'nav-alt-digit', group: 'Navigation', primary: 'Alt+0–7', action: 'Go to that section (0 Overview … 7 Fitness), also from inside a text field or a note', touch: 'The bottom bar tabs, or the More tab' },
   // Actions
   { id: 'action-new-item',  group: 'Actions', primary: 'N', secondary: 'Space',  action: 'New item for where you are (task / event / entry; in Notes, a notebook from the Chronicle column, a note from the notes column) — Ctrl+N also works', customizable: true, touch: 'The + button, or the section’s quick-add bar' },
   { id: 'action-settings',  group: 'Actions', primary: 'S',                      action: 'Toggle settings',                  customizable: true, touch: 'More tab → Settings' },
@@ -113,3 +115,15 @@ export const HOTKEYS: HotkeyDef[] = [
 
 // Ordered list of groups for rendering in the correct sequence.
 export const HOTKEY_GROUPS = ['Navigation', 'Actions', 'Item panes', 'Calendar', 'Notes', 'Lists', 'Portfolio'] as const;
+
+// Alt+digit goes to a section from anywhere, inside a text field too (the user's ask, 2026-10-17):
+// Ctrl+digit is taken in the note editor (Importance, Glossary marks) and a plain digit types.
+// Read from the physical key (`code`), since Option+digit types a character on a Mac. The top row
+// only: Alt and the number pad types a character by its code on Windows.
+const ALT_DIGIT_SECTIONS: AppView[] = ['overview', 'tasks', 'calendar', 'records', 'lists', 'notes', 'portfolio', 'fitness'];
+
+export function altDigitSection(e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'code'>): AppView | null {
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return null;
+  const m = /^Digit([0-9])$/.exec(e.code);
+  return m ? (ALT_DIGIT_SECTIONS[Number(m[1])] ?? null) : null;
+}

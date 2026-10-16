@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { BlockCategory } from './blockCategories';
 import type { CollectionId, CrossAppRef, CrossAppRefType } from '@/types';
 import type { EditorView } from '@tiptap/pm/view';
@@ -63,7 +64,7 @@ export interface NoteBlockKind {
   category: BlockCategory;   // objects/blockCategories.ts: how it's placed and how it's offered
   id:      string;      // the canonical keyword: `\timeline`
   label:   string;
-  icon:    string;
+  icon:    ReactNode;   // an emoji, or a drawn icon from components/Icons
   aliases: string[];
   hint:    string;
   // Replaces the typed `\…` (from..to) with the block, the cursor inside it. Ends the session.

@@ -397,3 +397,76 @@
 }
 
 .usageSize { color: var(--color-muted); font-variant-numeric: tabular-nums; }
+
+/* ── Typing shortcuts (TypingShortcutsSection) ───────────── */
+
+.shortcutList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.shortcutRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.shortcutTyped,
+.shortcutText {
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.shortcutTyped { flex: 0 0 7rem; }
+.shortcutText { flex: 1; }
+.shortcutTyped:focus,
+.shortcutText:focus { border-color: var(--color-primary); outline: none; }
+
+.shortcutArrow { flex: none; color: var(--color-muted); }
+
+.shortcutAdd {
+  flex: none;
+  padding: 0.35rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.shortcutRemove {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.shortcutRemove:hover,
+.shortcutRemove:focus-visible { border-color: var(--color-border); color: var(--color-danger); }
+.shortcutRemove svg { width: 15px; height: 15px; }
+
+.shortcutProblem {
+  margin: var(--space-1) 0 0;
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+}

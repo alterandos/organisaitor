@@ -1,4 +1,5 @@
 import { Extension, Mark, getMarkRange, mergeAttributes } from '@tiptap/core';
+import { placeElement } from '@/utils/floatingPlacement';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { DOMSerializer, Fragment } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
@@ -130,12 +131,7 @@ class LinkPreview {
     card.addEventListener('mouseenter', () => this.clearHide());
     card.addEventListener('mouseleave', () => this.scheduleHide());
     document.body.append(card);
-    const r = el.getBoundingClientRect();
-    const w = card.offsetWidth;
-    const h = card.offsetHeight;
-    const below = r.bottom + 6 + h <= window.innerHeight;
-    card.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 8))}px`;
-    card.style.top = `${below ? r.bottom + 6 : Math.max(8, r.top - h - 6)}px`;
+    placeElement(card, el.getBoundingClientRect(), { gap: 6 });
     this.card = card;
     this.unregisterEscape = registerEscapeClose(() => this.hide());
   }

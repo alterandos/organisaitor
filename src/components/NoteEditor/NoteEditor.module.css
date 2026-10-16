@@ -2255,6 +2255,146 @@
 .editorContent [data-type="proscons"][data-variant="ledger"][data-pc-lean="pro"]::after { color: var(--color-success-text); }
 .editorContent [data-type="proscons"][data-variant="ledger"][data-pc-lean="con"]::after { color: var(--color-danger); }
 
+/* ── Argument (extensions/Argument.ts, `\argument`) ──────────────────────────────────
+   A claim and its evidence for and against (the pros and cons block's own lists, so the points,
+   their + / − and weight dots are drawn by the rules above), then its optional parts, each with a
+   small label. Three designs; data-sides says which lists are there. Colour is never the only
+   signal: the lists are headed in words and each point carries + or −. */
+
+.editorContent [data-type="argument"] {
+  --pc-pro: var(--color-success);
+  --pc-con: var(--color-danger);
+  --arg-line: var(--color-border-strong);
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.editorContent [data-arg-claim] { font-size: var(--text-lg); font-weight: 700; line-height: 1.35; color: var(--color-text); }
+.editorContent [data-arg-claim]::before {
+  content: attr(data-arg-kind);
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.editorContent [data-type="argument"] > [data-type="proscons-list"] { margin-top: var(--space-3); }
+
+.editorContent [data-arg-field] { margin-top: var(--space-3); color: var(--color-text); }
+.editorContent [data-arg-field]::before {
+  content: attr(data-arg-label);
+  display: block;
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.editorContent [data-arg-hide] { display: none; }
+
+.editorContent [data-arg-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-arg-empty]::after {
+  content: attr(data-arg-placeholder);
+  color: var(--color-muted);
+  opacity: 0.6;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* Which way the evidence leans, in words, when both sides are shown. */
+.editorContent [data-type="argument"][data-arg-lean]::after {
+  content: attr(data-arg-net);
+  display: block;
+  margin-top: var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.editorContent [data-argument-tools] { top: -14px; right: 0; }
+.editorContent [data-argument-tools] [data-arg-tool] { padding: 0 8px; font-weight: 600; }
+.editorContent [data-argument-tools] [data-arg-tool="field"][aria-pressed="false"] { opacity: 0.6; }
+.editorContent [data-type="argument"]:hover > [data-argument-tools],
+.editorContent [data-type="argument"][data-arg-current] > [data-argument-tools] { opacity: 1; }
+
+/* ·· Card: a box, the claim, then each side under its heading ···································· */
+
+.editorContent [data-type="argument"][data-variant="card"] {
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ·· Tree: the claim in a box, its evidence branching beneath it ·································· */
+
+.editorContent [data-type="argument"][data-variant="tree"] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-5);
+}
+.editorContent [data-type="argument"][data-variant="tree"]:not([data-sides="both"]) { grid-template-columns: minmax(0, 1fr); }
+.editorContent [data-variant="tree"] > [data-arg-claim] {
+  grid-column: 1 / -1;
+  justify-self: center;
+  max-width: 36rem;
+  padding: var(--space-3) var(--space-5);
+  border: 2px solid var(--arg-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  text-align: center;
+}
+.editorContent [data-variant="tree"] > [data-arg-field],
+.editorContent [data-type="argument"][data-variant="tree"]::after { grid-column: 1 / -1; }
+/* Each side hangs from the claim: a stem down, then a branch to each piece of evidence. */
+.editorContent [data-variant="tree"] > [data-type="proscons-list"] {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--arg-line);
+}
+.editorContent [data-variant="tree"] > [data-type="proscons-list"]::before { text-align: center; }
+.editorContent [data-variant="tree"] > [data-type="proscons-list"] > [data-pc-point] {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3) var(--space-2) 2.9rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.editorContent [data-variant="tree"] > [data-side="pro"] > [data-pc-point] { border-left-color: var(--pc-pro); }
+.editorContent [data-variant="tree"] > [data-side="con"] > [data-pc-point] { border-left-color: var(--pc-con); }
+.editorContent [data-variant="tree"] [data-pc-point]::before { left: 0.3rem; top: var(--space-2); }
+.editorContent [data-variant="tree"] [data-pc-weight] { left: 1.3rem; top: calc(var(--space-2) + 0.78em); }
+
+/* ·· Debate: the claim across the top, for and against in two columns ···························· */
+
+.editorContent [data-type="argument"][data-variant="debate"] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-6);
+}
+.editorContent [data-type="argument"][data-variant="debate"]:not([data-sides="both"]) { grid-template-columns: minmax(0, 1fr); }
+.editorContent [data-variant="debate"] > [data-arg-claim] {
+  grid-column: 1 / -1;
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--arg-line);
+  text-align: center;
+}
+.editorContent [data-variant="debate"] > [data-arg-field],
+.editorContent [data-type="argument"][data-variant="debate"]::after { grid-column: 1 / -1; text-align: center; }
+/* Who's on each side sits under that side. */
+.editorContent [data-variant="debate"][data-sides="both"] > [data-arg-field="supporters"] { grid-column: 1; text-align: left; }
+.editorContent [data-variant="debate"][data-sides="both"] > [data-arg-field="opponents"] { grid-column: 2; text-align: left; }
+.editorContent [data-variant="debate"] > [data-type="proscons-list"]::before { font-size: var(--text-sm); }
+.editorContent [data-variant="debate"][data-sides="both"] > [data-type="proscons-list"][data-side="con"] {
+  padding-left: var(--space-5);
+  margin-left: calc(-1 * var(--space-3));
+  border-left: 2px solid var(--arg-line);
+}
+
 /* ── Options (extensions/Options.ts, `\options`) ────────────────────────────────────
    The different ways to one end. Five designs: three weigh the options (status chip, pros / cons,
    score), two just list them (data-op-plain on the block; pros, cons, status and score hidden,
@@ -4148,6 +4288,37 @@
   stroke-linecap: round;
 }
 
+/* ── Unsure flags (extensions/UnsureFlag.ts) ─────────────────────────────────────────────────────
+   The flagged words get a dotted underline and the faint text-mark tint (a text style, fine per
+   piece); the icon, a question mark in a broken ring, is one widget after the passage. Neutral
+   colours: marks on text keep out of the palette. A flag whose question is answered fades. */
+.editorContent [data-unsure-flag] {
+  background: var(--color-text-mark);
+  text-decoration: underline dotted var(--color-muted);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
+}
+
+.editorContent [data-unsure-marker] {
+  display: inline-grid;
+  place-items: center;
+  width: 1em;
+  height: 1em;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  vertical-align: -0.12em;
+  cursor: pointer;
+}
+
+.editorContent [data-unsure-marker]:hover,
+.editorContent [data-unsure-marker]:focus-visible { color: var(--color-text); }
+.editorContent [data-unsure-marker="question"] { color: var(--color-primary); }
+.editorContent [data-unsure-marker="answered"] { opacity: 0.45; }
+.editorContent [data-unsure-marker] svg { width: 0.95em; height: 0.95em; }
+
 /* ── Maths (extensions/Maths.ts, `\maths`) ───────────────────────────────────────────────────────
    A MathLive field (a custom element; its insides are styled through its CSS variables and
    ::part), or the LaTeX as text until MathLive has loaded. A block centres, sits left, or carries
@@ -4395,38 +4566,124 @@
 .editorContent mark[data-tag-type="learn-later"]::before { content: "🔖"; }
 
 /* ── Important, built out (extensions/Importance.ts) ──────────────────────────
-   Its icon is in the margin beside the line (one per line block, the highest level's), not
-   inline. Critical also reads heavier. */
+   Its icon is in the margin column (MarginColumn.ts, below). Critical also reads heavier. */
 .editorContent mark[data-tag-type="important"][data-level="3"] {
   font-weight: 600;
 }
 
-.editorContent [data-importance-marker] {
-  position: absolute;
-  margin-left: -2.35rem;
-  width: 2.1rem;
-  text-align: center;
-  white-space: nowrap;
-  font-size: 0.78rem;
-  font-weight: 400;
-  letter-spacing: -0.15em;
-  user-select: none;
-  cursor: default;
-  filter: drop-shadow(0 0 0.5px var(--importance-color));
-}
 
-.editorContent [data-importance-marker] svg { width: 1em; height: 1em; margin-left: 0.2em; vertical-align: -0.15em; color: var(--color-muted); }
 
 /* ── Text linked to a Glossary term (extensions/ConceptRef.ts) ────────────────
-   The text: a soft highlight in the term's colour, dotted underline. The brace and the label are
-   drawn once per run in a layer beside the editor; the editor makes room for them on the right
-   (wide), or just for the brace and an icon (compact, a narrow editor). */
+   The text: a soft highlight in the term's colour, dotted underline. Its icon is in the margin
+   column (below). */
 .editor {
   position: relative;
 }
 
-.editorContent[data-concept-margin="wide"]    { padding-right: 15rem; }
-.editorContent[data-concept-margin="compact"] { padding-right: 4rem; }
+/* ── The margin column (extensions/MarginColumn.ts) ─────────────────────────────────────────────
+   A thin column right of the text: on each line holding a marked passage, that mark's icon (up to
+   three, then +N), and a thin bracket down a passage over several lines. Collapsed, a short tick
+   per line, opening while hovered. The editor makes room for it on the right. */
+.editorContent[data-margin-column="open"]   { padding-right: 5.25rem; }
+.editorContent[data-margin-column="closed"] { padding-right: 1.5rem; }
+
+.editor [data-margin-column] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.editor [data-margin-strip] { position: absolute; top: 0; width: 4.5rem; }
+
+.editor [data-margin-toggle] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1;
+  opacity: 0.5;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.editor [data-margin-toggle]:hover,
+.editor [data-margin-toggle]:focus-visible { opacity: 1; background: var(--color-surface-alt); }
+
+.editor [data-margin-bracket] {
+  position: absolute;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--mark-color);
+  opacity: 0.55;
+}
+
+.editor [data-margin-row] {
+  position: absolute;
+  left: 10px;
+  display: flex;
+  gap: 2px;
+  height: 22px;
+}
+
+.editor [data-margin-icon],
+.editor [data-margin-more] {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--mark-color, var(--color-muted)) 12%, var(--color-surface));
+  color: var(--mark-color, var(--color-muted));
+  font: inherit;
+  font-size: var(--text-xs);
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.editor [data-margin-icon] svg { width: 14px; height: 14px; }
+.editor [data-margin-icon]:hover,
+.editor [data-margin-icon]:focus-visible,
+.editor [data-margin-more]:hover { border-color: var(--mark-color, var(--color-border-strong)); }
+.editor [data-margin-more] { color: var(--color-muted); font-weight: 700; }
+
+.editor [data-margin-tick] {
+  position: absolute;
+  left: 2px;
+  width: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--mark-color);
+  pointer-events: auto;
+  cursor: pointer;
+}
+/* A wider area to hover or tap than the tick itself. */
+.editor [data-margin-tick]::before { content: ''; position: absolute; inset: 0 -8px; }
+
+/* Open: the icons. Collapsed: the ticks, and the icons while the column is hovered. */
+.editor [data-margin-column][data-open] [data-margin-tick] { display: none; }
+.editor [data-margin-column]:not([data-open]) [data-margin-row],
+.editor [data-margin-column]:not([data-open]) [data-margin-bracket] { display: none; }
+@media (hover: hover) {
+  .editor [data-margin-column]:not([data-open]) [data-margin-strip]:hover [data-margin-row] { display: flex; }
+  .editor [data-margin-column]:not([data-open]) [data-margin-strip]:hover [data-margin-tick] { display: none; }
+}
+
+.editorContent [data-margin-hover] {
+  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  border-radius: 2px;
+}
 
 .editorContent [data-concept-ref] {
   background: color-mix(in srgb, var(--concept-color) 13%, transparent);
@@ -4440,63 +4697,11 @@
   border-radius: 2px;
 }
 
-.editor [data-concept-margin-layer] {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 0;
-  pointer-events: none;
-  z-index: 2;
-}
 
-.editor [data-concept-brace] {
-  position: absolute;
-  overflow: visible;
-  fill: none;
-  stroke: var(--concept-color);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  opacity: 0.7;
-}
 
-.editor [data-concept-label] {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  max-width: 12.75rem;
-  padding: 0 10px 0 7px;
-  border: 1px solid color-mix(in srgb, var(--concept-color) 35%, transparent);
-  border-radius: 99px;
-  background: color-mix(in srgb, var(--concept-color) 9%, var(--color-surface));
-  color: var(--color-text);
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
 
-.editor [data-concept-label="compact"] {
-  width: 24px;
-  padding: 0;
-  justify-content: center;
-}
 
-.editor [data-concept-label][data-hover],
-.editor [data-concept-label]:hover {
-  border-color: var(--concept-color);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--concept-color) 18%, transparent);
-}
 
-.editor [data-concept-term] {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 /* Linking to the Glossary as you type (extensions/GlossaryAutolink.ts): the word just typed is
    underlined, and a quiet chip after it offers the link — ↵ / Tab to take it, keep typing to
@@ -4617,42 +4822,6 @@
   .editorContent [data-autolink-chip], .editor [data-concept-hovercard] { animation: none; }
   .editorContent [data-autolink-chip][data-lingering] { animation: none; opacity: 0.85; }
 }
-
-/* The card: what the term means, on hover. */
-.editor [data-concept-card] {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 3;
-  width: 15rem;
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px 9px;
-  border: 1px solid var(--color-border);
-  border-top: 3px solid var(--concept-color);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-lg);
-  color: var(--color-text);
-  font-size: 0.8rem;
-  font-weight: 400;
-  line-height: 1.45;
-  text-align: left;
-  white-space: normal;
-}
-
-.editor [data-concept-label]:hover [data-concept-card] { display: flex; }
-.editor [data-concept-card] strong { font-size: 0.9rem; }
-.editor [data-concept-card] em {
-  color: var(--concept-color);
-  font-size: 0.66rem;
-  font-style: normal;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.editor [data-concept-card] small { color: var(--color-muted); font-size: 0.72rem; }
 
 /* Cross-app artifact links: the mark itself is only data. Each link is drawn as one inline pane
    (icon, kind, the text, when, flags, buttons) and optionally a card, by objects/artifactGroups.ts —
@@ -5134,7 +5303,8 @@
 /* Drawn as the Glossary cards are (GlossaryCard.module.css), so the two read as one family: Card is
    a box with a small coloured kind line, the question large, a short accent rule, then the parts
    with small labels; Compact is one bordered line, an icon, the question, a thin accent rule, the
-   answer. The accent follows the status: orange open, green answered, grey dropped. */
+   answer. The question itself is italic, not bold (the user's ask, 2026-10-17): it reads as a
+   question rather than a term. The accent follows the status: orange open, green answered, grey dropped. */
 
 .editorContent [data-type="question"] { --qn-accent: var(--color-swatch-orange); position: relative; }
 .editorContent [data-type="question"][data-status="answered"] { --qn-accent: var(--color-swatch-green); }
@@ -5162,7 +5332,8 @@
 }
 .editorContent [data-type="question"][data-variant="card"] > [data-qn-text] {
   font-size: var(--text-lg);
-  font-weight: 650;
+  font-style: italic;
+  font-weight: 400;
   line-height: 1.3;
 }
 .editorContent [data-type="question"][data-variant="card"] > [data-qn-text]::after {
@@ -5224,7 +5395,7 @@
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-text] {
   flex: 0 1 auto;
   min-width: 7.5rem;
-  font-weight: 650;
+  font-style: italic;
 }
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field] { margin-top: 0; }
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="answer"] {
