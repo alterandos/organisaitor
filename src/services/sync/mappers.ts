@@ -8,6 +8,7 @@ import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
 import type { TrashEntry, TrashEntryId, TrashableKind, DeletedBy } from '@/types/trash';
 import type { Overview } from '@/types/overview';
+import type { Picture } from '@/types/pictures';
 
 // ── Task ────────────────────────────────────────────────────────
 
@@ -626,6 +627,7 @@ export function noteToRow(n: Note, userId: string) {
     collection_id:   n.collectionId ?? null,
     is_encrypted:    n.isEncrypted ?? false,
     encrypted_payload: n.encryptedPayload ?? null,
+    backdrop:        n.backdrop ?? null,
     last_viewed_at:  n.lastViewedAt ?? null,
     archived_at:     n.archivedAt ?? null,
     created_at:      n.createdAt,
@@ -654,6 +656,7 @@ export function rowToNote(r: Record<string, any>): Note {
     collectionId: r.collection_id ?? null,
     isEncrypted:  r.is_encrypted ?? false,
     encryptedPayload: r.encrypted_payload ?? null,
+    backdrop:     r.backdrop ?? null,
     lastViewedAt: r.last_viewed_at ?? null,
     archivedAt:   r.archived_at ?? null,
     createdAt:    r.created_at,
@@ -679,6 +682,7 @@ export function noteTagToRow(t: NoteTag, userId: string) {
     field_schema:  t.fieldSchema ?? [],
     preset_key:    t.presetKey ?? null,
     collection_id: t.collectionId ?? null,
+    backdrop:      t.backdrop ?? null,
     created_at:    t.createdAt,
     updated_at:    t.updatedAt,
     deleted_at:    null,
@@ -700,6 +704,7 @@ export function rowToNoteTag(r: Record<string, any>): NoteTag {
     fieldSchema:  r.field_schema ?? [],
     presetKey:    r.preset_key ?? undefined,
     collectionId: r.collection_id ?? null,
+    backdrop:     r.backdrop ?? null,
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
     userId:       r.user_id,
@@ -847,5 +852,38 @@ export function rowToTrashEntry(r: Record<string, any>): TrashEntry {
     snapshot:      r.snapshot,
     deletedAt:     r.original_deleted_at,
     deletedBy:     (r.deleted_by ?? { type: 'user' }) as DeletedBy,
+  };
+}
+
+// ── Picture (the picture library, services/pictures.ts) ─────────
+// An encrypted picture arrives already in its stored form (src blank, the data URL in
+// encrypted_payload), like an encrypted note.
+
+export function pictureToRow(p: Picture, userId: string) {
+  return {
+    id:                p.id,
+    user_id:           userId,
+    src:               p.src,
+    is_encrypted:      p.isEncrypted,
+    encrypted_payload: p.encryptedPayload ?? null,
+    copy_of:           p.copyOf ?? null,
+    origin:            p.origin,
+    created_at:        p.createdAt,
+    updated_at:        p.updatedAt,
+    deleted_at:        null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToPicture(r: Record<string, any>): Picture {
+  return {
+    id:               r.id,
+    src:              r.src ?? '',
+    isEncrypted:      r.is_encrypted ?? false,
+    encryptedPayload: r.encrypted_payload ?? null,
+    copyOf:           r.copy_of ?? null,
+    origin:           r.origin ?? 'backdrop',
+    createdAt:        r.created_at,
+    updatedAt:        r.updated_at,
   };
 }

@@ -42,6 +42,12 @@ describe('reading //name', () => {
     expect(findShortcut('x²3')).toEqual({ start: 2, char: '³', typed: '3' });
     expect(findShortcut('a <')).toBeNull();
     expect(findShortcut('page 23')).toBeNull();
+    expect(findShortcut('the CO2')).toEqual({ start: 4, char: 'CO₂', typed: 'CO2' });
+    expect(findShortcut('H₂O2')).toEqual({ start: 0, char: 'H₂O₂', typed: 'H₂O2' });
+    expect(findShortcut('H2O')).toEqual({ start: 0, char: 'H₂O', typed: 'H2O' });
+    expect(findShortcut('MCO2')).toBeNull();
+    expect(findShortcut('co2')).toBeNull();
+    expect(findShortcut('H2')).toBeNull();
   });
 
   it('every name and alias is unique and short enough to type', () => {
@@ -125,6 +131,15 @@ describe('in any text field', () => {
     typeKeys('x != y');
     expect(key('Backspace').defaultPrevented).toBe(false);   // not straight after: left to the field
     expect(field.value).toBe('x ≠ y');
+  });
+
+  it('Ctrl+Z straight after a shortcut or formula puts the typed text back', () => {
+    typeKeys('x O2');
+    expect(field.value).toBe('x O₂');
+    const e = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+    field.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+    expect(field.value).toBe('x O2');
   });
 
   it('a paste is left alone, and URL, email and search fields get no shortcuts', () => {

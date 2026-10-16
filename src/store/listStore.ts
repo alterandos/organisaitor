@@ -12,6 +12,7 @@ import { encryptSecrets, decryptSecrets, queueEncrypt } from '@/services/noteSec
 import { persistStorage } from '@/utils/persistStorage';
 import { moveToTrash } from '@/services/trashCapture';
 import { log } from '@/utils/log';
+import { LABELS } from '@/config/labels';
 import {
   extractListSecrets, blankListSecrets, extractItemSecrets, blankItemSecrets,
   putListSecrets, putItemSecrets, dropListSecrets, dropItemSecrets,
@@ -148,6 +149,7 @@ const BUILTIN_LIST_TYPES: ListType[] = [
   {
     id: 'lt-dictionary' as ListTypeId,
     name: 'Dictionary', icon: '📕', color: '#b45309', kind: 'reference', isBuiltIn: true,
+    titleColumn: LABELS.dictionary.word,
     defaultFields: [
       { id: 'lf-meaning', name: 'Meaning',        type: 'text' },
       { id: 'lf-pos',     name: 'Part of speech', type: 'text' },
@@ -385,14 +387,23 @@ export const useListStore = create<ListState>()(
       version: 7,
       // Re-add any built-in type missing from the persisted map, so a built-in introduced after
       // this device first saved its lists (e.g. Shopping, 2026-09-28) still appears. User edits to
-      // an existing built-in are kept.
+      // an existing built-in are kept, but it gains any default field added to it in code since
+      // (the Dictionary's part of speech and example, 2026-10-15, never reached a saved copy) and
+      // takes its code-only settings (titleColumn) from the code.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<ListState>;
-        return {
-          ...current,
-          ...p,
-          listTypes: { ...toRecord(BUILTIN_LIST_TYPES), ...(p.listTypes ?? {}) } as Record<ListTypeId, ListType>,
-        };
+        const listTypes = { ...toRecord(BUILTIN_LIST_TYPES), ...(p.listTypes ?? {}) } as Record<ListTypeId, ListType>;
+        for (const builtIn of BUILTIN_LIST_TYPES) {
+          const saved = listTypes[builtIn.id];
+          if (saved === builtIn) continue;
+          const have = new Set(saved.defaultFields.map((f) => f.id));
+          listTypes[builtIn.id] = {
+            ...saved,
+            defaultFields: [...saved.defaultFields, ...builtIn.defaultFields.filter((f) => !have.has(f.id))],
+            titleColumn: builtIn.titleColumn,
+          };
+        }
+        return { ...current, ...p, listTypes };
       },
       migrate: (persisted, fromVersion) => {
         let state = persisted as any;

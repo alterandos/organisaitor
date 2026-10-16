@@ -145,6 +145,16 @@ function quoteNode(state: EditorState, text: string, fields: QuoteField[] = DEFA
   ]);
 }
 
+// A quote holding `text`, its Who field holding `who`: what the quote offer (BlockOffers.ts) puts
+// in place of a quotation typed as a line.
+export function quoteNodeFor(state: EditorState, text: string, who: string): PMNode {
+  const node = quoteNode(state, text);
+  if (!who) return node;
+  const children: PMNode[] = [];
+  node.forEach((c) => children.push(c.attrs.field === 'who' ? c.type.create(c.attrs, state.schema.text(who)) : c));
+  return node.type.create(node.attrs, children);
+}
+
 // `\quote`: replaces from..to (what was typed, and the space before it) with an empty quote,
 // the cursor in its text.
 export function insertQuote(state: EditorState, from: number, to: number): Transaction | null {

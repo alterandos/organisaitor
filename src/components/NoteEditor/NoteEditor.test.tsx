@@ -116,6 +116,23 @@ describe('NoteEditor tab restore on note switch', () => {
     expect(liveEditor().state.selection.from).toBe(2);
   });
 
+  it('coming back to Notes from another app puts the cursor where it was left', async () => {
+    useUIStore.setState({ activeView: 'notes' });
+    act(() => { useUIStore.getState().openNote('note-b'); });
+    const first = render(<StrictMode><NoteEditor /></StrictMode>);
+    act(() => { liveEditor().commands.setTextSelection({ from: 3, to: 5 }); });
+    act(() => { useUIStore.getState().setActiveView('tasks'); });
+    first.unmount();
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });   // the old editor is destroyed
+    expect(useUIStore.getState().noteCursorMemory['note-b:main']).toMatchObject({ from: 3, to: 5 });
+    act(() => { useUIStore.getState().navigateBack(); });
+    expect(useUIStore.getState().activeView).toBe('notes');
+    render(<StrictMode><NoteEditor /></StrictMode>);
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+    expect(editorText()).toContain('MAIN-B');
+    expect(liveEditor().state.selection).toMatchObject({ from: 3, to: 5 });
+  });
+
   it('a note with nothing remembered opens on its last tab, with the cursor at the end', () => {
     useUIStore.setState({ activeView: 'notes' });
     act(() => { useUIStore.getState().openNote('note-b'); });

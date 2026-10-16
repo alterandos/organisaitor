@@ -110,6 +110,13 @@ export const listWeight = (list: PMNode) => {
 // The scales' tilt, in degrees: towards the heavier side, a few degrees per point of weight.
 export const scalesTilt = (pros: number, cons: number) => Math.max(-14, Math.min(14, (cons - pros) * 4));
 
+// Pros and cons of `subject`: what the pros-and-cons offer (BlockOffers.ts) puts after "The pros
+// and cons of …:".
+export function prosConsNodeFor(state: EditorState, subject: string): PMNode {
+  const { prosCons, prosConsSubject, prosConsVerdict } = state.schema.nodes;
+  return prosCons.create(null, [prosConsSubject.create(null, subject ? state.schema.text(subject) : null), ...newLists(state), prosConsVerdict.create()]);
+}
+
 export function newLists(state: EditorState): PMNode[] {
   const { prosConsList, prosConsPoint } = state.schema.nodes;
   return (['pro', 'con'] as const).map((side) => prosConsList.create({ side }, prosConsPoint.create()));

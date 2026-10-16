@@ -1,5 +1,8 @@
 import Image from '@tiptap/extension-image';
 import type { Node as PMNode } from '@tiptap/pm/model';
+import { Plugin } from '@tiptap/pm/state';
+import { addPictureFromDataUrl, onPicturesChange, pictureSrc } from '@/services/pictures';
+import { log } from '@/utils/log';
 import type { Editor } from '@tiptap/core';
 import { LABELS } from '@/config/labels';
 import { registerEscapeClose } from '@/hooks/useEscapeClose';
@@ -14,13 +17,52 @@ import styles from './ResizableImage.module.css';
 // elsewhere applies, Esc cancels. Nothing is cut out of the image itself: `crop` (fractions of
 // each side) and `height` (set only once it has been stretched) are attributes, so a crop can be
 // widened again later. The geometry is pure, in imageGeometry.ts.
+//
+// The picture itself is in the picture library (CLAUDE.md "Picture library"): the node holds its
+// `pictureId`, and `src` stays empty. A picture still inline (`src` a data URL: pasted before the
+// library, or HTML pasted from elsewhere) is moved into the library when the note is open, as an
+// encrypted picture in an encrypted note. Copying writes the picture's data URL into `src` too, so
+// it pastes anywhere; pasted back into a note it keeps referring to the same picture.
 
-type Attrs = { src: string; alt?: string | null; title?: string | null; width: number | null; height: number | null; crop: Crop };
+type Attrs = { src: string | null; pictureId: string | null; alt?: string | null; title?: string | null; width: number | null; height: number | null; crop: Crop };
 
-export const ResizableImage = Image.extend({
+// What the node shows: its library picture, else its own src (a web address, or inline from before).
+export const imageSrc = (attrs: { src?: string | null; pictureId?: string | null }) =>
+  (attrs.pictureId ? pictureSrc(attrs.pictureId) : null) ?? attrs.src ?? '';
+
+export interface ResizableImageOptions {
+  // Whether the note being edited is encrypted (its pictures then go into the library encrypted);
+  // null while that can't be known, when nothing is moved.
+  noteEncrypted: () => boolean | null;
+}
+
+export const ResizableImage = Image.extend<ResizableImageOptions & ReturnType<NonNullable<typeof Image.config.addOptions>>>({
+  addOptions() {
+    return { ...this.parent!(), noteEncrypted: () => null };
+  },
+
+  parseHTML() {
+    return [{ tag: 'img[data-picture-id]' }, { tag: 'img[src]' }];
+  },
+
   addAttributes() {
+    const parent = this.parent?.() ?? {};
     return {
-      ...this.parent?.(),
+      ...parent,
+      src: {
+        default: null,
+        // A picture this library already holds is referred to; anything else keeps its src.
+        parseHTML: (el) => (el.getAttribute('data-picture-id') && pictureSrc(el.getAttribute('data-picture-id')) ? null : el.getAttribute('src')),
+        renderHTML: (attrs) => ({ src: imageSrc(attrs) }),
+      },
+      pictureId: {
+        default: null,
+        parseHTML: (el) => {
+          const id = el.getAttribute('data-picture-id');
+          return id && pictureSrc(id) ? id : null;
+        },
+        renderHTML: (attrs) => (attrs.pictureId ? { 'data-picture-id': attrs.pictureId } : {}),
+      },
       width: {
         default: null,
         parseHTML: (el) => {
@@ -48,6 +90,36 @@ export const ResizableImage = Image.extend({
   addNodeView() {
     return ({ node, editor, getPos }) => new ImageView(node, editor, typeof getPos === 'function' ? getPos : () => undefined);
   },
+
+  addProseMirrorPlugins() {
+    const noteEncrypted = this.options.noteEncrypted;
+    const moving = new Set<string>();
+    const moveInline = (view: import('@tiptap/pm/view').EditorView) => {
+      const encrypted = noteEncrypted();
+      if (encrypted === null) return;
+      view.state.doc.descendants((node) => {
+        const src = node.type.name === 'image' ? node.attrs.src as string | null : null;
+        if (!src || node.attrs.pictureId || !src.startsWith('data:image/') || moving.has(src)) return;
+        moving.add(src);
+        addPictureFromDataUrl(src, { encrypted, origin: 'note' }).then((pictureId) => {
+          if (view.isDestroyed) return;
+          const tr = view.state.tr;
+          view.state.doc.descendants((n, pos) => {
+            if (n.type.name === 'image' && n.attrs.src === src && !n.attrs.pictureId) tr.setNodeMarkup(pos, undefined, { ...n.attrs, src: null, pictureId });
+          });
+          if (tr.docChanged) view.dispatch(tr.setMeta('addToHistory', false));
+        }).catch((err) => log.warn('pictures', 'could not move a picture into the library', err))
+          .finally(() => moving.delete(src));
+      });
+    };
+    // On opening the note (its content arrives either at creation or with setContent) and after.
+    return [new Plugin({
+      view: (view) => {
+        moveInline(view);
+        return { update: (v, prev) => { if (v.state.doc !== prev.doc) moveInline(v); } };
+      },
+    })];
+  },
 });
 
 const HANDLES: Handle[] = [...CORNERS, ...EDGES];
@@ -67,6 +139,7 @@ class ImageView {
 
   private editor: Editor;
   private getPos: () => number | undefined;
+  private unsubscribe: () => void;
 
   constructor(node: PMNode, editor: Editor, getPos: () => number | undefined) {
     this.editor = editor;
@@ -101,16 +174,24 @@ class ImageView {
     this.dom.appendChild(this.bar);
 
     this.apply(node);
+    // An encrypted picture is decrypted a moment after the note opens; a synced one arrives later.
+    this.unsubscribe = onPicturesChange(() => this.showSrc());
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   private apply(node: PMNode) {
     this.attrs = node.attrs as Attrs;
-    if (this.img.getAttribute('src') !== this.attrs.src) this.img.src = this.attrs.src;
+    this.showSrc();
     this.img.alt = this.attrs.alt ?? '';
     if (this.attrs.title) this.img.title = this.attrs.title;
     this.layout();
+  }
+
+  private showSrc() {
+    const src = imageSrc(this.attrs);
+    if (!src) this.img.removeAttribute('src');
+    else if (this.img.getAttribute('src') !== src) this.img.src = src;
   }
 
   // The frame is the visible picture: its width (capped at the column) and shape. The image
@@ -215,7 +296,7 @@ class ImageView {
     stage.style.width = `${full.w}px`;
     stage.style.height = `${full.h}px`;
     const whole = document.createElement('img');
-    whole.src = this.attrs.src;
+    whole.src = imageSrc(this.attrs);
     whole.className = styles.stageImg;
     whole.draggable = false;
     const box = el('span', styles.cropBox);
@@ -330,6 +411,7 @@ class ImageView {
   ignoreMutation() { return true; }
 
   destroy() {
+    this.unsubscribe();
     this.drag?.();
     this.cropping?.release();
   }

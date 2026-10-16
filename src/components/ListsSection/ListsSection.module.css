@@ -766,6 +766,15 @@
   color: var(--color-text);
 }
 
+.refCellTitle {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
 .refCellUrl {
   color: var(--color-primary);
   text-decoration: none;

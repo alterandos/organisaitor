@@ -4,6 +4,8 @@ import { useTrackerStore } from '@/store/trackerStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useOverviewStore } from '@/store/overviewStore';
 import { useNoteStore } from '@/store/noteStore';
+import { usePictureStore } from '@/store/pictureStore';
+import { useTrashStore } from '@/store/trashStore';
 import { useListStore } from '@/store/listStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
@@ -37,6 +39,10 @@ export function clearSyncedLocalData(): void {
 
   const note = useNoteStore.getInitialState();
   useNoteStore.setState({ notes: note.notes, noteTags: note.noteTags, structuredTagEntries: note.structuredTagEntries });
+
+  usePictureStore.setState({ pictures: usePictureStore.getInitialState().pictures });
+  // Synced (trash_items), and its snapshots are the account's deleted records.
+  useTrashStore.setState({ entries: useTrashStore.getInitialState().entries });
 
   const list = useListStore.getInitialState();
   useListStore.setState({ lists: list.lists, listItems: list.listItems, listTypes: list.listTypes });

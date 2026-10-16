@@ -5,7 +5,7 @@ import { definitionPassage, openNotePassage } from '@/services/notePassage';
 import { GLOSSARY_TYPES, TERM_RICH, factsFromText, factsToText, fieldFacts, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, type Fact, type GlossaryLink, type StructuredTagFieldDef } from '@/config/structuredTagTypes';
 import { GLOSSARY_RELATIONS, glossaryRelation } from '@/config/glossaryRelations';
 import { LABELS } from '@/config/labels';
-import { compressImageBlob } from '@/utils/imageCompress';
+import { addPicture, pictureRef, useFieldPictureSrc } from '@/services/pictures';
 import { acronymLetterPositions } from '@/utils/acronymInference';
 import { log, errorMessage } from '@/utils/log';
 import { normalizeLinkUrl, openExternalLink } from '@/utils/links';
@@ -296,11 +296,14 @@ function FactsField({ facts, onCommit, placeholder, editable, label, autoFocus }
   );
 }
 
-function ImageField({ src, term, onCommit, editable }: { src: string; term: string; onCommit: (v: string) => void; editable: boolean }) {
+// The picture is in the picture library (`picture:<id>` in the field; a data URL from before the
+// library still shows). An encrypted entry's picture is stored encrypted.
+function ImageField({ value, term, encrypted, onCommit, editable }: { value: string; term: string; encrypted: boolean; onCommit: (v: string) => void; editable: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const src = useFieldPictureSrc(value);
   async function choose(file: File | undefined) {
     if (!file) return;
-    try { onCommit(await compressImageBlob(file)); }
+    try { onCommit(pictureRef(await addPicture(file, { encrypted, origin: 'card' }))); }
     catch (e) { log.warn('glossaryCard', 'could not read the picture', errorMessage(e)); }
   }
   return (
@@ -308,8 +311,8 @@ function ImageField({ src, term, onCommit, editable }: { src: string; term: stri
       {src && <img className={styles.image} src={src} alt={L.imageAlt(term)} />}
       {editable && (
         <div className={styles.imageTools}>
-          <button type="button" className={styles.smallBtn} onClick={() => fileRef.current?.click()}>{src ? L.replaceImage : L.addImage}</button>
-          {src && <button type="button" className={styles.smallBtn} onClick={() => onCommit('')}>{L.removeImage}</button>}
+          <button type="button" className={styles.smallBtn} onClick={() => fileRef.current?.click()}>{value ? L.replaceImage : L.addImage}</button>
+          {value && <button type="button" className={styles.smallBtn} onClick={() => onCommit('')}>{L.removeImage}</button>}
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void choose(e.target.files?.[0])} />
         </div>
       )}
@@ -523,7 +526,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
       case 'list':
         return <RichList items={fieldRichList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} />;
       case 'image':
-        return <ImageField src={fieldText(entry.fields, f.id)} term={entry.term} onCommit={(v) => setField(f.id, v)} editable={editable} />;
+        return <ImageField value={fieldText(entry.fields, f.id)} term={entry.term} encrypted={entry.isEncrypted} onCommit={(v) => setField(f.id, v)} editable={editable} />;
       case 'parent': {
         const parts = all.filter((e) => e.id !== entry.id && fieldText(e.fields, f.id) === id);
         return (

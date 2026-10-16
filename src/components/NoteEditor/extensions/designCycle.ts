@@ -13,6 +13,7 @@ import { CONCLUSION_DESIGNS } from './Conclusion';
 import { CYCLE_DESIGNS } from './Cycle';
 import { DIAGRAM_DESIGNS } from './Diagram';
 import { GLOSSARY_CARD_DESIGNS } from './GlossaryCard';
+import { chipToCard } from './GlossaryChip';
 import { HIERARCHY_DESIGNS } from './Hierarchy';
 import { HUB_DESIGNS } from './Hub';
 import { IDKEY_DESIGNS } from './IdKey';
@@ -78,6 +79,12 @@ export function nextDesign(node: PMNode, dir: 1 | -1): BlockDesign<string> | nul
 }
 
 export function cycleBlockDesign(view: EditorView, dir: 1 | -1): boolean {
+  // A selected Glossary chip is the card's Inline design, last in its list: on to Card, back to Compact.
+  const sel = view.state.selection;
+  if (sel instanceof NodeSelection && sel.node.type.name === 'glossaryChip') {
+    chipToCard(view, sel.from, dir === 1 ? 'card' : 'compact');
+    return true;
+  }
   const block = blockForDesign(view.state);
   if (!block) return false;
   const design = nextDesign(block.node, dir);

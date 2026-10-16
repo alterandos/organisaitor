@@ -5474,3 +5474,7 @@
   white-space: normal;
   cursor: auto;
 }
+/* The chip's designs (Card, Compact, Inline), in the pill of its open card: the way back to a card. */
+.editorContent [data-glossary-chip-card] { position: relative; }
+.editorContent [data-glossary-chip-card]:hover > [data-glossary-tools],
+.editorContent [data-glossary-chip-card]:focus-within > [data-glossary-tools] { opacity: 1; }

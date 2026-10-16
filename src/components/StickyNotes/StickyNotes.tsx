@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import { SpecialCharInput } from '@/components/NoteEditor/extensions/SpecialCharInput';
 import { useNoteStore } from '@/store/noteStore';
 import { useStickyStore, STICKY_DESIGNS, DEFAULT_STICKY_PLACE, type StickyDesign } from '@/store/stickyStore';
 import { useUIStore } from '@/store/uiStore';
 import { isNoteLocked, noteView } from '@/services/noteSecrets';
-import { addSticky, plainTextOf, removeSticky, setStickyText, stickyNotes } from '@/services/stickyNotes';
+import { addSticky, removeSticky, setStickyContent, stickyDocFrom, stickyDocOf, stickyNotes, type StickyDoc, type StickyMark } from '@/services/stickyNotes';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { TrashIcon } from '@/components/Icons';
@@ -15,7 +19,9 @@ import styles from './StickyNotes.module.css';
 
 // The sticky notes (services/stickyNotes.ts) over the Notes section: each stays where it was put
 // (dragged by its edge or any part that isn't its text), above the notes and below panes and
-// dialogs. Mounted by NotesSection, desktop only.
+// dialogs. Mounted by NotesSection, desktop only. The text is a small Tiptap editor holding only
+// what a sticky can (paragraphs, bold, italic, underline, strikethrough: STICKY_MARKS), with the
+// usual Ctrl+B / I / U / Shift+S and the same choices in its right-click menu.
 
 // Right-click anywhere in Notes that has no menu of its own: New sticky note.
 registerContextMenuProvider({
@@ -51,34 +57,71 @@ export function StickyNotes() {
 
 const paperFor = (color: string | null) => (color ? SWATCHES.find((s) => s.hex === color)?.pale ?? null : null);
 
+// Only what a sticky can hold (services/stickyNotes.ts STICKY_MARKS), plus the `//name` characters
+// every text field has.
+const STICKY_EXTENSIONS = [
+  StarterKit.configure({
+    heading: false, blockquote: false, bulletList: false, orderedList: false, listItem: false, listKeymap: false,
+    code: false, codeBlock: false, horizontalRule: false, link: false, dropcursor: false, gapcursor: false, trailingNode: false,
+  }),
+  Placeholder.configure({ placeholder: LABELS.stickies.placeholder }),
+  SpecialCharInput,
+];
+
+const MARK_SHORTCUT: Record<StickyMark, string> = { bold: 'Ctrl+B', italic: 'Ctrl+I', underline: 'Ctrl+U', strike: 'Ctrl+Shift+S' };
+const MARK_ICON: Record<StickyMark, string> = { bold: 'B', italic: 'I', underline: 'U', strike: 'S' };
+
+function toggleMark(editor: Editor, mark: StickyMark) {
+  const chain = editor.chain().focus();
+  if (mark === 'bold') chain.toggleBold().run();
+  else if (mark === 'italic') chain.toggleItalic().run();
+  else if (mark === 'underline') chain.toggleUnderline().run();
+  else chain.toggleStrike().run();
+}
+
 function StickyNote({ note }: { note: Note }) {
   const place = useStickyStore((s) => s.places[note.id]) ?? DEFAULT_STICKY_PLACE;
   const setPlace = useStickyStore((s) => s.setPlace);
   const locked = isNoteLocked(note);
-  const stored = locked ? null : plainTextOf(noteView(note).content);
+  const content = locked ? '' : noteView(note).content;
+  const stored = locked ? null : stickyDocOf(content);
   const L = LABELS.stickies;
 
-  // The text being written; takes up a change from elsewhere (another device, the editor) unless
-  // it's being written in right now.
-  const [text, setText] = useState(stored ?? '');
-  const [prevStored, setPrevStored] = useState(stored);
-  const [focused, setFocused] = useState(false);
-  if (stored !== prevStored) {
-    setPrevStored(stored);
-    if (!focused && stored !== null) setText(stored);
-  }
-
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pending = useRef<string | null>(null);
+  const pending = useRef<StickyDoc | null>(null);
   const flush = () => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    if (pending.current !== null) { setStickyText(note.id, pending.current); pending.current = null; }
+    if (pending.current !== null) { setStickyContent(note.id, pending.current); pending.current = null; }
   };
   const noteId = note.id;
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
-    if (pending.current !== null) setStickyText(noteId, pending.current);
+    if (pending.current !== null) setStickyContent(noteId, pending.current);
   }, [noteId]);
+
+  const editor = useEditor({
+    extensions: STICKY_EXTENSIONS,
+    content: stored ?? '',
+    editorProps: { attributes: { class: styles.text, 'aria-label': L.text, 'aria-multiline': 'true', role: 'textbox' } },
+    onUpdate: ({ editor: ed }) => {
+      const doc = stickyDocFrom(ed.getJSON());
+      if (!doc) return;
+      pending.current = doc;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(flush, SAVE_MS);
+    },
+    onBlur: () => flush(),
+  });
+
+  // A change from elsewhere (another device, the note's editor) is taken up unless the sticky is
+  // being written in right now.
+  const storedKey = stored ? JSON.stringify(stored) : null;
+  useEffect(() => {
+    if (!editor || editor.isDestroyed || storedKey === null || editor.isFocused || pending.current) return;
+    const now = stickyDocFrom(editor.getJSON());
+    if (now && JSON.stringify(now) === storedKey) return;
+    editor.commands.setContent(JSON.parse(storedKey), { emitUpdate: false });
+  }, [editor, storedKey]);
 
   // Dragging: anywhere but the text and the buttons.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -91,7 +134,7 @@ function StickyNote({ note }: { note: Note }) {
   const top = drag ? drag.top : clampTop(place.y * window.innerHeight);
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    if (e.button !== 0 || (e.target as HTMLElement).closest('textarea, button')) return;
+    if (e.button !== 0 || (e.target as HTMLElement).closest('[contenteditable="true"], button')) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     setDrag({ dx: e.clientX - left, dy: e.clientY - top, left, top });
@@ -113,6 +156,12 @@ function StickyNote({ note }: { note: Note }) {
     kind: 'sticky-note',
     data: { noteId: note.id },
     items: () => [
+      ...(editor && stored !== null && editor.view.dom.contains(document.activeElement)
+        ? (Object.keys(MARK_SHORTCUT) as StickyMark[]).map((m) => ({
+          id: `format-${m}`, label: L.format[m], icon: editor.isActive(m) ? '✓' : MARK_ICON[m], shortcut: MARK_SHORTCUT[m],
+          run: () => toggleMark(editor, m),
+        }))
+        : []),
       { id: 'open', label: L.open, icon: '📝', run: openNote },
       {
         id: 'design', label: L.design, submenu: [STICKY_DESIGNS.map((d) => ({
@@ -151,20 +200,7 @@ function StickyNote({ note }: { note: Note }) {
           {L.formatted}
         </button>
       ) : (
-        <textarea
-          className={styles.text}
-          value={text}
-          placeholder={L.placeholder}
-          aria-label={L.text}
-          onFocus={() => setFocused(true)}
-          onBlur={() => { setFocused(false); flush(); }}
-          onChange={(e) => {
-            setText(e.target.value);
-            pending.current = e.target.value;
-            if (timer.current) clearTimeout(timer.current);
-            timer.current = setTimeout(flush, SAVE_MS);
-          }}
-        />
+        <EditorContent editor={editor} className={styles.textHost} />
       )}
     </div>
   );

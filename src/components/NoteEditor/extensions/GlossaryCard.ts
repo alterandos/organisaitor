@@ -15,7 +15,7 @@ import type { NoteObjectContext } from '../objects/types';
 import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, moveFromBlock, openBlockPopover, pillButton, placeBlock, registerEnterableBlock, popoverClass as pop, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { deleteForever, trashedBy } from '@/services/trash';
 import { GlossaryCardBody } from './GlossaryCardBody';
-import { cardToChip, insertGlossaryChip } from './GlossaryChip';
+import { cardToChip, insertGlossaryChip, setChipDesigns } from './GlossaryChip';
 
 // A Glossary card in a note (`\definition`, `\acronym`, `\concept`): one atom node that points at a
 // Glossary record (StructuredTagEntry) by `entryId`, never a copy of it. Marked text in a sentence
@@ -43,6 +43,7 @@ export const GLOSSARY_CARD_DESIGNS_WITH_INLINE: BlockDesign<GlossaryCardDesign>[
   ...GLOSSARY_CARD_DESIGNS,
   { id: 'inline', label: D.inline, icon: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h2.5M12 8h2.5"/><rect x="5" y="5.5" width="6" height="5" rx="2.5"/></svg>' },
 ];
+setChipDesigns(GLOSSARY_CARD_DESIGNS_WITH_INLINE);
 
 // How wide a card is. Standard is one width for every card, so cards in a row sit side by side
 // and look alike; the rest are fractions of the column (dragging the edge snaps to them). Unset

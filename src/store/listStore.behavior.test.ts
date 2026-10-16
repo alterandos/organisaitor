@@ -74,4 +74,24 @@ describe('built-in list types on rehydrate', () => {
     expect(types['lt-custom1']?.name).toBe('Recipes');
     localStorage.removeItem('lists-storage');
   });
+
+  it('a saved copy of a built-in type gains default fields added in code since, keeping the user’s edits', async () => {
+    localStorage.setItem('lists-storage', JSON.stringify({
+      version: 7,
+      state: {
+        lists: {}, listItems: {},
+        listTypes: {
+          'lt-dictionary': { id: 'lt-dictionary', name: 'My words', icon: '📕', color: null, kind: 'reference', isBuiltIn: true,
+            defaultFields: [{ id: 'lf-meaning', name: 'Meaning', type: 'text' }, { id: 'lf-mine', name: 'Mine', type: 'text' }] },
+        },
+      },
+    }));
+    vi.resetModules();
+    const { useListStore: fresh } = await import('@/store/listStore');
+    const dict = fresh.getState().listTypes['lt-dictionary' as never];
+    expect(dict.name).toBe('My words');
+    expect(dict.defaultFields.map((f) => f.id)).toEqual(['lf-meaning', 'lf-mine', 'lf-pos', 'lf-example', 'lf-source', 'lf-added']);
+    expect(dict.titleColumn).toBe('Word');
+    localStorage.removeItem('lists-storage');
+  });
 });

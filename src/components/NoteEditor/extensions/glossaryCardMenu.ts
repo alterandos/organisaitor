@@ -70,6 +70,7 @@ registerContextMenuProvider({
     return [
       { id: 'glossary-chip-open', label: LABELS.glossaryCard.edit, icon: '✎', shortcut: 'Enter', run: () => openChip(view, pos) },
       { id: 'glossary-chip-card', label: LABELS.glossaryCard.showAsCard, icon: '▭', run: () => chipToCard(view, pos) },
+      designMenuItem(GLOSSARY_CARD_DESIGNS_WITH_INLINE, 'inline', (v) => { if (v !== 'inline') chipToCard(view, pos, v); }),
     ];
   },
 });

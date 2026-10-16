@@ -1,7 +1,7 @@
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { ReplaceStep } from '@tiptap/pm/transform';
-import { closeHistory } from '@tiptap/pm/history';
+import { closeHistory, undo as historyUndo } from '@tiptap/pm/history';
 
 // "Offer as you type" (CLAUDE.md, adopted 2026-10-13): a quiet chip after what was just typed that
 // offers to do something with it (link a Glossary term, record an acronym…). Every offer behaves
@@ -16,7 +16,9 @@ import { closeHistory } from '@tiptap/pm/history';
 //     people type straight on, and an offer that vanished on the next key was easy to miss;
 //   - Esc, or letting it go, passes it over: not offered again for the same thing in that
 //     note this session;
-//   - an offer can say how Backspace straight after accepting takes it back.
+//   - Backspace or Ctrl+Z straight after accepting takes it back (CLAUDE.md "Automatic changes
+//     are undoable", 2026-10-17): the offer's own `undo` if it has one, else the history's undo of
+//     the accept step (its own step, through closeHistory).
 // An offer only says what to look for (`find`), what the chip says, and what accepting does.
 
 export interface TypingOfferMatch { from: number; to: number; id: string }
@@ -32,7 +34,8 @@ export interface TypingOfferSpec<O extends TypingOfferMatch> {
   // What accepting does to the document (null: nothing to do). Side effects (a new record) may
   // happen here too.
   accept: (state: EditorState, offer: O) => Transaction | null;
-  // Backspace straight after accepting: what takes it back (null: Backspace is left alone).
+  // Backspace or Ctrl+Z straight after accepting: what takes it back, when more than undoing the
+  // accept step (null: left to the history's undo).
   undo?:  (state: EditorState, offer: O) => Transaction | null;
 }
 
@@ -167,7 +170,18 @@ export function typingOfferPlugin<O extends TypingOfferMatch>(spec: TypingOfferS
       },
       handleKeyDown: (view, event) => {
         const st = key.getState(view.state);
-        if (!st || event.ctrlKey || event.metaKey || event.altKey) return false;
+        if (!st || event.altKey) return false;
+        const undoKey = event.key === 'Backspace' ? !event.ctrlKey && !event.metaKey
+          : (event.key === 'z' || event.key === 'Z') && (event.ctrlKey || event.metaKey) && !event.shiftKey;
+        if (st.accepted && undoKey) {
+          const tr = spec.undo?.(view.state, st.accepted) ?? null;
+          passed().add(st.accepted.id);
+          if (tr) view.dispatch(tr.setMeta(key, { clear: true } satisfies Meta));
+          else if (!historyUndo(view.state, view.dispatch)) return false;
+          event.preventDefault();
+          return true;
+        }
+        if (event.ctrlKey || event.metaKey) return false;
         if (st.offer && !event.shiftKey && (event.key === 'Tab' || (event.key === 'Enter' && !st.lingering))) {
           event.preventDefault();
           return accept(view);
@@ -177,14 +191,6 @@ export function typingOfferPlugin<O extends TypingOfferMatch>(spec: TypingOfferS
           event.stopPropagation();
           passed().add(st.offer.id);
           view.dispatch(view.state.tr.setMeta(key, { clear: true } satisfies Meta));
-          return true;
-        }
-        if (st.accepted && spec.undo && event.key === 'Backspace') {
-          const tr = spec.undo(view.state, st.accepted);
-          if (!tr) return false;
-          passed().add(st.accepted.id);
-          view.dispatch(tr.setMeta(key, { clear: true } satisfies Meta));
-          event.preventDefault();
           return true;
         }
         return false;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { useListStore } from '@/store/listStore';
 import { useListViews, useListItemViews } from '@/store/listViews';
@@ -7,6 +7,8 @@ import { LIST_ITEM_STATUS_META } from '@/types/lists';
 import type { ListItemStatus, ListFieldSchema, ListId, ListItemId } from '@/types/lists';
 import styles from './AddListItemModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { LABELS } from '@/config/labels';
 
 // ── Dynamic field input ───────────────────────────────────────────────────────
 function FieldInput({
@@ -126,6 +128,9 @@ export function AddListItemModal() {
   const existing   = editingListItemId ? listItems[editingListItemId as ListItemId] : null;
   const listId     = (existing?.listId ?? pendingListItemListId) as ListId | null;
   const list       = listId ? lists[listId] : null;
+  // A type that names its items by their title (the Dictionary's word): the form asks for it, and
+  // it is never derived from the first field.
+  const titleColumn = useListStore((s) => (list?.typeId ? s.listTypes[list.typeId]?.titleColumn : undefined));
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -139,16 +144,7 @@ export function AddListItemModal() {
 
   useEscapeClose(() => { closeModal(); });
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        formRef.current?.requestSubmit();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeModal]);
+  useCtrlEnterSubmit(() => formRef.current?.requestSubmit());
 
   const updateFieldData = (fieldId: string, value: unknown) => {
     setData((prev) => ({ ...prev, [fieldId]: value }));
@@ -168,7 +164,7 @@ export function AddListItemModal() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!listId || !list) return;
-    const isReference = list.kind === 'reference';
+    const isReference = list.kind === 'reference' && !titleColumn;
     if (!isReference && !title.trim()) return;
     const cleanData = Object.fromEntries(
       Object.entries(data).filter(([, v]) => v != null && v !== '' && v !== 0)
@@ -217,18 +213,19 @@ export function AddListItemModal() {
             <span className={styles.listBadge}>
               {list.icon ?? '📋'} {list.name}
             </span>
-            <span className={styles.title}>{isEditing ? 'Edit item' : 'New item'}</span>
+            <span className={styles.title}>{isEditing ? LABELS.lists.form.editTitle : LABELS.lists.form.newTitle}</span>
           </div>
-          <button className={styles.closeBtn} onClick={closeModal}>✕</button>
+          <button type="button" className={styles.closeBtn} onClick={closeModal} title={LABELS.lists.form.close} aria-label={LABELS.lists.form.close}>✕</button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit} className={styles.form}>
           {/* Title — watchlist only; reference lists have no mandatory name */}
-          {list.kind !== 'reference' && (
+          {(list.kind !== 'reference' || titleColumn) && (
             <div className={styles.field}>
               <input
                 className={`${styles.input} ${styles.titleInput}`}
-                placeholder="Title…"
+                aria-label={titleColumn ?? LABELS.lists.form.title}
+                placeholder={`${titleColumn ?? LABELS.lists.form.title}…`}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 autoFocus
@@ -240,7 +237,7 @@ export function AddListItemModal() {
           {/* Status — watchlist only */}
           {list.kind === 'watchlist' && (
             <div className={styles.field}>
-              <label className={styles.fieldLabel}>Status</label>
+              <label className={styles.fieldLabel}>{LABELS.lists.form.status}</label>
               <div className={styles.statusRow}>
                 {(Object.entries(LIST_ITEM_STATUS_META) as [ListItemStatus, { label: string; color: string }][]).map(([s, meta]) => (
                   <button
@@ -260,14 +257,14 @@ export function AddListItemModal() {
           {/* Tab picker — only when list has tabs */}
           {(list.tabs?.length ?? 0) > 0 && (
             <div className={styles.field}>
-              <label className={styles.fieldLabel}>Tab</label>
+              <label className={styles.fieldLabel}>{LABELS.lists.form.tab}</label>
               <div className={styles.statusRow}>
                 <button
                   type="button"
                   className={`${styles.statusBtn} ${tabId === null ? styles.statusBtnActive : ''}`}
                   onClick={() => setTabId(null)}
                 >
-                  None
+                  {LABELS.lists.form.noTab}
                 </button>
                 {list.tabs!.map((tab) => (
                   <button
@@ -303,10 +300,10 @@ export function AddListItemModal() {
 
           {/* Notes */}
           <div className={styles.field}>
-            <label className={styles.fieldLabel}>Notes</label>
+            <label className={styles.fieldLabel}>{LABELS.lists.form.notes}</label>
             <textarea
               className={`${styles.textarea} ${styles.notesTextarea}`}
-              placeholder="Notes…"
+              placeholder={LABELS.lists.form.notesHint}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
@@ -315,7 +312,7 @@ export function AddListItemModal() {
 
           {/* Links */}
           <div className={styles.field}>
-            <label className={styles.fieldLabel}>Links</label>
+            <label className={styles.fieldLabel}>{LABELS.lists.form.links}</label>
             {links.length > 0 && (
               <div className={styles.linkList}>
                 {links.map((url, idx) => {
@@ -324,7 +321,7 @@ export function AddListItemModal() {
                   return (
                     <div key={idx} className={styles.linkRow}>
                       <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreview}>{display}</a>
-                      <button type="button" className={styles.removeLinkBtn} onClick={() => removeLink(idx)}>✕</button>
+                      <button type="button" className={styles.removeLinkBtn} onClick={() => removeLink(idx)} title={LABELS.lists.form.removeLink} aria-label={LABELS.lists.form.removeLink}>✕</button>
                     </div>
                   );
                 })}
@@ -339,18 +336,18 @@ export function AddListItemModal() {
                 onChange={(e) => setNewLink(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
               />
-              <button type="button" className={styles.addLinkBtn} onClick={addLink}>Add</button>
+              <button type="button" className={styles.addLinkBtn} onClick={addLink}>{LABELS.lists.form.addLink}</button>
             </div>
           </div>
 
           <div className={styles.actions}>
-            <button type="button" className={styles.cancelBtn} onClick={closeModal}>Cancel</button>
+            <button type="button" className={styles.cancelBtn} onClick={closeModal}>{LABELS.lists.form.cancel}</button>
             <button
               type="submit"
               className={styles.submitBtn}
-              disabled={list?.kind !== 'reference' && !title.trim()}
+              disabled={(list?.kind !== 'reference' || !!titleColumn) && !title.trim()}
             >
-              {isEditing ? 'Save changes' : 'Add item'}
+              {isEditing ? LABELS.lists.form.save : LABELS.lists.form.add}
             </button>
           </div>
         </form>

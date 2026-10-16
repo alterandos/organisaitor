@@ -29,6 +29,8 @@ function type(text: string) {
 }
 const press = (key: string) => editor.view.someProp('handleKeyDown', (f) => f(editor.view, new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })));
 
+const ctrlZ = () => editor.view.someProp('handleKeyDown', (f) => f(editor.view, new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }))) ?? false;
+
 describe('//name in the note editor', () => {
   it('the whole name and a space becomes the letter', () => {
     make();
@@ -70,10 +72,31 @@ describe('shortcuts in the note editor (-->, <=, >=, !=, ^2)', () => {
     expect(editor.getText()).toBe('a <=');
   });
 
+  it('Ctrl+Z straight after puts the typed text back; later it undoes as usual', () => {
+    make();
+    type('a <=');
+    expect(ctrlZ()).toBe(true);
+    expect(editor.getText()).toBe('a <=');
+    make();
+    type('a <= b');
+    ctrlZ();                                  // not straight after: the history's undo
+    expect(editor.getText()).not.toContain('<=');
+  });
+
+  it('chemical formulas get subscripts as typed, whole words and exact case only', () => {
+    make();
+    type('CO2 and H2O2, H2SO4, N2O4; co2 MCO2 H2 F2');
+    expect(editor.getText()).toBe('CO₂ and H₂O₂, H₂SO₄, N₂O₄; co2 MCO2 H2 F2');
+    make();
+    type('O2');
+    press('Backspace');
+    expect(editor.getText()).toBe('O2');
+  });
+
   it('not in code', () => {
     make('<pre><code></code></pre>');
-    type('if (a <= b) x^2 -->');
-    expect(editor.getText()).toContain('if (a <= b) x^2 -->');
+    type('if (a <= b) x^2 --> CO2');
+    expect(editor.getText()).toContain('if (a <= b) x^2 --> CO2');
   });
 });
 

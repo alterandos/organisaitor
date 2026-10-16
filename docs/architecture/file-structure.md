@@ -54,6 +54,7 @@ src/
     notificationStore.ts     — pending in-app notifications + already-notified log (persisted `todo-notifications`)
     voiceStore.ts            — voice dictation status/level for VoiceIndicator (memory-only, written by services/speech/dictation.ts)
     trashStore.ts            — Recycling Bin: TrashEntry snapshots (persisted `trash-storage`, IndexedDB), see "Recycling Bin" above
+    pictureStore.ts          — the picture library (persisted `pictures-storage`, IndexedDB; synced `pictures`); use only through services/pictures.ts
   services/sync/
     syncService.ts           — Supabase push/pull
     mappers.ts               — xToRow / rowToX for every entity
@@ -67,12 +68,11 @@ src/
   dictionary.ts / dictionaryActions.ts — the Dictionary: words kept in a built-in list, meanings fetched (Free Dictionary API, Wiktionary), use counts
   services/noteHubs.ts      — idea hubs: addPassageToHub (marks the passage, links it in the hub; Undo), addLinkToHub (a Glossary term or a note), setLinkRelation, removeLink (takes the passage's mark off), openHub / openHubLink / openHubFromMarker, listHubs
   services/noteContentEdit.ts — editNoteContent(noteId, tabId, { inEditor, inJson }): THE way to change a note's content from outside the editor (through the open editor if that text is open, else the stored JSON); editNoteText(…, schema, edit) when the editor's schema is at hand
-  services/stickyNotes.ts   — sticky notes: notes in the Stickies notebook (presetKey 'stickies'); addSticky, setStickyText (plain text, through editNoteContent), plainTextOf, removeSticky (to the Recycling Bin, Undo)
+  services/stickyNotes.ts   — sticky notes: notes in the Stickies notebook (presetKey 'stickies'); addSticky, setStickyContent (paragraphs with bold/italic/underline/strike, through editNoteContent), stickyDocOf/stickyDocFrom/stickyText, removeSticky (to the Recycling Bin, Undo)
   services/glossaryDelete.ts — deleting a Glossary record: asks (saying how many links go too), then removes every link to it in every note
   services/noteLinkTargets.ts — what a note link or embed points at: noteDocFor, linkTarget (the passage as it reads now), ensureBlockId, openNoteLink
   services/liveNoteEditor.ts — THE registry of open note editors (one per pane side by side): registerOpenNoteEditor, the one in front via registerLiveNoteEditor/liveNote(); liveNoteEditorFor(noteId, tabId), liveNoteFor(noteId), liveNotes(), liveNoteOf(view), flushOpenNoteEditors(). A change to a note's content from outside the editor goes through that view when it's open
   services/clearLocalData.ts — clearSyncedLocalData(): empties every CLOUD-SYNCED store + the account-specific selection ids (each reset from its own getInitialState()). Local-only stores (fitness, routine instances, settings, hotkeys, portfolio columnConfig) are deliberately left; add a store here in the same change that gives it cloud sync
-  services/shrinkNoteImages.ts — shrinkNoteImages(): recompresses every large inline image in every note and tab (skips locked encrypted notes; closes the open note first so the editor can't autosave its old copy over the result); Settings → Storage's button
   services/oauthState.ts    — mintOAuthState(provider): the single-use nonce used as the OAuth `state` for Strava/Google connect (migration 032; on Android it also records the client, migration 041, falling back if that isn't run); never put a credential in an OAuth URL. openOAuthFlow(provider, url): THE way a connect button starts the flow — a page navigation on web/desktop, the in-app browser on Android (resolves when the flow returns or the browser closes)
   services/android/deepLinks.ts — THE organisaitor:// router on Android: registerDeepLink(host, handler), startDeepLinks() (one appUrlOpen listener + the cold-start launch URL), started from one effect in App.tsx. A feature adds a route here, never its own appUrlOpen listener
   services/android/oauthReturn.ts — the `oauth-done` route: what the callbacks send an Android flow back to (closes the browser, settles openOAuthFlow, navigates like the web's ?strava/?googleCalendar return, toast). Server half: api/_lib/oauthReturn.ts
@@ -90,6 +90,7 @@ src/
   utils/noteHubs.ts         — hubs read from stored note content (hubsInContent, collectHubs), RELATIONS, linkInsertIndex
   components/NotesSection/MapView.tsx — the Map (a Place): notes joined by their links, and optionally the items linked to them; lazy (React Flow, dagre)
   utils/noteMap.ts          — the Map's graph (buildNoteMap, noteTargetsIn), pure
+  utils/noteBackdrop.ts     — which backdrop a note shows (resolveNoteBackdrop: its own, its notebook's and those above, the app-wide one), pure
   utils/richText.ts         — a little formatting in a block's own fields: sanitizeInlineHtml, richToPlain, richLines (Glossary cards)
   components/NoteEditor/blockFieldFormat.ts — formatFocusedBlockField: the ribbon's formatting buttons on a focused card field
   utils/noteLinks.ts        — links between notes read from stored content: linksToNote, unlinkedMentions, mentionRange, passagesOf, findBlock, passageRange
@@ -102,6 +103,7 @@ src/
   services/taskCalendarLinks.ts — keeps a task's shadow CalendarDeadline (deadline date) and event (scheduled date) matching the task, and flows edits made on the event back — the one place that logic lives (see "Task ⇄ calendar shadow entries" in Implemented features); like crossAppLinkCleanup it may import both taskStore and calendarStore
   services/taskDeadlineMigration.ts — migrateTaskDeadlineShadows(), called once from App.tsx's startup effect: converts any pre-2026-09-27 task shadow that's still a `CalendarReminder` with `reminderType: 'task'` into a `CalendarDeadline` with `deadlineType: 'task'` and repoints the owning task's `calendarDeadlineId`. State-driven (looks for legacy shadows still present, not a run-once flag), so it's naturally idempotent — see "Deadline calendar kind" in Implemented features
   services/trashCapture.ts  — moveToTrash(kind, entity): the write half of the Recycling Bin, called from inside every store's own delete* action. Deliberately imports NO domain store (only trashStore) so every domain store can import it without an import cycle — see "Recycling Bin" above
+  services/pictures.ts      — THE picture library (backdrops, note text, Glossary cards): add (stored once; encrypted for an encrypted note), show (usePictureSrc, onPicturesChange), place (setBackdrop, pictureRef), uses, delete everywhere; initPictures keeps encrypted notes' pictures encrypted — see CLAUDE.md "Picture library"
   services/trash.ts         — restoreFromTrash(entryId)/deleteForever(entryId), trashedBy(run)/restoreAllFromTrash(ids): the restore half, imports every domain store to write a snapshot back; never imported by a store or by trashCapture.ts (import cycle)
   services/undoableActions.ts — archiveTaskWithUndo / deleteTaskWithUndo: act at once, then an Undo toast (decision D2: swipe-left and action-sheet paths; pane footers keep their confirm dialog). Delete's Undo restores every Recycling Bin entry the delete made
   services/noteSecrets.ts    — the encrypted-notes model: NoteSecrets/EntrySecrets shapes, the memory-only plaintext cache, noteView()/entryView()/isNoteLocked() (the ONE way to read a possibly-encrypted note), the serialized re-encrypt queue (queueEncrypt/flushEncryptions) — see "Client-side encryption for Notes — comprehensive"
@@ -135,6 +137,7 @@ src/
     notes.ts                 — Note/NoteTag Endeavour resolution: getEffectiveCollectionId, resolveNoteInheritedCollectionId, getNoteEffectiveCollectionId, getVisibleNoteTagIds, getNoteBreadcrumb (a note's location as a string, e.g. in the note picker)
     noteQuestions.ts         — questions in notes (collectQuestions, for the Overview) and questionSubject ("What is osmosis?" → "osmosis")
     acronymInference.ts      — rules-based acronym finding (Schwartz & Hearst, refined): inferAcronymFromSelection, deduceAcronym (first letters), acronymLetterPositions (which letters spell it), acronymPairAtEnd (for the as-you-type offer)
+    blockOffers.ts           — rules for spotting writing that is a block as it is typed: quoteJustTyped, typesJustTyped, prosConsJustTyped
     collections.ts           — getOrderedEndeavours(collectionsRecord): Projects then Lists, in CollectionFilterPicker's render order; shared by the picker and the Ctrl+E digit-select hotkey
     fitnessFormat.ts         — Fitness display formatting (metric only, Phase 1): formatDistance, formatDuration, formatSpeed, computeAverageSpeedMps. Stored data is always SI (meters/seconds/m·s⁻¹); conversion happens only here, at render time
     fitnessActivityTypes.ts  — getActivityType() (graceful fallback if a type was deleted) and getTopActivityTypes() (usage-ranked, for the AddActivityModal pill row)
@@ -146,7 +149,7 @@ src/
     definitionInference.ts   — inferDefinitionFromSelection: term + meaning from "X is Y" / "X: Y" / a term and its sentence, for the Definition and Concept popover
     idbStorage.ts            — IndexedDB persistence for the notes store: preloadIdbStorage() (awaited in main.tsx before the app is imported), persistStorageIdb(), readPersistedValue()/writePersistedValue() for backup/restore, IDB_STORAGE_KEYS, getIdbUsage()
     persistStorage.ts        — THE `storage:` for every persist() (guards QuotaExceededError, see Zustand migration rule) + getStorageUsage()/formatStorageSize() for Settings → Storage
-    imageCompress.ts         — compressImageBlob(file) / recompressDataUrl(dataUrl): scale to fit 1600 px + WebP, used on paste into notes and by shrinkNoteImages
+    imageCompress.ts         — compressImageBlob(file) / recompressDataUrl(dataUrl): scale to fit 1600 px + WebP; called only by services/pictures.ts (and squareIconDataUrl by block icons)
     noteTabs.ts              — MAIN_TAB_ID ('__main__'), tabDatesText (a tab's created/modified, the tab bar's hover), linkTabIdFor / effectiveLinkTabId / tabNameOf: how a CrossAppRef.tabId (a link naming one tab of a note) is recorded, resolved (deleted tab → main) and named
     keywords.ts              — extractKeywords(text) (stop-words/short words dropped, max 8) + stemForMatch(word); used by NotePickerModal's title-keyword suggestions
     noteSearchText.ts        — getNoteTabTexts(note): cached plain text of a note's main tab and each extra tab for searching (never caches encrypted notes); read a note's text for search through this, not by re-parsing its JSON
@@ -277,12 +280,13 @@ src/
       NoteLinksFrom.tsx — the note's foot: notes linking here, unlinked mentions
       objects/noteRefTrigger.ts, objects/embedBlock.ts — the `\ref` and `\embed` keywords
       extensions/Question.ts, Compare.ts, Diagram.ts — the question, comparison and diagram blocks (their menus: questionMenu.ts, compareMenu.ts, diagramMenu.ts)
-      extensions/typingOffer.ts — THE "offer as you type" chip (typingOfferPlugin): Enter/Tab accept, Esc or typing on passes over, Backspace undoes; used by GlossaryAutolink and AcronymOffer
+      extensions/typingOffer.ts — THE "offer as you type" chip (typingOfferPlugin): Enter/Tab accept, Esc or typing on passes over, Backspace undoes; used by GlossaryAutolink, AcronymOffer and BlockOffers
       extensions/TrailingLine.ts — always an empty line after a block that ends a section or column
       extensions/AcronymOffer.ts — offers to record "Long form (ABC)" as an acronym as it's typed
+      extensions/BlockOffers.ts — offers a quote, a types block or pros and cons as matching writing is typed (rules in utils/blockOffers.ts)
       extensions/blockDesigns.ts     — Block designs, the shared half: BlockDesign, blockPill, designButtons, designMenuItem, pillButton, openBlockPopover, selectBlock / deleteBlock / selectButton, frames (blockFrameAttributes, setBlockFrame, openFrameOptions, applyFrameAttrs, the frame-fit plugin) (+ BlockDesigns.module.css for the popovers)
       extensions/blockPicks.ts       — Ctrl+click picks parts of a block (BLOCK_PART_NODES), Delete / copy / cut them together; Ctrl+Alt+click selects the whole block
-      NoteBackdrop.tsx               — the room below the end of a note (plain grey, a preset from config/noteBackdrops.ts, or the user's picture; settingsStore.noteBackdrop) and its picker
+      NoteBackdrop.tsx               — the room below the end of a note (the note's own backdrop, else its notebook's, else the app-wide one: utils/noteBackdrop.ts), its picker (apply to this note / its notebook / all notes; the picture library) and BackdropField for the note and notebook edit modals
       extensions/ConceptRef.ts       — ConceptRefMark (text linked to a Glossary term) + ConceptMargin (the brace and label beside it, hover card, click to the definition) — see "Annotations"
       extensions/Importance.ts       — Important's levels, passages, Review later scheduling and the margin markers; importanceLevels.ts holds the three levels
       extensions/annotationMenu.ts   — right-click on linked text (go to definition, unlink) and on Important text (level, review, remove)

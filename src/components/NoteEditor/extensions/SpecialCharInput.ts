@@ -9,9 +9,11 @@ import { hideCharPicker, showCharPicker } from '@/specialChars/charPicker';
 // code, where `//` is a comment.
 //
 // The shortcuts (`-->` → →, `<=` → ≤, `^2` → ²; SHORTCUTS in charSets.ts) are an input rule, so
-// Backspace straight after puts the typed text back (Tiptap's undoInputRule) and code is skipped.
+// Backspace or Ctrl+Z straight after puts the typed text back (Tiptap's undoInputRule; Ctrl+Z
+// does this for every input rule, as word processors do for an automatic change) and code is
+// skipped. Chemical formulas (`CO2` → CO₂, CHEMICAL_FORMULAS) go through the same rule.
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const SHORTCUT_FIND = new RegExp(`(?:${SHORTCUTS.map((s) => escapeRe(s.typed)).join('|')}|(?:\\^|[⁰¹²³⁴⁵⁶⁷⁸⁹])[0-9])$`);
+const SHORTCUT_FIND = new RegExp(`(?:${SHORTCUTS.map((s) => escapeRe(s.typed)).join('|')}|(?:\\^|[⁰¹²³⁴⁵⁶⁷⁸⁹])[0-9]|(?:^|[^\\p{L}\\p{N}])[A-Z][A-Za-z0-9₀-₉]*)$`, 'u');
 
 interface Typing { from: number; to: number; matches: CharMatch[] }
 
@@ -32,6 +34,10 @@ export const SpecialCharInput = Extension.create({
   name: 'specialCharInput',
   // Before the other typing helpers (the `\` menu, Glossary links), so its keys win while it's up.
   priority: 140,
+
+  addKeyboardShortcuts() {
+    return { 'Mod-z': () => this.editor.commands.undoInputRule() };
+  },
 
   addInputRules() {
     return [new InputRule({

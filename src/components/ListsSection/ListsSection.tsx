@@ -18,22 +18,19 @@ import { RowAction } from '@/components/RowHoverActions/RowAction';
 import { ChecklistView } from './ChecklistView';
 import { LABELS } from '@/config/labels';
 
-import { log } from '@/utils/log';
+import { log, errorMessage } from '@/utils/log';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { isTypingTarget } from '@/utils/typingTarget';
+import { DICTIONARY_TYPE_ID, refreshDictionaryFields } from '@/services/dictionary';
 // Sidebar group order. Anything that isn't a checklist or watchlist (custom types included) is Reference.
 const KIND_GROUPS: ListKind[] = ['checklist', 'watchlist', 'reference'];
 const groupOf = (l: List): ListKind => (l.kind === 'checklist' || l.kind === 'watchlist' ? l.kind : 'reference');
 
 // ── Status filter (watchlist only) ────────────────────────────────────────────
 type StatusFilter = 'all' | ListItemStatus;
-const STATUS_TABS: { id: StatusFilter; label: string }[] = [
-  { id: 'all',         label: 'All'         },
-  { id: 'want',        label: 'Want'        },
-  { id: 'in-progress', label: 'In Progress' },
-  { id: 'done',        label: 'Done'        },
-];
+const STATUS_TABS: { id: StatusFilter; label: string }[] = (['all', 'want', 'in-progress', 'done'] as const)
+  .map((id) => ({ id, label: LABELS.lists.statusTabs[id] }));
 
 function hostnameOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
@@ -153,7 +150,7 @@ function ItemCard({
             autoFocus
             className={styles.inlineTitleInput}
             defaultValue={item.title}
-            onBlur={(e) => { const v = e.target.value.trim(); v ? onTitleSave(v) : onCancelEdit(); }}
+            onBlur={(e) => { const v = e.target.value.trim(); if (v) onTitleSave(v); else onCancelEdit(); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
               if (e.key === 'Escape') { e.stopPropagation(); onCancelEdit(); }
@@ -163,8 +160,8 @@ function ItemCard({
           <span className={styles.itemTitle} onClick={() => onStartEdit('title')}>{item.title}</span>
         )}
         <div className={styles.itemCardActions}>
-          <button className={styles.itemActionBtn} onClick={onEdit} title="Edit">✎</button>
-          <button className={`${styles.itemActionBtn} ${styles.itemDeleteBtn}`} onClick={onDelete} title="Remove">✕</button>
+          <button className={styles.itemActionBtn} onClick={onEdit} title={LABELS.lists.editItem} aria-label={LABELS.lists.editItem}>✎</button>
+          <button className={`${styles.itemActionBtn} ${styles.itemDeleteBtn}`} onClick={onDelete} title={LABELS.lists.removeItem} aria-label={LABELS.lists.removeItem}>✕</button>
         </div>
       </div>
 
@@ -301,14 +298,14 @@ function SidebarListItem({
       </RowOptionsMenu>
       <div className={styles.sidebarItemInfo}>
         <TruncatedText text={list.name} className={styles.sidebarItemName} />
-        <span className={styles.sidebarItemCount}>{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
+        <span className={styles.sidebarItemCount}>{LABELS.lists.itemCount(itemCount)}</span>
       </div>
       {list.isEncrypted && (
         <button
           className={styles.lockBtn}
           onClick={(e) => { e.stopPropagation(); onDecrypt(); }}
-          title="Encrypted list. Click to decrypt it"
-          aria-label="Decrypt this list"
+          title={LABELS.lists.encryptedHint}
+          aria-label={LABELS.lists.decrypt}
         >🔒</button>
       )}
     </div>
@@ -448,6 +445,13 @@ export function ListsSection() {
     return selectedList.fieldSchema ?? [];
   })();
   const showTabBar  = hasTabs || addingTab;
+  // A type that names its items by their title (the Dictionary's word) shows it as the first column.
+  const titleColumn = selectedList?.typeId ? listTypes[selectedList.typeId]?.titleColumn : undefined;
+
+  const selectedTypeId = selectedList?.typeId;
+  useEffect(() => {
+    if (selectedTypeId === DICTIONARY_TYPE_ID) refreshDictionaryFields();
+  }, [selectedListId, selectedTypeId]);
 
   function handleSelectList(id: ListId) {
     useRecentItemsStore.getState().recordVisit('list', id);
@@ -521,7 +525,7 @@ export function ListsSection() {
   const countByStatus = (s: ListItemStatus) => allItemsInList.filter((i) => i.status === s).length;
 
   const handleDeleteList = async (id: ListId, name: string) => {
-    if (!(await confirmDelete('list', name, 'All its items will be deleted too.'))) return;
+    if (!(await confirmDelete(LABELS.list.toLowerCase(), name, LABELS.lists.deleteListDetail))) return;
     deleteListWithCleanup(id);
   };
 
@@ -599,15 +603,15 @@ export function ListsSection() {
       >
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <div className={styles.sidebarHeader}>
-          <span className={styles.sidebarTitle}>My Lists</span>
-          <button className={styles.sidebarNewBtn} onClick={showAddList} title="New list">+</button>
+          <span className={styles.sidebarTitle}>{LABELS.lists.myLists}</span>
+          <button className={styles.sidebarNewBtn} onClick={showAddList} title={LABELS.lists.newList} aria-label={LABELS.lists.newList}>+</button>
         </div>
 
         <div className={styles.sidebarList}>
           {allLists.length === 0 ? (
             <div className={styles.sidebarEmpty}>
-              <span>No lists yet</span>
-              <button className={styles.sidebarEmptyBtn} onClick={showAddList}>Create one</button>
+              <span>{LABELS.lists.noLists}</span>
+              <button className={styles.sidebarEmptyBtn} onClick={showAddList}>{LABELS.lists.createOne}</button>
             </div>
           ) : (
             sidebarGroups.map((g) => (
@@ -627,9 +631,9 @@ export function ListsSection() {
         {!selectedList ? (
           <div className={styles.emptyMain}>
             <span className={styles.emptyIcon}>📋</span>
-            <p className={styles.emptyTitle}>No list selected</p>
-            <p className={styles.emptyHint}>Create a list to get started</p>
-            <button className={styles.emptyCreateBtn} onClick={showAddList}>New list</button>
+            <p className={styles.emptyTitle}>{LABELS.lists.noneSelected}</p>
+            <p className={styles.emptyHint}>{LABELS.lists.getStarted}</p>
+            <button className={styles.emptyCreateBtn} onClick={showAddList}>{LABELS.lists.newList}</button>
           </div>
         ) : (
           <>
@@ -652,10 +656,8 @@ export function ListsSection() {
                   <button
                     className={styles.headerIconBtn}
                     onClick={() => requestDecrypt('list', selectedList.id)}
-                    title={selectedListLocked
-                      ? 'Encrypted — locked on this device. Click to decrypt this list'
-                      : 'Encrypted list. Click to decrypt it'}
-                    aria-label="Decrypt this list"
+                    title={selectedListLocked ? LABELS.lists.lockedHint : LABELS.lists.encryptedHint}
+                    aria-label={LABELS.lists.decrypt}
                   >🔒</button>
                 )}
                 {!selectedList.isEncrypted && (
@@ -665,14 +667,12 @@ export function ListsSection() {
                     onClick={() => {
                       encryptList(selectedList.id as ListId).catch((err) => {
                         log.error('ListsSection', 'could not encrypt list', err);
-                        void alertDialog(err instanceof Error ? err.message : 'Could not encrypt this list.');
+                        void alertDialog(`${LABELS.lists.encryptFailed} ${errorMessage(err)}`);
                       });
                     }}
-                    title={vaultUnlocked
-                      ? 'Encrypt this list (fully encrypts content uploaded to the cloud)'
-                      : 'Unlock encryption in Account first'}
+                    title={vaultUnlocked ? LABELS.lists.encryptHint : LABELS.lists.unlockFirst}
                   >
-                    🔒 Encrypt
+                    🔒 {LABELS.lists.encrypt}
                   </button>
                 )}
                 {!selectedListLocked && (
@@ -680,7 +680,8 @@ export function ListsSection() {
                     <button
                       className={styles.headerIconBtn}
                       onClick={() => openEditList(selectedList.id)}
-                      title="Edit list"
+                      title={LABELS.lists.editList}
+                      aria-label={LABELS.lists.editList}
                     >✎</button>
                   </>
                 )}
@@ -690,11 +691,9 @@ export function ListsSection() {
             {selectedListLocked ? (
               <div className={styles.emptyMain}>
                 <span className={styles.emptyIcon}>🔒</span>
-                <p className={styles.emptyTitle}>This list is encrypted</p>
-                <p className={styles.emptyHint}>
-                  Encryption is locked on this device. Unlock it in Account to see this list’s contents.
-                </p>
-                <button className={styles.emptyCreateBtn} onClick={openAccount}>Unlock encryption</button>
+                <p className={styles.emptyTitle}>{LABELS.lists.lockedTitle}</p>
+                <p className={styles.emptyHint}>{LABELS.lists.lockedBody}</p>
+                <button className={styles.emptyCreateBtn} onClick={openAccount}>{LABELS.lists.unlock}</button>
               </div>
             ) : (
             <>
@@ -758,7 +757,7 @@ export function ListsSection() {
                   <input
                     ref={tabInputRef}
                     className={styles.tabAddInput}
-                    placeholder="Tab name…"
+                    placeholder={LABELS.lists.tabName}
                     value={newTabName}
                     onChange={(e) => setNewTabName(e.target.value)}
                     onKeyDown={(e) => {
@@ -774,7 +773,8 @@ export function ListsSection() {
                   <button
                     className={styles.tabAddShortcut}
                     onClick={() => { setAddingTab(true); setNewTabName(''); }}
-                    title="Add tab"
+                    title={LABELS.lists.addTab}
+                    aria-label={LABELS.lists.addTab}
                   >+</button>
                 )}
               </div>
@@ -810,7 +810,7 @@ export function ListsSection() {
             ) : isWatchlist ? (
               <div className={styles.itemsGrid}>
                 {displayedItems.length === 0 && allItemsInList.length > 0 && (
-                  <p className={styles.gridEmptyHint}>No items match this filter</p>
+                  <p className={styles.gridEmptyHint}>{LABELS.lists.noMatch}</p>
                 )}
                 {displayedItems.map((item) => (
                   <ItemCard
@@ -831,7 +831,8 @@ export function ListsSection() {
                 <button
                   className={styles.addItemTile}
                   onClick={() => showAddListItem(selectedList.id, selectedTabId !== 'all' ? selectedTabId : null)}
-                  title="Add item"
+                  title={LABELS.lists.addItem}
+                  aria-label={LABELS.lists.addItem}
                 >
                   <span className={styles.addItemTileIcon}>+</span>
                 </button>
@@ -841,6 +842,7 @@ export function ListsSection() {
                 <table className={styles.refTable}>
                   <thead>
                     <tr>
+                      {titleColumn && <th>{titleColumn}</th>}
                       {tableFieldSchema.map((f) => (
                         <th key={f.id}>{f.name}</th>
                       ))}
@@ -850,6 +852,22 @@ export function ListsSection() {
                   <tbody>
                     {displayedItems.map((item) => (
                       <tr key={item.id}>
+                        {titleColumn && (
+                          editingCell?.itemId === item.id && editingCell.field === 'title' ? (
+                            <td>
+                              <FieldInput
+                                field={{ id: 'title', name: titleColumn, type: 'text' }}
+                                value={item.title}
+                                onSave={(v) => { if (typeof v === 'string' && v.trim()) updateListItem(item.id as ListItemId, { title: v.trim() }); setEditingCell(null); }}
+                                onCancel={() => setEditingCell(null)}
+                              />
+                            </td>
+                          ) : (
+                            <td className={styles.refCellClickable} onClick={() => setEditingCell({ itemId: item.id, field: 'title' })}>
+                              <span className={styles.refCellTitle}>{item.title}</span>
+                            </td>
+                          )
+                        )}
                         {tableFieldSchema.map((f) => {
                           if (f.type === 'boolean') {
                             return (
@@ -904,12 +922,14 @@ export function ListsSection() {
                             <button
                               className={styles.rowActionBtn}
                               onClick={() => openEditListItem(item.id)}
-                              title="Edit"
+                              title={LABELS.lists.editItem}
+                              aria-label={LABELS.lists.editItem}
                             >✎</button>
                             <button
                               className={`${styles.rowActionBtn} ${styles.rowDeleteBtn}`}
                               onClick={() => handleDeleteItem(item)}
-                              title="Delete"
+                              title={LABELS.lists.deleteItem}
+                              aria-label={LABELS.lists.deleteItem}
                             >✕</button>
                           </div>
                         </td>
@@ -920,11 +940,11 @@ export function ListsSection() {
                       onClick={() => showAddListItem(selectedList.id, selectedTabId !== 'all' ? selectedTabId : null)}
                     >
                       <td
-                        colSpan={tableFieldSchema.length + 1}
+                        colSpan={tableFieldSchema.length + (titleColumn ? 2 : 1)}
                         className={styles.addItemTableCell}
                       >
                         <span className={styles.addItemTableIcon}>+</span>
-                        <span className={styles.addItemTableLabel}>Add item</span>
+                        <span className={styles.addItemTableLabel}>{LABELS.lists.addItem}</span>
                       </td>
                     </tr>
                   </tbody>

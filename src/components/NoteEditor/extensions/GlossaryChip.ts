@@ -8,7 +8,7 @@ import { LABELS } from '@/config/labels';
 import { useNoteStore } from '@/store/noteStore';
 import { glossaryEntry } from '@/services/glossary';
 import { GlossaryCardBody } from './GlossaryCardBody';
-import { placeBlock, typeIntoBlockPlugin } from './blockDesigns';
+import { blockPill, designButtons, placeBlock, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { entryCardContent } from './ConceptRef';
 
 // A Glossary record shown inside a line of text (the card family's Inline design, agreed with the
@@ -17,7 +17,9 @@ import { entryCardContent } from './ConceptRef';
 // the same record always show the same thing. Hovering shows the whole record; a click opens the
 // full card on the line below (a widget, drawn while open and never stored), a click again closes
 // it. "Show as a card" turns it into the card block after its line, and a card's Inline design
-// turns it back.
+// turns it back. The chip offers the card's designs too (its open card's pill, Design ▸ on
+// right-click, Ctrl+] / Ctrl+[), so the way back is where the way in was (fixed 2026-10-16: a
+// chip had no design choice anywhere but its right-click menu, and looked stuck).
 
 export const GlossaryChip = Node.create({
   name: 'glossaryChip',
@@ -111,7 +113,7 @@ export function cardToChip(view: EditorView, pos: number): void {
 
 // "Show as a card" on a chip: the card block after the chip's line (the line goes if the chip was
 // all it held).
-export function chipToCard(view: EditorView, pos: number): void {
+export function chipToCard(view: EditorView, pos: number, variant: 'card' | 'compact' = 'card'): void {
   const state = view.state;
   const chip = state.doc.nodeAt(pos);
   const cardType = state.schema.nodes.glossaryCard;
@@ -120,7 +122,7 @@ export function chipToCard(view: EditorView, pos: number): void {
   const prev = state.doc.resolve(pos).nodeBefore;
   if (prev?.isText && prev.text?.endsWith(' ')) from -= 1;
   const tr = state.tr.delete(from, pos + chip.nodeSize).setMeta(chipKey, { close: pos } satisfies ChipMeta);
-  const at = placeBlock(tr, Math.min(from, tr.doc.content.size), cardType.create({ entryId: chip.attrs.entryId }));
+  const at = placeBlock(tr, Math.min(from, tr.doc.content.size), cardType.create({ entryId: chip.attrs.entryId, variant }));
   if (at === null) return;
   view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, at)).scrollIntoView());
   view.focus();
@@ -258,16 +260,27 @@ class GlossaryChipView {
 // edits the same record the same way. Esc, Ctrl+Enter or an arrow past its first or last field
 // closes it and puts the cursor beside the chip.
 
+// The card's designs, set by GlossaryCard.ts (which imports this file, so it can't be imported back).
+let chipDesigns: readonly BlockDesign<'card' | 'compact' | 'inline'>[] = [];
+export function setChipDesigns(designs: readonly BlockDesign<'card' | 'compact' | 'inline'>[]): void { chipDesigns = designs; }
+
 function openCard(view: EditorView, chipPos: number, entryId: string, focus: { n: number; text: string } | null): HTMLElement {
   const dom = document.createElement('div');
   dom.setAttribute('data-glossary-chip-card', '');
   dom.contentEditable = 'false';
-  const root = createRoot(dom);
-  let shown: string[] = [];
+  const body = document.createElement('div');
   const pos = () => {
     const found = (chipKey.getState(view.state)?.open ?? []).find((p) => view.state.doc.nodeAt(p)?.attrs.entryId === entryId);
     return found ?? chipPos;
   };
+  if (view.editable && chipDesigns.length) {
+    const bar = blockPill('data-glossary-tools');
+    bar.append(designButtons(chipDesigns, 'inline', (v) => { if (v !== 'inline') chipToCard(view, pos(), v); }));
+    dom.append(bar);
+  }
+  dom.append(body);
+  const root = createRoot(body);
+  let shown: string[] = [];
   const close = (forward = true) => closeChip(view, pos(), forward);
   const render = () => root.render(createElement(GlossaryCardBody, {
     entryId,

@@ -101,6 +101,18 @@ describe('linking to the Glossary as you type', () => {
     expect(editor.state.doc.textContent).toBe('A eukaryote');
   });
 
+  it('Ctrl+Z straight after linking takes the link off, and the offer isn’t made again in this note', () => {
+    make();
+    type('A eukaryote');
+    press('Enter');
+    const e = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+    expect(editor.view.someProp('handleKeyDown', (f) => f(editor.view, e))).toBe(true);
+    expect(links()).toEqual([]);
+    expect(editor.state.doc.textContent).toBe('A eukaryote');
+    type(' and another eukaryote');
+    expect(chip()).toBeNull();
+  });
+
   it('once per note: not offered again after linking, or after passing it over', () => {
     make();
     type('A eukaryote');

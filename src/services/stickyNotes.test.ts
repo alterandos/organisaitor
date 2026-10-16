@@ -3,7 +3,10 @@ import { useNoteStore } from '@/store/noteStore';
 import { useStickyStore } from '@/store/stickyStore';
 import { useTrashStore } from '@/store/trashStore';
 import { useToastStore } from '@/store/toastStore';
-import { addSticky, docForText, plainTextOf, removeSticky, setStickyText, stickiesNotebook, stickyNotes } from './stickyNotes';
+import { addSticky, docForText, removeSticky, setStickyContent, stickiesNotebook, stickyDocOf, stickyNotes, stickyText } from './stickyNotes';
+
+const textOf = (json: string) => { const d = stickyDocOf(json); return d ? stickyText(d) : null; };
+const setText = (id: string, text: string) => setStickyContent(id, stickyDocOf(docForText(text))!);
 
 beforeEach(() => {
   useNoteStore.setState(useNoteStore.getInitialState(), true);
@@ -29,29 +32,42 @@ describe('sticky notes', () => {
 
   it('write plain text into the note, its first line the title', () => {
     const id = addSticky();
-    setStickyText(id, 'Buy milk\n\nand eggs');
+    setText(id, 'Buy milk\n\nand eggs');
     const note = useNoteStore.getState().notes[id];
     expect(note.title).toBe('Buy milk');
-    expect(plainTextOf(note.content)).toBe('Buy milk\n\nand eggs');
+    expect(textOf(note.content)).toBe('Buy milk\n\nand eggs');
   });
 
-  it('read plain paragraphs back, but not a note with formatting', () => {
-    expect(plainTextOf('')).toBe('');
-    expect(plainTextOf(docForText('one\ntwo'))).toBe('one\ntwo');
+  it('read paragraphs with bold, italic, underline and strikethrough back, but not a note with more', () => {
+    expect(textOf('')).toBe('');
+    expect(textOf(docForText('one\ntwo'))).toBe('one\ntwo');
     const bold = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x', marks: [{ type: 'bold' }] }] }] });
     const heading = JSON.stringify({ type: 'doc', content: [{ type: 'heading', content: [{ type: 'text', text: 'x' }] }] });
-    expect(plainTextOf(bold)).toBeNull();
-    expect(plainTextOf(heading)).toBeNull();
+    const coloured = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x', marks: [{ type: 'textStyle', attrs: { color: 'red' } }] }] }] });
+    expect(textOf(bold)).toBe('x');
+    expect(textOf(heading)).toBeNull();
+    expect(textOf(coloured)).toBeNull();
   });
 
   it('removing one deletes its note to the Recycling Bin, and Undo brings it back', () => {
     const id = addSticky();
-    setStickyText(id, 'Keep me');
+    setText(id, 'Keep me');
     removeSticky(id);
     expect(stickies()).toHaveLength(0);
     expect(Object.keys(useTrashStore.getState().entries)).toHaveLength(1);
     useToastStore.getState().current!.actions![0].onClick();
     expect(stickies().map((n) => n.id)).toEqual([id]);
     expect(useStickyStore.getState().places[id]).toBeDefined();
+  });
+
+  it('keep their bold, italic, underline and strikethrough, the title from the plain text', () => {
+    const id = addSticky();
+    const doc = { type: 'doc', content: [{ type: 'paragraph', content: [
+      { type: 'text', text: 'Buy ', marks: [{ type: 'bold' }] }, { type: 'text', text: 'milk', marks: [{ type: 'italic' }, { type: 'underline' }] },
+    ] }, { type: 'paragraph', content: [{ type: 'text', text: 'not', marks: [{ type: 'strike' }] }] }] };
+    setStickyContent(id, stickyDocOf(JSON.stringify(doc))!);
+    const note = useNoteStore.getState().notes[id];
+    expect(note.title).toBe('Buy milk');
+    expect(stickyDocOf(note.content)).toEqual(doc);
   });
 });

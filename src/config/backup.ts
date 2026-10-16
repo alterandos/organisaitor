@@ -25,6 +25,7 @@ export const PERSISTED_STORAGE_KEYS = [
   'notes-stickies',     // stickyStore: where each sticky note sits on this device's screen, and its design
   'trash-storage',      // trashStore: Recycling Bin — deleted-item snapshots — lives in IndexedDB, not
                         // localStorage: read/write it via readPersistedValue/writePersistedValue (same as notes-storage)
+  'pictures-storage',   // pictureStore: the picture library (backdrops) — IndexedDB, like notes-storage
   'todo-ui-session',    // uiStore: navigation/session memory (active section, back/forward
                          // history, each section's last-open item + tab, filters) — modal/
                          // pane open-states are NOT included, see uiStore.ts's partialize

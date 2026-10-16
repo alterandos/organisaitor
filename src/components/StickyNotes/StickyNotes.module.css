@@ -26,23 +26,36 @@
 }
 .dragging { cursor: grabbing; }
 
+.textHost {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+/* The editing surface (the ProseMirror element, given this class in StickyNotes.tsx). */
 .text {
   flex: 1;
   min-height: 6rem;
   max-height: 22rem;
-  field-sizing: content;
+  overflow-y: auto;
   padding: 0;
-  border: none;
   outline: none;
-  background: transparent;
   color: inherit;
   font: inherit;
   font-size: var(--text-sm);
   line-height: 1.45;
-  resize: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   cursor: text;
 }
-.text::placeholder { color: var(--sticky-ink-soft); }
+.text p { margin: 0; }
+.text :global(p.is-editor-empty:first-child)::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--sticky-ink-soft);
+  pointer-events: none;
+}
 .text:focus-visible { outline: 1px dashed var(--sticky-ink-soft); outline-offset: 3px; }
 
 .message {

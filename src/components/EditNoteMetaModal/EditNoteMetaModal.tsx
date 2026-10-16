@@ -12,6 +12,7 @@ import styles from './EditNoteMetaModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
+import { BackdropField } from '@/components/NoteEditor/NoteBackdrop';
 
 // Render a flat list of tags in depth-first tree order with indentation
 function buildTagList(
@@ -170,6 +171,11 @@ function EditNoteMetaForm({ note }: { note: Note }) {
                 />
               ))}
             </div>
+          </section>
+
+          {/* ── Backdrop (applies at once) ────────────────────────────────── */}
+          <section className={styles.section}>
+            <BackdropField note={note} />
           </section>
 
           {/* ── Pinned ────────────────────────────────────────────────────── */}

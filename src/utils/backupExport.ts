@@ -8,6 +8,7 @@ import { useListStore } from '@/store/listStore';
 import { useNoteStore } from '@/store/noteStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useTrashStore } from '@/store/trashStore';
+import { usePictureStore } from '@/store/pictureStore';
 import { useOverviewStore } from '@/store/overviewStore';
 import { forceUpload, markRestored } from '@/services/sync/syncService';
 import { getBackupSnapshot } from '@/services/autoBackupStorage';
@@ -79,6 +80,7 @@ export async function restoreBackupData(backup: Record<string, unknown>, userId:
     usePortfolioStore.persist.rehydrate(),
     useTrashStore.persist.rehydrate(),
     useOverviewStore.persist.rehydrate(),
+    usePictureStore.persist.rehydrate(),
   ]);
 
   if (userId) {

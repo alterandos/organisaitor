@@ -125,6 +125,13 @@ type Command = (state: EditorState, dispatch?: (tr: Transaction) => void) => boo
 
 const newItem = (state: EditorState) => state.schema.nodes.typesItem.create(null, FIELDS.map((f) => state.schema.nodes[f].create()));
 
+// A types block for `category`, with `count` empty types: what the types offer (BlockOffers.ts)
+// puts after "There are three types of …:".
+export function typesNodeFor(state: EditorState, category: string, count: number): PMNode {
+  const { types, typesCategory } = state.schema.nodes;
+  return types.create(null, [typesCategory.create(null, category ? state.schema.text(category) : null), ...Array.from({ length: count }, () => newItem(state))]);
+}
+
 // `\types`: replaces from..to (what was typed and the space before it) with a types block of three
 // empty types, the cursor in the category.
 export function insertTypes(state: EditorState, from: number, to: number): Transaction | null {

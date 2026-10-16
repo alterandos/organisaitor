@@ -49,6 +49,10 @@ export interface ListType {
   kind:          ListKind;
   defaultFields: ListFieldSchema[];
   isBuiltIn:     boolean;
+  // A reference list whose items are named by their title (the Dictionary's word) rather than by
+  // their first field: the table shows the title as its first column under this heading, and the
+  // item form asks for it. Built-in types only (set in code, never persisted).
+  titleColumn?:  string;
 }
 
 // ── List ──────────────────────────────────────────────────────────────────────

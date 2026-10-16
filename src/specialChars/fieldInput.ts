@@ -10,7 +10,8 @@ import { hideCharPicker, showCharPicker, type CaretBox } from './charPicker';
 // puts the character in, Esc keeps the text. Typing the whole name and a space does it too.
 //
 // Shortcuts (`-->` → →, `<=` → ≤, `^2` → ²; SHORTCUTS in charSets.ts) replace as they're typed,
-// except in URL, email and search fields; Backspace straight after puts the typed text back.
+// except in URL, email and search fields; Backspace or Ctrl+Z straight after puts the typed text
+// back (the browser's own undo doesn't see a replace made by script).
 
 const TEXT_TYPES = new Set(['text', 'search', 'url', 'email', 'tel', '']);
 
@@ -24,7 +25,7 @@ interface Open { field: Field; start: number; end: number; matches: CharMatch[];
 let open: Open | null = null;
 
 const NO_SHORTCUTS = new Set(['url', 'email', 'search']);
-// The last shortcut made, so Backspace straight after can put the typed text back.
+// The last shortcut made, so Backspace or Ctrl+Z straight after can put the typed text back.
 let lastShortcut: { field: Field; at: number; char: string; typed: string } | null = null;
 
 function close() {
@@ -86,7 +87,9 @@ function onInput(e: Event) {
 // Enter, a pane's Ctrl+Enter) while the list is up.
 function onKeyDown(e: KeyboardEvent) {
   const s = lastShortcut;
-  if (s && e.key === 'Backspace' && e.target === s.field && !e.ctrlKey && !e.altKey && !e.metaKey
+  const undoKey = e.key === 'Backspace' ? !e.ctrlKey && !e.metaKey
+    : (e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey;
+  if (s && undoKey && e.target === s.field && !e.altKey
       && s.field.selectionStart === s.at && s.field.selectionEnd === s.at
       && s.field.value.slice(s.at - s.char.length, s.at) === s.char) {
     e.preventDefault();

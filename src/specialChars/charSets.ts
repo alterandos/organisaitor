@@ -129,11 +129,37 @@ export const SHORTCUTS: { typed: string; char: string }[] = [
 ];
 
 const SUPERSCRIPT_DIGITS = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+const SUBSCRIPT_DIGITS = '₀₁₂₃₄₅₆₇₈₉';
+
+// Common chemical formulas, which get their digits as subscripts (`CO2` → CO₂) as the last
+// character is typed, the same as the shortcuts above (the user's ask, 2026-10-16). Only whole
+// words and exact case, so `co2` and `MCO2` are left alone. Left out on purpose: H2 (a year's
+// second half, an HTML heading), F2 (the key) and I2.
+export const CHEMICAL_FORMULAS: ReadonlySet<string> = new Set([
+  'O2', 'O3', 'N2', 'Cl2', 'Br2', 'H2O', 'H2O2', 'H2S', 'CO2', 'SO2', 'SO3', 'NO2', 'N2O', 'N2O4',
+  'NH3', 'CH4', 'C2H2', 'C2H4', 'C2H6', 'C3H8', 'C4H10', 'C8H18', 'CH2O', 'CH3OH', 'C2H5OH',
+  'CH3COOH', 'C6H12O6', 'H2SO4', 'HNO3', 'H3PO4', 'H2CO3', 'HClO4', 'CaCO3', 'NaHCO3', 'Na2CO3',
+  'K2CO3', 'CaCl2', 'MgCl2', 'CaSO4', 'MgSO4', 'CuSO4', 'KNO3', 'NaNO3', 'KMnO4', 'Fe2O3', 'Fe3O4',
+  'Al2O3', 'SiO2', 'TiO2', 'P4O10',
+]);
+
+// The formula word the text before the cursor ends with (subscripts read as digits, so `H₂O2`
+// is H2O2), with its digits as subscripts.
+function findFormula(before: string): { start: number; char: string; typed: string } | null {
+  const m = /(?:^|[^\p{L}\p{N}])([A-Z][A-Za-z0-9₀-₉]*)$/u.exec(before);
+  if (!m) return null;
+  const word = m[1];
+  const plain = word.replace(/[₀-₉]/g, (d) => String(SUBSCRIPT_DIGITS.indexOf(d)));
+  if (!CHEMICAL_FORMULAS.has(plain)) return null;
+  const char = plain.replace(/[0-9]/g, (d) => SUBSCRIPT_DIGITS[Number(d)]);
+  if (char === word) return null;
+  return { start: before.length - word.length, char, typed: word };
+}
 
 // The shortcut the text before the cursor has just completed, if any (`before` ends with the
 // character just typed): what to replace from `start` to the end, and with what. `^` and a digit
 // give the superscript digit; a digit typed straight after a superscript digit stays superscript,
-// so `^23` gives ²³.
+// so `^23` gives ²³. A chemical formula's digits become subscripts (CHEMICAL_FORMULAS).
 export function findShortcut(before: string): { start: number; char: string; typed: string } | null {
   for (const s of SHORTCUTS) {
     if (before.endsWith(s.typed)) return { start: before.length - s.typed.length, char: s.char, typed: s.typed };
@@ -145,5 +171,5 @@ export function findShortcut(before: string): { start: number; char: string; typ
       ? { start: sup.index, char, typed: sup[0] }
       : { start: before.length - 1, char, typed: sup[2] };
   }
-  return null;
+  return findFormula(before);
 }

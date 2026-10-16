@@ -74,6 +74,7 @@ import { NotificationCenter } from '@/components/NotificationCenter/Notification
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
 import { HistoryBrowser } from '@/components/HistoryBrowser/HistoryBrowser';
+import { initPictures } from '@/services/pictures';
 import { installSpecialCharInput } from '@/specialChars/fieldInput';
 import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog/ConfirmDialog';
@@ -250,7 +251,7 @@ export default function App() {
   }, [isAndroid]);
 
   useNotificationChecker();
-  useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initAutoBackup(); migrateTaskDeadlineShadows(); }, []);
+  useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initPictures(); initAutoBackup(); migrateTaskDeadlineShadows(); }, []);
   // `//name` → a character (Greek, arrows, maths, super/subscripts) in every text field (src/specialChars/).
   useEffect(() => installSpecialCharInput(), []);
 

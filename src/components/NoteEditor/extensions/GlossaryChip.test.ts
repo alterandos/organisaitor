@@ -9,6 +9,8 @@ import { ConceptRefMark } from './ConceptRef';
 import { NoteBlockSelect } from './blockDesigns';
 import { GlossaryCardExtensions } from './GlossaryCard';
 import { GlossaryChipExtensions, cardToChip, chipKey, chipToCard, closeChip, toggleChip } from './GlossaryChip';
+import { cycleBlockDesign } from './designCycle';
+import { NodeSelection } from '@tiptap/pm/state';
 import { NoteListItem } from './ListItem';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { noteClipboardText } from '../noteClipboardText';
@@ -153,6 +155,24 @@ describe('Glossary chips (the Inline design)', () => {
     await flush();
     expect(asked.count).toBe(0);
     expect(entry(id)).toBeDefined();
+  });
+
+  it('a chip offers the card designs back: its open card’s pill, and Ctrl+] / Ctrl+[ on a selected chip', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Osmosis', fields: {}, noteId, collectionId: null });
+    await make(`<p>See <span data-type="glossary-chip" data-entry-id="${id}"></span> later</p>`);
+    act(() => toggleChip(editor.view, chips()[0].pos));
+    await flush();
+    const designs = [...editor.view.dom.querySelectorAll('[data-glossary-chip-card] [data-block-design]')] as HTMLButtonElement[];
+    expect(designs.map((b) => b.getAttribute('data-block-design'))).toEqual(['card', 'compact', 'inline']);
+    expect(designs[2].getAttribute('aria-pressed')).toBe('true');
+    act(() => designs[1].click());
+    expect(chips()).toHaveLength(0);
+    expect(editor.state.doc.nodeAt(cards()[0].pos)?.attrs.variant).toBe('compact');
+    act(() => cardToChip(editor.view, cards()[0].pos));
+    act(() => { editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, chips()[0].pos))); });
+    act(() => { cycleBlockDesign(editor.view, 1); });
+    expect(chips()).toHaveLength(0);
+    expect(editor.state.doc.nodeAt(cards()[0].pos)?.attrs.variant).toBe('card');
   });
 
   it('a chip counts as where the term is defined: listed in the Glossary, copied as its term, and deleting the last one asks', async () => {

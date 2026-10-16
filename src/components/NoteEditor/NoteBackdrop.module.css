@@ -175,3 +175,107 @@
 [data-backdrop="sunset"] {
   background: linear-gradient(180deg, #fde68a 0%, #fb923c 55%, #be185d 100%);
 }
+
+/* ── Apply to: this note / its notebook / all notes ─────────────────────── */
+.scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.scope {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 4px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.scope:hover { color: var(--color-text); }
+.scopeSel { border-color: var(--color-primary); background: var(--color-primary); color: var(--color-on-primary); }
+.scopeSel:hover { color: var(--color-on-primary); }
+
+.subheading { margin-top: 12px; }
+
+/* ── The picture library: each picture with its delete ─────────────────── */
+.pictureCell { position: relative; min-width: 0; }
+.pictureCell .swatch { width: 100%; }
+
+.deletePicture {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.pictureCell:hover .deletePicture,
+.deletePicture:focus-visible { opacity: 1; }
+.deletePicture:hover { color: var(--color-danger); }
+
+@media (hover: none) {
+  .deletePicture { opacity: 1; }
+}
+
+/* ── The field in a note's or notebook's edit modal ─────────────────────── */
+.field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fieldLabel {
+  flex: 1 0 100%;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.fieldButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 3px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.fieldButton:hover { background: var(--color-surface-alt); }
+
+.fieldFill {
+  display: block;
+  width: 56px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--color-overscroll);
+  background-size: cover;
+  background-position: center;
+}
+
+.fieldHint { color: var(--color-muted); font-size: var(--text-xs); }

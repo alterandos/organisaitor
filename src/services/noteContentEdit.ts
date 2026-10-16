@@ -17,9 +17,6 @@ import type { NoteId } from '@/types';
 // A caller gives both halves of its change: `inEditor` on the open editor's transaction, `inJson`
 // on the stored JSON string (return the new string, or null for no change). A caller that has the
 // editor's schema can use editNoteText instead and write the change once.
-//
-// Deliberate exception: services/shrinkNoteImages.ts closes the open note before it starts, so
-// there's never an editor to go through; it writes the store directly.
 
 export interface NoteContentEdit {
   inEditor: (tr: Transaction) => boolean;     // false: change nothing

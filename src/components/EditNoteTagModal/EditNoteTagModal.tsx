@@ -11,6 +11,7 @@ import styles from './EditNoteTagModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
+import { BackdropField } from '@/components/NoteEditor/NoteBackdrop';
 
 const FIELD_TYPES: { value: NoteTagFieldType; label: string }[] = [
   { value: 'text',    label: 'Text'   },
@@ -148,6 +149,13 @@ export function EditNoteTagModal() {
                 onChange={(id) => setCollectionId(id)}
                 noneLabel={`No ${LABELS.collection}`}
               />
+            </div>
+          )}
+
+          {/* ── Backdrop (notebooks only; applies at once) ─────────────── */}
+          {!isAnnotationTag && (
+            <div className={styles.field}>
+              <BackdropField notebook={tag} />
             </div>
           )}
 

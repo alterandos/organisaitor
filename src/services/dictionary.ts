@@ -10,7 +10,7 @@ import type { List, ListId, ListItemId, ListTypeId } from '@/types/lists';
 // The Dictionary (asked for 2026-10-15): everyday words the user wants to keep, as a built-in list
 // in Lists (type DICTIONARY_TYPE_ID; made the first time a word is added). Different from the
 // Glossary, which is for the terms a subject is built on: this is general vocabulary. A word's
-// meaning is fetched from the internet when it's added (the Free Dictionary API, then Wiktionary),
+// meaning is fetched from the internet when it's added (Wiktionary, then the Free Dictionary API),
 // unless the user writes their own; every occurrence of a dictionary word in a note shows it on
 // hover (extensions/DictionaryWords.ts), with how often it's used across the notes — counted when
 // asked, from the notes' search text, never tracked while typing.
@@ -30,14 +30,21 @@ export function dictionaryList(): List | null {
   return lists[0] ?? null;
 }
 
+// A Dictionary list made before a field was added to the type (part of speech, example) gains it:
+// when a word is added, and when the list is opened (ListsSection).
+export function refreshDictionaryFields(): void {
+  const existing = dictionaryList();
+  if (!existing) return;
+  const have = new Set(listView(existing).fieldSchema.map((f) => f.id));
+  const missing = (useListStore.getState().listTypes[DICTIONARY_TYPE_ID]?.defaultFields ?? []).filter((f) => !have.has(f.id));
+  if (missing.length) useListStore.getState().updateList(existing.id, { fieldSchema: [...listView(existing).fieldSchema, ...missing] });
+}
+
 function ensureDictionaryList(): ListId {
   const existing = dictionaryList();
   const type = useListStore.getState().listTypes[DICTIONARY_TYPE_ID];
   if (existing) {
-    // A list made before a field was added to the type (part of speech, example) gains it.
-    const have = new Set(listView(existing).fieldSchema.map((f) => f.id));
-    const missing = (type?.defaultFields ?? []).filter((f) => !have.has(f.id));
-    if (missing.length) useListStore.getState().updateList(existing.id, { fieldSchema: [...listView(existing).fieldSchema, ...missing] });
+    refreshDictionaryFields();
     return existing.id;
   }
   return useListStore.getState().addList({
@@ -82,45 +89,58 @@ export const cleanWord = (text: string): string => text.trim().replace(/^[^\p{L}
 // Read defensively: it comes from outside the app.
 const htmlText = (html: string) => new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
 
+// Wiktionary first (asked for 2026-10-16: the Free Dictionary API went down, which the browser
+// reports as a CORS error); it answers cross-origin. Its English entries come before Translingual
+// ones, and senses that are only a label (empty once the HTML is gone) are skipped.
+async function fromWiktionary(w: string): Promise<Definition | null> {
+  const res = await fetch(`https://en.wiktionary.org/api/rest_v1/page/definition/${w}`);
+  if (!res.ok) return null;
+  type Sense = { partOfSpeech?: unknown; language?: unknown; definitions?: { definition?: unknown; examples?: unknown }[] };
+  const data = await res.json() as { en?: unknown };
+  const senses = (Array.isArray(data.en) ? data.en as Sense[] : []).slice()
+    .sort((a, b) => Number(b?.language === 'English') - Number(a?.language === 'English'));
+  for (const sense of senses) {
+    for (const d of Array.isArray(sense?.definitions) ? sense.definitions : []) {
+      if (typeof d?.definition !== 'string') continue;
+      const text = htmlText(d.definition);
+      if (!text) continue;
+      const ex = Array.isArray(d.examples) ? d.examples.find((x): x is string => typeof x === 'string') : undefined;
+      return {
+        meaning: text,
+        partOfSpeech: typeof sense.partOfSpeech === 'string' ? sense.partOfSpeech.toLowerCase() : '',
+        example: ex ? htmlText(ex) : '',
+        source: LABELS.dictionary.sourceWiktionary,
+      };
+    }
+  }
+  return null;
+}
+
+async function fromFreeDictionary(w: string): Promise<Definition | null> {
+  const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);
+  if (!res.ok) return null;
+  const data: unknown = await res.json();
+  const first = Array.isArray(data) ? data[0] as { meanings?: { partOfSpeech?: unknown; definitions?: { definition?: unknown; example?: unknown }[] }[] } : null;
+  const m = first?.meanings?.find((x) => typeof x?.definitions?.[0]?.definition === 'string');
+  const d = m?.definitions?.[0];
+  if (typeof d?.definition !== 'string' || !d.definition.trim()) return null;
+  return {
+    meaning: d.definition.trim(),
+    partOfSpeech: typeof m?.partOfSpeech === 'string' ? m.partOfSpeech.toLowerCase() : '',
+    example: typeof d.example === 'string' ? d.example.trim() : '',
+    source: LABELS.dictionary.sourceFreeDictionary,
+  };
+}
+
 export async function fetchDefinition(word: string): Promise<Definition | null> {
   const w = encodeURIComponent(word.toLowerCase());
   try {
-    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);
-    if (res.ok) {
-      const data: unknown = await res.json();
-      const first = Array.isArray(data) ? data[0] as { meanings?: { partOfSpeech?: unknown; definitions?: { definition?: unknown; example?: unknown }[] }[] } : null;
-      const m = first?.meanings?.find((x) => typeof x?.definitions?.[0]?.definition === 'string');
-      const d = m?.definitions?.[0];
-      if (typeof d?.definition === 'string' && d.definition.trim()) {
-        return {
-          meaning: d.definition.trim(),
-          partOfSpeech: typeof m?.partOfSpeech === 'string' ? m.partOfSpeech.toLowerCase() : '',
-          example: typeof d.example === 'string' ? d.example.trim() : '',
-          source: LABELS.dictionary.sourceFreeDictionary,
-        };
-      }
-    }
-  } catch (e) { log.warn('dictionary', 'Free Dictionary API failed', errorMessage(e)); }
-  try {
-    const res = await fetch(`https://en.wiktionary.org/api/rest_v1/page/definition/${w}`);
-    if (res.ok) {
-      const data = await res.json() as { en?: { partOfSpeech?: unknown; definitions?: { definition?: unknown; examples?: unknown }[] }[] };
-      const sense = data.en?.find((x) => typeof x?.definitions?.[0]?.definition === 'string');
-      const d = sense?.definitions?.[0];
-      if (typeof d?.definition === 'string') {
-        const text = htmlText(d.definition);
-        if (text) {
-          const ex = Array.isArray(d.examples) ? d.examples.find((x): x is string => typeof x === 'string') : undefined;
-          return {
-            meaning: text,
-            partOfSpeech: typeof sense?.partOfSpeech === 'string' ? sense.partOfSpeech.toLowerCase() : '',
-            example: ex ? htmlText(ex) : '',
-            source: LABELS.dictionary.sourceWiktionary,
-          };
-        }
-      }
-    }
+    const def = await fromWiktionary(w);
+    if (def) return def;
   } catch (e) { log.warn('dictionary', 'Wiktionary failed', errorMessage(e)); }
+  try {
+    return await fromFreeDictionary(w);
+  } catch (e) { log.warn('dictionary', 'Free Dictionary API failed', errorMessage(e)); }
   return null;
 }
 

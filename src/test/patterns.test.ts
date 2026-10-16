@@ -814,10 +814,10 @@ describe('pattern: one shared helper where copies used to be', () => {
   });
 
   // A note's text changed from outside its editor goes through services/noteContentEdit.ts (through
-  // the open editor when the text is open). NoteEditor's own save, the store, and shrinkNoteImages
-  // (which closes the open note first) are the only other writers.
+  // the open editor when the text is open). NoteEditor's own save and the store are the only other
+  // writers.
   it("a note's content is changed from outside the editor only through editNoteContent", () => {
-    const allowed = /(services[/\\]noteContentEdit|services[/\\]shrinkNoteImages|NoteEditor[/\\]NoteEditor|store[/\\]noteStore)\.tsx?$/;
+    const allowed = /(services[/\\]noteContentEdit|NoteEditor[/\\]NoteEditor|store[/\\]noteStore)\.tsx?$/;
     // Shared test fixtures (src/test/) seed a note's content; that isn't a change made to a note.
     const files = SOURCE_FILES.filter((f) => !allowed.test(f) && !/src[/\\]test[/\\]/.test(f));
     const hits = findMatches(files, /updateNoteTabContent\(|updateNote\([^)]*\{\s*content\b/, { skipComments: true });
@@ -919,6 +919,37 @@ describe('pattern: offers made as you type come from one helper (CLAUDE.md "Offe
     const files = SOURCE_FILES.filter((f) => !/typingOffer\.ts$/.test(f) && !/\.test\.tsx?$/.test(f));
     const hits = findMatches(files, /setAttribute\('data-autolink-chip'/);
     expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: automatic changes as you type are undoable straight after (CLAUDE.md "Automatic changes are undoable")', () => {
+  it('every rich-text editor loads SpecialCharInput (its Mod-z undoes any input rule)', () => {
+    const editors = SOURCE_FILES.filter((f) => /useEditor\(|new Editor\(/.test(fs.readFileSync(f, 'utf8')));
+    expect(editors.length).toBeGreaterThan(0);
+    const missing = editors.filter((f) => !/\bSpecialCharInput\b/.test(fs.readFileSync(f, 'utf8'))).map(rel);
+    expect(missing).toEqual([]);
+    expect(fs.readFileSync(path.join(SRC, 'components/NoteEditor/extensions/SpecialCharInput.ts'), 'utf8'))
+      .toMatch(/'Mod-z':\s*\(\)\s*=>\s*this\.editor\.commands\.undoInputRule\(\)/);
+  });
+
+  it('text fields and typing offers take Ctrl+Z as well as Backspace', () => {
+    for (const f of ['specialChars/fieldInput.ts', 'components/NoteEditor/extensions/typingOffer.ts']) {
+      expect(fs.readFileSync(path.join(SRC, f), 'utf8'), f).toMatch(/key === 'z'/);
+    }
+  });
+});
+
+describe('pattern: pictures are stored once, through services/pictures.ts (CLAUDE.md "Picture library")', () => {
+  it('only the service, sync, backup and the sign-out wipe touch pictureStore', () => {
+    const allowed = ['src/services/pictures.ts', 'src/services/sync/syncService.ts', 'src/utils/backupExport.ts', 'src/services/clearLocalData.ts', 'src/store/pictureStore.ts'];
+    const hits = SOURCE_FILES.filter((f) => /@\/store\/pictureStore/.test(fs.readFileSync(f, 'utf8'))).map(rel).filter((r) => !allowed.includes(r));
+    expect(hits).toEqual([]);
+  });
+
+  it('nothing compresses a picture to keep inline: only the library does (block icons are exempt, BACKLOG.md)', () => {
+    const known = ['src/services/pictures.ts', 'src/utils/imageCompress.ts'];
+    const hits = SOURCE_FILES.filter((f) => /compressImageBlob\(/.test(fs.readFileSync(f, 'utf8'))).map(rel).filter((r) => !known.includes(r));
+    expect(hits).toEqual([]);
   });
 });
 

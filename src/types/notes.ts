@@ -1,5 +1,6 @@
 // ── Branded ID types ───────────────────────────────────────────────────────────
 import type { CollectionId } from './index';
+import type { PictureId } from './pictures';
 
 export type NoteId = string & { readonly _brand: 'NoteId' };
 export type NoteTagId = string & { readonly _brand: 'NoteTagId' };
@@ -56,7 +57,17 @@ export interface Note {
   // parentId, tabOrder, templateId, collectionId, and all timestamps.
   isEncrypted: boolean;
   encryptedPayload: string | null;
+  // What fills the room below the note; absent or null = as its notebook (then the app-wide
+  // setting). See utils/noteBackdrop.ts.
+  backdrop?: NoteBackdropChoice | null;
 }
+
+// A note's or notebook's own backdrop (config/noteBackdrops.ts lists the presets; a picture is
+// in the picture library, services/pictures.ts).
+export type NoteBackdropChoice =
+  | { kind: 'plain' }
+  | { kind: 'preset'; id: string }
+  | { kind: 'picture'; pictureId: PictureId };
 
 // ── NoteTag entity (hierarchical) ──────────────────────────────────────────────
 export interface NoteTag {
@@ -72,6 +83,7 @@ export interface NoteTag {
   fieldSchema: NoteTagFieldDef[];     // Attributes that can be filled per note (meaningful for kind='tag')
   presetKey?: string;                 // Set when created from a preset pack (e.g. 'academic'); undefined = fully user-created
   collectionId: CollectionId | null;  // Endeavour this notebook belongs to (meaningful for kind='area'); notes tagged with this notebook inherit it on create
+  backdrop?: NoteBackdropChoice | null; // Notebooks only: the backdrop its notes (and sub-notebooks) take unless they choose their own; absent/null = as its parent
   createdAt: string;                  // ISO 8601
   updatedAt: string;
   userId: string;

@@ -45,11 +45,19 @@ describe('the Dictionary', () => {
     expect(Object.keys(useListStore.getState().listItems).filter((id) => useListStore.getState().listItems[id as never].listId === list.id)).toHaveLength(1);
   });
 
-  it('falls back to Wiktionary; with nothing found (or offline) the word is kept, its meaning left to write', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => (url.includes('wiktionary')
-      ? { ok: true, json: async () => ({ en: [{ partOfSpeech: 'Noun', definitions: [{ definition: 'A <b>small</b> thing', examples: ['a <i>mote</i> of dust'] }] }] }) }
-      : notFound)));
+  it('asks Wiktionary first (English before Translingual, label-only senses skipped); with nothing found (or offline) the word is kept, its meaning left to write', async () => {
+    const fetchMock = vi.fn(async (url: string) => (url.includes('wiktionary')
+      ? { ok: true, json: async () => ({ en: [
+        { language: 'Translingual', partOfSpeech: 'Symbol', definitions: [{ definition: 'A code' }] },
+        { language: 'English', partOfSpeech: 'Noun', definitions: [{ definition: '<span class="usage-label-sense"></span>' }, { definition: 'A <b>small</b> thing', examples: ['a <i>mote</i> of dust'] }] },
+      ] }) }
+      : freeDictionary('Not asked')));
+    vi.stubGlobal('fetch', fetchMock);
     expect(await fetchDefinition('mote')).toEqual({ meaning: 'A small thing', partOfSpeech: 'noun', example: 'a mote of dust', source: 'Wiktionary (CC BY-SA)' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Wiktionary down or without the word: the Free Dictionary API.
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => { if (url.includes('wiktionary')) throw new Error('CORS'); return freeDictionary('Tiny.'); }));
+    expect(await fetchDefinition('mote')).toMatchObject({ meaning: 'Tiny.', source: 'Free Dictionary API' });
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
     const r = await addToDictionary('zzyzx');
     expect(r).toMatchObject({ existed: false, found: false });
@@ -64,7 +72,7 @@ describe('the Dictionary', () => {
     const w = dictionaryWords().get('liminal')!;
     const item = useListStore.getState().listItems[w.itemId];
     useListStore.getState().updateListItem(w.itemId, { data: { ...item.data, [DICT_FIELDS.meaning]: 'My own meaning' } });
-    answer(freeDictionary('Occupying a threshold.'));
+    answer({ ok: true, json: async () => ({ en: [{ language: 'English', partOfSpeech: 'Adjective', definitions: [{ definition: 'Occupying a threshold.' }] }] }) });
     await pending;
     expect(dictionaryWords().get('liminal')?.meaning).toBe('My own meaning');
   });

@@ -543,7 +543,8 @@ export interface CreateScheduleInput {
 // ── UI-only types (never persisted) ───────────────────────────────────────────
 export type TaskViewMode  = 'focused' | 'overview';
 // ── Note types (from notes.ts) ──────────────────────────────────────────────────
-export type { NoteId, NoteTagId, Note, NoteTab, NoteTag, CreateNoteInput, CreateNoteTagInput, NoteTagFieldDef, NoteTagFieldType, StructuredTagEntryId, StructuredTagEntry } from './notes';
+export type { NoteId, NoteTagId, Note, NoteTab, NoteTag, CreateNoteInput, CreateNoteTagInput, NoteTagFieldDef, NoteTagFieldType, StructuredTagEntryId, StructuredTagEntry, NoteBackdropChoice } from './notes';
+export type { Picture, PictureId } from './pictures';
 
 // ── List types (from lists.ts) ───────────────────────────────────────────────
 export type {

@@ -1,8 +1,6 @@
-import { useState } from 'react';
 import { LABELS } from '@/config/labels';
 import { formatStorageSize, getStorageUsage } from '@/utils/persistStorage';
 import { getIdbUsage } from '@/utils/idbStorage';
-import { shrinkNoteImages } from '@/services/shrinkNoteImages';
 import styles from './SettingsPane.module.css';
 
 const SHOWN = 5;
@@ -15,21 +13,10 @@ const allUsage = () => [
 
 // Settings → Storage: how much of the browser's localStorage each part of the app is using (the
 // whole site gets roughly 5 MB, though notes live in IndexedDB now — see utils/persistStorage.ts and
-// utils/idbStorage.ts), and the one-click way to shrink large images pasted into notes.
+// utils/idbStorage.ts).
 export function StorageSection() {
   const L = LABELS.storage;
-  const [usage, setUsage]     = useState(allUsage);
-  const [working, setWorking] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const shrink = async () => {
-    setWorking(true);
-    setMessage(null);
-    const result = await shrinkNoteImages();
-    setUsage(allUsage());
-    setMessage(result.images === 0 ? L.shrinkNothing : L.shrinkDone(result.images, result.notes, formatStorageSize(result.savedChars)));
-    setWorking(false);
-  };
+  const usage = allUsage();
 
   return (
     <section className={styles.section}>
@@ -48,16 +35,6 @@ export function StorageSection() {
             </li>
           ))}
         </ul>
-      </div>
-
-      <div className={styles.setting}>
-        <div className={styles.settingInfo}>
-          <span className={styles.settingName}>{L.shrinkName}</span>
-          <span className={styles.settingDesc}>{message ?? L.shrinkDesc}</span>
-        </div>
-        <button type="button" className={styles.hotkeysResetAllBtn} onClick={shrink} disabled={working}>
-          {working ? L.shrinking : L.shrinkButton}
-        </button>
       </div>
     </section>
   );

@@ -72,6 +72,7 @@ import { ColorDotIcon, DisclosureIcon, PinIcon, TextColorIcon } from '@/componen
 import { SWATCHES, swatchLabel } from '@/config/swatches';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { AcronymOffer } from './extensions/AcronymOffer';
+import { BlockOffers } from './extensions/BlockOffers';
 import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
 import { SpecialCharInput } from './extensions/SpecialCharInput';
 import { StickyHeadings } from './StickyHeadings';
@@ -86,7 +87,7 @@ import { SelectionMenu } from './objects/SelectionMenu';
 import './extensions/annotationMenu';
 import { liveNote, registerLiveNoteEditor, registerOpenNoteEditor } from '@/services/liveNoteEditor';
 import { LABELS } from '@/config/labels';
-import { compressImageBlob } from '@/utils/imageCompress';
+import { addPicture } from '@/services/pictures';
 import { FloatingToolbar, type FloatingToolbarActions } from './FloatingToolbar';
 import './contextMenu';
 import { NoteViewMenu } from '@/components/NoteSplitView/NoteViewMenu';
@@ -365,17 +366,15 @@ interface NoteEditorProps {
   pane?: { index: number; noteId: string | null; focused: boolean; ribbon: HTMLElement | null };
 }
 
-// Scrolls the editor so the text at pos sits near the top of the view (a fifth of the way down),
-// where it reads as "here it is" rather than wherever the browser's nearest-edge scroll leaves it.
-function showNearTop(view: import('@tiptap/pm/view').EditorView, pos: number) {
+// Scrolls the editor's scroll host so the text at pos sits `fraction` of the way down the view:
+// 1/5 reads as "here it is" (a passage opened from elsewhere), 1/2 is the middle (the cursor
+// when a note is returned to). One helper so every "show this place" scroll agrees.
+function scrollPosTo(view: import('@tiptap/pm/view').EditorView, pos: number, fraction: number, behavior: ScrollBehavior = 'auto') {
+  const host = scrollHostOf(view.dom);
+  if (!host) return;
   try {
-    const { node } = view.domAtPos(pos);
-    const el = node.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node.parentElement;
-    let scroller = el?.parentElement ?? null;
-    while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
-    if (!el || !scroller) return;
-    const offset = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-    scroller.scrollTo({ top: Math.max(0, scroller.scrollTop + offset - scroller.clientHeight / 5), behavior: 'smooth' });
+    const offset = view.coordsAtPos(pos).top - host.getBoundingClientRect().top;
+    host.scrollTo({ top: Math.max(0, host.scrollTop + offset - host.clientHeight * fraction), behavior });
   } catch { /* not laid out */ }
 }
 
@@ -738,6 +737,23 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       now:          new Date(),
     };
   }
+  // Whether the open note is encrypted, for its pictures (null while locked or none is open).
+  function openNoteEncrypted(): boolean | null {
+    const id = currentNoteIdRef.current;
+    const n = id ? useNoteStore.getState().notes[id as NoteId] : undefined;
+    return !n || isNoteLocked(n) ? null : n.isEncrypted;
+  }
+
+  // A picture pasted into the note: into the picture library (encrypted in an encrypted note),
+  // then a node that refers to it.
+  async function insertPicture(view: import('@tiptap/pm/view').EditorView, file: Blob) {
+    const encrypted = openNoteEncrypted();
+    if (encrypted === null) return;
+    const pictureId = await addPicture(file, { encrypted, origin: 'note' });
+    const node = view.state.schema.nodes.image?.create({ pictureId });
+    if (node && !view.isDestroyed) view.dispatch(view.state.tr.replaceSelectionWith(node));
+  }
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ document: false, codeBlock: false, listItem: false, link: { openOnClick: false, HTMLAttributes: { class: styles.link } } }),
@@ -751,7 +767,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       ArtifactLinkMark,
       ArtifactLinkGroups,
       NoteObjectTrigger,
-      ResizableImage.configure({ allowBase64: true, inline: false }),
+      ResizableImage.configure({ allowBase64: true, inline: false, noteEncrypted: openNoteEncrypted }),
       Superscript,
       Subscript,
       TextStyle,
@@ -797,6 +813,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       NoteBlockPicks,
       GlossaryAutolink,
       AcronymOffer,
+      BlockOffers,
       OccurrenceHighlight,
       SpecialCharInput,
       HeadingLevel,
@@ -926,13 +943,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
           const file = files[0];
           if (file.type.startsWith('image/')) {
             event.preventDefault();
-            // Scaled down and re-encoded first: images live inline in the note, and the whole app
-            // shares roughly 5 MB of localStorage (see utils/imageCompress.ts).
-            void compressImageBlob(file).then((src) => {
-              const node = view.state.schema.nodes.image?.create({ src });
-              if (!node) return;
-              view.dispatch(view.state.tr.replaceSelectionWith(node));
-            });
+            insertPicture(view, file).catch((err) => log.warn('pictures', 'could not add a pasted picture', err));
             return true;
           }
         }
@@ -998,8 +1009,9 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     useUIStore.getState().setNoteCursor(noteCursorKey(id, activeTabIdRef.current), { from, to, scroll });
   }
 
-  // Back to where the open tab was left; a tab never opened starts at the end, scrolled to the
-  // bottom (focused or not). Focuses the editor when asked (opening a note from the list,
+  // Back to where the open tab was left; a tab never opened starts at the end (focused or not).
+  // Either way the cursor is scrolled to the middle of the view (asked for by the user
+  // 2026-10-16: the remembered scroll could leave it at the very top or out of sight). Focuses the editor when asked (opening a note from the list,
   // switching tabs).
   function restoreCursor(focus: boolean) {
     const id = currentNoteIdRef.current;
@@ -1008,16 +1020,14 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     if (!saved) {
       if (focus) editor.commands.focus('end');
       else editor.commands.setTextSelection(Selection.atEnd(editor.state.doc).from);
-      const end = scrollHostOf(editor.view.dom);
-      if (end) requestAnimationFrame(() => { end.scrollTop = end.scrollHeight; });
+      requestAnimationFrame(() => { if (!editor.isDestroyed) scrollPosTo(editor.view, editor.state.selection.head, 1 / 2); });
       return;
     }
     const size = editor.state.doc.content.size;
     const chain = editor.chain();
     (focus ? chain.focus(undefined, { scrollIntoView: false }) : chain)
       .setTextSelection({ from: Math.min(saved.from, size), to: Math.min(saved.to, size) }).run();
-    const host = scrollHostOf(editor.view.dom);
-    if (host) requestAnimationFrame(() => { host.scrollTop = saved.scroll; });
+    requestAnimationFrame(() => { if (!editor.isDestroyed) scrollPosTo(editor.view, editor.state.selection.head, 1 / 2); });
   }
 
   // ── Tab switching ─────────────────────────────────────────────────────────
@@ -1122,9 +1132,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       for (const item of items) {
         const imageType = item.types.find((t) => t.startsWith('image/'));
         if (!imageType) continue;
-        const src = await compressImageBlob(await item.getType(imageType));
-        const node = view.state.schema.nodes.image?.create({ src });
-        if (node) view.dispatch(view.state.tr.replaceSelectionWith(node));
+        await insertPicture(view, await item.getType(imageType));
         return;
       }
       const htmlItem = items.find((i) => i.types.includes('text/html'));
@@ -1363,7 +1371,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (editor.isDestroyed) return;
       editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection({ from, to }).run();
-      showNearTop(editor.view, from);
+      scrollPosTo(editor.view, from, 1 / 5, 'smooth');
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the request is the trigger; only the note's id matters
   }, [requestedNotePassage, editor, note?.id]);
@@ -1373,8 +1381,13 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
   // and the title/abstract inputs from the current view WITHOUT resetting the tab the way a
   // full note-switch (the effect above) would. On lock this also wipes the plaintext out of the
   // ProseMirror doc, so locking doesn't leave the text sitting in a hidden editor.
+  // Only on a change: on mount the load effect has already loaded the note and put the cursor
+  // back, and reloading here moved it to the end (found 2026-10-16: coming back to Notes from
+  // another app, Alt+Left or the nav, always landed at the end of the tab).
+  const lockedRef = useRef(noteLocked);
   useEffect(() => {
-    if (!editor || !note) return;
+    if (!editor || !note || lockedRef.current === noteLocked) return;
+    lockedRef.current = noteLocked;
     isLoadingRef.current = true;
     if (noteLocked) {
       editor.commands.setContent('');
@@ -1382,6 +1395,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       const { tabId, content } = resolveNoteTab(note, activeTabIdRef.current);
       if (tabId !== activeTabIdRef.current) setTabFor(note.id, tabId);
       editor.commands.setContent(parseContent(content));
+      restoreCursor(false);
     }
     isLoadingRef.current = false;
     setTitle(note.title);
@@ -2497,7 +2511,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
               {editor && note && !noteLocked && <NoteLinksFrom note={note} schema={editor.schema} />}
             </>
           )}
-          <NoteBackdrop />
+          <NoteBackdrop note={note} />
         </div>
 
         {tocOpen && editor && !isAndroid && (

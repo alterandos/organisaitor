@@ -8,7 +8,9 @@ import { useNoteStore } from '@/store/noteStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useTrashStore } from '@/store/trashStore';
 import { useOverviewStore } from '@/store/overviewStore';
+import { usePictureStore } from '@/store/pictureStore';
 import type { Overview } from '@/types/overview';
+import type { Picture } from '@/types/pictures';
 import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, ScheduleTemplate } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
@@ -36,6 +38,7 @@ import {
   investmentPurposeToRow,  rowToInvestmentPurpose,
   trashEntryToRow,         rowToTrashEntry,
   overviewToRow,           rowToOverview,
+  pictureToRow,            rowToPicture,
 } from './mappers';
 
 // Custom (non-built-in) list types only — built-ins have fixed ids, are re-seeded
@@ -80,6 +83,7 @@ const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
   investment_purposes:    { get: () => usePortfolioStore.getState().investmentPurposes, toRow: (i, u) => investmentPurposeToRow(i as InvestmentPurpose, u) },
   trash_items:            { get: () => useTrashStore.getState().entries,                toRow: (i, u) => trashEntryToRow(i as TrashEntry, u) },
   overviews:              { get: () => useOverviewStore.getState().overviews,           toRow: (i, u) => overviewToRow(i as Overview, u) },
+  pictures:               { get: () => usePictureStore.getState().pictures,             toRow: (i, u) => pictureToRow(i as Picture, u) },
 };
 
 // ── Pending changes ─────────────────────────────────────────────
@@ -353,6 +357,7 @@ const SYNC_TABLES = [
   'watchlist_items', 'portfolio_tags', 'investment_purposes',
   'trash_items',
   'overviews',
+  'pictures',
 ] as const;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -454,7 +459,7 @@ export type UploadCounts = {
   schedules: number; lists: number; listItems: number; listTypes: number;
   notes: number; noteTags: number; structuredTagEntries: number;
   watchlistItems: number; portfolioTags: number; investmentPurposes: number;
-  trashItems: number; overviews: number;
+  trashItems: number; overviews: number; pictures: number;
 };
 
 // Force-uploads ALL current store data to Supabase (upsert), reading live in-memory
@@ -595,6 +600,11 @@ function hydrateStores(remote: RemoteRows) {
   useOverviewStore.setState((local) => ({
     overviews: mergeRecords(local.overviews, remote.overviews, rowToOverview, 'overviews'),
   }) as Parameters<typeof useOverviewStore.setState>[0]);
+
+  // @ts-expect-error — setState updater param typed loosely against the full store shape
+  usePictureStore.setState((local) => ({
+    pictures: mergeRecords(local.pictures, remote.pictures, rowToPicture, 'pictures'),
+  }) as Parameters<typeof usePictureStore.setState>[0]);
 }
 
 // ── Upload ──────────────────────────────────────────────────────
@@ -610,6 +620,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const { watchlistItems, portfolioTags, investmentPurposes } = usePortfolioStore.getState();
   const { entries: trashEntries } = useTrashStore.getState();
   const { overviews } = useOverviewStore.getState();
+  const { pictures } = usePictureStore.getState();
 
   const allTasks       = Object.values(tasks);
   const allCollections = Object.values(collections);
@@ -631,6 +642,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const allInvestmentPurposes = Object.values(investmentPurposes);
   const allTrashItems         = Object.values(trashEntries);
   const allOverviews          = Object.values(overviews);
+  const allPictures           = Object.values(pictures);
 
   const results = await Promise.all([
     allTasks.length       > 0 ? supabase.from('tasks').upsert(allTasks.map((t) => taskToRow(t, userId)))               : null,
@@ -653,6 +665,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     allInvestmentPurposes.length > 0 ? supabase.from('investment_purposes').upsert(allInvestmentPurposes.map((p) => investmentPurposeToRow(p, userId))) : null,
     allTrashItems.length         > 0 ? supabase.from('trash_items').upsert(allTrashItems.map((t) => trashEntryToRow(t, userId))) : null,
     allOverviews.length          > 0 ? supabase.from('overviews').upsert(allOverviews.map((o) => overviewToRow(o, userId))) : null,
+    allPictures.length           > 0 ? supabase.from('pictures').upsert(allPictures.map((p) => pictureToRow(p, userId))) : null,
   ]);
 
   const firstError = results.find((r) => r?.error)?.error;
@@ -666,7 +679,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     listItems: allListItems.length, listTypes: allListTypes.length,
     notes: allNotes.length, noteTags: allNoteTags.length, structuredTagEntries: allStructuredTagEntries.length,
     watchlistItems: allWatchlistItems.length, portfolioTags: allPortfolioTags.length, investmentPurposes: allInvestmentPurposes.length,
-    trashItems: allTrashItems.length, overviews: allOverviews.length,
+    trashItems: allTrashItems.length, overviews: allOverviews.length, pictures: allPictures.length,
   };
 }
 
@@ -731,6 +744,7 @@ function setupSubscriptions(userId: string): void {
     ]),
     watch(userId, useTrashStore, [{ prop: 'entries', table: 'trash_items' }]),
     watch(userId, useOverviewStore, [{ prop: 'overviews', table: 'overviews' }]),
+    watch(userId, usePictureStore, [{ prop: 'pictures', table: 'pictures' }]),
   ];
 
   // Retry what didn't get through: when the browser reports it is back online, and on a timer while
