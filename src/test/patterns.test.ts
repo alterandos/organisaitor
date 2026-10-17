@@ -923,7 +923,10 @@ describe('pattern: Places (CLAUDE.md "Places")', () => {
 
   it('every place is counted when opened, from anywhere (its uiStore open action records the visit)', () => {
     expect(ids.length).toBeGreaterThan(0);
-    const missing = ids.filter((id) => !uiSrc.includes(`recordVisit('place', '${id}')`));
+    // A Notes view or tool names its place in config/noteViews.ts; uiStore.setNotesView records it.
+    const viewsSrc = fs.readFileSync(path.join(SRC, 'config', 'noteViews.ts'), 'utf8');
+    const viaNotesView = (id: string) => viewsSrc.includes(`place: '${id}'`) && uiSrc.includes("recordVisit('place', place)");
+    const missing = ids.filter((id) => !uiSrc.includes(`recordVisit('place', '${id}')`) && !viaNotesView(id));
     expect(missing).toEqual([]);
   });
 
@@ -1050,5 +1053,55 @@ describe('pattern: every note block has a category (CLAUDE.md "Note blocks")', (
     }).map((f) => path.basename(f));
     expect(ids.length).toBeGreaterThan(0);
     expect(bad).toEqual([]);
+  });
+});
+
+describe('pattern: Notes views come from one registry (CLAUDE.md "Notes views")', () => {
+  it('no per-view open flags or open/close actions (one uiStore.notesView instead)', () => {
+    const hits = findMatches(SOURCE_FILES, /\bnotes(Glossary|Review|Hubs|Map)Open\b|\b(open|close)Notes(Glossary|Review|Hubs|Map)\b|\bnoteTagViewActive\b/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+  it('NotesSection renders through NOTE_VIEW_COMPONENTS, never importing a view itself', () => {
+    const src = fs.readFileSync(path.join(SRC, 'components/NotesSection/NotesSection.tsx'), 'utf8');
+    expect(src).toContain('NOTE_VIEW_COMPONENTS');
+    expect(src).not.toMatch(/import .*(ChronicleView|MobileNotes|GlossaryView|ReviewView|HubsView|MapView|TagView)\b/);
+  });
+  it('a view built on the browse model (components/NoteViews/) imports no store: it reads useNotesBrowse and acts through notesNav', () => {
+    const dir = path.join(SRC, 'components', 'NoteViews');
+    const files = fs.existsSync(dir) ? walk(dir, ['.ts', '.tsx']).filter((f) => !/\.test\.tsx?$/.test(f)) : [];
+    const hits = findMatches(files, /from '@\/store\//);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: page hotkeys stand aside through pageKeyBlocked (CLAUDE.md "Page hotkeys stand aside")', () => {
+  it('no hotkey guard lists open-state flags (openModal || editing… ) instead of asking pageKeyBlocked', () => {
+    const hits = findMatches(SOURCE_FILES, /\bopenModal\s*\|\|\s*editing|if \(\w*\.?openModal\) return/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+  it('every section-level hotkey handler asks pageKeyBlocked', () => {
+    const files = ['components/CalendarView/CalendarView.tsx', 'components/ChronicleView/ChronicleView.tsx', 'components/ListsSection/ListsSection.tsx', 'components/NotesSection/NotesViewSwitcher.tsx'];
+    const missing = files.filter((f) => !fs.readFileSync(path.join(SRC, f), 'utf8').includes('pageKeyBlocked('));
+    expect(missing).toEqual([]);
+  });
+  // App.tsx's global handler: what acts on the page (new item, section keys, back/forward, the
+  // filters) stands aside while an overlay is open, so Space in Manage can't open a new task below.
+});
+
+describe('pattern: a note is named with its notebook (CLAUDE.md "A note is named with its notebook")', () => {
+  // A bare `note.title || …` shown to the person. These places show the notebook another way:
+  // inside the notebook already (NoteList, MobileNotes' notebook list), the note itself
+  // (EditNoteMetaModal), with its path on a line of its own (describePlace, NotePickerModal),
+  // grouped by notebook (TagView), the title already named by noteLinkTargets (NoteEmbed,
+  // NoteLink), and Overview's title beside its Where column. A new place uses utils/notes noteName.
+  const ALLOWED = new Set([
+    'src/components/ChronicleView/NoteList.tsx', 'src/components/MobileNotes/MobileNotes.tsx', 'src/components/EditNoteMetaModal/EditNoteMetaModal.tsx',
+    'src/components/HistoryBrowser/describePlace.ts', 'src/components/NotePickerModal/NotePickerModal.tsx', 'src/components/NotesSection/TagView.tsx',
+    'src/components/NoteEditor/extensions/NoteEmbed.ts', 'src/components/NoteEditor/extensions/NoteLink.ts', 'src/overview/sources.ts',
+  ]);
+  it('no other place shows a bare note title', () => {
+    const files = SOURCE_FILES.filter((f) => /src[/\\](components|overview)[/\\]/.test(f));
+    const hits = findMatches(files, /\b(n|note|target)\??\.title\s*\|\|/, { skipComments: true }).filter((h) => !ALLOWED.has(h.file));
+    expect(hits, describeHits(hits)).toEqual([]);
   });
 });

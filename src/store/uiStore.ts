@@ -10,6 +10,8 @@ import { getNotePrimaryNotebookId } from '@/utils/notes';
 import type { NoteId } from '@/types/notes';
 import type { PassageFind } from '@/utils/noteContent';
 import { type NavPlace, pushPlace, travel } from '@/store/navHistory';
+import { DEFAULT_NOTES_VIEW, NOTE_VIEWS, type NotesViewId } from '@/config/noteViews';
+import { EMPTY_NOTES_FILTER, groupId, type NoteGroupingId, type NotesFilter } from '@/utils/notesBrowse';
 
 export type AppView = 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
 // Notes' three columns (ChronicleView). Which one has keyboard focus decides what N/Space creates.
@@ -446,22 +448,26 @@ interface UIState {
   // services/notePassage.ts; consumed by NoteEditor.
   requestedNotePassage:      ({ noteId: string } & PassageFind) | null;
   setRequestedNotePassage:   (p: ({ noteId: string } & PassageFind) | null) => void;
-  // The Notes Glossary view (components/NotesSection/GlossaryView.tsx), in place of the tree.
-  notesGlossaryOpen:       boolean;
-  openNotesGlossary:       () => void;
-  closeNotesGlossary:      () => void;
-  // The Notes Review view (passages marked "review later" that are due).
-  notesReviewOpen:         boolean;
-  openNotesReview:         () => void;
-  closeNotesReview:        () => void;
-  // The Notes Hubs view (every idea hub across notes, components/NotesSection/HubsView.tsx).
-  notesHubsOpen:           boolean;
-  openNotesHubs:           () => void;
-  closeNotesHubs:          () => void;
-  // The Notes Map (how notes link to each other and to items in other apps, components/NotesSection/MapView.tsx).
-  notesMapOpen:            boolean;
-  openNotesMap:            () => void;
-  closeNotesMap:           () => void;
+  // What the Notes section shows (config/noteViews.ts): a view (the Tree, the Map) or a tool
+  // (Glossary, Review, Hubs, the tagged passages). One field in place of a flag each (2026-10-17).
+  // setNotesView counts a visit to the view's Place; closeNotesView(id) goes back to the Tree
+  // when `id` is what's showing.
+  notesView:               NotesViewId;
+  setNotesView:            (id: NotesViewId) => void;
+  closeNotesView:          (id: NotesViewId) => void;
+  // The last *view* (not tool) shown: what closing a tool goes back to, and what Notes opens on
+  // (persisted, v9).
+  notesBrowseView:         NotesViewId;
+  // Shared by every Notes view (utils/notesBrowse.ts): which notes (the filter), how they're
+  // grouped, and which group you're in. In the notebook grouping the group you're in IS the
+  // selected notebook (selectedNoteTagId), so the Tree and any other view agree; read it with
+  // notesFocusOf, change it with setNotesFocus.
+  notesFilter:             NotesFilter;
+  setNotesFilter:          (filter: NotesFilter) => void;
+  notesGrouping:           NoteGroupingId;
+  setNotesGrouping:        (grouping: NoteGroupingId) => void;
+  notesFocusGroupId:       string | null;
+  setNotesFocus:           (groupId: string | null, opts?: { mode?: 'push' | 'silent' }) => void;
   closeNote:               () => void;
   // Notes side by side. `notePanes` holds the note in each pane (null: empty) while the layout
   // isn't single; the focused pane's note is always editingNoteId, so everything that opens a
@@ -507,8 +513,7 @@ interface UIState {
   openEditNoteTag:   (id: string) => void;
   closeEditNoteTag:  () => void;
 
-  // Notes — tag view
-  noteTagViewActive:       boolean;
+  // Notes — tag view (notesView 'tagView')
   noteTagViewTagIds:       string[];
   openNoteTagView:         (tagIds: string[]) => void;
   closeNoteTagView:        () => void;
@@ -949,7 +954,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     const panes = split ? { notePanes: s.notePanes.map((p, i) => (i === s.focusedNotePane ? id : p)) } : {};
     // The note being left is a stop, only in Notes itself (editingNoteId also drives the
     // quick-view pane in other sections, which isn't a place you were).
-    const history = (opts?.mode ?? 'push') === 'push' && s.activeView === 'notes' && s.editingNoteId ? recordPlace(s) : {};
+    // In a view with zoom levels (the Mosaic) the level you opened the note from is a stop too.
+    const history = (opts?.mode ?? 'push') === 'push' && s.activeView === 'notes' && (s.editingNoteId || NOTE_VIEWS[s.notesView].historyStops) ? recordPlace(s) : {};
 
     // Keep the notebook tree/list panels in sync with whatever note is actually being shown.
     // Every path that opens a note funnels through here — tree click, Quick Access, cross-app
@@ -971,18 +977,29 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   clearRequestedNoteTab:  () => set({ requestedNoteTab: null }),
   requestedNotePassage:     null,
   setRequestedNotePassage:  (p) => set({ requestedNotePassage: p }),
-  notesGlossaryOpen:      false,
-  openNotesGlossary:      () => { useRecentItemsStore.getState().recordVisit('place', 'glossary'); set({ notesGlossaryOpen: true, notesReviewOpen: false, notesHubsOpen: false, notesMapOpen: false, noteTagViewActive: false }); },
-  closeNotesGlossary:     () => set({ notesGlossaryOpen: false }),
-  notesReviewOpen:        false,
-  openNotesReview:        () => { useRecentItemsStore.getState().recordVisit('place', 'review'); set({ notesReviewOpen: true, notesGlossaryOpen: false, notesHubsOpen: false, notesMapOpen: false, noteTagViewActive: false }); },
-  closeNotesReview:       () => set({ notesReviewOpen: false }),
-  notesHubsOpen:          false,
-  openNotesHubs:          () => { useRecentItemsStore.getState().recordVisit('place', 'hubs'); set({ notesHubsOpen: true, notesGlossaryOpen: false, notesReviewOpen: false, notesMapOpen: false, noteTagViewActive: false }); },
-  closeNotesHubs:         () => set({ notesHubsOpen: false }),
-  notesMapOpen:           false,
-  openNotesMap:           () => { useRecentItemsStore.getState().recordVisit('place', 'map'); set({ notesMapOpen: true, notesGlossaryOpen: false, notesReviewOpen: false, notesHubsOpen: false, noteTagViewActive: false }); },
-  closeNotesMap:          () => set({ notesMapOpen: false }),
+  notesView:              DEFAULT_NOTES_VIEW,
+  notesBrowseView:        DEFAULT_NOTES_VIEW,
+  setNotesView:           (id) => {
+    const place = NOTE_VIEWS[id].place;
+    if (place) useRecentItemsStore.getState().recordVisit('place', place);
+    set(NOTE_VIEWS[id].kind === 'view' ? { notesView: id, notesBrowseView: id } : { notesView: id });
+  },
+  closeNotesView:         (id) => set((s) => (s.notesView === id ? { notesView: s.notesBrowseView } : {})),
+  notesFilter:            EMPTY_NOTES_FILTER,
+  setNotesFilter:         (notesFilter) => set({ notesFilter }),
+  notesGrouping:          'notebook',
+  setNotesGrouping:       (notesGrouping) => set({ notesGrouping, notesFocusGroupId: null }),
+  notesFocusGroupId:      null,
+  setNotesFocus:          (id, opts) => {
+    const s = useUIStore.getState();
+    // A view with zoom levels (the Mosaic) makes each one a history stop. The notebook grouping's
+    // own change below records one only when a note was open, so record it here when none was.
+    const zooms = (opts?.mode ?? 'push') === 'push' && s.activeView === 'notes' && NOTE_VIEWS[s.notesView].historyStops && notesFocusOf(s) !== id;
+    if (zooms && (s.notesGrouping !== 'notebook' || !s.editingNoteId)) set(recordPlace(s));
+    if (s.notesGrouping !== 'notebook') { set({ notesFocusGroupId: id }); return; }
+    const prefix = groupId('notebook', '');
+    s.setSelectedNoteTag(id && id.startsWith(prefix) ? id.slice(prefix.length) as NoteTagId : null);
+  },
   closeNote: () => set((s) => ({
     editingNoteId: null,
     ...(s.activeView === 'notes' && s.editingNoteId ? recordPlace(s) : {}),
@@ -1053,10 +1070,9 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   openEditNoteTag:  (id) => set({ editNoteTagOpen: true, editingNoteTagId: id }),
   closeEditNoteTag: () => set({ editNoteTagOpen: false, editingNoteTagId: null }),
 
-  noteTagViewActive:      false,
   noteTagViewTagIds:      [],
-  openNoteTagView:        (tagIds) => set({ noteTagViewActive: true, noteTagViewTagIds: tagIds, notesGlossaryOpen: false, notesReviewOpen: false, notesHubsOpen: false, notesMapOpen: false }),
-  closeNoteTagView:       () => set({ noteTagViewActive: false, noteTagViewTagIds: [] }),
+  openNoteTagView:        (tagIds) => set({ notesView: 'tagView', noteTagViewTagIds: tagIds }),
+  closeNoteTagView:       () => set((s) => ({ noteTagViewTagIds: [], ...(s.notesView === 'tagView' ? { notesView: s.notesBrowseView } : {}) })),
   noteTagViewReturn:    null,
   setNoteTagViewReturn: (ids) => set({ noteTagViewReturn: ids }),
 
@@ -1094,7 +1110,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 }), {
   name:    'todo-ui-session',
   storage: persistStorage(),
-  version: 7,
+  version: 9,
   // v1 → v2: overviewSelection (Overview section, 2026-10-01).
   // v2 → v3: one history of places (navHistory/navForward) replaces sectionHistory and
   // notesHistory (2026-10-07); the old section stops carry over, the note stops are dropped.
@@ -1102,6 +1118,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   // v4 → v5: mobileNotesHome (Android Notes: notebooks or recent, 2026-10-09).
   // v5 → v6: noteCursorMemory, where each note's tab was left (2026-10-13).
   // v6 → v7: notes side by side: noteLayout, notePanes, noteSplit (2026-10-16).
+  // v7 → v8: the Notes views' shared filter, grouping and focus (2026-10-17).
+  // v8 → v9: notesBrowseView, the Notes view to open on (2026-10-17).
   migrate: (persisted, fromVersion) => {
     let state = (persisted ?? {}) as Record<string, unknown>;
     if (fromVersion < 2 && state.overviewSelection === undefined) state = { ...state, overviewSelection: null };
@@ -1116,6 +1134,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     if (fromVersion < 5 && state.mobileNotesHome === undefined) state = { ...state, mobileNotesHome: 'notebooks' };
     if (fromVersion < 6 && state.noteCursorMemory === undefined) state = { ...state, noteCursorMemory: {} };
     if (fromVersion < 7) state = { noteLayout: 'single', notePanes: [], noteSplit: { x: 0.5, y: 0.5 }, ...state };
+    if (fromVersion < 8) state = { notesFilter: EMPTY_NOTES_FILTER, notesGrouping: 'notebook', notesFocusGroupId: null, ...state };
+    if (fromVersion < 9) state = { notesBrowseView: DEFAULT_NOTES_VIEW, ...state };
     return state as never;
   },
   partialize: (s) => ({
@@ -1136,6 +1156,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     notePanes:                s.notePanes,
     focusedNotePane:          s.focusedNotePane,
     noteSplit:                s.noteSplit,
+    notesFilter:              s.notesFilter,
+    notesGrouping:            s.notesGrouping,
+    notesFocusGroupId:        s.notesFocusGroupId,
+    notesBrowseView:          s.notesBrowseView,
+    // Notes reopens on the view it was left in; a tool (Glossary…) isn't reopened, as before.
+    notesView:                NOTE_VIEWS[s.notesView].kind === 'view' ? s.notesView : s.notesBrowseView,
     listsLastActiveListId:    s.listsLastActiveListId,
     listsLastActiveTabId:     s.listsLastActiveTabId,
     overviewSelection:        s.overviewSelection,
@@ -1154,6 +1180,13 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 export const selectActiveCollectionId = (s: UIState): string | null =>
   s.activeCollectionIdByView[s.activeView] ?? null;
 
+// The group the Notes views are in (utils/notesBrowse.ts groupId): in the notebook grouping, the
+// selected notebook; otherwise the group chosen in that grouping.
+export function notesFocusOf(s: Pick<UIState, 'notesGrouping' | 'notesFocusGroupId' | 'selectedNoteTagId'>): string | null {
+  if (s.notesGrouping === 'notebook') return s.selectedNoteTagId ? groupId('notebook', s.selectedNoteTagId) : null;
+  return s.notesFocusGroupId;
+}
+
 // ── History: what "here" is, and going back to a place (store/navHistory.ts) ─────────────────
 
 export function capturePlace(s: UIState): NavPlace {
@@ -1161,7 +1194,10 @@ export function capturePlace(s: UIState): NavPlace {
   switch (s.activeView) {
     case 'notes': {
       const noteId = s.editingNoteId;
-      return { view: 'notes', at, noteId, notebookId: s.selectedNoteTagId, tabId: noteId ? (s.notesTabMemory[noteId] ?? null) : null };
+      return {
+        view: 'notes', at, noteId, notebookId: s.selectedNoteTagId, tabId: noteId ? (s.notesTabMemory[noteId] ?? null) : null,
+        notesView: s.notesBrowseView, focusGroupId: s.notesGrouping === 'notebook' ? null : s.notesFocusGroupId,
+      };
     }
     case 'tasks':    return { view: 'tasks', at, taskId: s.editingTaskId };
     case 'lists':    return { view: 'lists', at, listId: s.activeListId ?? s.listsLastActiveListId, listTabId: s.listsLastActiveTabId };
@@ -1184,7 +1220,11 @@ function goToPlace(p: NavPlace): void {
   const set = useUIStore.setState;
   switch (p.view) {
     case 'notes': {
-      set({ notesLastEditingNoteId: p.noteId ?? null, selectedNoteTagId: (p.notebookId ?? null) as NoteTagId | null });
+      set({
+        notesLastEditingNoteId: p.noteId ?? null, selectedNoteTagId: (p.notebookId ?? null) as NoteTagId | null,
+        ...(p.notesView ? { notesView: p.notesView, notesBrowseView: p.notesView } : {}),
+        ...(p.focusGroupId !== undefined && ui.notesGrouping !== 'notebook' ? { notesFocusGroupId: p.focusGroupId } : {}),
+      });
       ui.setActiveView('notes', { mode: 'silent' });
       if (p.noteId) useUIStore.getState().openNote(p.noteId, p.tabId ?? undefined, { mode: 'silent' });
       else set({ editingNoteId: null });

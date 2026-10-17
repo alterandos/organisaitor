@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { pageKeyBlocked } from '@/utils/pageKeys';
 import { nanoid } from 'nanoid';
 import { useListStore } from '@/store/listStore';
 import { useListViews, useListItemViews } from '@/store/listViews';
@@ -21,7 +22,6 @@ import { LABELS } from '@/config/labels';
 import { log, errorMessage } from '@/utils/log';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
-import { isTypingTarget } from '@/utils/typingTarget';
 import { DICTIONARY_TYPE_ID, refreshDictionaryFields } from '@/services/dictionary';
 // Sidebar group order. Anything that isn't a checklist or watchlist (custom types included) is Reference.
 const KIND_GROUPS: ListKind[] = ['checklist', 'watchlist', 'reference'];
@@ -473,7 +473,7 @@ export function ListsSection() {
   // own content/tabs) responds to plain ↑/↓, mirroring Chronicle's tree/list/editor column focus.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (isTypingTarget(e)) return;
+      if (pageKeyBlocked(e)) return;
 
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === '`') {
         e.preventDefault();

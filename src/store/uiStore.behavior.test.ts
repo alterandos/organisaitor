@@ -328,3 +328,77 @@ describe('session memory', () => {
     expect(migrated.expandedNoteTagIds).toEqual([]);
   });
 });
+
+describe('Notes views — one notesView (config/noteViews.ts)', () => {
+  it('opening a tool shows it and counts a visit to its Place; closing it goes back to the Tree, only when it is what is showing', async () => {
+    const { useRecentItemsStore } = await import('@/store/recentItemsStore');
+    useRecentItemsStore.setState(useRecentItemsStore.getInitialState(), true);
+    expect(useUIStore.getState().notesView).toBe('tree');
+    useUIStore.getState().setNotesView('glossary');
+    expect(useUIStore.getState().notesView).toBe('glossary');
+    expect(JSON.stringify(useRecentItemsStore.getState())).toContain('glossary');
+    useUIStore.getState().closeNotesView('map');
+    expect(useUIStore.getState().notesView).toBe('glossary');
+    useUIStore.getState().closeNotesView('glossary');
+    expect(useUIStore.getState().notesView).toBe('tree');
+  });
+
+  it('the tagged passages: open with tags; another tool keeps the tags; closing clears them', () => {
+    useUIStore.getState().openNoteTagView(['t1']);
+    expect(useUIStore.getState()).toMatchObject({ notesView: 'tagView', noteTagViewTagIds: ['t1'] });
+    useUIStore.getState().setNotesView('hubs');
+    expect(useUIStore.getState()).toMatchObject({ notesView: 'hubs', noteTagViewTagIds: ['t1'] });
+    useUIStore.getState().closeNoteTagView();
+    expect(useUIStore.getState()).toMatchObject({ notesView: 'hubs', noteTagViewTagIds: [] });
+    useUIStore.getState().openNoteTagView(['t2']);
+    useUIStore.getState().closeNoteTagView();
+    expect(useUIStore.getState().notesView).toBe('tree');
+  });
+
+  it('the group you are in: in the notebook grouping it is the selected notebook; another grouping keeps its own', async () => {
+    const { notesFocusOf } = await import('@/store/uiStore');
+    useUIStore.getState().setNotesFocus('notebook:bio');
+    expect(useUIStore.getState().selectedNoteTagId).toBe('bio');
+    expect(notesFocusOf(useUIStore.getState())).toBe('notebook:bio');
+    useUIStore.getState().setNotesGrouping('endeavour');
+    expect(notesFocusOf(useUIStore.getState())).toBeNull();
+    useUIStore.getState().setNotesFocus('endeavour:thesis');
+    expect(notesFocusOf(useUIStore.getState())).toBe('endeavour:thesis');
+    expect(useUIStore.getState().selectedNoteTagId).toBe('bio');
+    useUIStore.getState().setNotesGrouping('notebook');
+    expect(notesFocusOf(useUIStore.getState())).toBe('notebook:bio');
+  });
+});
+
+describe('Notes views — the last view, and the Mosaic’s zoom levels in history', () => {
+  it('closing a tool goes back to the view it was opened from; Notes reopens on the last view, never a tool', async () => {
+    useUIStore.getState().setNotesView('mosaic');
+    useUIStore.getState().setNotesView('glossary');
+    useUIStore.getState().closeNotesView('glossary');
+    expect(useUIStore.getState().notesView).toBe('mosaic');
+    useUIStore.getState().setNotesView('review');
+    const persisted = JSON.parse(localStorage.getItem('todo-ui-session') ?? '{}').state;
+    expect(persisted).toMatchObject({ notesView: 'mosaic', notesBrowseView: 'mosaic' });
+  });
+
+  it('in the Mosaic, each group gone into and the level a note was opened from are stops; back puts you there', () => {
+    useUIStore.getState().setActiveView('notes');
+    useUIStore.getState().setNotesView('mosaic');
+    useUIStore.getState().setNotesGrouping('endeavour');
+    useUIStore.getState().setNotesFocus('endeavour:thesis');
+    useUIStore.getState().openNote('n1');
+    useUIStore.getState().navigateBack();
+    expect(useUIStore.getState()).toMatchObject({ editingNoteId: null, notesFocusGroupId: 'endeavour:thesis', notesView: 'mosaic' });
+    useUIStore.getState().navigateBack();
+    expect(useUIStore.getState().notesFocusGroupId).toBeNull();
+    useUIStore.getState().navigateForward();
+    expect(useUIStore.getState().notesFocusGroupId).toBe('endeavour:thesis');
+  });
+
+  it('the Tree keeps its own rule: choosing a notebook with no note open is not a stop', () => {
+    useUIStore.getState().setActiveView('notes');
+    const before = useUIStore.getState().navHistory.length;
+    useUIStore.getState().setNotesFocus('notebook:bio');
+    expect(useUIStore.getState().navHistory.length).toBe(before);
+  });
+});

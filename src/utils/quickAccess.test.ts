@@ -159,8 +159,8 @@ describe('Places', () => {
   });
 
   it('opening the Glossary or Review from anywhere counts as a use', () => {
-    useUIStore.getState().openNotesGlossary();
-    useUIStore.getState().openNotesReview();
+    useUIStore.getState().setNotesView('glossary');
+    useUIStore.getState().setNotesView('review');
     expect(useRecentItemsStore.getState().items['place:glossary']?.visitCount).toBe(1);
     expect(useRecentItemsStore.getState().items['place:review']?.visitCount).toBe(1);
   });
@@ -170,7 +170,7 @@ describe('Places', () => {
     const results = searchQuickAccessItems('glossary');
     expect(results[0]).toMatchObject({ type: 'place', entityId: 'glossary' });
     navigateToQuickAccessItem(results[0]);
-    expect(useUIStore.getState()).toMatchObject({ activeView: 'notes', notesGlossaryOpen: true });
+    expect(useUIStore.getState()).toMatchObject({ activeView: 'notes', notesView: 'glossary' });
   });
 
   it('places are never listed among the recent items, and never reported as stale', () => {

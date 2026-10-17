@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { pageKeyBlocked } from '@/utils/pageKeys';
 import type { TaskId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, CollectionId, CalendarEvent, ScheduleId, EventStatus } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
@@ -25,7 +27,6 @@ import { ITEM_FLAG_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import styles from './CalendarView.module.css';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
-import { isTypingTarget } from '@/utils/typingTarget';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -190,6 +191,8 @@ export function CalendarView() {
   const [tooltip,     setTooltip]     = useState<TooltipState | null>(null);
   const [hoveredHour, setHoveredHour] = useState<number | null>(null);
   const [dayPaneDate, setDayPaneDate] = useState<string | null>(null);
+  // The month view's day pane closes on an outside click, so Escape closes it too (it didn't, 2026-10-17).
+  useEscapeClose(() => setDayPaneDate(null), !!dayPaneDate);
 
   const tasks             = useTaskStore((s) => s.tasks);
   const collectionsRecord = useTaskStore((s) => s.collections);
@@ -211,11 +214,6 @@ export function CalendarView() {
   const openSchedules            = useUIStore((s) => s.openSchedules);
   const toggleSchedules          = useUIStore((s) => s.toggleSchedules);
   const activeCollectionId       = useUIStore(selectActiveCollectionId) as CollectionId | null;
-  const openModal                = useUIStore((s) => s.openModal);
-  const editingTaskId            = useUIStore((s) => s.editingTaskId);
-  const editingCalendarEventId    = useUIStore((s) => s.editingCalendarEventId);
-  const editingCalendarReminderId = useUIStore((s) => s.editingCalendarReminderId);
-  const editingCalendarDeadlineId = useUIStore((s) => s.editingCalendarDeadlineId);
 
   const shadePastDays         = useSettingsStore((s) => s.shadePastDays);
   const shadeWeekends         = useSettingsStore((s) => s.shadeWeekends);
@@ -803,8 +801,7 @@ export function CalendarView() {
   // AddCalendarItemModal's form instead of switching views.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (isTypingTarget(e)) return;
-      if (openModal || editingTaskId || editingCalendarEventId || editingCalendarReminderId || editingCalendarDeadlineId || dayPaneDate) return;
+      if (pageKeyBlocked(e)) return;
 
       if (e.key.toLowerCase() === 'o' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
@@ -840,7 +837,7 @@ export function CalendarView() {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desktopMode, year, month, selectedDate, effectiveZone, openModal, editingTaskId, editingCalendarEventId, editingCalendarReminderId, editingCalendarDeadlineId, dayPaneDate, toggleSchedules]);
+  }, [desktopMode, year, month, selectedDate, effectiveZone, toggleSchedules]);
 
   const todayStr = todayIsoStr;
 

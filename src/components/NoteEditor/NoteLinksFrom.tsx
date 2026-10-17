@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { Schema } from '@tiptap/pm/model';
 import { useNoteViews } from '@/store/noteViews';
+import { useNoteStore } from '@/store/noteStore';
+import { noteName } from '@/utils/notes';
 import { openNotePassage } from '@/services/notePassage';
 import { editNoteText } from '@/services/noteContentEdit';
 import { openNoteLink } from '@/services/noteLinkTargets';
@@ -20,6 +22,8 @@ interface Props {
 // mention a link. Both start folded, so they never crowd the note. Agreed with the user 2026-10-13.
 export function NoteLinksFrom({ note, schema }: Props) {
   const views = useNoteViews();
+  const noteTags = useNoteStore((s) => s.noteTags);
+  const nameOf = (id: string, fallback: string) => (views[id as never] ? noteName(views[id as never], noteTags, { untitled: LABELS.mobileNotes.untitled }).full : fallback || LABELS.mobileNotes.untitled);
   const [open, setOpen] = useState<{ links: boolean; mentions: boolean }>({ links: false, mentions: false });
   const L = LABELS.noteLinks;
 
@@ -58,7 +62,7 @@ export function NoteLinksFrom({ note, schema }: Props) {
       {section('links', L.fromNotes, links.length, links.map((l, i) => (
         <li key={`${l.fromNoteId}:${l.tabId}:${i}`} className={styles.item}>
           <button type="button" className={styles.itemMain} onClick={() => goTo(l.fromNoteId)}>
-            <span className={styles.itemTitle}>{l.fromTitle || LABELS.mobileNotes.untitled}</span>
+            <span className={styles.itemTitle}>{nameOf(l.fromNoteId, l.fromTitle)}</span>
             <span className={styles.context}>{highlightIn(l.context, l.text)}</span>
           </button>
         </li>
@@ -66,7 +70,7 @@ export function NoteLinksFrom({ note, schema }: Props) {
       {section('mentions', L.mentions, mentions.length, mentions.map((m) => (
         <li key={`${m.noteId}:${m.tabId}`} className={styles.item}>
           <button type="button" className={styles.itemMain} onClick={() => openNoteLink(m.noteId, m.tabId, null)}>
-            <span className={styles.itemTitle}>{m.title || LABELS.mobileNotes.untitled}</span>
+            <span className={styles.itemTitle}>{nameOf(m.noteId, m.title)}</span>
             <span className={styles.context}>{highlightIn(m.context, note.title)}</span>
           </button>
           <button type="button" className={styles.linkBtn} onClick={() => linkMention(m.noteId, m.tabId)} title={L.linkMentionTitle}>{L.linkMention}</button>

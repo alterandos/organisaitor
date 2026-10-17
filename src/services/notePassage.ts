@@ -1,5 +1,6 @@
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
+import { DEFAULT_NOTES_VIEW, NOTE_VIEWS } from '@/config/noteViews';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { isNoteLocked, noteView } from '@/services/noteSecrets';
 import { liveNoteFor } from '@/services/liveNoteEditor';
@@ -31,10 +32,8 @@ export function openNotePassage(noteId: string, findOrFinds: PassageFind | Passa
   const ui = useUIStore.getState();
   if (ui.activeView !== 'notes') ui.setActiveView('notes');
   ui.closeNoteTagView();
-  ui.closeNotesGlossary();
-  ui.closeNotesReview();
-  ui.closeNotesHubs();
-  ui.closeNotesMap();
+  // A view or tool without the editor (the Map, the Glossary…) gives way to the Tree, so the note is seen.
+  if (!NOTE_VIEWS[useUIStore.getState().notesView].showsEditor) ui.setNotesView(DEFAULT_NOTES_VIEW);
   ui.openNote(noteId, tabId);
   ui.setRequestedNotePassage({ noteId, ...find });
   return true;

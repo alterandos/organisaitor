@@ -120,10 +120,17 @@ notesFocusedColumn: 'tree' | 'list' | 'editor', setNotesFocusedColumn(col)
 createDraft: string | null, setCreateDraft(draft)
 
 // Notes: a passage to select once a note is open (services/notePassage.ts sets it with openNote;
-// NoteEditor consumes it), and the Glossary / Review views in place of the tree (memory-only).
+// NoteEditor consumes it).
 requestedNotePassage: { noteId, mark, attr, value } | null, setRequestedNotePassage(p)
-notesGlossaryOpen, openNotesGlossary(), closeNotesGlossary()
-notesReviewOpen, openNotesReview(), closeNotesReview()
+// Notes views (CLAUDE.md "Notes views"; the list is config/noteViews.ts): what Notes shows, one
+// field (memory-only) in place of a flag per tool (2026-10-17).
+notesView: NotesViewId ('tree' | 'mosaic' | 'map' | 'glossary' | 'review' | 'hubs' | 'tagView'), setNotesView(id), closeNotesView(id)  // persisted as the last view (never a tool)
+notesBrowseView: NotesViewId  // the last view: what closing a tool returns to (persisted, v9)
+// Shared by every view (persisted, v8): the filter, the grouping, and the group you're in
+// (in the notebook grouping that is selectedNoteTagId; read it with notesFocusOf(state)).
+notesFilter: NotesFilter, setNotesFilter(f)
+notesGrouping: NoteGroupingId, setNotesGrouping(g)   // resets notesFocusGroupId
+notesFocusGroupId: string | null, setNotesFocus(groupId, { mode?: 'push' | 'silent' })  // a history stop in a view with historyStops
 
 // Records
 activeTrackerId: string | null

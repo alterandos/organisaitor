@@ -40,6 +40,7 @@ import { NotesSection } from '@/components/NotesSection/NotesSection';
 import { ListsSection } from '@/components/ListsSection/ListsSection';
 import { OverviewSection } from '@/components/OverviewSection/OverviewSection';
 import { AddOverviewModal } from '@/components/AddOverviewModal/AddOverviewModal';
+import { NotesViewSwitcher } from '@/components/NotesSection/NotesViewSwitcher';
 import { ErrorBoundary } from '@/components/ErrorBoundary/ErrorBoundary';
 import { AccountIcon, SettingsIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
@@ -573,6 +574,7 @@ export default function App() {
                : activeView === 'fitness'   ? 'Fitness'
                : 'My To Do'}
             </h1>
+            {activeView === 'notes' && !isAndroid && <NotesViewSwitcher />}
           </div>
           <div className={styles.headerRight}>
             {activeView === 'tasks' && <PurposeFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />}

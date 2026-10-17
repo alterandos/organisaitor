@@ -24,7 +24,8 @@ const letterOf = (term: string) => {
 // means, where it's defined (click to go there), and the notes whose text refers to it. Opened
 // from the # button; Esc goes back to the notes.
 export function GlossaryView() {
-  const close = useUIStore((s) => s.closeNotesGlossary);
+  const closeNotesView = useUIStore((s) => s.closeNotesView);
+  const close = () => closeNotesView('glossary');
   useEscapeClose(close);
   const entriesRecord = useNoteStore((s) => s.structuredTagEntries);
   const notes = useNoteStore((s) => s.notes);

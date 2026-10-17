@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
+import { useNoteStore } from '@/store/noteStore';
+import { useNoteViews } from '@/store/noteViews';
+import { noteName } from '@/utils/notes';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { answerReview, dueReviews, reviewItems, type ReviewItem } from '@/services/noteReview';
 import { openNotePassage } from '@/services/notePassage';
@@ -17,7 +20,10 @@ const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - D
 // 35, 90 days); "Again" brings it back tomorrow; "Stop reviewing" takes it off the list. The
 // list is taken when the view opens, so answering never reshuffles what's left.
 export function ReviewView() {
-  const close = useUIStore((s) => s.closeNotesReview);
+  const closeNotesView = useUIStore((s) => s.closeNotesView);
+  const close = () => closeNotesView('review');
+  const views = useNoteViews();
+  const noteTags = useNoteStore((s) => s.noteTags);
   useEscapeClose(close);
   const today = todayIso();
   const [queue] = useState<ReviewItem[]>(() => dueReviews(today));
@@ -63,7 +69,7 @@ export function ReviewView() {
             <div className={styles.cardKicker}>
               <span>{level.icon} {level.label}</span>
               <button type="button" className={styles.source} onClick={() => openNotePassage(item.noteId, { mark: 'noteTag', attr: 'passageId', value: item.passageId })}>
-                {L.from(item.noteTitle || LABELS.glossary.untitledNote)} ↗
+                {L.from(views[item.noteId as never] ? noteName(views[item.noteId as never], noteTags, { untitled: LABELS.glossary.untitledNote }).full : item.noteTitle || LABELS.glossary.untitledNote)} ↗
               </button>
             </div>
             <blockquote className={styles.passage}>{item.text}</blockquote>

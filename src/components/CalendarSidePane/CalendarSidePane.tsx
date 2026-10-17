@@ -333,7 +333,8 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
     }
   };
 
-  useEscapeClose(close, open);
+  // Docked beside the calendar: the calendar's own keys (O, T, ←/→, Tab) keep working while it's open.
+  useEscapeClose(close, open, { docked: true });
 
   const schedules = useMemo(
     () => Object.values(schedulesRecord).sort((a, b) => a.name.localeCompare(b.name)),

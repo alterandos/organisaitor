@@ -8,6 +8,7 @@
 // Pure: the store (uiStore) captures and restores places; this module only shapes the stacks.
 
 import type { AppView, CalendarViewMode, OverviewSelection } from './uiStore';
+import type { NotesViewId } from '@/config/noteViews';
 
 export interface NavPlace {
   view:        AppView;
@@ -15,6 +16,8 @@ export interface NavPlace {
   noteId?:     string | null;          // notes: the open note (null: a notebook, no note)
   tabId?:      string | null;          // notes: its tab
   notebookId?: string | null;          // notes: the selected notebook
+  notesView?:  NotesViewId;            // notes: the view (Tree, Mosaic…); absent on stops from before views
+  focusGroupId?: string | null;        // notes: the group you were in, outside the notebook grouping
   taskId?:     string | null;          // tasks: the task open in the pane
   listId?:     string | null;          // lists
   listTabId?:  string | null;
@@ -30,7 +33,12 @@ export const MAX_NAV_HISTORY = 40;
 // Two places are the same stop when they'd put you in the same spot.
 export function placeKey(p: NavPlace): string {
   switch (p.view) {
-    case 'notes': return `notes:${p.noteId ?? `nb:${p.notebookId ?? ''}`}`;
+    case 'notes': {
+      // A view other than the Tree, or a group outside the notebook grouping, is its own stop
+      // (the Mosaic's zoom levels); the Tree's keys are as they always were.
+      const extra = `${p.notesView && p.notesView !== 'tree' ? `|v:${p.notesView}` : ''}${p.focusGroupId ? `|g:${p.focusGroupId}` : ''}`;
+      return `notes:${p.noteId ?? `nb:${p.notebookId ?? ''}${extra}`}`;
+    }
     default:      return p.view;
   }
 }

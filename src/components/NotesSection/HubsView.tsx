@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNoteStore } from '@/store/noteStore';
+import { useNoteViews } from '@/store/noteViews';
 import { useUIStore } from '@/store/uiStore';
 import { useSecretsVersion } from '@/services/noteSecrets';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { listHubs, openHub, openHubLink } from '@/services/noteHubs';
 import { rankSearch } from '@/utils/suggestRank';
+import { noteName } from '@/utils/notes';
 import { RELATIONS, type HubRef } from '@/utils/noteHubs';
 import { LABELS } from '@/config/labels';
 import { HubIcon } from '@/components/Icons';
@@ -14,9 +16,12 @@ import styles from './HubsView.module.css';
 // your take, and its links under how they relate. Click a hub's name to go to it in its note, a
 // link to follow it. Opened from the # button or Quick Access (a Place); Esc goes back.
 export function HubsView() {
-  const close = useUIStore((s) => s.closeNotesHubs);
+  const closeNotesView = useUIStore((s) => s.closeNotesView);
+  const close = () => closeNotesView('hubs');
   useEscapeClose(close);
   const notes = useNoteStore((s) => s.notes);
+  const views = useNoteViews();
+  const noteTags = useNoteStore((s) => s.noteTags);
   const entries = useNoteStore((s) => s.structuredTagEntries);
   const secrets = useSecretsVersion((s) => s.version);
   const [query, setQuery] = useState('');
@@ -60,7 +65,7 @@ export function HubsView() {
             <button type="button" className={styles.hubName} onClick={() => openHub(h.noteId, h.hubId)}>
               {h.title || L.untitled}
             </button>
-            <div className={styles.where}>{h.noteTitle || 'Untitled'} · {L.linkCount(h.links.length)}</div>
+            <div className={styles.where}>{views[h.noteId as never] ? noteName(views[h.noteId as never], noteTags, { untitled: LABELS.mobileNotes.untitled }).full : h.noteTitle || LABELS.mobileNotes.untitled} · {L.linkCount(h.links.length)}</div>
             {h.take && <p className={styles.take}>{h.take}</p>}
             {RELATIONS.filter((r) => h.links.some((l) => l.relation === r)).map((r) => (
               <div key={r} className={styles.group}>

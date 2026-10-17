@@ -225,3 +225,19 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* View transitions (utils/viewTransition.ts): going into a Mosaic group grows the new level out
+   of the old, coming back shrinks it, switching views crossfades. Never with reduced motion (the
+   helper skips the transition then). */
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: 260ms; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+:root[data-view-transition="zoom-in"]::view-transition-old(root)  { animation-name: vt-fade-out, vt-grow-out; }
+:root[data-view-transition="zoom-in"]::view-transition-new(root)  { animation-name: vt-fade-in, vt-grow-in; }
+:root[data-view-transition="zoom-out"]::view-transition-old(root) { animation-name: vt-fade-out, vt-shrink-out; }
+:root[data-view-transition="zoom-out"]::view-transition-new(root) { animation-name: vt-fade-in, vt-shrink-in; }
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; } }
+@keyframes vt-grow-out { to { transform: scale(1.08); } }
+@keyframes vt-grow-in { from { transform: scale(0.94); } }
+@keyframes vt-shrink-out { to { transform: scale(0.94); } }
+@keyframes vt-shrink-in { from { transform: scale(1.08); } }

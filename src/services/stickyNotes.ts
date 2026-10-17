@@ -15,7 +15,8 @@ import type { Note, NoteId, NoteTag, NoteTagId } from '@/types/notes';
 // Written as text with bold, italic, underline and strikethrough (STICKY_MARKS); a sticky whose note
 // was given more in the editor is shown read-only there, with a way to open it.
 
-export const STICKIES_PRESET = 'stickies';
+import { STICKIES_PRESET } from '@/utils/notes';
+export { STICKIES_PRESET };
 
 export function stickiesNotebook(tags: Record<string, NoteTag>): NoteTag | null {
   const found = Object.values(tags).filter((t) => t.kind === 'area' && t.presetKey === STICKIES_PRESET);

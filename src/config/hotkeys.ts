@@ -76,6 +76,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'calendar-view',    group: 'Calendar', primary: 'Tab', secondary: 'Shift+Tab', action: 'Cycle Month → Week → Day view (Shift+Tab cycles in reverse)', touch: 'Calendar header Month / Week / Day buttons' },
   // Notes
   { id: 'notes-apply-tag',     group: 'Notes', primary: 'Ctrl+1 .. Ctrl+8', action: 'Apply/remove a built-in annotation tag on the selection (editor focused) — Definition, Concept and Acronym open a create popover (a Glossary term) instead; Ctrl+1 steps Important → Very important → Critical → off', touch: 'n/a for now: Notes on a phone is read-first; editing tools come in W7’s collapsed toolbar (D11)' },
+  { id: 'notes-view',          group: 'Notes', primary: 'Tab', secondary: 'Shift+Tab', action: 'Cycle the Notes views (Tree → Mosaic → Map), reverse with Shift, while not typing', touch: 'n/a: the view switcher is desktop only; Android shows the phone Notes' },
   { id: 'notes-expand',        group: 'Notes', primary: '→',             action: 'Expand selected notebook', touch: 'Tap the arrow beside the notebook' },
   { id: 'notes-collapse',      group: 'Notes', primary: '←',             action: 'Collapse selected notebook', touch: 'Tap the arrow beside the notebook' },
   { id: 'notes-nav',           group: 'Notes', primary: 'PgUp/PgDn',     action: 'Navigate tree/list column (same as ↑/↓)', touch: 'n/a: scroll and tap' },

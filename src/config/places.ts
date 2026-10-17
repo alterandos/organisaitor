@@ -23,10 +23,10 @@ export interface Place {
 }
 
 export const PLACES: Place[] = [
-  { id: 'glossary',      label: LABELS.glossary.open,       Icon: GlossaryIcon,     open: () => { const ui = useUIStore.getState(); ui.setActiveView('notes'); ui.openNotesGlossary(); } },
-  { id: 'review',        label: LABELS.review.title,        Icon: ReviewIcon,       open: () => { const ui = useUIStore.getState(); ui.setActiveView('notes'); ui.openNotesReview(); }, badge: () => dueReviews().length },
-  { id: 'hubs',          label: LABELS.hubs.title,          Icon: HubIcon,          open: () => { const ui = useUIStore.getState(); ui.setActiveView('notes'); ui.openNotesHubs(); } },
-  { id: 'map',           label: LABELS.noteMap.title,       Icon: MapIcon,          open: () => { const ui = useUIStore.getState(); ui.setActiveView('notes'); ui.openNotesMap(); } },
+  { id: 'glossary',      label: LABELS.glossary.open,       Icon: GlossaryIcon,     open: () => { const ui = useUIStore.getState(); ui.setActiveView('notes'); ui.setNotesView('glossary'); } },
+  { id: 'review',        label: LABELS.review.title,        Icon: ReviewIcon,       open: () => { const ui = useUIStore.getState(); ui.setActiveView('notes'); ui.setNotesView('review'); }, badge: () => dueReviews().length },
+  { id: 'hubs',          label: LABELS.hubs.title,          Icon: HubIcon,          open: () => { const ui = useUIStore.getState(); ui.setActiveView('notes'); ui.setNotesView('hubs'); } },
+  { id: 'map',           label: LABELS.noteMap.title,       Icon: MapIcon,          open: () => { const ui = useUIStore.getState(); ui.setActiveView('notes'); ui.setNotesView('map'); } },
   { id: 'history',       label: LABELS.history.moreLabel,   Icon: HistoryIcon,      open: () => useUIStore.getState().openHistoryBrowser() },
   { id: 'manage',        label: LABELS.places.manage,       Icon: LibraryIcon,      open: () => useUIStore.getState().openManage() },
   { id: 'settings',      label: LABELS.places.settings,     Icon: SettingsIcon,     open: () => useUIStore.getState().openSettings() },

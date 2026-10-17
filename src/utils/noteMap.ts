@@ -1,6 +1,6 @@
 import type { Note } from '@/types/notes';
 
-// The Notes Map's graph (components/NotesSection/MapView.tsx): notes joined by their links to each
+// The Notes Map's links (drawn over its blobs by components/NoteViews/Map/): notes joined by their links to each
 // other (`noteLink` marks and `noteEmbed` blocks, either way round, counted), and, when asked, the
 // tasks, events and lists that link to them (their crossAppRefs). Pure, computed when shown, never
 // stored. Notes with no links are left out (a map of islands says nothing); a big map keeps its

@@ -8,6 +8,7 @@ export { createReviewIcon } from './reviewIcon';
 export { createUnsureIcon } from './unsureIcon';
 export { UnsureIcon } from './FlagIcons';
 export { GlossaryIcon, HistoryIcon, HubIcon, IntegrationsIcon, LibraryIcon, MapIcon, ReviewIcon, SettingsIcon } from './PlaceIcons';
+export { MosaicIcon, TagIcon, TreeIcon } from './NoteViewIcons';
 export { createDisclosureIcon } from './disclosureDom';
 export { ColorDotIcon } from './ColorDotIcon';
 export { TextColorIcon } from './TextColorIcon';

@@ -1,9 +1,10 @@
 import { NoteSplitView } from '@/components/NoteSplitView/NoteSplitView';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { pageKeyBlocked } from '@/utils/pageKeys';
+import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
 import type { RefObject } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId, type NotesColumn } from '@/store/uiStore';
-import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon } from '@/utils/notes';
+import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon, byNotebookOrder, isPinnedNotebook } from '@/utils/notes';
 import type { NoteTagId, CollectionId } from '@/types';
 import type { NoteTag } from '@/types/notes';
 import { NoteList } from './NoteList';
@@ -18,7 +19,6 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { DisclosureIcon } from '@/components/Icons';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
-import { isTypingTarget } from '@/utils/typingTarget';
 
 // ── Column order — extend here to add new panels in future ────────────────
 
@@ -44,7 +44,7 @@ function flattenVisible(
 ): FlatItem[] {
   const children = Object.values(noteTags)
     .filter((t) => t.parentTagId === parentId && t.kind === 'area' && (!visibleTagIds || visibleTagIds.has(t.id)))
-    .sort((a, b) => a.order - b.order);
+    .sort(byNotebookOrder);
   const result: FlatItem[] = [];
   for (const tag of children) {
     result.push({ tag, depth });
@@ -181,9 +181,10 @@ function NoteTagTreeNode({
 
   const siblings = Object.values(noteTags)
     .filter((t) => t.parentTagId === tag.parentTagId && t.kind === 'area')
-    .sort((a, b) => a.order - b.order);
+    .sort(byNotebookOrder);
   const myPos = siblings.findIndex((t) => t.id === tag.id);
-  const canIndent  = myPos > 0;
+  // Never into the pinned Stickies notebook just above.
+  const canIndent  = myPos > 0 && !isPinnedNotebook(siblings[myPos - 1]) && !isPinnedNotebook(tag);
   const canOutdent = tag.parentTagId !== null;
 
   // Direct notes only (not recursive into child notebooks) — matches getTopLevelNotes' own
@@ -439,15 +440,16 @@ export function ChronicleView() {
 
   const rootTags = Object.values(noteTags)
     .filter((t) => t.parentTagId === null && t.kind === 'area' && (!visibleTagIds || visibleTagIds.has(t.id)))
-    .sort((a, b) => a.order - b.order);
+    .sort(byNotebookOrder);
+  // Stickies is pinned first, with a line under it (byNotebookOrder).
+  const pinnedCount = rootTags.filter(isPinnedNotebook).length;
 
   // ── Keyboard navigation ──────────────────────────────────────────────────
   // Reads all dynamic state from getState() so the effect runs once and never goes stale.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const uiState = useUIStore.getState();
-      if (uiState.openModal) return;
-      if (isTypingTarget(document.activeElement)) return;
+      if (pageKeyBlocked(document.activeElement)) return;
 
       const col = uiState.notesFocusedColumn;
       const noteState = useNoteStore.getState();
@@ -585,9 +587,9 @@ export function ChronicleView() {
                   <p>{visibleTagIds ? `${LABELS.noneInCollection('notebooks')}.` : 'No notebooks yet.'}</p>
                   <button className={styles.panelEmptyLink} onClick={() => showAddNoteTag(null)}>Create one</button>
                 </div>
-              ) : rootTags.map((tag) => (
+              ) : rootTags.map((tag, i) => (
+                <Fragment key={tag.id}>
                 <NoteTagTreeNode
-                  key={tag.id}
                   tag={tag}
                   depth={0}
                   kbFocused={false}
@@ -601,6 +603,8 @@ export function ChronicleView() {
                   onDragLeaveTag={onDragLeaveTag}
                   onDragEndTag={onDragEndTag}
                 />
+                {i === pinnedCount - 1 && i < rootTags.length - 1 && <hr className={styles.pinnedRule} />}
+                </Fragment>
               ))}
             </div>
           </>

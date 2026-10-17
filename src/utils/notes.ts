@@ -1,5 +1,19 @@
 import type { CollectionId, NoteTag } from '@/types';
 
+// The Stickies notebook (services/stickyNotes.ts) is a special set of notes, not one notebook among
+// the others: at the top level it is pinned first, with a line under it, in every Notes view (the
+// Tree, the Mosaic, the Map; 2026-10-18). THE order of notebooks among their siblings is
+// byNotebookOrder: pinned first, then their own order.
+export const STICKIES_PRESET = 'stickies';
+
+export function isPinnedNotebook(t: Pick<NoteTag, 'kind' | 'presetKey' | 'parentTagId'>): boolean {
+  return t.kind === 'area' && !t.parentTagId && t.presetKey === STICKIES_PRESET;
+}
+
+export function byNotebookOrder(a: NoteTag, b: NoteTag): number {
+  return Number(isPinnedNotebook(b)) - Number(isPinnedNotebook(a)) || a.order - b.order || a.name.localeCompare(b.name);
+}
+
 // Effective Endeavour for a notebook: its own collectionId, or the nearest
 // ancestor notebook's. Lets a sub-notebook inherit an Endeavour set higher up the tree.
 export function getEffectiveCollectionId(
@@ -103,6 +117,26 @@ export function getNoteNotebookPath(
     if (path.length > 0) return path;
   }
   return [];
+}
+
+// A note's name as shown away from its notebook (CLAUDE.md "A note is named with its notebook",
+// 2026-10-17): a title alone rarely says which note it is (many notes are called "Lectures"), so
+// wherever notes from different notebooks are shown together the notebook goes with it. `title`
+// (the note's own, or `untitled`), `notebook` (the notebook it's filed in, nearest first; null when
+// in none, or when it is `here`, the notebook already being looked at), `path` (root → notebook,
+// for a tooltip) and `full`, one line for plain text: "Lectures · Biology".
+export interface NoteName { title: string; notebook: string | null; path: string; full: string }
+
+export function noteName(
+  note: { title: string; tagIds: readonly string[] },
+  noteTags: Record<string, NoteTag>,
+  opts: { untitled: string; here?: string | null },
+): NoteName {
+  const title = note.title.trim() || opts.untitled;
+  const primary = getNotePrimaryNotebookId(note, noteTags);
+  const path = getNoteNotebookPath(note, noteTags);
+  const notebook = primary && primary !== opts.here ? noteTags[primary]?.name ?? null : null;
+  return { title, notebook, path: path.join(' › '), full: notebook ? `${title} · ${notebook}` : title };
 }
 
 // Notebook IDs that should stay visible when focused on a given Endeavour: notebooks whose

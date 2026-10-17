@@ -2,7 +2,7 @@ import { LABELS } from '@/config/labels';
 import { INBOX_ICON, QUESTION_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { addDaysToIso } from '@/utils/date';
 import { expandRepeat } from '@/utils/recurrence';
-import { getNoteEffectiveCollectionId } from '@/utils/notes';
+import { getNoteEffectiveCollectionId, getNoteNotebookPath } from '@/utils/notes';
 import { collectQuestions } from '@/utils/noteQuestions';
 import { collectInboxes, localDay } from '@/utils/noteInboxes';
 import type {
@@ -131,7 +131,8 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
         rows: notes.filter((n) => !snap.lockedNoteIds.has(n.id)).map((n) => row('note', n.id, {
           title: n.title || '(Untitled)', when: null, time: null,
           status: n.archivedAt ? 'archived' : 'open',
-          endeavourId: getNoteEffectiveCollectionId(n, snap.noteTags), context: null,
+          // Where it lives: its notebook path (a title alone rarely says which note it is).
+          endeavourId: getNoteEffectiveCollectionId(n, snap.noteTags), context: getNoteNotebookPath(n, snap.noteTags).join(' › ') || null,
         })),
       };
     },

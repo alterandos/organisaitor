@@ -15,15 +15,12 @@ export function TagFAB() {
 
   const noteTagsRecord       = useNoteStore((s) => s.noteTags);
   const noteTagViewTagIds    = useUIStore((s) => s.noteTagViewTagIds);
-  const noteTagViewActive    = useUIStore((s) => s.noteTagViewActive);
+  const tagViewShowing    = useUIStore((s) => s.notesView === 'tagView');
   const openNoteTagView      = useUIStore((s) => s.openNoteTagView);
   const closeNoteTagView     = useUIStore((s) => s.closeNoteTagView);
 
   const userTags = Object.values(noteTagsRecord);
-  const openNotesGlossary = useUIStore((s) => s.openNotesGlossary);
-  const openNotesReview   = useUIStore((s) => s.openNotesReview);
-  const openNotesHubs     = useUIStore((s) => s.openNotesHubs);
-  const openNotesMap      = useUIStore((s) => s.openNotesMap);
+  const setNotesView      = useUIStore((s) => s.setNotesView);
   const notesRecord       = useNoteStore((s) => s.notes);
   // Counted when the panel opens (and when notes change while it's open), never on every render.
   const dueCount = useMemo(() => (open ? (void notesRecord, dueReviews().length) : 0), [open, notesRecord]);
@@ -59,16 +56,16 @@ export function TagFAB() {
       {open && (
         <div className={styles.panel}>
           <div className={styles.views}>
-            <button className={styles.viewBtn} onClick={() => { setOpen(false); openNotesGlossary(); }} title={LABELS.glossary.openHint}>
+            <button className={styles.viewBtn} onClick={() => { setOpen(false); setNotesView('glossary'); }} title={LABELS.glossary.openHint}>
               <GlossaryIcon className={styles.viewIcon} />{LABELS.glossary.open}
             </button>
-            <button className={styles.viewBtn} onClick={() => { setOpen(false); openNotesReview(); }} title={LABELS.review.openHint}>
+            <button className={styles.viewBtn} onClick={() => { setOpen(false); setNotesView('review'); }} title={LABELS.review.openHint}>
               <ReviewIcon className={styles.viewIcon} />{LABELS.review.open(dueCount)}
             </button>
-            <button className={styles.viewBtn} onClick={() => { setOpen(false); openNotesHubs(); }} title={LABELS.hubs.viewHint}>
+            <button className={styles.viewBtn} onClick={() => { setOpen(false); setNotesView('hubs'); }} title={LABELS.hubs.viewHint}>
               <HubIcon className={styles.viewIcon} />{LABELS.hubs.title}
             </button>
-            <button className={styles.viewBtn} onClick={() => { setOpen(false); openNotesMap(); }} title={LABELS.noteMap.hint}>
+            <button className={styles.viewBtn} onClick={() => { setOpen(false); setNotesView('map'); }} title={LABELS.noteMap.hint}>
               <MapIcon className={styles.viewIcon} />{LABELS.noteMap.title}
             </button>
           </div>
@@ -126,12 +123,12 @@ export function TagFAB() {
       )}
 
       <button
-        className={`${styles.fab} ${noteTagViewActive ? styles.fabActive : ''} ${noteTagViewTagIds.length > 0 && !noteTagViewActive ? styles.fabHasFilter : ''}`}
+        className={`${styles.fab} ${tagViewShowing ? styles.fabActive : ''} ${noteTagViewTagIds.length > 0 && !tagViewShowing ? styles.fabHasFilter : ''}`}
         onClick={() => setOpen((o) => !o)}
         title="Filter by tag"
         aria-expanded={open}
       >
-        {noteTagViewTagIds.length > 0 && !noteTagViewActive
+        {noteTagViewTagIds.length > 0 && !tagViewShowing
           ? <span className={styles.fabCount}>{noteTagViewTagIds.length}</span>
           : <span className={styles.fabIcon}>#</span>}
       </button>

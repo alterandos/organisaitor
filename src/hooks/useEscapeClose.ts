@@ -20,7 +20,9 @@ import { useEffect, useRef } from 'react';
 // still work as ordinary onKeyDown handlers, but must call `e.stopPropagation()` so the same
 // keypress doesn't also reach this stack and close the pane around the input.
 
-interface Entry { handler: { current: () => void } }
+// `docked`: a panel beside the page rather than over it (Calendar's side pane): Escape still
+// closes it, but it doesn't stop the page's own keys (hasOpenOverlay ignores it).
+interface Entry { handler: { current: () => void }; docked?: boolean }
 
 const stack: Entry[] = [];
 
@@ -42,14 +44,21 @@ export function closeTopOverlay(): boolean {
   return true;
 }
 
+// Whether an overlay is open over the page (docked panels don't count). A page's own hotkeys
+// stand aside while one is: ask through utils/pageKeys.ts pageKeyBlocked, never a list of
+// open-state flags.
+export function hasOpenOverlay(): boolean {
+  return stack.some((e) => !e.docked);
+}
+
 // Installed at module load — before any component mounts — so it runs ahead of listeners that
 // components add to `document` later.
 if (typeof document !== 'undefined') document.addEventListener('keydown', onKeyDown);
 
 // The same, for an overlay that isn't a React component (a popover a ProseMirror widget opens,
 // extensions/blockDesigns.ts). Returns the unregister function; call it when the overlay closes.
-export function registerEscapeClose(onClose: () => void): () => void {
-  const entry: Entry = { handler: { current: onClose } };
+export function registerEscapeClose(onClose: () => void, opts?: { docked?: boolean }): () => void {
+  const entry: Entry = { handler: { current: onClose }, docked: opts?.docked };
   stack.push(entry);
   return () => {
     const i = stack.indexOf(entry);
@@ -57,17 +66,18 @@ export function registerEscapeClose(onClose: () => void): () => void {
   };
 }
 
-export function useEscapeClose(onClose: () => void, active = true) {
+export function useEscapeClose(onClose: () => void, active = true, opts?: { docked?: boolean }) {
   const ref = useRef(onClose);
   useEffect(() => { ref.current = onClose; });
+  const docked = !!opts?.docked;
 
   useEffect(() => {
     if (!active) return;
-    const entry: Entry = { handler: ref };
+    const entry: Entry = { handler: ref, docked };
     stack.push(entry);
     return () => {
       const i = stack.indexOf(entry);
       if (i >= 0) stack.splice(i, 1);
     };
-  }, [active]);
+  }, [active, docked]);
 }

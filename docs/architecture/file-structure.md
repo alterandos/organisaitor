@@ -63,6 +63,9 @@ src/
   services/glossary.ts      — the Glossary model (Definitions, Concepts, Acronyms across notes): glossaryEntries/glossaryEntry/glossaryReferences, through the views — see "Annotations"
   services/noteFromItem.ts  — createNoteForItem(place, title): a new note in a notebook, or a new tab of a note, returned as the CrossAppRef to link; newNoteTitleFor(title, date). "+ New note" in the calendar panes
   services/notePassage.ts   — openNotePassage(noteId, { mark | node, attr, value }); noteHasPassage / docHasPassage (the open editor's text first): THE way to open a note at a passage (finds the tab; NoteEditor selects it). definitionPassage(entryId)
+  services/notesNav.ts      — what a Notes view does (open a note, go into a group, filter, grouping, view): the only way a view built on the browse model changes anything
+  config/noteViews.ts       — NOTE_VIEWS: the Notes views and tools (id, kind, label, icon, Place, showsEditor); components in components/NotesSection/noteViewComponents.ts
+  hooks/useNotesBrowse.ts   — the browse model for the current filter/grouping, and the trail to the group you are in
   services/noteReview.ts    — Review later: reviewItems/dueReviews (Important passages on the review list, from stored content) and answerReview (writes the schedule back, through the editor if that text is open)
   services/noteInbox.ts     — inboxes: sendToInbox (moves the selection into an inbox, leaving a marker; Undo), makeItemTask, openInboxItem / openItemSource, listInboxes — see "Inboxes"
   dictionary.ts / dictionaryActions.ts — the Dictionary: words kept in a built-in list, meanings fetched (Free Dictionary API, Wiktionary), use counts
@@ -91,7 +94,7 @@ src/
   components/HubPickerModal/ — Add to hub (which hub) and a hub's + Link… (which Glossary term or note), each with how it relates
   components/NotesSection/HubsView.tsx — the Hubs view: every hub across notes, searchable (a Place)
   utils/noteHubs.ts         — hubs read from stored note content (hubsInContent, collectHubs), RELATIONS, linkInsertIndex
-  components/NotesSection/MapView.tsx — the Map (a Place): notes joined by their links, and optionally the items linked to them; lazy (React Flow, dagre)
+  components/NoteViews/Map/ — the Map (a Notes view and a Place): MapView (React Flow canvas), MapNodes (blob, label, note, item nodes; the link curve), atlasLayout.ts (circle-packed blobs, d3-hierarchy; blobPath), mapHover.ts; links via hooks/useNoteMapLinks.ts. Was components/NotesSection/MapView.tsx (a dagre graph) until 2026-10-17 — notes joined by their links, and optionally the items linked to them; lazy (React Flow, dagre)
   utils/noteMap.ts          — the Map's graph (buildNoteMap, noteTargetsIn), pure
   utils/noteBackdrop.ts     — which backdrop a note shows (resolveNoteBackdrop: its own, its notebook's and those above, the app-wide one), pure
   utils/richText.ts         — a little formatting in a block's own fields: sanitizeInlineHtml, richToPlain, richLines (Glossary cards)
@@ -144,6 +147,9 @@ src/
     noteQuestions.ts         — questions in notes (collectQuestions, for the Overview) and questionSubject ("What is osmosis?" → "osmosis")
     acronymInference.ts      — rules-based acronym finding (Schwartz & Hearst, refined): inferAcronymFromSelection, deduceAcronym (first letters), acronymLetterPositions (which letters spell it), acronymPairAtEnd (for the as-you-type offer)
     blockOffers.ts           — rules for spotting writing that is a block as it is typed: quoteJustTyped, typesJustTyped, prosConsJustTyped
+    notesBrowse.ts           — the Notes browse model: the notes as a tree of groups for a filter and grouping (browseNotes, NOTE_GROUPINGS, groupPath); every Notes view draws it
+    viewTransition.ts        — withViewTransition(kind, change): animate a change of view or level with the browser's View Transitions (no library; skipped with reduced motion)
+    pageKeys.ts              — pageKeyBlocked(e): THE check a section hotkey makes (typing, or an overlay open over the page)
     collections.ts           — getOrderedEndeavours(collectionsRecord): Projects then Lists, in CollectionFilterPicker's render order; shared by the picker and the Ctrl+E digit-select hotkey
     fitnessFormat.ts         — Fitness display formatting (metric only, Phase 1): formatDistance, formatDuration, formatSpeed, computeAverageSpeedMps. Stored data is always SI (meters/seconds/m·s⁻¹); conversion happens only here, at render time
     fitnessActivityTypes.ts  — getActivityType() (graceful fallback if a type was deleted) and getTopActivityTypes() (usage-ranked, for the AddActivityModal pill row)
@@ -173,6 +179,7 @@ src/
   hooks/
     useCtrlEnterSubmit.ts    — THE Ctrl+Enter rule for form-less modals/panes: `useCtrlEnterSubmit(onSubmit, active?)` (see "Ctrl+Enter — universal submit rule")
     useEscapeClose.ts        — THE Escape rule: every overlay registers here; Escape closes only the most recently opened one (see "Escape key — universal close rule"). closeTopOverlay() is the same for the Android back button
+    useHoverOpen.ts          — a header button's panel opened on hover as a preview (the bell, the Settings peek); a click is the site's (pin it, or open the full modal). Does nothing on Android
     useLongPress.ts          — long-press (450 ms, cancelled by >10px movement, hapticMedium, swallows the click it produces, cancels Android's own long-press menu). Touch only — see "Bottom sheets"
     useSwipeRow.ts           — swipe right (row's positive action) / swipe left (reveal the row's actions), axis lock, 24px edge exclusion; the classification is pure exported functions. Used by TaskItem
     useTimeGridDrag.ts       — shared drag-to-move / drag-to-resize for any hourly time grid built on utils/timeGrid.ts: one hook instance can drive every draggable block on a page (geometry supplied per-gesture, not fixed at hook-creation time). Used by CalendarView's week/day grids (Events move+resize, Reminders move only) and ScheduleWeekGridPreview's block editor (AddScheduleModal) — see "Calendar drag-to-move / drag-to-resize" in Implemented features
@@ -315,7 +322,8 @@ src/
     EditNoteMetaModal/       — edit note metadata: tagIds (notebooks + annotation tags), accent color, pinned
     NoteTagPresetModal/      — install curated annotation tag packs; detects already-installed via presetKey
     ChronicleView/           — Notes section layout: notebook tree, note list, editor; hover-expand on notebooks; NotebookLocationView is the editor column's empty state (path/tree of where you are)
-    NotesSection/            — Notes section wrapper; GlossaryView.tsx (the Glossary) and ReviewView.tsx (Review later), both opened from TagFAB's # panel
+    NoteViews/               — Notes views built on the browse model (CLAUDE.md "Notes views"; no store imports): shared ViewBar, ViewFilter, NoteLevel, gridFocus.ts; Mosaic/ (MosaicView: tiles one level at a time; MosaicTile with its hover peek; MosaicNoteCard; mosaicLayout.ts tile sizes and peek sections); Map/ (see components/NoteViews/Map/ below)
+    NotesSection/            — Notes section wrapper (NotesViewSwitcher.tsx: the header's view switcher and its Tab hotkey), rendering the view or tool in uiStore.notesView through noteViewComponents.ts (CLAUDE.md "Notes views"); GlossaryView.tsx (the Glossary) and ReviewView.tsx (Review later), both opened from TagFAB's # panel
     ListsSection/            — Lists section: sidebar (Checklists/Watchlists/Reference dividers) + card grid (watchlist), table (reference) or ChecklistView.tsx (checklist — tick-off, checked items struck through and moved to the bottom via listStore.toggleListItemChecked) + tab bar
     AddListModal/            — two-step create/edit list (type picker grouped by kind → form with field schema editor + tabs editor)
     AddListItemModal/        — add/edit list item (tab picker, status picker for watchlists, dynamic fields, notes, links)

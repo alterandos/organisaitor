@@ -1,0 +1,134 @@
+/* Shared by the Notes views built on the browse model (ViewBar, ViewFilter, NoteLevel). */
+
+/* ── The bar: where you are, how notes are grouped, the filter ─────────── */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.trail { display: flex; flex-wrap: wrap; align-items: center; min-width: 0; font-size: var(--text-md); }
+.crumbWrap { display: inline-flex; align-items: center; }
+.crumbSep { margin: 0 var(--space-1); color: var(--color-muted); }
+.crumb {
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.crumb:hover { color: var(--color-text); background: var(--color-surface-alt); }
+.crumb[aria-current="page"] { color: var(--color-text); font-weight: 600; cursor: default; background: none; }
+.crumb:focus-visible { outline: 2px solid var(--color-primary); }
+
+.barRight { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+
+.segment { display: inline-flex; padding: 2px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); }
+.segmentBtn {
+  padding: 2px var(--space-3);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.segmentBtn:hover { color: var(--color-text); }
+.segmentBtn[aria-pressed="true"] { color: var(--color-primary); background: var(--color-primary-subtle); font-weight: 600; }
+.segmentBtn:focus-visible { outline: 2px solid var(--color-primary); }
+
+/* ── The filter ───────────────────────────────────────────────────────── */
+
+.filter { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.filterBtn, .chip, .choice, .clearBtn {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.filterBtn { padding: 2px var(--space-3); }
+.chip {
+  padding: 2px var(--space-2);
+  border-color: var(--chip-color, var(--color-primary-border));
+  background: var(--color-primary-subtle);
+}
+.filterBtn:focus-visible, .chip:focus-visible, .choice:focus-visible, .clearBtn:focus-visible { outline: 2px solid var(--color-primary); }
+.filterPanel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-picker);
+  width: 20rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+.filterSection + .filterSection { margin-top: var(--space-3); }
+.filterHeading { margin-bottom: var(--space-1); color: var(--color-muted); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.filterChoices { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.choice { padding: 2px var(--space-2); border-left: 4px solid var(--chip-color, var(--color-border)); }
+.choice[aria-pressed="true"] { background: var(--color-primary-subtle); border-color: var(--color-primary); color: var(--color-primary); font-weight: 600; }
+.clearBtn { margin-top: var(--space-3); padding: 2px var(--space-3); }
+.filterNone { margin: 0; color: var(--color-muted); font-size: var(--text-sm); }
+
+/* ── The note level ───────────────────────────────────────────────────── */
+
+.noteLevel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.backBtn {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.backBtn:hover { background: var(--color-surface-alt); }
+.backBtn:focus-visible { outline: 2px solid var(--color-primary); }
+.siblings { display: flex; gap: var(--space-1); min-width: 0; overflow-x: auto; }
+.sibling {
+  flex-shrink: 0;
+  max-width: 12rem;
+  overflow: hidden;
+  padding: 2px var(--space-3);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sibling:hover { color: var(--color-text); background: var(--color-surface-alt); }
+.sibling[aria-current="page"] { color: var(--color-primary); background: var(--color-primary-subtle); font-weight: 600; }
+.sibling:focus-visible { outline: 2px solid var(--color-primary); }
+.editorArea { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; background: var(--color-surface); }
+

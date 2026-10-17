@@ -10,6 +10,7 @@ import { listHubs, type HubTarget, type LinkChoice } from '@/services/noteHubs';
 import { glossaryEntries, type GlossaryEntry } from '@/services/glossary';
 import { rankSearch, rankSuggestions, type RankField } from '@/utils/suggestRank';
 import { RELATIONS, type HubRef, type HubRelation } from '@/utils/noteHubs';
+import { noteName } from '@/utils/notes';
 // Same look as the note, task, list and inbox pickers.
 import styles from '@/components/NotePickerModal/NotePickerModal.module.css';
 import own from './HubPickerModal.module.css';
@@ -44,6 +45,7 @@ export function HubPickerModal(props: Props) {
   const notesRaw = useNoteStore((s) => s.notes);
   const entriesRaw = useNoteStore((s) => s.structuredTagEntries);
   const notes = useNoteViews();
+  const noteTags = useNoteStore((s) => s.noteTags);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
   const [relation, setRelation] = useState<HubRelation>('related');
@@ -62,7 +64,7 @@ export function HubPickerModal(props: Props) {
       const terms: Row[] = glossaryEntries().filter((e) => !e.locked && e.term).map((entry) => ({ key: `term:${entry.id}`, kind: 'glossary', entry }));
       const noteRows: Row[] = Object.values(notes)
         .filter((n) => !n.archivedAt && n.id !== excludeNoteId)
-        .map((n) => ({ key: `note:${n.id}`, kind: 'note', noteId: n.id, title: n.title || 'Untitled', text: n.abstract ?? '', updatedAt: n.updatedAt }));
+        .map((n) => ({ key: `note:${n.id}`, kind: 'note', noteId: n.id, title: noteName(n, noteTags, { untitled: LABELS.mobileNotes.untitled }).full, text: n.abstract ?? '', updatedAt: n.updatedAt }));
       candidates = [...terms, ...noteRows];
     }
     const ranked = query.trim()
@@ -71,7 +73,7 @@ export function HubPickerModal(props: Props) {
     const list = ranked.items.slice(0, 60);
     if (mode === 'hub') list.push({ key: 'new', kind: 'new' });
     return { rows: list, suggested: Math.min(ranked.suggested, list.length), keywords: ranked.keywords };
-  }, [mode, notes, notesRaw, entriesRaw, excludeNoteId, query, suggestFrom]);
+  }, [mode, notes, notesRaw, entriesRaw, excludeNoteId, query, suggestFrom, noteTags]);
 
   const last = Math.max(0, rows.length - 1);
   if (highlight > last) setHighlight(last);

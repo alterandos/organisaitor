@@ -1,39 +1,35 @@
 import { StickyNotes } from '@/components/StickyNotes/StickyNotes';
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { useUIStore } from '@/store/uiStore';
-import { ChronicleView } from '../ChronicleView/ChronicleView';
-import { MobileNotes } from '../MobileNotes/MobileNotes';
+import { DEFAULT_NOTES_VIEW, NOTE_VIEWS } from '@/config/noteViews';
 import { usePlatform } from '@/hooks/usePlatform';
-import { TagView } from './TagView';
-import { GlossaryView } from './GlossaryView';
-import { ReviewView } from './ReviewView';
-import { HubsView } from './HubsView';
+import { NOTE_VIEW_COMPONENTS } from './noteViewComponents';
 import { TagFAB } from './TagFAB';
-
-// The Map carries React Flow and dagre: its own chunk, loaded the first time it's opened.
-const MapView = lazy(() => import('./MapView'));
 import { EditNoteTagModal } from '../EditNoteTagModal/EditNoteTagModal';
 import styles from './NotesSection.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 
+// The Notes section shows one view or tool at a time (uiStore.notesView; the list is
+// config/noteViews.ts, what each renders noteViewComponents.ts). Never pick what to show here by
+// hand: a new view is an entry in those two files.
 export function NotesSection() {
   const { isAndroid } = usePlatform();
   const editingNoteId     = useUIStore((s) => s.editingNoteId);
-  const noteTagViewActive = useUIStore((s) => s.noteTagViewActive);
-  const glossaryOpen      = useUIStore((s) => s.notesGlossaryOpen);
-  const reviewOpen        = useUIStore((s) => s.notesReviewOpen);
-  const hubsOpen          = useUIStore((s) => s.notesHubsOpen);
-  const mapOpen           = useUIStore((s) => s.notesMapOpen);
+  const notesView         = useUIStore((s) => s.notesView);
   const closeNoteTagView  = useUIStore((s) => s.closeNoteTagView);
   const editNoteTagOpen   = useUIStore((s) => s.editNoteTagOpen);
   const editingNoteTagId  = useUIStore((s) => s.editingNoteTagId);
 
   // Esc closes tag view
-  useEscapeClose(closeNoteTagView, noteTagViewActive);
+  useEscapeClose(closeNoteTagView, notesView === 'tagView');
+
+  const shown = isAndroid && NOTE_VIEWS[notesView].desktopOnly ? DEFAULT_NOTES_VIEW : notesView;
+  const def = NOTE_VIEW_COMPONENTS[shown];
+  const View = isAndroid && def.Phone ? def.Phone : def.Component;
 
   return (
     <div className={styles.container}>
-      {glossaryOpen ? <GlossaryView /> : reviewOpen ? <ReviewView /> : hubsOpen ? <HubsView /> : mapOpen ? <Suspense fallback={null}><MapView /></Suspense> : noteTagViewActive ? <TagView /> : isAndroid ? <MobileNotes /> : <ChronicleView />}
+      {def.lazy ? <Suspense fallback={null}><View /></Suspense> : <View />}
       {!(isAndroid && editingNoteId) && <TagFAB />}
       {!isAndroid && <StickyNotes />}
       {editNoteTagOpen && <EditNoteTagModal key={editingNoteTagId} />}

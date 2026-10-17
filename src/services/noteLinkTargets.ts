@@ -8,6 +8,7 @@ import { editNoteText } from '@/services/noteContentEdit';
 import { openNotePassage } from '@/services/notePassage';
 import { findBlock, passageRange } from '@/utils/noteLinks';
 import { MAIN_TAB_ID } from '@/utils/noteTabs';
+import { noteName } from '@/utils/notes';
 import type { PassageFind } from '@/utils/noteContent';
 import type { NoteId } from '@/types';
 import { LINKABLE_BLOCK_NODES } from '@/components/NoteEditor/blockNodes';
@@ -33,6 +34,7 @@ export function noteDocFor(noteId: string, tabId: string | null | undefined, sch
 
 export type TargetState = 'ok' | 'missing-note' | 'missing-passage' | 'locked';
 
+// `title` is the note's name with its notebook (utils/notes noteName), for showing; '' when untitled.
 export interface TargetPreview { state: TargetState; title: string; heading: string | null; fragment: PMNode[] }
 
 // What a link shows when hovered and an embed shows in full: the passage (a paragraph, or a
@@ -40,7 +42,8 @@ export interface TargetPreview { state: TargetState; title: string; heading: str
 export function linkTarget(noteId: string, tabId: string | null | undefined, blockId: string | null | undefined, schema: Schema, wholeNoteBlocks = 4): TargetPreview {
   const raw = useNoteStore.getState().notes[noteId as NoteId];
   if (!raw || raw.archivedAt) return { state: 'missing-note', title: '', heading: null, fragment: [] };
-  const title = noteView(raw).title;
+  const view = noteView(raw);
+  const title = view.title.trim() ? noteName(view, useNoteStore.getState().noteTags, { untitled: '' }).full : '';
   if (isNoteLocked(raw)) return { state: 'locked', title, heading: null, fragment: [] };
   const doc = noteDocFor(noteId, tabId, schema);
   if (!doc) return { state: 'ok', title, heading: null, fragment: [] };

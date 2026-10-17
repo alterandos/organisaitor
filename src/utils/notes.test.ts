@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getEffectiveCollectionId, resolveNoteInheritedCollectionId, getNoteEffectiveCollectionId,
-  getNotebookIcon, getNoteBreadcrumb, getNoteNotebookPath, getVisibleNoteTagIds,
+  getNotebookIcon, getNoteBreadcrumb, getNoteNotebookPath, getVisibleNoteTagIds, noteName,
 } from '@/utils/notes';
 import type { CollectionId, NoteTag } from '@/types';
 
@@ -169,5 +169,21 @@ describe('getVisibleNoteTagIds', () => {
   it('excludes an annotation tag entirely (only area tags are considered)', () => {
     const tags = { tagKind: tag('tagKind', { kind: 'tag', collectionId: 'c1' as CollectionId }) };
     expect(getVisibleNoteTagIds(tags, 'c1' as CollectionId).has('tagKind')).toBe(false);
+  });
+});
+
+describe('noteName: a note is named with its notebook', () => {
+  const tags = {
+    uni: { id: 'uni', name: 'University', kind: 'area', parentTagId: null },
+    bio: { id: 'bio', name: 'Biology', kind: 'area', parentTagId: 'uni' },
+    key: { id: 'key', name: 'Key idea', kind: 'tag', parentTagId: null },
+  } as unknown as Parameters<typeof noteName>[1];
+  it('title and nearest notebook, the full path for a tooltip, one line for plain text', () => {
+    expect(noteName({ title: 'Lectures', tagIds: ['key', 'bio'] }, tags, { untitled: 'Untitled' }))
+      .toEqual({ title: 'Lectures', notebook: 'Biology', path: 'University › Biology', full: 'Lectures · Biology' });
+  });
+  it('no notebook when it is in none, or in the one being looked at; untitled named so', () => {
+    expect(noteName({ title: '  ', tagIds: [] }, tags, { untitled: 'Untitled' }).full).toBe('Untitled');
+    expect(noteName({ title: 'Lectures', tagIds: ['bio'] }, tags, { untitled: 'Untitled', here: 'bio' }).full).toBe('Lectures');
   });
 });

@@ -3,6 +3,7 @@ import { useNoteViews } from '@/store/noteViews';
 import { useNoteStore } from '@/store/noteStore';
 import { isNoteLocked } from '@/services/noteSecrets';
 import { LABELS } from '@/config/labels';
+import { noteName } from '@/utils/notes';
 import type { CrossAppRef } from '@/types';
 import type { Note, NoteId } from '@/types/notes';
 import styles from './LinkedNoteAbstracts.module.css';
@@ -37,6 +38,8 @@ export function LinkedNoteAbstracts({ refs, onOpen }: Props) {
 
 function AbstractBox({ note, onOpen }: { note: Note; onOpen?: () => void }) {
   const L = LABELS.noteAbstracts;
+  const noteTags = useNoteStore((s) => s.noteTags);
+  const name = noteName(note, noteTags, { untitled: LABELS.mobileNotes.untitled }).full;
   const [text, setText] = useState(note.abstract ?? '');
   // The note's abstract changed elsewhere (in the note, another device) while this isn't being
   // edited: show the new text.
@@ -57,8 +60,8 @@ function AbstractBox({ note, onOpen }: { note: Note; onOpen?: () => void }) {
     <div className={styles.box}>
       <div className={styles.head}>
         {onOpen
-          ? <button type="button" className={styles.noteLink} onClick={onOpen}>📝 {L.heading(note.title || 'Untitled')}</button>
-          : <span className={styles.noteLink}>📝 {L.heading(note.title || 'Untitled')}</span>}
+          ? <button type="button" className={styles.noteLink} onClick={onOpen}>📝 {L.heading(name)}</button>
+          : <span className={styles.noteLink}>📝 {L.heading(name)}</span>}
       </div>
       <textarea
         className={styles.text}
