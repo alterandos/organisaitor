@@ -14,6 +14,7 @@ import { AutoBackupSection } from '@/components/AutoBackupSection/AutoBackupSect
 import styles from './AccountPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
+import { errorMessage } from '@/utils/log';
 
 type Mode = 'signin' | 'signup';
 
@@ -34,6 +35,7 @@ export function AccountPane() {
   const [syncStatus,  setSyncStatus]  = useState<SyncStatus>('idle');
   const [syncErr,     setSyncErr]     = useState<string | null>(null);
   const [restoring,   setRestoring]   = useState(false);
+  const [loadingDemo, setLoadingDemo] = useState(false);
   const [uploading,   setUploading]   = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -181,6 +183,20 @@ export function AccountPane() {
     } finally {
       setRestoring(false);
       if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  // Development builds only (the demo module isn't in a production bundle): src/demo/loadDemo.ts.
+  const handleLoadDemo = async () => {
+    setLoadingDemo(true);
+    setError(null);
+    try {
+      const { loadDemoAsked } = await import('@/demo/loadDemo');
+      if (await loadDemoAsked()) closeAccount();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoadingDemo(false);
     }
   };
 
@@ -361,6 +377,11 @@ export function AccountPane() {
               hidden
               onChange={handleRestoreFile}
             />
+            {import.meta.env.DEV && (
+              <button className={styles.exportBtn} onClick={handleLoadDemo} disabled={loadingDemo} type="button">
+                {loadingDemo ? LABELS.demo.loading : LABELS.demo.load}
+              </button>
+            )}
             <AutoBackupSection />
             <button
               className={styles.exportBtn}

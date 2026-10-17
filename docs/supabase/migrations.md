@@ -33,6 +33,7 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `045` | **Applied** | `045_notification_acks.sql` (`remind_occurrence` on `calendar_events`/`calendar_reminders`/`calendar_deadlines`; `seen_dates jsonb` on events and deadlines). Every upsert to those three tables now sends them, so they reject writes until it runs (sync isolates the failure per table; changes stay queued locally). |
 | `048` | **Applied** | `048_pictures.sql` (new `pictures` table — the picture library — and `backdrop jsonb` on `notes` and `note_tags`, "Backdrops per note and notebook", 2026-10-17). Until it runs: every note and notebook upsert (which now sends `backdrop`) is rejected, so note changes stay queued locally and sync once it's applied; pictures don't sync (they still work on this device). Sync isolates each table; nothing else breaks. |
 | `049` | **Applied** | `049_picture_origin.sql` (`origin text` on `pictures`: backdrop / note / card — "Picture library: note and card pictures", 2026-10-17). Every picture upsert now sends `origin`, so `pictures` rejects writes until it runs (sync isolates the failure per table; pictures stay on this device and queued). Notes are unaffected: they hold only the picture's id. |
+| `050` | **Applied** | `050_investment_purposes_per_account.sql` (primary key of `investment_purposes` becomes `(user_id, id)`: the built-in purposes share fixed ids across accounts, so a second account's upload was refused with a 403). The app now upserts this table on `user_id,id`, which needs this key: until it runs, investment purpose changes from every account are rejected (sync isolates the failure per table; changes stay queued locally and go up once it's applied). |
 
 ## Migration history
 
@@ -87,6 +88,7 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `047_note_tab_dates.sql` | `main_tab_updated_at timestamptz` on `notes` (`Note.mainTabUpdatedAt`): when the main tab's content last changed. A tab's own `createdAt`/`updatedAt` live in the `tabs` jsonb, needing no column. Alters an existing table only, so no new grant. |
 | `048_pictures.sql` | New `pictures` table (`src`, `is_encrypted`, `encrypted_payload`, `copy_of`): the picture library, each picture stored once and referred to by id. `backdrop jsonb` on `notes` and `note_tags` (a note's or notebook's own backdrop; null = inherit). Includes its own grant (new table). |
 | `049_picture_origin.sql` | `origin text not null default 'backdrop'` on `pictures`: where a picture was added (backdrop, a note's text, a Glossary card). Alters an existing table only, so no new grant. |
+| `050_investment_purposes_per_account.sql` | Primary key of `investment_purposes` from `id` to `(user_id, id)`. The built-in purposes (`SEED_PURPOSES`, fixed ids like `ip-growth`) exist in every account; with `id` alone the first account to upload one owned the row and every other account's upload hit RLS (403, "violates row-level security policy (USING expression)"). Supersedes 021's note that fixed ids "naturally deduplicate". Alters an existing table only, so no new grant. |
 
 ## Supabase tables (summary)
 

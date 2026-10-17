@@ -60,7 +60,11 @@ let currentUserId: string | null = null;
 // change tracker, the retry flush and the post-load reconcile below.
 
 type Records = Record<string, unknown>;
-interface TableDef { get: () => Records; toRow: (item: unknown, userId: string) => Record<string, unknown> }
+// onConflict: the columns a table is keyed by, when not `id` alone. A table whose records have
+// fixed ids shared by every account (built-in seeds) is keyed by (user_id, id) instead, or one
+// account's row would block every other account's upload of the same id (migration 050).
+interface TableDef { get: () => Records; toRow: (item: unknown, userId: string) => Record<string, unknown>; onConflict?: string }
+const PER_ACCOUNT_KEY = 'user_id,id';
 
 const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
   tasks:                  { get: () => useTaskStore.getState().tasks,                  toRow: (i, u) => taskToRow(i as Task, u) },
@@ -80,7 +84,7 @@ const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
   structured_tag_entries: { get: () => useNoteStore.getState().structuredTagEntries,   toRow: (i, u) => structuredTagEntryToRow(i as StructuredTagEntry, u) },
   watchlist_items:        { get: () => usePortfolioStore.getState().watchlistItems,    toRow: (i, u) => watchlistItemToRow(i as WatchlistItem, u) },
   portfolio_tags:         { get: () => usePortfolioStore.getState().portfolioTags,     toRow: (i, u) => portfolioTagToRow(i as PortfolioTag, u) },
-  investment_purposes:    { get: () => usePortfolioStore.getState().investmentPurposes, toRow: (i, u) => investmentPurposeToRow(i as InvestmentPurpose, u) },
+  investment_purposes:    { get: () => usePortfolioStore.getState().investmentPurposes, toRow: (i, u) => investmentPurposeToRow(i as InvestmentPurpose, u), onConflict: PER_ACCOUNT_KEY },
   trash_items:            { get: () => useTrashStore.getState().entries,                toRow: (i, u) => trashEntryToRow(i as TrashEntry, u) },
   overviews:              { get: () => useOverviewStore.getState().overviews,           toRow: (i, u) => overviewToRow(i as Overview, u) },
   pictures:               { get: () => usePictureStore.getState().pictures,             toRow: (i, u) => pictureToRow(i as Picture, u) },
@@ -166,7 +170,7 @@ async function pushIds(userId: string, table: keyof typeof TABLE_DEFS, ids: stri
   let error: string | null = null;
   try {
     if (upserts.length > 0) {
-      const res = await supabase.from(table).upsert(upserts);
+      const res = await supabase.from(table).upsert(upserts, def.onConflict ? { onConflict: def.onConflict } : undefined);
       if (res.error) error = res.error.message;
     }
     if (!error && deletes.length > 0) {
@@ -662,7 +666,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     allStructuredTagEntries.length > 0 ? supabase.from('structured_tag_entries').upsert(allStructuredTagEntries.map((e) => structuredTagEntryToRow(e, userId))) : null,
     allWatchlistItems.length     > 0 ? supabase.from('watchlist_items').upsert(allWatchlistItems.map((i) => watchlistItemToRow(i, userId)))         : null,
     allPortfolioTags.length      > 0 ? supabase.from('portfolio_tags').upsert(allPortfolioTags.map((t) => portfolioTagToRow(t, userId)))            : null,
-    allInvestmentPurposes.length > 0 ? supabase.from('investment_purposes').upsert(allInvestmentPurposes.map((p) => investmentPurposeToRow(p, userId))) : null,
+    allInvestmentPurposes.length > 0 ? supabase.from('investment_purposes').upsert(allInvestmentPurposes.map((p) => investmentPurposeToRow(p, userId)), { onConflict: PER_ACCOUNT_KEY }) : null,
     allTrashItems.length         > 0 ? supabase.from('trash_items').upsert(allTrashItems.map((t) => trashEntryToRow(t, userId))) : null,
     allOverviews.length          > 0 ? supabase.from('overviews').upsert(allOverviews.map((o) => overviewToRow(o, userId))) : null,
     allPictures.length           > 0 ? supabase.from('pictures').upsert(allPictures.map((p) => pictureToRow(p, userId))) : null,

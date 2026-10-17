@@ -23,6 +23,7 @@ const fake = vi.hoisted(() => {
   const upserts: Record<string, any[]> = {};
   const updates: Record<string, { ids: string[] }[]> = {};
   const upsertErrors: Record<string, { message: string } | undefined> = {};
+  const upsertOptions: Record<string, ({ onConflict?: string } | undefined)[]> = {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const deferredUpserts: Record<string, { rows: any[]; resolve: () => void }[]> = {};
 
@@ -33,6 +34,7 @@ const fake = vi.hoisted(() => {
     for (const k of Object.keys(upserts)) delete upserts[k];
     for (const k of Object.keys(updates)) delete updates[k];
     for (const k of Object.keys(upsertErrors)) delete upsertErrors[k];
+    for (const k of Object.keys(upsertOptions)) delete upsertOptions[k];
     for (const k of Object.keys(deferredUpserts)) delete deferredUpserts[k];
   }
 
@@ -62,7 +64,8 @@ const fake = vi.hoisted(() => {
         },
       }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      upsert: async (rows: any[]) => {
+      upsert: async (rows: any[], options?: { onConflict?: string }) => {
+        (upsertOptions[table] ??= []).push(options);
         if (table in deferredUpserts) {
           await new Promise<void>((resolve) => { deferredUpserts[table].push({ rows, resolve }); });
         }
@@ -81,7 +84,7 @@ const fake = vi.hoisted(() => {
     };
   }
 
-  return { reset, from, upserts, updates, upsertErrors, deferNextUpsert, resolveNext, holdSelects, releaseSelects };
+  return { reset, from, upserts, updates, upsertErrors, upsertOptions, deferNextUpsert, resolveNext, holdSelects, releaseSelects };
 });
 
 vi.mock('@/services/supabase', () => ({ supabase: { from: (t: string) => fake.from(t) } }));
@@ -419,6 +422,27 @@ describe('customListTypes — built-in list types are never uploaded', () => {
     expect(uploadedIds).toEqual(['custom-1']);
     expect(builtinIds.some((id) => uploadedIds.includes(id))).toBe(false);
     expect(counts.listTypes).toBe(1);
+  });
+});
+
+describe('investment purposes are keyed per account (migration 050)', () => {
+  // The built-in purposes have the same fixed ids in every account, so an upsert on `id` alone
+  // would hit another account's row and be refused by RLS.
+  it('forceUpload and an ordinary push both upsert on (user_id, id)', async () => {
+    usePortfolioStore.setState({ investmentPurposes: usePortfolioStore.getInitialState().investmentPurposes });
+    await forceUpload(USER);
+    expect(fake.upsertOptions.investment_purposes).toEqual([{ onConflict: 'user_id,id' }]);
+    expect(fake.upsertOptions.tasks?.every((o) => !o?.onConflict) ?? true).toBe(true);
+
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] } });
+    await initSync(USER);
+    await tick();
+    const pushedBefore = fake.upsertOptions.investment_purposes?.length ?? 0;
+    usePortfolioStore.getState().addInvestmentPurpose({ name: 'Climate', color: null });
+    await tick();
+    const pushed = fake.upsertOptions.investment_purposes ?? [];
+    expect(pushed.length).toBeGreaterThan(pushedBefore);
+    expect(pushed.every((o) => o?.onConflict === 'user_id,id')).toBe(true);
   });
 });
 

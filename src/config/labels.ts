@@ -444,6 +444,17 @@ export const LABELS = {
     openBeside: 'Open beside',
   },
   // Sticky notes (services/stickyNotes.ts): small notes that stay on the screen in Notes.
+  // The demo account loader (src/demo/loadDemo.ts; Account pane, development builds only).
+  demo: {
+    load:          'Load the demo account',
+    loading:       'Loading the demo…',
+    confirmTitle:  'Replace everything with the demo?',
+    confirmMessage: (who: string) => `Every task, note, event, list and record in ${who} is deleted, here and in the cloud, and replaced by the demo semester. This can’t be undone.`,
+    thisDevice:    'this device',
+    confirmLabel:  'Replace with the demo',
+    notDemo:       (email: string) => `You’re signed in as ${email}. The demo only loads into an account whose email contains “demo”, so it can never replace your real data.`,
+    loaded:        'Demo loaded',
+  },
   stickies: {
     notebook:   'Stickies',
     untitled:   'Sticky note',

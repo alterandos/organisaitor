@@ -4587,7 +4587,7 @@
 .editorContent[data-margin-column="open"]   { padding-right: 5.25rem; }
 .editorContent[data-margin-column="closed"] { padding-right: 1.5rem; }
 
-.editor [data-margin-column] {
+.editor [data-margin-column=""] {   /* the layer only: the editor surface carries data-margin-column="open|closed" */
   position: absolute;
   top: 0;
   left: 0;

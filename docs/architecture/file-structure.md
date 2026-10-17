@@ -98,6 +98,9 @@ src/
   components/NoteEditor/blockFieldFormat.ts — formatFocusedBlockField: the ribbon's formatting buttons on a focused card field
   utils/noteLinks.ts        — links between notes read from stored content: linksToNote, unlinkedMentions, mentionRange, passagesOf, findBlock, passageRange
   src/test/glossaryFixtures.ts — defineInItsNote: puts a test record's card in its note (a record only counts while its note defines it)
+  src/demo/demoAccount.ts   — the demo account (an Earth Sciences student's semester across every app), built through the stores' own actions; demoAccount.test.ts checks it against the editor's schema and writes it as a backup file (DEMO_OUT)
+  src/demo/loadDemo.ts      — the in-app demo loader (Account pane, dev builds only): wipes this device and the signed-in demo account, adds the pictures, builds the demo dated from today, adds per-device touches
+  src/demo/resources/       — the user's demo pictures, one file per slot (README lists them)
   components/InboxPickerModal/ — Send to inbox: the picker (inboxes ranked by the selected words, New inbox here, Also make a task)
   config/itemLinkKinds.ts   — ITEM_LINK_KINDS: THE registry of task-link kinds (Waiting on / Follow-up of / Related — icon, labels, blocks, symmetric); see "ItemLink" in Type system
   utils/taskLinks.ts        — the task-link rules, pure: taskRelations (both directions), openBlockers/isBlocked/openBlockersDeep, unlockedBy, canAddLink (self/duplicate/loop), makeItemLink
