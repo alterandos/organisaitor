@@ -23,6 +23,14 @@ const MANAGE_SECTIONS: { id: ManageSection; label: string; icon: string }[] = [
   { id: 'tags',       label: 'Tags',                  icon: '#' },
 ];
 
+// Each section's "+ New" (2026-10-18: Manage could edit and delete but not create). Opens the
+// same creation modal the Sidebar does; it sits above Manage (z-index 102).
+const NEW_ACTIONS: Record<ManageSection, () => void> = {
+  endeavours: () => useUIStore.getState().showAddCollection(),
+  purposes:   () => useUIStore.getState().showAddPurpose(),
+  tags:       () => useUIStore.getState().showAddTag(),
+};
+
 interface RowProps {
   color?:      string | null;
   name:        string;
@@ -283,6 +291,11 @@ export function ManagePane() {
           </nav>
 
           <div className={styles.content}>
+            <div className={styles.toolbar}>
+              <button type="button" className={styles.newBtn} onClick={NEW_ACTIONS[manageSection]}>
+                + {LABELS.manage.new[manageSection]}
+              </button>
+            </div>
             {manageSection === 'endeavours' && <EndeavoursSection />}
             {manageSection === 'purposes'   && <PurposesSection />}
             {manageSection === 'tags'       && <TagsSection />}

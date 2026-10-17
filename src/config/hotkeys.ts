@@ -48,6 +48,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'nav-portfolio', group: 'Navigation', primary: '6', secondary: 'Ctrl+6', action: 'Portfolio section', customizable: true, touch: 'More tab → Portfolio' },
   { id: 'nav-fitness',   group: 'Navigation', primary: '7', secondary: 'Ctrl+7', action: 'Fitness section',   customizable: true, touch: 'More tab → Fitness' },
   { id: 'nav-alt-digit', group: 'Navigation', primary: 'Alt+0–7', action: 'Go to that section (0 Overview … 7 Fitness), also from inside a text field or a note', touch: 'The bottom bar tabs, or the More tab' },
+  { id: 'nav-alt-letter', group: 'Navigation', primary: 'Alt+S / Alt+M / Alt+A', action: 'Open Settings, Manage or Account, also from inside a text field or a note (Alt + the letter each is bound to)', touch: 'More tab → Settings / Manage Library / Account' },
   // Actions
   { id: 'action-new-item',  group: 'Actions', primary: 'N', secondary: 'Space',  action: 'New item for where you are (task / event / entry; in Notes, a notebook from the Chronicle column, a note from the notes column) — Ctrl+N also works', customizable: true, touch: 'The + button, or the section’s quick-add bar' },
   { id: 'action-settings',  group: 'Actions', primary: 'S',                      action: 'Toggle settings',                  customizable: true, touch: 'More tab → Settings' },
@@ -62,7 +63,8 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'action-quick-access', group: 'Actions', primary: 'Ctrl+G', secondary: 'Alt+G', action: 'Open Quick Access — jump to a note, notebook, task, list, tracker, routine, or ' + LABELS.collection + ' (works from inside a text field too)', customizable: true, touch: 'Swipe down on the mobile header, or the header 🔍 icon (D6; built in W8)' },
   { id: 'action-history', group: 'Actions', primary: 'Alt+N', action: 'Browse where you’ve been: a carousel of the places in your back/forward history (scroll or ← → to move, Enter to go there)', customizable: true, touch: 'More tab → History' },
   { id: 'action-dictate', group: 'Actions', primary: 'Ctrl+D', action: 'Dictate into the focused text field — press again (or Enter) to finish, Esc cancels', customizable: true, touch: 'n/a: the keyboard’s own microphone key (01-tasks-app.md §3.1)' },
-  { id: 'action-recycling-bin', group: 'Actions', primary: 'Ctrl+Shift+R', action: 'Open/close the Recycling Bin', customizable: true, touch: 'More tab → Account → Recycling Bin' },
+  { id: 'action-recycling-bin', group: 'Actions', primary: 'Ctrl+Shift+R', secondary: 'Alt+R', action: 'Open/close the Recycling Bin (also from inside a text field)', customizable: true, touch: 'More tab → Account → Recycling Bin' },
+  { id: 'action-theme', group: 'Actions', primary: 'Alt+T', action: 'Switch between the dark and light theme (also from inside a text field)', customizable: true, touch: 'More tab → Settings → Appearance → Theme' },
   // Item panes — handled locally by useItemActions (src/components/ItemActions/), only while a
   // task / calendar event / calendar reminder pane is open. Not customizable (component-local).
   { id: 'task-archive', group: 'Item panes', primary: 'Ctrl+Shift+A', action: 'Archive the open task / event / reminder (Restore, if it\'s already archived)', touch: 'Archive button in the pane footer; swipe left on a task row → Archive' },

@@ -19,7 +19,7 @@ import { migrateTaskDeadlineShadows } from '@/services/taskDeadlineMigration';
 import { DecryptPrompt } from '@/components/DecryptPrompt/DecryptPrompt';
 import { backfillTaskCalendarLinks } from '@/services/taskCalendarBackfill';
 import { syncGoogleCalendars } from '@/services/googleCalendar';
-import { matchesHotkeyId, matchesHotkeyPrimary } from '@/store/hotkeyOverridesStore';
+import { altLetterHotkey, matchesHotkeyId, matchesHotkeyPrimary } from '@/store/hotkeyOverridesStore';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { AccountPane } from '@/components/AccountPane/AccountPane';
 import { TaskList } from '@/components/TaskList/TaskList';
@@ -56,6 +56,7 @@ import { AddInvestmentPurposeModal } from '@/components/AddInvestmentPurposeModa
 import { TaskPane } from '@/components/TaskPane/TaskPane';
 import { SettingsPane } from '@/components/SettingsPane/SettingsPane';
 import { ManagePane } from '@/components/ManagePane/ManagePane';
+import { useHoverOpen } from '@/hooks/useHoverOpen';
 import { CalendarEventPane } from '@/components/CalendarEventPane/CalendarEventPane';
 import { CalendarReminderPane } from '@/components/CalendarReminderPane/CalendarReminderPane';
 import { CalendarDeadlinePane } from '@/components/CalendarDeadlinePane/CalendarDeadlinePane';
@@ -92,7 +93,7 @@ import { NoteEditorPane } from '@/components/NoteEditorPane/NoteEditorPane';
 import { useNotificationChecker } from '@/hooks/useNotificationChecker';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
-import { closeTopOverlay } from '@/hooks/useEscapeClose';
+import { closeTopOverlay, hasOpenOverlay } from '@/hooks/useEscapeClose';
 import { useSettingsStore } from '@/store/settingsStore';
 import { hexToRgba } from '@/utils/color';
 import { getOrderedEndeavours } from '@/utils/collections';
@@ -286,6 +287,9 @@ export default function App() {
 
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Hovering the Settings button peeks the narrow Settings pane; a click opens the full modal.
+  const settingsPeek = useHoverOpen();
+
   const handleHoverOpen = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     openSidebar();
@@ -358,10 +362,23 @@ export default function App() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // A modal, pane or dialog open over the page takes the keyboard (CLAUDE.md "Page hotkeys
+      // stand aside"): nothing below that acts on the page underneath it (new item, section
+      // switching, back/forward, the filters, zoom) fires then. What stays live opens or
+      // closes a suite overlay of its own (Settings, Manage, Account, Recycling Bin, Quick
+      // Access, History) or works in the focused field (dictation).
+      const overOverlay = hasOpenOverlay();
+      const togglePlace = (id: 'action-settings' | 'action-manage' | 'action-account') => {
+        const ui = useUIStore.getState();
+        if (id === 'action-settings') { if (ui.settingsOpen) ui.closeSettings(); else ui.openSettings(); }
+        else if (id === 'action-account') { if (ui.accountOpen) ui.closeAccount(); else ui.openAccount(); }
+        else ui.toggleManage();
+      };
+
       // Notes editor zoom — must fire before isTyping guard (editor is contentEditable)
       // !e.shiftKey prevents Ctrl+Shift+= (superscript) and Ctrl+Shift+- (subscript) from also zooming
       // A key the editor already took (Ctrl+=/− on a heading changes its level) is not a zoom.
-      if (activeView === 'notes' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && !e.defaultPrevented) {
+      if (!overOverlay && activeView === 'notes' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && !e.defaultPrevented) {
         if (e.key === '-') { e.preventDefault(); nudgeNoteEditorZoom(-0.1); return; }
         if (e.key === '=') { e.preventDefault(); nudgeNoteEditorZoom(0.1); return; }
       }
@@ -380,11 +397,13 @@ export default function App() {
       // typing, never navigate; it only acts as "back" below, once isTyping is confirmed false.
       if (matchesHotkeyPrimary(e, 'action-back')) {
         e.preventDefault();
+        if (overOverlay) return;
         if (navigateBack()) useUIStore.getState().flashNav('back');
         return;
       }
       if (matchesHotkeyPrimary(e, 'action-forward')) {
         e.preventDefault();
+        if (overOverlay) return;
         if (useUIStore.getState().travelHistory(1)) useUIStore.getState().flashNav('forward');
         return;
       }
@@ -408,7 +427,33 @@ export default function App() {
       const altSection = altDigitSection(e);
       if (altSection) {
         e.preventDefault();
+        if (overOverlay) return;
         if ((altSection !== 'portfolio' && altSection !== 'fitness') || isAppEnabled(altSection)) setActiveView(altSection);
+        return;
+      }
+
+      // Recycling Bin (Ctrl+Shift+R / Alt+R) and the theme switch (Alt+T): also from inside a text
+      // field, where neither types anything.
+      if (matchesHotkeyId(e, 'action-recycling-bin')) {
+        e.preventDefault();
+        const ui = useUIStore.getState();
+        if (ui.recyclingBinOpen) ui.closeRecyclingBin(); else ui.openRecyclingBin();
+        return;
+      }
+      if (matchesHotkeyId(e, 'action-theme')) {
+        e.preventDefault();
+        // From System, switch to the opposite of what is showing now.
+        const dark = document.documentElement.dataset.theme === 'dark';
+        useSettingsStore.getState().setTheme(dark ? 'light' : 'dark');
+        return;
+      }
+
+      // Alt + a place's letter (Alt+S Settings, Alt+M Manage, Alt+A Account): also from inside a
+      // text field, where the plain letter types. Follows the letter each is bound to.
+      const altPlace = altLetterHotkey(e, ['action-settings', 'action-manage', 'action-account']);
+      if (altPlace) {
+        e.preventDefault();
+        togglePlace(altPlace);
         return;
       }
 
@@ -420,7 +465,7 @@ export default function App() {
       // with the bypass above since a typing-field target already returned by now.
       if (matchesHotkeyId(e, 'action-back')) {
         e.preventDefault();
-        if (navigateBack()) useUIStore.getState().flashNav('back');
+        if (!overOverlay && navigateBack()) useUIStore.getState().flashNav('back');
         return;
       }
 
@@ -451,6 +496,13 @@ export default function App() {
       // Alt+Left/Right also works while focus is in a text field.)
 
 
+      if (matchesHotkeyId(e, 'action-settings')) { e.preventDefault(); togglePlace('action-settings'); return; }
+      if (matchesHotkeyId(e, 'action-account'))  { e.preventDefault(); togglePlace('action-account');  return; }
+      if (matchesHotkeyId(e, 'action-manage'))   { e.preventDefault(); togglePlace('action-manage');   return; }
+
+      // Everything below acts on the page, so it stands aside under an open overlay.
+      if (overOverlay) return;
+
       if (matchesHotkeyId(e, 'nav-overview'))  { e.preventDefault(); setActiveView('overview');  return; }
       if (matchesHotkeyId(e, 'nav-tasks'))     { e.preventDefault(); setActiveView('tasks');     return; }
       if (matchesHotkeyId(e, 'nav-calendar'))  { e.preventDefault(); setActiveView('calendar');  return; }
@@ -460,23 +512,6 @@ export default function App() {
       if (matchesHotkeyId(e, 'nav-portfolio')) { if (isAppEnabled('portfolio')) { e.preventDefault(); setActiveView('portfolio'); } return; }
       if (matchesHotkeyId(e, 'nav-fitness'))   { if (isAppEnabled('fitness'))   { e.preventDefault(); setActiveView('fitness');   } return; }
 
-      if (matchesHotkeyId(e, 'action-settings')) {
-        e.preventDefault();
-        if (settingsOpen) closeSettings(); else openSettings();
-        return;
-      }
-
-      if (matchesHotkeyId(e, 'action-account')) {
-        e.preventDefault();
-        if (accountOpen) closeAccount(); else openAccount();
-        return;
-      }
-
-      if (matchesHotkeyId(e, 'action-recycling-bin')) {
-        e.preventDefault();
-        if (recyclingBinOpen) closeRecyclingBin(); else openRecyclingBin();
-        return;
-      }
 
       if (matchesHotkeyId(e, 'action-endeavour')) {
         if (activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness' && activeView !== 'overview') { e.preventDefault(); toggleEndeavourPicker(); }
@@ -488,11 +523,6 @@ export default function App() {
         return;
       }
 
-      if (matchesHotkeyId(e, 'action-manage')) {
-        e.preventDefault();
-        toggleManage();
-        return;
-      }
 
 
       if (portfolioChartOpen && e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -590,7 +620,8 @@ export default function App() {
             ><AccountIcon className={styles.accountIcon} /></button>
             <button
               className={styles.settingsBtn}
-              onClick={openSettings}
+              onClick={() => { settingsPeek.close(); openSettings(); }}
+              {...settingsPeek.handlers}
               aria-label="Open settings"
               title="Settings"
             ><SettingsIcon className={styles.accountIcon} /></button>
@@ -649,7 +680,10 @@ export default function App() {
 
         {!isAndroid && <Sidebar onHoverEnter={handleHoverOpen} onHoverLeave={handleHoverClose} />}
         {editingTaskId             && <TaskPane key={editingTaskId} />}
-        {settingsOpen              && <SettingsPane />}
+        {settingsOpen              && <SettingsPane variant="modal" />}
+        {!settingsOpen && settingsPeek.open && (
+          <SettingsPane variant="peek" hoverHandlers={settingsPeek.handlers} onClosePeek={settingsPeek.close} />
+        )}
         <ManagePane />
         {accountOpen               && <AccountPane />}
         {integrationsOpen          && <IntegrationsPane />}

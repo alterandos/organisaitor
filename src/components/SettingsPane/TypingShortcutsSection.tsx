@@ -3,12 +3,13 @@ import { LABELS } from '@/config/labels';
 import { useSettingsStore } from '@/store/settingsStore';
 import { textShortcutProblem, SHORTCUT_TEXT_MAX, SHORTCUT_TYPED_MAX, type TextShortcut } from '@/specialChars/charSets';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
-import { TrashIcon } from '@/components/Icons';
+import { DisclosureIcon, TrashIcon } from '@/components/Icons';
 import styles from './SettingsPane.module.css';
 
 // Settings → Typing shortcuts: the person's own (`govt` → government), used in every text field
 // and the note editor (specialChars/charSets.ts findUserShortcut). The whole section is
-// `data-no-shortcuts`, so writing a shortcut here never sets one off.
+// `data-no-shortcuts`, so writing a shortcut here never sets one off. The add row stays at the
+// top; the list itself is folded away until opened, so the section stays short.
 export function TypingShortcutsSection() {
   const L = LABELS.typingShortcuts;
   const shortcuts = useSettingsStore((s) => s.textShortcuts);
@@ -16,6 +17,7 @@ export function TypingShortcutsSection() {
   const [typed, setTyped] = useState('');
   const [text, setText] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,11 +34,7 @@ export function TypingShortcutsSection() {
     <section className={styles.section} data-no-shortcuts>
       <h3 className={styles.sectionLabel}>{L.section}</h3>
       <p className={styles.settingDesc}>{L.desc}</p>
-      <ul className={styles.shortcutList}>
-        {shortcuts.length === 0 && <li className={styles.settingDesc}>{L.none}</li>}
-        {shortcuts.map((s) => <ShortcutRow key={s.id} shortcut={s} all={shortcuts} />)}
-      </ul>
-      <form className={styles.shortcutRow} onSubmit={submit}>
+      <form className={`${styles.shortcutRow} ${styles.shortcutAddRow}`} onSubmit={submit}>
         <input
           className={styles.shortcutTyped}
           value={typed}
@@ -57,6 +55,26 @@ export function TypingShortcutsSection() {
         <button type="submit" className={styles.shortcutAdd}>{L.add}</button>
       </form>
       {problem && <p className={styles.shortcutProblem} role="alert">{problem}</p>}
+      {shortcuts.length === 0 ? (
+        <p className={styles.settingDesc}>{L.none}</p>
+      ) : (
+        <>
+          <button
+            type="button"
+            className={styles.disclosureBtn}
+            aria-expanded={listOpen}
+            onClick={() => setListOpen((o) => !o)}
+          >
+            <DisclosureIcon open={listOpen} />
+            {L.yours(shortcuts.length)}
+          </button>
+          {listOpen && (
+            <ul className={styles.shortcutList}>
+              {shortcuts.map((s) => <ShortcutRow key={s.id} shortcut={s} all={shortcuts} />)}
+            </ul>
+          )}
+        </>
+      )}
     </section>
   );
 }

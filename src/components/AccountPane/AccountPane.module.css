@@ -12,17 +12,22 @@
   .overlay { align-items: center; padding: 1rem; }
 }
 
+/* Never taller than the screen: the header stays and the body scrolls, so everything (Sign out
+   included) can always be reached. */
 .pane {
   background: var(--color-surface);
   width: 100%;
   max-width: 400px;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: 0 -4px 28px rgba(0,0,0,0.14);
   overflow: hidden;
 }
 
 @media (min-width: 520px) {
-  .pane { border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+  .pane { max-height: calc(100dvh - 2rem); border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
 }
 
 .header {
@@ -31,6 +36,7 @@
   justify-content: space-between;
   padding: 1rem 1.25rem 0.75rem;
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 .title { font-size: 0.95rem; font-weight: 600; }
@@ -66,7 +72,7 @@
   border-radius: 3px;
 }
 
-.body { padding: 1rem 1.25rem 1.25rem; }
+.body { padding: 1rem 1.25rem 1.25rem; overflow-y: auto; min-height: 0; flex: 1; }
 
 /* ── Tabs ── */
 .tabs {

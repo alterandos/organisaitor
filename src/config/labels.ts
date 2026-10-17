@@ -547,6 +547,7 @@ export const LABELS = {
     remove:      'Delete shortcut',
     noun:        'typing shortcut',
     none:        'No shortcuts yet.',
+    yours:       (n: number) => `Your shortcuts (${n})`,
     problems: {
       typedEmpty: 'Type the shortcut.',
       typedSpace: 'A shortcut is one word, with no spaces.',
@@ -554,6 +555,34 @@ export const LABELS = {
       textEmpty:  'Type what it becomes.',
       textLong:   'Keep the text to 500 characters or fewer.',
       duplicate:  'There is already a shortcut for that.',
+    },
+  },
+  // Account → Automatic local backups.
+  autoBackup: {
+    snapshots: (n: number) => `${n} snapshot${n === 1 ? '' : 's'}`,
+    latest:    (when: string) => `latest ${when}`,
+  },
+  // The Manage library modal.
+  manage: {
+    new: {
+      endeavours: `New ${COLLECTION}`,
+      purposes:   'New Purpose',
+      tags:       'New Tag',
+    },
+  },
+  // The Settings pane: peeked on hover, the full modal on click or S (2026-10-18).
+  settings: {
+    title:    'Settings',
+    close:    'Close settings',
+    openFull: 'Open all settings',
+    sections: {
+      appearance:    'Appearance',
+      voice:         'Voice dictation',
+      notifications: 'Notifications',
+      storage:       'Storage',
+      tasks:         'Tasks display',
+      calendar:      'Calendar display',
+      hotkeys:       'Keyboard shortcuts',
     },
   },
   // A note's colour (Note.color), shown in the note so notes are easy to tell apart (2026-10-16).

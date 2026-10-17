@@ -14,6 +14,7 @@ import { formatObjectWhen } from '@/components/NoteEditor/objects/format';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useHoverOpen } from '@/hooks/useHoverOpen';
 import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import styles from './NotificationCenter.module.css';
 
@@ -197,28 +198,35 @@ function NotificationCard({ n }: { n: PendingNotification }) {
 export function NotificationCenter() {
   const pending   = useNotificationStore((s) => s.pending);
   const clearAll  = useNotificationStore((s) => s.clearAll);
-  const [open, setOpen] = useState(false);
+  // Hovering the bell opens the panel as a preview (closes when the mouse leaves); a click pins
+  // it open until a click outside or Escape.
+  const [pinned, setPinned] = useState(false);
+  const hover = useHoverOpen(!pinned);
+  const open = pinned || hover.open;
   const ref = useRef<HTMLDivElement>(null);
+  const hoverClose = hover.close;
+  const close = () => { setPinned(false); hoverClose(); };
 
-  useEscapeClose(() => setOpen(false), open);
+  useEscapeClose(close, open);
 
   // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) { setPinned(false); hoverClose(); }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [open, hoverClose]);
 
   const count = pending.length;
 
   return (
-    <div className={styles.wrapper} ref={ref}>
+    <div className={styles.wrapper} ref={ref} {...hover.handlers}>
       <button
         className={`${styles.bellBtn} ${count > 0 ? styles.bellActive : ''}`}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => { if (pinned) close(); else setPinned(true); }}
+        aria-expanded={open}
         aria-label={`Notifications${count > 0 ? ` (${count})` : ''}`}
         title="Notifications"
       >

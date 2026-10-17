@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
+import type { AppView } from '@/store/uiStore';
 import { useUIStore } from '@/store/uiStore';
 import { useSettingsStore, NOTE_COLOR_BARS } from '@/store/settingsStore';
 import { LABELS } from '@/config/labels';
@@ -52,11 +53,26 @@ function HotkeyCell({
   );
 }
 
-export function SettingsPane() {
+type SettingsSectionId = 'appearance' | 'voice' | 'typing' | 'notifications' | 'storage' | 'tasks' | 'notes' | 'calendar' | 'hotkeys';
+
+// Two ways in, as with the library (the ☰ hover Sidebar and its Manage modal): hovering the
+// Settings button peeks this as a narrow pane beside the page (`peek`, closed when the mouse
+// leaves); clicking it, or the hotkey, opens the full modal (`modal`: a section list on the
+// left, Manage's size), which takes the keyboard while open.
+export function SettingsPane({ variant, hoverHandlers, onClosePeek }: {
+  variant: 'peek' | 'modal';
+  hoverHandlers?: { onMouseEnter: () => void; onMouseLeave: () => void };
+  onClosePeek?: () => void;
+}) {
   const paneResize = usePaneWidth('settings-pane', { edge: 'left', min: 280, max: 720 });
+  const navResize  = usePaneWidth('settings-nav', { edge: 'right', min: 140, max: 360 });
   const { isAndroid } = usePlatform();
   const closeSettings = useUIStore((s) => s.closeSettings);
+  const openSettings  = useUIStore((s) => s.openSettings);
   const activeView    = useUIStore((s) => s.activeView);
+  const [sectionId, setSectionId] = useState<SettingsSectionId>(() =>
+    activeView === 'tasks' || activeView === 'notes' || activeView === 'calendar' ? activeView : 'appearance');
+  const close = variant === 'peek' ? (onClosePeek ?? (() => {})) : closeSettings;
 
   // Hotkey-rebind capture state — a separate Escape handler below cancels capture rather
   // than closing the whole pane; this one must not also fire in that case (same class of
@@ -73,7 +89,7 @@ export function SettingsPane() {
     return slot === 'primary' ? h.primary : (h.secondary ?? null);
   };
 
-  useEscapeClose(() => { if (!listening) closeSettings(); });
+  useEscapeClose(() => { if (!listening) close(); });
 
   // Captures the next keypress while `listening` is set. Registered in the capture phase
   // so it runs before the effect above (and before anything else) — Escape here cancels
@@ -184,18 +200,9 @@ export function SettingsPane() {
   const setWeekendShadeColor       = useSettingsStore((s) => s.setWeekendShadeColor);
   const toggleStrikethroughPastDays = useSettingsStore((s) => s.toggleStrikethroughPastDays);
 
-  return (
-    <>
-      <div className={styles.overlay} onClick={closeSettings} />
-      <aside style={paneResize.style} className={styles.pane}>
-        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
-        <header className={styles.header}>
-          <span className={styles.heading}>Settings</span>
-          <button className={styles.closeBtn} onClick={closeSettings} aria-label="Close settings">×</button>
-        </header>
-
-        <div className={styles.body}>
-
+  // Every section, in order. `here`: shown in the hover peek only in that app section (the full
+  // modal lists them all, so any section's settings can be reached from anywhere).
+  const appearanceSection = (
           <section className={styles.section}>
             <h3 className={styles.sectionLabel}>Appearance</h3>
             <div className={styles.setting}>
@@ -255,7 +262,9 @@ export function SettingsPane() {
               </select>
             </div>
           </section>
+  );
 
+  const voiceSection = (
           <section className={styles.section}>
             <h3 className={styles.sectionLabel}>Voice dictation</h3>
             <div className={styles.setting}>
@@ -277,12 +286,9 @@ export function SettingsPane() {
               </select>
             </div>
           </section>
+  );
 
-          <TypingShortcutsSection />
-          {isAndroid && <NotificationsSection />}
-          <StorageSection />
-
-          {activeView === 'tasks' && (
+  const tasksSection = (
             <section className={styles.section}>
               <h3 className={styles.sectionLabel}>Display</h3>
 
@@ -314,9 +320,9 @@ export function SettingsPane() {
                 <Toggle on={hideBlockedTasks} onToggle={toggleHideBlockedTasks} label="Toggle moving blocked tasks out of the list" />
               </SettingRow>
             </section>
-          )}
+  );
 
-          {activeView === 'notes' && (
+  const notesSection = (
             <section className={styles.section}>
               <h3 className={styles.sectionLabel}>{LABELS.noteHeadings.settingsSection}</h3>
 
@@ -360,9 +366,9 @@ export function SettingsPane() {
                 </div>
               </SettingRow>
             </section>
-          )}
+  );
 
-          {activeView === 'calendar' && (
+  const calendarSection = (
             <section className={styles.section}>
               <h3 className={styles.sectionLabel}>Calendar display</h3>
 
@@ -400,8 +406,9 @@ export function SettingsPane() {
                 <Toggle on={strikethroughPastDays} onToggle={toggleStrikethroughPastDays} label="Toggle strikethrough past days" />
               </SettingRow>
             </section>
-          )}
+  );
 
+  const hotkeysSection = (
           <section className={styles.section}>
             <div className={styles.hotkeysHeader}>
               <h3 className={styles.sectionLabel}>Keyboard shortcuts</h3>
@@ -480,9 +487,61 @@ export function SettingsPane() {
               </tbody>
             </table>
           </section>
+  );
 
+  const sections: { id: SettingsSectionId; label: string; here?: AppView; node: React.ReactNode }[] = [
+    { id: 'appearance', label: LABELS.settings.sections.appearance, node: appearanceSection },
+    { id: 'voice',      label: LABELS.settings.sections.voice,      node: voiceSection },
+    { id: 'typing',     label: LABELS.typingShortcuts.section,        node: <TypingShortcutsSection /> },
+    ...(isAndroid ? [{ id: 'notifications' as const, label: LABELS.settings.sections.notifications, node: <NotificationsSection /> }] : []),
+    { id: 'storage',    label: LABELS.settings.sections.storage,    node: <StorageSection /> },
+    { id: 'tasks',      label: LABELS.settings.sections.tasks,      here: 'tasks',    node: tasksSection },
+    { id: 'notes',      label: LABELS.noteHeadings.settingsSection, here: 'notes',    node: notesSection },
+    { id: 'calendar',   label: LABELS.settings.sections.calendar,   here: 'calendar', node: calendarSection },
+    { id: 'hotkeys',    label: LABELS.settings.sections.hotkeys,    node: hotkeysSection },
+  ];
+
+  if (variant === 'peek') {
+    return (
+      <aside style={paneResize.style} className={styles.pane} {...hoverHandlers} aria-label={LABELS.settings.title}>
+        {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
+        <header className={styles.header}>
+          <span className={styles.heading}>{LABELS.settings.title}</span>
+          <button className={styles.expandBtn} onClick={openSettings}>{LABELS.settings.openFull}</button>
+        </header>
+        <div className={styles.body}>
+          {sections.filter((x) => !x.here || x.here === activeView).map((x) => (
+            <Fragment key={x.id}>{x.node}</Fragment>
+          ))}
         </div>
       </aside>
-    </>
+    );
+  }
+
+  const shown = sections.find((x) => x.id === sectionId) ?? sections[0];
+  return (
+    <div className={styles.modalOverlay} onMouseDown={(e) => { if (e.target === e.currentTarget) closeSettings(); }}>
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label={LABELS.settings.title}>
+        <header className={styles.modalHeader}>
+          <span className={styles.modalTitle}>{LABELS.settings.title}</span>
+          <button className={styles.closeBtn} onClick={closeSettings} aria-label={LABELS.settings.close}>×</button>
+        </header>
+        <div className={styles.modalBody}>
+          <nav style={navResize.style} className={styles.nav} aria-label={LABELS.settings.title}>
+            {navResize.handle && <ResizeHandle {...navResize.handle} />}
+            {sections.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                className={`${styles.navItem} ${x.id === shown.id ? styles.navItemActive : ''}`}
+                aria-current={x.id === shown.id ? 'true' : undefined}
+                onClick={() => setSectionId(x.id)}
+              >{x.label}</button>
+            ))}
+          </nav>
+          <div className={styles.modalContent}>{shown.node}</div>
+        </div>
+      </div>
+    </div>
   );
 }

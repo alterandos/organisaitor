@@ -61,8 +61,11 @@ export function matchesBinding(e: KeyboardEvent, binding: string | null | undefi
   if (!binding) return false;
   const p = parseBinding(binding);
   const eventKey = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  // With Alt held a letter is read from the physical key too: Option+letter types a character on
+  // a Mac (Option+T is †), so `key` alone would never match Alt+T there.
+  const sameKey = eventKey === p.key || (p.alt && /^[A-Z]$/.test(p.key) && e.code === `Key${p.key}`);
   return (
-    eventKey === p.key &&
+    sameKey &&
     e.ctrlKey  === p.ctrl &&
     e.shiftKey === p.shift &&
     e.altKey   === p.alt &&

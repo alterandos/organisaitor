@@ -66,7 +66,31 @@
   margin: 0;
 }
 
+.disclosure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0.3rem 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+.disclosure:hover { color: var(--color-primary); }
+
+.disclosureLatest {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--color-muted);
+}
+
 .list {
+  max-height: 14rem;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;

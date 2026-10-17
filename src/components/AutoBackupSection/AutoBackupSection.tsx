@@ -4,6 +4,8 @@ import { useAuthStore } from '@/store/authStore';
 import { listBackupSnapshots, getBackupSnapshot, type BackupSnapshotMeta } from '@/services/autoBackupStorage';
 import { restoreBackupData } from '@/utils/backupExport';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
+import { DisclosureIcon } from '@/components/Icons';
+import { LABELS } from '@/config/labels';
 import styles from './AutoBackupSection.module.css';
 
 // The UI half of services/autoBackup.ts — shown in AccountPane (both signed-in and guest
@@ -22,6 +24,9 @@ export function AutoBackupSection() {
   const [loading,     setLoading]     = useState(true);
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [message,     setMessage]     = useState<string | null>(null);
+  // The snapshots are folded into one line (how many, the latest) until opened, so they don't
+  // push the rest of Account down.
+  const [listOpen,    setListOpen]    = useState(false);
 
   const refresh = async () => {
     setLoading(true);
@@ -89,7 +94,20 @@ export function AutoBackupSection() {
       ) : snapshots.length === 0 ? (
         <p className={styles.empty}>No automatic snapshots yet.</p>
       ) : (
-        <ul className={styles.list}>
+        <>
+        <button
+          type="button"
+          className={styles.disclosure}
+          aria-expanded={listOpen}
+          onClick={() => setListOpen((o) => !o)}
+        >
+          <DisclosureIcon open={listOpen} />
+          <span>{LABELS.autoBackup.snapshots(snapshots.length)}</span>
+          <span className={styles.disclosureLatest}>
+            {LABELS.autoBackup.latest(new Date(snapshots[0].createdAt).toLocaleString())}
+          </span>
+        </button>
+        {listOpen && <ul className={styles.list}>
           {snapshots.map((s) => (
             <li key={s.id} className={styles.row}>
               <span className={styles.rowDate}>{new Date(s.createdAt).toLocaleString()}</span>
@@ -103,7 +121,8 @@ export function AutoBackupSection() {
               </button>
             </li>
           ))}
-        </ul>
+        </ul>}
+        </>
       )}
     </div>
   );

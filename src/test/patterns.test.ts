@@ -1086,6 +1086,14 @@ describe('pattern: page hotkeys stand aside through pageKeyBlocked (CLAUDE.md "P
   });
   // App.tsx's global handler: what acts on the page (new item, section keys, back/forward, the
   // filters) stands aside while an overlay is open, so Space in Manage can't open a new task below.
+  it('the global hotkeys in App.tsx ask hasOpenOverlay, and stop before the page-acting ones', () => {
+    const app = fs.readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
+    expect(app).toContain('const overOverlay = hasOpenOverlay();');
+    const stop = app.search(/if \(overOverlay\) return;\s+if \(matchesHotkeyId\(e, 'nav-overview'\)\)/);
+    expect(stop).toBeGreaterThan(-1);
+    expect(app.indexOf("matchesHotkeyId(e, 'action-new-item')")).toBeGreaterThan(stop);
+    expect(app.indexOf("matchesHotkeyId(e, 'action-endeavour')")).toBeGreaterThan(stop);
+  });
 });
 
 describe('pattern: a note is named with its notebook (CLAUDE.md "A note is named with its notebook")', () => {

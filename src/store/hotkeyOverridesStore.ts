@@ -57,6 +57,21 @@ export function matchesHotkeyId(e: KeyboardEvent, id: string): boolean {
   return matchesBinding(e, primary) || matchesBinding(e, secondary);
 }
 
+// Alt + the letter a place's hotkey is bound to (Alt+S for Settings while S opens it), so the place
+// can be reached from inside a text field, where the plain letter types. Only a binding that is
+// one bare letter counts. Read from the physical key (`code`): Option+letter types a character on
+// a Mac. Returns the matching id, or null.
+export function altLetterHotkey<T extends string>(e: KeyboardEvent, ids: readonly T[]): T | null {
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return null;
+  const m = /^Key([A-Z])$/.exec(e.code);
+  if (!m) return null;
+  for (const id of ids) {
+    const { primary, secondary } = getEffectiveBinding(id);
+    if (primary?.toUpperCase() === m[1] || secondary?.toUpperCase() === m[1]) return id;
+  }
+  return null;
+}
+
 // Primary-slot-only match — for the rare hotkey (today: action-back/action-forward) whose
 // primary binding must work even while typing in a text field but whose secondary must not
 // (Alt+Left/Right isn't a text-editing binding anywhere; Backspace, action-back's secondary,

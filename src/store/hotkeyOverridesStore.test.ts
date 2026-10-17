@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useHotkeyOverridesStore, getEffectiveBinding, matchesHotkeyId, findConflicts } from '@/store/hotkeyOverridesStore';
+import { useHotkeyOverridesStore, getEffectiveBinding, matchesHotkeyId, findConflicts, altLetterHotkey } from '@/store/hotkeyOverridesStore';
 
 beforeEach(() => {
   useHotkeyOverridesStore.setState(useHotkeyOverridesStore.getInitialState(), true);
@@ -82,3 +82,37 @@ describe('findConflicts', () => {
     expect(findConflicts('Ctrl+Alt+Shift+F12', 'nav-tasks')).toEqual([]);
   });
 });
+
+describe('altLetterHotkey (Alt + the letter of a place, from inside a text field too)', () => {
+  const ids = ['action-settings', 'action-manage', 'action-account'] as const;
+  const alt = (code: string, mods: Partial<KeyboardEvent> = {}) => ({ code, key: '?', altKey: true, ctrlKey: false, metaKey: false, shiftKey: false, ...mods }) as KeyboardEvent;
+
+  it('Alt+S, Alt+M, Alt+A find Settings, Manage, Account, read from the physical key', () => {
+    expect(altLetterHotkey(alt('KeyS'), ids)).toBe('action-settings');
+    expect(altLetterHotkey(alt('KeyM'), ids)).toBe('action-manage');
+    expect(altLetterHotkey(alt('KeyA'), ids)).toBe('action-account');
+    expect(altLetterHotkey(alt('KeyQ'), ids)).toBeNull();
+  });
+
+  it('needs Alt alone, and follows a rebinding', () => {
+    expect(altLetterHotkey(alt('KeyS', { altKey: false }), ids)).toBeNull();
+    expect(altLetterHotkey(alt('KeyS', { ctrlKey: true }), ids)).toBeNull();
+    expect(altLetterHotkey(alt('KeyS', { shiftKey: true }), ids)).toBeNull();
+    useHotkeyOverridesStore.getState().setOverride('action-settings', 'primary', 'Q');
+    expect(altLetterHotkey(alt('KeyQ'), ids)).toBe('action-settings');
+    expect(altLetterHotkey(alt('KeyS'), ids)).toBeNull();
+  });
+});
+
+describe('Alt+T and Alt+R (theme, Recycling Bin)', () => {
+  const ev = (k: string, code: string) => ({ key: k, code, altKey: true, ctrlKey: false, metaKey: false, shiftKey: false }) as KeyboardEvent;
+
+  it('match by the letter, and by the physical key when Option+letter types a character (Mac)', () => {
+    expect(matchesHotkeyId(ev('t', 'KeyT'), 'action-theme')).toBe(true);
+    expect(matchesHotkeyId(ev('†', 'KeyT'), 'action-theme')).toBe(true);
+    expect(matchesHotkeyId(ev('r', 'KeyR'), 'action-recycling-bin')).toBe(true);
+    expect(matchesHotkeyId(ev('®', 'KeyR'), 'action-recycling-bin')).toBe(true);
+    expect(matchesHotkeyId({ ...ev('t', 'KeyT'), altKey: false } as KeyboardEvent, 'action-theme')).toBe(false);
+  });
+});
+
