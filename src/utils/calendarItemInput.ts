@@ -1,6 +1,6 @@
 import type {
   CalendarEventType, CollectionId, CreateCalendarEventInput, CreateCalendarReminderInput, CreateCalendarDeadlineInput,
-  CrossAppRef, EventStatus, NotifyUnit, RepeatConfig,
+  CrossAppRef, EventStatus, NotifyUnit, RepeatConfig, TravelMode,
 } from '@/types';
 import { mergeNewLinks } from '@/utils/links';
 
@@ -16,6 +16,7 @@ export interface CalendarEventFields {
   links?:             string[];
   location?:          string | null;
   eventType?:         CalendarEventType;
+  travelMode?:        TravelMode | null;
   collectionId?:      CollectionId | null;
   notifyBeforeValue?: number | null;
   notifyBeforeUnit?:  NotifyUnit;
@@ -44,6 +45,7 @@ export function buildCalendarEventInput(f: CalendarEventFields): CreateCalendarE
     links:             mergeNewLinks(f.links ?? [], f.notes),
     location:          f.location || null,
     eventType,
+    travelMode:        eventType === 'travel' ? f.travelMode ?? null : null,
     collectionId:      f.collectionId || null,
     notifyBeforeValue: f.notifyBeforeValue ?? null,
     notifyBeforeUnit:  f.notifyBeforeUnit,

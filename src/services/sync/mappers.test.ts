@@ -87,8 +87,8 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       repeat: { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null },
       status: 'confirmed', important: true, background: false, color: null, crossAppRefs: [{ type: 'note', id: 'n1' }],
       archivedAt: null, archiveReason: null, seriesId: 'e0', seriesDate: '2030-01-08', remindOccurrence: '2030-01-08', seenDates: ['2030-01-01'],
-      source: 'google', sourceConnectionId: 'conn1', sourceCalendarId: 'cal1', sourceEventId: 'evt1',
-      sourceRaw: { raw: true },
+      travelMode: 'train', source: 'google', sourceAccount: 'me@example.com', sourceConnectionId: 'conn1', sourceCalendarId: 'cal1', sourceEventId: 'evt1',
+      sourceUid: 'uid1', sourceRaw: { raw: true },
     };
     expect(rowToEvent(eventToRow(e, USER))).toEqual(e);
   });

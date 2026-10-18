@@ -20,6 +20,8 @@ export interface ReviewRow {
   eventType:   CalendarEventType;
   isDuplicate: boolean;
 }
+  repeatText:  string | null;   // "Repeats every week on Mon, Thu"
+  partial:     boolean;         // repeats in a way the app can't show: only the first date comes in
 
 interface Props {
   rows:      ReviewRow[];
@@ -102,6 +104,8 @@ export function CalendarImportReviewModal({ rows: initialRows, onConfirm, onCanc
                     {r.isDuplicate && <span className={styles.dupBadge}>already in calendar</span>}
                     {r.location && <span className={styles.locationHint}>📍 {r.location}</span>}
                   </td>
+                    {r.repeatText && <span className={styles.locationHint}>🔁 {r.repeatText}</span>}
+                    {r.partial && <span className={styles.locationHint}>{LABELS.calendarImport.partialRepeat}</span>}
                   <td className={styles.nowrap}>{formatDate(r.date)}</td>
                   <td className={styles.nowrap}>{r.startTime ?? 'All day'}</td>
                   <td>

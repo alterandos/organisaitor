@@ -18,6 +18,7 @@ import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/por
 import type { TrashEntry } from '@/types/trash';
 import { log } from '@/utils/log';
 import {
+import { importKeyOf } from '@/services/calendarImport/draft';
   taskToRow,       rowToTask,
   collectionToRow, rowToCollection,
   tagToRow,        rowToTag,
@@ -371,6 +372,24 @@ export function initSync(userId: string): Promise<void> {
   return enqueue(() => runInitSync(userId));
 }
 
+// The account whose cloud data this device has finished loading (successfully or not) since the
+// app opened, and who's waiting for it. A calendar import waits for it, so the events already in
+// the cloud are here before it decides what is new.
+let loadedFor: string | null = null;
+const loadWaiters: { userId: string; resolve: () => void }[] = [];
+
+export function waitForSyncLoad(userId: string): Promise<void> {
+  if (loadedFor === userId) return Promise.resolve();
+  return new Promise((resolve) => { loadWaiters.push({ userId, resolve }); });
+}
+
+function markLoaded(userId: string) {
+  loadedFor = userId;
+  for (let i = loadWaiters.length - 1; i >= 0; i--) {
+    if (loadWaiters[i].userId === userId) { loadWaiters[i].resolve(); loadWaiters.splice(i, 1); }
+  }
+}
+
 async function runInitSync(userId: string): Promise<void> {
   stopSync();
   loadPending(userId);
@@ -448,6 +467,7 @@ async function runInitSync(userId: string): Promise<void> {
 
   if (pendingCount() > 0) void flushPending(userId);
 }
+    markLoaded(userId);
 
 export function stopSync(): void {
   unsubscribers.forEach((u) => u());
@@ -459,6 +479,7 @@ export function stopSync(): void {
 
 export type UploadCounts = {
   tasks: number; collections: number; tags: number; purposes: number;
+  loadedFor = null;
   events: number; reminders: number; deadlines: number; entries: number;
   schedules: number; lists: number; listItems: number; listTypes: number;
   notes: number; noteTags: number; structuredTagEntries: number;
@@ -564,6 +585,13 @@ function hydrateStores(remote: RemoteRows) {
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useTrackerStore.setState((local) => ({
     entries: mergeRecords(local.entries, remote.tracker_entries, rowToEntry, 'tracker_entries'),
+  // Imported events deleted on any device: their keys, so a calendar import never brings them back
+  // here (calendarImport/reconcile.ts; the store's own list only knows this device's deletions).
+  const deletedImports = (remote.calendar_events ?? [])
+    .filter((r) => r.deleted_at && r.source && r.source_event_id)
+    .map((r) => importKeyOf(rowToEvent(r)))
+    .filter((k): k is string => !!k);
+  if (deletedImports.length) useCalendarStore.getState().markImported(deletedImports);
   }) as Parameters<typeof useTrackerStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape

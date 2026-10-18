@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import type { CalendarItemKind, CalendarEventType, EventStatus, NotifyUnit, RepeatConfig } from '@/types';
+import type { CalendarItemKind, CalendarEventType, EventStatus, NotifyUnit, RepeatConfig, TravelMode } from '@/types';
+import { TravelModePicker } from '@/components/TravelModePicker/TravelModePicker';
 import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -57,6 +58,7 @@ export function AddCalendarItemModal() {
   );
   const [important,         setImportant]         = useState(prefillExtra?.important ?? false);
   const [background,        setBackground]        = useState(false);
+  const [travelMode,        setTravelMode]        = useState<TravelMode | null>(null);
   const [color,             setColor]             = useState<string | null>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
@@ -148,6 +150,7 @@ export function AddCalendarItemModal() {
         links,
         location,
         eventType,
+        travelMode: eventType === 'travel' ? travelMode : null,
         collectionId,
         notifyBeforeValue: notifyBeforeOn ? notifyBeforeValue : null,
         notifyBeforeUnit,
@@ -305,6 +308,7 @@ export function AddCalendarItemModal() {
                   </button>
                 ))}
               </div>
+              {eventType === 'travel' && <TravelModePicker value={travelMode} onChange={setTravelMode} />}
             </div>
           )}
 
@@ -454,7 +458,7 @@ export function AddCalendarItemModal() {
               )}
 
               <div className={styles.field}>
-                <RepeatField value={repeat} onChange={setRepeat} labelClassName={styles.label} />
+                <RepeatField value={repeat} onChange={setRepeat} labelClassName={styles.label} date={date} />
               </div>
 
               <div className={styles.field}>

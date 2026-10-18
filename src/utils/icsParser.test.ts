@@ -63,17 +63,28 @@ describe('parseICS', () => {
     expect(ev.startTime).toBe('09:00');
   });
 
-  it('expands a weekly RRULE, honoring EXDATE', () => {
+  it('keeps a repeating event as one entry with its rule, and a changed date as its own entry', () => {
     const raw = ics(
-      'BEGIN:VEVENT',
-      'SUMMARY:Standup',
-      'DTSTART:20260302T090000Z',
-      'RRULE:FREQ=WEEKLY;COUNT=4',
-      'EXDATE:20260309T090000Z',
-      'END:VEVENT'
+      'BEGIN:VEVENT', 'UID:abc', 'SUMMARY:Standup', 'DTSTART:20260302T090000Z',
+      'RRULE:FREQ=WEEKLY;COUNT=4', 'EXDATE:20260309T090000Z', 'END:VEVENT',
+      'BEGIN:VEVENT', 'UID:abc', 'SUMMARY:Standup (moved)', 'DTSTART:20260317T100000Z',
+      'RECURRENCE-ID:20260316T090000Z', 'END:VEVENT',
+      'BEGIN:VEVENT', 'UID:abc', 'SUMMARY:Standup', 'DTSTART:20260323T090000Z',
+      'RECURRENCE-ID:20260323T090000Z', 'STATUS:CANCELLED', 'END:VEVENT',
     );
     const events = parseICS(raw);
-    expect(events.map((e) => e.date)).toEqual(['2026-03-02', '2026-03-16', '2026-03-23']);
+    expect(events).toHaveLength(3);
+    expect(events[0]).toMatchObject({ uid: 'abc', recurrence: ['RRULE:FREQ=WEEKLY;COUNT=4', 'EXDATE:20260309T090000Z'], recurrenceId: null });
+    expect(events[1]).toMatchObject({ title: 'Standup (moved)', recurrenceId: { value: '20260316T090000Z', params: '' } });
+    expect(events[2]).toMatchObject({ cancelled: true });
+  });
+
+  it('reads an all-day event over several days (DTEND is exclusive) and TRANSP', () => {
+    const raw = ics('BEGIN:VEVENT', 'SUMMARY:Holiday', 'DTSTART;VALUE=DATE:20260401', 'DTEND;VALUE=DATE:20260405', 'TRANSP:TRANSPARENT', 'END:VEVENT',
+      'BEGIN:VEVENT', 'SUMMARY:One day', 'DTSTART;VALUE=DATE:20260410', 'DTEND;VALUE=DATE:20260411', 'END:VEVENT');
+    const [a, b] = parseICS(raw);
+    expect(a).toMatchObject({ endDate: '2026-04-04', transparent: true });
+    expect(b.endDate).toBeNull();
   });
 
   it('handles folded lines (CRLF + leading space/tab join, per RFC 5545 the fold\'s own leading space is consumed)', () => {

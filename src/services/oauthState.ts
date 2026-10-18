@@ -7,7 +7,7 @@ import { supabase } from '@/services/supabase';
 // the redirect back can't carry an Authorization header, so the callback redeems this instead.
 // The Android app also records that the flow started there (migration 041), so the callback
 // sends the user back into the app rather than to the web app.
-export async function mintOAuthState(provider: 'strava' | 'google'): Promise<string> {
+export async function mintOAuthState(provider: 'strava' | 'google' | 'microsoft'): Promise<string> {
   if (Capacitor.getPlatform() === 'android') {
     const { data, error } = await supabase.rpc('mint_oauth_state', { p_provider: provider, p_client: 'android' });
     if (!error && typeof data === 'string' && data) return data;
@@ -21,7 +21,7 @@ export async function mintOAuthState(provider: 'strava' | 'google'): Promise<str
   return data;
 }
 
-export type OAuthProvider = 'strava' | 'google-calendar';
+export type OAuthProvider = 'strava' | 'google-calendar' | 'microsoft-calendar';
 export interface OAuthResult { status: 'connected' | 'error' | 'closed'; reason?: string }
 
 const waiting = new Map<OAuthProvider, (result: OAuthResult) => void>();

@@ -22,6 +22,7 @@ const eventFields = {
   location: z.string().trim().max(300).nullish(),
   tentative: z.boolean().optional().describe('A placeholder the user has not confirmed yet'),
   notifyBefore: notifyBefore.nullish(),
+  travelMode: z.enum(['flight', 'train', 'bus', 'car', 'ferry']).nullish().describe('A travel event only: how it travels (sets its icon)'),
 };
 
 const reminderFields = {
@@ -34,7 +35,7 @@ const CALENDAR_HELP =
   'kind "event" has a start/end (a meeting, a class); kind "reminder" is a single point in time or an all-day nudge; ' +
   'kind "deadline" is something due by a date — it only ever notifies some lead time BEFORE it is due (notifyDaysBefore/notifyAtTime), never at the moment itself, even if you give it a time. ' +
   'A birthday is an event with eventType "birthday" (no times; repeats every year). ' +
-  'A journey (a flight, a train or bus, a long drive) is an event with eventType "travel": it blocks the time but shows quieter on the calendar.';
+  'A journey (a flight, a train or bus, a long drive) is an event with eventType "travel" and a travelMode: it blocks the time but shows quieter on the calendar.';
 
 export const createCalendarItem = defineCommand({
   name: 'create_calendar_item',
@@ -61,7 +62,7 @@ export const createCalendarItem = defineCommand({
     const repeat = input.repeat ? toRepeatConfig(input.repeat) : null;
 
     if (input.kind === 'reminder' || input.kind === 'deadline') {
-      const stray = (['endDate', 'startTime', 'endTime', 'location', 'tentative', 'notifyBefore', 'eventType'] as const).filter((k) => input[k] != null);
+      const stray = (['endDate', 'startTime', 'endTime', 'location', 'tentative', 'notifyBefore', 'eventType', 'travelMode'] as const).filter((k) => input[k] != null);
       if (stray.length) throw new AgentError('invalid', `A ${input.kind} has no ${stray.join(', ')}. Use kind "event" for those, or "time" for a ${input.kind}'s time.`);
       if (input.kind === 'reminder') {
         const id = write.createReminder(buildCalendarReminderInput({
@@ -89,7 +90,7 @@ export const createCalendarItem = defineCommand({
 
     const id = write.createEvent(buildCalendarEventInput({
       title: input.title, date: input.date, endDate: input.endDate, startTime: input.startTime, endTime: input.endTime,
-      notes: input.notes, links: input.links, location: input.location, eventType: input.eventType,
+      notes: input.notes, links: input.links, location: input.location, eventType: input.eventType, travelMode: input.travelMode,
       collectionId: (input.endeavourId ?? null) as never,
       notifyBeforeValue: input.notifyBefore?.value ?? null, notifyBeforeUnit: input.notifyBefore?.unit as NotifyUnit | undefined,
       repeat, status: input.tentative ? 'tentative' : 'confirmed', important: input.important,
@@ -176,6 +177,10 @@ export const updateCalendarItem = defineCommand({
     if (repeat !== undefined) changes.repeat = repeat;
     if (input.important !== undefined) changes.important = input.important;
     if (input.tentative !== undefined) changes.status = input.tentative ? 'tentative' : 'confirmed';
+    if (input.travelMode !== undefined) {
+      if (input.travelMode && e.eventType !== 'travel') throw new AgentError('invalid', 'Only a travel event has a travelMode.');
+      changes.travelMode = input.travelMode ?? null;
+    }
     if (input.notifyBefore !== undefined) {
       changes.notifyBeforeValue = input.notifyBefore ? input.notifyBefore.value : null;
       if (input.notifyBefore) changes.notifyBeforeUnit = input.notifyBefore.unit;

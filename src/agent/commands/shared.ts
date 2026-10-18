@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AgentError } from '@/agent/errors';
 import { read } from '@/agent/access';
+import { repeatPattern } from '@/utils/recurrence';
 import type { CalendarEvent, CalendarReminder, CalendarDeadline, Collection, RepeatConfig, ScheduleBlock, ScheduleTemplate, Task } from '@/types';
 
 // ── Input primitives ─────────────────────────────────────────────────────────────────────────
@@ -16,6 +17,9 @@ export const repeatSchema = z.object({
   endKind:  z.enum(['forever', 'count', 'until']).default('forever'),
   count:    z.number().int().min(1).max(1000).nullish().describe('Total occurrences, when endKind is "count"'),
   until:    dateStr.nullish().describe('Last date, when endKind is "until"'),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1).max(7).optional().describe('Weekly only: the weekdays it falls on, 0 = Sunday … 6 = Saturday'),
+  monthWeekday: z.object({ week: z.number().int().refine((w) => w === -1 || (w >= 1 && w <= 5)), day: z.number().int().min(0).max(6) }).optional()
+    .describe('Monthly or yearly only: on the nth weekday of the month (week 1–5, or -1 = last; day 0 = Sunday), e.g. the 2nd Tuesday = { week: 2, day: 2 }'),
 }).refine((r) => r.endKind !== 'count' || !!r.count, { message: 'count is required when endKind is "count"' })
   .refine((r) => r.endKind !== 'until' || !!r.until, { message: 'until is required when endKind is "until"' });
 
@@ -26,6 +30,8 @@ export function toRepeatConfig(r: z.output<typeof repeatSchema>): RepeatConfig {
     endKind: r.endKind,
     count: r.endKind === 'count' ? (r.count ?? null) : null,
     until: r.endKind === 'until' ? (r.until ?? null) : null,
+    ...(r.freq === 'weekly' && r.daysOfWeek ? { daysOfWeek: [...new Set(r.daysOfWeek)].sort() } : {}),
+    ...((r.freq === 'monthly' || r.freq === 'yearly') && r.monthWeekday ? { monthWeekday: r.monthWeekday } : {}),
   };
 }
 
@@ -99,6 +105,7 @@ export function repeatText(r: RepeatConfig | null) {
   if (!r) return null;
   return compact({
     every: `${r.interval} ${r.freq === 'daily' ? 'day' : r.freq === 'weekly' ? 'week' : r.freq === 'monthly' ? 'month' : 'year'}${r.interval === 1 ? '' : 's'}`,
+    on: repeatPattern(r) ?? undefined,
     ends: r.endKind === 'forever' ? 'never' : r.endKind === 'count' ? `after ${r.count} times` : `on ${r.until}`,
     skippedDates: r.exceptions,
   });
@@ -153,6 +160,7 @@ export function eventSummary(e: CalendarEvent) {
     endTime: e.endTime,
     location: e.location,
     type: e.eventType === 'default' ? null : e.eventType,
+    travelMode: e.travelMode,
     tentative: e.status === 'tentative' ? true : null,
     important: e.important ? true : null,
     repeat: repeatText(e.repeat),

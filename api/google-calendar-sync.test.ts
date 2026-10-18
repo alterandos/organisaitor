@@ -6,7 +6,7 @@ const fake = vi.hoisted(() => {
     setConnections: (c: typeof connections) => { connections = c; },
     client: {
       auth: { getUser: () => Promise.resolve({ data: { user: { id: 'u1' } }, error: null }) },
-      from: () => ({ select: () => ({ eq: () => Promise.resolve({ data: connections, error: null }) }) }),
+      from: () => ({ select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: connections, error: null }) }) }) }),
     },
   };
 });
@@ -58,15 +58,17 @@ describe('api/google-calendar-sync', () => {
     expect(gcal.fetchGoogleCalendarList).not.toHaveBeenCalled();
   });
 
-  it('drops cancelled instances of an expanded recurring event rather than importing them', async () => {
+  it('passes deleted events (status cancelled) through, with the account and calendar details', async () => {
+    fake.setConnections([{ id: 'conn-1', account_email: 'me@example.com', calendars_enabled: ['primary'] }]);
+    gcal.fetchGoogleCalendarList.mockResolvedValue([{ id: 'primary', defaultReminders: [], accessRole: 'owner', backgroundColor: '#123456', timeZone: 'Australia/Sydney' } as never]);
     gcal.fetchGoogleCalendarEvents.mockResolvedValue([
       { id: 'e1', status: 'confirmed', summary: 'Keep me' },
-      { id: 'e2', status: 'cancelled', summary: 'Drop me' },
+      { id: 'e2', status: 'cancelled' },
     ]);
     const res = await handler(req());
-    const { events } = await res.json() as { events: { connectionId: string; calendarId: string; event: { summary?: string } }[] };
-    expect(events).toHaveLength(1);
-    expect(events[0].event.summary).toBe('Keep me');
+    const { events } = await res.json() as { events: { account: string; calendar: { backgroundColor: string; timeZone: string }; event: { id: string } }[] };
+    expect(events.map((e) => e.event.id)).toEqual(['e1', 'e2']);
+    expect(events[0]).toMatchObject({ account: 'me@example.com', calendar: { backgroundColor: '#123456', timeZone: 'Australia/Sydney' } });
   });
 
   it('one connection failing (e.g. a revoked token) does not block the others', async () => {

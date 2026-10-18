@@ -517,6 +517,8 @@ export const LABELS = {
     collapse: 'Collapse the margin column',
     more:     (n: number) => `${n} more mark${n === 1 ? '' : 's'} on this line`,
   },
+    resize:     'Resize (drag, or arrow keys; double-click for the usual size)',
+    resetSize:  'Back to the usual size',
   // The Unsure flag (NoteEditor/extensions/UnsureFlag.ts): a passage you're not sure of.
   unsureFlag: {
     label:          'Unsure',
@@ -564,10 +566,10 @@ export const LABELS = {
     taglines: [
       'Everything you will ever do, already in order.',
       'Monday has been informed.',
-      'We have spoken with entropy. It has agreed to terms.',
-      'Some people keep calendars. Ours keeps time.',
+      'We have spoken with entropy. It has agreed to your terms.',
+      'Some people keep calendars. This one keeps people.',
       'Your lists, your notes, your plans. Your gravity.',
-      'Deadlines now arrive slightly early, out of respect.',
+      'Deadlines now arrive early, out of respect.',
       'The universe had a backlog. It has been cleared.',
       'Tomorrow has been moved to a more convenient time.',
       'Cause, then effect. Now in whichever order you prefer.',
@@ -1234,7 +1236,7 @@ export const LABELS = {
 
   // Returning to the Android app from a provider's sign-in page (services/oauthState.ts)
   oauthReturn: {
-    provider:  { strava: 'Strava', 'google-calendar': 'Google Calendar' },
+    provider:  { strava: 'Strava', 'google-calendar': 'Google Calendar', 'microsoft-calendar': 'Outlook Calendar' },
     connected: (provider: string) => `${provider} connected`,
     failed:    (provider: string) => `${provider} connection failed`,
   },
@@ -1368,6 +1370,35 @@ export const LABELS = {
   listType:      'List Type',
   // Per ListKind: `one` names a single list of that kind, `many` heads its group in the sidebar
   // and the create-list type picker.
+  // Importing calendars (.ics files, Google): the review, the event pane's "where from" line.
+  calendarImport: {
+    partialRepeat: 'Repeats in a way the app can’t show yet: only its first date is imported',
+    providerName:  { google: 'Google Calendar', microsoft: 'Outlook' } as Record<'google' | 'microsoft', string>,
+    connect:       (provider: string) => `+ Connect ${provider}`,
+    notConfigured: (provider: string) => `${provider} isn’t set up for this app yet (its client id is missing).`,
+    connectFailed: (provider: string) => `Could not start the ${provider} connection.`,
+    signInToConnect: 'Sign in to connect a Google or Outlook calendar.',
+    intro:         'Events from a connected calendar sync in while the app is open. Changes and deletions made there follow here, except for anything you’ve edited here, which stays as you left it. Nothing goes back.',
+    fromGoogle:    (account: string) => `From Google · ${account}`,
+    fromOutlook:   (account: string) => `From Outlook · ${account}`,
+    fromFile:      (file: string) => `From ${file}`,
+    deletedThere:  (provider: string) => `Deleted in ${provider}; kept here because you edited it`,
+    deletedShort:  (provider: string) => `Deleted in ${provider} · kept`,
+    followsSource: (provider: string) => `Changes made in ${provider} update this event, except fields you’ve edited here`,
+    disconnectTitle:  (account: string) => `Disconnect ${account}?`,
+    disconnectBody:   (n: number) => n === 1 ? 'One event was imported from this account.' : `${n} events were imported from this account.`,
+    disconnectKeep:   'Disconnect, keep events',
+    disconnectRemove: 'Disconnect and remove them',
+    removedToast:     (n: number) => `Removed ${n} imported event${n === 1 ? '' : 's'} (in the Recycling Bin)`,
+  },
+  travelMode: {
+    heading: 'Travelling by',
+    flight:  'Flight',
+    train:   'Train',
+    bus:     'Bus',
+    car:     'Car',
+    ferry:   'Ferry',
+  },
   listKind: {
     checklist: { one: 'Checklist',      many: 'Checklists' },
     watchlist: { one: 'Watchlist',      many: 'Watchlists' },
@@ -1587,6 +1618,16 @@ export const LABELS = {
     addRelated:      '+ Related…',
     addFollowUp:     '+ Follow-up',
     reasonPlaceholder: 'Reason (optional)',
+    // Weekly on chosen weekdays; monthly/yearly on the nth weekday (RepeatField).
+    dayShort:   ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    dayLetter:  ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+    dayName:    ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    onDays:     'On',
+    weekdays:   'weekdays',
+    monthOnDay:     (day: number) => `On day ${day}`,
+    monthOnWeekday: (nth: string, day: string) => `On the ${nth} ${day}`,
+    nth:        { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth', [-1]: 'last' } as Record<number, string>,
+    onPattern:  (what: string) => `on ${what}`,
     removeLink:      'Remove link',
     pickerTitle:     'Link a task',
     pickerSearch:    'Search tasks…',

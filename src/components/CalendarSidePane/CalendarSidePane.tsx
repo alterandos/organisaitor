@@ -10,14 +10,18 @@ import { formatDate, todayIso } from '@/utils/date';
 import { countTemplateConflicts } from '@/utils/scheduleOccurrences';
 import { ScheduleWeekGridPreview, type PreviewEntry } from '@/components/ScheduleWeekGridPreview/ScheduleWeekGridPreview';
 import {
-  getGoogleCalendarConnectUrl, fetchGoogleCalendarConnections,
-  setGoogleCalendarEnabled, disconnectGoogleCalendar, syncGoogleCalendars,
+  getGoogleCalendarConnectUrl,
 } from '@/services/googleCalendar';
 import { openOAuthFlow } from '@/services/oauthState';
+import { getMicrosoftCalendarConnectUrl } from '@/services/microsoftCalendar';
+import { fetchCalendarConnections, setCalendarEnabled, disconnectCalendar, syncAllCalendars } from '@/services/calendarConnections';
 import type { ScheduleId, ScheduleTemplate, CalendarConnection } from '@/types';
 import styles from './CalendarSidePane.module.css';
+import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { alertDialog, confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { alertDialog, choiceDialog, confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { showToast } from '@/components/Toast/showToast';
+import { removeImportedEvents } from '@/services/calendarImport/reconcile';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
@@ -264,7 +268,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
     viewMode === 'week'  ? "Use the arrows to move the calendar, or click a date to jump to its week." :
                             'Use the arrows to move the calendar, or click a date to jump straight to it.';
 
-  // ── Imported calendars (Google — see CLAUDE.md "External calendar sync") ──
+  // ── Imported calendars (Google, Outlook — docs/features/external-calendar-sync.md) ──
   const authUser = useAuthStore((s) => s.user);
   const [connections, setConnections] = useState<CalendarConnection[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
@@ -274,7 +278,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
   const reloadConnections = () => {
     if (!authUser) { setConnections([]); return; }
     setConnectionsLoading(true);
-    fetchGoogleCalendarConnections().then(setConnections).finally(() => setConnectionsLoading(false));
+    fetchCalendarConnections().then(setConnections).finally(() => setConnectionsLoading(false));
   };
 
   useEffect(() => {
@@ -283,12 +287,14 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, authUser]);
 
-  const handleConnect = async () => {
+  const handleConnect = async (provider: 'google' | 'microsoft') => {
+    const L = LABELS.calendarImport;
     try {
-      const url = await getGoogleCalendarConnectUrl();
-      if (url && await openOAuthFlow('google-calendar', url)) reloadConnections();
+      const url = provider === 'google' ? await getGoogleCalendarConnectUrl() : await getMicrosoftCalendarConnectUrl();
+      if (!url) { await alertDialog(L.notConfigured(L.providerName[provider])); return; }
+      if (await openOAuthFlow(provider === 'google' ? 'google-calendar' : 'microsoft-calendar', url)) reloadConnections();
     } catch (e) {
-      await alertDialog(e instanceof Error ? e.message : 'Could not start the Google Calendar connection.');
+      await alertDialog(e instanceof Error ? e.message : L.connectFailed(L.providerName[provider]));
     }
   };
 
@@ -299,20 +305,32 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
         : c
     ));
     try {
-      await setGoogleCalendarEnabled(connectionId, calendarId, enabled);
+      await setCalendarEnabled(connectionId, calendarId, enabled);
     } catch {
       reloadConnections(); // revert the optimistic update on failure
     }
   };
 
-  const handleDisconnect = async (connectionId: string, accountEmail: string) => {
-    const ok = await confirmDialog({
-      title: `Disconnect ${accountEmail}?`,
-      message: 'Events already imported from it will stay.',
-      confirmLabel: 'Disconnect',
-    });
-    if (!ok) return;
-    await disconnectGoogleCalendar(connectionId);
+  const handleDisconnect = async (connectionId: string, provider: string, accountEmail: string) => {
+    const L = LABELS.calendarImport;
+    const count = Object.values(useCalendarStore.getState().events).filter((e) => e.source === provider && e.sourceAccount === accountEmail).length;
+    // Keeping them is the primary choice: it affects the least (CLAUDE.md "Confirmations and alerts").
+    const choice = count === 0
+      ? (await confirmDialog({ title: L.disconnectTitle(accountEmail), confirmLabel: 'Disconnect' }) ? 'confirm' : 'cancel')
+      : await choiceDialog({
+        title: L.disconnectTitle(accountEmail),
+        message: L.disconnectBody(count),
+        confirmLabel: L.disconnectKeep,
+        alternateLabel: L.disconnectRemove,
+      });
+    if (choice === 'cancel') return;
+    try {
+      await disconnectCalendar(connectionId);
+    } catch (e) {
+      await alertDialog(e instanceof Error ? e.message : 'Could not disconnect the account.');
+      return;
+    }
+    if (choice === 'alternate') showToast({ message: L.removedToast(removeImportedEvents(provider, accountEmail)) });
     reloadConnections();
   };
 
@@ -320,12 +338,14 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
     setSyncing(true);
     setSyncStatus(null);
     try {
-      const { created, failed } = await syncGoogleCalendars();
-      setSyncStatus(
-        failed > 0
-          ? `${created} new event${created !== 1 ? 's' : ''} imported, ${failed} calendar${failed !== 1 ? 's' : ''} failed to sync`
-          : `${created} new event${created !== 1 ? 's' : ''} imported`
-      );
+      const { created, updated, removed, failed } = await syncAllCalendars();
+      const parts = [
+        `${created} new event${created !== 1 ? 's' : ''} imported`,
+        ...(updated ? [`${updated} updated`] : []),
+        ...(removed ? [`${removed} removed`] : []),
+        ...(failed ? [`${failed} calendar${failed !== 1 ? 's' : ''} failed to sync`] : []),
+      ];
+      setSyncStatus(parts.join(', '));
     } catch {
       setSyncStatus('Sync failed');
     } finally {
@@ -469,19 +489,15 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
             )}
           </div>
 
-          {/* ── Imported calendars (Google) ── */}
+          {/* ── Imported calendars (Google, Outlook) ── */}
           <div className={styles.section}>
             <span className={styles.label}>Imported calendars</span>
 
             {!authUser ? (
-              <p className={styles.empty}>Sign in to connect a Google Calendar.</p>
+              <p className={styles.empty}>{LABELS.calendarImport.signInToConnect}</p>
             ) : (
               <>
-                <p className={styles.intro}>
-                  Events from a connected calendar sync in automatically (while the app is open) and become normal,
-                  fully-editable events here — this app is the source of truth for them once imported, so editing or
-                  deleting one locally is never overwritten by a later sync.
-                </p>
+                <p className={styles.intro}>{LABELS.calendarImport.intro}</p>
 
                 {connectionsLoading ? (
                   <p className={styles.empty}>Loading…</p>
@@ -493,10 +509,11 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
                       <div key={conn.id} className={styles.connectionBlock}>
                         <div className={styles.connectionHeader}>
                           <span className={styles.rowName}>{conn.accountEmail}</span>
+                          <span className={styles.providerTag}>{LABELS.calendarImport.providerName[conn.provider as 'google' | 'microsoft'] ?? conn.provider}</span>
                           <button
                             type="button"
                             className={`${styles.rowActionBtn} ${styles.rowActionBtnDelete}`}
-                            onClick={() => handleDisconnect(conn.id, conn.accountEmail)}
+                            onClick={() => handleDisconnect(conn.id, conn.provider, conn.accountEmail)}
                             title="Disconnect"
                           >
                             🗑
@@ -523,7 +540,8 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
                 )}
 
                 <div className={styles.connectRow}>
-                  <button className={styles.addBtn} onClick={handleConnect}>+ Connect Google Calendar</button>
+                  <button className={styles.addBtn} onClick={() => handleConnect('google')}>{LABELS.calendarImport.connect(LABELS.calendarImport.providerName.google)}</button>
+                  <button className={styles.addBtn} onClick={() => handleConnect('microsoft')}>{LABELS.calendarImport.connect(LABELS.calendarImport.providerName.microsoft)}</button>
                   {connections.length > 0 && (
                     <button type="button" className={styles.syncNowBtn} onClick={handleSyncNow} disabled={syncing}>
                       {syncing ? 'Syncing…' : 'Sync now'}

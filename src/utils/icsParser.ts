@@ -1,6 +1,10 @@
+// One VEVENT, as written. A repeating event is ONE entry with its rule (`recurrence`), and a date
+// changed in it is another entry with `recurrenceId`; services/calendarImport/ics.ts turns them
+// into the app's series and linked copies.
 export interface ICSEvent {
   title:     string;
   date:      string;        // YYYY-MM-DD
+  endDate:   string | null; // last day of an all-day event over several days (DTEND is exclusive)
   startTime: string | null; // HH:MM (24h) or null for all-day
   endTime:   string | null;
   notes:     string | null;
@@ -9,17 +13,20 @@ export interface ICSEvent {
   // "floating" time (RFC 5545's term for a wall-clock time with no zone attached at all) or an
   // all-day value — floating/all-day need no re-projection, they mean whatever the app's zone says.
   tzid:      string | null;
-  // STATUS:TENTATIVE in the source, imported as the app's tentative event. (A CANCELLED event
-  // isn't imported at all.)
+  // STATUS:TENTATIVE in the source, imported as the app's tentative event.
   tentative: boolean;
+  // STATUS:CANCELLED. Kept only for one date of a series (it takes that date out); a whole
+  // cancelled event isn't returned at all.
+  cancelled: boolean;
+  uid:       string | null;
+  // RECURRENCE-ID: this entry stands in for that date of the series with the same UID (the raw
+  // value and its parameters; the caller reads the date in the account's zone).
+  recurrenceId: { value: string; params: string } | null;
+  recurrence:  string[];    // the RRULE / EXDATE / RDATE / EXRULE lines, as written
+  transparent: boolean;     // TRANSP:TRANSPARENT ("free")
 }
 
-// Recognizes the common Google/Outlook/Apple "Contacts" birthday export shape (e.g.
-// "Jane Doe's Birthday", "Birthday: Jane Doe") so the import review step can default these
-// to the app's dedicated birthday event type instead of a plain event.
-export function looksLikeBirthday(title: string): boolean {
-  return /\bbirthday\b/i.test(title);
-}
+export { looksLikeBirthday } from '@/services/calendarImport/classify';
 
 // RFC 5545: folded lines (CRLF + SPACE/TAB) are joined
 function unfold(raw: string): string {
@@ -58,103 +65,38 @@ function unescape(s: string): string {
     .replace(/\\\\/g, '\\');
 }
 
-interface ParsedRRule {
-  freq:     'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
-  interval: number;
-  count:    number | null;
-  until:    string | null; // YYYY-MM-DD
-}
-
-function parseRRule(raw: string): ParsedRRule | null {
-  const upper = raw.toUpperCase();
-  const get = (key: string): string | undefined => {
-    const m = upper.match(new RegExp(`(?:^|;)${key}=([^;]+)`));
-    return m?.[1];
-  };
-
-  const freq = get('FREQ') as ParsedRRule['freq'];
-  if (!freq || !['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(freq)) return null;
-
-  const interval = parseInt(get('INTERVAL') ?? '1', 10) || 1;
-  const countVal = get('COUNT');
-  const count    = countVal ? parseInt(countVal, 10) : null;
-
-  const untilStr = get('UNTIL');
-  let until: string | null = null;
-  if (untilStr) {
-    const m = untilStr.match(/^(\d{4})(\d{2})(\d{2})/);
-    if (m) until = `${m[1]}-${m[2]}-${m[3]}`;
-  }
-
-  return { freq, interval, count, until };
-}
-
-function advanceDate(dateStr: string, freq: ParsedRRule['freq'], interval: number): string {
-  const d = new Date(`${dateStr}T00:00:00`);
-  switch (freq) {
-    case 'DAILY':   d.setDate(d.getDate() + interval);            break;
-    case 'WEEKLY':  d.setDate(d.getDate() + interval * 7);        break;
-    case 'MONTHLY': d.setMonth(d.getMonth() + interval);          break;
-    case 'YEARLY':  d.setFullYear(d.getFullYear() + interval);    break;
-  }
-  return toDateStr(d);
-}
-
-// Returns all occurrence dates from baseDate up to horizonDate (or COUNT/UNTIL limit),
-// skipping any date present in `exdates` (RFC 5545 EXDATE — a recurrence exception, e.g.
-// "skip just this one occurrence").
-function expandRecurrences(baseDate: string, rrule: ParsedRRule, horizonDate: string, exdates: Set<string>): string[] {
-  const result: string[] = [];
-  if (!exdates.has(baseDate)) result.push(baseDate);
-  let current = baseDate;
-  const cap = rrule.count ?? 1000;
-
-  for (let i = 1; i < cap; i++) {
-    current = advanceDate(current, rrule.freq, rrule.interval);
-    if (rrule.until && current > rrule.until) break;
-    if (current > horizonDate) break;
-    if (!exdates.has(current)) result.push(current);
-  }
-
-  return result;
-}
-
 export function parseICS(raw: string): ICSEvent[] {
   const lines = unfold(raw).split(/\r?\n/);
   const events: ICSEvent[] = [];
-
-  // Expand recurring events up to 3 years ahead
-  const horizon = new Date();
-  horizon.setFullYear(horizon.getFullYear() + 3);
-  const horizonStr = toDateStr(horizon);
-
   let inEvent = false;
-  let ev: Partial<ICSEvent> & { rrule?: ParsedRRule | null; exdates?: Set<string>; cancelled?: boolean } = {};
-
-  const pushEvent = (date: string) => {
-    events.push({
-      title:     ev.title!,
-      date,
-      startTime: ev.startTime ?? null,
-      endTime:   ev.endTime   ?? null,
-      notes:     ev.notes     ?? null,
-      location:  ev.location  ?? null,
-      tzid:      ev.tzid      ?? null,
-      tentative: ev.tentative ?? false,
-    });
-  };
+  let ev: Partial<ICSEvent> & { endExclusive?: string } = {};
 
   for (const line of lines) {
-    if (line.trim() === 'BEGIN:VEVENT') { inEvent = true; ev = { exdates: new Set() }; continue; }
+    if (line.trim() === 'BEGIN:VEVENT') { inEvent = true; ev = { recurrence: [] }; continue; }
     if (line.trim() === 'END:VEVENT') {
-      if (inEvent && ev.title && ev.date && !ev.cancelled) {
-        if (ev.rrule) {
-          for (const date of expandRecurrences(ev.date, ev.rrule, horizonStr, ev.exdates ?? new Set())) {
-            pushEvent(date);
-          }
-        } else {
-          pushEvent(ev.date);
+      if (inEvent && ev.title && ev.date && (!ev.cancelled || ev.recurrenceId)) {
+        let endDate: string | null = null;
+        if (!ev.startTime && ev.endExclusive && ev.endExclusive > ev.date) {
+          const d = new Date(ev.endExclusive + 'T00:00:00');
+          d.setDate(d.getDate() - 1);
+          endDate = toDateStr(d) > ev.date ? toDateStr(d) : null;
         }
+        events.push({
+          title:        ev.title,
+          date:         ev.date,
+          endDate,
+          startTime:    ev.startTime ?? null,
+          endTime:      ev.endTime   ?? null,
+          notes:        ev.notes     ?? null,
+          location:     ev.location  ?? null,
+          tzid:         ev.tzid      ?? null,
+          tentative:    ev.tentative ?? false,
+          cancelled:    ev.cancelled ?? false,
+          uid:          ev.uid ?? null,
+          recurrenceId: ev.recurrenceId ?? null,
+          recurrence:   ev.recurrence ?? [],
+          transparent:  ev.transparent ?? false,
+        });
       }
       inEvent = false;
       continue;
@@ -174,12 +116,18 @@ export function parseICS(raw: string): ICSEvent[] {
       case 'SUMMARY':
         ev.title = unescape(val.trim());
         break;
+      case 'UID':
+        ev.uid = val.trim() || null;
+        break;
       case 'STATUS': {
         const s = val.trim().toUpperCase();
         ev.tentative = s === 'TENTATIVE';
         ev.cancelled = s === 'CANCELLED';
         break;
       }
+      case 'TRANSP':
+        ev.transparent = val.trim().toUpperCase() === 'TRANSPARENT';
+        break;
       case 'LOCATION':
         ev.location = unescape(val.trim()) || null;
         break;
@@ -193,20 +141,20 @@ export function parseICS(raw: string): ICSEvent[] {
       case 'DTEND': {
         const p = parseDateValue(val.trim(), params);
         ev.endTime = p.time;
+        if (!p.time) ev.endExclusive = p.date;
         break;
       }
-      case 'EXDATE': {
-        for (const part of val.split(',')) {
-          const p = parseDateValue(part.trim(), params);
-          if (p.date) ev.exdates?.add(p.date);
-        }
-        break;
-      }
-      case 'DESCRIPTION':
-        ev.notes = unescape(val.trim()) || null;
+      case 'RECURRENCE-ID':
+        ev.recurrenceId = { value: val.trim(), params };
         break;
       case 'RRULE':
-        ev.rrule = parseRRule(val.trim()) ?? null;
+      case 'EXDATE':
+      case 'RDATE':
+      case 'EXRULE':
+        ev.recurrence?.push(`${keyPart}:${val.trim()}`);
+        break;
+      case 'DESCRIPTION':
+        ev.notes = unescape(val.trim()) || null;
         break;
     }
   }

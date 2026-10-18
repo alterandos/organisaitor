@@ -71,6 +71,7 @@ export interface GoogleCalendarListEntry {
   id:              string;
   summary:         string;
   backgroundColor?: string;
+  timeZone?:       string;
   primary?:        boolean;
   accessRole?:     string;                                  // owner | writer | reader | freeBusyReader
   defaultReminders?: { method: string; minutes: number }[]; // what an event using "default" reminders gets
@@ -85,15 +86,14 @@ export async function fetchGoogleCalendarList(accessToken: string): Promise<Goog
   return data.items ?? [];
 }
 
+// The fields the client reads (src/services/calendarImport/google.ts has the full shape); the
+// rest of Google's payload is passed through untouched.
 export interface GoogleCalendarEvent {
   id:      string;
   status?: string;   // 'confirmed' | 'cancelled' | 'tentative' — Google's own event status
   summary?: string;
-  location?: string;
-  description?: string;
-  start?:  { date?: string; dateTime?: string; timeZone?: string };
-  end?:    { date?: string; dateTime?: string; timeZone?: string };
-  reminders?: { useDefault?: boolean; overrides?: { method: string; minutes: number }[] };
+  recurringEventId?: string;
+  [field: string]: unknown;
 }
 
 // 1 month back / 6 months forward — pulling in a Google account's entire history would be
@@ -110,23 +110,41 @@ export function syncWindow(): { timeMin: string; timeMax: string } {
   };
 }
 
-// singleEvents=true asks Google to expand recurring events into concrete instances
-// server-side, each with its own stable id — sidesteps translating Google's RRULE into
-// this app's own (deliberately simpler) RepeatConfig. See CLAUDE.md for why this is a
-// scoped-down Phase 1 choice, not an oversight.
-export async function fetchGoogleCalendarEvents(accessToken: string, calendarId: string): Promise<GoogleCalendarEvent[]> {
+const MAX_PAGES = 40;
+
+// Every page of an events listing (Google pages at maxResults, at most 2500 a page).
+async function fetchAllPages(accessToken: string, url: string, params: URLSearchParams, what: string): Promise<GoogleCalendarEvent[]> {
+  const items: GoogleCalendarEvent[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    if (pageToken) params.set('pageToken', pageToken);
+    const res = await fetch(`${url}?${params.toString()}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) throw new Error(`Google ${what} request failed: ${res.status}`);
+    const data = await res.json() as { items?: GoogleCalendarEvent[]; nextPageToken?: string };
+    items.push(...(data.items ?? []));
+    pageToken = data.nextPageToken;
+    if (!pageToken) return items;
+  }
+  throw new Error(`Google ${what}: more than ${MAX_PAGES} pages`);
+}
+
+// singleEvents=false: a repeating event comes back once, with its rule (`recurrence`), and each
+// date changed or deleted in it as its own entry (`recurringEventId`), so the client can make one
+// native series. showDeleted=true: events deleted in Google come back as status 'cancelled', so
+// the client can remove them here too. A series is returned when any of its dates is in the window.
+export function fetchGoogleCalendarEvents(accessToken: string, calendarId: string): Promise<GoogleCalendarEvent[]> {
   const { timeMin, timeMax } = syncWindow();
-  const params = new URLSearchParams({
-    timeMin, timeMax,
-    singleEvents: 'true',
-    orderBy: 'startTime',
-    maxResults: '250',
-  });
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+  const params = new URLSearchParams({ timeMin, timeMax, singleEvents: 'false', showDeleted: 'true', maxResults: '2500' });
+  return fetchAllPages(accessToken, `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`, params, `events for ${calendarId}`);
+}
+
+// The single dates of one repeating event, in the window: for a rule the app can't show as a series.
+export function fetchGoogleEventInstances(accessToken: string, calendarId: string, eventId: string): Promise<GoogleCalendarEvent[]> {
+  const { timeMin, timeMax } = syncWindow();
+  const params = new URLSearchParams({ timeMin, timeMax, showDeleted: 'true', maxResults: '2500' });
+  return fetchAllPages(
+    accessToken,
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}/instances`,
+    params, `instances of ${eventId}`,
   );
-  if (!res.ok) throw new Error(`Google events request failed for ${calendarId}: ${res.status}`);
-  const data = await res.json() as { items?: GoogleCalendarEvent[] };
-  return data.items ?? [];
 }

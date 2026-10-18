@@ -223,7 +223,7 @@ export function CalendarDeadlinePane() {
 
           {/* ── Repeat ── */}
           <div className={styles.field}>
-            <RepeatField value={deadline.repeat ?? null} onChange={(r) => updateDeadline(id, { repeat: r })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
+            <RepeatField value={deadline.repeat ?? null} onChange={(r) => updateDeadline(id, { repeat: r })} date={deadline.date} labelClassName={`${styles.label} ${styles.checkLabel}`} />
           </div>
 
           <div className={styles.field}>

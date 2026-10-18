@@ -1,5 +1,6 @@
 import { formatTime } from '@/utils/date';
 import { LABELS } from '@/config/labels';
+import { repeatPattern } from '@/utils/recurrence';
 import type { RepeatConfig } from '@/types';
 import { useSettingsStore } from '@/store/settingsStore';
 
@@ -34,9 +35,10 @@ const UNIT: Record<string, string> = { daily: 'day', weekly: 'week', monthly: 'm
 
 // "Every week", "Every 2 weeks, until Fri 30 Oct", "Every day, 5 times".
 export function formatRepeatRule(repeat: RepeatConfig): string {
-  const base = repeat.interval === 1
+  const pattern = repeatPattern(repeat);
+  const base = (repeat.interval === 1
     ? LABELS.noteObjects.card.repeatFreq[repeat.freq]
-    : `Every ${repeat.interval} ${UNIT[repeat.freq]}s`;
+    : `Every ${repeat.interval} ${UNIT[repeat.freq]}s`) + (pattern ? ` ${LABELS.recurring.onPattern(pattern)}` : '');
   if (repeat.endKind === 'until' && repeat.until) return `${base}, until ${formatObjectDay(repeat.until)}`;
   if (repeat.endKind === 'count' && repeat.count) return `${base}, ${repeat.count} times`;
   return base;

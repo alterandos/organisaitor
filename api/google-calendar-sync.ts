@@ -10,7 +10,8 @@ export const config = { runtime: 'edge' };
 // this endpoint never writes to calendarStore itself (that stays client-side, same
 // boundary api/strava-sync.ts already draws); date/time extraction and timezone
 // conversion (the account's effective zone, a client-only setting) happen client-side too,
-// in src/services/googleCalendar.ts.
+// in src/services/googleCalendar.ts. Deleted events are passed on too (status 'cancelled'): the
+// client removes them, or takes that date out of its series.
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 });
 
@@ -23,13 +24,14 @@ export default async function handler(req: Request): Promise<Response> {
 
   const { data: connections, error: connError } = await supabase
     .from('calendar_connections')
-    .select('id, access_token, refresh_token, expires_at, calendars_enabled')
-    .eq('user_id', userData.user.id);
+    .select('id, account_email, access_token, refresh_token, expires_at, calendars_enabled')
+    .eq('user_id', userData.user.id)
+    .eq('provider', 'google');
 
   if (connError) return Response.json({ error: connError.message }, { status: 500 });
   if (!connections || connections.length === 0) return Response.json({ events: [] });
 
-  const results: { connectionId: string; calendarId: string; event: unknown; calendar?: unknown }[] = [];
+  const results: { connectionId: string; account?: string; calendarId: string; event: unknown; calendar?: unknown }[] = [];
 
   for (const connection of connections) {
     const enabledCalendars: string[] = connection.calendars_enabled ?? [];
@@ -41,13 +43,13 @@ export default async function handler(req: Request): Promise<Response> {
       const calendarList = await fetchGoogleCalendarList(accessToken);
       for (const calendarId of enabledCalendars) {
         const entry = calendarList.find((c) => c.id === calendarId);
-        const calendar = { defaultReminders: entry?.defaultReminders, accessRole: entry?.accessRole };
+        const calendar = {
+          defaultReminders: entry?.defaultReminders, accessRole: entry?.accessRole,
+          backgroundColor: entry?.backgroundColor, timeZone: entry?.timeZone,
+        };
         const events = await fetchGoogleCalendarEvents(accessToken, calendarId);
         for (const event of events) {
-          // Cancelled instances of an expanded recurring event still come back from the
-          // API (singleEvents=true) — skip them rather than importing a "cancelled" event.
-          if (event.status === 'cancelled') continue;
-          results.push({ connectionId: connection.id, calendarId, event, calendar });
+          results.push({ connectionId: connection.id, account: connection.account_email, calendarId, event, calendar });
         }
       }
     } catch (e) {

@@ -19,7 +19,7 @@ import {
   type TimeGridEntry as TimeGridEntryG,
   type HourLayout,
 } from '@/utils/timeGrid';
-import { EVENT_TYPE_ICON } from '@/config/calendarEventTypes';
+import { eventTypeIcon } from '@/config/calendarEventTypes';
 import { ScheduleOccurrencePopover } from '@/components/ScheduleOccurrencePopover/ScheduleOccurrencePopover';
 import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane';
 import { useTimeGridDrag } from '@/hooks/useTimeGridDrag';
@@ -32,7 +32,7 @@ import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
-  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean }
+  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean; travelIcon: string; color: string | null }
   | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
   | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
   | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean };
@@ -299,12 +299,14 @@ export function CalendarView() {
         // A birthday/travel icon takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
         // event auto-created from a task's scheduledAt (see Task.calendarEventId) so the calendar
         // reads as task-linked without changing the event's click/edit behaviour.
-        typeIcon: `${ev.important ? '❗' : ''}${EVENT_TYPE_ICON[ev.eventType ?? 'default'] || (taskLinkedEventIds.has(ev.id) ? '🕐' : '')}`,
+        typeIcon: `${ev.important ? '❗' : ''}${eventTypeIcon(ev) || (taskLinkedEventIds.has(ev.id) ? '🕐' : '')}`,
         status: ev.status ?? 'confirmed',
         important: ev.important ?? false,
         occurrenceDate: ev.date,
         travel: ev.eventType === 'travel',
       };
+        travelIcon: eventTypeIcon(ev),
+        color: ev.color ?? null,
 
       if (ev.endDate && ev.endDate > ev.date) {
         // Multi-day event: push to all covered dates within view range
@@ -931,6 +933,8 @@ export function CalendarView() {
       if (scheduleColor) return { borderLeft: `3px solid ${scheduleColor}` };
     }
     if (!item.collectionId) return {};
+    // An event's own colour (an imported event takes its calendar's) comes before its Endeavour's.
+    if (item.kind === 'event' && item.color) return { borderLeft: `3px solid ${item.color}` };
     const col = collectionsRecord[item.collectionId];
     if (!col?.color) return {};
     return { borderLeft: `3px solid ${col.color}` };
@@ -938,6 +942,7 @@ export function CalendarView() {
 
   const getSpanPillStyle = (slot: SpanSlot): React.CSSProperties => {
     if (slot.collectionId) {
+    if (slot.color) return { background: slot.color, color: '#fff' };
       const col = collectionsRecord[slot.collectionId];
       if (col?.color) return { background: col.color, color: '#fff' };
     }
@@ -1361,7 +1366,7 @@ export function CalendarView() {
                                 <span className={styles.weekTimeBlockTime}>
                                   {formatItemTimeLabel(item, resizing ? dragPreview!.endMin : endMin)}
                                 </span>
-                                <span className={styles.weekTimeBlockTitle}>{isTravelItem(item) && `${EVENT_TYPE_ICON.travel} `}{item.title}</span>
+                                <span className={styles.weekTimeBlockTitle}>{isTravelItem(item) && item.kind === 'event' && `${item.travelIcon} `}{item.title}</span>
                                 {getItemLocation(item) && (
                                   <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                                 )}
@@ -1521,7 +1526,7 @@ export function CalendarView() {
                               <span className={styles.weekTimeBlockTime}>
                                 {formatItemTimeLabel(item, liveEndMin)}
                               </span>
-                              <span className={styles.weekTimeBlockTitle}>{isTravelItem(item) && `${EVENT_TYPE_ICON.travel} `}{item.title}</span>
+                              <span className={styles.weekTimeBlockTitle}>{isTravelItem(item) && item.kind === 'event' && `${item.travelIcon} `}{item.title}</span>
                               {getItemLocation(item) && (
                                 <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                               )}

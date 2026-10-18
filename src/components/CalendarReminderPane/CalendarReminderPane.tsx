@@ -218,7 +218,7 @@ export function CalendarReminderPane() {
 
           {/* ── Repeat ── */}
           <div className={styles.field}>
-            <RepeatField value={reminder.repeat ?? null} onChange={(r) => updateReminder(id, { repeat: r })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
+            <RepeatField value={reminder.repeat ?? null} onChange={(r) => updateReminder(id, { repeat: r })} date={reminder.date} labelClassName={`${styles.label} ${styles.checkLabel}`} />
           </div>
 
           <div className={styles.field}>

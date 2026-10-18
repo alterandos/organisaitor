@@ -254,6 +254,8 @@ export type CalendarItemKind  = 'event' | 'reminder' | 'deadline';
 // from `background`, which is an ambient multi-day span ("in Vietnam this week"). Free-text
 // column (001_initial.sql), so a new value needs no migration.
 export type CalendarEventType = 'default' | 'birthday' | 'task' | 'travel';
+// How a 'travel' event travels; its icon comes from config/calendarEventTypes.ts. null = not said.
+export type TravelMode = 'flight' | 'train' | 'bus' | 'car' | 'ferry';
 // A self-created event's confirmation state — 'tentative' is a placeholder the user put on
 // the calendar to be aware something might happen, not yet committed to (see CLAUDE.md
 // "Tentative events"). Named after (and worth keeping compatible with) the iCalendar spec's
@@ -284,7 +286,14 @@ export interface RepeatConfig {
   endKind:     'forever' | 'count' | 'until';
   count:       number | null;                   // number of total occurrences
   until:       string | null;                   // YYYY-MM-DD
-  daysOfWeek?: number[];                        // 0=Sun … 6=Sat; used by routines
+  // Weekly only: the weekdays it falls on (0=Sun … 6=Sat), e.g. [1,3,5] for Mon/Wed/Fri. Absent or
+  // empty = the start date's weekday. Weeks run Monday to Sunday (iCalendar's default) for "every
+  // 2 weeks on Mon and Fri". See src/utils/recurrence.ts.
+  daysOfWeek?: number[];
+  // Monthly or yearly only: on the nth weekday of the month rather than the same day number —
+  // "the 2nd Tuesday" is { week: 2, day: 2 }, "the last Friday" { week: -1, day: 5 }. A yearly rule
+  // uses the start date's month. A month with no 5th such weekday is skipped.
+  monthWeekday?: { week: number; day: number };
   // Individual occurrence dates (YYYY-MM-DD) removed from a repeating calendar event/reminder —
   // "delete just this one". Lives inside RepeatConfig (already a jsonb column) so it needs no
   // schema change. See src/utils/recurrence.ts.
@@ -328,15 +337,19 @@ export interface CalendarEvent {
   // them again. An event isn't struck out by that: it still happens.
   remindOccurrence:   string | null;
   seenDates:          string[];
-  // External calendar sync provenance (see CLAUDE.md "External calendar sync — built (Google,
-  // Phase 1)"). All null for a native, in-app-created event. Once synced in, this app is the
-  // source of truth — these fields are provenance/dedup only, never used to re-sync or
-  // overwrite the event again.
-  source:             string | null;              // 'google' (future: 'microsoft'); null = native
-  sourceConnectionId: string | null;              // which connected ACCOUNT (CalendarConnection.id) — supports multiple accounts of the same provider
+  travelMode:         TravelMode | null;       // eventType 'travel' only: flight, train, … (its icon)
+  // Where an imported event came from (docs/features/external-calendar-sync.md). All null for an
+  // event made in the app. A Google event keeps following Google for every field not edited here
+  // (services/calendarImport/reconcile.ts); an .ics import is a one-off copy.
+  source:             string | null;              // 'google' | 'ics' (future: 'microsoft'); null = made here
+  sourceAccount:      string | null;              // which account: its email (Google), or the file name (.ics)
+  sourceConnectionId: string | null;              // the connection row it came through (CalendarConnection.id); changes if the account is reconnected, so never part of a key
   sourceCalendarId:   string | null;              // which calendar within that account (a Google account can have several)
-  sourceEventId:      string | null;              // the provider's own event id — (sourceConnectionId, sourceCalendarId, sourceEventId) together are the dedup key
-  sourceRaw:          Record<string, unknown> | null; // full provider payload, so surfacing more fields later isn't a re-sync
+  sourceEventId:      string | null;              // the provider's own event id — (source, sourceAccount, sourceCalendarId, sourceEventId) is the event's key
+  sourceUid:          string | null;              // iCalendar UID (+ '@' + the date, for one changed date of a series): the same meeting in two calendars, or a later .ics import, shares it
+  // { event: the provider's payload as last seen, imported: the fields as last imported } — the
+  // second is the base for "has this been edited here since?" (calendarImport/reconcile.ts).
+  sourceRaw:          Record<string, unknown> | null;
 }
 
 // A point-in-time reminder (not duration-based). Also the type used to
@@ -393,10 +406,13 @@ export interface CreateCalendarEventInput {
   seriesDate?:        string | null;
   doneDates?:         string[];
   seenDates?:         string[];
+  travelMode?:         TravelMode | null;
   source?:             string | null;
+  sourceAccount?:      string | null;
   sourceConnectionId?: string | null;
   sourceCalendarId?:   string | null;
   sourceEventId?:      string | null;
+  sourceUid?:          string | null;
   sourceRaw?:          Record<string, unknown> | null;
 }
 

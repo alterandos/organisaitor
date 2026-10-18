@@ -20,18 +20,14 @@ import { mergeNewLinks } from '@/utils/links';
 import { persistStorage } from '@/utils/persistStorage';
 import { moveToTrash } from '@/services/trashCapture';
 
-// Composite key for one externally-sourced event, used to decide "have I already imported
-// this" — see importedSourceKeys below.
-function sourceKey(connectionId: string, calendarId: string, eventId: string): string {
-  return `${connectionId}::${calendarId}::${eventId}`;
-}
-
 interface CalendarState {
   events:    Record<CalendarEventId,    CalendarEvent>;
   reminders: Record<CalendarReminderId, CalendarReminder>;
   deadlines: Record<CalendarDeadlineId, CalendarDeadline>;
 
-  addEvent:    (input: CreateCalendarEventInput)    => CalendarEventId;
+  // `id` is given only by an import (services/calendarImport/ids.ts), so two devices importing
+  // the same event make the same record; everything else gets a new one.
+  addEvent:    (input: CreateCalendarEventInput, id?: CalendarEventId) => CalendarEventId;
   updateEvent: (id: CalendarEventId, changes: Partial<Omit<CalendarEvent,    'id' | 'createdAt'>>) => void;
   deleteEvent: (id: CalendarEventId)                => void;
   archiveEvent: (id: CalendarEventId, reason?: string | null) => void;
@@ -75,16 +71,12 @@ interface CalendarState {
   detachDeadlineOccurrence:  (id: CalendarDeadlineId, date: string) => CalendarDeadlineId | null;
   splitDeadlineSeries:       (id: CalendarDeadlineId, date: string) => CalendarDeadlineId | null;
 
-  // External calendar sync (see CLAUDE.md "External calendar sync — built (Google, Phase
-  // 1)"). Local-only, deliberately NOT part of the Supabase-synced entity rows — a plain
-  // digest of every (connectionId, calendarId, eventId) ever pulled in, kept even after the
-  // resulting CalendarEvent is deleted, so a later sync pass never resurrects it. Once an
-  // event is created this way, this app is the source of truth for it — sync only ever
-  // creates NEW events, never updates or deletes an already-imported one.
+  // Imported events (services/calendarImport/reconcile.ts): the key of every event ever imported
+  // on this device, kept after the event is deleted so the next sync doesn't bring it back.
+  // Local only; deletions made on another device arrive as the cloud's tombstones, which the
+  // sync load adds here (syncService hydrateStores).
   importedSourceKeys: string[];
-  upsertSyncedEvent: (input: CreateCalendarEventInput & {
-    sourceConnectionId: string; sourceCalendarId: string; sourceEventId: string;
-  }) => CalendarEventId | null;
+  markImported: (keys: string[]) => void;
 }
 
 export const useCalendarStore = create<CalendarState>()(
@@ -94,8 +86,8 @@ export const useCalendarStore = create<CalendarState>()(
       reminders: {},
       deadlines: {},
 
-      addEvent: (input) => {
-        const id  = newCalendarEventId();
+      addEvent: (input, givenId) => {
+        const id  = givenId ?? newCalendarEventId();
         const ts  = now();
         const event: CalendarEvent = {
           id,
@@ -127,10 +119,13 @@ export const useCalendarStore = create<CalendarState>()(
           seriesDate:        input.seriesDate         ?? null,
           remindOccurrence:  null,
           seenDates:         input.seenDates          ?? [],
+          travelMode:          input.travelMode          ?? null,
           source:              input.source              ?? null,
+          sourceAccount:       input.sourceAccount       ?? null,
           sourceConnectionId:  input.sourceConnectionId   ?? null,
           sourceCalendarId:    input.sourceCalendarId     ?? null,
           sourceEventId:       input.sourceEventId        ?? null,
+          sourceUid:           input.sourceUid           ?? null,
           sourceRaw:           input.sourceRaw            ?? null,
         };
         set((s) => ({ events: { ...s.events, [id]: event } }));
@@ -326,7 +321,7 @@ export const useCalendarStore = create<CalendarState>()(
         const ev = get().events[id];
         if (!ev?.repeat) return null;
         get().updateEvent(id, { repeat: withException(ev.repeat, date) });
-        return get().addEvent({ ...ev, date, endDate: null, repeat: null, seriesId: id, seriesDate: date, seenDates: (ev.seenDates ?? []).filter((d) => d === date), source: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceRaw: null });
+        return get().addEvent({ ...ev, date, endDate: null, repeat: null, seriesId: id, seriesDate: date, seenDates: (ev.seenDates ?? []).filter((d) => d === date), source: null, sourceAccount: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceUid: null, sourceRaw: null });
       },
 
       splitEventSeries: (id, date) => {
@@ -334,7 +329,7 @@ export const useCalendarStore = create<CalendarState>()(
         if (!ev?.repeat || date <= ev.date) return null;
         const tail = tailOf(ev.date, ev.repeat, date);
         get().updateEvent(id, { repeat: endedBefore(ev.repeat, date) });
-        return get().addEvent({ ...ev, date, endDate: null, repeat: tail, seriesId: id, seriesDate: date, seenDates: (ev.seenDates ?? []).filter((d) => d >= date), source: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceRaw: null });
+        return get().addEvent({ ...ev, date, endDate: null, repeat: tail, seriesId: id, seriesDate: date, seenDates: (ev.seenDates ?? []).filter((d) => d >= date), source: null, sourceAccount: null, sourceConnectionId: null, sourceCalendarId: null, sourceEventId: null, sourceUid: null, sourceRaw: null });
       },
 
       skipReminderOccurrence: (id, date) => {
@@ -400,28 +395,16 @@ export const useCalendarStore = create<CalendarState>()(
       },
 
       importedSourceKeys: [],
-      upsertSyncedEvent: (input) => {
-        const key = sourceKey(input.sourceConnectionId, input.sourceCalendarId, input.sourceEventId);
-        const state = get();
-        if (state.importedSourceKeys.includes(key)) return null;
-        const alreadyLive = Object.values(state.events).some((ev) =>
-          ev.sourceConnectionId === input.sourceConnectionId &&
-          ev.sourceCalendarId   === input.sourceCalendarId &&
-          ev.sourceEventId      === input.sourceEventId
-        );
-        if (alreadyLive) {
-          set((s) => ({ importedSourceKeys: [...s.importedSourceKeys, key] }));
-          return null;
-        }
-        const id = get().addEvent(input);
-        set((s) => ({ importedSourceKeys: [...s.importedSourceKeys, key] }));
-        return id;
-      },
+      markImported: (keys) => set((s) => {
+        const known = new Set(s.importedSourceKeys);
+        const fresh = keys.filter((k) => !known.has(k));
+        return fresh.length ? { importedSourceKeys: [...s.importedSourceKeys, ...fresh] } : {};
+      }),
     }),
     {
       name: 'todo-calendar',
       storage: persistStorage(),
-      version: 17,
+      version: 18,
       migrate(state: any, version: number) {
         if (version < 2) {
           const events = state.events ?? {};
@@ -514,6 +497,16 @@ export const useCalendarStore = create<CalendarState>()(
           for (const slice of [state.events, state.deadlines]) {
             (Object.values(slice ?? {}) as { seenDates?: string[] }[]).forEach((item) => { if (item.seenDates === undefined) item.seenDates = []; });
           }
+        }
+        if (version < 18) {
+          // travelMode, sourceAccount, sourceUid (Google import rebuilt, 2026-10-18). The import
+          // keys changed shape (no longer the connection id), so the old ones are dropped.
+          (Object.values(state.events ?? {}) as { travelMode?: unknown; sourceAccount?: unknown; sourceUid?: unknown }[]).forEach((ev) => {
+            if (ev.travelMode === undefined) ev.travelMode = null;
+            if (ev.sourceAccount === undefined) ev.sourceAccount = null;
+            if (ev.sourceUid === undefined) ev.sourceUid = null;
+          });
+          state.importedSourceKeys = [];
         }
         return state as CalendarState;
       },

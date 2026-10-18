@@ -18,7 +18,7 @@ import { initAutoBackup } from '@/services/autoBackup';
 import { migrateTaskDeadlineShadows } from '@/services/taskDeadlineMigration';
 import { DecryptPrompt } from '@/components/DecryptPrompt/DecryptPrompt';
 import { backfillTaskCalendarLinks } from '@/services/taskCalendarBackfill';
-import { syncGoogleCalendars } from '@/services/googleCalendar';
+import { syncAllCalendars } from '@/services/calendarConnections';
 import { altLetterHotkey, matchesHotkeyId, matchesHotkeyPrimary } from '@/store/hotkeyOverridesStore';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { AccountPane } from '@/components/AccountPane/AccountPane';
@@ -338,7 +338,8 @@ export default function App() {
     // Google's OAuth redirect lands on bare "/" too (same reasoning as Strava's above) —
     // jump to Calendar and open the side pane's "Imported calendars" section so the
     // connected/error state is immediately visible.
-    if (new URLSearchParams(window.location.search).has('googleCalendar')) {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('googleCalendar') || params.has('outlookCalendar')) {
       setActiveView('calendar');
       openSchedules();
     }
@@ -366,14 +367,14 @@ export default function App() {
     return () => { unwatch(); void resume.then((l) => l.remove()); };
   }, [isAndroid]);
 
-  // Syncs connected Google calendars while the app is open — on load/sign-in, then every
+  // Syncs connected Google and Outlook calendars while the app is open — on load/sign-in, then every
   // 15 minutes. No server-side cron: this app has no service-role Supabase credential
   // anywhere, and this keeps it that way (see CLAUDE.md "External calendar sync"). A no-op
-  // if there's no session or no connections (syncGoogleCalendars checks both internally).
+  // if there's no session or no connections (each provider's sync checks both internally).
   useEffect(() => {
     if (!isSupabaseConfigured || !authUserId) return;
-    void syncGoogleCalendars();
-    const id = setInterval(() => { void syncGoogleCalendars(); }, 15 * 60_000);
+    void syncAllCalendars();
+    const id = setInterval(() => { void syncAllCalendars(); }, 15 * 60_000);
     return () => clearInterval(id);
   }, [authUserId]);
 
@@ -674,6 +675,12 @@ export default function App() {
           <>
             <main
               ref={taskScrollRef}
+            <button
+              className={styles.settingsBtn}
+              onClick={() => openAccount()}
+              aria-label="Account"
+              title="Account &amp; sync"
+            ><AccountIcon className={styles.accountIcon} /></button>
               className={`${styles.main} ${isAndroid ? styles.mainMobile : ''}`}
             >
               {isAndroid && (pullDistance > 0 || pullRefreshing) && (

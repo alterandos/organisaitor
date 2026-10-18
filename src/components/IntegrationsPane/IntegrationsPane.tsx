@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
-import { useCalendarStore } from '@/store/calendarStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { parseICS, looksLikeBirthday, type ICSEvent } from '@/utils/icsParser';
-import { resolveTimezone, rezoneWallClock } from '@/utils/timezone';
+import { parseICS } from '@/utils/icsParser';
+import { resolveTimezone } from '@/utils/timezone';
+import { icsToDrafts, withEventType } from '@/services/calendarImport/ics';
+import { applyImport, findExisting } from '@/services/calendarImport/reconcile';
+import type { ImportDraft } from '@/services/calendarImport/draft';
+import { repeatSummary } from '@/services/recurringTasks';
 import { CalendarImportReviewModal, type ReviewRow } from '@/components/CalendarImportReviewModal/CalendarImportReviewModal';
 import type { CollectionId } from '@/types';
 import { downloadBackup, downloadAutoBackupSnapshot, restoreBackupData } from '@/utils/backupExport';
@@ -12,6 +15,7 @@ import { listBackupSnapshots, type BackupSnapshotMeta } from '@/services/autoBac
 import styles from './IntegrationsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
+import { log } from '@/utils/log';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
@@ -21,8 +25,6 @@ type ImportStatus = 'idle' | 'success' | 'error';
 
 function CalendarImportCard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const events       = useCalendarStore((s) => s.events);
-  const addEvent     = useCalendarStore((s) => s.addEvent);
   const timezone     = useSettingsStore((s) => s.timezone);
 
   const [status,   setStatus]   = useState<ImportStatus>('idle');
@@ -30,7 +32,9 @@ function CalendarImportCard() {
   const [skipped,  setSkipped]  = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const [pendingEvents, setPendingEvents] = useState<Map<string, ICSEvent> | null>(null);
+  // Everything in the file, as drafts (changed and deleted dates of a series included); the review
+  // lists one row per event or series, and those come along with their series.
+  const [pendingDrafts, setPendingDrafts] = useState<ImportDraft[] | null>(null);
   const [reviewRows,    setReviewRows]    = useState<ReviewRow[] | null>(null);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,34 +44,25 @@ function CalendarImportCard() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const raw    = ev.target?.result as string;
-        const parsed = parseICS(raw);
-
-        const existingKeys = new Set(
-          Object.values(events).map((e) => `${e.title}|${e.date}|${e.startTime ?? ''}`)
-        );
-
-        const eventMap = new Map<string, ICSEvent>();
-        const rows: ReviewRow[] = parsed.map((item, i) => {
-          const key = `${item.title}|${item.date}|${item.startTime ?? ''}|${i}`;
-          eventMap.set(key, item);
-          const dedupKey = `${item.title}|${item.date}|${item.startTime ?? ''}`;
-          return {
-            key,
-            title:       item.title,
-            date:        item.date,
-            startTime:   item.startTime,
-            endTime:     item.endTime,
-            location:    item.location,
-            eventType:   looksLikeBirthday(item.title) ? 'birthday' : 'default',
-            isDuplicate: existingKeys.has(dedupKey),
-          };
-        });
-
-        setPendingEvents(eventMap);
+        const raw = ev.target?.result as string;
+        const { drafts, partial } = icsToDrafts(parseICS(raw), file.name, resolveTimezone(timezone));
+        const rows: ReviewRow[] = drafts.filter((d) => !d.series && !d.cancelled).map((d) => ({
+          key:         d.key,
+          title:       d.fields.title,
+          date:        d.fields.date,
+          startTime:   d.fields.startTime,
+          endTime:     d.fields.endTime,
+          location:    d.fields.location,
+          eventType:   d.fields.eventType,
+          isDuplicate: !!findExisting(d),
+          repeatText:  d.fields.repeat ? repeatSummary(d.fields.repeat) : null,
+          partial:     partial.has(d.key),
+        }));
+        setPendingDrafts(drafts);
         setReviewRows(rows);
-      } catch {
-        setErrorMsg('Could not read the file. Make sure it\'s a valid .ics calendar file.');
+      } catch (err) {
+        log.warn('calendarImport', 'could not read .ics file', err);
+        setErrorMsg('Could not read the file. Make sure it’s a valid .ics calendar file.');
         setStatus('error');
       }
       e.target.value = '';
@@ -81,44 +76,21 @@ function CalendarImportCard() {
   };
 
   const handleReviewConfirm = (selected: ReviewRow[], collectionId: CollectionId | null) => {
-    if (!pendingEvents) return;
-    const zone = resolveTimezone(timezone);
-
-    for (const row of selected) {
-      const item = pendingEvents.get(row.key);
-      if (!item) continue;
-
-      let date      = item.date;
-      let startTime = item.startTime;
-      let endTime   = item.endTime;
-
-      // Re-project into the app's zone if the source carried an explicit zone that differs —
-      // floating times (tzid === null) already mean "whatever zone reads this", so leave as-is.
-      if (item.tzid && item.tzid !== zone && startTime) {
-        const r = rezoneWallClock(item.date, startTime, item.tzid, zone);
-        date      = r.date;
-        startTime = r.time;
-        if (endTime) endTime = rezoneWallClock(item.date, endTime, item.tzid, zone).time;
-      }
-
-      addEvent({
-        title:      item.title,
-        date,
-        startTime,
-        endTime,
-        notes:      item.notes,
-        location:   item.location,
-        eventType:  row.eventType,
-        status:     item.tentative ? 'tentative' : 'confirmed',
-        collectionId,
+    if (!pendingDrafts) return;
+    const chosen = new Map(selected.map((r) => [r.key, r]));
+    const drafts = pendingDrafts
+      .filter((d) => chosen.has(d.key) || (d.series && chosen.has(d.series.key)))
+      .map((d) => {
+        const row = chosen.get(d.key);
+        return row ? { ...d, fields: withEventType(d.fields, row.eventType) } : d;
       });
-    }
+    const result = applyImport(drafts, { collectionId });
 
-    setImported(selected.length);
+    setImported(result.created);
     setSkipped((reviewRows?.length ?? 0) - selected.length);
     setStatus('success');
     setReviewRows(null);
-    setPendingEvents(null);
+    setPendingDrafts(null);
   };
 
   const reset = () => setStatus('idle');
@@ -139,8 +111,9 @@ function CalendarImportCard() {
         <span className={styles.cardName}>Calendar (.ics)</span>
         <span className={styles.cardDesc}>
           Import from Google Calendar, Outlook, Apple Calendar, or any app that exports .ics files.
-          Recurring events are expanded up to 3 years ahead. You'll get a chance to review, deselect,
-          and adjust each event's type (e.g. Birthday) and {LABELS.collection} before anything is added.
+          Repeating events come in as repeating events, and anything already in your calendar is left
+          out. You'll get a chance to review, deselect, and adjust each event's type (e.g. Birthday)
+          and {LABELS.collection} before anything is added.
         </span>
         {status === 'success' && (
           <div className={`${styles.statusMsg} ${styles.statusSuccess}`}>
@@ -177,7 +150,7 @@ function CalendarImportCard() {
         <CalendarImportReviewModal
           rows={reviewRows}
           onConfirm={handleReviewConfirm}
-          onCancel={() => { setReviewRows(null); setPendingEvents(null); }}
+          onCancel={() => { setReviewRows(null); setPendingDrafts(null); }}
         />
       )}
     </div>

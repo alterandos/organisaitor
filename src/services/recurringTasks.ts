@@ -2,7 +2,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { addTaskWithCalendar, updateTaskLinked } from '@/services/taskCalendarLinks';
 import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
 import { deleteForever, trashedBy } from '@/services/trash';
-import { expandRepeat } from '@/utils/recurrence';
+import { expandRepeat, repeatPattern } from '@/utils/recurrence';
 import { addDaysToIso, todayIso } from '@/utils/date';
 import { makeItemLink } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
@@ -21,7 +21,8 @@ import type { RepeatConfig, Task, TaskId } from '@/types';
 // the UI, agent/access.ts for agents), so the rule lives here only.
 
 // How far ahead to look for the next date, by frequency (at least one whole step).
-const STEP_DAYS: Record<RepeatConfig['freq'], number> = { daily: 1, weekly: 7, monthly: 31, yearly: 366 };
+// An nth-weekday rule can skip a month (no 5th Friday), hence two months' or years' worth.
+const STEP_DAYS: Record<RepeatConfig['freq'], number> = { daily: 1, weekly: 7, monthly: 62, yearly: 732 };
 
 // The next occurrence's date after `basis`: the first the rule gives after it that's today or
 // later. null when the rule has ended (its until date has passed, or its count is used up).
@@ -154,7 +155,8 @@ export function discardOccurrence(id: TaskId): void {
 export function repeatSummary(repeat: RepeatConfig): string {
   const L = LABELS.recurring;
   const [one, many] = L.units[repeat.freq];
-  const every = L.summaryEvery(repeat.interval, repeat.interval === 1 ? one : many);
+  const pattern = repeatPattern(repeat);
+  const every = L.summaryEvery(repeat.interval, repeat.interval === 1 ? one : many) + (pattern ? ` ${L.onPattern(pattern)}` : '');
   if (repeat.endKind === 'count' && repeat.count) return `${every} · ${L.summaryMore(repeat.count - 1)}`;
   if (repeat.endKind === 'until' && repeat.until) return `${every} · ${L.summaryUntil(repeat.until)}`;
   return every;

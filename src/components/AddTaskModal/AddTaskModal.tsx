@@ -368,7 +368,7 @@ export function AddTaskModal() {
               {/* Repeat — not for a sub-task, which repeats with its parent */}
               {!parentId && (
                 <div className={styles.field}>
-                  <RepeatField value={repeat} onChange={setRepeat} hint={LABELS.recurring.hint} />
+                  <RepeatField value={repeat} onChange={setRepeat} hint={LABELS.recurring.hint} date={deadline || scheduledAt || null} />
                 </div>
               )}
 

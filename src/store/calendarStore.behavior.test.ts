@@ -170,23 +170,10 @@ describe('archiveEvent / restoreEvent', () => {
   });
 });
 
-describe('upsertSyncedEvent — external calendar sync provenance', () => {
-  const input = {
-    title: 'Imported', date: '2030-01-01',
-    sourceConnectionId: 'conn-1', sourceCalendarId: 'cal-1', sourceEventId: 'evt-1',
-  };
-
-  it('creates a new event the first time a (connection, calendar, event) triple is seen', () => {
-    const id = useCalendarStore.getState().upsertSyncedEvent(input);
-    expect(id).not.toBeNull();
-    expect(useCalendarStore.getState().events[id!].title).toBe('Imported');
-  });
-
-  it('never creates a second event for the same triple, even after the first is deleted', () => {
-    const id = useCalendarStore.getState().upsertSyncedEvent(input)!;
-    useCalendarStore.getState().deleteEvent(id);
-    const second = useCalendarStore.getState().upsertSyncedEvent(input);
-    expect(second).toBeNull();
-    expect(Object.keys(useCalendarStore.getState().events)).toEqual([]);
+describe('markImported — the import ledger', () => {
+  it('adds each key once, and keeps keys whose events were deleted', () => {
+    useCalendarStore.getState().markImported(['google|a|c|1', 'google|a|c|2']);
+    useCalendarStore.getState().markImported(['google|a|c|2', 'google|a|c|3']);
+    expect(useCalendarStore.getState().importedSourceKeys).toEqual(['google|a|c|1', 'google|a|c|2', 'google|a|c|3']);
   });
 });

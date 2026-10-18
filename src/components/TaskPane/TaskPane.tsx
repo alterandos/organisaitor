@@ -269,6 +269,7 @@ export function TaskPane() {
                 value={task.repeat ?? null}
                 hint={LABELS.recurring.hint}
                 onChange={(repeat) => updateTaskLinked(taskId, repeat && !task.deadline && !task.scheduledAt ? { repeat, deadline: todayIso() } : { repeat })}
+                date={task.deadline ?? task.scheduledAt}
               />
             </div>
           )}

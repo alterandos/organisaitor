@@ -26,6 +26,7 @@ import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
 import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
+import { TravelModePicker } from '@/components/TravelModePicker/TravelModePicker';
 import styles from './CalendarEventPane.module.css';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
@@ -151,6 +152,20 @@ export function CalendarEventPane() {
       <aside style={paneResize.style} className={styles.pane}>
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
+          {event.source && event.sourceAccount && (() => {
+            const L = LABELS.calendarImport;
+            const synced = event.source === 'google' || event.source === 'microsoft';
+            const name = event.source === 'microsoft' ? 'Outlook' : 'Google';
+            const deleted = (event.sourceRaw as { deleted?: boolean } | null)?.deleted;
+            return (
+              <span className={styles.sourceLine} title={synced ? (deleted ? L.deletedThere(name) : L.followsSource(name)) : undefined}>
+                {deleted ? L.deletedShort(name)
+                  : event.source === 'google' ? L.fromGoogle(event.sourceAccount)
+                  : event.source === 'microsoft' ? L.fromOutlook(event.sourceAccount)
+                  : L.fromFile(event.sourceAccount)}
+              </span>
+            );
+          })()}
           <span className={styles.heading}>{LABELS.calendarItemKind.event}</span>
           <button className={styles.closeBtn} onClick={closePane} aria-label="Close">×</button>
         </header>
@@ -283,7 +298,7 @@ export function CalendarEventPane() {
                     key={t.value}
                     type="button"
                     className={`${styles.typeBtn} ${(event.eventType ?? 'default') === t.value ? styles.typeBtnActive : ''}`}
-                    onClick={() => updateEvent(id, { eventType: t.value })}
+                    onClick={() => updateEvent(id, { eventType: t.value, ...(t.value === 'travel' ? {} : { travelMode: null }) })}
                   >
                     {t.icon && <span>{t.icon}</span>}
                     {t.label}
@@ -291,6 +306,9 @@ export function CalendarEventPane() {
                 ))}
               </div>
             </div>
+              {event.eventType === 'travel' && (
+                <TravelModePicker value={event.travelMode ?? null} onChange={(m) => updateEvent(id, { travelMode: m })} />
+              )}
           )}
 
           <div className={styles.field}>
@@ -380,7 +398,7 @@ export function CalendarEventPane() {
 
           {/* ── Repeat — not offered on a task's scheduled event: the task itself doesn't repeat ── */}
           {!isTaskShadow && <div className={styles.field}>
-            <RepeatField value={event.repeat ?? null} onChange={(r) => updateEvent(id, { repeat: r })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
+            <RepeatField value={event.repeat ?? null} onChange={(r) => updateEvent(id, { repeat: r })} date={event.date} labelClassName={`${styles.label} ${styles.checkLabel}`} />
           </div>}
 
           <div className={styles.field}>

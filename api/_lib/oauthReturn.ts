@@ -6,11 +6,12 @@ import { getAnonClient } from './supabaseEdge';
 // organisaitor://oauth-done (src/services/android/deepLinks.ts routes it).
 
 export type OAuthClient = 'web' | 'android';
-export type OAuthReturnProvider = 'strava' | 'google-calendar';
+export type OAuthReturnProvider = 'strava' | 'google-calendar' | 'microsoft-calendar';
 
 const WEB_PARAM: Record<OAuthReturnProvider, string> = {
   strava: 'strava',
   'google-calendar': 'googleCalendar',
+  'microsoft-calendar': 'outlookCalendar',
 };
 
 // A save function's result: 'ok' (web), 'ok:<client>' (another client), or an error code.

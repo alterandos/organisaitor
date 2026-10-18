@@ -1,5 +1,6 @@
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
+import { clearMicrosoftCursors } from '@/services/microsoftCalendar';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useOverviewStore } from '@/store/overviewStore';
@@ -31,7 +32,10 @@ export function clearSyncedLocalData(): void {
   useTaskStore.setState({ tasks: task.tasks, collections: task.collections, tags: task.tags, purposes: task.purposes });
 
   const calendar = useCalendarStore.getInitialState();
-  useCalendarStore.setState({ events: calendar.events, reminders: calendar.reminders, deadlines: calendar.deadlines });
+  // The import keys too: they name the account's imported events, and a next account on this
+  // device importing the same Google calendar must not find them "already deleted".
+  useCalendarStore.setState({ events: calendar.events, reminders: calendar.reminders, deadlines: calendar.deadlines, importedSourceKeys: [] });
+  clearMicrosoftCursors();
 
   useTrackerStore.setState({ entries: useTrackerStore.getInitialState().entries });
   useScheduleStore.setState({ schedules: useScheduleStore.getInitialState().schedules });

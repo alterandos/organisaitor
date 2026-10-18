@@ -304,7 +304,8 @@ interface RepeatConfig {
   endKind:     'forever' | 'count' | 'until';
   count:       number | null;
   until:       string | null;   // YYYY-MM-DD
-  daysOfWeek?: number[];        // 0=Sun…6=Sat — used by routines
+  daysOfWeek?: number[];        // weekly only: the weekdays (0=Sun…6=Sat); weeks run Mon–Sun
+  monthWeekday?: { week: number; day: number };  // monthly/yearly: the nth (1–5, -1 = last) weekday
 }
 ```
 
@@ -315,7 +316,7 @@ interface RepeatConfig {
 | Store | Persist key | Version | Persisted to | Purpose |
 |-------|------------|---------|-------------|---------|
 | `taskStore` | `todo-app-storage` | **v14** | localStorage + Supabase | tasks, collections, tags, purposes |
-| `calendarStore` | `todo-calendar` | **v17** | localStorage + Supabase | calendar events, reminders, deadlines (v15: `doneDates` on reminders/deadlines; v16: `seriesId`/`seriesDate` on all three — see "Repeating series" under Component patterns; v17: `remindOccurrence` on all three, `seenDates` on events/deadlines — see "Notifications") |
+| `calendarStore` | `todo-calendar` | **v18** | localStorage + Supabase | calendar events, reminders, deadlines (v18: `travelMode`, `sourceAccount`, `sourceUid` on events — the calendar import, `docs/features/external-calendar-sync.md`; v15: `doneDates` on reminders/deadlines; v16: `seriesId`/`seriesDate` on all three — see "Repeating series" under Component patterns; v17: `remindOccurrence` on all three, `seenDates` on events/deadlines — see "Notifications") |
 | `trackerStore` | `todo-tracker` | **v1** | localStorage + Supabase | tracker entries |
 | `routineStore` | `todo-routines` | **v1** | localStorage only | daily routine instances (transient) |
 | `noteStore` | `notes-storage` | **v13** | **IndexedDB** (not localStorage — see below) + Supabase | notes, note tags, structured tag entries |
@@ -381,7 +382,7 @@ Every new column on a persisted type needs:
 - **Every local change is recorded, then pushed** — including changes made while a load is still downloading: the watchers start before the fetch, and while `loading` they only record (pushes wait until the merge is done, or the fetched snapshot would bring a pushed delete back; fixed 2026-10-14). `watch()`/`trackChanges()` record each changed or deleted row id in a **pending-changes queue** persisted in localStorage (`todo-sync-pending`, deliberately NOT in `PERSISTED_STORAGE_KEYS`; per account; cleared on sign-out by `clearPendingSync()`), then `pushIds()` sends the row's *current* state (or a soft-delete if it no longer exists locally) immediately. An entry is forgotten only after Supabase accepts it. Failures stay queued and are retried when the browser comes back online, every 60 s while anything waits, and after each load — so being offline, a failed request, or closing the window mid-request no longer loses a change.
 - **After each load's merge**, `queueLocalOnlyAndNewer()` queues anything that exists only locally (created offline / before sign-in) or is newer locally than in the cloud, and `mergeRecords()` refuses to resurrect a row deleted on this device but not yet reported. Tables whose records have no `updatedAt` (tags, list types, portfolio tags/purposes) can only be detected as "missing remotely"; an offline *edit* to one of those still loses to the cloud.
 - **Adding a synced table or store property:** add it to `SYNC_TABLES` (the load fetches exactly this list and passes the rows on keyed by table name — never add a separate positional fetch list; one drifted by a position on 2026-09-27 and put every later table's rows in the wrong store), `TABLE_DEFS` (how to read its local records and build a row), `hydrateStores` (read `remote.<table>` and pass the table name to `mergeRecords`), `upsertAllToSupabase`, and `setupSubscriptions` (`watch()`); plus the mapper and migration below. Missing `TABLE_DEFS`/`watch` means its changes silently never sync.
-- **A synced record's id must be unique across every account**, since most tables are keyed by `id` alone. Use `nanoid()`, never a fixed id. A table that does hold fixed ids shared by every account (built-in seeds: `investment_purposes`) is keyed by `(user_id, id)` and its `TABLE_DEFS` entry sets `onConflict` (migration 050; found 2026-10-18 when a second account's upload of `ip-growth` hit the first account's row and RLS refused it).
+- **A synced record's id must be unique across every account**, since most tables are keyed by `id` alone. Use `nanoid()`, never a fixed id. *One exception, approved by the user 2026-10-18:* an event imported from Google gets `importedEventId(userId, key)` (`services/calendarImport/ids.ts`), a hash of the app account and the event's source key, so two devices importing it make one record; the account in the hash keeps it unique across accounts. A table that does hold fixed ids shared by every account (built-in seeds: `investment_purposes`) is keyed by `(user_id, id)` and its `TABLE_DEFS` entry sets `onConflict` (migration 050; found 2026-10-18 when a second account's upload of `ip-growth` hit the first account's row and RLS refused it).
 - Never call `authStore.signOut()`/wipe the stores while `watch()` subscriptions are live — the wipe would be read as "user deleted everything" (`stopSync()` first; see `authStore.signOut`).
 - **Restore marker** (`sync_markers`, migration `042`, 2026-10-06). A backup restore uploads records with their *old* `updatedAt`, so another device holding newer copies would push them back. `restoreBackupData` therefore calls `markRestored()` after its `forceUpload`, writing one account-level `restored_at`. A device that loads after a restore it hasn't seen (`todo-sync-restore-seen`, per device, not in `PERSISTED_STORAGE_KEYS`, cleared on sign-out) treats the cloud as the truth for that load. Local records and queued changes older than the restore give way; later edits still win. A device that has never loaded the account just records the marker. Logic: "Restore marker" in `syncService.ts` (`restoreCutoff`, read by `mergeRecords`); tests in `syncService.test.ts`. If the table can't be read, it's skipped.
 
@@ -459,6 +460,7 @@ Each of these is THE one way to do its job. Most have a pattern section below an
 | Ask "is this note's text open in an editor?" | `services/liveNoteEditor.ts` `liveNoteEditorFor` / `liveNoteFor` (every pane); `liveNote()` only for the editor in front | comparing `liveNote().noteId` (misses a note open in another pane) |
 | Add, show, place or delete a picture (backdrops, note text, cards, and any new use) | `services/pictures.ts` (`addPicture`, `usePictureSrc`, `setBackdrop`, `pictureRef`, `pictureUses`, `deletePictureEverywhere`) | an inline data URL stored on a record; `pictureStore` from anywhere else (pattern test) |
 | Add a word to the Dictionary, read it | `services/dictionary.ts` (`addToDictionary`, `dictionaryWords`, `fetchDefinition`) | a list item made by hand, or a definition fetched anywhere else |
+| Import calendar events (Google and Outlook sync, .ics, and any future source) | `services/calendarImport/reconcile.ts` `applyImport()` over `ImportDraft`s; a repeat rule through `utils/rrule.ts` | `addEvent` from an import, or a source's own dedup |
 
 ## Component patterns
 
@@ -1135,6 +1137,7 @@ Not bugs in normal use; recorded so they aren't rediscovered from scratch.
 
 ---
 
+- **The Microsoft client secret expires** (Outlook calendar sync; 24 months at most from when it was made in Entra). Before then make a new one and replace `MICROSOFT_CLIENT_SECRET` in Vercel, or every Outlook sync fails with a token error. Record the expiry date here when the app is registered: *not yet registered*.
 ## Notes app — orientation
 
 Notes is the knowledge-base app: a rich-text editor (Tiptap) over hierarchical **notebooks** with cross-cutting **annotation tags**, linked to the rest of the suite through the cross-app linking mechanism. What is built, and how, is in `docs/features/implemented-features.md` (search "Notes"); what isn't is in BACKLOG.md. Data types are in `src/types/notes.ts`, state in `noteStore`, sync in `syncService.ts`.

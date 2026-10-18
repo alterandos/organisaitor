@@ -60,6 +60,38 @@ describe('expandRepeat', () => {
   });
 });
 
+describe('expandRepeat: weekdays and the nth weekday of the month', () => {
+  const wk = (days: number[], extra: Partial<RepeatConfig> = {}): RepeatConfig => ({ freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null, daysOfWeek: days, ...extra });
+  it('repeats on several weekdays (Mon/Wed/Fri)', () => {
+    // 2026-10-19 is a Monday.
+    expect(expandRepeat('2026-10-19', wk([1, 3, 5]), '2026-10-19', '2026-10-30'))
+      .toEqual(['2026-10-21', '2026-10-23', '2026-10-26', '2026-10-28', '2026-10-30']);
+  });
+  it('every 2 weeks on Mon and Sun keeps weeks Monday to Sunday', () => {
+    expect(expandRepeat('2026-10-19', wk([1, 0], { interval: 2 }), '2026-10-19', '2026-11-09'))
+      .toEqual(['2026-10-25', '2026-11-02', '2026-11-08']);
+  });
+  it('counts the start date as the first of a count, even off-pattern', () => {
+    // Start on a Tuesday, rule Mon/Fri, 3 times: Tue 20, Fri 23, Mon 26.
+    expect(expandRepeat('2026-10-20', wk([1, 5], { endKind: 'count', count: 3 }), '2026-10-01', '2026-12-31'))
+      .toEqual(['2026-10-23', '2026-10-26']);
+  });
+  it('the 2nd Tuesday of every month', () => {
+    const r: RepeatConfig = { freq: 'monthly', interval: 1, endKind: 'forever', count: null, until: null, monthWeekday: { week: 2, day: 2 } };
+    expect(expandRepeat('2026-10-13', r, '2026-10-01', '2027-01-31')).toEqual(['2026-11-10', '2026-12-08', '2027-01-12']);
+  });
+  it('the last Friday, and a 5th weekday skips months without one', () => {
+    const last: RepeatConfig = { freq: 'monthly', interval: 1, endKind: 'forever', count: null, until: null, monthWeekday: { week: -1, day: 5 } };
+    expect(expandRepeat('2026-10-30', last, '2026-10-01', '2027-01-31')).toEqual(['2026-11-27', '2026-12-25', '2027-01-29']);
+    const fifth: RepeatConfig = { ...last, monthWeekday: { week: 5, day: 5 } };
+    expect(expandRepeat('2026-10-30', fifth, '2026-10-01', '2027-02-28')).toEqual(['2027-01-29']);
+  });
+  it('yearly on the 4th Thursday of the start month (Thanksgiving)', () => {
+    const r: RepeatConfig = { freq: 'yearly', interval: 1, endKind: 'forever', count: null, until: null, monthWeekday: { week: 4, day: 4 } };
+    expect(expandRepeat('2026-11-26', r, '2026-01-01', '2028-12-31')).toEqual(['2027-11-25', '2028-11-23']);
+  });
+});
+
 describe('isOccurrenceSkipped', () => {
   it('is true only for a date in exceptions', () => {
     const r = repeat({ exceptions: ['2026-01-05'] });
