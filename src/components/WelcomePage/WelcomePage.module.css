@@ -46,8 +46,8 @@
 }
 
 .logo {
-  width: 128px;
-  height: 128px;
+  width: 512px;
+  height: 256px;
   object-fit: contain;
   margin-bottom: var(--space-5);
 }

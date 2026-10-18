@@ -50,7 +50,7 @@ export function WelcomePage({ onContinue }: { onContinue: () => void }) {
       <div className={styles.glow} aria-hidden="true" />
       <div className={styles.content}>
         {!logoMissing && (
-          <img className={styles.logo} src={LOGO_SRC} alt="" width={128} height={128} onError={() => setLogoMissing(true)} />
+          <img className={styles.logo} src={LOGO_SRC} alt="" width={256} height={256} onError={() => setLogoMissing(true)} />
         )}
         <h1 className={styles.name}>{L.suiteName}</h1>
         <p className={`${styles.tagline} ${tagline.shown ? '' : styles.taglineHidden}`}>{L.taglines[tagline.index]}</p>
