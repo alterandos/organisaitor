@@ -667,6 +667,12 @@ export default function App() {
               aria-label="Open settings"
               title="Settings"
             ><SettingsIcon className={styles.accountIcon} /></button>
+            <button
+              className={styles.settingsBtn}
+              onClick={() => openAccount()}
+              aria-label="Account"
+              title="Account &amp; sync"
+            ><AccountIcon className={styles.accountIcon} /></button>
           </div>
         </header>
 
@@ -675,12 +681,6 @@ export default function App() {
           <>
             <main
               ref={taskScrollRef}
-            <button
-              className={styles.settingsBtn}
-              onClick={() => openAccount()}
-              aria-label="Account"
-              title="Account &amp; sync"
-            ><AccountIcon className={styles.accountIcon} /></button>
               className={`${styles.main} ${isAndroid ? styles.mainMobile : ''}`}
             >
               {isAndroid && (pullDistance > 0 || pullRefreshing) && (

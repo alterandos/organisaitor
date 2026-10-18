@@ -93,11 +93,11 @@ src/
   utils/floatingPlacement.ts — placeFloating / useFloatingPlacement / placeElement: THE way to place a dropdown, menu or popover so all of it is reachable
   utils/marginLayout.ts     — the margin column's layout: rows per line, three icons then +N, brackets (layoutMarginRows, spansLines)
   utils/unsureFlag.ts       — which sentence an Unsure flag takes (sentenceEndingAt, findUnsureTrigger), asQuestion
+  utils/windowsZones.ts     — Windows time zone names to IANA (windowsZoneToIana, CLDR's table) and sameClock(a, b, at)
+  utils/rrule.ts            — iCalendar repeat rules into RepeatConfig: parseRRule, parseRecurrence (with EXDATE), icalDate; null for what the app can't show exactly
   utils/typingTarget.ts     — isTypingTarget(e | element): THE "is the person typing?" check for key handlers (sees into shadow DOM)
   utils/noteInboxes.ts      — inboxes read from stored note content (inboxesInContent, collectInboxes), insertIndex, localDay; utils/inboxDoc.ts — their document operations (findNode, insertItem, sortedItems, sliceToBlocks)
   components/HubPickerModal/ — Add to hub (which hub) and a hub's + Link… (which Glossary term or note), each with how it relates
-  utils/windowsZones.ts     — Windows time zone names to IANA (windowsZoneToIana, CLDR's table) and sameClock(a, b, at)
-  utils/rrule.ts            — iCalendar repeat rules into RepeatConfig: parseRRule, parseRecurrence (with EXDATE), icalDate; null for what the app can't show exactly
   components/NotesSection/HubsView.tsx — the Hubs view: every hub across notes, searchable (a Place)
   utils/noteHubs.ts         — hubs read from stored note content (hubsInContent, collectHubs), RELATIONS, linkInsertIndex
   components/NoteViews/Map/ — the Map (a Notes view and a Place): MapView (React Flow canvas), MapNodes (blob, label, note, item nodes; the link curve), atlasLayout.ts (circle-packed blobs, d3-hierarchy; blobPath), mapHover.ts; links via hooks/useNoteMapLinks.ts. Was components/NotesSection/MapView.tsx (a dagre graph) until 2026-10-17 — notes joined by their links, and optionally the items linked to them; lazy (React Flow, dagre)

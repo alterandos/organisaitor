@@ -304,9 +304,9 @@ export function CalendarView() {
         important: ev.important ?? false,
         occurrenceDate: ev.date,
         travel: ev.eventType === 'travel',
-      };
         travelIcon: eventTypeIcon(ev),
         color: ev.color ?? null,
+      };
 
       if (ev.endDate && ev.endDate > ev.date) {
         // Multi-day event: push to all covered dates within view range
@@ -932,17 +932,17 @@ export function CalendarView() {
       const scheduleColor = schedules[item.scheduleId]?.color;
       if (scheduleColor) return { borderLeft: `3px solid ${scheduleColor}` };
     }
-    if (!item.collectionId) return {};
     // An event's own colour (an imported event takes its calendar's) comes before its Endeavour's.
     if (item.kind === 'event' && item.color) return { borderLeft: `3px solid ${item.color}` };
+    if (!item.collectionId) return {};
     const col = collectionsRecord[item.collectionId];
     if (!col?.color) return {};
     return { borderLeft: `3px solid ${col.color}` };
   };
 
   const getSpanPillStyle = (slot: SpanSlot): React.CSSProperties => {
-    if (slot.collectionId) {
     if (slot.color) return { background: slot.color, color: '#fff' };
+    if (slot.collectionId) {
       const col = collectionsRecord[slot.collectionId];
       if (col?.color) return { background: col.color, color: '#fff' };
     }

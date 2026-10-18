@@ -459,8 +459,8 @@ Each of these is THE one way to do its job. Most have a pattern section below an
 | Send a passage to an inbox | `services/noteInbox.ts` `sendToInbox()` | moving text between notes by hand |
 | Ask "is this note's text open in an editor?" | `services/liveNoteEditor.ts` `liveNoteEditorFor` / `liveNoteFor` (every pane); `liveNote()` only for the editor in front | comparing `liveNote().noteId` (misses a note open in another pane) |
 | Add, show, place or delete a picture (backdrops, note text, cards, and any new use) | `services/pictures.ts` (`addPicture`, `usePictureSrc`, `setBackdrop`, `pictureRef`, `pictureUses`, `deletePictureEverywhere`) | an inline data URL stored on a record; `pictureStore` from anywhere else (pattern test) |
-| Add a word to the Dictionary, read it | `services/dictionary.ts` (`addToDictionary`, `dictionaryWords`, `fetchDefinition`) | a list item made by hand, or a definition fetched anywhere else |
 | Import calendar events (Google and Outlook sync, .ics, and any future source) | `services/calendarImport/reconcile.ts` `applyImport()` over `ImportDraft`s; a repeat rule through `utils/rrule.ts` | `addEvent` from an import, or a source's own dedup |
+| Add a word to the Dictionary, read it | `services/dictionary.ts` (`addToDictionary`, `dictionaryWords`, `fetchDefinition`) | a list item made by hand, or a definition fetched anywhere else |
 
 ## Component patterns
 
@@ -1126,6 +1126,7 @@ This project grew in stages, and several patterns were agreed only after a lot o
 
 Not bugs in normal use; recorded so they aren't rediscovered from scratch.
 
+- **The Microsoft client secret expires** (Outlook calendar sync; 24 months at most from when it was made in Entra). Before then make a new one and replace `MICROSOFT_CLIENT_SECRET` in Vercel, or every Outlook sync fails with a token error. Record the expiry date here when the app is registered: *not yet registered*.
 - **`api/ticker-*` are unauthenticated proxies to Yahoo Finance's unofficial endpoint.** Anyone who finds the URL can use the deployment's quota, and the unofficial API carries terms-of-service risk. They are unauthenticated **on purpose**: Portfolio must work for guests with no account, so simply requiring the Supabase Bearer token would break guest mode. A real fix needs per-IP rate limiting (Vercel KV/Upstash or Vercel's firewall rules) and/or moving to an official market-data API with a server-side key.
 - **Soft-delete tombstones are never purged** (`deleted_at` rows stay forever). Fine at current scale; add a scheduled purge of rows older than ~90 days once any table grows.
 - **`calendar_events.notify_before_value` is `integer`** but `CalendarEventPane` feeds it a free-typed number, so typing `1.5` would fail sync (see migration 023's note). Clamp/round the input, or widen the column.
@@ -1137,7 +1138,6 @@ Not bugs in normal use; recorded so they aren't rediscovered from scratch.
 
 ---
 
-- **The Microsoft client secret expires** (Outlook calendar sync; 24 months at most from when it was made in Entra). Before then make a new one and replace `MICROSOFT_CLIENT_SECRET` in Vercel, or every Outlook sync fails with a token error. Record the expiry date here when the app is registered: *not yet registered*.
 ## Notes app — orientation
 
 Notes is the knowledge-base app: a rich-text editor (Tiptap) over hierarchical **notebooks** with cross-cutting **annotation tags**, linked to the rest of the suite through the cross-app linking mechanism. What is built, and how, is in `docs/features/implemented-features.md` (search "Notes"); what isn't is in BACKLOG.md. Data types are in `src/types/notes.ts`, state in `noteStore`, sync in `syncService.ts`.

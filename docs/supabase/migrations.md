@@ -91,9 +91,9 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `048_pictures.sql` | New `pictures` table (`src`, `is_encrypted`, `encrypted_payload`, `copy_of`): the picture library, each picture stored once and referred to by id. `backdrop jsonb` on `notes` and `note_tags` (a note's or notebook's own backdrop; null = inherit). Includes its own grant (new table). |
 | `049_picture_origin.sql` | `origin text not null default 'backdrop'` on `pictures`: where a picture was added (backdrop, a note's text, a Glossary card). Alters an existing table only, so no new grant. |
 | `050_investment_purposes_per_account.sql` | Primary key of `investment_purposes` from `id` to `(user_id, id)`. The built-in purposes (`SEED_PURPOSES`, fixed ids like `ip-growth`) exist in every account; with `id` alone the first account to upload one owned the row and every other account's upload hit RLS (403, "violates row-level security policy (USING expression)"). Supersedes 021's note that fixed ids "naturally deduplicate". Alters an existing table only, so no new grant. |
-
 | `051_calendar_import_provenance.sql` | `travel_mode text`, `source_account text`, `source_uid text` on `calendar_events`: how a journey travels, which account an imported event came from (stable across reconnecting, unlike `source_connection_id`), and its iCalendar UID for recognising the same event from two places. Alters an existing table only, so no new grant. |
 | `052_microsoft_calendar.sql` | Outlook calendar connections: both `mint_oauth_state` overloads (032, 041) recreated with the same signatures, now also accepting provider `'microsoft'`; new security-definer `save_microsoft_calendar_connection(...)` (the Microsoft callback's twin of 041's `save_calendar_connection`, provider `'microsoft'`; `grant execute` to `anon`). Additive (ADR-9). No table change (`calendar_connections.provider` already exists), so no new table grant. |
+
 ## Supabase tables (summary)
 
 - **tasks** — mirrors Task interface

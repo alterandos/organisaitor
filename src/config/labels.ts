@@ -494,6 +494,8 @@ export const LABELS = {
     removed:    'Sticky note removed',
     open:       'Open as a note',
     remove:     'Remove sticky note',
+    resize:     'Resize (drag, or arrow keys; double-click for the usual size)',
+    resetSize:  'Back to the usual size',
     design:     'Design',
     designs:    { sticky: 'Sticky note', pin: 'Pinned', staple: 'Stapled', tape: 'Taped' },
     nextDesign: (name: string) => `Design: ${name}. Click for the next`,
@@ -517,8 +519,6 @@ export const LABELS = {
     collapse: 'Collapse the margin column',
     more:     (n: number) => `${n} more mark${n === 1 ? '' : 's'} on this line`,
   },
-    resize:     'Resize (drag, or arrow keys; double-click for the usual size)',
-    resetSize:  'Back to the usual size',
   // The Unsure flag (NoteEditor/extensions/UnsureFlag.ts): a passage you're not sure of.
   unsureFlag: {
     label:          'Unsure',
@@ -1347,29 +1347,6 @@ export const LABELS = {
     birthday: 'Birthday',
     travel:   'Travel',
   },
-
-  // Records / Trackers
-  records: 'Records',
-  tracker: 'Tracker',
-  trackerPlural: 'Trackers',
-  trackerEntry: 'Entry',
-  trackerEntryPlural: 'Entries',
-
-  // Routines
-  routine: 'Routine',
-  routinePlural: 'Routines',
-
-  // Schedules (recurring weekly timetables, Calendar section)
-  schedule: 'Schedule',
-
-  // Lists
-  list:          'List',
-  listPlural:    'Lists',
-  listItem:      'Item',
-  listItemPlural:'Items',
-  listType:      'List Type',
-  // Per ListKind: `one` names a single list of that kind, `many` heads its group in the sidebar
-  // and the create-list type picker.
   // Importing calendars (.ics files, Google): the review, the event pane's "where from" line.
   calendarImport: {
     partialRepeat: 'Repeats in a way the app can’t show yet: only its first date is imported',
@@ -1399,6 +1376,29 @@ export const LABELS = {
     car:     'Car',
     ferry:   'Ferry',
   },
+
+  // Records / Trackers
+  records: 'Records',
+  tracker: 'Tracker',
+  trackerPlural: 'Trackers',
+  trackerEntry: 'Entry',
+  trackerEntryPlural: 'Entries',
+
+  // Routines
+  routine: 'Routine',
+  routinePlural: 'Routines',
+
+  // Schedules (recurring weekly timetables, Calendar section)
+  schedule: 'Schedule',
+
+  // Lists
+  list:          'List',
+  listPlural:    'Lists',
+  listItem:      'Item',
+  listItemPlural:'Items',
+  listType:      'List Type',
+  // Per ListKind: `one` names a single list of that kind, `many` heads its group in the sidebar
+  // and the create-list type picker.
   listKind: {
     checklist: { one: 'Checklist',      many: 'Checklists' },
     watchlist: { one: 'Watchlist',      many: 'Watchlists' },
@@ -1595,6 +1595,16 @@ export const LABELS = {
     endNever:   'Never',
     endCount:   'After N times',
     endUntil:   'On date',
+    // Weekly on chosen weekdays; monthly/yearly on the nth weekday (RepeatField).
+    dayShort:   ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    dayLetter:  ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+    dayName:    ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    onDays:     'On',
+    weekdays:   'weekdays',
+    monthOnDay:     (day: number) => `On day ${day}`,
+    monthOnWeekday: (nth: string, day: string) => `On the ${nth} ${day}`,
+    nth:        { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth', [-1]: 'last' } as Record<number, string>,
+    onPattern:  (what: string) => `on ${what}`,
     summaryEvery: (n: number, unit: string) => (n === 1 ? `Every ${unit}` : `Every ${n} ${unit}`),
     summaryMore:  (n: number) => (n === 1 ? '1 more' : `${n} more`),
     summaryUntil: (d: string) => `until ${d}`,
@@ -1618,16 +1628,6 @@ export const LABELS = {
     addRelated:      '+ Related…',
     addFollowUp:     '+ Follow-up',
     reasonPlaceholder: 'Reason (optional)',
-    // Weekly on chosen weekdays; monthly/yearly on the nth weekday (RepeatField).
-    dayShort:   ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-    dayLetter:  ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
-    dayName:    ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-    onDays:     'On',
-    weekdays:   'weekdays',
-    monthOnDay:     (day: number) => `On day ${day}`,
-    monthOnWeekday: (nth: string, day: string) => `On the ${nth} ${day}`,
-    nth:        { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth', [-1]: 'last' } as Record<number, string>,
-    onPattern:  (what: string) => `on ${what}`,
     removeLink:      'Remove link',
     pickerTitle:     'Link a task',
     pickerSearch:    'Search tasks…',

@@ -152,6 +152,7 @@ export function CalendarEventPane() {
       <aside style={paneResize.style} className={styles.pane}>
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
+          <span className={styles.heading}>{LABELS.calendarItemKind.event}</span>
           {event.source && event.sourceAccount && (() => {
             const L = LABELS.calendarImport;
             const synced = event.source === 'google' || event.source === 'microsoft';
@@ -166,7 +167,6 @@ export function CalendarEventPane() {
               </span>
             );
           })()}
-          <span className={styles.heading}>{LABELS.calendarItemKind.event}</span>
           <button className={styles.closeBtn} onClick={closePane} aria-label="Close">×</button>
         </header>
 
@@ -305,10 +305,10 @@ export function CalendarEventPane() {
                   </button>
                 ))}
               </div>
-            </div>
               {event.eventType === 'travel' && (
                 <TravelModePicker value={event.travelMode ?? null} onChange={(m) => updateEvent(id, { travelMode: m })} />
               )}
+            </div>
           )}
 
           <div className={styles.field}>

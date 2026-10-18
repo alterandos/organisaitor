@@ -17,8 +17,8 @@ import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
 import type { TrashEntry } from '@/types/trash';
 import { log } from '@/utils/log';
-import {
 import { importKeyOf } from '@/services/calendarImport/draft';
+import {
   taskToRow,       rowToTask,
   collectionToRow, rowToCollection,
   tagToRow,        rowToTag,
@@ -368,10 +368,6 @@ const SYNC_TABLES = [
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RemoteRows = Record<(typeof SYNC_TABLES)[number], any[] | null>;
 
-export function initSync(userId: string): Promise<void> {
-  return enqueue(() => runInitSync(userId));
-}
-
 // The account whose cloud data this device has finished loading (successfully or not) since the
 // app opened, and who's waiting for it. A calendar import waits for it, so the events already in
 // the cloud are here before it decides what is new.
@@ -388,6 +384,10 @@ function markLoaded(userId: string) {
   for (let i = loadWaiters.length - 1; i >= 0; i--) {
     if (loadWaiters[i].userId === userId) { loadWaiters[i].resolve(); loadWaiters.splice(i, 1); }
   }
+}
+
+export function initSync(userId: string): Promise<void> {
+  return enqueue(() => runInitSync(userId));
 }
 
 async function runInitSync(userId: string): Promise<void> {
@@ -463,11 +463,11 @@ async function runInitSync(userId: string): Promise<void> {
     setStatus('error', msg);
   } finally {
     loading = false;
+    markLoaded(userId);
   }
 
   if (pendingCount() > 0) void flushPending(userId);
 }
-    markLoaded(userId);
 
 export function stopSync(): void {
   unsubscribers.forEach((u) => u());
@@ -475,11 +475,11 @@ export function stopSync(): void {
   if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
   if (onlineListener) { window.removeEventListener('online', onlineListener); onlineListener = null; }
   currentUserId = null;
+  loadedFor = null;
 }
 
 export type UploadCounts = {
   tasks: number; collections: number; tags: number; purposes: number;
-  loadedFor = null;
   events: number; reminders: number; deadlines: number; entries: number;
   schedules: number; lists: number; listItems: number; listTypes: number;
   notes: number; noteTags: number; structuredTagEntries: number;
@@ -581,10 +581,6 @@ function hydrateStores(remote: RemoteRows) {
     reminders: mergeRecords(local.reminders, remote.calendar_reminders, rowToReminder, 'calendar_reminders'),
     deadlines: mergeRecords(local.deadlines, remote.calendar_deadlines, rowToDeadline, 'calendar_deadlines'),
   }) as Parameters<typeof useCalendarStore.setState>[0]);
-
-  // @ts-expect-error — setState updater param typed loosely against the full store shape
-  useTrackerStore.setState((local) => ({
-    entries: mergeRecords(local.entries, remote.tracker_entries, rowToEntry, 'tracker_entries'),
   // Imported events deleted on any device: their keys, so a calendar import never brings them back
   // here (calendarImport/reconcile.ts; the store's own list only knows this device's deletions).
   const deletedImports = (remote.calendar_events ?? [])
@@ -592,6 +588,10 @@ function hydrateStores(remote: RemoteRows) {
     .map((r) => importKeyOf(rowToEvent(r)))
     .filter((k): k is string => !!k);
   if (deletedImports.length) useCalendarStore.getState().markImported(deletedImports);
+
+  // @ts-expect-error — setState updater param typed loosely against the full store shape
+  useTrackerStore.setState((local) => ({
+    entries: mergeRecords(local.entries, remote.tracker_entries, rowToEntry, 'tracker_entries'),
   }) as Parameters<typeof useTrackerStore.setState>[0]);
 
   // @ts-expect-error — setState updater param typed loosely against the full store shape
