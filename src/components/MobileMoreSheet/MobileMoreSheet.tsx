@@ -51,7 +51,7 @@ export function MobileMoreSheet() {
       <button className={styles.item} onClick={() => go(openSettings)}>
         {LABELS.places.settings}
       </button>
-      <button className={styles.item} onClick={() => go(openAccount)}>
+      <button className={styles.item} onClick={() => go(() => openAccount())}>
         {LABELS.places.account}
       </button>
     </BottomSheet>

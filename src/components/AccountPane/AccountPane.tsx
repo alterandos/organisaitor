@@ -26,7 +26,7 @@ export function AccountPane() {
   const { user, loading, signIn, signUp } = useAuthStore();
 
   const [rememberedEmail] = useState(() => localStorage.getItem(REMEMBERED_EMAIL_KEY));
-  const [mode,        setMode]        = useState<Mode>('signin');
+  const [mode,        setMode]        = useState<Mode>(() => useUIStore.getState().accountStartMode);
   const [email,       setEmail]       = useState(rememberedEmail ?? '');
   const [rememberMe,  setRememberMe]  = useState(rememberedEmail !== null);
   const [password,    setPassword]    = useState('');

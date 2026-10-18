@@ -1,4 +1,4 @@
-import { useRef, useEffect, lazy, Suspense } from 'react';
+import { useRef, useEffect, useState, lazy, Suspense } from 'react';
 import type React from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -56,6 +56,9 @@ import { AddInvestmentPurposeModal } from '@/components/AddInvestmentPurposeModa
 import { TaskPane } from '@/components/TaskPane/TaskPane';
 import { SettingsPane } from '@/components/SettingsPane/SettingsPane';
 import { ManagePane } from '@/components/ManagePane/ManagePane';
+import { WelcomePage } from '@/components/WelcomePage/WelcomePage';
+import welcomeStyles from '@/components/WelcomePage/WelcomePage.module.css';
+import { passWelcome, welcomePassed } from '@/services/welcome';
 import { useHoverOpen } from '@/hooks/useHoverOpen';
 import { CalendarEventPane } from '@/components/CalendarEventPane/CalendarEventPane';
 import { CalendarReminderPane } from '@/components/CalendarReminderPane/CalendarReminderPane';
@@ -260,6 +263,20 @@ export default function App() {
 
   const setSession = useAuthStore((s) => s.setSession);
   const authUserId = useAuthStore((s) => s.user?.id ?? null);
+  const authReady  = useAuthStore((s) => s.initialized) || !isSupabaseConfigured;
+
+  // The welcome page (components/WelcomePage): shown instead of the app while nobody is signed in,
+  // until the person carries on without an account on this device (services/welcome.ts). Signing
+  // out shows it again.
+  const [guestChosen, setGuestChosen] = useState(welcomePassed);
+  const [prevUserId, setPrevUserId] = useState(authUserId);
+  if (prevUserId !== authUserId) {
+    setPrevUserId(authUserId);
+    if (prevUserId && !authUserId) setGuestChosen(false);
+  }
+  const showWelcome = !authUserId && !guestChosen;
+  const showWelcomeRef = useRef(showWelcome);
+  useEffect(() => { showWelcomeRef.current = showWelcome; });
 
   const handlePullRefresh = () => {
     if (!isSupabaseConfigured || !authUserId) return;
@@ -362,6 +379,9 @@ export default function App() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // The welcome page has no app behind it to act on.
+      if (showWelcomeRef.current) return;
+
       // A modal, pane or dialog open over the page takes the keyboard (CLAUDE.md "Page hotkeys
       // stand aside"): nothing below that acts on the page underneath it (new item, section
       // switching, back/forward, the filters, zoom) fires then. What stays live opens or
@@ -565,6 +585,27 @@ export default function App() {
     return style;
   })();
 
+  // Confirmations and toasts work on the welcome page too (Account's sign-in uses them).
+  const dialogHosts = (
+    <>
+      <ConfirmDialogHost />
+      <ToastHost />
+    </>
+  );
+
+  if (showWelcome) {
+    // Until the saved session has been read, a blank page in the same colours, so the app never
+    // flashes up before it.
+    if (!authReady && !guestChosen) return <div className={welcomeStyles.waiting} />;
+    return (
+      <>
+        <WelcomePage onContinue={() => { passWelcome(); setGuestChosen(true); }} />
+        {accountOpen && <AccountPane />}
+        {dialogHosts}
+      </>
+    );
+  }
+
   return (
     <div className={styles.shell}>
       {!isAndroid && <NavSidebar />}
@@ -614,7 +655,7 @@ export default function App() {
             <NotificationCenter />
             <button
               className={styles.settingsBtn}
-              onClick={openAccount}
+              onClick={() => openAccount()}
               aria-label="Account"
               title="Account &amp; sync"
             ><AccountIcon className={styles.accountIcon} /></button>
@@ -720,8 +761,7 @@ export default function App() {
 
         <LinkHoverPreview />
         <VoiceIndicator />
-        <ConfirmDialogHost />
-        <ToastHost />
+        {dialogHosts}
         <NavFlash />
         <ContextMenuHost />
         {quickAccessOpen && <QuickAccessPane />}

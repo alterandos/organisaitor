@@ -1,0 +1,164 @@
+.page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  overflow-y: auto;
+  background: var(--color-bg);
+  color: var(--color-text);
+  isolation: isolate;
+}
+
+/* A slow, soft wash of the primary colour behind everything. */
+.glow {
+  position: fixed;
+  inset: -30%;
+  background:
+    radial-gradient(40% 35% at 30% 35%, var(--color-primary-border), transparent 70%),
+    radial-gradient(35% 30% at 70% 65%, var(--color-primary-subtle), transparent 70%);
+  filter: blur(40px);
+  animation: drift 24s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes drift {
+  from { transform: translate(-4%, -3%) rotate(0deg); }
+  to   { transform: translate(4%, 3%) rotate(12deg); }
+}
+
+.content {
+  position: relative;   /* above the glow, which comes first */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 34rem;
+  width: 100%;
+  animation: rise 700ms ease both;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.logo {
+  width: 128px;
+  height: 128px;
+  object-fit: contain;
+  margin-bottom: var(--space-5);
+}
+
+.name {
+  margin: 0;
+  font-size: clamp(2.4rem, 7vw, 3.6rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.tagline {
+  margin: var(--space-4) 0 var(--space-6);
+  font-size: var(--text-lg);
+  line-height: 1.5;
+  color: var(--color-muted);
+  font-style: italic;
+  min-height: 3em;               /* two lines, so a longer tagline never moves the buttons */
+  transition: opacity 700ms ease, transform 700ms ease;
+}
+
+.taglineHidden {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.primary,
+.secondary {
+  min-width: 10rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.primary {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.primary:hover { background: var(--color-primary-hover); }
+
+.secondary {
+  border: 1px solid var(--color-primary-border);
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+.secondary:hover { background: var(--color-primary-subtle); }
+
+.primary:active,
+.secondary:active { transform: scale(0.98); }
+
+.guest {
+  margin-top: var(--space-5);
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.guest:hover { color: var(--color-primary); }
+
+.primary:focus-visible,
+.secondary:focus-visible,
+.guest:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+
+.guestHint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.footer {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+/* A blank page in the same colours while the saved session is read, so the app never flashes. */
+.waiting {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg);
+}
+
+@media (max-height: 560px) {
+  .footer { position: static; margin-top: var(--space-5); }
+  .logo { width: 88px; height: 88px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow, .content { animation: none; }
+  .tagline { transition: opacity 700ms ease; }
+  .taglineHidden { transform: none; }
+}

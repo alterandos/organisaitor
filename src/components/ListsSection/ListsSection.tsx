@@ -693,7 +693,7 @@ export function ListsSection() {
                 <span className={styles.emptyIcon}>🔒</span>
                 <p className={styles.emptyTitle}>{LABELS.lists.lockedTitle}</p>
                 <p className={styles.emptyHint}>{LABELS.lists.lockedBody}</p>
-                <button className={styles.emptyCreateBtn} onClick={openAccount}>{LABELS.lists.unlock}</button>
+                <button className={styles.emptyCreateBtn} onClick={() => openAccount()}>{LABELS.lists.unlock}</button>
               </div>
             ) : (
             <>

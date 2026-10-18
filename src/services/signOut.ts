@@ -1,3 +1,4 @@
+import { resetWelcome } from '@/services/welcome';
 import { useAuthStore } from '@/store/authStore';
 import { forceUpload } from '@/services/sync/syncService';
 import { lockVault, untrustThisDevice } from '@/services/vault';
@@ -41,5 +42,7 @@ export async function requestSignOut(): Promise<boolean> {
   }
 
   await useAuthStore.getState().signOut();
+  // The next person on this device is greeted by the welcome page again.
+  resetWelcome();
   return true;
 }

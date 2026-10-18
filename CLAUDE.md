@@ -432,6 +432,7 @@ Each of these is THE one way to do its job. Most have a pattern section below an
 | Job | Use | Never |
 |-----|-----|-------|
 | Sign out | `services/signOut.ts` `requestSignOut()` (confirms, locks the vault, uploads, then wipes) | `authStore.signOut()` from UI |
+| Decide whether the app or the welcome page shows (signed out) | `App.tsx` with `services/welcome.ts` (`welcomePassed` / `passWelcome` / `resetWelcome`) | a second gate elsewhere |
 | Wipe synced data on sign-out | `services/clearLocalData.ts` `clearSyncedLocalData()`; a store that gains cloud sync is added there in the same change | resetting stores one by one |
 | Call `/api/*` | `utils/apiFetch.ts` `apiFetch()` | a bare `fetch('/api…')` (pattern test) |
 | Hand the user a file (exports, backups) | `utils/saveFile.ts` `saveFile()` (share sheet on Android) | an anchor download in a component |

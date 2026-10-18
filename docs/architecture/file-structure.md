@@ -60,6 +60,7 @@ src/
     mappers.ts               — xToRow / rowToX for every entity
   services/newItem.ts       — openNewItem(view): THE N/Space/Ctrl+N routing, section by section (Notes: by focused column) — see "New-item hotkey"
   services/signOut.ts       — requestSignOut(): THE way to sign out — confirms (and says what stays on the device), locks the vault, force-uploads and only wipes if that succeeded (else warns, user can cancel), then authStore.signOut(). Never call authStore.signOut() directly from UI
+  services/welcome.ts       — whether this device chose to carry on without an account (the welcome page): per device, not in backups, forgotten by requestSignOut
   services/glossary.ts      — the Glossary model (Definitions, Concepts, Acronyms across notes): glossaryEntries/glossaryEntry/glossaryReferences, through the views — see "Annotations"
   services/noteFromItem.ts  — createNoteForItem(place, title): a new note in a notebook, or a new tab of a note, returned as the CrossAppRef to link; newNoteTitleFor(title, date). "+ New note" in the calendar panes
   services/notePassage.ts   — openNotePassage(noteId, { mark | node, attr, value }); noteHasPassage / docHasPassage (the open editor's text first): THE way to open a note at a passage (finds the tab; NoteEditor selects it). definitionPassage(entryId)
@@ -188,6 +189,7 @@ src/
     NavSidebar/              — left nav: section switcher, settings, account icons (desktop/web only — hidden on Android in favour of MobileNav); navItems.tsx holds CORE_NAV_ITEMS and SECTION_ICONS (THE icon per section)
     NavFlash/                — what a keyboard back/forward (Alt+←/→, Backspace) shows: the compact history carousel (HistoryCarousel) centred on where you went, a small arrow at its side; stays while Alt is held, fades after (uiStore.navFlash, set by App.tsx).
     StickyNotes/             — the sticky notes over Notes (desktop): paper that stays where it's dragged, four designs, its text written in place; right-click: open, design, remove; mounted by NotesSection
+    WelcomePage/             — what a signed-out visitor sees instead of the app: suite name, tagline (LABELS.welcome), logo (public/brand/logo.png → /brand/logo.png), Sign in / Create an account / Continue without an account; App.tsx decides when
     HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores; PlaceCard.tsx is THE card for a place, shared with the phone's recent notes (MobileNotes)
       HistoryCarousel.tsx    — THE history carousel (cards fanned either side of the centred one), drawn full size by the history browser and compact by NavFlash.
     MobileNav/               — Android-only bottom tab bar: Tasks/Calendar/Records/Lists/More

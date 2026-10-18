@@ -557,6 +557,32 @@ export const LABELS = {
       duplicate:  'There is already a shortcut for that.',
     },
   },
+  // The welcome page a signed-out visitor sees first (components/WelcomePage, 2026-10-18).
+  // `taglines` cycle slowly under the name (WelcomePage, picked by taglines.ts).
+  welcome: {
+    suiteName:       'Organisaitor',
+    taglines: [
+      'Everything you will ever do, already in order.',
+      'Monday has been informed.',
+      'We have spoken with entropy. It has agreed to terms.',
+      'Some people keep calendars. Ours keeps time.',
+      'Your lists, your notes, your plans. Your gravity.',
+      'Deadlines now arrive slightly early, out of respect.',
+      'The universe had a backlog. It has been cleared.',
+      'Tomorrow has been moved to a more convenient time.',
+      'Cause, then effect. Now in whichever order you prefer.',
+      'Designed in your mind. Felt across the multiverse.',
+      'One place for your calendar, your notes, and your fate.',
+      'Every note you take, quietly altering history.',
+      'Your to-do list, now binding on the sun.',
+      'Some things are timeless. Now, so is Tuesday.',
+    ],
+    signIn:          'Sign in',
+    createAccount:   'Create an account',
+    continueWithout: 'Continue without an account',
+    continueHint:    'Everything stays on this device. You can sign in later from Account.',
+    footer:          'Tasks · Calendar · Records · Lists · Notes',
+  },
   // Account → Automatic local backups.
   autoBackup: {
     snapshots: (n: number) => `${n} snapshot${n === 1 ? '' : 's'}`,

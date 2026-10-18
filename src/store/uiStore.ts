@@ -247,7 +247,9 @@ interface UIState {
   closeSettings: () => void;
 
   accountOpen:  boolean;
-  openAccount:  () => void;
+  // Which tab Account opens on when signed out ('signup' from the welcome page's Create account).
+  accountStartMode: 'signin' | 'signup';
+  openAccount:  (mode?: 'signin' | 'signup') => void;
   closeAccount: () => void;
 
   integrationsOpen:  boolean;
@@ -699,7 +701,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeSettings: () => set({ settingsOpen: false }),
 
   accountOpen:  false,
-  openAccount:  () => { useRecentItemsStore.getState().recordVisit('place', 'account'); set({ accountOpen: true }); },
+  accountStartMode: 'signin',
+  openAccount:  (mode) => { useRecentItemsStore.getState().recordVisit('place', 'account'); set({ accountOpen: true, accountStartMode: mode ?? 'signin' }); },
   closeAccount: () => set({ accountOpen: false }),
 
   integrationsOpen:  false,
