@@ -1,8 +1,10 @@
+import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { HIERARCHY_DESIGNS, hierarchyPosAt, openTierEditor, setHierarchySettings } from './Hierarchy';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
+import { PaletteIcon } from '@/components/Icons';
 
 // Right-click in a hierarchy: its design, colours, frame, and naming its levels.
 registerContextMenuProvider({
@@ -22,7 +24,7 @@ registerContextMenuProvider({
       designMenuItem(HIERARCHY_DESIGNS, node.attrs.variant, (v) => setHierarchySettings(view, pos, { variant: v })),
       frameMenuItem(view, pos, node.attrs),
       {
-        id: 'hi-colours', label: L.colourTitle(node.attrs.colours === 'spectrum' ? L.colours.spectrum : C.colours.accent).split('.')[0], icon: '◐',
+        id: 'hi-colours', label: L.colourTitle(node.attrs.colours === 'spectrum' ? L.colours.spectrum : C.colours.accent).split('.')[0], icon: createElement(PaletteIcon),
         submenu: [(['accent', 'spectrum'] as const).map((c) => ({
           id: `colours-${c}`, label: c === 'spectrum' ? L.colours.spectrum : C.colours.accent,
           icon: node.attrs.colours === c ? '✓' : undefined, run: () => setHierarchySettings(view, pos, { colours: c }),

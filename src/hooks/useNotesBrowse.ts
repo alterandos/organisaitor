@@ -4,7 +4,7 @@ import { useNoteViews } from '@/store/noteViews';
 import { useTaskStore } from '@/store/taskStore';
 import { notesFocusOf, selectActiveCollectionId, useUIStore } from '@/store/uiStore';
 import { getOrderedEndeavours } from '@/utils/collections';
-import { getNotePrimaryNotebookId, noteName, type NoteName } from '@/utils/notes';
+import { getNotePrimaryNotebookId, isPinnedNotebook, noteName, type NoteName } from '@/utils/notes';
 import { LABELS } from '@/config/labels';
 import { browseNotes, groupPath, type NoteGroup, type NoteGroupingId, type NotesBrowse, type NotesFilter } from '@/utils/notesBrowse';
 
@@ -63,7 +63,7 @@ export function useNotesBrowse(): NotesBrowseView {
     const note = notes[noteId as never];
     const id = note ? getNotePrimaryNotebookId(note, noteTags) : null;
     const t = id ? noteTags[id as keyof typeof noteTags] : undefined;
-    return t ? { id: t.id as string, name: t.name, icon: t.icon, color: t.color } : null;
+    return t ? { id: t.id as string, name: t.name, icon: t.icon, color: t.color, pinned: isPinnedNotebook(t) } : null;
   }, [notes, noteTags]);
   return { ...browse, filter, focusId, focusPath, openNoteId, lastNoteId, split, options, headerEndeavourId, nameOf, notebookOf };
 }

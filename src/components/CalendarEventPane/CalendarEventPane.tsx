@@ -32,6 +32,7 @@ import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { CloseIcon, OpenIcon } from '@/components/Icons';
 
 export function CalendarEventPane() {
   const paneResize = usePaneWidth('item-pane', { edge: 'left', min: 340, max: 820 });
@@ -167,7 +168,7 @@ export function CalendarEventPane() {
               </span>
             );
           })()}
-          <button className={styles.closeBtn} onClick={closePane} aria-label="Close">×</button>
+          <button className={styles.closeBtn} onClick={closePane} aria-label="Close"><CloseIcon /></button>
         </header>
 
         <div className={styles.body}>
@@ -283,7 +284,7 @@ export function CalendarEventPane() {
                   className={styles.locationLink}
                   title={isLocationUrl(event.location) ? 'Open link' : 'Open in Google Maps'}
                 >
-                  {isLocationUrl(event.location) ? '↗' : '🗺'}
+                  {isLocationUrl(event.location) ? <OpenIcon /> : '🗺'}
                 </a>
               )}
             </div>

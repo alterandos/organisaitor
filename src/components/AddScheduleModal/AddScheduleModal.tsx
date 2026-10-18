@@ -14,6 +14,7 @@ import styles from './AddScheduleModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { CloseIcon, TrashIcon } from '@/components/Icons';
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 // When a schedule has no end date, the "skip occurrences" checklist would otherwise try to list
@@ -232,7 +233,7 @@ export function AddScheduleModal() {
         <div className={styles.modal}>
           <div className={styles.header}>
             <span className={styles.title}>{isEditMode ? 'Edit Schedule' : 'New Schedule'}</span>
-            <button className={styles.closeBtn} onClick={closeEditSchedule} aria-label="Close">×</button>
+            <button className={styles.closeBtn} onClick={closeEditSchedule} aria-label="Close"><CloseIcon /></button>
           </div>
 
           <form ref={formRef} onSubmit={handleSubmit} className={styles.body}>
@@ -296,7 +297,7 @@ export function AddScheduleModal() {
                     </div>
                     <div className={styles.fieldRowActions}>
                       <button type="button" className={styles.fieldActionBtn} onClick={() => toggleExpand(idx)} title="Configure">⚙</button>
-                      <button type="button" className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} onClick={() => removeBlockRow(idx)} title="Remove">✕</button>
+                      <button type="button" className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} onClick={() => removeBlockRow(idx)} title="Remove"><TrashIcon width="1em" height="1em" /></button>
                     </div>
                   </div>
 

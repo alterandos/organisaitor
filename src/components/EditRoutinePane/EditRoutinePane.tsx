@@ -13,6 +13,7 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { CloseIcon, TrashIcon } from '@/components/Icons';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAYS   = [1, 2, 3, 4, 5];
@@ -123,7 +124,7 @@ export function EditRoutinePane() {
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <div className={styles.header}>
           <span className={styles.heading}>Edit routine</span>
-          <button className={styles.closeBtn} onClick={closeEditRoutine} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeEditRoutine} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <div className={styles.body}>
@@ -228,7 +229,7 @@ export function EditRoutinePane() {
                   <div className={styles.fieldRowActions}>
                     <button className={styles.fieldActionBtn} onClick={() => moveStep(idx, -1)} disabled={idx === 0} title="Move up">↑</button>
                     <button className={styles.fieldActionBtn} onClick={() => moveStep(idx, 1)} disabled={idx === tasks.length - 1} title="Move down">↓</button>
-                    <button className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} onClick={() => removeStep(task.id)} title="Remove">✕</button>
+                    <button className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} onClick={() => removeStep(task.id)} title="Remove"><TrashIcon width="1em" height="1em" /></button>
                   </div>
                 </div>
               </div>

@@ -10,6 +10,7 @@ import { LABELS } from '@/config/labels';
 import { BUILTIN_TAGS } from '../builtinTags';
 import { openBlockPopover, popoverClass } from './blockDesigns';
 import { refreshMarginColumns, registerMarginSource } from './MarginColumn';
+import { createGlyph } from '@/components/Icons';
 
 // Text that refers to a Glossary entry (a Definition, Concept or Acronym defined somewhere in
 // Notes): highlighted in the entry's colour; hovering it shows the term's card. Its icon is in the
@@ -223,7 +224,7 @@ class ConceptHoverView {
     if (entry) {
       const go = document.createElement('button');
       go.type = 'button';
-      go.textContent = `${LABELS.glossary.goToDefinition} ↗`;
+      go.append(`${LABELS.glossary.goToDefinition} `, createGlyph('open'));
       go.addEventListener('mousedown', (ev) => ev.preventDefault());
       go.addEventListener('click', (ev) => { ev.preventDefault(); this.hideCard(); openNotePassage(entry.noteId, definitionPassage(entry.id)); });
       card.append(go);

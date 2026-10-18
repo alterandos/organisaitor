@@ -56,11 +56,6 @@ export function BlobNode({ data }: NodeProps<Node<BlobData>>) {
   );
 }
 
-// The line between the pinned Stickies island and the rest of the map (atlasLayout's `divider`).
-export function DividerNode({ data }: NodeProps<Node<{ width: number }>>) {
-  return <div className={styles.divider} style={{ width: data.width }} aria-hidden="true" />;
-}
-
 // A blob's name: a pill on its top edge, drawn above everything (so the blobs and notes inside
 // never cover it). An island is always named; a smaller blob once it's big enough on screen.
 export function BlobLabelNode({ data }: NodeProps<Node<BlobData>>) {

@@ -5,7 +5,7 @@ import type { Note, NoteTag } from '@/types/notes';
 
 const note = (id: string, tagIds: string[], extra: Partial<Note> = {}): Note => ({
   id, title: id, content: '', tagIds, tagData: {}, createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z',
-  abstract: null, mainTabUpdatedAt: null, lastViewedAt: null, archivedAt: null, color: null, pinned: false, userId: '', parentId: null,
+  abstract: null, mainTabUpdatedAt: null, lastViewedAt: null, archivedAt: null, color: null, userId: '', parentId: null,
   tabs: [], mainTabName: 'Main', tabOrder: [], templateId: null, collectionId: null, isEncrypted: false, encryptedPayload: null,
   ...extra,
 } as unknown as Note);

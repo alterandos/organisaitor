@@ -12,8 +12,11 @@ import type { NoteGroup } from '@/utils/notesBrowse';
 // its notebooks first, each holding its notes), `notebookOf` saying which; notes in no notebook
 // stay in the group itself. Whether a blob shows what's inside it is decided as you zoom
 // (mapDetail.ts), never here.
+//
+// The Stickies notebook (a pinned group) and its notes are left out (asked for 2026-10-18: they
+// sit over the notes as stickies, not on the map).
 
-export interface NotebookRef { id: string; name: string; icon: string | null; color: string | null }
+export interface NotebookRef { id: string; name: string; icon: string | null; color: string | null; pinned?: boolean }
 
 export interface AtlasBlob {
   id:       string;          // the group's id, `<group id>>nb:<notebook id>` for a notebook inside one, or LOOSE_ID
@@ -31,9 +34,7 @@ export interface AtlasBlob {
 
 export interface AtlasNote { noteId: string; x: number; y: number; r: number; blobId: string }
 
-// `divider`: the line between a pinned island (Stickies, packed on its own above the others) and
-// the rest of the map; null when nothing is pinned.
-export interface Atlas { blobs: AtlasBlob[]; notes: AtlasNote[]; size: number; divider: { y: number; x1: number; x2: number } | null }
+export interface Atlas { blobs: AtlasBlob[]; notes: AtlasNote[]; size: number }
 
 export const LOOSE_ID = 'loose';
 
@@ -49,11 +50,11 @@ type Datum =
 const NOTE_AREA = 70;
 const ISLAND_GAP = 56;
 const INNER_GAP = 12;
-const PINNED_GAP = 80;   // between the pinned island and the rest (the divider runs through it)
 
 export function atlasLayout(roots: NoteGroup[], loose: string[], looseLabel: string, notebookOf?: (noteId: string) => NotebookRef | null): Atlas {
   const placed = new Set<string>();
-  const notesOf = (ids: string[]): Datum[] => ids.filter((id) => !placed.has(id) && placed.add(id)).map((noteId) => ({ kind: 'note', noteId }));
+  const sticky = (id: string) => !!notebookOf?.(id)?.pinned;
+  const notesOf = (ids: string[]): Datum[] => ids.filter((id) => !sticky(id) && !placed.has(id) && placed.add(id)).map((noteId) => ({ kind: 'note', noteId }));
   // A group's own notes: a blob per notebook, when grouped by something other than notebooks.
   const ownNotes = (ownerId: string, ids: string[], byNotebook: boolean): Datum[] => {
     const notes = notesOf(ids);
@@ -72,19 +73,17 @@ export function atlasLayout(roots: NoteGroup[], loose: string[], looseLabel: str
     const children = [...g.children.map(groupDatum).filter((d): d is Datum => !!d), ...ownNotes(g.id, g.noteIds, g.grouping !== 'notebook')];
     return children.length ? { kind: 'group', group: g, children } : null;
   };
-  const all = roots.map(groupDatum).filter((d): d is Datum => !!d);
-  const islands = all.filter((d) => !(d.kind === 'group' && d.group.pinned));
-  const pinned = all.filter((d) => d.kind === 'group' && d.group.pinned);
+  const islands = roots.filter((g) => !g.pinned).map(groupDatum).filter((d): d is Datum => !!d);
   const looseNotes = ownNotes(LOOSE_ID, loose, !!roots[0] && roots[0].grouping !== 'notebook');
   if (looseNotes.length) islands.push({ kind: 'loose', children: looseNotes });
-  if (islands.length === 0 && pinned.length === 0) return { blobs: [], notes: [], size: 0, divider: null };
+  if (islands.length === 0) return { blobs: [], notes: [], size: 0 };
 
   const blobs: AtlasBlob[] = [];
   const notes: AtlasNote[] = [];
   const blobIdOf = (n: HierarchyCircularNode<Datum>): string | null =>
     n.data.kind === 'group' ? n.data.group.id : n.data.kind === 'notebook' ? n.data.id : n.data.kind === 'loose' ? LOOSE_ID : null;
   const leavesOf = (ds: Datum[]): number => ds.reduce((sum, d) => sum + (d.kind === 'note' ? 1 : 'children' in d ? leavesOf(d.children) : 0), 0);
-  const sizeFor = (ds: Datum[]) => Math.max(ds === pinned ? 160 : 480, Math.sqrt(leavesOf(ds)) * NOTE_AREA + ds.length * ISLAND_GAP);
+  const sizeFor = (ds: Datum[]) => Math.max(480, Math.sqrt(leavesOf(ds)) * NOTE_AREA + ds.length * ISLAND_GAP);
   // Packs one set of islands into a size × size square and emits it, shifted by (dx, dy).
   const place = (ds: Datum[], size: number, dx: number, dy: number) => {
     const root = hierarchy<Datum>({ kind: 'root', children: ds }, (d) => ('children' in d ? d.children : undefined))
@@ -108,17 +107,9 @@ export function atlasLayout(roots: NoteGroup[], loose: string[], looseLabel: str
     });
   };
 
-  const size = islands.length ? sizeFor(islands) : 0;
-  if (islands.length) place(islands, size, 0, 0);
-  let divider: Atlas['divider'] = null;
-  // A pinned island (Stickies) sits on its own above the map, centred, with a line between.
-  if (pinned.length) {
-    const p = sizeFor(pinned);
-    const width = Math.max(size, p);
-    place(pinned, p, (width - p) / 2, islands.length ? -(p + PINNED_GAP) : 0);
-    if (islands.length) divider = { y: -PINNED_GAP / 2, x1: 0, x2: width };
-  }
-  return { blobs, notes, size: Math.max(size, 1), divider };
+  const size = sizeFor(islands);
+  place(islands, size, 0, 0);
+  return { blobs, notes, size: Math.max(size, 1) };
 }
 
 // ── A soft blob's outline ────────────────────────────────────────────────────

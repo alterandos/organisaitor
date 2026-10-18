@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditor, useEditorState, EditorContent, getMarkRange } from '@tiptap/react';
 import { Selection, TextSelection } from '@tiptap/pm/state';
@@ -69,7 +69,7 @@ import { NoteBlockSelect } from './extensions/blockDesigns';
 import { NoteBlockPicks } from './extensions/blockPicks';
 import { NoteBackdrop } from './NoteBackdrop';
 import { MobileNoteSidePanel } from './MobileNoteSidePanel';
-import { ColorDotIcon, DisclosureIcon, PinIcon, TextColorIcon } from '@/components/Icons';
+import { CloseIcon, ColorDotIcon, DisclosureIcon, PinIcon, TableIcon, TextColorIcon, TrashIcon } from '@/components/Icons';
 import { SWATCHES, swatchLabel } from '@/config/swatches';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { AcronymOffer } from './extensions/AcronymOffer';
@@ -99,6 +99,7 @@ import { NoteListItem } from './extensions/ListItem';
 import { setNoteColor } from './noteColorMenu';
 import type { NoteEditorMenuApi } from './contextMenu';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
+import { usePinAction } from '@/hooks/usePinAction';
 import { NoteTOC } from './NoteTOC';
 import { NoteObjectTrigger, objectTriggerStorage } from './objects/NoteObjectTrigger';
 import { NoteObjectMenu } from './objects/NoteObjectMenu';
@@ -250,17 +251,6 @@ function TocIcon() {
   );
 }
 
-function TableIcon() {
-  return (
-    <svg width="15" height="13" viewBox="0 0 15 13" fill="currentColor">
-      <rect x="0" y="0"  width="15" height="3"  rx="0.5"/>
-      <rect x="0" y="4"  width="7"  height="3.5" rx="0.5" opacity="0.6"/>
-      <rect x="8" y="4"  width="7"  height="3.5" rx="0.5" opacity="0.6"/>
-      <rect x="0" y="9"  width="7"  height="3.5" rx="0.5" opacity="0.4"/>
-      <rect x="8" y="9"  width="7"  height="3.5" rx="0.5" opacity="0.4"/>
-    </svg>
-  );
-}
 
 function ColumnsIcon() {
   return (
@@ -415,6 +405,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
 
   const rawNote = editingNoteId ? notes[editingNoteId as NoteId] : null;
   const note = useNoteView(editingNoteId);
+  const pinNote = usePinAction('note', editingNoteId ?? '');
 
   const [title, setTitle]           = useState('');
   const [tocOpen, setTocOpen]       = useState(false);
@@ -441,6 +432,17 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     if (!abstractFocused) setAbstract(storedAbstract);
   }
   const [abstractCollapsed, setAbstractCollapsed] = useState(false);
+  // The abstract box is as tall as its text, up to its CSS max-height (then it scrolls).
+  const abstractRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = abstractRef.current;
+    if (!el) return;
+    const fit = () => { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; };
+    fit();
+    // A narrower or wider pane wraps the text differently.
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [abstract, abstractCollapsed]);
   const [noteMenuOpen, setNoteMenuOpen] = useState(false);
   // See src/services/vault.ts — encryption applies to Note.content (Main tab) only, not
   // NoteTab.content. A locked encrypted note shows a placeholder instead of the editor;
@@ -1818,6 +1820,17 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       style={note?.color ? { ['--note-color' as string]: note.color } : undefined}
       data-note-color={note?.color && noteColorBars !== 'off' ? noteColorBars : undefined}
       data-note-color-headings={note?.color && noteColorHeadings ? '' : undefined}
+      onKeyDown={(e) => {
+        // Ctrl+` from the note's own fields (title, abstract, tag attributes) goes back to the nav
+        // columns too; the text itself is handled in the capture-phase handler above.
+        if (!e.ctrlKey || e.shiftKey || e.altKey || e.key !== '`' || e.defaultPrevented) return;
+        e.preventDefault();
+        // Stopped here: the Notes columns' own Ctrl+` (on the document) would otherwise see the
+        // field blurred and send the focus straight back into the note.
+        e.stopPropagation();
+        (e.target as HTMLElement).blur();
+        onNavReturnRef.current?.();
+      }}
     >
       {/* ── Title bar ────────────────────────────────────────────────────── */}
       <div
@@ -2187,6 +2200,12 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                   >
                     {note?.isEncrypted ? '🔓 Remove encryption' : '🔒 Encrypt this note'}
                   </button>
+                  <button
+                    className={`${styles.noteMenuItem} ${styles.noteMenuIconItem}`}
+                    onClick={() => { pinNote.onClick(); setNoteMenuOpen(false); }}
+                  >
+                    {pinNote.icon}{pinNote.label}
+                  </button>
                   <div className={styles.noteMenuColors} role="group" aria-label={LABELS.noteColors.menu}>
                     <span className={styles.noteMenuLabel}>{LABELS.noteColors.menu}</span>
                     <div className={styles.noteMenuSwatches}>
@@ -2209,7 +2228,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
           </div>
         )}
 
-        {!isAndroid && <button className={styles.closeBtn} onClick={closeNote} title="Close (Esc)">✕</button>}
+        {!isAndroid && <button className={styles.closeBtn} onClick={closeNote} title="Close (Esc)" aria-label="Close"><CloseIcon /></button>}
       </div>
 
       {!isAndroid && <NoteBacklinks note={note} activeTabId={activeTabId} editor={editor} canInsert={!noteLocked} onSwitchTab={switchTab} />}
@@ -2327,7 +2346,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                   onClick={(e) => void handleRemoveTab(e, tabId, tabName)}
                   title={LABELS.noteTabs.delete}
                   aria-label={LABELS.noteTabs.delete}
-                >×</button>
+                ><TrashIcon width="1em" height="1em" /></button>
               )}
             </div>
           );
@@ -2350,6 +2369,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
           </div>
           {!abstractCollapsed && (
             <textarea
+              ref={abstractRef}
               className={styles.abstractInput}
               value={abstract}
               onChange={(e) => { setAbstract(e.target.value); scheduleAbstract(e.target.value); }}
@@ -2363,7 +2383,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                 }
               }}
               placeholder="Brief summary of this note…"
-              rows={3}
+              rows={1}
             />
           )}
         </div>
@@ -2610,7 +2630,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => runTableCmd(anyCell, 'deleteTable')}
               title="Delete table"
-            >×</button>
+            ><TrashIcon width="1em" height="1em" /></button>
 
             {/* Row controls — right side of hovered row */}
             {rr && rowCell && (

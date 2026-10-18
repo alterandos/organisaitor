@@ -8,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import type { TrashEntry, TrashEntryId } from '@/types/trash';
 import styles from './RecyclingBinPane.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 // Display labels for each kind's badge — kept local rather than in config/labels.ts, since
 // most of these entities (Calendar event, Note, Schedule, …) have no existing singular
@@ -72,7 +73,7 @@ export function RecyclingBinPane() {
       <div className={styles.pane}>
         <header className={styles.header}>
           <span className={styles.title}>{LABELS.recyclingBin.title}</span>
-          <button className={styles.closeBtn} onClick={closeRecyclingBin} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeRecyclingBin} aria-label="Close"><CloseIcon /></button>
         </header>
 
         <div className={styles.body}>

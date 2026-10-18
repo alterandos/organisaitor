@@ -1,3 +1,4 @@
+import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import { GLOSSARY_TYPES } from '@/config/structuredTagTypes';
@@ -6,6 +7,7 @@ import type { NoteEditorMenuApi } from '../contextMenu';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
 import { GLOSSARY_CARD_DESIGNS_WITH_INLINE, GLOSSARY_CARD_WIDTHS, cardWidth, focusGlossaryCard, glossaryCardPosAt, insertCardAfter, setGlossaryCardVariant, setGlossaryCardWidth, type GlossaryCardDesign } from './GlossaryCard';
 import { cardToChip, chipToCard, glossaryChipPosAt, openChip } from './GlossaryChip';
+import { EditIcon } from '@/components/Icons';
 
 // Right-click on a Glossary card: edit it, its design (Inline makes it a chip) and frame. On a chip:
 // open its card, or show it as a card block. On marked text that has a
@@ -22,7 +24,7 @@ registerContextMenuProvider({
     const node = pos === null ? null : view.state.doc.nodeAt(pos);
     if (pos === null || !node) return [];
     return [
-      { id: 'glossary-card-edit', label: LABELS.glossaryCard.edit, icon: '✎', shortcut: 'Enter', run: () => focusGlossaryCard(view, pos) },
+      { id: 'glossary-card-edit', label: LABELS.glossaryCard.edit, icon: createElement(EditIcon), shortcut: 'Enter', run: () => focusGlossaryCard(view, pos) },
       designMenuItem(GLOSSARY_CARD_DESIGNS_WITH_INLINE, node.attrs.variant as GlossaryCardDesign, (v) => (v === 'inline' ? cardToChip(view, pos) : setGlossaryCardVariant(view, pos, v))),
       {
         id: 'glossary-card-width', label: LABELS.glossaryCard.width, icon: '↔',
@@ -68,7 +70,7 @@ registerContextMenuProvider({
     const pos = glossaryChipPosAt(view, ctx.target);
     if (pos === null) return [];
     return [
-      { id: 'glossary-chip-open', label: LABELS.glossaryCard.edit, icon: '✎', shortcut: 'Enter', run: () => openChip(view, pos) },
+      { id: 'glossary-chip-open', label: LABELS.glossaryCard.edit, icon: createElement(EditIcon), shortcut: 'Enter', run: () => openChip(view, pos) },
       { id: 'glossary-chip-card', label: LABELS.glossaryCard.showAsCard, icon: '▭', run: () => chipToCard(view, pos) },
       designMenuItem(GLOSSARY_CARD_DESIGNS_WITH_INLINE, 'inline', (v) => { if (v !== 'inline') chipToCard(view, pos, v); }),
     ];

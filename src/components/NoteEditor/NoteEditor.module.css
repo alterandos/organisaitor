@@ -511,6 +511,9 @@
   line-height: 1.6;
   resize: none;
   box-sizing: border-box;
+  /* Grows with its text (NoteEditor sets the height); past a fifth of the screen it scrolls. */
+  max-height: max(20vh, 7rem);
+  overflow-y: auto;
 }
 .abstractInput::placeholder { color: var(--color-muted); }
 
@@ -564,6 +567,9 @@
   white-space: nowrap;
 }
 .noteMenuItem:hover { background: var(--color-surface-alt); }
+/* An item led by an icon (Pin to Quick Access). */
+.noteMenuIconItem { display: flex; align-items: center; gap: var(--space-2); }
+.noteMenuIconItem svg { flex: none; width: 1em; height: 1em; }
 
 /* The note's colour, in the Note ▾ menu: No colour, then the palette. */
 .noteMenuColors {

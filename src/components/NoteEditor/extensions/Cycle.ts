@@ -5,6 +5,7 @@ import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { choiceRow, iconSlot, popoverHeading } from './blockIcons';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, openBlockPopover, pillButton, popoverClass as pop, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
+import { createGlyph } from '@/components/Icons';
 
 // A cycle in a note (`\cycle`): stages that lead one to the next and from the last back to the
 // first — the water cycle, a habit loop, a product lifecycle. At least two stages.
@@ -577,7 +578,7 @@ function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLE
   b.setAttribute('data-cycle-delete', '');
   b.title = LABELS.noteBlocks.cycle.deleteStage;
   b.setAttribute('aria-label', LABELS.noteBlocks.cycle.deleteStage);
-  b.textContent = '×';
+  b.append(createGlyph('trash'));
   b.addEventListener('mousedown', (e) => e.preventDefault());
   b.addEventListener('click', (e) => {
     e.preventDefault();

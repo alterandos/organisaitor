@@ -4,6 +4,7 @@ import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { getChartHistory } from '@/integrations/tickerService';
 import type { WatchlistItem } from '@/types/portfolio';
 import styles from './WatchlistView.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 const RANGES = [
   { label: '1M', range: '1mo' as const, interval: '1d'  as const },
@@ -105,7 +106,7 @@ export function TickerChart({ item, price, change, changePercent, onClose }: Pro
               >{r.label}</button>
             ))}
           </div>
-          <button className={styles.chartCloseBtn} onClick={onClose} aria-label="Close chart">✕</button>
+          <button className={styles.chartCloseBtn} onClick={onClose} aria-label="Close chart"><CloseIcon /></button>
         </div>
       </div>
 

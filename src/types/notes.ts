@@ -40,7 +40,6 @@ export interface Note {
   lastViewedAt: string | null;
   archivedAt: string | null;          // Soft delete
   color: string | null;               // User-chosen highlight color
-  pinned: boolean;                    // Quick access from landing page
   userId: string;                     // Supabase auth.user_id
   parentId: NoteId | null;            // Sub-note parent; null = top-level
   tabs: NoteTab[];                    // Additional tabs (main content stays in .content)
@@ -53,7 +52,7 @@ export interface Note {
   // src/services/noteSecrets.ts) and are BLANKED on the stored object: at rest locally and in
   // Supabase alike. Plaintext exists only in a memory cache while the vault is unlocked; read a
   // note through noteView() (never `note.title` etc. directly) so encrypted notes resolve.
-  // Still plaintext by design (needed for the tree/filters/sync merge): tagIds, color, pinned,
+  // Still plaintext by design (needed for the tree/filters/sync merge): tagIds, color,
   // parentId, tabOrder, templateId, collectionId, and all timestamps.
   isEncrypted: boolean;
   encryptedPayload: string | null;

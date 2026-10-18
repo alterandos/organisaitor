@@ -15,7 +15,7 @@ import { registerEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
 import { SWATCH_IDS } from '@/config/swatches';
 import { createElement } from 'react';
-import { TrashIcon } from '@/components/Icons';
+import { DesignIcon, TrashIcon } from '@/components/Icons';
 import styles from './BlockDesigns.module.css';
 
 // ── Blocks with their own inputs take the typing ─────────────────────────────
@@ -792,7 +792,7 @@ export function designMenuItem<V extends string>(designs: readonly BlockDesign<V
   return {
     id: 'block-design',
     label: LABELS.noteBlocks.design,
-    icon: '◫',
+    icon: createElement(DesignIcon),
     submenu: [designs.map((d) => ({ id: `design-${d.id}`, label: d.label, icon: d.id === current ? '✓' : undefined, run: () => pick(d.id) }))],
   };
 }

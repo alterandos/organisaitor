@@ -8,6 +8,7 @@ import type { CollectionId } from '@/types';
 import type { ArtifactFlag } from './flags';
 import { usePaneState } from './paneState';
 import styles from './ObjectBody.module.css';
+import { LinkIcon, OpenIcon, TrashIcon } from '@/components/Icons';
 
 interface Props {
   // The start of the second heading line (WhenLine: date, time, options that are on, state).
@@ -112,7 +113,7 @@ export function ObjectBody({ heading, onToggle, notes, links, collectionId, onNo
               📍 {looksLikeUrl(place.value) ? hostOf(place.value) : place.value}
             </button>
             {looksLikeUrl(place.value) && (
-              <button type="button" className={styles.placeOpen} title={L.openPlace} onClick={() => { void openExternalLink(normalizeLinkUrl(place.value!)); }}>↗</button>
+              <button type="button" className={styles.placeOpen} title={L.openPlace} aria-label={L.openPlace} onClick={() => { void openExternalLink(normalizeLinkUrl(place.value!)); }}><OpenIcon /></button>
             )}
           </span>
         ))}
@@ -151,8 +152,8 @@ export function ObjectBody({ heading, onToggle, notes, links, collectionId, onNo
             <div className={styles.things}>
               {links.map((url) => (
                 <span key={url} className={styles.link}>
-                  <button type="button" className={styles.linkOpen} title={url} onClick={() => { void openExternalLink(normalizeLinkUrl(url)); }}>🔗 {hostOf(url)}</button>
-                  <button type="button" className={styles.linkRemove} title={L.removeLink} onClick={() => onLinks(links.filter((l) => l !== url))}>×</button>
+                  <button type="button" className={styles.linkOpen} title={url} onClick={() => { void openExternalLink(normalizeLinkUrl(url)); }}><LinkIcon /> {hostOf(url)}</button>
+                  <button type="button" className={styles.linkRemove} title={L.removeLink} onClick={() => onLinks(links.filter((l) => l !== url))}><TrashIcon width="1em" height="1em" /></button>
                 </span>
               ))}
               {linkDraft !== null && (

@@ -11,7 +11,7 @@ import { isNoteLocked, noteView } from '@/services/noteSecrets';
 import { addSticky, removeSticky, setStickyContent, stickyDocFrom, stickyDocOf, stickyNotes, type StickyDoc, type StickyMark } from '@/services/stickyNotes';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
-import { TrashIcon } from '@/components/Icons';
+import { DesignIcon, OpenIcon, TrashIcon } from '@/components/Icons';
 import { SWATCHES } from '@/config/swatches';
 import { LABELS } from '@/config/labels';
 import type { Note, NoteId } from '@/types/notes';
@@ -34,6 +34,8 @@ registerContextMenuProvider({
 const SAVE_MS = 400;
 const STICKY_W = 208;       // .sticky's width (13rem), for keeping it on the screen
 const STICKY_MIN_H = 144;   // its least height
+const MIN_W = 144, MIN_H = 96;   // the smallest it can be resized to
+const KEY_STEP = 16;             // the grip's arrow keys
 
 export function StickyNotes() {
   const notes = useNoteStore((s) => s.notes);
@@ -123,18 +125,50 @@ function StickyNote({ note }: { note: Note }) {
     editor.commands.setContent(JSON.parse(storedKey), { emitUpdate: false });
   }, [editor, storedKey]);
 
-  // Dragging: anywhere but the text and the buttons.
+  // Dragging: anywhere but the text, the buttons and the resize grip.
   const rootRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ dx: number; dy: number; left: number; top: number } | null>(null);
-  const width = STICKY_W;
-  const height = STICKY_MIN_H;
+  // Resizing: the grip at the bottom right corner. Width and height are kept on the screen.
+  const [resize, setResize] = useState<{ x0: number; y0: number; w0: number; h0: number; w: number; h: number } | null>(null);
+  const size = resize ? { w: resize.w, h: resize.h } : { w: place.w, h: place.h };
+  const width = size.w ?? STICKY_W;
+  const height = size.h ?? STICKY_MIN_H;
   const clampLeft = (v: number) => Math.max(0, Math.min(v, window.innerWidth - width));
   const clampTop = (v: number) => Math.max(0, Math.min(v, window.innerHeight - height));
   const left = drag ? drag.left : clampLeft(place.x * window.innerWidth);
   const top = drag ? drag.top : clampTop(place.y * window.innerHeight);
+  const fitW = (v: number) => Math.round(Math.max(MIN_W, Math.min(v, window.innerWidth - left)));
+  const fitH = (v: number) => Math.round(Math.max(MIN_H, Math.min(v, window.innerHeight - top)));
+
+  function onGripDown(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const box = rootRef.current?.getBoundingClientRect();
+    const w0 = place.w ?? box?.width ?? STICKY_W, h0 = place.h ?? box?.height ?? STICKY_MIN_H;
+    setResize({ x0: e.clientX, y0: e.clientY, w0, h0, w: w0, h: h0 });
+  }
+  function onGripMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!resize) return;
+    setResize({ ...resize, w: fitW(resize.w0 + e.clientX - resize.x0), h: fitH(resize.h0 + e.clientY - resize.y0) });
+  }
+  function onGripUp() {
+    if (!resize) return;
+    setPlace(note.id, { w: resize.w, h: resize.h });
+    setResize(null);
+  }
+  function onGripKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    const dx = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    const dy = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+    if (!dx && !dy) return;
+    e.preventDefault();
+    const box = rootRef.current?.getBoundingClientRect();
+    setPlace(note.id, { w: fitW((place.w ?? box?.width ?? STICKY_W) + dx * KEY_STEP), h: fitH((place.h ?? box?.height ?? STICKY_MIN_H) + dy * KEY_STEP) });
+  }
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    if (e.button !== 0 || (e.target as HTMLElement).closest('[contenteditable="true"], button')) return;
+    if (e.button !== 0 || (e.target as HTMLElement).closest('[contenteditable="true"], button, [data-sticky-grip]')) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     setDrag({ dx: e.clientX - left, dy: e.clientY - top, left, top });
@@ -168,7 +202,8 @@ function StickyNote({ note }: { note: Note }) {
           id: d, label: L.designs[d], icon: d === place.design ? '✓' : undefined, run: () => setPlace(note.id, { design: d }),
         }))],
       },
-      { id: 'remove', label: L.remove, icon: '×', destructive: true, run: () => removeSticky(note.id as NoteId) },
+      ...(place.w !== null || place.h !== null ? [{ id: 'size', label: L.resetSize, run: () => setPlace(note.id, { w: null, h: null }) }] : []),
+      { id: 'remove', label: L.remove, icon: <TrashIcon width="1em" height="1em" />, destructive: true, run: () => removeSticky(note.id as NoteId) },
     ],
   }));
 
@@ -176,9 +211,9 @@ function StickyNote({ note }: { note: Note }) {
   return (
     <div
       ref={rootRef}
-      className={`${styles.sticky} ${drag ? styles.dragging : ''}`}
+      className={`${styles.sticky} ${drag ? styles.dragging : ''} ${size.h !== null ? styles.sized : ''}`}
       data-design={place.design}
-      style={{ left, top, ...(paper ? { ['--paper' as string]: paper } : {}) }}
+      style={{ left, top, ...(size.w !== null ? { width: size.w } : {}), ...(size.h !== null ? { height: size.h } : {}), ...(paper ? { ['--paper' as string]: paper } : {}) }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -186,8 +221,8 @@ function StickyNote({ note }: { note: Note }) {
     >
       <div className={styles.tools}>
         <button type="button" className={styles.tool} onClick={() => setPlace(note.id, { design: nextDesign(place.design) })}
-          title={L.nextDesign(L.designs[place.design])} aria-label={L.nextDesign(L.designs[place.design])}>◐</button>
-        <button type="button" className={styles.tool} onClick={openNote} title={L.open} aria-label={L.open}>↗</button>
+          title={L.nextDesign(L.designs[place.design])} aria-label={L.nextDesign(L.designs[place.design])}><DesignIcon /></button>
+        <button type="button" className={styles.tool} onClick={openNote} title={L.open} aria-label={L.open}><OpenIcon /></button>
         <button type="button" className={styles.tool} onClick={() => removeSticky(note.id as NoteId)} title={L.remove} aria-label={L.remove}>
           <TrashIcon />
         </button>
@@ -202,6 +237,20 @@ function StickyNote({ note }: { note: Note }) {
       ) : (
         <EditorContent editor={editor} className={styles.textHost} />
       )}
+      <div
+        className={styles.grip}
+        data-sticky-grip=""
+        role="separator"
+        tabIndex={0}
+        aria-label={L.resize}
+        title={L.resize}
+        onPointerDown={onGripDown}
+        onPointerMove={onGripMove}
+        onPointerUp={onGripUp}
+        onPointerCancel={onGripUp}
+        onDoubleClick={() => setPlace(note.id, { w: null, h: null })}
+        onKeyDown={onGripKey}
+      />
     </div>
   );
 }

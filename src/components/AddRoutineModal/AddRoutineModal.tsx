@@ -8,7 +8,7 @@ import { LABELS } from '@/config/labels';
 import type { RoutineTask, RepeatConfig, PurposeId, TagId, CollectionId } from '@/types';
 import styles from './AddRoutineModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { DisclosureIcon } from '@/components/Icons';
+import { CloseIcon, DisclosureIcon, TrashIcon } from '@/components/Icons';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAYS   = [1, 2, 3, 4, 5];
@@ -116,7 +116,7 @@ export function AddRoutineModal() {
       >
         <div className={styles.header}>
           <span className={styles.title}>New routine</span>
-          <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
+          <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>
@@ -155,7 +155,7 @@ export function AddRoutineModal() {
                       className={styles.taskRemoveBtn}
                       onClick={() => removeTask(t.id)}
                       aria-label="Remove step"
-                    >✕</button>
+                    ><TrashIcon width="1em" height="1em" /></button>
                   </li>
                 ))}
               </ul>

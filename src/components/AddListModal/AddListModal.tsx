@@ -16,7 +16,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 
 import { log } from '@/utils/log';
-import { DisclosureIcon } from '@/components/Icons';
+import { CloseIcon, DisclosureIcon, TrashIcon } from '@/components/Icons';
 const FIELD_TYPES: { value: ListFieldType; label: string }[] = [
   { value: 'text',    label: 'Text'    },
   { value: 'number',  label: 'Number'  },
@@ -271,7 +271,7 @@ export function AddListModal() {
         <input type="checkbox" checked={!!field.required} onChange={(e) => onUpdate({ required: e.target.checked })} />
         Req.
       </label>
-      <button type="button" className={styles.removeFieldBtn} onClick={onRemove} title="Remove field">✕</button>
+      <button type="button" className={styles.removeFieldBtn} onClick={onRemove} title="Remove field"><TrashIcon width="1em" height="1em" /></button>
 
       {field.type === 'select' && (
         <div className={styles.selectOptions}>
@@ -279,7 +279,7 @@ export function AddListModal() {
             {(field.options ?? []).map((opt, oi) => (
               <span key={oi} className={styles.selectOptionTag}>
                 {opt}
-                <button type="button" className={styles.removeOptionBtn} onClick={() => onRemoveOption(oi)}>✕</button>
+                <button type="button" className={styles.removeOptionBtn} onClick={() => onRemoveOption(oi)}><TrashIcon width="1em" height="1em" /></button>
               </span>
             ))}
           </div>
@@ -305,7 +305,7 @@ export function AddListModal() {
         <div className={`${styles.modal} ${styles.modalLarge}`}>
           <div className={styles.header}>
             <span className={styles.title}>Choose a list type</span>
-            <button className={styles.closeBtn} onClick={closeModal}>✕</button>
+            <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
           </div>
 
           {typeGroups.map((g) => (
@@ -343,7 +343,7 @@ export function AddListModal() {
       <div className={`${styles.modal} ${styles.modalLarge}`}>
         <div className={styles.header}>
           <span className={styles.title}>{isEditing ? 'Edit List' : 'New List'}</span>
-          <button className={styles.closeBtn} onClick={closeModal}>✕</button>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit} className={styles.form}>
@@ -465,7 +465,7 @@ export function AddListModal() {
                       >
                         <DisclosureIcon open={expandedTabs.has(idx)} /> Fields{tab.fieldSchema.length > 0 ? ` (${tab.fieldSchema.length})` : ''}
                       </button>
-                      <button type="button" className={styles.removeFieldBtn} onClick={() => removeTab(idx)} title="Remove tab">✕</button>
+                      <button type="button" className={styles.removeFieldBtn} onClick={() => removeTab(idx)} title="Remove tab"><TrashIcon width="1em" height="1em" /></button>
                     </div>
 
                     {expandedTabs.has(idx) && (

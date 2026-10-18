@@ -5,6 +5,8 @@ import type { NoteGroup } from '@/utils/notesBrowse';
 import type { Note } from '@/types/notes';
 import type { NoteName } from '@/utils/notes';
 import { peekSections, type TileSize } from './mosaicLayout';
+import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
+import { pinMenuItem } from '@/services/quickAccessPins';
 import styles from './Mosaic.module.css';
 
 // A group's tile: its colour, icon, name and count, its own groups as chips and its newest notes.
@@ -47,6 +49,9 @@ export function MosaicTile({ group, size, notes, nameOf, onEnter, onEnterGroup, 
   };
   const close = () => { clear(); setPeek(null); };
   useEscapeClose(() => { close(); tileRef.current?.focus(); }, !!peek);
+  // A notebook's or an Endeavour's tile can be pinned to Quick Access (purposes and tags can't).
+  const pinType = group.grouping === 'notebook' ? 'notebook' as const : group.grouping === 'endeavour' ? 'endeavour' as const : null;
+  useContextMenuScope(tileRef, () => ({ kind: 'note-group', items: () => (pinType ? [pinMenuItem(pinType, group.sourceId)] : []) }), !!pinType);
 
   const recent = newestInside(group, notes, size === 'large' ? 5 : size === 'wide' ? 3 : 2);
   const subGroups = size === 'small' ? [] : group.children.slice(0, size === 'large' ? 8 : 4);

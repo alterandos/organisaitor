@@ -4,6 +4,7 @@ import { NOTE_TAG_PRESETS } from '@/config/noteTagPresets';
 import type { NoteTag } from '@/types/notes';
 import styles from './NoteTagPresetModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { CloseIcon } from '@/components/Icons';
 
 export function NoteTagPresetModal() {
   const closeModal   = useUIStore((s) => s.closeModal);
@@ -38,7 +39,7 @@ export function NoteTagPresetModal() {
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>Tag Presets</span>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">×</button>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <p className={styles.subtitle}>

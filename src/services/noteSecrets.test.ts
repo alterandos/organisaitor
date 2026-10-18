@@ -29,7 +29,7 @@ function note(overrides: Partial<Note> = {}): Note {
   return {
     id: 'n1' as never, title: '', content: '', tagIds: [], tagData: {}, createdAt: '2030-01-01T00:00:00.000Z',
     updatedAt: '2030-01-01T00:00:00.000Z', abstract: null, mainTabUpdatedAt: null, lastViewedAt: null, archivedAt: null, color: null,
-    pinned: false, userId: 'u1', parentId: null, tabs: [], mainTabName: 'Main', tabOrder: [], templateId: null,
+    userId: 'u1', parentId: null, tabs: [], mainTabName: 'Main', tabOrder: [], templateId: null,
     collectionId: null, isEncrypted: true, encryptedPayload: 'cipher-v1', ...overrides,
   };
 }

@@ -9,7 +9,7 @@ import { getStructuredTagType } from '@/config/structuredTagTypes';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { NoteTagId } from '@/types';
 import styles from './TagView.module.css';
-import { DisclosureIcon } from '@/components/Icons';
+import { CloseIcon, DisclosureIcon } from '@/components/Icons';
 
 type SortMode = 'type' | 'alpha' | 'count';
 
@@ -223,7 +223,7 @@ export function TagView() {
             <option value="alpha">Sort: A–Z</option>
             <option value="count">Sort: most notes</option>
           </select>
-          <button className={styles.closeBtn} onClick={closeNoteTagView} title="Return to Chronicle (Esc)">×</button>
+          <button className={styles.closeBtn} onClick={closeNoteTagView} title="Return to Chronicle (Esc)" aria-label="Close"><CloseIcon /></button>
         </div>
       </div>
 

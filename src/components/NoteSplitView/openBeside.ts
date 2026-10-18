@@ -1,7 +1,9 @@
+import { createElement } from 'react';
 import { notePaneCount, useUIStore } from '@/store/uiStore';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import { flushOpenNoteEditors } from '@/services/liveNoteEditor';
+import { NoteLayoutIcon } from '@/components/Icons';
 
 // "Open beside" on a note's row: in the next pane, splitting the view in two if it's one note.
 export function openBeside(noteId: string): void {
@@ -24,7 +26,7 @@ registerContextMenuProvider({
   order: 40,
   items: (_ctx, scope) => {
     const id = (scope.data as { noteId?: string } | undefined)?.noteId;
-    return id ? [{ id: 'open-beside', label: LABELS.noteViews.openBeside, icon: '◫', run: () => openBeside(id) }] : [];
+    return id ? [{ id: 'open-beside', label: LABELS.noteViews.openBeside, icon: createElement(NoteLayoutIcon, { layout: 'two' }), run: () => openBeside(id) }] : [];
   },
 });
 

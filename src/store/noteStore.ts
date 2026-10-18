@@ -105,7 +105,6 @@ export const useNoteStore = create<NoteStore>()(
           lastViewedAt: null,
           archivedAt: null,
           color: input.color ?? null,
-          pinned: false,
           parentId: null,
           tabs: [],
           mainTabName: 'Main',

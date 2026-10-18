@@ -15,6 +15,7 @@ import styles from './AccountPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
 import { errorMessage } from '@/utils/log';
+import { CloseIcon } from '@/components/Icons';
 
 type Mode = 'signin' | 'signup';
 
@@ -213,7 +214,7 @@ export function AccountPane() {
       <div className={styles.pane}>
         <header className={styles.header}>
           <span className={styles.title}>Account</span>
-          <button className={styles.closeBtn} onClick={closeAccount} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeAccount} aria-label="Close"><CloseIcon /></button>
         </header>
 
         {!isSupabaseConfigured && (

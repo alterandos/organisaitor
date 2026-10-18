@@ -11,6 +11,7 @@ import styles from './AddActivityModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { CloseIcon } from '@/components/Icons';
 
 const NEW_TYPE_VALUE = '__new__';
 
@@ -262,7 +263,7 @@ export function AddActivityModal() {
               <span className={styles.sourceBadge}>Strava</span>
             )}
           </span>
-          <button type="button" className={styles.closeBtn} onClick={closeEditActivity} aria-label="Close">✕</button>
+          <button type="button" className={styles.closeBtn} onClick={closeEditActivity} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>

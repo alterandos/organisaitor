@@ -18,6 +18,7 @@ export const PERSISTED_STORAGE_KEYS = [
   'todo-settings',      // settingsStore
   'todo-notifications', // notificationStore
   'todo-recent-items',  // recentItemsStore: Quick Access pane recent/frequent visit history
+  'quick-access-pins',  // pinnedItemsStore: what's pinned to Quick Access (synced)
   'todo-hotkey-overrides', // hotkeyOverridesStore: user-rebound keyboard shortcuts
   'agent-log',          // agentLogStore: what the assistant did (local audit log)
   'agent-batches',      // agentBatchStore: before-snapshots so an assistant change can be undone

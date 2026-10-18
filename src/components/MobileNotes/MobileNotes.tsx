@@ -7,6 +7,7 @@ import { formatRelativeTime } from '@/utils/date';
 import { isNoteLocked } from '@/services/noteSecrets';
 import { deleteNoteWithCleanup } from '@/services/crossAppLinkCleanup';
 import { useLongPress } from '@/hooks/useLongPress';
+import { usePinAction } from '@/hooks/usePinAction';
 import { ActionSheet } from '@/components/ActionSheet/ActionSheet';
 import type { ActionSheetItem } from '@/components/ActionSheet/ActionSheet';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
@@ -17,7 +18,7 @@ import { LABELS } from '@/config/labels';
 import type { CollectionId, NoteTagId } from '@/types';
 import type { Note, NoteTag } from '@/types/notes';
 import styles from './MobileNotes.module.css';
-import { DisclosureIcon } from '@/components/Icons';
+import { DisclosureIcon, EditIcon, TrashIcon } from '@/components/Icons';
 
 // Notes on a phone (docs/android/10-gap-analysis.md F24, the user's design 2026-10-08/09).
 // With no note open, Notes is a home screen: the notebook tree (notes listed inside their
@@ -122,6 +123,7 @@ function NotebookRow({ tag, depth }: { tag: NoteTag; depth: number }) {
   const rowRef = useRef<HTMLButtonElement>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   useLongPress(rowRef, () => setSheetOpen(true));
+  const pin = usePinAction('notebook', tag.id);
 
   const children = childNotebooks(noteTags, tag.id, visibleTagIds);
   const topNotes = Object.values(notes)
@@ -140,9 +142,10 @@ function NotebookRow({ tag, depth }: { tag: NoteTag; depth: number }) {
   const actions: ActionSheetItem[] = [
     { label: L.newNote, icon: '📝', onSelect: () => { const ui = useUIStore.getState(); ui.setSelectedNoteTag(tag.id as NoteTagId); ui.showAddNote(); } },
     { label: L.newSubNotebook, icon: '📁', onSelect: () => useUIStore.getState().showAddNoteTag(tag.id as NoteTagId) },
-    { label: L.editNotebook, icon: '✎', onSelect: () => useUIStore.getState().openEditNoteTag(tag.id) },
+    { label: L.editNotebook, icon: <EditIcon />, onSelect: () => useUIStore.getState().openEditNoteTag(tag.id) },
+    { label: pin.label, icon: pin.icon, onSelect: pin.onClick },
     {
-      label: LABELS.rowActions.delete, icon: '×', destructive: true,
+      label: LABELS.rowActions.delete, icon: <TrashIcon width="1em" height="1em" />, destructive: true,
       onSelect: async () => {
         if (!(await confirmDelete('notebook', tag.name, 'All its contents will be deleted too.'))) return;
         useNoteStore.getState().deleteNoteTag(tag.id as NoteTagId);
@@ -185,6 +188,7 @@ function NoteRow({ note, raw, depth }: { note: Note; raw: Note; depth: number })
   const rowRef = useRef<HTMLButtonElement>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   useLongPress(rowRef, () => setSheetOpen(true));
+  const pin = usePinAction('note', note.id);
 
   const locked = isNoteLocked(raw);
   const title = locked ? `🔒 ${LABELS.mobileNotes.lockedNote}` : (note.title || LABELS.mobileNotes.untitled);
@@ -195,9 +199,10 @@ function NoteRow({ note, raw, depth }: { note: Note; raw: Note; depth: number })
   const L = LABELS.mobileNotes;
   const actions: ActionSheetItem[] = [
     { label: L.openNote, icon: '📝', onSelect: () => useUIStore.getState().openNote(note.id) },
-    { label: L.noteDetails, icon: '✎', onSelect: () => useUIStore.getState().showEditNoteMeta(note.id) },
+    { label: L.noteDetails, icon: <EditIcon />, onSelect: () => useUIStore.getState().showEditNoteMeta(note.id) },
+    { label: pin.label, icon: pin.icon, onSelect: pin.onClick },
     {
-      label: LABELS.rowActions.delete, icon: '×', destructive: true,
+      label: LABELS.rowActions.delete, icon: <TrashIcon width="1em" height="1em" />, destructive: true,
       onSelect: async () => {
         if (!(await confirmDelete('note', title))) return;
         deleteNoteWithCleanup(note.id);

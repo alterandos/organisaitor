@@ -8,6 +8,7 @@
 //
 // Dates are days from `base` (the day it's generated), so regenerating moves the semester along.
 import { nanoid } from 'nanoid';
+import { usePinnedItemsStore } from '@/store/pinnedItemsStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
@@ -150,8 +151,8 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   const essayNote = newNote('Essay: is solar geoengineering responsible?', [geos215], essay);
   const hubNote = newNote('Feedback loops in the Earth system', [geos215]);
   useNoteStore.getState().updateNote(lab, { parentId: rock });
-  useNoteStore.getState().updateNote(welcome, { pinned: true, color: colour('blue'), abstract: 'Where everything for semester 2 lives, and the shortcuts I keep forgetting.' });
-  useNoteStore.getState().updateNote(essayNote, { pinned: true, abstract: 'Thesis: research it, but don’t deploy it. Due in under four weeks.' });
+  useNoteStore.getState().updateNote(welcome, { color: colour('blue'), abstract: 'Where everything for semester 2 lives, and the shortcuts I keep forgetting.' });
+  useNoteStore.getState().updateNote(essayNote, { abstract: 'Thesis: research it, but don’t deploy it. Due in under four weeks.' });
   useNoteStore.getState().updateNote(trip, { color: colour('teal') });
 
   // ── Glossary records (each shown by a card or chip in its own note, below) ──
@@ -651,6 +652,16 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     p('Every ', termLink('climate feedback', feedback, 'concept'), ' here should get a sentence in the essay’s background section.'),
   )));
 
+
+  // Quick Access (Q): what a student keeps one key away.
+  const pins = usePinnedItemsStore.getState();
+  pins.pin('note', welcome);
+  pins.pin('note', essayNote);
+  pins.pin('notebook', geos215);
+  pins.pin('endeavour', fieldReport);
+  pins.pin('list', books);
+  pins.pin('routine', routine);
+  pins.pin('place', 'review');
 
   return {
     notebooks: { university: uni, geos201, geos215 },

@@ -104,11 +104,18 @@
   font-size: 0.9rem;
 }
 
+.itemRow {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-md);
+}
+
 .item {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  width: 100%;
   border: none;
   background: transparent;
   text-align: left;
@@ -121,6 +128,77 @@
 .itemActive {
   background: var(--color-primary-subtle);
 }
+
+.itemDragging { opacity: 0.5; }
+.itemRow[draggable="true"] { cursor: grab; }
+
+/* Pin / unpin: shown on the highlighted row, and always on touch. */
+.pinBtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-right: var(--space-1);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.pinBtnOn { color: var(--color-primary); }
+.itemActive .pinBtn, .pinBtn:focus-visible { opacity: 1; }
+.pinBtn:hover { background: var(--color-surface); color: var(--color-text); }
+.pinBtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+@media (hover: none) {
+  .pinBtn { opacity: 1; }
+}
+
+.listHeading {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* The two tabs: Quick Access (Q) and Go to (Ctrl+G). */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.tab:hover { color: var(--color-text); }
+.tab:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+
+.tabActive {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
+  font-weight: 600;
+}
+
+.tabIcon { width: 1em; height: 1em; flex: none; }
 
 .itemIcon {
   font-size: 1.1rem;
@@ -200,6 +278,9 @@
   font-size: var(--text-2xs);
   text-align: center;
 }
+
+/* Under the pins on the Quick Access tab, so the pins come first. */
+.placesBelow { border-bottom: none; border-top: 1px solid var(--color-border); flex: none; }
 
 /* With a mouse, sideways scrolling is awkward: the row wraps instead. */
 @media (hover: hover) {

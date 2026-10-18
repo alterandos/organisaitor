@@ -5,6 +5,7 @@ import { cancelDictation, stopDictation } from '@/services/speech/dictation';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
 import styles from './VoiceIndicator.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 function MicIcon() {
   return (
@@ -83,7 +84,7 @@ export function VoiceIndicator() {
       {listening && (
         <>
           <button className={`${styles.btn} ${styles.btnDone}`} onMouseDown={keepFocus} onClick={() => void stopDictation()} aria-label={LABELS.voice.done} title={LABELS.voice.done}>✓</button>
-          <button className={styles.btn} onMouseDown={keepFocus} onClick={cancelDictation} aria-label={LABELS.voice.cancel} title={LABELS.voice.cancel}>✕</button>
+          <button className={styles.btn} onMouseDown={keepFocus} onClick={cancelDictation} aria-label={LABELS.voice.cancel} title={LABELS.voice.cancel}><CloseIcon /></button>
         </>
       )}
     </div>,

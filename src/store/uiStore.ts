@@ -17,6 +17,7 @@ export type AppView = 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 
 // Notes' three columns (ChronicleView). Which one has keyboard focus decides what N/Space creates.
 export type NotesColumn = 'tree' | 'list' | 'editor';
 export type MobileNotesHome = 'notebooks' | 'recent';
+export type QuickAccessTab = 'pinned' | 'goto';
 // Notes side by side (2026-10-16): one note, two side by side, three (two stacked on the left and
 // a column on the right) or four quadrants. Desktop only.
 export const NOTE_LAYOUTS = ['single', 'two', 'three', 'four'] as const;
@@ -547,10 +548,14 @@ interface UIState {
   requestDecrypt:      (kind: 'note' | 'list', id: string) => void;
   closeDecryptPrompt:  () => void;
 
+  // Two tabs: 'pinned' is Quick Access (pins and Places, Q / Alt+Q), 'goto' is Go to (search
+  // and Recent/Frequent, Ctrl+G / Alt+G).
   quickAccessOpen:   boolean;
-  openQuickAccess:   () => void;
+  quickAccessTab:    QuickAccessTab;
+  openQuickAccess:   (tab?: QuickAccessTab) => void;
   closeQuickAccess:  () => void;
-  toggleQuickAccess: () => void;
+  toggleQuickAccess: (tab: QuickAccessTab) => void;
+  setQuickAccessTab: (tab: QuickAccessTab) => void;
 
   // Lists' selected-list state lives as local useState in ListsSection.tsx (seeded once from
   // listsLastActiveListId on mount) rather than in uiStore, so an external navigation request
@@ -1100,9 +1105,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeDecryptPrompt:  () => set({ decryptPrompt: null }),
 
   quickAccessOpen:   false,
-  openQuickAccess:   () => set({ quickAccessOpen: true }),
+  quickAccessTab:    'pinned',
+  openQuickAccess:   (tab = 'pinned') => set({ quickAccessOpen: true, quickAccessTab: tab }),
   closeQuickAccess:  () => set({ quickAccessOpen: false }),
-  toggleQuickAccess: () => set((s) => ({ quickAccessOpen: !s.quickAccessOpen })),
+  // Its own key closes the tab that's showing; the other tab's key switches to it.
+  toggleQuickAccess: (tab) => set((s) => (s.quickAccessOpen && s.quickAccessTab === tab ? { quickAccessOpen: false } : { quickAccessOpen: true, quickAccessTab: tab })),
+  setQuickAccessTab: (tab) => set({ quickAccessTab: tab }),
 
   pendingListSelectionId:    null,
   requestListSelection:      (id) => set({ pendingListSelectionId: id }),

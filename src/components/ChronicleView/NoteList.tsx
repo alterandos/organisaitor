@@ -14,6 +14,7 @@ import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import '@/components/NoteEditor/noteColorMenu';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
+import { EditIcon, IndentIcon, OutdentIcon, TrashIcon } from '@/components/Icons';
 
 interface NoteListProps {
   tagId: NoteTagId;
@@ -74,10 +75,10 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
     data: { noteId: note.id },
     items: () => [
       { id: 'open', label: LABELS.contextMenu.openNote, icon: '📝', run: () => openNote(note.id) },
-      { id: 'details', label: LABELS.contextMenu.noteDetails, icon: '✎', run: () => showEditNoteMeta(note.id) },
-      ...(canIndent ? [{ id: 'indent', label: LABELS.rowActions.indentNote, icon: '↳', run: () => indentNote(note.id as NoteId, siblings[myPos - 1].id as NoteId) }] : []),
-      ...(canOutdent ? [{ id: 'outdent', label: LABELS.rowActions.outdent, icon: '↰', run: () => outdentNote(note.id as NoteId) }] : []),
-      { id: 'delete', label: LABELS.rowActions.delete, icon: '×', destructive: true, run: deleteNote },
+      { id: 'details', label: LABELS.contextMenu.noteDetails, icon: <EditIcon />, run: () => showEditNoteMeta(note.id) },
+      ...(canIndent ? [{ id: 'indent', label: LABELS.rowActions.indentNote, icon: <IndentIcon />, run: () => indentNote(note.id as NoteId, siblings[myPos - 1].id as NoteId) }] : []),
+      ...(canOutdent ? [{ id: 'outdent', label: LABELS.rowActions.outdent, icon: <OutdentIcon />, run: () => outdentNote(note.id as NoteId) }] : []),
+      { id: 'delete', label: LABELS.rowActions.delete, icon: <TrashIcon width="1em" height="1em" />, destructive: true, run: deleteNote },
     ],
   }));
 
@@ -113,25 +114,25 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
               className={styles.noteActionBtn}
               onClick={(e) => { e.stopPropagation(); indentNote(note.id as NoteId, siblings[myPos - 1].id as NoteId); }}
               title={LABELS.rowActions.indentNote}
-            >↳</button>
+            ><IndentIcon /></button>
           )}
           {canOutdent && (
             <button
               className={styles.noteActionBtn}
               onClick={(e) => { e.stopPropagation(); outdentNote(note.id as NoteId); }}
               title="Move up one level"
-            >↰</button>
+            ><OutdentIcon /></button>
           )}
           <button
             className={styles.noteActionBtn}
             onClick={(e) => { e.stopPropagation(); showEditNoteMeta(note.id); }}
             title="Edit note details"
-          >✎</button>
+          ><EditIcon /></button>
           <button
             className={`${styles.noteActionBtn} ${styles.noteActionDelete}`}
             onClick={handleDelete}
             title="Delete"
-          >×</button>
+          ><TrashIcon width="1em" height="1em" /></button>
         </div>
       </div>
 

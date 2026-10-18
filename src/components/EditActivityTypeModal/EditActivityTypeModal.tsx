@@ -7,6 +7,7 @@ import type { ActivityFieldSchema, ActivityFieldType, ActivityTypeId } from '@/t
 import styles from './EditActivityTypeModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { CloseIcon, TrashIcon } from '@/components/Icons';
 
 const FIELD_TYPES: { value: ActivityFieldType; label: string }[] = [
   { value: 'text',     label: 'Text' },
@@ -168,7 +169,7 @@ export function EditActivityTypeModal() {
       <aside className={styles.pane} role="complementary" aria-label={isEditMode ? 'Edit activity type' : 'New activity type'}>
         <div className={styles.header}>
           <span className={styles.heading}>{isEditMode ? 'Edit activity type' : 'New activity type'}</span>
-          <button className={styles.closeBtn} onClick={closeEditActivityType} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeEditActivityType} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <div className={styles.body}>
@@ -240,7 +241,7 @@ export function EditActivityTypeModal() {
                     <button className={styles.fieldActionBtn} onClick={() => moveField(idx, -1)} disabled={idx === 0} title="Move up">↑</button>
                     <button className={styles.fieldActionBtn} onClick={() => moveField(idx, 1)} disabled={idx === fields.length - 1} title="Move down">↓</button>
                     <button className={styles.fieldActionBtn} onClick={() => toggleExpand(idx)} title="Configure">⚙</button>
-                    <button className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} onClick={() => removeField(idx)} title="Remove">✕</button>
+                    <button className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} onClick={() => removeField(idx)} title="Remove"><TrashIcon width="1em" height="1em" /></button>
                   </div>
                 </div>
 

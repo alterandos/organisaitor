@@ -8,6 +8,7 @@ import type { PortfolioTagId, WatchlistStatus } from '@/types/portfolio';
 import styles from './BulkUploadWatchlistModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { CloseIcon } from '@/components/Icons';
 
 // Map common exchange prefixes to Yahoo Finance ticker suffixes.
 const EXCHANGE_SUFFIX: Record<string, string> = {
@@ -150,7 +151,7 @@ export function BulkUploadWatchlistModal() {
       <div className={styles.modal}>
         <div className={styles.header}>
           <span className={styles.title}>Bulk Import Tickers</span>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         {phase !== 'done' ? (

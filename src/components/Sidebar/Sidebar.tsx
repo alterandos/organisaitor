@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { TagId, PurposeId, CollectionId } from '@/types';
+import { usePinAction } from '@/hooks/usePinAction';
 import { LABELS } from '@/config/labels';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -10,7 +11,7 @@ import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import type { Collection, Tag, Purpose } from '@/types';
-import { DisclosureIcon } from '@/components/Icons';
+import { DisclosureIcon, EditIcon, TrashIcon } from '@/components/Icons';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
@@ -25,6 +26,7 @@ interface Props {
 
 function SidebarCollectionRow({ col, onEdit, onDelete }: { col: Collection; onEdit: () => void; onDelete: () => void }) {
   const rowRef = useRef<HTMLDivElement>(null);
+  const pin = usePinAction('endeavour', col.id);
   return (
     <div ref={rowRef} className={styles.row}>
       <RowOptionsMenu rowRef={rowRef} title={col.name} icon={<span className={styles.dot} style={{ background: col.color ?? 'var(--color-border)' }} />}>
@@ -34,8 +36,9 @@ function SidebarCollectionRow({ col, onEdit, onDelete }: { col: Collection; onEd
           label={LABELS.overview.endeavourTitle(col.name)}
           onClick={() => useUIStore.getState().openEndeavourOverview(col.id)}
         />
-        <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
-        <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon="×" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
+        <RowAction className={styles.iconBtn} icon={<EditIcon />} label={LABELS.rowActions.edit} onClick={onEdit} />
+        <RowAction className={styles.iconBtn} {...pin} />
+        <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon={<TrashIcon width="1em" height="1em" />} label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowOptionsMenu>
       <div className={styles.rowMain}>
         <TruncatedText text={col.name} className={styles.name} />
@@ -53,8 +56,8 @@ function SidebarTagRow({ tag, isActive, onToggle, onEdit, onDelete }: { tag: Tag
       style={isActive && tag.color ? { background: tag.color + '18' } : undefined}
     >
       <RowOptionsMenu rowRef={rowRef} title={tag.name} icon={<span className={styles.dot} style={{ background: tag.color ?? 'var(--color-border)' }} />}>
-        <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
-        <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon="×" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
+        <RowAction className={styles.iconBtn} icon={<EditIcon />} label={LABELS.rowActions.edit} onClick={onEdit} />
+        <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon={<TrashIcon width="1em" height="1em" />} label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowOptionsMenu>
       <button className={styles.rowMain} onClick={onToggle}>
         <TruncatedText text={tag.name} className={styles.name} />
@@ -68,8 +71,8 @@ function SidebarPurposeRow({ purpose, onEdit, onDelete }: { purpose: Purpose; on
   return (
     <div ref={rowRef} className={styles.row}>
       <RowOptionsMenu rowRef={rowRef} title={purpose.name} icon={<span className={styles.dot} style={{ background: purpose.color ?? 'var(--color-border)' }} />}>
-        <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
-        <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon="×" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
+        <RowAction className={styles.iconBtn} icon={<EditIcon />} label={LABELS.rowActions.edit} onClick={onEdit} />
+        <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon={<TrashIcon width="1em" height="1em" />} label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowOptionsMenu>
       <div className={styles.rowMain}>
         <TruncatedText text={purpose.name} className={styles.name} />

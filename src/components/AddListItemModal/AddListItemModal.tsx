@@ -9,6 +9,7 @@ import styles from './AddListItemModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { LABELS } from '@/config/labels';
+import { CloseIcon, TrashIcon } from '@/components/Icons';
 
 // ── Dynamic field input ───────────────────────────────────────────────────────
 function FieldInput({
@@ -102,7 +103,7 @@ function FieldInput({
             >★</button>
           ))}
           {num > 0 && (
-            <button type="button" className={styles.ratingClear} onClick={() => onChange(0)}>✕</button>
+            <button type="button" className={styles.ratingClear} onClick={() => onChange(0)} aria-label="Clear"><CloseIcon /></button>
           )}
         </div>
       );
@@ -215,7 +216,7 @@ export function AddListItemModal() {
             </span>
             <span className={styles.title}>{isEditing ? LABELS.lists.form.editTitle : LABELS.lists.form.newTitle}</span>
           </div>
-          <button type="button" className={styles.closeBtn} onClick={closeModal} title={LABELS.lists.form.close} aria-label={LABELS.lists.form.close}>✕</button>
+          <button type="button" className={styles.closeBtn} onClick={closeModal} title={LABELS.lists.form.close} aria-label={LABELS.lists.form.close}><CloseIcon /></button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit} className={styles.form}>
@@ -321,7 +322,7 @@ export function AddListItemModal() {
                   return (
                     <div key={idx} className={styles.linkRow}>
                       <a href={url} target="_blank" rel="noopener noreferrer" className={styles.linkPreview}>{display}</a>
-                      <button type="button" className={styles.removeLinkBtn} onClick={() => removeLink(idx)} title={LABELS.lists.form.removeLink} aria-label={LABELS.lists.form.removeLink}>✕</button>
+                      <button type="button" className={styles.removeLinkBtn} onClick={() => removeLink(idx)} title={LABELS.lists.form.removeLink} aria-label={LABELS.lists.form.removeLink}><TrashIcon width="1em" height="1em" /></button>
                     </div>
                   );
                 })}

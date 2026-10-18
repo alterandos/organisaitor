@@ -8,6 +8,7 @@ import styles from './NoteEditorPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { CloseIcon } from '@/components/Icons';
 
 export function NoteEditorPane() {
   const paneResize = usePaneWidth('note-pane', { edge: 'left', min: 360, max: 1100 });
@@ -85,8 +86,9 @@ export function NoteEditorPane() {
           className={styles.closeBtn}
           onClick={closeNote}
           title="Close (Esc)"
+          aria-label="Close"
         >
-          ✕
+          <CloseIcon />
         </button>
       </div>
 

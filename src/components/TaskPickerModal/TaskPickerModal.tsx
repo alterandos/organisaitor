@@ -8,6 +8,7 @@ import { rankSearch, rankSuggestions, type RankField } from '@/utils/suggestRank
 import type { Task } from '@/types';
 // Same look as the note and list pickers, so the "link a …" dialogs read as one family.
 import styles from '@/components/NotePickerModal/NotePickerModal.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 interface Props {
   title?:     string;
@@ -86,7 +87,7 @@ export function TaskPickerModal({ title = LABELS.taskLinks.pickerTitle, suggestF
       <div className={styles.modal} role="dialog" aria-label={title}>
         <div className={styles.header}>
           <span className={styles.title}>✔ {title}</span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <input

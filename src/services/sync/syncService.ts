@@ -9,6 +9,7 @@ import { usePortfolioStore } from '@/store/portfolioStore';
 import { useTrashStore } from '@/store/trashStore';
 import { useOverviewStore } from '@/store/overviewStore';
 import { usePictureStore } from '@/store/pictureStore';
+import { usePinnedItemsStore, type PinnedItem } from '@/store/pinnedItemsStore';
 import type { Overview } from '@/types/overview';
 import type { Picture } from '@/types/pictures';
 import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, ScheduleTemplate } from '@/types';
@@ -40,6 +41,7 @@ import {
   trashEntryToRow,         rowToTrashEntry,
   overviewToRow,           rowToOverview,
   pictureToRow,            rowToPicture,
+  pinToRow,                rowToPin,
 } from './mappers';
 
 // Custom (non-built-in) list types only — built-ins have fixed ids, are re-seeded
@@ -89,6 +91,7 @@ const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
   trash_items:            { get: () => useTrashStore.getState().entries,                toRow: (i, u) => trashEntryToRow(i as TrashEntry, u) },
   overviews:              { get: () => useOverviewStore.getState().overviews,           toRow: (i, u) => overviewToRow(i as Overview, u) },
   pictures:               { get: () => usePictureStore.getState().pictures,             toRow: (i, u) => pictureToRow(i as Picture, u) },
+  quick_access_pins:      { get: () => usePinnedItemsStore.getState().pins,             toRow: (i, u) => pinToRow(i as PinnedItem, u), onConflict: PER_ACCOUNT_KEY },
 };
 
 // ── Pending changes ─────────────────────────────────────────────
@@ -363,6 +366,7 @@ const SYNC_TABLES = [
   'trash_items',
   'overviews',
   'pictures',
+  'quick_access_pins',
 ] as const;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -484,7 +488,7 @@ export type UploadCounts = {
   schedules: number; lists: number; listItems: number; listTypes: number;
   notes: number; noteTags: number; structuredTagEntries: number;
   watchlistItems: number; portfolioTags: number; investmentPurposes: number;
-  trashItems: number; overviews: number; pictures: number;
+  trashItems: number; overviews: number; pictures: number; pins: number;
 };
 
 // Force-uploads ALL current store data to Supabase (upsert), reading live in-memory
@@ -637,6 +641,10 @@ function hydrateStores(remote: RemoteRows) {
   usePictureStore.setState((local) => ({
     pictures: mergeRecords(local.pictures, remote.pictures, rowToPicture, 'pictures'),
   }) as Parameters<typeof usePictureStore.setState>[0]);
+
+  usePinnedItemsStore.setState((local) => ({
+    pins: mergeRecords(local.pins, remote.quick_access_pins, rowToPin, 'quick_access_pins'),
+  }));
 }
 
 // ── Upload ──────────────────────────────────────────────────────
@@ -653,6 +661,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const { entries: trashEntries } = useTrashStore.getState();
   const { overviews } = useOverviewStore.getState();
   const { pictures } = usePictureStore.getState();
+  const { pins } = usePinnedItemsStore.getState();
 
   const allTasks       = Object.values(tasks);
   const allCollections = Object.values(collections);
@@ -675,6 +684,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const allTrashItems         = Object.values(trashEntries);
   const allOverviews          = Object.values(overviews);
   const allPictures           = Object.values(pictures);
+  const allPins               = Object.values(pins);
 
   const results = await Promise.all([
     allTasks.length       > 0 ? supabase.from('tasks').upsert(allTasks.map((t) => taskToRow(t, userId)))               : null,
@@ -698,6 +708,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     allTrashItems.length         > 0 ? supabase.from('trash_items').upsert(allTrashItems.map((t) => trashEntryToRow(t, userId))) : null,
     allOverviews.length          > 0 ? supabase.from('overviews').upsert(allOverviews.map((o) => overviewToRow(o, userId))) : null,
     allPictures.length           > 0 ? supabase.from('pictures').upsert(allPictures.map((p) => pictureToRow(p, userId))) : null,
+    allPins.length               > 0 ? supabase.from('quick_access_pins').upsert(allPins.map((p) => pinToRow(p, userId)), { onConflict: PER_ACCOUNT_KEY }) : null,
   ]);
 
   const firstError = results.find((r) => r?.error)?.error;
@@ -711,7 +722,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     listItems: allListItems.length, listTypes: allListTypes.length,
     notes: allNotes.length, noteTags: allNoteTags.length, structuredTagEntries: allStructuredTagEntries.length,
     watchlistItems: allWatchlistItems.length, portfolioTags: allPortfolioTags.length, investmentPurposes: allInvestmentPurposes.length,
-    trashItems: allTrashItems.length, overviews: allOverviews.length, pictures: allPictures.length,
+    trashItems: allTrashItems.length, overviews: allOverviews.length, pictures: allPictures.length, pins: allPins.length,
   };
 }
 
@@ -777,6 +788,7 @@ function setupSubscriptions(userId: string): void {
     watch(userId, useTrashStore, [{ prop: 'entries', table: 'trash_items' }]),
     watch(userId, useOverviewStore, [{ prop: 'overviews', table: 'overviews' }]),
     watch(userId, usePictureStore, [{ prop: 'pictures', table: 'pictures' }]),
+    watch(userId, usePinnedItemsStore, [{ prop: 'pins', table: 'quick_access_pins' }]),
   ];
 
   // Retry what didn't get through: when the browser reports it is back online, and on a timer while

@@ -16,7 +16,8 @@ import styles from './AddTaskModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
-import { DisclosureIcon } from '@/components/Icons';
+import { CloseIcon, DisclosureIcon, TrashIcon } from '@/components/Icons';
+import { ITEM_LINK_KINDS } from '@/config/itemLinkKinds';
 
 type PendingTag = { id: TagId; name: string; isNew: boolean };
 
@@ -237,9 +238,9 @@ export function AddTaskModal() {
       <div className={styles.modal}>
         <div className={styles.header}>
           <span className={styles.title}>New Task</span>
-          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close"><CloseIcon /></button>
         </div>
-        {followUpOrigin && <div className={styles.followUpBanner}>↳ {LABELS.taskLinks.followUpBanner(followUpOrigin.title)}</div>}
+        {followUpOrigin && <div className={styles.followUpBanner}>{ITEM_LINK_KINDS.followUpOf.icon} {LABELS.taskLinks.followUpBanner(followUpOrigin.title)}</div>}
 
         <form ref={formRef} onSubmit={handleSubmit}>
           {/* ── Basic fields ── */}
@@ -430,7 +431,7 @@ export function AddTaskModal() {
                   {pendingTags.map((t) => (
                     <span key={t.id} className={styles.tag}>
                       {t.name}
-                      <button type="button" className={styles.tagRemove} onClick={() => removeTag(t.id)}>×</button>
+                      <button type="button" className={styles.tagRemove} onClick={() => removeTag(t.id)} aria-label={`Remove ${t.name}`}><CloseIcon /></button>
                     </span>
                   ))}
                   <input
@@ -472,7 +473,7 @@ export function AddTaskModal() {
                       return (
                         <li key={url} className={styles.linkRow}>
                           <span className={styles.linkLabel}>{label}</span>
-                          <button type="button" className={styles.linkRemove} onClick={() => removeLink(url)} aria-label="Remove link">×</button>
+                          <button type="button" className={styles.linkRemove} onClick={() => removeLink(url)} aria-label="Remove link"><TrashIcon width="1em" height="1em" /></button>
                         </li>
                       );
                     })}

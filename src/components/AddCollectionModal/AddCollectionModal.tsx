@@ -8,6 +8,7 @@ import { formatDate, now } from '@/utils/date';
 import type { CollectionId, CollectionKind, PurposeId } from '@/types';
 import styles from './AddCollectionModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { CloseIcon } from '@/components/Icons';
 
 export function AddCollectionModal() {
   const addCollection    = useTaskStore((s) => s.addCollection);
@@ -126,7 +127,7 @@ export function AddCollectionModal() {
             onClick={handleClose}
             aria-label="Close"
           >
-            ✕
+            <CloseIcon />
           </button>
         </div>
 

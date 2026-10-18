@@ -36,7 +36,7 @@ describe('the Map layout (atlasLayout)', () => {
   });
 
   it('nothing to draw: an empty atlas', () => {
-    expect(atlasLayout([g('empty', [])], [], '')).toEqual({ blobs: [], notes: [], size: 0, divider: null });
+    expect(atlasLayout([g('empty', [])], [], '')).toEqual({ blobs: [], notes: [], size: 0 });
   });
 
   it('a blob outline is the same for the same id, different for another, and closed', () => {
@@ -62,20 +62,19 @@ describe('the Map layout, grouped by something other than notebooks', () => {
   });
 });
 
-describe('the Map layout with a pinned island (Stickies)', () => {
+describe('the Map leaves the Stickies out', () => {
   const stickies = { ...g('stk', ['s1', 's2']), pinned: true };
-  const atlas = atlasLayout([stickies, g('work', ['w1', 'w2', 'w3'])], [], 'Not in a notebook');
-  const blob = (id: string) => atlas.blobs.find((b) => b.id === `notebook:${id}`)!;
+  const notebookOf = (id: string) => (id.startsWith('s') ? { id: 'stk', name: 'Stickies', icon: null, color: null, pinned: true } : null);
 
-  it('sits on its own above the rest, with the divider between', () => {
-    expect(atlas.divider).not.toBeNull();
-    const s = blob('stk'), w = blob('work');
-    expect(s.y + s.r).toBeLessThan(atlas.divider!.y);
-    expect(w.y - w.r).toBeGreaterThan(atlas.divider!.y);
+  it('drops the Stickies notebook and its notes', () => {
+    const atlas = atlasLayout([stickies, g('work', ['w1', 'w2', 'w3'])], [], 'Not in a notebook', notebookOf);
+    expect(atlas.blobs.map((b) => b.id)).toEqual(['notebook:work']);
+    expect(atlas.notes.map((n) => n.noteId).sort()).toEqual(['w1', 'w2', 'w3']);
   });
 
-  it('no divider when nothing is pinned, or only the pinned island is there', () => {
-    expect(atlasLayout([g('work', ['w1'])], [], 'x').divider).toBeNull();
-    expect(atlasLayout([stickies], [], 'x').divider).toBeNull();
+  it('drops sticky notes grouped some other way (loose, under an Endeavour)', () => {
+    const atlas = atlasLayout([], ['s1', 'w1'], 'Not in an Endeavour', notebookOf);
+    expect(atlas.notes.map((n) => n.noteId)).toEqual(['w1']);
+    expect(atlasLayout([stickies], [], 'x', notebookOf)).toEqual({ blobs: [], notes: [], size: 0 });
   });
 });

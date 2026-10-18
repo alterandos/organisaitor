@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { pageKeyBlocked } from '@/utils/pageKeys';
+import { usePinAction } from '@/hooks/usePinAction';
+import { PinButton } from '@/components/PinButton/PinButton';
 import { nanoid } from 'nanoid';
 import { useListStore } from '@/store/listStore';
 import { useListViews, useListItemViews } from '@/store/listViews';
@@ -23,6 +25,7 @@ import { log, errorMessage } from '@/utils/log';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { DICTIONARY_TYPE_ID, refreshDictionaryFields } from '@/services/dictionary';
+import { EditIcon, TrashIcon } from '@/components/Icons';
 // Sidebar group order. Anything that isn't a checklist or watchlist (custom types included) is Reference.
 const KIND_GROUPS: ListKind[] = ['checklist', 'watchlist', 'reference'];
 const groupOf = (l: List): ListKind => (l.kind === 'checklist' || l.kind === 'watchlist' ? l.kind : 'reference');
@@ -160,8 +163,8 @@ function ItemCard({
           <span className={styles.itemTitle} onClick={() => onStartEdit('title')}>{item.title}</span>
         )}
         <div className={styles.itemCardActions}>
-          <button className={styles.itemActionBtn} onClick={onEdit} title={LABELS.lists.editItem} aria-label={LABELS.lists.editItem}>✎</button>
-          <button className={`${styles.itemActionBtn} ${styles.itemDeleteBtn}`} onClick={onDelete} title={LABELS.lists.removeItem} aria-label={LABELS.lists.removeItem}>✕</button>
+          <button className={styles.itemActionBtn} onClick={onEdit} title={LABELS.lists.editItem} aria-label={LABELS.lists.editItem}><EditIcon /></button>
+          <button className={`${styles.itemActionBtn} ${styles.itemDeleteBtn}`} onClick={onDelete} title={LABELS.lists.removeItem} aria-label={LABELS.lists.removeItem}><TrashIcon width="1em" height="1em" /></button>
         </div>
       </div>
 
@@ -277,6 +280,7 @@ function SidebarListItem({
   onDecrypt: () => void;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
+  const pin = usePinAction('list', list.id);
   return (
     <div
       ref={rowRef}
@@ -286,11 +290,12 @@ function SidebarListItem({
     >
       <RowOptionsMenu rowRef={rowRef} title={list.name} icon={<span className={styles.sidebarItemIcon}>{list.icon ?? listType?.icon ?? '📋'}</span>}>
         {!isLocked && (
-          <RowAction className={styles.sidebarActionBtn} icon="✎" label={LABELS.rowActions.editThing(LABELS.list)} onClick={onEdit} />
+          <RowAction className={styles.sidebarActionBtn} icon={<EditIcon />} label={LABELS.rowActions.editThing(LABELS.list)} onClick={onEdit} />
         )}
+        <RowAction className={styles.sidebarActionBtn} {...pin} />
         <RowAction
           className={`${styles.sidebarActionBtn} ${styles.sidebarDeleteBtn}`}
-          icon="✕"
+          icon={<TrashIcon width="1em" height="1em" />}
           label={LABELS.rowActions.deleteThing(LABELS.list)}
           onClick={onDelete}
           destructive
@@ -675,6 +680,7 @@ export function ListsSection() {
                     🔒 {LABELS.lists.encrypt}
                   </button>
                 )}
+                <PinButton type="list" id={selectedList.id} className={styles.headerIconBtn} />
                 {!selectedListLocked && (
                   <>
                     <button
@@ -682,7 +688,7 @@ export function ListsSection() {
                       onClick={() => openEditList(selectedList.id)}
                       title={LABELS.lists.editList}
                       aria-label={LABELS.lists.editList}
-                    >✎</button>
+                    ><EditIcon /></button>
                   </>
                 )}
               </div>
@@ -924,13 +930,13 @@ export function ListsSection() {
                               onClick={() => openEditListItem(item.id)}
                               title={LABELS.lists.editItem}
                               aria-label={LABELS.lists.editItem}
-                            >✎</button>
+                            ><EditIcon /></button>
                             <button
                               className={`${styles.rowActionBtn} ${styles.rowDeleteBtn}`}
                               onClick={() => handleDeleteItem(item)}
                               title={LABELS.lists.deleteItem}
                               aria-label={LABELS.lists.deleteItem}
-                            >✕</button>
+                            ><TrashIcon width="1em" height="1em" /></button>
                           </div>
                         </td>
                       </tr>

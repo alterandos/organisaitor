@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TextColorIcon } from '@/components/Icons';
+import { CloseIcon, LinkIcon, TextColorIcon, UnlinkIcon } from '@/components/Icons';
 import { NodeSelection } from '@tiptap/pm/state';
 import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/react';
@@ -403,7 +403,7 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
           />
           <button className={styles.linkApplyBtn} onClick={applyLink} title="Apply link">✓</button>
           {hasLink && (
-            <button className={styles.linkRemoveBtn} onClick={removeLink} title="Remove link">✕</button>
+            <button className={styles.linkRemoveBtn} onClick={removeLink} title="Remove link" aria-label="Remove link"><UnlinkIcon /></button>
           )}
         </div>
       ) : showColorPicker ? (
@@ -455,19 +455,19 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
           <button className={`${styles.btn} ${editor.isActive('italic')    ? styles.on : ''}`} onClick={() => fmt(() => editor.chain().toggleItalic().run())}    title="Italic"><em>I</em></button>
           <button className={`${styles.btn} ${editor.isActive('underline') ? styles.on : ''}`} onClick={() => fmt(() => editor.chain().toggleUnderline().run())} title="Underline"><u>U</u></button>
           <button className={`${styles.btn} ${editor.isActive('strike')    ? styles.on : ''}`} onClick={() => fmt(() => editor.chain().toggleStrike().run())}    title="Strike"><s>S</s></button>
-          <button className={`${styles.btn} ${hasLink ? styles.on : ''}`} onClick={openLinkInput} title="Link">🔗</button>
+          <button className={`${styles.btn} ${hasLink ? styles.on : ''}`} onClick={openLinkInput} title="Link" aria-label="Link"><LinkIcon /></button>
           <button className={styles.btn} onClick={() => setShowColorPicker(true)} title="Text color">
             <TextColorIcon current={editor.getAttributes('textStyle').color as string | undefined} />
           </button>
           <div className={styles.div} />
           {hasTagMark ? (
-            <button className={`${styles.btn} ${styles.tagBtn} ${styles.on}`} onClick={removeTag} title="Remove tag"># ✕</button>
+            <button className={`${styles.btn} ${styles.tagBtn} ${styles.on}`} onClick={removeTag} title="Remove tag"># <CloseIcon /></button>
           ) : (
             <button className={`${styles.btn} ${styles.tagBtn}`} onClick={() => setShowTags(true)} title="Tag selection (Ctrl+Space)"># Tag</button>
           )}
           <div className={styles.div} />
           {hasArtifactMark ? (
-            <button className={`${styles.btn} ${styles.createBtn} ${styles.on}`} onClick={removeArtifactLink} title="Remove link">🧩 ✕</button>
+            <button className={`${styles.btn} ${styles.createBtn} ${styles.on}`} onClick={removeArtifactLink} title="Remove link">🧩 <UnlinkIcon /></button>
           ) : (
             <button className={`${styles.btn} ${styles.createBtn}`} onClick={() => { setStubMessage(null); setShowCreateMenu(true); }} title="Create linked item from selection (Ctrl+Q)">🧩</button>
           )}

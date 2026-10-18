@@ -26,6 +26,25 @@
 }
 .dragging { cursor: grabbing; }
 
+/* Resized to a height: the text scrolls inside it rather than growing it. */
+.sized { min-height: 0; }
+.sized .textHost { min-height: 0; overflow-y: auto; }
+
+/* The resize grip: the bottom right corner, three diagonal lines, shown with the tools. */
+.grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1rem;
+  height: 1rem;
+  cursor: nwse-resize;
+  opacity: 0;
+  background: linear-gradient(135deg, transparent 45%, var(--sticky-ink-soft) 45%, var(--sticky-ink-soft) 52%, transparent 52%, transparent 65%, var(--sticky-ink-soft) 65%, var(--sticky-ink-soft) 72%, transparent 72%);
+  transition: opacity 0.15s;
+}
+.sticky:hover .grip, .grip:focus-visible { opacity: 0.7; }
+.grip:focus-visible { outline: 2px solid var(--sticky-ink-soft); }
+
 .textHost {
   display: flex;
   flex: 1;
@@ -156,5 +175,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tools { transition: none; }
+  .tools, .grip { transition: none; }
 }

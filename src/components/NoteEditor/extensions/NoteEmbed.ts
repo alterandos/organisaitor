@@ -6,6 +6,7 @@ import { LABELS } from '@/config/labels';
 import { linkTarget, openNoteLink } from '@/services/noteLinkTargets';
 import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, placeBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import styles from './NoteLink.module.css';
+import { createGlyph } from '@/components/Icons';
 
 // A passage from another note (or this one), shown as it reads now (`\embed`): the block holds
 // only where the passage is (note, tab, blockId); its text is read from that note each time it's
@@ -148,7 +149,7 @@ class EmbedView {
     if (target.state === 'ok' && target.fragment.length) holder.append(DOMSerializer.fromSchema(view.state.schema).serializeFragment(Fragment.from(target.fragment)));
     else holder.textContent = target.state === 'missing-note' ? L.missingNote : target.state === 'missing-passage' ? L.missingPassage : target.state === 'locked' ? L.locked : L.empty;
     const html = `${target.state}|${holder.innerHTML}`;
-    this.source.textContent = `↗ ${L.embedFrom(`${target.title || LABELS.mobileNotes.untitled}${target.heading ? ` › ${target.heading}` : ''}`)}`;
+    this.source.replaceChildren(createGlyph('open'), ` ${L.embedFrom(`${target.title || LABELS.mobileNotes.untitled}${target.heading ? ` › ${target.heading}` : ''}`)}`);
     if (html === this.lastHtml) return;
     this.lastHtml = html;
     this.body.classList.toggle(styles.previewEmpty, target.state !== 'ok' || target.fragment.length === 0);

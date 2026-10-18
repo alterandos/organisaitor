@@ -6,6 +6,7 @@ import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { now } from '@/utils/date';
 import styles from './AddPurposeModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { CloseIcon } from '@/components/Icons';
 
 export function AddPurposeModal() {
   const addPurpose       = useTaskStore((s) => s.addPurpose);
@@ -65,7 +66,7 @@ export function AddPurposeModal() {
               <span className={styles.archivedBadge}>Archived</span>
             )}
           </span>
-          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close"><CloseIcon /></button>
         </div>
 
         {!isEdit && (

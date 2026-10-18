@@ -1,5 +1,6 @@
 import { NoteSplitView } from '@/components/NoteSplitView/NoteSplitView';
 import { pageKeyBlocked } from '@/utils/pageKeys';
+import { usePinAction } from '@/hooks/usePinAction';
 import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
 import type { RefObject } from 'react';
 import { useNoteStore } from '@/store/noteStore';
@@ -16,7 +17,7 @@ import { RowAction } from '@/components/RowHoverActions/RowAction';
 import styles from './ChronicleView.module.css';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
-import { DisclosureIcon } from '@/components/Icons';
+import { DisclosureIcon, EditIcon, IndentIcon, OutdentIcon, TrashIcon } from '@/components/Icons';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
@@ -223,6 +224,7 @@ function NoteTagTreeNode({
   const isDropAfter  = dragOverInfo?.tagId === tag.id && dragOverInfo.zone === 'after';
 
   const rowRef = useRef<HTMLDivElement>(null);
+  const pin = usePinAction('notebook', tag.id);
   // Opening a note selects its notebook and expands the ancestors (uiStore.openNote), but in a long
   // tree the row can still be off-screen — bring it into view. 'nearest' leaves a visible row alone.
   useEffect(() => {
@@ -300,14 +302,15 @@ function NoteTagTreeNode({
 
         <RowOptionsMenu rowRef={rowRef} title={tag.name} icon={<span className={styles.nodeIcon}>{getNotebookIcon(tag, noteTags, notes)}</span>}>
           {canIndent && (
-            <RowAction className={styles.nodeActionBtn} icon="↳" label={LABELS.rowActions.indent} onClick={() => indentNoteTag(tag.id as NoteTagId)} />
+            <RowAction className={styles.nodeActionBtn} icon={<IndentIcon />} label={LABELS.rowActions.indent} onClick={() => indentNoteTag(tag.id as NoteTagId)} />
           )}
           {canOutdent && (
-            <RowAction className={styles.nodeActionBtn} icon="↰" label={LABELS.rowActions.outdent} onClick={() => outdentNoteTag(tag.id as NoteTagId)} />
+            <RowAction className={styles.nodeActionBtn} icon={<OutdentIcon />} label={LABELS.rowActions.outdent} onClick={() => outdentNoteTag(tag.id as NoteTagId)} />
           )}
           <RowAction className={styles.nodeActionBtn} icon="+" label={LABELS.rowActions.addSection} onClick={() => showAddNoteTag(tag.id as NoteTagId)} />
-          <RowAction className={styles.nodeActionBtn} icon="✎" label={LABELS.rowActions.edit} onClick={() => openEditNoteTag(tag.id)} />
-          <RowAction className={`${styles.nodeActionBtn} ${styles.nodeActionDelete}`} icon="×" label={LABELS.rowActions.delete} onClick={handleDelete} destructive />
+          <RowAction className={styles.nodeActionBtn} icon={<EditIcon />} label={LABELS.rowActions.edit} onClick={() => openEditNoteTag(tag.id)} />
+          <RowAction className={styles.nodeActionBtn} {...pin} />
+          <RowAction className={`${styles.nodeActionBtn} ${styles.nodeActionDelete}`} icon={<TrashIcon width="1em" height="1em" />} label={LABELS.rowActions.delete} onClick={handleDelete} destructive />
         </RowOptionsMenu>
         <button
           className={styles.nodeContent}

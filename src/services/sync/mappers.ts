@@ -9,6 +9,7 @@ import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/por
 import type { TrashEntry, TrashEntryId, TrashableKind, DeletedBy } from '@/types/trash';
 import type { Overview } from '@/types/overview';
 import type { Picture } from '@/types/pictures';
+import type { PinnedItem } from '@/store/pinnedItemsStore';
 
 // ── Task ────────────────────────────────────────────────────────
 
@@ -622,7 +623,6 @@ export function noteToRow(n: Note, userId: string) {
     tag_ids:         n.tagIds ?? [],
     tag_data:        n.tagData ?? {},
     color:           n.color ?? null,
-    pinned:          n.pinned,
     abstract:        n.abstract ?? null,
     main_tab_updated_at: n.mainTabUpdatedAt ?? null,
     parent_id:       n.parentId ?? null,
@@ -651,7 +651,6 @@ export function rowToNote(r: Record<string, any>): Note {
     tagIds:       r.tag_ids  ?? [],
     tagData:      r.tag_data ?? {},
     color:        r.color    ?? null,
-    pinned:       r.pinned   ?? false,
     abstract:     r.abstract ?? null,
     mainTabUpdatedAt: r.main_tab_updated_at ?? null,
     parentId:     r.parent_id ?? null,
@@ -891,5 +890,32 @@ export function rowToPicture(r: Record<string, any>): Picture {
     origin:           r.origin ?? 'backdrop',
     createdAt:        r.created_at,
     updatedAt:        r.updated_at,
+  };
+}
+
+// ── Quick Access pins ───────────────────────────────────────────
+
+export function pinToRow(p: PinnedItem, userId: string) {
+  return {
+    id:         p.id,
+    user_id:    userId,
+    type:       p.type,
+    entity_id:  p.entityId,
+    sort_order: p.order,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+    deleted_at: null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToPin(r: Record<string, any>): PinnedItem {
+  return {
+    id:        r.id,
+    type:      r.type,
+    entityId:  r.entity_id,
+    order:     r.sort_order ?? 0,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }

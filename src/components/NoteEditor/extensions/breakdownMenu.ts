@@ -1,8 +1,10 @@
+import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { BREAKDOWN_DESIGNS, addPart, breakdownPosAt, canDeletePart, deletePart, setBreakdownSettings } from './Breakdown';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
+import { PaletteIcon, TrashIcon } from '@/components/Icons';
 
 // Right-click in a breakdown: its design, colours, frame, and (on a part) deleting that part.
 registerContextMenuProvider({
@@ -21,7 +23,7 @@ registerContextMenuProvider({
       designMenuItem(BREAKDOWN_DESIGNS, node.attrs.variant, (v) => setBreakdownSettings(view, pos, { variant: v })),
       frameMenuItem(view, pos, node.attrs),
       {
-        id: 'bd-colours', label: C.colourTitle(C.colours[node.attrs.colours as 'accent' | 'spectrum']).split('.')[0], icon: '◐',
+        id: 'bd-colours', label: C.colourTitle(C.colours[node.attrs.colours as 'accent' | 'spectrum']).split('.')[0], icon: createElement(PaletteIcon),
         submenu: [(['accent', 'spectrum'] as const).map((c) => ({ id: `colours-${c}`, label: C.colours[c], icon: node.attrs.colours === c ? '✓' : undefined, run: () => setBreakdownSettings(view, pos, { colours: c }) }))],
       },
       { id: 'bd-add', label: L.addPart, icon: '+', run: () => addPart(view, pos) },
@@ -31,7 +33,7 @@ registerContextMenuProvider({
     try { if (partEl) pp = view.posAtDOM(partEl, 0) - 1; } catch { pp = null; }
     if (pp !== null && view.state.doc.nodeAt(pp)?.type.name === 'breakdownPart') {
       const at = pp;
-      items.push({ id: 'bd-delete', label: L.deletePart, icon: '×', disabled: !canDeletePart(view.state, at), run: () => { deletePart(view, at); } });
+      items.push({ id: 'bd-delete', label: L.deletePart, icon: createElement(TrashIcon, { width: '1em', height: '1em' }), disabled: !canDeletePart(view.state, at), run: () => { deletePart(view, at); } });
     }
     return items;
   },

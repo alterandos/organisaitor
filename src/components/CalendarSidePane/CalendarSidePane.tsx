@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useCalendarStore } from '@/store/calendarStore';
-import { ArchiveIcon, DisclosureIcon } from '@/components/Icons';
+import { ArchiveIcon, CloseIcon, DisclosureIcon } from '@/components/Icons';
 import { useUIStore, type CalendarViewMode } from '@/store/uiStore';
 import { useSettingsStore, type CalendarLayerKey } from '@/store/settingsStore';
 import { useAuthStore } from '@/store/authStore';
@@ -382,7 +382,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <div className={styles.header}>
           <span className={styles.heading}>Calendar</span>
-          <button className={styles.closeBtn} onClick={close} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={close} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <div className={styles.body}>

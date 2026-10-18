@@ -12,6 +12,7 @@ import type { NoteId } from '@/types/notes';
 import { createNoteForItem, type NotePlace } from '@/services/noteFromItem';
 import { showToast } from '@/components/Toast/showToast';
 import styles from './CrossAppRefPicker.module.css';
+import { UnlinkIcon } from '@/components/Icons';
 
 interface Props {
   value:    CrossAppRef[];
@@ -89,7 +90,7 @@ export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom, ty
               )}
               {tabName && <span className={styles.chipTab}>› {tabName}</span>}
               {path && <span className={styles.chipPath}>{path.split(' > ').pop()}</span>}
-              <button type="button" className={styles.chipRemove} onClick={() => removeRef(ref)} aria-label="Remove link">×</button>
+              <button type="button" className={styles.chipRemove} onClick={() => removeRef(ref)} aria-label="Remove link"><UnlinkIcon /></button>
             </span>
           );
         })}

@@ -8,6 +8,7 @@ import { TaskPickerModal } from '@/components/TaskPickerModal/TaskPickerModal';
 import { taskRelations, isResolved, hierarchyIds, type TaskRelation } from '@/utils/taskLinks';
 import type { ItemLinkKind, Task, TaskId } from '@/types';
 import styles from './TaskLinks.module.css';
+import { UnlinkIcon } from '@/components/Icons';
 
 const L = LABELS.taskLinks;
 const relKey = (r: TaskRelation) => `${r.kind}:${r.ownerId}:${r.targetId}`;
@@ -80,7 +81,7 @@ export function TaskLinksField({ task }: { task: Task }) {
                   onClick={() => removeItemLink(r.ownerId, r.kind, r.targetId)}
                   aria-label={L.removeLink}
                   title={L.removeLink}
-                >×</button>
+                ><UnlinkIcon /></button>
               </li>
             ))}
           </ul>

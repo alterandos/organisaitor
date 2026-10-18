@@ -12,6 +12,7 @@ import {
   blockFrameAttributes, blockPill, designButtons, frameButtons, openBlockPopover, pillButton, popoverClass as pop,
   replaceTypedWithBlock, selectButton, type BlockDesign,
 } from './blockDesigns';
+import { createGlyph } from '@/components/Icons';
 
 // An inbox in a note (`\inbox`): somewhere to send passages from any note to take further — the
 // "dumping ground". Passages arrive through Send to inbox (services/noteInbox.ts), or are typed in.
@@ -122,7 +123,7 @@ export const MovedStub = Node.create({
       remove.setAttribute('data-stub-remove', '');
       remove.title = LABELS.sendToInbox.stubRemove;
       remove.setAttribute('aria-label', LABELS.sendToInbox.stubRemove);
-      remove.textContent = '×';
+      remove.append(createGlyph('close'));
       remove.addEventListener('mousedown', (e) => e.preventDefault());
       remove.addEventListener('click', (e) => {
         e.preventDefault();

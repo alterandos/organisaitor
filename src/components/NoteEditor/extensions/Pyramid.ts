@@ -4,6 +4,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
+import { createGlyph } from '@/components/Icons';
 
 // A pyramid in a note (`\pyramid`): layers that build on each other, the first at the top —
 // Maslow's needs, the food chain, a funnel from awareness to purchase. At least two layers.
@@ -260,7 +261,7 @@ function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLE
   b.setAttribute('data-py-delete', '');
   b.title = LABELS.noteBlocks.pyramid.deleteLayer;
   b.setAttribute('aria-label', LABELS.noteBlocks.pyramid.deleteLayer);
-  b.textContent = '×';
+  b.append(createGlyph('trash'));
   b.addEventListener('mousedown', (e) => e.preventDefault());
   b.addEventListener('click', (e) => {
     e.preventDefault();

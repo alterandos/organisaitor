@@ -1,8 +1,10 @@
+import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { ARROW_DIRECTIONS, CYCLE_DESIGNS, ICON_SHAPES, ICON_SIZES, addStage, canDeleteStage, cyclePosAt, deleteStage, reverseCycle, setCycleSettings, setStageAttrs } from './Cycle';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
+import { PaletteIcon, TrashIcon } from '@/components/Icons';
 
 // Right-click in a cycle: its design and options (as the pill at its top right), and, on a stage,
 // that stage's arrow.
@@ -23,7 +25,7 @@ registerContextMenuProvider({
       frameMenuItem(view, pos, node.attrs),
       { id: 'cycle-numbered', label: node.attrs.numbered ? L.unnumbered : L.numbered, icon: '#', run: () => setCycleSettings(view, pos, { numbered: !node.attrs.numbered }) },
       {
-        id: 'cycle-colours', label: L.colourTitle(L.colours[node.attrs.colours as 'accent' | 'spectrum']).split('.')[0], icon: '◐',
+        id: 'cycle-colours', label: L.colourTitle(L.colours[node.attrs.colours as 'accent' | 'spectrum']).split('.')[0], icon: createElement(PaletteIcon),
         submenu: [(['accent', 'spectrum'] as const).map((c) => ({ id: `colours-${c}`, label: L.colours[c], icon: tick(node.attrs.colours === c), run: () => setCycleSettings(view, pos, { colours: c }) }))],
       },
       { id: 'cycle-reverse', label: L.reverse, icon: '⇄', run: () => reverseCycle(view, pos) },
@@ -47,7 +49,7 @@ registerContextMenuProvider({
         id: 'cycle-arrow', label: L.arrowTitle, icon: '→',
         submenu: [ARROW_DIRECTIONS.map((d) => ({ id: `arrow-${d}`, label: L.arrowDirections[d], icon: tick(stage.attrs.arrow === d), run: () => setStageAttrs(view, sp, { arrow: d }) }))],
       });
-      items.push({ id: 'cycle-delete-stage', label: L.deleteStage, icon: '×', disabled: !canDeleteStage(view.state, sp), run: () => { deleteStage(view, sp); } });
+      items.push({ id: 'cycle-delete-stage', label: L.deleteStage, icon: createElement(TrashIcon, { width: '1em', height: '1em' }), disabled: !canDeleteStage(view.state, sp), run: () => { deleteStage(view, sp); } });
     }
     return items;
   },

@@ -1,8 +1,10 @@
+import { createElement } from 'react';
 import type { Editor } from '@tiptap/react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import type { ContextMenuScope } from '@/contextMenu/types';
 import { LABELS } from '@/config/labels';
 import { setNormalText } from './extensions/normalText';
+import { LinkIcon } from '@/components/Icons';
 
 // The Notes editor's right-click menu. NoteEditor declares a `note-editor` scope on the editing
 // surface whose data is this API (the actions only it can perform); the providers below turn it
@@ -48,7 +50,7 @@ registerContextMenuProvider({
   items: (_ctx, scope) => {
     const { editor, openLink, openCreate } = api(scope);
     return [
-      { id: 'link', label: LABELS.contextMenu.link, icon: '🔗', shortcut: 'Ctrl+L', run: openLink },
+      { id: 'link', label: LABELS.contextMenu.link, icon: createElement(LinkIcon), shortcut: 'Ctrl+L', run: openLink },
       { id: 'create', label: LABELS.contextMenu.createFrom, icon: '🧩', shortcut: 'Ctrl+Q', disabled: editor.state.selection.empty, run: openCreate },
     ];
   },

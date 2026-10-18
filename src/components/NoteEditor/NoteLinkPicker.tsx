@@ -13,6 +13,7 @@ import { EMBED_ICON, NOTE_LINK_ICON } from '@/config/itemIcons';
 import type { NoteId } from '@/types';
 import styles from '@/components/NotePickerModal/NotePickerModal.module.css';
 import own from './NoteLinkPicker.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 export interface PickedLink {
   noteId:  string;
@@ -129,7 +130,7 @@ function PassageStep({ purpose, schema, noteId, tabId, onPick, onBack, onClose }
         <div className={styles.header}>
           <button type="button" className={own.back} onClick={onBack} aria-label={LABELS.mobileNotes.back}>‹</button>
           <span className={styles.title}>{purpose === 'embed' ? EMBED_ICON : NOTE_LINK_ICON} {heading} <span className={own.noteName}>{title}</span></span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
         </div>
         <input
           autoFocus

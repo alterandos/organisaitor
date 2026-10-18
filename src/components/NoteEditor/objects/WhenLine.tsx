@@ -7,6 +7,7 @@ import { usePaneState } from './paneState';
 import { LABELS } from '@/config/labels';
 import type { ArtifactSummary, ArtifactTypeDef } from './artifactTypes';
 import styles from './ObjectBody.module.css';
+import { OpenIcon } from '@/components/Icons';
 
 interface Props {
   def:        ArtifactTypeDef;
@@ -93,7 +94,7 @@ function OccurrenceList({ def, id, targetType, onClose }: { def: ArtifactTypeDef
           {o.current && <span className={styles.occurrenceNext}>{L.nextOne}</span>}
         </div>
       ))}
-      <button type="button" className={styles.occurrencesSeries} onClick={() => { openArtifactTarget(targetType, id); onClose(); }}>{L.openSeries} ↗</button>
+      <button type="button" className={styles.occurrencesSeries} onClick={() => { openArtifactTarget(targetType, id); onClose(); }}>{L.openSeries} <OpenIcon /></button>
     </div>
   );
 }

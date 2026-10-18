@@ -20,7 +20,7 @@ import { RowAction } from '@/components/RowHoverActions/RowAction';
 import type { CollectionId } from '@/types';
 import type { Overview, OverviewId, OverviewQuery, OverviewRow } from '@/types/overview';
 import styles from './OverviewSection.module.css';
-import { DisclosureIcon } from '@/components/Icons';
+import { DisclosureIcon, EditIcon, TrashIcon } from '@/components/Icons';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
@@ -48,10 +48,10 @@ function SavedRow({ overview, active }: { overview: Overview; active: boolean })
   return (
     <div ref={rowRef} className={`${styles.navItem} ${active ? styles.navItemActive : ''}`}>
       <RowOptionsMenu rowRef={rowRef} title={overview.name} icon={<span className={styles.navIcon}>{overview.icon ?? '📊'}</span>}>
-        <RowAction className={styles.actionBtn} icon="✎" label={L.edit} onClick={() => openEdit(overview.id)} />
+        <RowAction className={styles.actionBtn} icon={<EditIcon />} label={L.edit} onClick={() => openEdit(overview.id)} />
         <RowAction
           className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
-          icon="✕"
+          icon={<TrashIcon width="1em" height="1em" />}
           label={LABELS.rowActions.delete}
           destructive
           onClick={async () => {
@@ -83,8 +83,7 @@ function RowView({ row, showEndeavour, today }: { row: OverviewRow; showEndeavou
         )}
       </span>
       <button className={styles.rowOpen} onClick={() => openOverviewRow(row)}>
-        {/* A task's kind icon is a ticked box: beside the tick box it would read as a second one. */}
-        <span className={styles.cellIcon} title={source.label}>{row.source === 'task' && canTickDone(row) ? null : source.icon}</span>
+        <span className={styles.cellIcon} title={source.label}>{source.icon}</span>
         <span className={styles.cellWhat}>
           <span className={styles.title}>{row.title}</span>
           {row.context && <span className={styles.context}>{row.context}</span>}

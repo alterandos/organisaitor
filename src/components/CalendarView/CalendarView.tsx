@@ -27,6 +27,7 @@ import { ITEM_FLAG_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import styles from './CalendarView.module.css';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { CloseIcon } from '@/components/Icons';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1575,7 +1576,7 @@ export function CalendarView() {
                 <span className={styles.dayPaneTitle}>
                   {new Date(dayPaneDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </span>
-                <button className={styles.dayPaneClose} onClick={() => setDayPaneDate(null)}>×</button>
+                <button className={styles.dayPaneClose} onClick={() => setDayPaneDate(null)} aria-label="Close"><CloseIcon /></button>
               </header>
               <div className={styles.dayPaneBody}>
                 {(itemsByDate.get(dayPaneDate) ?? []).map((item) => {

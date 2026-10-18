@@ -1,9 +1,11 @@
+import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import { STACKABLE, normalizeChart, type ChartKind, type ChartStacking } from '@/charts/chartSpec';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { CHART_DESIGNS, chartPosAt, openChartData, setChartSettings, setChartStacking } from './Chart';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
+import { TableIcon } from '@/components/Icons';
 
 // Right-click on a chart: its type, stacking, frame, and its data (the table, or paste a table).
 registerContextMenuProvider({
@@ -22,7 +24,7 @@ registerContextMenuProvider({
     const items = [
       designMenuItem(CHART_DESIGNS, node.attrs.variant as ChartKind, (v) => setChartSettings(view, pos, { variant: v })),
       frameMenuItem(view, pos, node.attrs),
-      { id: 'chart-data', label: L.editData, icon: '▦', run: () => openChartData(view, pos) },
+      { id: 'chart-data', label: L.editData, icon: createElement(TableIcon, { width: '1em', height: '1em' }), run: () => openChartData(view, pos) },
       { id: 'chart-paste', label: C.paste, icon: '⎘', run: () => openChartData(view, pos, true) },
     ];
     if (STACKABLE.has(node.attrs.variant as ChartKind) && spec.series.length > 1) {

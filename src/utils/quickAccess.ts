@@ -19,6 +19,7 @@ import { useListStore } from '@/store/listStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore, type QuickAccessTargetType, type RecentItemEntry } from '@/store/recentItemsStore';
+import type { PinnedItem } from '@/store/pinnedItemsStore';
 import { getNotebookIcon, getNoteBreadcrumb } from '@/utils/notes';
 import { LABELS } from '@/config/labels';
 import { noteView } from '@/services/noteSecrets';
@@ -317,4 +318,20 @@ export function placesByUse(entries: Record<string, RecentItemEntry>): Place[] {
   return PLACES.map((p, i) => ({ p, i, n: uses(p) }))
     .sort((a, b) => b.n - a.n || a.i - b.i)
     .map(({ p }) => p);
+}
+
+// One item as it is now, from its type and id (a pin's title follows a rename); null when it's
+// gone, archived or locked.
+export function resolveQuickAccessItem(type: QuickAccessTargetType, entityId: string): QuickAccessItem | null {
+  return providerByType[type]?.resolve(entityId) ?? null;
+}
+
+// The pinned items in the person's order. A pin whose item is gone (deleted, archived, a locked
+// term) is skipped, not removed, so it comes back with the item (a restore from the Recycling Bin,
+// unarchiving, unlocking).
+export function resolvePinnedItems(pins: Record<string, PinnedItem>): QuickAccessItem[] {
+  return Object.values(pins)
+    .sort((a, b) => a.order - b.order)
+    .map((p) => resolveQuickAccessItem(p.type, p.entityId))
+    .filter((i): i is QuickAccessItem => i !== null);
 }

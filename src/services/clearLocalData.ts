@@ -10,6 +10,7 @@ import { useTrashStore } from '@/store/trashStore';
 import { useListStore } from '@/store/listStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
+import { usePinnedItemsStore } from '@/store/pinnedItemsStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import { useUIStore } from '@/store/uiStore';
 import { useAgentLogStore } from '@/store/agentLogStore';
@@ -40,6 +41,7 @@ export function clearSyncedLocalData(): void {
   useTrackerStore.setState({ entries: useTrackerStore.getInitialState().entries });
   useScheduleStore.setState({ schedules: useScheduleStore.getInitialState().schedules });
   useOverviewStore.setState({ overviews: useOverviewStore.getInitialState().overviews });
+  usePinnedItemsStore.setState({ pins: usePinnedItemsStore.getInitialState().pins });
 
   const note = useNoteStore.getInitialState();
   useNoteStore.setState({ notes: note.notes, noteTags: note.noteTags, structuredTagEntries: note.structuredTagEntries });

@@ -4,6 +4,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
+import { createGlyph } from '@/components/Icons';
 
 // A breakdown in a note (`\breakdown`): a whole and the parts it's made of — the pillars of
 // democracy, the elements of a strategy, what makes a good habit. At least two parts.
@@ -288,7 +289,7 @@ function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLE
   b.setAttribute('data-bd-delete', '');
   b.title = LABELS.noteBlocks.breakdown.deletePart;
   b.setAttribute('aria-label', LABELS.noteBlocks.breakdown.deletePart);
-  b.textContent = '×';
+  b.append(createGlyph('trash'));
   b.addEventListener('mousedown', (e) => e.preventDefault());
   b.addEventListener('click', (e) => {
     e.preventDefault();

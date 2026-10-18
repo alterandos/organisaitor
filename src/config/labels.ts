@@ -13,6 +13,29 @@ export const LABELS = {
   noneInCollection: (things: string) => `No ${things} in this ${COLLECTION}`,
   quickAccessPlaceholder: `Jump to a note, task, list, term, place or ${COLLECTION}…`,
   quickAccessScheduleHidden: 'Hidden',
+  // The overlay's two tabs: Quick Access (pins and Places, Q) and Go to (search and history, Ctrl+G).
+  quickAccess: {
+    title:       'Quick Access',
+    goTo:        'Go to',
+    open:        'Quick Access (Q)',
+    tabs:        'Quick Access or Go to',
+    pinned:      'Pinned',
+    pin:         'Pin to Quick Access',
+    unpin:       'Unpin from Quick Access',
+    pinnedToast: (name: string) => `Pinned “${name}” to Quick Access`,
+    unpinnedToast: (name: string) => `Unpinned “${name}”`,
+    undo:        'Undo',
+    noPins:      'Nothing pinned yet. Pin a note, notebook, list, tracker, routine, place or term with its pin button or right-click menu.',
+    noRecent:    'Nothing visited yet — items you open will show up here',
+    noMatches:   'No matches',
+    recent:      'Recent',
+    frequent:    'Frequent',
+    show:        'Show',
+    moveUp:      'Move up',
+    moveDown:    'Move down',
+    footerPinned: '↑↓ choose · Alt+↑↓ reorder · Enter open · Alt+G Go to · Esc close',
+    footerGoTo:   '↑↓ choose · Enter open · Alt+Q Quick Access · Esc close',
+  },
   // The Places row of Quick Access (config/places.ts). Glossary, Review, History and the Recycling
   // Bin take their names from their own labels.
   places: {
@@ -250,7 +273,7 @@ export const LABELS = {
       removeLink:       'Remove this link',
       addEndeavour:     '+ ' + COLLECTION,
       changeEndeavour:  'Change the ' + COLLECTION.toLowerCase(),
-      noBody:           'Open ↗ to see everything about it.',
+      noBody:           'Open it to see everything about it.',
       // Options that are off show greyed; a click turns them on.
       turnOn:           (label: string) => `Turn on: ${label}`,
       repeatHow:        'Repeat how often?',

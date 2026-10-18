@@ -13,7 +13,7 @@ import { ViewBar } from '../ViewBar';
 import { NoteLevel } from '../NoteLevel';
 import { moveFocusInGrid } from '../gridFocus';
 import { atlasLayout, type AtlasBlob } from './atlasLayout';
-import { BlobLabelNode, BlobNode, DividerNode, ItemNode, LinkEdge, NoteNode, type BlobData, type ItemData, type LinkData, type NoteData } from './MapNodes';
+import { BlobLabelNode, BlobNode, ItemNode, LinkEdge, NoteNode, type BlobData, type ItemData, type LinkData, type NoteData } from './MapNodes';
 import { LINKS_ZOOM, standInLinks } from './mapLinks';
 import { blobShown, noteStandIn, openBlobs } from './mapDetail';
 import { MapHover } from './mapHover';
@@ -27,7 +27,7 @@ import styles from './Map.module.css';
 // goes into it (the shared "where you are", so the Tree and the Mosaic follow); clicking a note
 // opens it (NoteLevel). Built on the browse model (CLAUDE.md "Notes views").
 
-const NODE_TYPES = { blob: BlobNode, label: BlobLabelNode, note: NoteNode, item: ItemNode, divider: DividerNode };
+const NODE_TYPES = { blob: BlobNode, label: BlobLabelNode, note: NoteNode, item: ItemNode };
 const EDGE_TYPES = { link: LinkEdge };
 const FIT = { padding: 0.12, duration: 400 };
 const ITEM_R = 11;
@@ -84,10 +84,6 @@ function MapCanvas() {
       };
       nodes.push({ id: `blob:${bl.id}`, type: 'blob', position: { x: bl.x - bl.r, y: bl.y - bl.r }, zIndex: bl.depth, draggable: false, selectable: false, focusable: false, data });
       nodes.push({ id: `label:${bl.id}`, type: 'label', position: { x: bl.x, y: bl.y - bl.r }, zIndex: 300, draggable: false, selectable: false, focusable: false, data });
-    }
-    if (atlas.divider) {
-      const d = atlas.divider;
-      nodes.push({ id: 'divider', type: 'divider', position: { x: d.x1, y: d.y }, zIndex: 0, draggable: false, selectable: false, focusable: false, data: { width: d.x2 - d.x1 } });
     }
     const visibleNotes = new Set<string>();
     for (const n of atlas.notes) {

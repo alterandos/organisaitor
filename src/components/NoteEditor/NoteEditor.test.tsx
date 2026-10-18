@@ -5,7 +5,7 @@
 // note's MAIN content into the editor, so the next save — a tab click, typing, leaving — wrote
 // Main's content over that tab. The editor must always show the content of the tab it marks active.
 import '@testing-library/jest-dom/vitest';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StrictMode } from 'react';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -21,7 +21,7 @@ function makeNote(id: string, content: string, tabs: Note['tabs'] = []): Note {
   return {
     id: id as NoteId, title: id, content, tagIds: [], tagData: {}, createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z', abstract: null, mainTabUpdatedAt: null, lastViewedAt: null, archivedAt: null, color: null,
-    pinned: false, userId: '', parentId: null, tabs, mainTabName: 'Main', tabOrder: [], templateId: null,
+    userId: '', parentId: null, tabs, mainTabName: 'Main', tabOrder: [], templateId: null,
     collectionId: null, isEncrypted: false, encryptedPayload: null,
   };
 }
@@ -324,5 +324,24 @@ describe('NoteEditor keys added 2026-10-07', () => {
       keyInEditor({ key: 'h', ctrlKey: true });
       expect(blocks()).toEqual(['noteTitle', 'paragraph', 'paragraph']);
     });
+  });
+});
+
+describe('NoteEditor: the abstract', () => {
+  it('Ctrl+` from the abstract goes back to the nav columns, and stops there (2026-10-18)', async () => {
+    useNoteStore.setState((s) => ({ notes: { ...s.notes, ['note-a' as NoteId]: { ...s.notes['note-a' as NoteId], abstract: 'Short.' } } }));
+    useUIStore.setState({ activeView: 'notes', editingNoteId: 'note-a' });
+    const onNavReturn = vi.fn();
+    const onDocument = vi.fn();
+    document.addEventListener('keydown', onDocument);
+    render(<NoteEditor onNavReturn={onNavReturn} />);
+    const abstract = screen.getByPlaceholderText('Brief summary of this note…');
+    abstract.focus();
+    await userEvent.keyboard('{Control>}`{/Control}');
+    document.removeEventListener('keydown', onDocument);
+    expect(onNavReturn).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).not.toBe(abstract);
+    // The Notes columns' own Ctrl+` listens on the document: it must not also act.
+    expect(onDocument.mock.calls.filter(([e]) => (e as KeyboardEvent).key === '`')).toEqual([]);
   });
 });

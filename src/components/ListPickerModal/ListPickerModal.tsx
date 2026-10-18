@@ -8,6 +8,7 @@ import { rankSearch, rankSuggestions, type RankField } from '@/utils/suggestRank
 import type { List } from '@/types/lists';
 // Same look as the note picker, so the two "link a …" dialogs read as one family.
 import styles from '@/components/NotePickerModal/NotePickerModal.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 interface Props {
   excludeIds: ReadonlySet<string>;
@@ -96,7 +97,7 @@ export function ListPickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
       <div className={styles.modal} role="dialog" aria-label={LABELS.listLinks.pickerTitle}>
         <div className={styles.header}>
           <span className={styles.title}>📋 {LABELS.listLinks.pickerTitle}</span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <input

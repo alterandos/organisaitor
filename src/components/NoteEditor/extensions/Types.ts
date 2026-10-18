@@ -5,6 +5,7 @@ import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign, replaceTypedWithBlock } from './blockDesigns';
 import { iconSlot, type BlockIcon } from './blockIcons';
+import { createGlyph } from '@/components/Icons';
 
 // The types of something (`\types`): a category and its kinds — the types of bird, of rock, of
 // contract. An "is a kind of" relation, unlike the breakdown's "is part of" (asked for
@@ -276,7 +277,7 @@ function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLE
   b.setAttribute('data-ty-delete', '');
   b.title = LABELS.noteBlocks.types.deleteType;
   b.setAttribute('aria-label', LABELS.noteBlocks.types.deleteType);
-  b.textContent = '×';
+  b.append(createGlyph('trash'));
   b.addEventListener('mousedown', (e) => e.preventDefault());
   b.addEventListener('click', (e) => {
     e.preventDefault();

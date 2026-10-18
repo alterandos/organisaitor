@@ -22,7 +22,7 @@ import type { CollectionId } from '@/types';
 import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
 import styles from './AddCalendarItemModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { DisclosureIcon } from '@/components/Icons';
+import { CloseIcon, DisclosureIcon } from '@/components/Icons';
 
 function todayStr(): string {
   return todayIsoInZone(resolveTimezone(useSettingsStore.getState().timezone));
@@ -207,7 +207,7 @@ export function AddCalendarItemModal() {
       <div className={styles.modal}>
         <div className={styles.header}>
           <span className={styles.title}>New {LABELS.calendarItemKind[kind]}</span>
-          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close"><CloseIcon /></button>
         </div>
 
         {/* Type toggle */}

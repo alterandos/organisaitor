@@ -23,7 +23,7 @@ import {
   watchlistItemToRow, rowToWatchlistItem,
   portfolioTagToRow, rowToPortfolioTag,
   investmentPurposeToRow, rowToInvestmentPurpose,
-  trashEntryToRow, overviewToRow, rowToOverview, rowToTrashEntry,
+  trashEntryToRow, overviewToRow, rowToOverview, rowToTrashEntry, pinToRow, rowToPin,
   pictureToRow, rowToPicture,
 } from '@/services/sync/mappers';
 import type {
@@ -35,6 +35,7 @@ import type { Note, NoteTag, StructuredTagEntry, NoteId, NoteTagId, StructuredTa
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose, WatchlistItemId, PortfolioTagId, InvestmentPurposeId } from '@/types/portfolio';
 import type { TrashEntry, TrashEntryId } from '@/types/trash';
 import type { Overview, OverviewId } from '@/types/overview';
+import type { PinnedItem } from '@/store/pinnedItemsStore';
 import type { Picture, PictureId } from '@/types/pictures';
 
 const USER = 'user-1';
@@ -145,6 +146,11 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     expect(rowToOverview(overviewToRow(o, USER))).toEqual(o);
   });
 
+  it('Quick Access pin', () => {
+    const p: PinnedItem = { id: 'place:review', type: 'place', entityId: 'review', order: 3, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-02T00:00:00.000Z' };
+    expect(rowToPin(pinToRow(p, USER))).toEqual(p);
+  });
+
   it('List', () => {
     const l: List = {
       id: 'l1' as ListId, name: 'Movies', description: null, typeId: 'lt-movies' as never, kind: 'watchlist',
@@ -178,7 +184,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     const n: Note = {
       id: 'n1' as NoteId, title: 'Notes on X', content: '{"type":"doc"}', tagIds: ['nt1' as NoteTagId],
       tagData: { nt1: { field1: 'v' } }, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
-      abstract: 'summary', mainTabUpdatedAt: '2030-01-03T00:00:00.000Z', lastViewedAt: '2030-01-02T00:00:00.000Z', archivedAt: null, color: '#f00', pinned: true,
+      abstract: 'summary', mainTabUpdatedAt: '2030-01-03T00:00:00.000Z', lastViewedAt: '2030-01-02T00:00:00.000Z', archivedAt: null, color: '#f00',
       userId: USER, parentId: null, tabs: [{ id: 'tab1', name: 'Extra', content: '{}', createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-04T00:00:00.000Z' }], mainTabName: 'Main',
       tabOrder: ['__main__', 'tab1'], templateId: null, collectionId: null, isEncrypted: false, encryptedPayload: null,
       backdrop: { kind: 'picture', pictureId: 'p1' as PictureId },

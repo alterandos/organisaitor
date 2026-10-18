@@ -17,6 +17,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useHoverOpen } from '@/hooks/useHoverOpen';
 import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import styles from './NotificationCenter.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 // ── Bell icon ─────────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ function NotificationCard({ n }: { n: PendingNotification }) {
           className={styles.dismissBtn}
           onClick={calendarKind || legacyTask ? gotIt : close}
           title={n.kind === 'reminder' ? C.gotItReminder : C.gotItHint}
-        >✕</button>
+        ><CloseIcon /></button>
       </div>
 
       {mode === 'idle' && (

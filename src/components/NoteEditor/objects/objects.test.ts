@@ -748,12 +748,13 @@ describe('the pane, fifth round', () => {
     expect(linkMarks()[0].display).toBe('basic');
   });
 
-  it('↗ and the chevron sit together, so an expanded pane can right-align them', () => {
+  it('Open and the chevron sit together, so an expanded pane can right-align them', () => {
     const id = useCalendarStore.getState().addReminder({ title: 'Call mum', date: '2026-10-07' });
     make(`<p><mark data-artifact-id="${id}" data-artifact-type="reminder">Call mum</mark></p>`);
     const open = editor.view.dom.querySelector('[data-artifact-part="tail"] [title="Open"]')!;
-    expect(open.parentElement!.textContent).toBe('↗');
-    expect(open.parentElement!.querySelector('svg')).not.toBeNull();
+    // Open is the shared open icon (an svg), beside the chevron (another).
+    expect(open.querySelector('svg')).not.toBeNull();
+    expect(open.parentElement!.querySelectorAll('svg').length).toBe(2);
   });
 });
 

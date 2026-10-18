@@ -12,6 +12,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 import { BackdropField } from '@/components/NoteEditor/NoteBackdrop';
+import { CloseIcon, ColorDotIcon, TrashIcon } from '@/components/Icons';
 
 const FIELD_TYPES: { value: NoteTagFieldType; label: string }[] = [
   { value: 'text',    label: 'Text'   },
@@ -77,7 +78,7 @@ export function EditNoteTagModal() {
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h2>{title}</h2>
-          <button className={styles.closeBtn} onClick={closeEditNoteTag}>×</button>
+          <button className={styles.closeBtn} onClick={closeEditNoteTag} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <div className={styles.body}>
@@ -125,7 +126,7 @@ export function EditNoteTagModal() {
                   className={`${styles.swatch} ${styles.swatchNone} ${!color ? styles.swatchActive : ''}`}
                   onClick={() => setColor(null)}
                   title="None"
-                >✕</button>
+                ><ColorDotIcon color={null} /></button>
                 {SWATCH_HEXES.map((c) => (
                   <button
                     key={c}
@@ -191,7 +192,7 @@ export function EditNoteTagModal() {
                         <option key={ft.value} value={ft.value}>{ft.label}</option>
                       ))}
                     </select>
-                    <button className={styles.removeFieldBtn} onClick={() => removeField(f.id)} title="Remove">×</button>
+                    <button className={styles.removeFieldBtn} onClick={() => removeField(f.id)} title="Remove"><TrashIcon width="1em" height="1em" /></button>
                   </div>
                 ))
               )}

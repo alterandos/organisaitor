@@ -18,6 +18,7 @@ import { LABELS } from '@/config/labels';
 import { log } from '@/utils/log';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { CloseIcon } from '@/components/Icons';
 
 type ImportStatus = 'idle' | 'success' | 'error';
 
@@ -120,13 +121,13 @@ function CalendarImportCard() {
             {imported > 0
               ? `${imported} event${imported !== 1 ? 's' : ''} imported${skipped > 0 ? `, ${skipped} left out` : ''}`
               : 'No events imported'}
-            <button className={styles.statusDismiss} onClick={reset}>✕</button>
+            <button className={styles.statusDismiss} onClick={reset} aria-label="Dismiss"><CloseIcon /></button>
           </div>
         )}
         {status === 'error' && (
           <div className={`${styles.statusMsg} ${styles.statusError}`}>
             {errorMsg}
-            <button className={styles.statusDismiss} onClick={reset}>✕</button>
+            <button className={styles.statusDismiss} onClick={reset} aria-label="Dismiss"><CloseIcon /></button>
           </div>
         )}
       </div>
@@ -197,13 +198,13 @@ function ExportCard() {
         {status === 'success' && (
           <div className={`${styles.statusMsg} ${styles.statusSuccess}`}>
             Backup downloaded.
-            <button className={styles.statusDismiss} onClick={reset}>✕</button>
+            <button className={styles.statusDismiss} onClick={reset} aria-label="Dismiss"><CloseIcon /></button>
           </div>
         )}
         {status === 'error' && (
           <div className={`${styles.statusMsg} ${styles.statusError}`}>
             {errorMsg}
-            <button className={styles.statusDismiss} onClick={reset}>✕</button>
+            <button className={styles.statusDismiss} onClick={reset} aria-label="Dismiss"><CloseIcon /></button>
           </div>
         )}
       </div>
@@ -277,13 +278,13 @@ function SnapshotExportCard() {
         {status === 'success' && (
           <div className={`${styles.statusMsg} ${styles.statusSuccess}`}>
             Snapshot downloaded.
-            <button className={styles.statusDismiss} onClick={reset}>✕</button>
+            <button className={styles.statusDismiss} onClick={reset} aria-label="Dismiss"><CloseIcon /></button>
           </div>
         )}
         {status === 'error' && (
           <div className={`${styles.statusMsg} ${styles.statusError}`}>
             {errorMsg}
-            <button className={styles.statusDismiss} onClick={reset}>✕</button>
+            <button className={styles.statusDismiss} onClick={reset} aria-label="Dismiss"><CloseIcon /></button>
           </div>
         )}
       </div>
@@ -357,7 +358,7 @@ function RestoreCard() {
         {status === 'error' && (
           <div className={`${styles.statusMsg} ${styles.statusError}`}>
             {errorMsg}
-            <button className={styles.statusDismiss} onClick={reset}>✕</button>
+            <button className={styles.statusDismiss} onClick={reset} aria-label="Dismiss"><CloseIcon /></button>
           </div>
         )}
       </div>
@@ -395,7 +396,7 @@ export function IntegrationsPane() {
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>Data &amp; Integrations</span>
-          <button className={styles.closeBtn} onClick={closeIntegrations} aria-label="Close">×</button>
+          <button className={styles.closeBtn} onClick={closeIntegrations} aria-label="Close"><CloseIcon /></button>
         </header>
 
         <div className={styles.body}>

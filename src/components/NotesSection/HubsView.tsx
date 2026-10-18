@@ -9,7 +9,7 @@ import { rankSearch } from '@/utils/suggestRank';
 import { noteName } from '@/utils/notes';
 import { RELATIONS, type HubRef } from '@/utils/noteHubs';
 import { LABELS } from '@/config/labels';
-import { HubIcon } from '@/components/Icons';
+import { CloseIcon, HubIcon } from '@/components/Icons';
 import styles from './HubsView.module.css';
 
 // Every idea hub across Notes (services/noteHubs.ts), newest-edited notes first: each hub's idea,
@@ -46,7 +46,7 @@ export function HubsView() {
         <div className={styles.titleRow}>
           <span className={styles.title}><HubIcon className={styles.titleIcon} />{L.title}</span>
           <span className={styles.count}>{all.length}</span>
-          <button type="button" className={styles.closeBtn} onClick={close} title={L.back} aria-label={L.back}>×</button>
+          <button type="button" className={styles.closeBtn} onClick={close} title={L.back} aria-label={L.back}><CloseIcon /></button>
         </div>
         <input
           className={styles.search}

@@ -5,7 +5,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews } from '@/store/noteViews';
 import { LABELS } from '@/config/labels';
 import { HUB_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
-import { HubIcon } from '@/components/Icons';
+import { CloseIcon, HubIcon } from '@/components/Icons';
 import { listHubs, type HubTarget, type LinkChoice } from '@/services/noteHubs';
 import { glossaryEntries, type GlossaryEntry } from '@/services/glossary';
 import { rankSearch, rankSuggestions, type RankField } from '@/utils/suggestRank';
@@ -133,7 +133,7 @@ export function HubPickerModal(props: Props) {
       <div className={styles.modal} role="dialog" aria-label={title}>
         <div className={styles.header}>
           <span className={`${styles.title} ${own.title}`}><HubIcon className={own.icon} /> {title}</span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <input

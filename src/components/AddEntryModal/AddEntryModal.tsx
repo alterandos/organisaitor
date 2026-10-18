@@ -6,6 +6,7 @@ import type { FieldSchema, CollectionId, TrackerEntryId } from '@/types';
 import { todayIso } from '@/utils/date';
 import styles from './AddEntryModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { CloseIcon } from '@/components/Icons';
 
 // ── Field renderer ────────────────────────────────────────────────
 
@@ -244,7 +245,7 @@ export function AddEntryModal() {
       >
         <div className={styles.header}>
           <span className={styles.title}>{title}</span>
-          <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
+          <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>

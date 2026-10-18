@@ -4,6 +4,7 @@ import { useUIStore } from '@/store/uiStore';
 import styles from './PurposeFilterPicker.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
+import { PurposeIcon } from '@/components/Icons';
 
 interface Props {
   // See CollectionFilterPicker's identical prop for the rationale — same treatment applied
@@ -72,7 +73,7 @@ export function PurposeFilterPicker({ variant = 'dropdown' }: Props) {
           aria-expanded={open}
           aria-label="Purpose filter"
         >
-          ◎
+          <PurposeIcon />
         </button>
         {open && (
           <BottomSheet onClose={closePurposePicker} title="Purposes">

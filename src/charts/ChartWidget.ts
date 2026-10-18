@@ -5,6 +5,7 @@ import {
 } from './chartSpec';
 import { drawChart, readChartTheme, seriesCssColor, type ChartHandle } from './chartAdapter';
 import styles from './ChartWidget.module.css';
+import { createGlyph } from '@/components/Icons';
 
 // A chart and its data editor, for any app: the drawn chart, and (while editing) a table to type
 // numbers into, plus a box to paste a table from a spreadsheet or CSV. Plain DOM, no framework,
@@ -147,7 +148,7 @@ export class ChartWidget {
       const th = thead.appendChild(el('th', styles.seriesHead));
       th.style.setProperty('--series-color', seriesCssColor(k));
       th.append(this.input(s.name, L.seriesName(k + 1), (v) => { this.spec.series[k].name = v; }, `name:${k}`));
-      if (spec.series.length > 1) th.append(this.button('×', () => this.edit((sp) => { sp.series.splice(k, 1); }), styles.deleteBtn, L.deleteSeries));
+      if (spec.series.length > 1) th.append(this.button(createGlyph('trash'), () => this.edit((sp) => { sp.series.splice(k, 1); }), styles.deleteBtn, L.deleteSeries));
       if (k > 0 && SINGLE_SERIES.has(this.kind)) th.classList.add(styles.unused);
     });
     thead.appendChild(document.createElement('th')).append(this.button(`+ ${L.addSeries}`, () => this.edit((sp) => {
@@ -164,7 +165,7 @@ export class ChartWidget {
         tr.insertCell().append(cell);
       });
       const last = tr.insertCell();
-      if (spec.labels.length > 1) last.append(this.button('×', () => this.edit((sp) => { sp.labels.splice(r, 1); sp.series.forEach((x) => x.values.splice(r, 1)); }), styles.deleteBtn, L.deleteRow));
+      if (spec.labels.length > 1) last.append(this.button(createGlyph('trash'), () => this.edit((sp) => { sp.labels.splice(r, 1); sp.series.forEach((x) => x.values.splice(r, 1)); }), styles.deleteBtn, L.deleteRow));
     });
     const foot = table.createTFoot().insertRow().insertCell();
     foot.colSpan = spec.series.length + 2;
@@ -217,11 +218,11 @@ export class ChartWidget {
     return input;
   }
 
-  private button(label: string, onClick: () => void, cls: string, title?: string): HTMLButtonElement {
+  private button(label: string | Node, onClick: () => void, cls: string, title?: string): HTMLButtonElement {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = `${styles.btn} ${cls}`;
-    b.textContent = label;
+    b.append(label);
     if (title) { b.title = title; b.setAttribute('aria-label', title); }
     b.addEventListener('mousedown', (e) => e.preventDefault());
     b.addEventListener('click', (e) => { e.preventDefault(); onClick(); });

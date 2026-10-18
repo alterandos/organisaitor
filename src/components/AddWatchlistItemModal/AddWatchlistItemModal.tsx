@@ -8,6 +8,7 @@ import { useTickerLookup } from '@/integrations/useTickerLookup';
 import type { TickerMatch } from '@/integrations/types';
 import styles from './AddWatchlistItemModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { CloseIcon, TrashIcon } from '@/components/Icons';
 
 export function AddWatchlistItemModal() {
   const editingWatchlistItemId = useUIStore((s) => s.editingWatchlistItemId);
@@ -142,7 +143,7 @@ export function AddWatchlistItemModal() {
       <div className={styles.modal}>
         <div className={styles.header}>
           <span className={styles.title}>{isEdit ? 'Edit Ticker' : 'Add Ticker'}</span>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>
@@ -308,7 +309,7 @@ export function AddWatchlistItemModal() {
                       className={styles.linkRemoveBtn}
                       onClick={() => removeLink(url)}
                       aria-label="Remove link"
-                    >✕</button>
+                    ><TrashIcon width="1em" height="1em" /></button>
                   </li>
                 ))}
               </ul>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
+import { isPinned, togglePin } from '@/services/quickAccessPins';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteView } from '@/store/noteViews';
 import { useTaskStore } from '@/store/taskStore';
@@ -13,6 +14,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 import { BackdropField } from '@/components/NoteEditor/NoteBackdrop';
+import { CloseIcon } from '@/components/Icons';
 
 // Render a flat list of tags in depth-first tree order with indentation
 function buildTagList(
@@ -47,7 +49,7 @@ function EditNoteMetaForm({ note }: { note: Note }) {
 
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(() => new Set(note.tagIds));
   const [color, setColor]   = useState<string | null>(note.color);
-  const [pinned, setPinned] = useState(note.pinned);
+  const [pinned, setPinned] = useState(() => isPinned('note', note.id));
   const [collectionId, setCollectionId] = useState<CollectionId | null>(note.collectionId);
 
   useEscapeClose(closeModal);
@@ -57,9 +59,9 @@ function EditNoteMetaForm({ note }: { note: Note }) {
     updateNote(note.id, {
       tagIds: Array.from(selectedTagIds) as NoteTagId[],
       color,
-      pinned,
       collectionId,
     });
+    if (pinned !== isPinned('note', note.id)) togglePin('note', note.id);
     closeModal();
   }
 
@@ -83,7 +85,7 @@ function EditNoteMetaForm({ note }: { note: Note }) {
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <span className={styles.title}>Edit note details</span>
-          <button className={styles.closeBtn} onClick={closeModal}>×</button>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <div className={styles.noteTitle}>{note.isEncrypted ? '🔒 ' : ''}{note.title || '(Untitled)'}</div>
@@ -187,7 +189,7 @@ function EditNoteMetaForm({ note }: { note: Note }) {
                 checked={pinned}
                 onChange={(e) => setPinned(e.target.checked)}
               />
-              <span>Pinned (appears in quick-access area)</span>
+              <span>{LABELS.quickAccess.pin}</span>
             </label>
           </section>
 

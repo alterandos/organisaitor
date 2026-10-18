@@ -11,6 +11,7 @@ import { ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { MAIN_TAB_ID, effectiveLinkTabId, tabNameOf } from '@/utils/noteTabs';
 import { ARTIFACT_DRAG_TYPE, insertArtifactLinkAtSelection, removeArtifactMarksFor } from './artifactLinkInsert';
 import styles from './NoteBacklinks.module.css';
+import { LinkIcon, UnlinkIcon } from '@/components/Icons';
 
 const ICON: Record<NoteBacklink['type'], string> = ITEM_TYPE_ICON;
 
@@ -139,14 +140,14 @@ export function NoteBacklinks({ note, activeTabId, editor, canInsert, onSwitchTa
           onClick={() => remove(l)}
           title={LABELS.noteBacklinks.remove}
           aria-label={`Remove the link to ${l.title}`}
-        >×</button>
+        ><UnlinkIcon /></button>
       </span>
     );
   };
 
   const chipText = here.length > 0
-    ? `🔗 ${here.length}${elsewhere.length > 0 ? ` +${elsewhere.length}` : ''}`
-    : `🔗 ${elsewhere.length} on other tabs`;
+    ? `${here.length}${elsewhere.length > 0 ? ` +${elsewhere.length}` : ''}`
+    : `${elsewhere.length} on other tabs`;
 
   return (
     <div className={styles.bar}>
@@ -162,7 +163,7 @@ export function NoteBacklinks({ note, activeTabId, editor, canInsert, onSwitchTa
           aria-expanded={open}
           title={elsewhere.length > 0 ? LABELS.noteBacklinks.chipTitleOtherTabs(here.length, elsewhere.length) : undefined}
         >
-          {chipText}
+          <LinkIcon /> {chipText}
         </button>
       )}
       {open && pos && createPortal(

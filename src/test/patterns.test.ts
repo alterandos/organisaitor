@@ -661,7 +661,7 @@ describe('pattern: an item kind has one icon, from config/itemIcons.ts', () => {
   // Deadlines were ⏳ in one place, 🚩 in another and ⏰ (the reminder's) in a third.
   it('no source file but itemIcons.ts spells out the reminder, deadline or task icon', () => {
     const files = SOURCE_FILES.filter((f) => !f.endsWith('itemIcons.ts'));
-    const hits = findMatches(files, /'(⏰|🏁|☑️)'/, { skipComments: true });
+    const hits = findMatches(files, /'(⏰|🏁|🔨)'/, { skipComments: true });
     expect(hits, describeHits(hits)).toEqual([]);
   });
 });
@@ -695,6 +695,24 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
     expect(swatches, describeHits(swatches)).toEqual([]);
     const oldPath = findMatches(SOURCE_FILES, /ItemActions\/icons/);
     expect(oldPath, describeHits(oldPath)).toEqual([]);
+  });
+
+  it('edit, close, delete and link controls are icons, not typed characters (✎ × ✕ 🔗; 2026-10-18)', () => {
+    const files = SOURCE_FILES.filter((f) => !/components[/\\]Icons[/\\]/.test(f));
+    // ✎ and ✕ have no other use; × only as a button's content, an icon or a widget's text (it stays
+    // as a multiplication sign: 3×4, "× 2"); 🔗 only as an item kind's icon (config/itemIcons.ts, the
+    // task-link kinds, the fallback object icon, a field type's icon).
+    const typed = findMatches(files, /[✎✕]|>\s*×\s*<|icon[=:]\s*["']×|textContent = '×'|this\.button\('×'/, { skipComments: true });
+    expect(typed, describeHits(typed)).toEqual([]);
+    // The rest of the control glyphs (2026-10-18): archive ⊘, restore/reset ↺, open ↗, indent ↳ ↰,
+    // colours/designs/status ◐ ◫, a table ▦, and the + speed dial's ◎ ▤ ✦ ◉ (Endeavour, Purpose,
+    // presets, reminder). ↳ stays as the follow-up link kind's own icon (config/itemLinkKinds.ts).
+    const glyphAllowed = /itemLinkKinds\.ts$/;
+    const more = findMatches(files.filter((f) => !glyphAllowed.test(f)), /[⊘↺↗↳↰◐◫▦◎▤✦◉]/, { skipComments: true });
+    expect(more, describeHits(more)).toEqual([]);
+    const linkAllowed = /itemIcons\.ts$|itemLinkKinds\.ts$|artifactTypes\.ts$|CrossAppRefPicker\.tsx$|EditActivityTypeModal\.tsx$|EditTrackerPane\.tsx$/;
+    const links = findMatches(files.filter((f) => !linkAllowed.test(f)), /🔗/, { skipComments: true });
+    expect(links, describeHits(links)).toEqual([]);
   });
 
   it('expand/collapse arrows are DisclosureIcon: no ▸/▾ glyph toggled by hand, no local rotate-on-open chevron', () => {
@@ -913,6 +931,23 @@ describe('pattern: text on a primary fill uses --color-on-primary (CLAUDE.md "De
       }
     }
     expect(hits, hits.join(' | ')).toEqual([]);
+  });
+});
+
+describe('pattern: Pin to Quick Access (CLAUDE.md "Pin to Quick Access")', () => {
+  it('only services/quickAccessPins.ts (and the demo builder) pins or unpins: every pin button and menu item goes through togglePin', () => {
+    const allowed = new Set(['src/services/quickAccessPins.ts', 'src/demo/demoAccount.ts']);
+    const hits = findMatches(SOURCE_FILES, /\b(pins|usePinnedItemsStore\.getState\(\)|store)\.(pin|unpin)\(/, { skipComments: true })
+      .filter((h) => !allowed.has(h.file));
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  it('every pinnable type resolves through a Quick Access provider', () => {
+    const storeSrc = fs.readFileSync(path.join(SRC, 'store', 'pinnedItemsStore.ts'), 'utf8');
+    const qaSrc = fs.readFileSync(path.join(SRC, 'utils', 'quickAccess.ts'), 'utf8');
+    const types = [...(/PINNABLE_TYPES: readonly PinnableType\[\] = \[([^\]]+)\]/.exec(storeSrc)?.[1] ?? '').matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
+    expect(types.length).toBeGreaterThan(0);
+    expect(types.filter((t) => !qaSrc.includes(`type: '${t}',`))).toEqual([]);
   });
 });
 

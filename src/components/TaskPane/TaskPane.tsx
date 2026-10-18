@@ -26,6 +26,7 @@ import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { CloseIcon, OpenIcon } from '@/components/Icons';
 
 const PRIORITY_OPTIONS: { value: Priority; label: string; color: string }[] = [
   { value: 'low',    label: 'Low',    color: '#22c55e' },
@@ -188,7 +189,7 @@ export function TaskPane() {
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>Task</span>
-          <button className={styles.closeBtn} onClick={closeTaskPane} aria-label="Close">×</button>
+          <button className={styles.closeBtn} onClick={closeTaskPane} aria-label="Close"><CloseIcon /></button>
         </header>
 
         <div className={styles.body}>
@@ -385,7 +386,7 @@ export function TaskPane() {
                       className={styles.tagRemove}
                       onMouseDown={(e) => { e.preventDefault(); toggleTag(id); }}
                       aria-label={`Remove ${tag.name}`}
-                    >×</button>
+                    ><CloseIcon /></button>
                   </span>
                 );
               })}
@@ -472,7 +473,7 @@ export function TaskPane() {
                       onClick={() => openTaskPane(sub.id)}
                       aria-label="Open subtask"
                       title="Open full pane"
-                    >↗</button>
+                    ><OpenIcon /></button>
                   </li>
                 ))}
               </ul>

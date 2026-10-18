@@ -138,10 +138,3 @@
 .controls :global(.react-flow__controls-button) { border-bottom: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); fill: currentColor; }
 .controls :global(.react-flow__controls-button:hover) { background: var(--color-surface-alt); }
 .controls :global(.react-flow__controls-button svg) { fill: currentColor; }
-
-/* The line under the pinned Stickies island. */
-.divider {
-  height: 0;
-  border-top: 2px dashed var(--color-border);
-  pointer-events: none;
-}

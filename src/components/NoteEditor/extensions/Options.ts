@@ -5,6 +5,7 @@ import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, replaceTypedWithBlock, selectButton, type BlockDesign } from './blockDesigns';
 import { listDecorations, newLists, pointAt, pointsEnter, textFieldsIn } from './ProsCons';
+import { createGlyph } from '@/components/Icons';
 
 // Options (`\options`): the different ways to one end — policies for a goal, routes, approaches —
 // asked for 2026-10-15 as distinct from the breakdown (parts that make up a whole) and the types
@@ -332,7 +333,7 @@ function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLE
   b.setAttribute('data-op-delete', '');
   b.title = LABELS.noteBlocks.options.deleteOption;
   b.setAttribute('aria-label', LABELS.noteBlocks.options.deleteOption);
-  b.textContent = '×';
+  b.append(createGlyph('trash'));
   b.addEventListener('mousedown', (e) => e.preventDefault());
   b.addEventListener('click', (e) => {
     e.preventDefault();

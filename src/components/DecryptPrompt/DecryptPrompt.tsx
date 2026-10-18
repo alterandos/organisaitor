@@ -11,6 +11,7 @@ import type { NoteId } from '@/types/notes';
 import type { ListId } from '@/types/lists';
 import styles from './DecryptPrompt.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { CloseIcon } from '@/components/Icons';
 
 // "Enter your passphrase to permanently decrypt this note/list." Opened by the clickable 🔒
 // icons (uiStore.requestDecrypt). Deliberately asks for the passphrase (or recovery code) even
@@ -70,7 +71,7 @@ export function DecryptPrompt() {
       <div className={styles.modal} role="dialog" aria-label={`Decrypt ${noun}`}>
         <div className={styles.header}>
           <span className={styles.title}>🔒 Decrypt this {noun}?</span>
-          <button className={styles.closeBtn} type="button" onClick={close} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} type="button" onClick={close} aria-label="Close"><CloseIcon /></button>
         </div>
         <form ref={formRef} onSubmit={handleSubmit} className={styles.body}>
           <p className={styles.text}>

@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
-import { TrashIcon } from '@/components/Icons';
+import { OpenIcon, TrashIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
 import { HUB_ICON } from '@/config/itemIcons';
 import { openHubLink, removeLink, selectionTouchesHub, setLinkRelation } from '@/services/noteHubs';
@@ -25,7 +25,7 @@ registerContextMenuProvider({
     const L = LABELS.hubs;
     const a = link.attrs;
     return [
-      { id: 'hub-link-open', label: L.open, icon: '↗', shortcut: 'Enter', run: () => openHubLink({ kind: a.kind as HubLinkKind, noteId: a.noteId, entryId: a.entryId, linkId: a.linkId }) },
+      { id: 'hub-link-open', label: L.open, icon: createElement(OpenIcon), shortcut: 'Enter', run: () => openHubLink({ kind: a.kind as HubLinkKind, noteId: a.noteId, entryId: a.entryId, linkId: a.linkId }) },
       {
         id: 'hub-link-relation', label: L.relation, icon: '⇄', disabled: !view.editable,
         submenu: [RELATIONS.map((r) => ({ id: `hub-relation-${r}`, label: L.relations[r].label, icon: tick(a.relation === r), run: () => setLinkRelation(view, pos, r) }))],

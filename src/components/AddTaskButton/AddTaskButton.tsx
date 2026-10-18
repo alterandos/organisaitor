@@ -7,55 +7,60 @@ import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
 import { addSticky } from '@/services/stickyNotes';
 import styles from './AddTaskButton.module.css';
+import type { ComponentType, SVGProps } from 'react';
+import { EndeavourIcon, ListIcon, NotebookIcon, PlusIcon, PresetIcon, PurposeIcon, ReminderIcon, RoutineIcon, StickyIcon, TagIcon, TrackerIcon, UploadIcon } from '@/components/Icons';
+
+// Each option's icon: a line icon from components/Icons, drawn on its coloured circle.
+type IconType = ComponentType<SVGProps<SVGSVGElement>>;
 
 type TaskDialType      = 'tag' | 'collection' | 'purpose' | 'task';
 type CalDialType       = 'event' | 'reminder';
 type RecordsDialType   = 'tracker' | 'entry' | 'routine';
 type PortfolioDialType = 'watchlist-item' | 'portfolio-tag' | 'investment-purpose' | 'bulk-upload';
 
-const TASK_OPTIONS: { type: TaskDialType; label: string; color: string; icon: string }[] = [
-  { type: 'tag',        label: 'Tag',              color: '#8b5cf6', icon: '#' },
-  { type: 'collection', label: LABELS.collection,  color: '#10b981', icon: '▤' },
-  { type: 'purpose',    label: 'Purpose',          color: '#f97316', icon: '◎' },
-  { type: 'task',       label: 'Task',             color: '#5b6ee1', icon: '+' },
+const TASK_OPTIONS: { type: TaskDialType; label: string; color: string; Icon: IconType }[] = [
+  { type: 'tag',        label: 'Tag',              color: 'var(--color-swatch-purple)', Icon: TagIcon },
+  { type: 'collection', label: LABELS.collection,  color: 'var(--color-swatch-green)', Icon: EndeavourIcon },
+  { type: 'purpose',    label: 'Purpose',          color: 'var(--color-swatch-orange)', Icon: PurposeIcon },
+  { type: 'task',       label: 'Task',             color: 'var(--color-swatch-indigo)', Icon: PlusIcon },
 ];
 
-const CAL_OPTIONS: { type: CalDialType; label: string; color: string; icon: string }[] = [
-  { type: 'reminder', label: LABELS.calendarItemKind.reminder, color: '#10b981', icon: '◉' },
-  { type: 'event',    label: LABELS.calendarItemKind.event,    color: '#5b6ee1', icon: '+' },
+const CAL_OPTIONS: { type: CalDialType; label: string; color: string; Icon: IconType }[] = [
+  { type: 'reminder', label: LABELS.calendarItemKind.reminder, color: 'var(--color-swatch-green)', Icon: ReminderIcon },
+  { type: 'event',    label: LABELS.calendarItemKind.event,    color: 'var(--color-swatch-indigo)', Icon: PlusIcon },
 ];
 
-const REC_OPTIONS: { type: RecordsDialType; label: string; color: string; icon: string }[] = [
-  { type: 'routine', label: LABELS.routine,  color: '#f97316', icon: '↺' },
-  { type: 'tracker', label: LABELS.tracker,  color: '#10b981', icon: '▦' },
-  { type: 'entry',   label: 'New entry',     color: '#5b6ee1', icon: '+' },
+const REC_OPTIONS: { type: RecordsDialType; label: string; color: string; Icon: IconType }[] = [
+  { type: 'routine', label: LABELS.routine,  color: 'var(--color-swatch-orange)', Icon: RoutineIcon },
+  { type: 'tracker', label: LABELS.tracker,  color: 'var(--color-swatch-green)', Icon: TrackerIcon },
+  { type: 'entry',   label: 'New entry',     color: 'var(--color-swatch-indigo)', Icon: PlusIcon },
 ];
 
-const PORTFOLIO_OPTIONS: { type: PortfolioDialType; label: string; color: string; icon: string }[] = [
-  { type: 'investment-purpose', label: LABELS.investmentPurpose, color: '#8b5cf6', icon: '◎' },
-  { type: 'portfolio-tag',      label: LABELS.portfolioTag,      color: '#10b981', icon: '#' },
-  { type: 'bulk-upload',        label: 'Bulk Import',            color: '#64748b', icon: '↑' },
-  { type: 'watchlist-item',     label: LABELS.watchlistItem,     color: '#5b6ee1', icon: '+' },
+const PORTFOLIO_OPTIONS: { type: PortfolioDialType; label: string; color: string; Icon: IconType }[] = [
+  { type: 'investment-purpose', label: LABELS.investmentPurpose, color: 'var(--color-swatch-purple)', Icon: PurposeIcon },
+  { type: 'portfolio-tag',      label: LABELS.portfolioTag,      color: 'var(--color-swatch-green)', Icon: TagIcon },
+  { type: 'bulk-upload',        label: 'Bulk Import',            color: 'var(--color-swatch-grey)', Icon: UploadIcon },
+  { type: 'watchlist-item',     label: LABELS.watchlistItem,     color: 'var(--color-swatch-indigo)', Icon: PlusIcon },
 ];
 
 type ListsDialType = 'list' | 'list-item';
-const LISTS_OPTIONS: { type: ListsDialType; label: string; color: string; icon: string }[] = [
-  { type: 'list',      label: 'New list',  color: '#10b981', icon: '▤' },
-  { type: 'list-item', label: 'Add item',  color: '#5b6ee1', icon: '+' },
+const LISTS_OPTIONS: { type: ListsDialType; label: string; color: string; Icon: IconType }[] = [
+  { type: 'list',      label: 'New list',  color: 'var(--color-swatch-green)', Icon: ListIcon },
+  { type: 'list-item', label: 'Add item',  color: 'var(--color-swatch-indigo)', Icon: PlusIcon },
 ];
 
 type NotesDialType = 'note' | 'notebook' | 'custom-tag' | 'tag-preset' | 'sticky';
-const NOTES_OPTIONS: { type: NotesDialType; label: string; color: string; icon: string }[] = [
-  { type: 'notebook',   label: 'Notebook',   color: '#8b5cf6', icon: '📓' },
-  { type: 'custom-tag', label: 'Custom tag', color: '#10b981', icon: '#' },
-  { type: 'tag-preset', label: 'Tag presets', color: '#64748b', icon: '✦' },
-  { type: 'sticky',     label: LABELS.stickies.add, color: '#ca8a04', icon: '🗒️' },
-  { type: 'note',       label: 'Note',       color: '#5b6ee1', icon: '+' },
+const NOTES_OPTIONS: { type: NotesDialType; label: string; color: string; Icon: IconType }[] = [
+  { type: 'notebook',   label: 'Notebook',   color: 'var(--color-swatch-purple)', Icon: NotebookIcon },
+  { type: 'custom-tag', label: 'Custom tag', color: 'var(--color-swatch-green)', Icon: TagIcon },
+  { type: 'tag-preset', label: 'Tag presets', color: 'var(--color-swatch-grey)', Icon: PresetIcon },
+  { type: 'sticky',     label: LABELS.stickies.add, color: 'var(--color-swatch-yellow)', Icon: StickyIcon },
+  { type: 'note',       label: 'Note',       color: 'var(--color-swatch-indigo)', Icon: PlusIcon },
 ];
 
 type FitnessDialType = 'activity';
-const FITNESS_OPTIONS: { type: FitnessDialType; label: string; color: string; icon: string }[] = [
-  { type: 'activity', label: LABELS.activity, color: '#5b6ee1', icon: '+' },
+const FITNESS_OPTIONS: { type: FitnessDialType; label: string; color: string; Icon: IconType }[] = [
+  { type: 'activity', label: LABELS.activity, color: 'var(--color-swatch-indigo)', Icon: PlusIcon },
 ];
 
 export function AddTaskButton() {
@@ -160,7 +165,7 @@ export function AddTaskButton() {
     return (
       <div className={dialClass} ref={ref}>
         <button className={styles.fab} onClick={() => useUIStore.getState().showAddOverview()} aria-label={LABELS.overview.newTitle}>
-          <span className={styles.fabIcon}>+</span>
+          <span className={styles.fabIcon}><PlusIcon /></span>
         </button>
       </div>
     );
@@ -180,7 +185,7 @@ export function AddTaskButton() {
                 onClick={() => handleListsOption(opt.type)}
                 aria-label={opt.label}
               >
-                {opt.icon}
+                <opt.Icon className={styles.optionIcon} />
               </button>
             </div>
           ))}
@@ -191,7 +196,7 @@ export function AddTaskButton() {
           aria-label="Add to lists"
           aria-expanded={open}
         >
-          <span className={styles.fabIcon}>+</span>
+          <span className={styles.fabIcon}><PlusIcon /></span>
         </button>
       </div>
     );
@@ -210,7 +215,7 @@ export function AddTaskButton() {
                 onClick={() => handleCalOption(opt.type)}
                 aria-label={`Create ${opt.label}`}
               >
-                {opt.icon}
+                <opt.Icon className={styles.optionIcon} />
               </button>
             </div>
           ))}
@@ -221,7 +226,7 @@ export function AddTaskButton() {
           aria-label="Add calendar item"
           aria-expanded={open}
         >
-          <span className={styles.fabIcon}>+</span>
+          <span className={styles.fabIcon}><PlusIcon /></span>
         </button>
       </div>
     );
@@ -240,7 +245,7 @@ export function AddTaskButton() {
                 onClick={() => handlePortfolioOption(opt.type)}
                 aria-label={`Add ${opt.label}`}
               >
-                {opt.icon}
+                <opt.Icon className={styles.optionIcon} />
               </button>
             </div>
           ))}
@@ -251,7 +256,7 @@ export function AddTaskButton() {
           aria-label="Add portfolio item"
           aria-expanded={open}
         >
-          <span className={styles.fabIcon}>+</span>
+          <span className={styles.fabIcon}><PlusIcon /></span>
         </button>
       </div>
     );
@@ -275,7 +280,7 @@ export function AddTaskButton() {
                 onClick={() => handleRecOption(opt.type)}
                 aria-label={`Create ${opt.label}`}
               >
-                {opt.icon}
+                <opt.Icon className={styles.optionIcon} />
               </button>
             </div>
           ))}
@@ -286,7 +291,7 @@ export function AddTaskButton() {
           aria-label="Add record"
           aria-expanded={open}
         >
-          <span className={styles.fabIcon}>+</span>
+          <span className={styles.fabIcon}><PlusIcon /></span>
         </button>
       </div>
     );
@@ -305,7 +310,7 @@ export function AddTaskButton() {
                 onClick={() => handleNotesOption(opt.type)}
                 aria-label={`Create ${opt.label}`}
               >
-                {opt.icon}
+                <opt.Icon className={styles.optionIcon} />
               </button>
             </div>
           ))}
@@ -316,7 +321,7 @@ export function AddTaskButton() {
           aria-label="Add note"
           aria-expanded={open}
         >
-          <span className={styles.fabIcon}>+</span>
+          <span className={styles.fabIcon}><PlusIcon /></span>
         </button>
       </div>
     );
@@ -335,7 +340,7 @@ export function AddTaskButton() {
                 onClick={() => handleFitnessOption(opt.type)}
                 aria-label={`Create ${opt.label}`}
               >
-                {opt.icon}
+                <opt.Icon className={styles.optionIcon} />
               </button>
             </div>
           ))}
@@ -346,7 +351,7 @@ export function AddTaskButton() {
           aria-label="Add activity"
           aria-expanded={open}
         >
-          <span className={styles.fabIcon}>+</span>
+          <span className={styles.fabIcon}><PlusIcon /></span>
         </button>
       </div>
     );
@@ -364,7 +369,7 @@ export function AddTaskButton() {
               onClick={() => handleTaskOption(opt.type)}
               aria-label={`Create ${opt.label}`}
             >
-              {opt.icon}
+              <opt.Icon className={styles.optionIcon} />
             </button>
           </div>
         ))}
@@ -375,7 +380,7 @@ export function AddTaskButton() {
         aria-label="Add task"
         aria-expanded={open}
       >
-        <span className={styles.fabIcon}>+</span>
+        <span className={styles.fabIcon}><PlusIcon /></span>
       </button>
     </div>
   );

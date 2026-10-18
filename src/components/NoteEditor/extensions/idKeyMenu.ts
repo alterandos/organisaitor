@@ -1,8 +1,10 @@
+import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { IDKEY_DESIGNS, addChoice, addStep, canDeleteStep, deleteStep, idKeyPosAt, setIdKeyVariant } from './IdKey';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
+import { TrashIcon } from '@/components/Icons';
 
 // Right-click in an identification key: its design, frame, adding a step, and (on a step) adding a
 // choice to it or removing it.
@@ -28,7 +30,7 @@ registerContextMenuProvider({
     if (sp !== null && view.state.doc.nodeAt(sp)?.type.name === 'idKeyStep') {
       const at = sp;
       items.push({ id: 'ik-add-choice', label: L.addChoice, icon: '+', run: () => addChoice(view, at) });
-      items.push({ id: 'ik-delete-step', label: L.deleteStep, icon: '×', disabled: !canDeleteStep(view.state, at), run: () => { deleteStep(view, at); } });
+      items.push({ id: 'ik-delete-step', label: L.deleteStep, icon: createElement(TrashIcon, { width: '1em', height: '1em' }), disabled: !canDeleteStep(view.state, at), run: () => { deleteStep(view, at); } });
     }
     return items;
   },

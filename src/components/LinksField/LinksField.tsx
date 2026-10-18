@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import styles from './LinksField.module.css';
+import { EditIcon, TrashIcon } from '@/components/Icons';
 
 interface Props {
   links:    string[];
@@ -71,13 +72,13 @@ export function LinksField({ links, onChange }: Props) {
             onClick={() => startEditLink(idx)}
             aria-label="Edit link"
             title="Edit"
-          >✎</button>
+          ><EditIcon /></button>
           <button
             className={`${styles.linkIconBtn} ${styles.linkDeleteBtn}`}
             onClick={() => deleteLink(idx)}
             aria-label="Delete link"
             title="Delete"
-          >×</button>
+          ><TrashIcon width="1em" height="1em" /></button>
         </div>
       ))}
       <div className={styles.linkAdd}>

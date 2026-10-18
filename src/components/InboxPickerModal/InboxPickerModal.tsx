@@ -10,6 +10,7 @@ import type { InboxRef } from '@/utils/noteInboxes';
 // Same look as the note, task and list pickers, so the "send / link to …" dialogs read as one family.
 import styles from '@/components/NotePickerModal/NotePickerModal.module.css';
 import own from './InboxPickerModal.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 interface Props {
   // The selected text: its keywords order the inboxes while the search is empty.
@@ -91,7 +92,7 @@ export function InboxPickerModal({ suggestFrom, onSend, onClose }: Props) {
       <div className={styles.modal} role="dialog" aria-label={L.pickerTitle}>
         <div className={styles.header}>
           <span className={styles.title}>{INBOX_ICON} {L.pickerTitle}</span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <input

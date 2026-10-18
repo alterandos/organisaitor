@@ -12,7 +12,7 @@ import { ArtifactBody } from './ArtifactBody';
 import { requestOccurrenceList } from './occurrenceRequests';
 import { clearPaneState } from './paneState';
 import styles from './ArtifactLinks.module.css';
-import { createDisclosureIcon } from '@/components/Icons';
+import { createDisclosureIcon, createGlyph } from '@/components/Icons';
 
 // How linked text (an `artifactLink` mark, made by `\` or Ctrl+Q) is drawn. ProseMirror splits a
 // mark into one element per paragraph and wherever another mark starts or stops inside it, so
@@ -240,7 +240,9 @@ function paneTail(group: ArtifactGroup, summary: ArtifactSummary | null, state: 
       const gone = el('span', styles.paneState, L.deleted);
       gone.title = L.missing;
       tail.append(gone);
-      tail.append(control(el('button', styles.paneBtn, '✕'), L.unlink, () => unlinkArtifactGroup(view, group.key, getPos() ?? group.to)));
+      const unlinkBtn = el('button', styles.paneBtn);
+      unlinkBtn.append(createGlyph('unlink'));
+      tail.append(control(unlinkBtn, L.unlink, () => unlinkArtifactGroup(view, group.key, getPos() ?? group.to)));
       return tail;
     }
     const expanded = group.display === 'expanded';
@@ -276,7 +278,9 @@ function paneTail(group: ArtifactGroup, summary: ArtifactSummary | null, state: 
     }
     // ↗ and the chevron, together: at the pane's right edge when it's expanded.
     const actions = el('span', styles.paneActions);
-    actions.append(control(el('button', styles.paneBtn, '↗'), L.open, () => { openArtifactTarget(group.targetType, group.targetId, summary.repeats ? summary.occurrence ?? undefined : undefined); }));
+    const openBtn = el('button', styles.paneBtn);
+    openBtn.append(createGlyph('open'));
+    actions.append(control(openBtn, L.open, () => { openArtifactTarget(group.targetType, group.targetId, summary.repeats ? summary.occurrence ?? undefined : undefined); }));
     const chevron = el('span', styles.paneChevron);
     chevron.append(createDisclosureIcon(expanded));
     chevron.title = expanded ? L.hideDetails : L.showDetails;

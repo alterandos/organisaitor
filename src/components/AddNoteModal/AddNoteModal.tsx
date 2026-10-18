@@ -11,6 +11,7 @@ import styles from './AddNoteModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CreateKindSwitcher } from '@/components/CreateKindSwitcher/CreateKindSwitcher';
+import { CloseIcon } from '@/components/Icons';
 
 export function AddNoteModal() {
   const closeModal        = useUIStore((s) => s.closeModal);
@@ -92,7 +93,7 @@ export function AddNoteModal() {
         <CreateKindSwitcher current="note" draft={title} />
         <div className={styles.header}>
           <h2>Add Note</h2>
-          <button className={styles.closeBtn} onClick={closeModal}>✕</button>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <div className={styles.body}>

@@ -10,7 +10,7 @@ import { nextReview, REVIEW_INTERVALS, type ReviewAnswer } from '../NoteEditor/e
 import { importanceLevel } from '../NoteEditor/extensions/importanceLevels';
 import { formatDate, todayIso } from '@/utils/date';
 import { LABELS } from '@/config/labels';
-import { ReviewIcon } from '@/components/Icons';
+import { CloseIcon, OpenIcon, ReviewIcon } from '@/components/Icons';
 import styles from './ReviewView.module.css';
 
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
@@ -55,7 +55,7 @@ export function ReviewView() {
       <div className={styles.header}>
         <span className={styles.title}><ReviewIcon className={styles.titleIcon} />{L.title}</span>
         {queue.length > 0 && <span className={styles.progress}>{L.progress(Math.min(index + 1, queue.length), queue.length)}</span>}
-        <button type="button" className={styles.closeBtn} onClick={close} title={LABELS.glossary.back}>×</button>
+        <button type="button" className={styles.closeBtn} onClick={close} title={LABELS.glossary.back} aria-label={LABELS.glossary.back}><CloseIcon /></button>
       </div>
       {queue.length > 0 && (
         <div className={styles.bar} aria-hidden="true">
@@ -69,7 +69,7 @@ export function ReviewView() {
             <div className={styles.cardKicker}>
               <span>{level.icon} {level.label}</span>
               <button type="button" className={styles.source} onClick={() => openNotePassage(item.noteId, { mark: 'noteTag', attr: 'passageId', value: item.passageId })}>
-                {L.from(views[item.noteId as never] ? noteName(views[item.noteId as never], noteTags, { untitled: LABELS.glossary.untitledNote }).full : item.noteTitle || LABELS.glossary.untitledNote)} ↗
+                {L.from(views[item.noteId as never] ? noteName(views[item.noteId as never], noteTags, { untitled: LABELS.glossary.untitledNote }).full : item.noteTitle || LABELS.glossary.untitledNote)} <OpenIcon />
               </button>
             </div>
             <blockquote className={styles.passage}>{item.text}</blockquote>

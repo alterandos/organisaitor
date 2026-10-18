@@ -5,6 +5,7 @@ import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import styles from './AddPortfolioTagModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { CloseIcon } from '@/components/Icons';
 
 export function AddPortfolioTagModal() {
   const [name,  setName]  = useState('');
@@ -40,7 +41,7 @@ export function AddPortfolioTagModal() {
       <div className={styles.modal}>
         <div className={styles.header}>
           <span className={styles.title}>New Tag</span>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>

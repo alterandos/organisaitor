@@ -1,8 +1,10 @@
+import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { PYRAMID_DESIGNS, addLayer, canDeleteLayer, deleteLayer, pyramidPosAt, setPyramidSettings } from './Pyramid';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
+import { PaletteIcon, TrashIcon } from '@/components/Icons';
 
 // Right-click in a pyramid: its design, colours, frame, adding a layer, and (on a layer) deleting it.
 registerContextMenuProvider({
@@ -21,7 +23,7 @@ registerContextMenuProvider({
       designMenuItem(PYRAMID_DESIGNS, node.attrs.variant, (v) => setPyramidSettings(view, pos, { variant: v })),
       frameMenuItem(view, pos, node.attrs),
       {
-        id: 'py-colours', label: C.colourTitle(C.colours[node.attrs.colours as 'accent' | 'spectrum']).split('.')[0], icon: '◐',
+        id: 'py-colours', label: C.colourTitle(C.colours[node.attrs.colours as 'accent' | 'spectrum']).split('.')[0], icon: createElement(PaletteIcon),
         submenu: [(['accent', 'spectrum'] as const).map((c) => ({ id: `colours-${c}`, label: C.colours[c], icon: node.attrs.colours === c ? '✓' : undefined, run: () => setPyramidSettings(view, pos, { colours: c }) }))],
       },
       { id: 'py-add', label: L.addLayer, icon: '+', run: () => addLayer(view, pos) },
@@ -32,7 +34,7 @@ registerContextMenuProvider({
     try { if (layerEl) lp = view.posAtDOM(layerEl, 0) - 1; } catch { lp = null; }
     if (lp !== null && view.state.doc.nodeAt(lp)?.type.name === 'pyramidLayer') {
       const at = lp;
-      items.push({ id: 'py-delete', label: L.deleteLayer, icon: '×', disabled: !canDeleteLayer(view.state, at), run: () => { deleteLayer(view, at); } });
+      items.push({ id: 'py-delete', label: L.deleteLayer, icon: createElement(TrashIcon, { width: '1em', height: '1em' }), disabled: !canDeleteLayer(view.state, at), run: () => { deleteLayer(view, at); } });
     }
     return items;
   },

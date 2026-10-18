@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
-import { ReviewIcon } from '@/components/Icons';
+import { CloseIcon, ReviewIcon, UnlinkIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
 import { glossaryEntry } from '@/services/glossary';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
@@ -31,7 +31,7 @@ registerContextMenuProvider({
     const L = LABELS.glossary;
     return [
       { id: 'definition', label: L.goToDefinition, icon: entry?.icon ?? '📖', disabled: !entry, run: () => { if (entry) openNotePassage(entry.noteId, definitionPassage(entry.id)); } },
-      { id: 'unlink', label: L.removeLink, icon: '✕', run: () => unlinkConceptRef(view, group) },
+      { id: 'unlink', label: L.removeLink, icon: createElement(UnlinkIcon), run: () => unlinkConceptRef(view, group) },
     ];
   },
 });
@@ -58,7 +58,7 @@ registerContextMenuProvider({
         }))],
       },
       { id: 'review', label: passage.reviewDue ? I.stopReviewing : I.reviewLater, icon: createElement(ReviewIcon), run: () => toggleReview(view, passage.from, passage.to) },
-      { id: 'remove', label: LABELS.contextMenu.removeImportant, icon: '✕', run: () => setImportance(view, passage.from, passage.to, null) },
+      { id: 'remove', label: LABELS.contextMenu.removeImportant, icon: createElement(CloseIcon), run: () => setImportance(view, passage.from, passage.to, null) },
     ];
   },
 });

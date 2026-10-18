@@ -6,6 +6,7 @@ import { TimeInput } from '@/components/TimeInput/TimeInput';
 import styles from './MobileCalendarQuickAdd.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { CloseIcon } from '@/components/Icons';
 
 // Android-only quick-add sheet for calendar events/reminders (docs/android/02-calendar-app.md
 // §3) — a genuinely separate, faster component from AddCalendarItemModal, same rationale as
@@ -81,7 +82,7 @@ export function MobileCalendarQuickAdd() {
               onClick={() => setKind('reminder')}
             >Reminder</button>
           </div>
-          <button type="button" className={styles.closeBtn} onClick={close} aria-label="Close">✕</button>
+          <button type="button" className={styles.closeBtn} onClick={close} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <input

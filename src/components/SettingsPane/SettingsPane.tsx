@@ -19,6 +19,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { CloseIcon, ResetIcon } from '@/components/Icons';
 
 function renderKeys(combo: string) {
   const parts = combo.split('+');
@@ -477,7 +478,8 @@ export function SettingsPane({ variant, hoverHandlers, onClosePeek }: {
                               className={styles.hotkeyResetBtn}
                               onClick={() => resetHotkeyOverride(h.id)}
                               title="Reset this hotkey to its default"
-                            >↺</button>
+                              aria-label="Reset this hotkey to its default"
+                            ><ResetIcon /></button>
                           )}
                         </td>
                       </tr>
@@ -524,7 +526,7 @@ export function SettingsPane({ variant, hoverHandlers, onClosePeek }: {
       <div className={styles.modal} role="dialog" aria-modal="true" aria-label={LABELS.settings.title}>
         <header className={styles.modalHeader}>
           <span className={styles.modalTitle}>{LABELS.settings.title}</span>
-          <button className={styles.closeBtn} onClick={closeSettings} aria-label={LABELS.settings.close}>×</button>
+          <button className={styles.closeBtn} onClick={closeSettings} aria-label={LABELS.settings.close}><CloseIcon /></button>
         </header>
         <div className={styles.modalBody}>
           <nav style={navResize.style} className={styles.nav} aria-label={LABELS.settings.title}>

@@ -28,6 +28,7 @@ import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { CloseIcon } from '@/components/Icons';
 
 // Structurally close to CalendarReminderPane (same fields, same repeat/tentative/important
 // machinery) — the one deliberate difference: the "Notify me" lead-time field is always shown
@@ -121,7 +122,7 @@ export function CalendarDeadlinePane() {
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>{LABELS.calendarItemKind.deadline}</span>
-          <button className={styles.closeBtn} onClick={closePane} aria-label="Close">×</button>
+          <button className={styles.closeBtn} onClick={closePane} aria-label="Close"><CloseIcon /></button>
         </header>
 
         <div className={styles.body}>

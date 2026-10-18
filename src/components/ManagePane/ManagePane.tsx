@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
+import { usePinAction } from '@/hooks/usePinAction';
 import { useUIStore } from '@/store/uiStore';
 import type { ManageSection } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
@@ -11,16 +12,16 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
-import { DisclosureIcon } from '@/components/Icons';
+import { ArchiveIcon, CloseIcon, DisclosureIcon, EditIcon, EndeavourIcon, PurposeIcon, RestoreIcon, TagIcon, TrashIcon } from '@/components/Icons';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 // Left-nav tabs — add an entry here (+ a render branch below) to extend this view with
 // future sections (e.g. Notebooks, List types) without redesigning the layout.
-const MANAGE_SECTIONS: { id: ManageSection; label: string; icon: string }[] = [
-  { id: 'endeavours', label: LABELS.collectionPlural, icon: '▤' },
-  { id: 'purposes',   label: 'Purposes',              icon: '◎' },
-  { id: 'tags',       label: 'Tags',                  icon: '#' },
+const MANAGE_SECTIONS: { id: ManageSection; label: string; Icon: typeof TagIcon }[] = [
+  { id: 'endeavours', label: LABELS.collectionPlural, Icon: EndeavourIcon },
+  { id: 'purposes',   label: 'Purposes',              Icon: PurposeIcon },
+  { id: 'tags',       label: 'Tags',                  Icon: TagIcon },
 ];
 
 // Each section's "+ New" (2026-10-18: Manage could edit and delete but not create). Opens the
@@ -38,25 +39,28 @@ interface RowProps {
   onEdit?:     () => void;
   onArchive?:  () => void;
   onDelete:    () => void;
+  pinId?:      string;   // an Endeavour, which can be pinned to Quick Access
 }
 
-function ManageRow({ color, name, archived, onEdit, onArchive, onDelete }: RowProps) {
+function ManageRow({ color, name, archived, onEdit, onArchive, onDelete, pinId }: RowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
+  const pin = usePinAction('endeavour', pinId ?? '');
   return (
     <div ref={rowRef} className={`${styles.row} ${archived ? styles.rowArchived : ''}`}>
       <RowOptionsMenu rowRef={rowRef} title={name} icon={color && <span className={styles.dot} style={{ background: color }} />}>
         {onEdit && (
-          <RowAction className={styles.iconBtn} icon="✎" label={LABELS.rowActions.edit} onClick={onEdit} />
+          <RowAction className={styles.iconBtn} icon={<EditIcon />} label={LABELS.rowActions.edit} onClick={onEdit} />
         )}
         {onArchive && (
           <RowAction
             className={styles.iconBtn}
-            icon={archived ? '↺' : '⊘'}
+            icon={archived ? <RestoreIcon width="1em" height="1em" /> : <ArchiveIcon width="1em" height="1em" />}
             label={archived ? LABELS.rowActions.restore : LABELS.rowActions.archive}
             onClick={onArchive}
           />
         )}
-        <RowAction className={`${styles.iconBtn} ${styles.iconBtnDelete}`} icon="✕" label={LABELS.rowActions.delete} onClick={onDelete} destructive />
+        {pinId && !archived && <RowAction className={styles.iconBtn} {...pin} />}
+        <RowAction className={`${styles.iconBtn} ${styles.iconBtnDelete}`} icon={<TrashIcon width="1em" height="1em" />} label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowOptionsMenu>
       <div className={styles.rowMain}>
         <TruncatedText text={name} className={styles.name} />
@@ -109,6 +113,7 @@ function EndeavoursSection() {
               onEdit={() => openEditCollection(c)}
               onArchive={() => toggleArchive(c)}
               onDelete={() => handleDelete(c)}
+              pinId={c.id}
             />
           ))}
         </div>
@@ -125,6 +130,7 @@ function EndeavoursSection() {
               onEdit={() => openEditCollection(c)}
               onArchive={() => toggleArchive(c)}
               onDelete={() => handleDelete(c)}
+              pinId={c.id}
             />
           ))}
         </div>
@@ -145,6 +151,7 @@ function EndeavoursSection() {
               onEdit={() => openEditCollection(c)}
               onArchive={() => toggleArchive(c)}
               onDelete={() => handleDelete(c)}
+              pinId={c.id}
             />
           ))}
         </div>
@@ -272,7 +279,7 @@ export function ManagePane() {
       >
         <div className={styles.header}>
           <span className={styles.title}>Manage</span>
-          <button className={styles.closeBtn} onClick={closeManage} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeManage} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <div className={styles.body}>
@@ -284,7 +291,7 @@ export function ManagePane() {
                 className={`${styles.navItem} ${manageSection === s.id ? styles.navItemActive : ''}`}
                 onClick={() => setManageSection(s.id)}
               >
-                <span className={styles.navIcon}>{s.icon}</span>
+                <span className={styles.navIcon}><s.Icon width="1em" height="1em" /></span>
                 {s.label}
               </button>
             ))}

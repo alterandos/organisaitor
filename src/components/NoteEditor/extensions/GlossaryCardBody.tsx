@@ -14,6 +14,7 @@ import type { StructuredTagEntry, StructuredTagEntryId } from '@/types';
 import type { GlossaryCardVariant } from './GlossaryCard';
 import { BUILTIN_TAGS } from '../builtinTags';
 import styles from './GlossaryCard.module.css';
+import { UnlinkIcon } from '@/components/Icons';
 
 // The card a Glossary card block (GlossaryCard.ts) shows: the record's term, then each field of
 // its type's schema (config/structuredTagTypes.ts) drawn by the field's kind, so a new field is
@@ -377,7 +378,7 @@ function LinksField({ self, all, editable, onCommit }: { self: StructuredTagEntr
         return (
           <div key={`${l.kind}-${l.entryId}`} className={styles.linkRow}>
             <span className={styles.relation}>{glossaryRelation(l.kind).label}</span> <EntryLink entry={target} />
-            {editable && <button type="button" className={styles.remove} aria-label={L.remove} title={L.remove} onClick={() => onCommit(links.filter((_, j) => j !== i))}>×</button>}
+            {editable && <button type="button" className={styles.remove} aria-label={L.remove} title={L.remove} onClick={() => onCommit(links.filter((_, j) => j !== i))}><UnlinkIcon /></button>}
           </div>
         );
       })}

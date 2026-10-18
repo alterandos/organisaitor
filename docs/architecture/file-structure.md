@@ -45,7 +45,8 @@ src/
     uiStore.ts               — all UI state
     settingsStore.ts         — user preferences
     authStore.ts             — Supabase session
-    recentItemsStore.ts      — Quick Access (Ctrl+G) recent/frequent visit history, keyed by `${QuickAccessTargetType}:${entityId}`
+    pinnedItemsStore.ts      — what's pinned to Quick Access (Q), in order (persisted `quick-access-pins`; synced `quick_access_pins`); pin only through services/quickAccessPins.ts — see "Pin to Quick Access"
+    recentItemsStore.ts      — Go to (Ctrl+G) recent/frequent visit history, keyed by `${QuickAccessTargetType}:${entityId}`
     stickyStore.ts           — where each sticky note sits on this device's screen (fractions of the window) and its design (sticky / pin / staple / tape)
     dialogStore.ts           — queue of pending confirm/alert requests (memory-only) behind `confirmDialog()` / `choiceDialog()` / `alertDialog()` in components/ConfirmDialog/dialogs.ts
     overviewStore.ts         — saved Overviews (persisted `overviews-storage`, synced `overviews`); deleteOverview goes to the Recycling Bin
@@ -58,6 +59,8 @@ src/
   services/sync/
     syncService.ts           — Supabase push/pull
     mappers.ts               — xToRow / rowToX for every entity
+  services/quickAccessPins.ts — togglePin (toast with Undo), isPinned, pinMenuItem, the note-row pin provider, adoptLegacyNotePins: THE way to pin to Quick Access
+  hooks/usePinAction.ts     — a pin button's icon/label/action, for a RowAction or a button (PinButton)
   services/newItem.ts       — openNewItem(view): THE N/Space/Ctrl+N routing, section by section (Notes: by focused column) — see "New-item hotkey"
   services/signOut.ts       — requestSignOut(): THE way to sign out — confirms (and says what stays on the device), locks the vault, force-uploads and only wipes if that succeeded (else warns, user can cancel), then authStore.signOut(). Never call authStore.signOut() directly from UI
   services/welcome.ts       — whether this device chose to carry on without an account (the welcome page): per device, not in backups, forgotten by requestSignOut
@@ -180,7 +183,7 @@ src/
     scheduleOccurrences.ts   — expandScheduleBlock() (turns one ScheduleBlock into concrete occurrence dates, honouring interval/anchor/exceptions), blocksMayConflict() + countTemplateConflicts() (the schedule manager's "N potential conflicts" hint)
     recurrence.ts            — repeating calendar items and tasks: expandRepeat (honours RepeatConfig.exceptions, weekdays and the nth weekday of the month), repeatPattern (what those read as), nthWeekdayOfMonth, weekOfMonth, isOccurrenceSkipped, withException / endedBefore / tailOf (the "this one / this and following" operations) — see "Calendar: editing individual occurrences"
     timezone.ts              — account-wide timezone: resolveTimezone, zonedTimeToUtc, utcToZonedTime, rezoneWallClock, todayIsoInZone, listTimezones
-    quickAccess.ts           — Quick Access (Ctrl+G) provider registry: one QuickAccessProvider per destination type (place/glossary term/note/notebook/task/list/endeavour/tracker/routine/schedule) with list()/resolve()/navigate(); searchQuickAccessItems(), resolveRecentItems(), navigateToQuickAccessItem() — extension point for new destination types (see Implemented features)
+    quickAccess.ts           — Quick Access / Go to provider registry (also resolveQuickAccessItem, resolvePinnedItems): one QuickAccessProvider per destination type (place/glossary term/note/notebook/task/list/endeavour/tracker/routine/schedule) with list()/resolve()/navigate(); searchQuickAccessItems(), resolveRecentItems(), navigateToQuickAccessItem() — extension point for new destination types (see Implemented features)
   services/timezoneMigration.ts — rezoneAllCalendarData(fromZone, toZone): re-stamps every stored wall-clock date+time when the timezone setting changes
   hooks/
     useCtrlEnterSubmit.ts    — THE Ctrl+Enter rule for form-less modals/panes: `useCtrlEnterSubmit(onSubmit, active?)` (see "Ctrl+Enter — universal submit rule")
@@ -234,7 +237,8 @@ src/
     TravelModePicker/        — how a travel event travels (flight, train, bus, car, ferry); AddCalendarItemModal and CalendarEventPane
     LinksField/              — the shared links list (clickable / edit / delete / add) used by TaskPane, CalendarEventPane and CalendarReminderPane; links typed into notes arrive via `mergeNewLinks` in the store's update action, never here
     LinkHoverPreview/        — app-wide: shows a hovered link's URL bottom-left (see "Link hover preview" pattern below)
-    QuickAccessPane/         — app-wide, Ctrl+G: portaled search-and-jump overlay across Notes/Notebooks/Tasks/Lists/Endeavours/Trackers/Routines/Schedules, or browse Recent/Frequent visit history (see "Suite-wide Quick Access pane" in Implemented features)
+    PinButton/               — the pin / unpin button beside an item's own heading (a list, a tracker, a routine)
+    QuickAccessPane/         — app-wide: two tabs, Quick Access (Q: pins in your order, then Places) and Go to (Ctrl+G: search, Recent/Frequent); portaled search-and-jump overlay across Notes/Notebooks/Tasks/Lists/Endeavours/Trackers/Routines/Schedules, or browse Recent/Frequent visit history (see "Suite-wide Quick Access pane" in Implemented features)
     TruncatedText/           — wraps a CSS-ellipsis-truncated name/title; on hover, only when actually truncated, reveals the full text: `reveal="tooltip"` (default) in a floating box below the row, `reveal="extend"` drawn in place over the row and running out to the right (Notes: NoteList's note titles and ChronicleView's notebook names, 2026-09-28). Tooltip users: (2026-09-24) Sidebar/ManagePane/ListsSection/RecordsView's row names
     RowHoverActions/         — suite-wide nav-column row actions: RowOptionsMenu (the row's leading icon slot, which becomes a "⋯" on row hover; hovering it drops the actions down as a narrow column; long-press the row on Android) + RowAction (one labelled action), built on useRowHoverActions() (open/close state machine, shared with HoverOptions) + RowHoverActionsMenu (portaled floating panel; a BottomSheet on Android) — see "Row options menu" in Component patterns. Used by ChronicleView, Sidebar, ManagePane, ListsSection, RecordsView, OverviewSection
     SettingsPane/            — settings slide-in; reads HOTKEYS[] dynamically; NotificationsSection.tsx = Android-only Notifications block; SettingControls.tsx = the shared Toggle/SettingRow; StorageSection.tsx = the Storage block (per-store usage + Shrink images in notes); TypingShortcutsSection.tsx = the person's own typing shortcuts (add, edit, delete)

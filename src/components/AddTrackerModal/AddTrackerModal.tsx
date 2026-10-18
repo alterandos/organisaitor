@@ -8,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import type { TrackerTemplate, PurposeId, TagId, CollectionId } from '@/types';
 import styles from './AddTrackerModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { CloseIcon } from '@/components/Icons';
 
 const TEMPLATES: TrackerTemplate[] = ['habit', 'books', 'movies', 'custom'];
 
@@ -78,7 +79,7 @@ export function AddTrackerModal() {
       >
         <div className={styles.header}>
           <span className={styles.title}>New tracker</span>
-          <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
+          <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>

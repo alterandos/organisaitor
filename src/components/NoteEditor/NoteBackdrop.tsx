@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { ImageIcon } from '@/components/Icons';
+import { ImageIcon, TrashIcon } from '@/components/Icons';
 import { alertDialog, choiceDialog, confirmDelete, confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { LABELS } from '@/config/labels';
 import { NOTE_BACKDROP_PRESETS, noteBackdropLabel, type NoteBackdrop as AppBackdrop } from '@/config/noteBackdrops';
@@ -234,7 +234,7 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
                   title={L.deletePicture}
                   aria-label={L.deletePicture}
                   onClick={() => void remove(p)}
-                >×</button>
+                ><TrashIcon width="1em" height="1em" /></button>
               </div>
             ))}
           </div>

@@ -12,6 +12,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CreateKindSwitcher } from '@/components/CreateKindSwitcher/CreateKindSwitcher';
 import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
+import { CloseIcon } from '@/components/Icons';
 
 function getDepth(tagId: string | null, noteTags: Record<string, { parentTagId: string | null }>): number {
   if (!tagId) return 0;
@@ -104,7 +105,7 @@ export function AddNoteTagModal() {
         <CreateKindSwitcher current={isTag ? 'note-tag' : 'notebook'} draft={name} />
         <div className={styles.header}>
           <h2>New {levelLabel}</h2>
-          <button className={styles.closeBtn} onClick={closeModal}>✕</button>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <div className={styles.body}>
@@ -132,7 +133,7 @@ export function AddNoteTagModal() {
                     onClick={() => { setParentId(null); setParentPickerOpen(false); }}
                     title={LABELS.notebookParent.makeTopLevel}
                     aria-label={LABELS.notebookParent.makeTopLevel}
-                  >✕</button>
+                  ><CloseIcon /></button>
                 )}
               </div>
               {parentPickerOpen && (

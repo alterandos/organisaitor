@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useToastStore, type ToastRequest } from '@/store/toastStore';
 import styles from './Toast.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 function ToastView({ toast }: { toast: ToastRequest }) {
   const dismiss = useToastStore((s) => s.dismiss);
@@ -36,7 +37,7 @@ function ToastView({ toast }: { toast: ToastRequest }) {
           {a.label}
         </button>
       ))}
-      <button type="button" className={styles.close} onClick={() => dismiss(toast.id)} aria-label="Dismiss">×</button>
+      <button type="button" className={styles.close} onClick={() => dismiss(toast.id)} aria-label="Dismiss"><CloseIcon /></button>
     </div>,
     document.body,
   );

@@ -1,5 +1,7 @@
 import { useRef } from 'react';
 import { useTaskStore } from '@/store/taskStore';
+import { usePinAction } from '@/hooks/usePinAction';
+import { PinButton } from '@/components/PinButton/PinButton';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useRoutineStore } from '@/store/routineStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -14,6 +16,7 @@ import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { EditIcon, TrashIcon } from '@/components/Icons';
 
 function formatFieldValue(schema: FieldSchema, value: unknown): string {
   if (value === undefined || value === null || value === '') return '—';
@@ -67,8 +70,8 @@ function EntryRow({ entry, schema, onEdit, onDelete, hasNotes }: EntryRowProps) 
         )}
       </div>
       <div className={styles.entryActions}>
-        <button className={styles.entryBtn} onClick={() => onEdit(entry.id)} title="Edit">✎</button>
-        <button className={`${styles.entryBtn} ${styles.entryBtnDelete}`} onClick={() => onDelete(entry.id)} title="Delete">✕</button>
+        <button className={styles.entryBtn} onClick={() => onEdit(entry.id)} title="Edit"><EditIcon /></button>
+        <button className={`${styles.entryBtn} ${styles.entryBtnDelete}`} onClick={() => onDelete(entry.id)} title="Delete"><TrashIcon width="1em" height="1em" /></button>
       </div>
     </div>
   );
@@ -98,6 +101,7 @@ function TrackerDetail({ tracker }: TrackerDetailProps) {
             <span className={styles.detailDot} style={{ background: tracker.color }} />
           )}
           <h2 className={styles.detailTitle}>{tracker.name}</h2>
+          <PinButton type="tracker" id={tracker.id} className={styles.detailPinBtn} />
         </div>
         <button className={styles.addEntryBtn} onClick={() => showAddEntry(tracker.id)}>
           + Add entry
@@ -106,7 +110,7 @@ function TrackerDetail({ tracker }: TrackerDetailProps) {
 
       {tracker.fieldSchema.length === 0 ? (
         <p className={styles.emptyHint}>
-          This tracker has no fields defined. Use the ✎ button in the sidebar to add fields.
+          This tracker has no fields defined. Edit it from its ⋯ menu in the sidebar to add fields.
         </p>
       ) : trackerEntries.length === 0 ? (
         <p className={styles.emptyHint}>No entries yet. Add your first entry above.</p>
@@ -157,6 +161,7 @@ function RoutineDetail({ routine }: RoutineDetailProps) {
             <span className={styles.detailDot} style={{ background: routine.color }} />
           )}
           <h2 className={styles.detailTitle}>{routine.name}</h2>
+          <PinButton type="routine" id={routine.id} className={styles.detailPinBtn} />
         </div>
       </div>
 
@@ -226,11 +231,13 @@ function TrackerSidebarRow({
   deleteTitle: string;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
+  const pin = usePinAction(item.kind === 'routine' ? 'routine' : 'tracker', item.id);
   return (
     <div ref={rowRef} className={`${styles.trackerItem} ${active ? styles.trackerItemActive : ''}`}>
       <RowOptionsMenu rowRef={rowRef} title={item.name} icon={item.color && <span className={styles.trackerDot} style={{ background: item.color }} />}>
-        <RowAction className={styles.trackerActionBtn} icon="✎" label={editTitle} onClick={onEdit} />
-        <RowAction className={`${styles.trackerActionBtn} ${styles.trackerActionBtnDelete}`} icon="✕" label={deleteTitle} onClick={onDelete} destructive />
+        <RowAction className={styles.trackerActionBtn} icon={<EditIcon />} label={editTitle} onClick={onEdit} />
+        <RowAction className={styles.trackerActionBtn} {...pin} />
+        <RowAction className={`${styles.trackerActionBtn} ${styles.trackerActionBtnDelete}`} icon={<TrashIcon width="1em" height="1em" />} label={deleteTitle} onClick={onDelete} destructive />
       </RowOptionsMenu>
       <button className={styles.trackerSelectBtn} onClick={onSelect}>
         <TruncatedText text={item.name} className={styles.trackerName} />

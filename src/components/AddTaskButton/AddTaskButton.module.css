@@ -68,9 +68,10 @@
   border-radius: 50%;
   border: none;
   cursor: pointer;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #fff;
+  font-size: 1.15rem;
+  /* The circles are palette colours (lighter in the dark theme), so the icon takes the surface
+     colour: white on them in light, dark on them in dark. */
+  color: var(--color-surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -109,12 +110,15 @@
   box-shadow: 0 6px 18px rgba(91, 110, 225, 0.55);
 }
 
+.optionIcon { display: block; }
+
 .fabIcon {
   font-size: 1.75rem;
   line-height: 1;
   display: block;
   transition: transform 220ms ease;
 }
+.fabIcon svg { display: block; }
 
 .speedDialOpen .fabIcon {
   transform: rotate(45deg);

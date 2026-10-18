@@ -14,6 +14,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { EditIcon, TrashIcon } from '@/components/Icons';
 
 function formatPrice(price: number): string {
   if (price >= 1) {
@@ -584,7 +585,7 @@ export function WatchlistView() {
                       );
                     })}
               </div>
-              <span className={styles.tagEditHint} aria-hidden="true">✎</span>
+              <span className={styles.tagEditHint} aria-hidden="true"><EditIcon /></span>
             </div>
           </td>
         );
@@ -1021,8 +1022,8 @@ export function WatchlistView() {
                       {visibleColumns.map((col) => renderCell(col.id, item))}
                       <td className={`${styles.td} ${styles.tdActions}`} onClick={(e) => e.stopPropagation()}>
                         <div className={styles.rowActions}>
-                          <button className={styles.actionBtn} onClick={() => openEditWatchlistItem(item.id)} title="Edit">✎</button>
-                          <button className={`${styles.actionBtn} ${styles.deleteBtn}`} onClick={() => handleDelete(item.id, item.name)} title="Remove">✕</button>
+                          <button className={styles.actionBtn} onClick={() => openEditWatchlistItem(item.id)} title="Edit"><EditIcon /></button>
+                          <button className={`${styles.actionBtn} ${styles.deleteBtn}`} onClick={() => handleDelete(item.id, item.name)} title="Remove"><TrashIcon width="1em" height="1em" /></button>
                         </div>
                       </td>
                     </tr>

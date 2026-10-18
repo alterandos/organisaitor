@@ -42,7 +42,7 @@ import { OverviewSection } from '@/components/OverviewSection/OverviewSection';
 import { AddOverviewModal } from '@/components/AddOverviewModal/AddOverviewModal';
 import { NotesViewSwitcher } from '@/components/NotesSection/NotesViewSwitcher';
 import { ErrorBoundary } from '@/components/ErrorBoundary/ErrorBoundary';
-import { AccountIcon, SettingsIcon } from '@/components/Icons';
+import { AccountIcon, QuickAccessIcon, SettingsIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
 import { AddActivityModal } from '@/components/AddActivityModal/AddActivityModal';
 import { EditActivityTypeModal } from '@/components/EditActivityTypeModal/EditActivityTypeModal';
@@ -80,6 +80,7 @@ import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
 import { HistoryBrowser } from '@/components/HistoryBrowser/HistoryBrowser';
 import { initPictures } from '@/services/pictures';
+import { adoptLegacyNotePins } from '@/services/quickAccessPins';
 import { installSpecialCharInput } from '@/specialChars/fieldInput';
 import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog/ConfirmDialog';
@@ -257,7 +258,7 @@ export default function App() {
   }, [isAndroid]);
 
   useNotificationChecker();
-  useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initPictures(); initAutoBackup(); migrateTaskDeadlineShadows(); }, []);
+  useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initPictures(); initAutoBackup(); migrateTaskDeadlineShadows(); adoptLegacyNotePins(); }, []);
   // `//name` → a character (Greek, arrows, maths, super/subscripts) in every text field (src/specialChars/).
   useEffect(() => installSpecialCharInput(), []);
 
@@ -440,7 +441,13 @@ export default function App() {
       // own find-next (2026-10-09); neither Ctrl+G nor Alt+G types anything.
       if (matchesHotkeyId(e, 'action-quick-access')) {
         e.preventDefault();
-        toggleQuickAccess();
+        toggleQuickAccess('goto');
+        return;
+      }
+      // Quick Access's pins: Alt + its letter from inside a text field too (the plain letter types).
+      if (altLetterHotkey(e, ['action-pinned'])) {
+        e.preventDefault();
+        toggleQuickAccess('pinned');
         return;
       }
 
@@ -520,6 +527,7 @@ export default function App() {
       if (matchesHotkeyId(e, 'action-settings')) { e.preventDefault(); togglePlace('action-settings'); return; }
       if (matchesHotkeyId(e, 'action-account'))  { e.preventDefault(); togglePlace('action-account');  return; }
       if (matchesHotkeyId(e, 'action-manage'))   { e.preventDefault(); togglePlace('action-manage');   return; }
+      if (matchesHotkeyId(e, 'action-pinned'))   { e.preventDefault(); toggleQuickAccess('pinned'); return; }
 
       // Everything below acts on the page, so it stands aside under an open overlay.
       if (overOverlay) return;
@@ -653,13 +661,13 @@ export default function App() {
             {activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness' && activeView !== 'overview' && (
               <CollectionFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />
             )}
-            <NotificationCenter />
             <button
               className={styles.settingsBtn}
-              onClick={() => openAccount()}
-              aria-label="Account"
-              title="Account &amp; sync"
-            ><AccountIcon className={styles.accountIcon} /></button>
+              onClick={() => toggleQuickAccess('pinned')}
+              aria-label={LABELS.quickAccess.title}
+              title={LABELS.quickAccess.open}
+            ><QuickAccessIcon className={styles.accountIcon} /></button>
+            <NotificationCenter />
             <button
               className={styles.settingsBtn}
               onClick={() => { settingsPeek.close(); openSettings(); }}

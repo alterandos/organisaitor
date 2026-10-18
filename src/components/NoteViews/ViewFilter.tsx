@@ -5,6 +5,7 @@ import { notesNav } from '@/services/notesNav';
 import { isFilterEmpty, type NotesFilter } from '@/utils/notesBrowse';
 import type { FilterOption } from '@/hooks/useNotesBrowse';
 import styles from './NoteViews.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 // The Notes views' filter: chips for what's chosen (each removable), and a Filter button opening the
 // Endeavours, Purposes and tags to choose from. The filter is shared by every Notes view.
@@ -41,7 +42,7 @@ export function ViewFilter({ filter, options }: { filter: NotesFilter; options: 
         <button key={`${c.key}:${c.id}`} type="button" className={styles.chip}
           style={c.opt.color ? ({ '--chip-color': c.opt.color } as CSSProperties) : undefined}
           aria-label={L.removeFilter(c.opt.label)} title={L.removeFilter(c.opt.label)} onClick={() => toggle(c.key, c.id)}>
-          {c.opt.label} <span aria-hidden="true">×</span>
+          {c.opt.label} <CloseIcon aria-hidden="true" />
         </button>
       ))}
       <button type="button" className={styles.filterBtn} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>

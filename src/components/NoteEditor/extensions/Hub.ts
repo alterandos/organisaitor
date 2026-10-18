@@ -12,6 +12,7 @@ import {
   blockFrameAttributes, blockPill, designButtons, frameButtons, openBlockPopover, popoverClass as pop,
   replaceTypedWithBlock, selectButton, type BlockDesign,
 } from './blockDesigns';
+import { createGlyph } from '@/components/Icons';
 
 // An idea hub in a note (`\hub`): one bigger idea and what bears on it. A name, your own take on
 // it, then links, each saying how it relates (causes, supports, contradicts, an example of…) and
@@ -255,7 +256,7 @@ class HubLinkView {
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.setAttribute('data-hub-link-remove', '');
-    remove.textContent = '×';
+    remove.append(createGlyph('unlink'));
     remove.title = L.remove;
     remove.setAttribute('aria-label', L.remove);
     remove.hidden = !this.editor.isEditable;

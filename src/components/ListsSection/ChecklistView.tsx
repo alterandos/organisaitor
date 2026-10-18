@@ -7,6 +7,7 @@ import { confirmDialog, confirmDelete } from '@/components/ConfirmDialog/dialogs
 import { toggleChecklistItemWithTasks } from '@/services/taskListLinks';
 import type { List, ListId, ListItem, ListItemId, ListFieldSchema } from '@/types/lists';
 import styles from './ListsSection.module.css';
+import { EditIcon, TrashIcon } from '@/components/Icons';
 
 function fieldSummary(item: ListItem, fieldSchema: ListFieldSchema[]): string {
   return fieldSchema
@@ -107,8 +108,8 @@ export function ChecklistView({
           )}
         </div>
         <div className={styles.rowActions}>
-          <button className={styles.rowActionBtn} onClick={() => openEditListItem(item.id)} title="Edit">✎</button>
-          <button className={`${styles.rowActionBtn} ${styles.rowDeleteBtn}`} onClick={() => handleDelete(item)} title="Delete">✕</button>
+          <button className={styles.rowActionBtn} onClick={() => openEditListItem(item.id)} title="Edit"><EditIcon /></button>
+          <button className={`${styles.rowActionBtn} ${styles.rowDeleteBtn}`} onClick={() => handleDelete(item)} title="Delete"><TrashIcon width="1em" height="1em" /></button>
         </div>
       </li>
     );

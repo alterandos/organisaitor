@@ -10,6 +10,7 @@ import type { Note } from '@/types/notes';
 import { NoteTOC } from './NoteTOC';
 import { NoteBacklinks } from './NoteBacklinks';
 import styles from './MobileNoteSidePanel.module.css';
+import { CloseIcon, EditIcon } from '@/components/Icons';
 
 // The open note's side panel on a phone (MobileNotes, F24): what the desktop shows around the
 // editor — the tabs, the contents outline and key points, "Linked from" and the note's details —
@@ -54,7 +55,7 @@ export function MobileNoteSidePanel({ note, tabs, activeTabId, editor, noteLocke
       <aside className={styles.panel} role="dialog" aria-label={L.panelTitle}>
         <header className={styles.header}>
           <span className={styles.title}>{L.panelTitle}</span>
-          <button type="button" className={styles.close} onClick={onClose} aria-label={L.closePanel}>✕</button>
+          <button type="button" className={styles.close} onClick={onClose} aria-label={L.closePanel}><CloseIcon /></button>
         </header>
 
         <div className={styles.body}>
@@ -94,7 +95,7 @@ export function MobileNoteSidePanel({ note, tabs, activeTabId, editor, noteLocke
                       className={styles.tabRename}
                       onClick={() => setRenaming({ id: t.id, isMain: t.isMain, value: t.name })}
                       aria-label={LABELS.rowActions.edit}
-                    >✎</button>
+                    ><EditIcon /></button>
                   )}
                 </div>
               );

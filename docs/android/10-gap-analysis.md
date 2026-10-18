@@ -178,7 +178,7 @@ Notes is free on Android (ADR-4) and has never had a phone design. It is the lar
 | ID | Gap | Sev | Proposed treatment |
 |----|-----|-----|--------------------|
 | I1 | **Done 2026-10-04 (W2).** **Manage view** (Endeavours/Purposes/Tags) is reachable from More, but its row actions are hover-only, so you can't edit, archive or delete anything. | H | A5. |
-| I2 | Quick Access has no entry point. | M | A6 / D6. |
+| I2 | ~~Quick Access has no entry point.~~ **Done 2026-10-18:** the header's ⚡ button opens it (Go to is its second tab); its rows pin and reorder through a long-press sheet. Left from D6: swipe down on the header. | M | A6 / D6. |
 | I3 | Recycling Bin: reachable from Account. | — | Fine; verify layout. |
 | I4 | Settings: Storage, auto-backup and hotkey table. | L | Hide the hotkey table on Android unless a hardware keyboard is attached (or n/a). Auto-backup snapshot export depends on A7. |
 | I5 | Notification bell (`NotificationCenter`) placement in the mobile header. | L | Verify. |

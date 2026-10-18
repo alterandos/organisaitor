@@ -7,7 +7,7 @@ import { ARTIFACT_TYPES } from './artifactTypes';
 import { flagMenuItems } from './flags';
 import { findArtifactGroup, setArtifactDisplay, unlinkArtifactGroup } from './artifactGroups';
 import { createElement } from 'react';
-import { DisclosureIcon } from '@/components/Icons';
+import { DisclosureIcon, OpenIcon, UnlinkIcon } from '@/components/Icons';
 
 // Right-click on linked text (or anywhere on its pane): the pane's own actions, plus the item's
 // extras (its flags and repeat, which the visual pane doesn't offer).
@@ -40,13 +40,13 @@ registerContextMenuProvider({
     const summary = def?.summarize(group.targetId) ?? null;
     const expanded = group.display === 'expanded';
     return [
-      { id: 'open', label: L.open, icon: '↗', disabled: !summary, run: () => { openArtifactTarget(group.targetType, group.targetId); } },
+      { id: 'open', label: L.open, icon: createElement(OpenIcon), disabled: !summary, run: () => { openArtifactTarget(group.targetType, group.targetId); } },
       { id: 'display', label: expanded ? L.hideDetails : L.showDetails, icon: createElement(DisclosureIcon, { open: expanded }), run: () => setArtifactDisplay(view, group.key, pos, expanded ? 'basic' : 'expanded') },
       ...(summary && summary.done !== null && def?.toggleDone
         ? [{ id: 'done', label: summary.done ? L.markNotDone : L.markDone, icon: summary.done ? '☐' : '☑', run: () => def.toggleDone!(group.targetId) }]
         : []),
       ...(summary && def?.flags ? [{ id: 'options', label: L.options, icon: '⚙', submenu: [flagMenuItems(def.flags(group.targetId))] }] : []),
-      { id: 'unlink', label: L.unlink, icon: '✕', run: () => unlinkArtifactGroup(view, group.key, pos) },
+      { id: 'unlink', label: L.unlink, icon: createElement(UnlinkIcon), run: () => unlinkArtifactGroup(view, group.key, pos) },
     ];
   },
 });

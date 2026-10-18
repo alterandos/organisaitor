@@ -10,6 +10,7 @@ import { MAIN_TAB_ID } from '@/utils/noteTabs';
 import { LABELS } from '@/config/labels';
 import type { NotePlace } from '@/services/noteFromItem';
 import styles from './NotePickerModal.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 interface Props {
   excludeIds: ReadonlySet<string>;
@@ -281,7 +282,7 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
       <div className={styles.modal} role="dialog" aria-label={placing ? L.placeTitle : 'Link a note'}>
         <div className={styles.header}>
           <span className={styles.title}>{placing ? `📝 ${L.placeTitle}` : '📝 Link a note'}</span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <input

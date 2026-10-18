@@ -9,6 +9,7 @@ import { openOAuthFlow } from '@/services/oauthState';
 import type { Activity, ActivityId, ActivityType } from '@/types/fitness';
 import styles from './FitnessSection.module.css';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { EditIcon, TrashIcon } from '@/components/Icons';
 
 function StravaConnect() {
   const [status, setStatus] = useState<StravaStatus | null>(null);
@@ -103,12 +104,12 @@ function ActivityRow({ activity, activityTypes }: { activity: Activity; activity
           className={styles.actionBtn}
           onClick={(e) => { e.stopPropagation(); openEditActivity(activity); }}
           title="Edit"
-        >✎</button>
+        ><EditIcon /></button>
         <button
           className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
           onClick={handleDelete}
           title="Delete"
-        >✕</button>
+        ><TrashIcon width="1em" height="1em" /></button>
       </div>
     </div>
   );

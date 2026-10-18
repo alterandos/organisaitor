@@ -46,6 +46,8 @@ due in about three and a half weeks.
   Then the saved "Due in the next fortnight".
 - **Records:** Study hours and Field samples trackers, the Morning revision routine.
 - **Lists:** the Dictionary (words are highlighted in notes), the reading list.
-- **Quick Access** (Ctrl+G): recent notes and places. **Glossary** and **Review** (Important
-  passages due for review).
+- **Quick Access** (Q): the pins (Start here, the essay, GEOS215, the field trip report, the
+  reading list, the morning routine, Review) and the Places row. Right-click any note, notebook or
+  list → Pin to Quick Access, then Q shows it. **Go to** (Ctrl+G, or Alt+G from the Quick Access
+  tab): search, recent notes. **Glossary** and **Review** (Important passages due for review).
 - Fitness and Portfolio, briefly, if they're part of the pitch.

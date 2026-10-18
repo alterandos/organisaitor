@@ -14,6 +14,7 @@ import type {
   OverviewGroupBy, OverviewId, OverviewQuery, OverviewSort, OverviewSourceKey, OverviewStatusFilter, OverviewWhenFilter,
 } from '@/types/overview';
 import styles from './AddOverviewModal.module.css';
+import { CloseIcon } from '@/components/Icons';
 
 const L = LABELS.overview;
 
@@ -72,7 +73,7 @@ export function AddOverviewModal() {
       <div className={styles.modal} role="dialog" aria-label={editing ? L.editTitle : L.newTitle}>
         <div className={styles.header}>
           <span className={styles.title}>{editing ? L.editTitle : L.newTitle}</span>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>

@@ -3,6 +3,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { formatTime } from '@/utils/date';
 import styles from './TimeInput.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { CloseIcon } from '@/components/Icons';
 
 interface Props {
   className?:  string;
@@ -345,7 +346,7 @@ export function TimeInput({ className, value, onChange, placeholder }: Props) {
           aria-label="Clear time"
           onClick={clearTime}
         >
-          ✕
+          <CloseIcon />
         </button>
       )}
       <button

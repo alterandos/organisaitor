@@ -9,6 +9,7 @@ import styles from './CalendarImportReviewModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { CloseIcon } from '@/components/Icons';
 
 export interface ReviewRow {
   key:         string;
@@ -62,7 +63,7 @@ export function CalendarImportReviewModal({ rows: initialRows, onConfirm, onCanc
       <div className={styles.modal}>
         <div className={styles.header}>
           <span className={styles.title}>Review import — {rows.length} event{rows.length !== 1 ? 's' : ''} found</span>
-          <button className={styles.closeBtn} onClick={onCancel} aria-label="Close">×</button>
+          <button className={styles.closeBtn} onClick={onCancel} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <div className={styles.toolbar}>
