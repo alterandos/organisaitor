@@ -289,7 +289,11 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
     if (showLinkInput) { setShowLinkInput(false); setLinkUrl(''); return; }
     if (showColorPicker) { setShowColorPicker(false); return; }
     editor.commands.setTextSelection(editor.state.selection.to);
-  }, !!pos);
+  }, !!pos, {
+    // Only while the person is in this note or its toolbar: typing in the scratchpad or a sticky
+    // with a selection left in the note, Escape is theirs.
+    when: () => editor.isFocused || !!document.activeElement?.closest(`.${styles.toolbar}`),
+  });
 
   useEffect(() => {
     if (!pos) return;

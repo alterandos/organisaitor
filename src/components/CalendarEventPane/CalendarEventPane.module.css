@@ -167,8 +167,6 @@
 .select     { width: 100%; cursor: pointer; }
 .dateInput  { width: fit-content; }
 .timeInput  { width: 7.5rem; }
-.notifyNum  { width: 4rem; font-size: 0.9rem; font-family: inherit; color: var(--color-text); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.4rem 0.65rem; outline: none; transition: border-color 140ms ease; }
-.notifyNum:focus { border-color: var(--color-primary); }
 .select:focus,
 .dateInput:focus,
 .timeInput:focus { border-color: var(--color-primary); }

@@ -94,7 +94,8 @@ export function docForText(text: string): string {
 
 const titleFor = (text: string) => text.split('\n').find((l) => l.trim())?.trim().slice(0, 60) || LABELS.stickies.untitled;
 
-export function setStickyContent(noteId: string, doc: StickyDoc): void {
+// `keepTitle`: the note keeps its own name (the scratchpad) rather than taking its first line.
+export function setStickyContent(noteId: string, doc: StickyDoc, keepTitle = false): void {
   const json = asNoteJson(doc);
   editNoteContent(noteId, null, {
     inEditor: (tr) => {
@@ -104,6 +105,7 @@ export function setStickyContent(noteId: string, doc: StickyDoc): void {
     },
     inJson: () => json,
   });
+  if (keepTitle) return;
   const note = useNoteStore.getState().notes[noteId as NoteId];
   const title = titleFor(stickyText(doc));
   if (note && note.title !== title) useNoteStore.getState().updateNote(noteId as NoteId, { title });

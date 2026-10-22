@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
-import { HierarchyExtensions, setHierarchySettings } from './Hierarchy';
+import { HierarchyExtensions, addHierarchyItem, setHierarchySettings } from './Hierarchy';
 import { PyramidExtensions, deleteLayer, layerWidths, setPyramidSettings } from './Pyramid';
 import { effectiveLevels, hierarchyLayout, subtreeEnd } from './hierarchyLayout';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
@@ -161,5 +161,28 @@ describe('pyramid block', () => {
     setPyramidSettings(editor.view, posOf('pyramid'), { variant: 'funnel', colours: 'spectrum' });
     editor.commands.setContent(editor.getHTML());
     expect(editor.state.doc.nodeAt(posOf('pyramid'))!.attrs).toMatchObject({ variant: 'funnel', colours: 'spectrum' });
+  });
+});
+
+describe('adding an item from a node (the hover +)', () => {
+  const html = '<div data-type="hierarchy"><div data-type="hierarchy-item" data-level="0"><div data-hi-box>A</div></div>'
+    + '<div data-type="hierarchy-item" data-level="1"><div data-hi-box>B</div></div>'
+    + '<div data-type="hierarchy-item" data-level="2"><div data-hi-box>B1</div></div>'
+    + '<div data-type="hierarchy-item" data-level="1"><div data-hi-box>C</div></div></div>';
+
+  it('a child goes after the node’s last descendant, a level down, with the cursor in it', () => {
+    make(html);
+    addHierarchyItem(editor.view, posOf('hierarchy'), 1, 'child');
+    expect(outline()).toBe('0:A 1:B 2:B1 2: 1:C');
+    type('B2');
+    expect(outline()).toBe('0:A 1:B 2:B1 2:B2 1:C');
+  });
+
+  it('a sibling goes after the whole subtree, at the same level; at the end too', () => {
+    make(html);
+    addHierarchyItem(editor.view, posOf('hierarchy'), 1, 'sibling');
+    expect(outline()).toBe('0:A 1:B 2:B1 1: 1:C');
+    addHierarchyItem(editor.view, posOf('hierarchy'), 4, 'sibling');
+    expect(outline()).toBe('0:A 1:B 2:B1 1: 1:C 1:');
   });
 });

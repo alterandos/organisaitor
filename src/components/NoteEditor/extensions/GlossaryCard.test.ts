@@ -140,16 +140,37 @@ describe('Glossary cards', () => {
     expect(link.getAttribute('href')).toBe('https://www.example.org/osmosis');
   });
 
-  it('width: Standard for a Card, the column for Compact, unless set; a drag snaps to the nearest width', () => {
-    expect(cardWidth({ variant: 'card', width: null })).toBe('standard');
+  it('width: Fit the text for a Card, the column for Compact, unless set; a drag is free, snapping near the named widths', () => {
+    expect(cardWidth({ variant: 'card', width: null })).toBe('auto');
     expect(cardWidth({ variant: 'compact', width: null })).toBe('full');
     expect(cardWidth({ variant: 'compact', width: 'half' })).toBe('half');
-    expect(cardWidth({ variant: 'card', width: 'nonsense' })).toBe('standard');
-    // Standard is 26rem (416px).
-    expect(snapCardWidth(0.3, 960)).toBe('third');
-    expect(snapCardWidth(0.95, 960)).toBe('full');
-    expect(snapCardWidth(0.62, 1600)).toBe('half');
-    expect(snapCardWidth(0.25, 1600)).toBe('standard');   // 416 / 1600 = 0.26
+    expect(cardWidth({ variant: 'card', width: '42%' })).toBe('42%');
+    expect(cardWidth({ variant: 'card', width: 'nonsense' })).toBe('auto');
+    expect(cardWidth({ variant: 'card', width: '3%' })).toBe('15%');        // never too narrow to use
+    expect(snapCardWidth(0.32, 960)).toBe('third');                         // close to a third
+    expect(snapCardWidth(0.42, 1600)).toBe('42%');                          // nowhere near a stop: free
+    expect(snapCardWidth(0.98, 960)).toBe('full');
+    expect(snapCardWidth(0.51, 1600)).toBe('half');
+    expect(snapCardWidth(0.74, 1600)).toBe('75%');
+    expect(snapCardWidth(0.26, 1600)).toBe('standard');   // 416 / 1600 = 0.26, nearer than a quarter
+  });
+
+  it('a dragged width is stored as a share and drawn through --card-w', async () => {
+    await make('<div data-type="glossary-card" data-entry-id="e1"></div>');
+    setGlossaryCardWidth(editor.view, cards()[0].pos, '42%');
+    const dom = editor.view.dom.querySelector('[data-type="glossary-card"]') as HTMLElement;
+    expect(dom.getAttribute('data-card-width-shown')).toBe('custom');
+    expect(dom.style.getPropertyValue('--card-w')).toBe('42%');
+    setGlossaryCardWidth(editor.view, cards()[0].pos, 'auto');
+    expect(editor.state.doc.nodeAt(cards()[0].pos)!.attrs.width).toBeNull();
+  });
+
+  it('the picture’s width and place are kept on the card and round-trip', async () => {
+    await make('<div data-type="glossary-card" data-entry-id="e1" data-image-width="180" data-image-place="right"></div>');
+    expect(editor.state.doc.nodeAt(cards()[0].pos)!.attrs).toMatchObject({ imageWidth: 180, imagePlace: 'right' });
+    await make('<div data-type="glossary-card" data-entry-id="e1" data-image-place="sideways"></div>');
+    expect(editor.state.doc.nodeAt(cards()[0].pos)!.attrs).toMatchObject({ imageWidth: null, imagePlace: 'flow' });
+    expect(editor.getHTML()).not.toContain('data-image-place');
   });
 
   it('a set width is stored on the card and round-trips', async () => {

@@ -273,14 +273,17 @@ export function RecordsView() {
     : null;
 
   async function handleDeleteTracker(id: string, name: string) {
-    if (await confirmDelete('tracker', name, 'All its entries will be deleted too.')) {
+    const hasEntries = Object.values(useTrackerStore.getState().entries).some((e) => e.trackerId === id);
+    if (await confirmDelete('tracker', name, 'All its entries will be deleted too.', { empty: !hasEntries })) {
       deleteCollection(id as CollectionId);
       if (activeTrackerId === id) setActiveTracker(null);
     }
   }
 
   async function handleDeleteRoutine(id: string, name: string) {
-    if (await confirmDelete('routine', name, 'Its history will be deleted too.')) {
+    const routine = useTaskStore.getState().collections[id as CollectionId];
+    const hasHistory = Object.values(useRoutineStore.getState().instances).some((i) => i.routineId === id);
+    if (await confirmDelete('routine', name, 'Its history will be deleted too.', { empty: !hasHistory && !(routine?.routineTasks ?? []).length })) {
       deleteInstances(id as CollectionId);
       deleteCollection(id as CollectionId);
       if (activeRoutineId === id) setActiveRoutine(null);

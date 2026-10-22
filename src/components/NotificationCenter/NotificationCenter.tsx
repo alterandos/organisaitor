@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import { toggleTaskCompletion } from '@/services/taskCompletion';
 import { useNotificationStore, type PendingNotification } from '@/store/notificationStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -169,7 +170,7 @@ function NotificationCard({ n }: { n: PendingNotification }) {
             </div>
           )}
           <div className={styles.miniForm}>
-            <input type="date" className={styles.miniDate} value={postponeTo} onChange={(e) => setPostponeTo(e.target.value)} />
+            <DateInput className={styles.miniDate} value={postponeTo} onChange={(v) => setPostponeTo(v)} />
             <TimeInput className={styles.miniTime} value={postponeTime} onChange={setPostponeTime} />
             <button className={`${styles.actionBtn} ${styles.doneBtn}`} disabled={!postponeTo} onClick={() => postpone(postponeTo, postponeTime || undefined)}>{C.move}</button>
             <button className={styles.actionBtn} onClick={() => setMode('idle')}>{C.cancel}</button>

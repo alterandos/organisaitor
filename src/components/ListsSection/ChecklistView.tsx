@@ -53,7 +53,7 @@ export function ChecklistView({
   }
 
   async function handleDelete(item: ListItem) {
-    if (!(await confirmDelete('list item', item.title))) return;
+    if (!(await confirmDelete('list item', item.title, undefined, { empty: !item.title.trim() }))) return;
     deleteListItem(item.id);
   }
 

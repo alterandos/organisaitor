@@ -68,7 +68,11 @@ export async function confirmGlossaryDelete(entryId: string): Promise<boolean> {
   const entry = glossaryEntry(entryId);
   if (!entry) return true;
   const links = linksToEntry(entryId).reduce((n, l) => n + l.count, 0);
-  return confirmDelete(entry.kindLabel.toLowerCase(), entry.term || '…', links ? LABELS.glossaryCard.deleteDetail(links) : undefined);
+  // Nothing written in it and nothing linking to it: it goes without asking.
+  const raw = useNoteStore.getState().structuredTagEntries[entryId as never] as { isEncrypted?: boolean; fields?: Record<string, unknown> } | undefined;
+  const filled = Object.values(raw?.fields ?? {}).some((v) => (Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? v.trim() !== '' : v != null));
+  const empty = !entry.locked && !raw?.isEncrypted && !entry.term.trim() && !links && !filled;
+  return confirmDelete(entry.kindLabel.toLowerCase(), entry.term || '…', links ? LABELS.glossaryCard.deleteDetail(links) : undefined, { empty });
 }
 
 export function deleteGlossaryEntryNow(entryId: string, schema: Schema): void {

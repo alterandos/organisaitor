@@ -4,7 +4,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { NodeSelection } from '@tiptap/pm/state';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
-import { MathExtensions, loadMathLive, setMathSettings } from './Maths';
+import { MathExtensions, loadMathLive, mathsFromSelection, setMathSettings } from './Maths';
 import { NoteBlockSelect } from './blockDesigns';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { noteClipboardText } from '../noteClipboardText';
@@ -203,5 +203,21 @@ describe('maths', () => {
     expect(press('ArrowLeft')).toBe(true);
     await new Promise((r) => setTimeout(r, 0));
     expect(commands().at(-1)).toBe('moveToMathfieldEnd');
+  });
+});
+
+describe('maths from selected text', () => {
+  const textPos = (text: string) => { let at = -1; editor.state.doc.descendants((n, p) => { if (at < 0 && n.isText && n.text!.includes(text)) at = p + n.text!.indexOf(text); }); return at; };
+  const nodes = (name: string) => { const out: Record<string, unknown>[] = []; editor.state.doc.descendants((n) => { if (n.type.name === name) out.push(n.attrs); }); return out; };
+
+  it('a whole line becomes a maths block with the text in it; part of a line, inline maths', () => {
+    make('<p>E = mc^2</p><p>so x^2 + 1 here</p>');
+    const a = textPos('E = mc^2');
+    mathsFromSelection(editor.view, a, a + 8);
+    expect(nodes('mathBlock').map((n) => n.latex)).toEqual(['E = mc^2']);
+    const b = textPos('x^2 + 1');
+    mathsFromSelection(editor.view, b, b + 7);
+    expect(nodes('mathInline').map((n) => n.latex)).toEqual(['x^2 + 1']);
+    expect(editor.getText()).toContain('so  here');
   });
 });

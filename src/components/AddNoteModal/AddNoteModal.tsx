@@ -37,9 +37,11 @@ export function AddNoteModal() {
     : resolveNoteInheritedCollectionId(selectedTagIds, noteTags);
 
   useEscapeClose(() => { closeModal(); });
+  // Creating a note opens it with the cursor in it, ready to type (asked for 2026-10-19); Save &
+  // close is the second choice.
   useCtrlEnterSubmit(() => handleSave());
 
-  function handleSave(openEditor = false) {
+  function handleSave(openEditor = true) {
     if (!title.trim()) return;
     const template = NOTE_TEMPLATES.find((t) => t.id === templateId);
     const noteId = addNote({
@@ -51,6 +53,7 @@ export function AddNoteModal() {
     });
     if (openEditor) {
       closeModal();
+      useUIStore.getState().setRequestedNoteFocus(noteId);
       openNote(noteId);
     } else {
       setTitle('');
@@ -188,7 +191,7 @@ export function AddNoteModal() {
             Cancel
           </button>
           <button
-            className={styles.btnPrimary}
+            className={styles.btnSecondary}
             onClick={() => handleSave(false)}
             disabled={!title.trim()}
           >

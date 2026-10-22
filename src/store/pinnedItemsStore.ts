@@ -25,6 +25,14 @@ export interface PinnedItem {
 
 export const pinKey = (type: PinnableType, entityId: string) => `${type}:${entityId}`;
 
+// Pinned from the start (2026-10-19): the scratchpad, so Quick Access reaches it by default. Added
+// once (a fresh install's first state, or the v2 migration), so one the person unpins stays unpinned.
+function defaultPins(): Record<string, PinnedItem> {
+  const ts = now();
+  const id = pinKey('place', 'scratchpad');
+  return { [id]: { id, type: 'place', entityId: 'scratchpad', order: 0, createdAt: ts, updatedAt: ts } };
+}
+
 interface PinnedItemsState {
   pins: Record<string, PinnedItem>;
   pin:     (type: PinnableType, entityId: string) => void;
@@ -38,7 +46,7 @@ interface PinnedItemsState {
 export const usePinnedItemsStore = create<PinnedItemsState>()(
   persist(
     (set) => ({
-      pins: {},
+      pins: defaultPins(),
 
       pin: (type, entityId) => set((s) => {
         const id = pinKey(type, entityId);
@@ -67,6 +75,21 @@ export const usePinnedItemsStore = create<PinnedItemsState>()(
         return { pins };
       }),
     }),
-    { name: 'quick-access-pins', storage: persistStorage(), version: 1 },
+    {
+      name: 'quick-access-pins',
+      storage: persistStorage(),
+      version: 2,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      migrate(state: any, version: number) {
+        // v1 → v2: the scratchpad pinned by default, after what's already pinned (2026-10-19).
+        if (version < 2) {
+          const pins: Record<string, PinnedItem> = state?.pins ?? {};
+          const [id, pin] = Object.entries(defaultPins())[0];
+          if (!pins[id]) pins[id] = { ...pin, order: Math.max(-1, ...Object.values(pins).map((p) => p.order)) + 1 };
+          state = { ...state, pins };
+        }
+        return state as PinnedItemsState;
+      },
+    },
   ),
 );

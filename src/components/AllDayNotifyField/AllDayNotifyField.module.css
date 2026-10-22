@@ -1,9 +1,11 @@
 .row {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+/* The amount and what it counts (days before, hours before) never part. */
+.row > .row { flex-wrap: nowrap; }
 
 .select {
   padding: 0.4rem 0.5rem;
@@ -17,4 +19,96 @@
 .at {
   font-size: 0.8rem;
   color: var(--color-muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+/* An amount typed straight in, with a ▾ list of the usual choices (NotifyLead.tsx). */
+.amount {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+.amount:focus-within {
+  border-color: var(--color-primary);
+}
+.amountInput {
+  width: 2.6rem;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  text-align: right;
+  padding: 0.4rem 0.2rem 0.4rem 0.5rem;
+}
+.amountToggle {
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.65rem;
+  padding: 0 0.4rem;
+  align-self: stretch;
+}
+.amountToggle:hover {
+  color: var(--color-text);
+}
+
+.presets {
+  position: fixed;
+  min-width: 9rem;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-picker);
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.preset {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 0.35rem 0.6rem;
+  font-size: var(--text-sm);
+  font-family: inherit;
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.preset:hover {
+  background: var(--color-bg);
+}
+.presetActive {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* The time of day in "days before, at", boxed like the amount beside it. */
+.time {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
 }

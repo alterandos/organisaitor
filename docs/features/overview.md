@@ -79,6 +79,19 @@ It sits at the top of the left nav, above a divider, with hotkey `0`.
   - A task's shadow calendar items are excluded to avoid duplicates.
   - Repeating calendar items show their next occurrence.
 
+## Layouts: List, Runway, Board (2026-10-22)
+
+An Overview can be shown three ways (the header's switch, remembered per Overview on this device: `uiStore.overviewLayouts`, by selection key). Designed with the user:
+- **List**: the rows, grouped and sorted as the Overview asks.
+- **Runway** (`components/OverviewRunway/OverviewRunway.tsx`): a time line. Each thing's bar is **the time left**: from today (or a task's start, its scheduled day) to its due date, so a longer bar is more runway. Overdue things run back from today in red ("2 days late"); events are their own span; reminders, reviews, question follow-ups and list items' dates are dots; a planned work window (from a start) is striped, with a dotted line from today to a start still ahead. Bands: **Important**, **By date** (soonest first), and the **No date** tray of chips (inbox items, questions with no follow-up, undated tasks). Zoom Week / Month / Quarter; Today scrolls to today; things beyond the zoom's cap run off the right edge. **Dragging**: a bar's right end moves its due date (a task's deadline, a Deadline's date); a dot or event moves whole; a bar's left end sets when work starts (a task's scheduled day), and on a standalone Deadline **plans the work**: it becomes a task that keeps the Deadline (`planDeadlineWork` in `services/taskCalendarLinks.ts`). Every drag through `overview/edit.ts`, each with Undo. Repeating items and reviews aren't draggable (`plan.movable`). No keyboard shortcut (Alt+arrows are navigation). **Important things stand out** (2026-10-23): a warm band heading, a warm stripe, a bold title and a ❗ beside it; a taller bar in full colour with a warm ring; a bold label. Colour is never the only signal. **Labels say how far off**: a due thing "N days left" / "N days late"; an event or a moment "in N days", "tomorrow", "today", "on now" (an event under way), "N days ago".
+- **Board** (`components/OverviewRunway/OverviewBoard.tsx`): columns Overdue, Today, This week (to Sunday), Next week, This month, Later, No date; important things first in each. On a phone the Board takes the Runway's place (the Runway needs width); its columns stack on a narrow screen.
+
+How a row is drawn is its `plan` (`OverviewPlan` in `types/overview.ts`: shape due / block / point / tray, start, end, important, movable), set by each source; rows without one (notes, lists, tracker entries) are left off both timelines. The rules (bands, span, Board buckets) are pure, in `overview/timeline.ts` (tested). The components only read the rows they're given, so either could be mounted elsewhere (the Calendar) later.
+
+**Tasks under their event** (2026-10-23): a task linked to an event or a Deadline (preparation, follow-up or related: `utils/eventTaskLinks.ts`) sits under that event's row on the Runway, wherever its own date falls, with a faint band on its track where the event is. An arrow on the event's row folds its tasks away ("3 tasks" while folded; open by default). Generic: a row's `plan.under` names the row it sits under (the task source sets it from the task's first event link); `runwayBands` returns them as `children` when that row is shown, and as ordinary rows when it isn't (the event filtered out). Sub-tasks aren't pulled in: their parent stands for them. The Board doesn't group.
+
+**Review source** (2026-10-22): Important passages on the review list, due on their next review day (`review`, icon 🔁), opened at the passage.
+
 ## Files
 
 - **Engine and types**: `src/types/overview.ts`, `src/overview/{sources,engine,useOverviewSnapshot,open}.ts`.

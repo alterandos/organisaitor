@@ -4,6 +4,7 @@ import type {
 import { formatTime, addDaysToIso } from '@/utils/date';
 import { zonedTimeToUtc, utcToZonedTime } from '@/utils/timezone';
 import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
+import { datedRule, eventRule, leadDays, notifyMoment } from '@/utils/notifyRule';
 import type { ClockFormat } from '@/utils/date';
 
 // THE notification rules, for every platform (docs/android/05-notifications.md N1). Pure: given a
@@ -47,10 +48,6 @@ const SCHEDULE_NOTIFY_BEFORE_MIN = 30;
 
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
-
-function leadMinutes(value: number, unit: 'minutes' | 'hours' | 'days'): number {
-  return unit === 'days' ? value * 1440 : unit === 'hours' ? value * 60 : value;
-}
 
 // The item's own date plus, for a repeating item, every occurrence in [start, end].
 function occurrences(date: string, repeat: CalendarEvent['repeat'], start: string, end: string): string[] {
@@ -104,12 +101,12 @@ export function planNotifications(snap: NotificationSnapshot, opts: PlanOptions)
     if (ev.archivedAt) continue;
     const seen = (date: string) => (ev.seenDates ?? []).includes(date);
     const snoozed = snooze('event', ev, null, 'Snoozed', seen);
-    if (ev.notifyBeforeValue === null) continue;
-    const lead = leadMinutes(ev.notifyBeforeValue, ev.notifyBeforeUnit);
-    const [start, end] = range(Math.ceil(lead / 1440));
+    const rule = eventRule(ev);
+    if (rule.kind === 'off') continue;
+    const [start, end] = range(leadDays(rule));
     for (const date of occurrences(ev.date, ev.repeat, start, end)) {
       if (seen(date)) continue;
-      const at = new Date(zonedTimeToUtc(date, ev.startTime ?? '00:00', zone).getTime() - lead * MIN);
+      const at = notifyMoment(rule, date, ev.startTime, zone)!;
       if (!inWindow(at) || snoozedAway(snoozed, date, at)) continue;
       // Imported events arrive with their history; don't announce what passed before they existed.
       if (ev.source && at.getTime() < Date.parse(ev.createdAt)) continue;
@@ -120,37 +117,37 @@ export function planNotifications(snap: NotificationSnapshot, opts: PlanOptions)
 
   // ── Reminders: at their time; a whole-day one at its own notify moment (default the evening before) ──
   for (const rem of Object.values(snap.reminders)) {
-    if (rem.archivedAt) continue;
+    if (rem.archivedAt || rem.notify === false) continue;
     const linkedTask = rem.reminderType === 'task' ? taskByReminder.get(rem.id) : undefined;
     if (rem.reminderType === 'task' && taskDone(linkedTask)) continue;
     const label = rem.reminderType === 'task' ? 'Due' : 'Reminder';
     const remDone = (date: string) => (rem.doneDates ?? []).includes(date);
     const snoozed = snooze('reminder', rem, linkedTask?.id ?? null, `${label} (snoozed)`, remDone);
-    const [start, end] = range(rem.time ? 0 : rem.notifyDaysBefore);
+    const rule = datedRule(rem, 'reminder');
+    const [start, end] = range(leadDays(rule));
     for (const date of occurrences(rem.date, rem.repeat, start, end)) {
       if (remDone(date)) continue;
-      const at = rem.time
-        ? zonedTimeToUtc(date, rem.time, zone)
-        : zonedTimeToUtc(addDaysToIso(date, -rem.notifyDaysBefore), rem.notifyAtTime, zone);
+      const at = notifyMoment(rule, date, rem.time, zone)!;
       if (!inWindow(at) || snoozedAway(snoozed, date, at)) continue;
-      // A whole-day moment that passed before the reminder existed isn't worth announcing.
-      if (!rem.time && at.getTime() < Date.parse(rem.createdAt)) continue;
+      // A lead-time moment that passed before the reminder existed isn't worth announcing.
+      if (rule.kind !== 'atTime' && at.getTime() < Date.parse(rem.createdAt)) continue;
       const body = rem.time ? `${label} at ${formatTime(rem.time, clockFormat)}` : `${label} ${whenFrom(at, date, zone)}`;
       out.push({ key: `reminder:${rem.id}:${date}`, kind: 'reminder', itemId: rem.id, occurrence: date, at, title: rem.title, body, important: rem.important, taskId: linkedTask?.id ?? null });
     }
   }
 
-  // ── Deadlines: only ever BEFORE (notifyDaysBefore + notifyAtTime), even with a time set ──
+  // ── Deadlines: only ever BEFORE (days before at a time, or N units before its time), never at it ──
   for (const dl of Object.values(snap.deadlines)) {
-    if (dl.archivedAt) continue;
+    if (dl.archivedAt || dl.notify === false) continue;
     const linkedTask = dl.deadlineType === 'task' ? taskByDeadline.get(dl.id) : undefined;
     if (dl.deadlineType === 'task' && taskDone(linkedTask)) continue;
     const settled = (date: string) => (dl.doneDates ?? []).includes(date) || (dl.seenDates ?? []).includes(date);
     const snoozed = snooze('deadline', dl, linkedTask?.id ?? null, 'Due (snoozed)', settled);
-    const [start, end] = range(dl.notifyDaysBefore);
+    const rule = datedRule(dl, 'deadline');
+    const [start, end] = range(leadDays(rule));
     for (const date of occurrences(dl.date, dl.repeat, start, end)) {
       if (settled(date)) continue;
-      const at = zonedTimeToUtc(addDaysToIso(date, -dl.notifyDaysBefore), dl.notifyAtTime, zone);
+      const at = notifyMoment(rule, date, dl.time, zone)!;
       if (!inWindow(at) || snoozedAway(snoozed, date, at)) continue;
       if (at.getTime() < Date.parse(dl.createdAt)) continue;
       const body = `Due ${whenFrom(at, date, zone)}${dl.time ? ` at ${formatTime(dl.time, clockFormat)}` : ''}`;

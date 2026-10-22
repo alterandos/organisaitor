@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType } from '@/types';
+import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType, RepeatConfig } from '@/types';
 import type { Activity } from '@/types/fitness';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { useNoteStore } from '@/store/noteStore';
 import { persistStorage } from '@/utils/persistStorage';
 import { todayIso } from '@/utils/date';
 import { getNotePrimaryNotebookId } from '@/utils/notes';
+import type { OverviewLayout } from '@/types/overview';
 import type { NoteId } from '@/types/notes';
 import type { PassageFind } from '@/utils/noteContent';
 import { type NavPlace, pushPlace, travel } from '@/store/navHistory';
@@ -41,7 +42,7 @@ export interface CalendarItemPrefillExtra {
   eventType?:    'default' | 'birthday' | 'travel';
   tentative?:    boolean;
   important?:    boolean;
-  repeat?:       { freq: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number } | null;
+  repeat?:       RepeatConfig | null;
 }
 
 // A Notes text range waiting for the item it was turned into (see pendingArtifactLink).
@@ -160,6 +161,10 @@ interface UIState {
   // purposes from it the way it does from a parent, and links the new task `followUpOf` it.
   showAddFollowUp:   (originTaskId: string) => void;
   pendingFollowUpOf: string | null;
+  // New task linked to an event or a Deadline as its preparation or follow-up
+  // (utils/eventTaskLinks.ts): AddTaskModal takes its dates, title and Endeavour from it and links it.
+  showAddTaskForEvent: (link: { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'deadline'; targetId: string }) => void;
+  pendingEventLink:    { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'deadline'; targetId: string } | null;
   // MobileQuickAddBar's "More options…" escape hatch (docs/android/01-tasks-app.md §3.2), and
   // the Notes "Create ▸ Task" flow (FloatingToolbar) — both open the full AddTaskModal
   // pre-filled rather than duplicating its fields in a bespoke form.
@@ -260,7 +265,21 @@ interface UIState {
   // Recycling Bin (Ctrl+Shift+R, or from Account) — see src/components/RecyclingBinPane/.
   recyclingBinOpen:  boolean;
   openRecyclingBin:  () => void;
+  // The date calculator (components/DateCalculator): a Place, opened from the Calendar's header too.
+  dateCalcOpen:      boolean;
+  // The converters panel (components/ConverterPane): a Place, Alt+=. `converterTarget` opens it
+  // on a converter (`select`: a unit category's id or a converter's) or its editor (`edit`).
+  convertersOpen:    boolean;
+  converterTarget:   { select?: string; edit?: string } | null;
+  openConverters:    (target?: { select?: string; edit?: string }) => void;
+  closeConverters:   () => void;
+  openDateCalculator:  () => void;
+  closeDateCalculator: () => void;
   closeRecyclingBin: () => void;
+  // The scratchpad panel (Alt+P, services/scratchpad.ts), over any section.
+  scratchpadOpen:    boolean;
+  openScratchpad:    () => void;
+  closeScratchpad:   () => void;
 
   sortField:    SortField;
   sortDir:      SortDir;
@@ -408,6 +427,10 @@ interface UIState {
   // Overview — persisted, so the section reopens on what it last showed.
   overviewSelection:     OverviewSelection;
   setOverviewSelection:  (sel: OverviewSelection) => void;
+  // How each Overview is shown (list, Runway, Board), by its selection key ('saved:<id>',
+  // 'endeavour:<id>', 'builtIn:inboxes'); remembered on this device. Missing = the list.
+  overviewLayouts:       Record<string, OverviewLayout>;
+  setOverviewLayout:     (key: string, layout: OverviewLayout) => void;
   // Jump to an Endeavour's automatic Overview from anywhere (e.g. the Endeavour's row menu).
   openEndeavourOverview: (collectionId: string) => void;
   editingOverviewId:     string | null;   // null with openModal 'add-overview' = creating one
@@ -451,6 +474,10 @@ interface UIState {
   // services/notePassage.ts; consumed by NoteEditor.
   requestedNotePassage:      ({ noteId: string } & PassageFind) | null;
   setRequestedNotePassage:   (p: ({ noteId: string } & PassageFind) | null) => void;
+  // A note to put the cursor in once it's open: a note just created (2026-10-19), so typing can
+  // start at once. Consumed by whichever NoteEditor loads it.
+  requestedNoteFocus:        string | null;
+  setRequestedNoteFocus:     (noteId: string | null) => void;
   // What the Notes section shows (config/noteViews.ts): a view (the Tree, the Map) or a tool
   // (Glossary, Review, Hubs, the tagged passages). One field in place of a flag each (2026-10-17).
   // setNotesView counts a visit to the view's Place; closeNotesView(id) goes back to the Tree
@@ -601,10 +628,12 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   taskModalAdvanced:  false,
   pendingParentId:    null,
 
-  showAddTask:       () => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, pendingFollowUpOf: null, quickAddPrefill: null }),
+  showAddTask:       () => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, pendingFollowUpOf: null, pendingEventLink: null, quickAddPrefill: null }),
   showAddSubtask:    (parentId) => set({ openModal: 'add-task', taskModalAdvanced: true, pendingParentId: parentId ?? null, pendingFollowUpOf: null, quickAddPrefill: null }),
   pendingFollowUpOf: null,
-  showAddFollowUp:   (originTaskId) => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, pendingFollowUpOf: originTaskId, quickAddPrefill: null }),
+  showAddFollowUp:   (originTaskId) => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, pendingFollowUpOf: originTaskId, pendingEventLink: null, quickAddPrefill: null }),
+  pendingEventLink:    null,
+  showAddTaskForEvent: (link) => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, pendingFollowUpOf: null, pendingEventLink: link, quickAddPrefill: null }),
   quickAddPrefill:        null,
   showAddTaskWithPrefill: (prefill) => set({ openModal: 'add-task', taskModalAdvanced: false, pendingParentId: null, pendingFollowUpOf: null, quickAddPrefill: prefill }),
 
@@ -643,6 +672,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     taskModalAdvanced: false,
     pendingParentId: null,
     pendingFollowUpOf: null,
+    pendingEventLink: null,
     editingOverviewId: null,
     quickAddPrefill: null,
     editingTag: null,
@@ -715,8 +745,18 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeIntegrations: () => set({ integrationsOpen: false }),
 
   recyclingBinOpen:  false,
+  dateCalcOpen:      false,
+  convertersOpen:    false,
+  converterTarget:   null,
+  openConverters:    (target) => { useRecentItemsStore.getState().recordVisit('place', 'converters'); set({ convertersOpen: true, converterTarget: target ?? null }); },
+  closeConverters:   () => set({ convertersOpen: false, converterTarget: null }),
+  openDateCalculator:  () => { useRecentItemsStore.getState().recordVisit('place', 'date-calculator'); set({ dateCalcOpen: true }); },
+  closeDateCalculator: () => set({ dateCalcOpen: false }),
   openRecyclingBin:  () => { useRecentItemsStore.getState().recordVisit('place', 'recycling-bin'); set({ recyclingBinOpen: true }); },
   closeRecyclingBin: () => set({ recyclingBinOpen: false }),
+  scratchpadOpen:    false,
+  openScratchpad:    () => { useRecentItemsStore.getState().recordVisit('place', 'scratchpad'); set({ scratchpadOpen: true }); },
+  closeScratchpad:   () => set({ scratchpadOpen: false }),
 
   sortField: 'createdAt',
   sortDir:   'desc',
@@ -902,6 +942,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   setListsLastActive:    (listId, tabId) => set({ listsLastActiveListId: listId, listsLastActiveTabId: tabId }),
   overviewSelection:     null,
   setOverviewSelection:  (sel) => set({ overviewSelection: sel }),
+  overviewLayouts:       {},
+  setOverviewLayout:     (key, layout) => set((s) => ({ overviewLayouts: { ...s.overviewLayouts, [key]: layout } })),
   openEndeavourOverview: (collectionId) => {
     set({ overviewSelection: { kind: 'endeavour', id: collectionId } });
     get().setActiveView('overview');
@@ -985,6 +1027,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   clearRequestedNoteTab:  () => set({ requestedNoteTab: null }),
   requestedNotePassage:     null,
   setRequestedNotePassage:  (p) => set({ requestedNotePassage: p }),
+  requestedNoteFocus:       null,
+  setRequestedNoteFocus:    (noteId) => set({ requestedNoteFocus: noteId }),
   notesView:              DEFAULT_NOTES_VIEW,
   notesBrowseView:        DEFAULT_NOTES_VIEW,
   setNotesView:           (id) => {
@@ -1121,7 +1165,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 }), {
   name:    'todo-ui-session',
   storage: persistStorage(),
-  version: 9,
+  version: 10,
   // v1 → v2: overviewSelection (Overview section, 2026-10-01).
   // v2 → v3: one history of places (navHistory/navForward) replaces sectionHistory and
   // notesHistory (2026-10-07); the old section stops carry over, the note stops are dropped.
@@ -1131,6 +1175,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   // v6 → v7: notes side by side: noteLayout, notePanes, noteSplit (2026-10-16).
   // v7 → v8: the Notes views' shared filter, grouping and focus (2026-10-17).
   // v8 → v9: notesBrowseView, the Notes view to open on (2026-10-17).
+  // v9 → v10: overviewLayouts, how each Overview is shown (2026-10-22).
   migrate: (persisted, fromVersion) => {
     let state = (persisted ?? {}) as Record<string, unknown>;
     if (fromVersion < 2 && state.overviewSelection === undefined) state = { ...state, overviewSelection: null };
@@ -1147,6 +1192,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     if (fromVersion < 7) state = { noteLayout: 'single', notePanes: [], noteSplit: { x: 0.5, y: 0.5 }, ...state };
     if (fromVersion < 8) state = { notesFilter: EMPTY_NOTES_FILTER, notesGrouping: 'notebook', notesFocusGroupId: null, ...state };
     if (fromVersion < 9) state = { notesBrowseView: DEFAULT_NOTES_VIEW, ...state };
+    if (fromVersion < 10) state = { overviewLayouts: {}, ...state };
     return state as never;
   },
   partialize: (s) => ({
@@ -1176,6 +1222,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     listsLastActiveListId:    s.listsLastActiveListId,
     listsLastActiveTabId:     s.listsLastActiveTabId,
     overviewSelection:        s.overviewSelection,
+    overviewLayouts:          s.overviewLayouts,
     activeTrackerId:          s.activeTrackerId,
     activeRoutineId:          s.activeRoutineId,
     calendarViewMode:         s.calendarViewMode,

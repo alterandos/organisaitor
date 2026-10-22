@@ -1,0 +1,256 @@
+/* The Runway (OverviewRunway.tsx): bands of things on a time line, each a bar of the time left. */
+.runway { display: flex; flex-direction: column; gap: var(--space-3); min-height: 0; }
+.runway[data-dragging] { cursor: ew-resize; user-select: none; }
+
+.toolbar { display: flex; align-items: center; gap: var(--space-3); }
+.zooms { display: inline-flex; padding: 2px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.zoomBtn {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.zoomOn { background: var(--color-primary); color: var(--color-on-primary); }
+.todayBtn {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.todayBtn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.empty { color: var(--color-muted); font-size: var(--text-sm); }
+
+.scroll {
+  overflow: auto;
+  max-height: calc(100dvh - 15rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+.canvas { position: relative; padding-bottom: var(--space-3); }
+
+/* The dates along the top, kept in view while scrolling down. */
+.axis { position: sticky; top: 0; z-index: calc(var(--z-sticky) + 1); display: flex; height: 2rem; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+.axisCorner { position: sticky; left: 0; z-index: var(--z-sticky); flex: none; width: var(--label-w); background: var(--color-surface); }
+.axisTrack { position: relative; flex: none; }
+.tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: var(--space-1) 0 0 var(--space-1);
+  border-left: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+.tickMajor { color: var(--color-text); font-weight: 600; border-left-color: var(--color-border-strong); }
+
+.todayLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: var(--z-sticky);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-danger);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.band { position: relative; }
+.bandHead { position: sticky; left: 0; display: flex; align-items: center; height: 1.8rem; padding-left: var(--space-3); background: var(--color-bg); border-bottom: 1px solid var(--color-border); }
+.bandTitle {
+  position: sticky;
+  left: var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.count { margin-left: var(--space-1); font-weight: 600; }
+
+.line { display: flex; align-items: center; height: 2.1rem; }
+.line:hover { background: var(--color-primary-subtle); }
+.lineDone { opacity: 0.55; }
+.what {
+  position: sticky;
+  left: 0;
+  z-index: calc(var(--z-sticky) + 1);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: var(--label-w);
+  height: 100%;
+  padding: 0 var(--space-3);
+  border: none;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.line:hover .what { background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)); }
+.whatTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track { position: relative; flex: none; height: 100%; }
+
+/* A bar of time left: solid; a planned work window (from a start): striped; overdue: red. */
+.bar {
+  position: absolute;
+  top: 0.55rem;
+  height: 1rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+.planned {
+  background: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--color-primary) 75%, transparent) 0 6px,
+    color-mix(in srgb, var(--color-primary) 50%, transparent) 6px 12px);
+}
+.late { background: color-mix(in srgb, var(--color-danger) 75%, transparent); }
+.finished { background: var(--color-border-strong); }
+.clipped { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* Before a start that's still ahead: a thin dotted line from today. */
+.waiting { position: absolute; top: 1.02rem; height: 0; border-top: 2px dotted var(--color-border-strong); }
+
+.block {
+  position: absolute;
+  top: 0.7rem;
+  height: 0.7rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-item-calendar) 70%, transparent);
+}
+.point {
+  position: absolute;
+  top: 50%;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin: -0.375rem 0 0 -0.375rem;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--color-primary);
+  outline: 1px solid var(--color-primary);
+}
+.grab { cursor: grab; }
+
+/* The ends of a bar, to drag: shown on hover, always on touch. */
+.handle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  border: 2px solid var(--color-primary);
+  cursor: ew-resize;
+  touch-action: none;
+  opacity: 0;
+}
+.handleStart { left: -5px; }
+.handleEnd { right: -5px; }
+.line:hover .handle, .handle:focus-visible { opacity: 1; }
+@media (hover: none) { .handle { opacity: 1; } }
+
+.barLabel {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tray { display: flex; flex-direction: column; gap: var(--space-2); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chip {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--color-primary); }
+
+/* Important things stand out by more than their band (agreed 2026-10-23): a warm stripe and a ❗ by
+   the title, the title in bold, a taller, fully coloured bar with a warm ring, and the label in the
+   text colour. Colour is never the only signal: the ❗ and the weight carry it too. */
+.importantBand .bandHead { background: var(--color-warning-muted); border-bottom-color: color-mix(in srgb, var(--color-warning) 40%, var(--color-border)); }
+.importantBand .bandTitle { color: var(--color-text); }
+.important .what { border-left: 3px solid var(--color-warning); padding-left: calc(var(--space-3) - 3px); font-weight: 600; }
+.flag { flex: none; margin-left: auto; font-size: var(--text-xs); }
+.important .bar { top: 0.4rem; height: 1.3rem; background: var(--color-primary); outline: 2px solid var(--color-warning); outline-offset: 1px; }
+.important .planned {
+  background: repeating-linear-gradient(135deg, var(--color-primary) 0 6px, color-mix(in srgb, var(--color-primary) 70%, transparent) 6px 12px);
+}
+.important .late { background: var(--color-danger); }
+.important .finished { background: var(--color-border-strong); outline-color: var(--color-border-strong); }
+.important .block { top: 0.55rem; height: 1rem; background: var(--color-item-calendar); outline: 2px solid var(--color-warning); outline-offset: 1px; }
+.important .point { width: 1rem; height: 1rem; margin: -0.5rem 0 0 -0.5rem; outline: 2px solid var(--color-warning); }
+.important .barLabel { color: var(--color-text); font-weight: 600; }
+
+/* The title column holds the open button, and on a row with linked tasks the fold arrow and,
+   folded, how many there are. */
+.what { cursor: default; }
+.whatOpen {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fold {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-left: calc(-1 * var(--space-2));
+  padding: var(--space-1);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.fold:hover { color: var(--color-text); background: var(--color-primary-subtle); }
+.kidCount { flex: none; color: var(--color-muted); font-size: var(--text-xs); font-weight: 400; }
+
+/* A task linked to the row above it: indented under it, with a faint band where that event falls. */
+.child .what { padding-left: calc(var(--space-3) + 1.25rem); font-size: var(--text-xs); }
+.child { height: 1.8rem; }
+.anchorMark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--color-item-calendar) 12%, transparent);
+  border-left: 1px dashed color-mix(in srgb, var(--color-item-calendar) 60%, transparent);
+  pointer-events: none;
+}
+.child .bar { top: 0.4rem; }
+.child .block { top: 0.55rem; }

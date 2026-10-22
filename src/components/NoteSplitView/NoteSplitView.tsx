@@ -5,8 +5,8 @@ import { NoteEditor } from '@/components/NoteEditor/NoteEditor';
 import { useNoteView } from '@/store/noteViews';
 import { NotePickerModal } from '@/components/NotePickerModal/NotePickerModal';
 import { SplitDivider } from '@/components/ResizeHandle/SplitDivider';
-import { LABELS } from '@/config/labels';
 import { NoteViewMenu } from './NoteViewMenu';
+import { EmptyPane } from './EmptyPane';
 import styles from './NoteSplitView.module.css';
 
 // Notes side by side (asked for by the user, built 2026-10-16): two, three or four notes at once,
@@ -32,7 +32,6 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
   const [live, setLive] = useState<{ x?: number; y?: number }>({});
   const [picking, setPicking] = useState<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const L = LABELS.noteViews;
   // Suggestions from the note in front, as every picker suggests from what it's opened beside.
   const frontNote = useNoteView(panes[focused] ?? null);
   const frontTitle = frontNote?.title ?? '';
@@ -55,6 +54,7 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
     </div>
   );
   const areas = ['a', 'b', 'c', 'd'];
+  const openIds = new Set(panes.filter((p): p is string => !!p));
 
   return (
     <div className={styles.root}>
@@ -81,15 +81,12 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
             >
               {noteId ? (
                 <NoteEditor
-                  focusSignal={i === focused ? focusSignal : undefined}
+                  focusSignal={focusSignal}
                   onNavReturn={onNavReturn}
-                  pane={{ index: i, noteId, focused: i === focused, ribbon }}
+                  pane={{ index: i, noteId, focused: i === focused, ribbon, onReplace: () => setPicking(i) }}
                 />
               ) : (
-                <div className={styles.empty}>
-                  <p>{L.empty}</p>
-                  <button type="button" className={styles.choose} onClick={() => setPicking(i)}>{L.choose}</button>
-                </div>
+                <EmptyPane openIds={openIds} onPick={(id) => openInPane(i, id)} onChoose={() => setPicking(i)} />
               )}
             </section>
           );
@@ -100,7 +97,7 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
       </div>
       {picking !== null && (
         <NotePickerModal
-          excludeIds={new Set(panes.filter((p): p is string => !!p))}
+          excludeIds={openIds}
           suggestFrom={frontTitle}
           onPick={(noteId, tabId) => { openInPane(picking, noteId, tabId); setPicking(null); }}
           onClose={() => setPicking(null)}

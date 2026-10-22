@@ -92,6 +92,18 @@ describe('`\\` offers note blocks', () => {
     expect(getSession(editor.state)).toBeNull();
   });
 
+  it('Ctrl+Z straight after making a block takes just the block away, giving back what was typed', () => {
+    make();
+    type('Earlier text');          // typed just before, so it would share the undo step
+    editor.commands.splitBlock();
+    type('\\timeline ');
+    expect(editor.getHTML()).toContain('data-type="timeline"');
+    editor.commands.undo();
+    expect(editor.getText()).toContain('Earlier text');
+    expect(editor.getHTML()).not.toContain('data-type="timeline"');
+    expect(editor.getText()).toContain('\\timeline');
+  });
+
   it('`\\tl` + Enter inserts it too; after text on the line, the timeline goes below the line', () => {
     make('<p>History</p>');
     type(' \\tl');

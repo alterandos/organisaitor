@@ -29,6 +29,19 @@ export function nthWeekdayOfMonth(year: number, month: number, week: number, day
   return d.getMonth() === month ? d : null;
 }
 
+// The first date on or after `date` that is the `week`th `day` of its month ("the next third
+// Sunday"), or `date` itself if none comes within a year. A series' first date always counts as one
+// of its dates, so a rule chosen for "every third Sunday" starts here.
+export function firstNthWeekdayFrom(date: string, mw: { week: number; day: number }): string {
+  const start = new Date(date + 'T00:00:00');
+  for (let k = 0; k < 14; k++) {
+    const m = new Date(start.getFullYear(), start.getMonth() + k, 1);
+    const d = nthWeekdayOfMonth(m.getFullYear(), m.getMonth(), mw.week, mw.day);
+    if (d && d >= start) return toDateStr(d);
+  }
+  return date;
+}
+
 // Which week of its month a date is in, as monthWeekday counts it: 1–4, or -1 when it's the last
 // such weekday of the month (the 5th is always the last). For offering "the 2nd Tuesday" /
 // "the last Friday" from a start date.

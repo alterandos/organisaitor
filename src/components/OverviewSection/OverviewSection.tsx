@@ -22,6 +22,10 @@ import type { Overview, OverviewId, OverviewQuery, OverviewRow } from '@/types/o
 import styles from './OverviewSection.module.css';
 import { DisclosureIcon, EditIcon, TrashIcon } from '@/components/Icons';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
+import { OverviewRunway } from '@/components/OverviewRunway/OverviewRunway';
+import { OverviewBoard } from '@/components/OverviewRunway/OverviewBoard';
+import { usePlatform } from '@/hooks/usePlatform';
+import { OVERVIEW_LAYOUTS, type OverviewLayout } from '@/types/overview';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 const L = LABELS.overview;
@@ -117,6 +121,9 @@ export function OverviewSection() {
   const openEdit    = useUIStore((s) => s.openEditOverview);
   const timezone    = useSettingsStore((s) => s.timezone);
   const snapshot    = useOverviewSnapshot();
+  const layouts     = useUIStore((s) => s.overviewLayouts);
+  const setLayout   = useUIStore((s) => s.setOverviewLayout);
+  const { isAndroid } = usePlatform();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const today = todayIsoInZone(resolveTimezone(timezone));
@@ -139,6 +146,12 @@ export function OverviewSection() {
     ? selectedSaved.name
     : selectedEndeavour ? L.endeavourTitle(selectedEndeavour.name) : '';
   const queryEndeavour = query?.collectionId ? collections[query.collectionId] : undefined;
+  // How this Overview is shown (List / Runway / Board), remembered per Overview. The Runway needs
+  // width, so a phone shows the Board in its place.
+  const layoutKey = selection ? `${selection.kind}:${selection.id}` : '';
+  const layout: OverviewLayout = layouts[layoutKey] ?? 'list';
+  const shownLayout: OverviewLayout = isAndroid && layout === 'runway' ? 'board' : layout;
+  const allRows = useMemo(() => result?.groups.flatMap((g) => g.rows) ?? [], [result]);
 
   const toggleGroup = (key: string) => setCollapsed((prev) => {
     const next = new Set(prev);
@@ -197,6 +210,12 @@ export function OverviewSection() {
                   {describeQuery(query, selectedSaved && queryEndeavour ? queryEndeavour.name : null)} · {L.count(result.total)}
                 </span>
               </div>
+              <div className={styles.layouts} role="group" aria-label={L.layoutLabel}>
+                {OVERVIEW_LAYOUTS.filter((l) => !(isAndroid && l === 'runway')).map((l) => (
+                  <button key={l} type="button" aria-pressed={shownLayout === l} className={`${styles.layoutBtn} ${shownLayout === l ? styles.layoutOn : ''}`}
+                    onClick={() => setLayout(layoutKey, l)}>{L.layouts[l]}</button>
+                ))}
+              </div>
               {selectedSaved && (
                 <button className={styles.editBtn} onClick={() => openEdit(selectedSaved.id)}>{L.edit}</button>
               )}
@@ -205,7 +224,9 @@ export function OverviewSection() {
             {result.hiddenLocked > 0 && <p className={styles.locked}>🔒 {L.lockedHidden(result.hiddenLocked)}</p>}
             {result.total === 0 && <p className={styles.hint}>{L.noRows}</p>}
 
-            {result.groups.map((g) => {
+            {shownLayout === 'runway' && <OverviewRunway rows={allRows} today={today} onOpen={openOverviewRow} />}
+            {shownLayout === 'board' && <OverviewBoard rows={allRows} today={today} onOpen={openOverviewRow} />}
+            {shownLayout === 'list' && result.groups.map((g) => {
               const isCollapsed = collapsed.has(g.key);
               return (
                 <section key={g.key} className={styles.group}>

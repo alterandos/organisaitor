@@ -530,12 +530,13 @@ export function ListsSection() {
   const countByStatus = (s: ListItemStatus) => allItemsInList.filter((i) => i.status === s).length;
 
   const handleDeleteList = async (id: ListId, name: string) => {
-    if (!(await confirmDelete(LABELS.list.toLowerCase(), name, LABELS.lists.deleteListDetail))) return;
+    const hasItems = Object.values(useListStore.getState().listItems).some((i) => i.listId === id);
+    if (!(await confirmDelete(LABELS.list.toLowerCase(), name, LABELS.lists.deleteListDetail, { empty: !hasItems }))) return;
     deleteListWithCleanup(id);
   };
 
   const handleDeleteItem = async (item: ListItem) => {
-    if (!(await confirmDelete('list item', item.title))) return;
+    if (!(await confirmDelete('list item', item.title, undefined, { empty: !item.title.trim() }))) return;
     deleteListItem(item.id);
   };
 

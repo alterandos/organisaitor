@@ -1,4 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useCardTermLinks } from './CardTermLinks';
+import { alertDialog } from '@/components/ConfirmDialog/dialogs';
+import { DEFAULT_IMAGE_LAYOUT, IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { useNoteStore } from '@/store/noteStore';
 import { entryView, isEntryLocked, useSecretsVersion } from '@/services/noteSecrets';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
@@ -43,6 +46,31 @@ interface Props {
   onAddAnother: () => void; // Shift+Enter in the last field
   onDiscard: (how: 'enter' | 'escape') => void;   // Enter or Esc in a fresh, empty card
   onLeave:  (forward: boolean) => void;   // an arrow key past the first or last field
+  onUndo:   () => void;   // Ctrl+Z in a fresh, empty card: undo making it
+  imageLayout?: ImageLayout;   // how this card shows its picture (cardImageLayout.ts)
+  onImageLayout?: (layout: ImageLayout) => void;
+}
+
+const DEFAULT_LAYOUT = DEFAULT_IMAGE_LAYOUT;
+const MIN_IMAGE_PX = 48;
+
+// The first picture on the clipboard (a paste or a drop), if any.
+function imageFileFrom(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  for (const item of Array.from(data.items ?? [])) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) return item.getAsFile();
+  }
+  return Array.from(data.files ?? []).find((f) => f.type.startsWith('image/')) ?? null;
+}
+
+// The clipboard's picture, read on request (the Paste button): needs the browser's permission.
+async function clipboardImage(): Promise<File | null> {
+  const items = await navigator.clipboard.read();
+  for (const item of items) {
+    const type = item.types.find((t) => t.startsWith('image/'));
+    if (type) return new File([await item.getType(type)], 'pasted', { type });
+  }
+  return null;
 }
 
 // The record's current fields merged with `change`, written through the store (encryption-aware).
@@ -144,11 +172,13 @@ function formatKey(e: KeyboardEvent<HTMLElement>): void {
 // A field of formatted text (utils/richText.ts): editable in place, saved half a second after
 // typing stops and on leaving it, never per keystroke (each save syncs). Shown from the record while
 // it isn't being typed in. Pasting brings in the text only.
-function RichField({ html, onCommit, multiline, placeholder, className, editable, label, autoFocus }: {
+function RichField({ html, onCommit, multiline, placeholder, className, editable, label, autoFocus, termLinksFor }: {
   html: string; onCommit: (html: string) => void; multiline?: boolean; placeholder?: string; className?: string;
   editable: boolean; label: string; autoFocus?: boolean;
+  termLinksFor?: string;   // this card's record: Glossary terms typed here are offered as links (CardTermLinks.tsx)
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const links = useCardTermLinks(termLinksFor);
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commit = useRef(onCommit);
@@ -169,8 +199,17 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
   }, [html]);
   useEffect(() => { if (autoFocus && ref.current) focusField(ref.current, 'end'); }, [autoFocus]);
   useEffect(() => { const s = save.current; return () => s(); }, []);
-  if (!editable) return html ? <div className={`${styles.richShown} ${className ?? ''}`} dangerouslySetInnerHTML={{ __html: sanitizeInlineHtml(html) }} /> : null;
+  if (!editable) {
+    return html ? (
+      <>
+        <div className={`${styles.richShown} ${className ?? ''}`} dangerouslySetInnerHTML={{ __html: sanitizeInlineHtml(html) }}
+          onMouseOver={links.onMouseOver} onMouseOut={links.onMouseOut} onClick={links.onClick} />
+        {links.overlay}
+      </>
+    ) : null;
+  }
   return (
+    <>
     <div
       ref={ref}
       contentEditable
@@ -189,14 +228,18 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
         dirty.current = true;
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => save.current(), 500);
+        links.onInput(el);
       }}
+      onMouseOver={links.onMouseOver}
+      onMouseOut={links.onMouseOut}
+      onClick={links.onClick}
       onBlur={() => {
         save.current();
         // Left as saved: only the kept formatting (a pasted or browser-added span goes).
         const el = ref.current;
         if (el && el.innerHTML !== sanitizeInlineHtml(el.innerHTML)) el.innerHTML = sanitizeInlineHtml(el.innerHTML);
       }}
-      onKeyDown={formatKey}
+      onKeyDown={(e) => { if (!links.onKeyDown(e, e.currentTarget)) formatKey(e); }}
       onPaste={(e) => {
         e.preventDefault();
         const text = e.clipboardData.getData('text/plain');
@@ -204,6 +247,8 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
       }}
       onDrop={(e) => e.preventDefault()}
     />
+    {links.overlay}
+    </>
   );
 }
 
@@ -298,22 +343,87 @@ function FactsField({ facts, onCommit, placeholder, editable, label, autoFocus }
 }
 
 // The picture is in the picture library (`picture:<id>` in the field; a data URL from before the
-// library still shows). An encrypted entry's picture is stored encrypted.
-function ImageField({ value, term, encrypted, onCommit, editable }: { value: string; term: string; encrypted: boolean; onCommit: (v: string) => void; editable: boolean }) {
+// library still shows). An encrypted entry's picture is stored encrypted. A picture can be chosen,
+// pasted (Ctrl+V with the slot focused, anywhere in the card, or the Paste button) or dropped on
+// it; dragging its corner resizes it, and it can sit in the fields' order, to their right or after them.
+function ImageField({ value, term, encrypted, onCommit, editable, layout, onLayout }: {
+  value: string; term: string; encrypted: boolean; onCommit: (v: string) => void; editable: boolean;
+  layout: ImageLayout; onLayout?: (l: ImageLayout) => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const src = useFieldPictureSrc(value);
-  async function choose(file: File | undefined) {
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  async function choose(file: File | null | undefined) {
     if (!file) return;
     try { onCommit(pictureRef(await addPicture(file, { encrypted, origin: 'card' }))); }
     catch (e) { log.warn('glossaryCard', 'could not read the picture', errorMessage(e)); }
   }
+  async function pasteFromClipboard() {
+    let file: File | null;
+    try { file = await clipboardImage(); }
+    catch (e) {
+      log.warn('glossaryCard', 'clipboard not readable', errorMessage(e));
+      await alertDialog(L.clipboardBlocked);
+      return;
+    }
+    if (file) await choose(file);
+    else await alertDialog(L.noClipboardImage);
+  }
+  function startResize(e: React.PointerEvent<HTMLSpanElement>) {
+    const img = imgRef.current;
+    if (!img || !onLayout) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const left = img.getBoundingClientRect().left;
+    const max = img.closest('[data-glossary-type]')?.getBoundingClientRect().width ?? 600;
+    let width = img.getBoundingClientRect().width;
+    const move = (ev: PointerEvent) => { width = Math.round(Math.max(MIN_IMAGE_PX, Math.min(max, ev.clientX - left))); setDragWidth(width); };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      setDragWidth(null);
+      onLayout({ ...layout, width });
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  }
+  const width = dragWidth ?? layout.width;
   return (
-    <div className={styles.imageField}>
-      {src && <img className={styles.image} src={src} alt={L.imageAlt(term)} />}
+    <div
+      className={styles.imageField}
+      tabIndex={editable ? 0 : undefined}
+      aria-label={editable ? L.imageSlot : undefined}
+      onPaste={(e) => { const f = editable ? imageFileFrom(e.clipboardData) : null; if (f) { e.preventDefault(); e.stopPropagation(); void choose(f); } }}
+      onDragOver={(e) => { if (editable && Array.from(e.dataTransfer.items).some((i) => i.type.startsWith('image/'))) e.preventDefault(); }}
+      onDrop={(e) => { const f = editable ? imageFileFrom(e.dataTransfer) : null; if (f) { e.preventDefault(); e.stopPropagation(); void choose(f); } }}
+    >
+      {src && (
+        <span className={styles.imageBox}>
+          <img ref={imgRef} className={`${styles.image} ${width ? styles.imageSized : ''}`} src={src} alt={L.imageAlt(term)} style={width ? { width } : undefined} />
+          {editable && onLayout && (
+            <span className={styles.imageResize} role="separator" aria-orientation="vertical" aria-label={L.resizeImage} title={L.resizeImage}
+              onPointerDown={startResize} onDoubleClick={() => onLayout({ ...layout, width: null })} />
+          )}
+        </span>
+      )}
       {editable && (
         <div className={styles.imageTools}>
           <button type="button" className={styles.smallBtn} onClick={() => fileRef.current?.click()}>{value ? L.replaceImage : L.addImage}</button>
+          <button type="button" className={styles.smallBtn} onClick={() => void pasteFromClipboard()}>{L.pasteImage}</button>
           {value && <button type="button" className={styles.smallBtn} onClick={() => onCommit('')}>{L.removeImage}</button>}
+          {value && onLayout && (
+            <span className={styles.placeChoice} role="group" aria-label={L.imagePlace}>
+              {IMAGE_PLACES.map((p) => (
+                <button key={p} type="button" aria-pressed={layout.place === p} className={`${styles.smallBtn} ${layout.place === p ? styles.smallBtnOn : ''}`}
+                  onClick={() => onLayout({ ...layout, place: p })}>{L.imagePlaces[p]}</button>
+              ))}
+            </span>
+          )}
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void choose(e.target.files?.[0])} />
         </div>
       )}
@@ -408,7 +518,7 @@ function SpelledOut({ term, text }: { term: string; text: string }) {
   return <>{[...text].map((ch, i) => (at.has(i) ? <b key={i} className={styles.spelled}>{ch}</b> : <Fragment key={i}>{ch}</Fragment>))}</>;
 }
 
-export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onEscape, onDone, shown, onShow, onWaiting, fresh, onTouched, onAddAnother, onDiscard, onLeave }: Props) {
+export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onEscape, onDone, shown, onShow, onWaiting, fresh, onTouched, onAddAnother, onDiscard, onLeave, onUndo, imageLayout = DEFAULT_LAYOUT, onImageLayout }: Props) {
   const entries = useNoteStore((s) => s.structuredTagEntries);
   useSecretsVersion((s) => s.version);
   const [editingExpansion, setEditingExpansion] = useState(false);
@@ -477,6 +587,10 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
       leave(() => onDiscard(how));
       return;
     }
+    if (empty && mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z') {
+      leave(onUndo);
+      return;
+    }
     if (e.key === 'Enter' && e.shiftKey && !mod && !e.altKey) {
       const fields = e.currentTarget.querySelectorAll('[data-field]');
       if (fields.length && fields[fields.length - 1].contains(target)) leave(onAddAnother);
@@ -520,14 +634,14 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
         return (
           <div onBlur={() => setEditingExpansion(false)}>
             <RichField html={fieldRich(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} multiline={f.type === 'textarea'}
-              placeholder={f.placeholder} editable={editable} label={f.name} className={f.id === primaryId ? styles.primary : undefined}
+              placeholder={f.placeholder} editable={editable} label={f.name} className={f.id === primaryId ? styles.primary : undefined} termLinksFor={id}
               autoFocus={autoFocus || (isAcronym && f.id === 'expansion' && editingExpansion)} />
           </div>
         );
       case 'list':
         return <RichList items={fieldRichList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} />;
       case 'image':
-        return <ImageField value={fieldText(entry.fields, f.id)} term={entry.term} encrypted={entry.isEncrypted} onCommit={(v) => setField(f.id, v)} editable={editable} />;
+        return <ImageField value={fieldText(entry.fields, f.id)} term={entry.term} encrypted={entry.isEncrypted} onCommit={(v) => setField(f.id, v)} editable={editable} layout={imageLayout} onLayout={onImageLayout} />;
       case 'parent': {
         const parts = all.filter((e) => e.id !== entry.id && fieldText(e.fields, f.id) === id);
         return (
@@ -571,19 +685,43 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   const visible = typeDef.fields.filter((f) => f.id === primaryId || hasValue(f) || shown.includes(f.id) || (f.type === 'parent' && hasParts) || (f.type === 'links' && all.some((e) => fieldLinks(e.fields, 'related').some((l) => l.entryId === id))));
   const waiting = editable ? typeDef.fields.filter((f) => !visible.includes(f)) : [];
 
-  return (
-    <div ref={rootRef} className={styles.card} data-glossary-type={entry.typeKey} onKeyDown={keyDown} onInput={typed}>
+  // The picture out of the fields' order when it's placed to their right or after them.
+  const imageDef = typeDef.fields.find((f) => f.type === 'image');
+  const placed = imageDef && visible.includes(imageDef) && hasValue(imageDef) && imageLayout.place !== 'flow' ? imageDef : null;
+  const fieldBox = (f: StructuredTagFieldDef) => (
+    <div key={f.id} className={styles.field} data-field={f.id}>
+      {f.id !== primaryId && <div className={styles.label}>{f.name}</div>}
+      {renderField(f, shown.includes(f.id) && !hasValue(f))}
+    </div>
+  );
+  const main = (
+    <>
       <div className={styles.head}>
         <span className={styles.kind}>{typeDef.label}</span>
         {termField}
       </div>
       <div className={styles.rule} aria-hidden="true" />
-      {visible.map((f) => (
-        <div key={f.id} className={styles.field} data-field={f.id}>
-          {f.id !== primaryId && <div className={styles.label}>{f.name}</div>}
-          {renderField(f, shown.includes(f.id) && !hasValue(f))}
-        </div>
-      ))}
+      {visible.filter((f) => f !== placed).map(fieldBox)}
+    </>
+  );
+  // Ctrl+V anywhere in the card with a picture on the clipboard puts it in the picture field.
+  const pasteImage = (e: React.ClipboardEvent) => {
+    const file = editable && imageDef ? imageFileFrom(e.clipboardData) : null;
+    if (!file || !imageDef) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!visible.includes(imageDef)) onShow(imageDef.id);
+    void addPicture(file, { encrypted: entry.isEncrypted, origin: 'card' })
+      .then((pid) => setField(imageDef.id, pictureRef(pid)))
+      .catch((err) => log.warn('glossaryCard', 'could not read the picture', errorMessage(err)));
+  };
+
+  return (
+    <div ref={rootRef} className={styles.card} data-glossary-type={entry.typeKey} onKeyDown={keyDown} onInput={typed} onPasteCapture={pasteImage}>
+      {placed && imageLayout.place === 'right'
+        ? <div className={styles.withSide}><div className={styles.mainCol}>{main}</div><div className={styles.sideCol}>{fieldBox(placed)}</div></div>
+        : main}
+      {placed && imageLayout.place === 'bottom' && fieldBox(placed)}
       {waiting.length > 0 && (
         <div className={styles.more} data-card-more="">
           {waiting.map((f) => (

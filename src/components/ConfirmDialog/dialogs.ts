@@ -43,8 +43,10 @@ export function choiceDialog(opts: ConfirmOptions & { alternateLabel?: string })
 
 // The one path for "delete this permanently": same wording, red button, Cancel focused,
 // "This cannot be undone." — see CLAUDE.md "Archive and delete look and behave the same".
-// `noun` is lower-case ("tracker"); `detail` says what else goes with it.
-export function confirmDelete(noun: string, itemName: string, detail?: string): Promise<boolean> {
+// `noun` is lower-case ("tracker"); `detail` says what else goes with it. `empty`: the thing has
+// nothing in it, so it goes without asking (the user's rule, 2026-10-22; utils/emptyContent.ts).
+export function confirmDelete(noun: string, itemName: string, detail?: string, { empty = false }: { empty?: boolean } = {}): Promise<boolean> {
+  if (empty) return Promise.resolve(true);
   return confirmDialog({
     title:        LABELS.itemActions.deleteTitle(noun),
     itemName,

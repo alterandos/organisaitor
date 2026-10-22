@@ -1,5 +1,6 @@
 import { Extension, Node, mergeAttributes, type Editor } from '@tiptap/core';
 import { NodeSelection, Selection, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
+import { closeHistory } from '@tiptap/pm/history';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 import type { MathfieldElement } from 'mathlive';
@@ -145,6 +146,32 @@ export function insertMaths(state: EditorState, from: number, to: number): { tr:
   if (!type) return null;
   const tr = state.tr.replaceWith(from, to, type.create());
   return { tr: tr.setSelection(NodeSelection.create(tr.doc, from)).scrollIntoView(), pos: from };
+}
+
+// Selected text turned into maths (the `\` menu on a selection): the whole of a line becomes a
+// maths block, part of one inline maths, the text kept as what's typed in it (x^2, a/b and Greek
+// letters read the same in the maths editor). Its own undo step.
+export function mathsFromSelection(view: EditorView, from: number, to: number): void {
+  const state = view.state;
+  const text = state.doc.textBetween(from, to, ' ').trim();
+  const $from = state.doc.resolve(from);
+  if (!text || !$from.sameParent(state.doc.resolve(to))) return;
+  const parent = $from.parent;
+  const rest = parent.textBetween(0, $from.parentOffset) + parent.textBetween(state.doc.resolve(to).parentOffset, parent.content.size);
+  const d = $from.depth;
+  const block = state.schema.nodes.mathBlock;
+  const tr = closeHistory(state.tr);
+  if (rest.trim() === '' && d > 0 && block && $from.node(d - 1).canReplaceWith($from.index(d - 1), $from.index(d - 1) + 1, block)) {
+    const at = $from.before(d);
+    tr.replaceWith(at, $from.after(d), block.create({ latex: text }));
+    view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, at)).scrollIntoView());
+  } else {
+    const inline = state.schema.nodes.mathInline;
+    if (!inline) return;
+    tr.replaceWith(from, to, inline.create({ latex: text }));
+    view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, from)).scrollIntoView());
+  }
+  view.focus();
 }
 
 export function setMathSettings(view: EditorView, pos: number, attrs: Partial<{ latex: string; variant: MathVariant }>): void {

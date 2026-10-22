@@ -270,16 +270,49 @@ describe('inferCalendarItemFromSelection — event type, tentative, important, r
     expect(cal('Call the bank tomorrow').important).toBe(false);
   });
 
+  const forever = { endKind: 'forever', count: null, until: null };
   it.each([
-    ['Team standup every Monday 9-9:15am', { freq: 'weekly', interval: 1 }, 'Team standup'],
+    ['Team standup every Monday 9-9:15am', { freq: 'weekly', interval: 1, daysOfWeek: [1] }, 'Team standup'],
     ['Water the plants every 3 days',       { freq: 'daily', interval: 3 },  'Water the plants'],
     ['Bins out fortnightly',                { freq: 'weekly', interval: 2 }, 'Bins out'],
     ['Book club every other week',          { freq: 'weekly', interval: 2 }, 'Book club'],
     ['Pay rent monthly',                    { freq: 'monthly', interval: 1 }, 'Pay rent'],
+    ['Gym every Monday and Thursday',       { freq: 'weekly', interval: 1, daysOfWeek: [1, 4] }, 'Gym'],
+    ['Check in every weekday 9am',          { freq: 'weekly', interval: 1, daysOfWeek: [1, 2, 3, 4, 5] }, 'Check in'],
+    ['Board meeting the last Friday of every month', { freq: 'monthly', interval: 1, monthWeekday: { week: -1, day: 5 } }, 'Board meeting'],
   ])('repeat: %s', (text, repeat, title) => {
     const out = cal(text);
-    expect(out.repeat).toEqual(repeat);
+    expect(out.repeat).toEqual({ ...repeat, ...forever });
     expect(out.title).toBe(title);
+  });
+
+  it('every Monday starts on the next Monday', () => {
+    expect(cal('Team standup every Monday 9-9:15am').date).toBe('2026-09-28');
+  });
+
+  // The magic wand's example (2026-10-19): an nth weekday, an end date, an address and a link.
+  it('"every 3rd Sunday of the month until …", an address and a link', () => {
+    const out = cal('Every 3rd Sunday of the month until December 19, 2027 hash run is on at Minervastrasse 65, 8032 Zürich, Switzerland · Zürich, ZH https://www.meetup.com/the-zurich-hash-house-harriers/events/316706575/');
+    expect(out).toMatchObject({
+      kind: 'event',
+      title: 'Hash run',
+      date: '2026-10-18',   // the 3rd Sunday after 24 September (20 September has gone)
+      location: 'Minervastrasse 65, 8032 Zürich, Switzerland',
+      links: ['https://www.meetup.com/the-zurich-hash-house-harriers/events/316706575/'],
+      repeat: { freq: 'monthly', interval: 1, monthWeekday: { week: 3, day: 0 }, endKind: 'until', until: '2027-12-19', count: null },
+    });
+  });
+
+  it('a repeat ending after N times; a given date on the rule is kept', () => {
+    expect(cal('Swimming lessons every Saturday 10 times').repeat).toMatchObject({ endKind: 'count', count: 10, daysOfWeek: [6] });
+    expect(cal('Rotary every first Tuesday from 6 October 2026').date).toBe('2026-10-06');
+  });
+
+  it('addresses: labelled, "at" a street and number, or a number and a street; never a time', () => {
+    expect(cal('Dinner Friday 7pm at 12 Smith St, Fitzroy').location).toBe('12 Smith St, Fitzroy');
+    expect(cal('Party Saturday. Location: The Old Barn, Hilltop Rd').location).toBe('The Old Barn, Hilltop Rd');
+    expect(cal('Meet at the station tomorrow at 2pm').location).toBeNull();
+    expect(cal('Drinks at 6pm, Friday').location).toBeNull();
   });
 
   it('"every month on the 1st" repeats monthly from the next 1st', () => {

@@ -28,6 +28,7 @@ import { TYPES_DESIGNS } from './Types';
 import { PROSCONS_DESIGNS } from './ProsCons';
 import { ARGUMENT_DESIGNS } from './Argument';
 import { OPTIONS_DESIGNS } from './Options';
+import { CONVERT_DESIGNS } from './Convert';
 
 // Ctrl+] / Ctrl+[ (asked for 2026-10-15): the next / previous design of the note block the cursor
 // is in (or the block that's selected), wrapping round, the new design's name shown beside it for
@@ -58,6 +59,7 @@ export const BLOCK_DESIGN_LISTS: Record<string, readonly BlockDesign<string>[]> 
   diagram:       DIAGRAM_DESIGNS,
   hub:           HUB_DESIGNS,
   noteEmbed:     EMBED_DESIGNS,
+  convertBlock:  CONVERT_DESIGNS,
 };
 
 // The block the command acts on: the selected block, else the innermost block around the cursor.

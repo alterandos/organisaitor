@@ -7,6 +7,7 @@ import {
   blockFrameAttributes, blockPill, designButtons, frameButtons, openBlockPopover, pillButton, popoverClass, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour,
 } from './blockDesigns';
 import { MAX_LEVEL, effectiveLevels, hierarchyLayout, subtreeEnd } from './hierarchyLayout';
+import { partAddersPlugin, type PartAdder } from './partAdders';
 
 // A hierarchy in a note (`\hierarchy`): things ranked inside each other — a taxonomy (Kingdom ›
 // Phylum › Class…), an organisation, a classification. Written as an outline: Enter adds an item,
@@ -197,6 +198,36 @@ export function openTierEditor(view: EditorView, pos: number, anchor: DOMRect, f
     setTimeout(() => inputs[Math.min(focusLevel, inputs.length - 1)]?.focus(), 0);
     return form;
   });
+}
+
+// A new item after `index` and everything under it: one level down (its last child) or at its own
+// level (its next sibling), the cursor in it. The hover "+" buttons call this.
+export function addHierarchyItem(view: EditorView, pos: number, index: number, as: 'child' | 'sibling'): void {
+  const node = view.state.doc.nodeAt(pos);
+  if (!node || node.type.name !== 'hierarchy' || index >= node.childCount) return;
+  const raw = levelsOf(node);
+  const level = Math.min(MAX_LEVEL, effectiveLevels(raw)[index] + (as === 'child' ? 1 : 0));
+  const at = subtreeEnd(raw, index);
+  const insertAt = at < node.childCount ? itemPos(node, pos, at) : pos + node.nodeSize - 1;
+  const tr = view.state.tr.insert(insertAt, view.state.schema.nodes.hierarchyItem.create({ level }));
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, insertAt + 1)).scrollIntoView());
+  view.focus();
+}
+
+// Where the two "+" go for each design: the child on the side children grow, the sibling on the other.
+function itemAdders(view: EditorView, part: HTMLElement): PartAdder[] | null {
+  const inner = part.querySelector('[data-hi-box]');
+  if (!inner) return null;
+  const h = hierarchyAt(view.state.doc.resolve(view.posAtDOM(inner, 0)));
+  if (!h) return null;
+  const variant = h.node.attrs.variant as HierarchyVariant;
+  const level = effectiveLevels(levelsOf(h.node))[h.index];
+  const L = LABELS.noteBlocks.hierarchy;
+  const add = (as: 'child' | 'sibling') => () => addHierarchyItem(view, h.pos, h.index, as);
+  const child: PartAdder = { side: variant === 'tree' ? 'below' : variant === 'columns' ? 'right' : 'below-indent', label: L.addChild, run: add('child'), disabled: level >= MAX_LEVEL };
+  // The top item has no siblings to add.
+  if (level === 0 && h.index === 0) return [child];
+  return [child, { side: variant === 'tree' ? 'right' : variant === 'columns' ? 'below' : 'below-left', label: L.addSibling, run: add('sibling') }];
 }
 
 // ── Keys ─────────────────────────────────────────────────────────────────────
@@ -423,7 +454,10 @@ export const HierarchyBehaviour = Extension.create({
   },
 
   addProseMirrorPlugins() {
-    return [new Plugin({ key: hierarchyKey, props: { decorations: hierarchyDecorations } })];
+    return [
+      new Plugin({ key: hierarchyKey, props: { decorations: hierarchyDecorations } }),
+      partAddersPlugin('hierarchy', '[data-type="hierarchy-item"]', itemAdders, '[data-hi-box]'),
+    ];
   },
 });
 

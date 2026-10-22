@@ -10,6 +10,8 @@ import { usePortfolioStore } from '@/store/portfolioStore';
 import { useTrashStore } from '@/store/trashStore';
 import { usePictureStore } from '@/store/pictureStore';
 import { useOverviewStore } from '@/store/overviewStore';
+import { useConverterStore } from '@/store/converterStore';
+import { useFitnessStore } from '@/store/fitnessStore';
 import { forceUpload, markRestored } from '@/services/sync/syncService';
 import { getBackupSnapshot } from '@/services/autoBackupStorage';
 import { saveFile } from '@/utils/saveFile';
@@ -80,7 +82,9 @@ export async function restoreBackupData(backup: Record<string, unknown>, userId:
     usePortfolioStore.persist.rehydrate(),
     useTrashStore.persist.rehydrate(),
     useOverviewStore.persist.rehydrate(),
+    useConverterStore.persist.rehydrate(),
     usePictureStore.persist.rehydrate(),
+    useFitnessStore.persist.rehydrate(),
   ]);
 
   if (userId) {

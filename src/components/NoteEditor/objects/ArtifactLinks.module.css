@@ -3,13 +3,17 @@
    Three kinds of inline piece share one outline: the head closes it on the left, the tail on the
    right, the text pieces carry only top and bottom. All three keep the text's font size (an inline
    box's border follows its own font), so their borders line up; only their contents are smaller.
-   The expanded card is ArtifactCard.module.css. Theme tokens only. */
+   The expanded card is ArtifactCard.module.css. Theme tokens only. The pane's colour is its kind's
+   (--pane-accent, set from data-artifact-type: tasks blue, calendar items green). */
+
+[data-artifact-type] { --pane-accent: var(--color-item-calendar); }
+[data-artifact-type="task"] { --pane-accent: var(--color-item-task); }
 
 .paneHead,
 .paneText,
 .paneTail {
-  --pane-edge: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
-  background: color-mix(in srgb, var(--color-success) 9%, var(--color-surface));
+  --pane-edge: color-mix(in srgb, var(--pane-accent, var(--color-item-calendar)) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--pane-accent, var(--color-item-calendar)) 9%, var(--color-surface));
   border: 1px solid var(--pane-edge);
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
@@ -109,7 +113,7 @@
 }
 
 .paneBtn:hover {
-  background: color-mix(in srgb, var(--color-success) 22%, transparent);
+  background: color-mix(in srgb, var(--pane-accent, var(--color-item-calendar)) 22%, transparent);
   color: var(--color-text);
 }
 
@@ -169,7 +173,7 @@
 }
 
 .paneEditable:hover {
-  background: color-mix(in srgb, var(--color-success) 22%, transparent);
+  background: color-mix(in srgb, var(--pane-accent, var(--color-item-calendar)) 22%, transparent);
   color: var(--color-text);
 }
 
@@ -202,12 +206,12 @@
    Its first line (head, text, tail) is the heading; the body widget sits inside the same
    paragraph, under it. The pieces drop their own outline — the paragraph has it. */
 .paneBlock {
-  --pane-edge: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
+  --pane-edge: color-mix(in srgb, var(--pane-accent, var(--color-item-calendar)) 40%, var(--color-border));
   box-sizing: border-box;
   max-width: 100%;
   padding: 3px 8px 0;
   border: 1px solid var(--pane-edge);
-  background: color-mix(in srgb, var(--color-success) 9%, var(--color-surface));
+  background: color-mix(in srgb, var(--pane-accent, var(--color-item-calendar)) 9%, var(--color-surface));
 }
 
 .paneBlockOnly {
@@ -283,7 +287,7 @@
 .paneText:hover,
 .paneBlock .paneText:hover {
   border-radius: 3px;
-  background: color-mix(in srgb, var(--color-success) 20%, transparent);
+  background: color-mix(in srgb, var(--pane-accent, var(--color-item-calendar)) 20%, transparent);
 }
 
 /* ↗ and the chevron: at the end of the inline pane; at the right edge of an expanded one. */

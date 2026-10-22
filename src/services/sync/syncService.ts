@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import { isHydrating, setHydrating } from './hydrating';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTrackerStore } from '@/store/trackerStore';
@@ -8,6 +9,8 @@ import { useNoteStore } from '@/store/noteStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useTrashStore } from '@/store/trashStore';
 import { useOverviewStore } from '@/store/overviewStore';
+import { useConverterStore } from '@/store/converterStore';
+import type { CustomConverter } from '@/types/converters';
 import { usePictureStore } from '@/store/pictureStore';
 import { usePinnedItemsStore, type PinnedItem } from '@/store/pinnedItemsStore';
 import type { Overview } from '@/types/overview';
@@ -40,17 +43,25 @@ import {
   investmentPurposeToRow,  rowToInvestmentPurpose,
   trashEntryToRow,         rowToTrashEntry,
   overviewToRow,           rowToOverview,
+  converterToRow,          rowToConverter,
   pictureToRow,            rowToPicture,
   pinToRow,                rowToPin,
+  activityToRow,           rowToActivity,
+  activityTypeToRow,       rowToActivityType,
 } from './mappers';
+import { useFitnessStore } from '@/store/fitnessStore';
+import type { Activity, ActivityType } from '@/types/fitness';
+import { withStableStravaIds } from '@/utils/fitnessIds';
 
 // Custom (non-built-in) list types only — built-ins have fixed ids, are re-seeded
 // locally on every load, and are never uploaded or merged from remote.
 const customListTypes = (types: Record<string, ListType>) =>
   Object.fromEntries(Object.entries(types).filter(([, t]) => !t.isBuiltIn));
+// The same for Fitness's activity types (the built-ins are seeded on every device).
+const customActivityTypes = (types: Record<string, ActivityType>) =>
+  Object.fromEntries(Object.entries(types).filter(([, t]) => !t.isBuiltIn));
 
-// Suppresses outbound sync while stores are being hydrated from Supabase.
-let hydrating = false;
+// Suppresses outbound sync while stores are being hydrated from Supabase (services/sync/hydrating.ts).
 // True while a load is in flight. Changes made meanwhile are recorded in the pending queue but not
 // pushed until the load's merge is done: pushed earlier, a delete would leave the queue before the
 // merge, and the snapshot fetched before it would bring the row back.
@@ -90,8 +101,11 @@ const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
   investment_purposes:    { get: () => usePortfolioStore.getState().investmentPurposes, toRow: (i, u) => investmentPurposeToRow(i as InvestmentPurpose, u), onConflict: PER_ACCOUNT_KEY },
   trash_items:            { get: () => useTrashStore.getState().entries,                toRow: (i, u) => trashEntryToRow(i as TrashEntry, u) },
   overviews:              { get: () => useOverviewStore.getState().overviews,           toRow: (i, u) => overviewToRow(i as Overview, u) },
+  converters:             { get: () => useConverterStore.getState().converters,         toRow: (i, u) => converterToRow(i as CustomConverter, u) },
   pictures:               { get: () => usePictureStore.getState().pictures,             toRow: (i, u) => pictureToRow(i as Picture, u) },
   quick_access_pins:      { get: () => usePinnedItemsStore.getState().pins,             toRow: (i, u) => pinToRow(i as PinnedItem, u), onConflict: PER_ACCOUNT_KEY },
+  fitness_activities:     { get: () => useFitnessStore.getState().activities,           toRow: (i, u) => activityToRow(i as Activity, u) },
+  fitness_activity_types: { get: () => customActivityTypes(useFitnessStore.getState().activityTypes as Record<string, ActivityType>), toRow: (i, u) => activityTypeToRow(i as ActivityType, u) },
 };
 
 // ── Pending changes ─────────────────────────────────────────────
@@ -365,8 +379,10 @@ const SYNC_TABLES = [
   'watchlist_items', 'portfolio_tags', 'investment_purposes',
   'trash_items',
   'overviews',
+  'converters',
   'pictures',
   'quick_access_pins',
+  'fitness_activities', 'fitness_activity_types',
 ] as const;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -446,11 +462,11 @@ async function runInitSync(userId: string): Promise<void> {
         restoreCutoff = Date.parse(restoredAt!);
         dropPendingBefore(restoreCutoff);
       }
-      hydrating = true;
+      setHydrating(true);
       try {
         hydrateStores(remote);
       } finally {
-        hydrating = false;
+        setHydrating(false);
         restoreCutoff = null;
       }
       queueLocalOnlyAndNewer(remote);
@@ -488,7 +504,8 @@ export type UploadCounts = {
   schedules: number; lists: number; listItems: number; listTypes: number;
   notes: number; noteTags: number; structuredTagEntries: number;
   watchlistItems: number; portfolioTags: number; investmentPurposes: number;
-  trashItems: number; overviews: number; pictures: number; pins: number;
+  trashItems: number; overviews: number; converters: number; pictures: number; pins: number;
+  activities: number; activityTypes: number;
 };
 
 // Force-uploads ALL current store data to Supabase (upsert), reading live in-memory
@@ -637,6 +654,10 @@ function hydrateStores(remote: RemoteRows) {
     overviews: mergeRecords(local.overviews, remote.overviews, rowToOverview, 'overviews'),
   }) as Parameters<typeof useOverviewStore.setState>[0]);
 
+  useConverterStore.setState((local) => ({
+    converters: mergeRecords(local.converters, remote.converters, rowToConverter, 'converters'),
+  }));
+
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   usePictureStore.setState((local) => ({
     pictures: mergeRecords(local.pictures, remote.pictures, rowToPicture, 'pictures'),
@@ -645,6 +666,18 @@ function hydrateStores(remote: RemoteRows) {
   usePinnedItemsStore.setState((local) => ({
     pins: mergeRecords(local.pins, remote.quick_access_pins, rowToPin, 'quick_access_pins'),
   }));
+
+  // Strava activities imported before Fitness synced take their stable ids here (utils/fitnessIds.ts),
+  // so the post-load upload sends one record per Strava activity whichever device made it.
+  const userId = currentUserId;
+  useFitnessStore.setState((local) => {
+    const activities = mergeRecords(local.activities, remote.fitness_activities, rowToActivity, 'fitness_activities') as Record<string, Activity>;
+    return {
+      activities:    userId ? withStableStravaIds(activities, userId) : activities,
+      // Built-ins are left as they are: the cloud never holds their fixed ids.
+      activityTypes: mergeRecords(local.activityTypes, remote.fitness_activity_types, rowToActivityType, 'fitness_activity_types'),
+    } as Partial<ReturnType<typeof useFitnessStore.getState>>;
+  });
 }
 
 // ── Upload ──────────────────────────────────────────────────────
@@ -660,8 +693,10 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const { watchlistItems, portfolioTags, investmentPurposes } = usePortfolioStore.getState();
   const { entries: trashEntries } = useTrashStore.getState();
   const { overviews } = useOverviewStore.getState();
+  const { converters } = useConverterStore.getState();
   const { pictures } = usePictureStore.getState();
   const { pins } = usePinnedItemsStore.getState();
+  const { activities, activityTypes } = useFitnessStore.getState();
 
   const allTasks       = Object.values(tasks);
   const allCollections = Object.values(collections);
@@ -683,8 +718,11 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const allInvestmentPurposes = Object.values(investmentPurposes);
   const allTrashItems         = Object.values(trashEntries);
   const allOverviews          = Object.values(overviews);
+  const allConverters         = Object.values(converters);
   const allPictures           = Object.values(pictures);
   const allPins               = Object.values(pins);
+  const allActivities         = Object.values(activities);
+  const allActivityTypes      = Object.values(customActivityTypes(activityTypes as Record<string, ActivityType>));
 
   const results = await Promise.all([
     allTasks.length       > 0 ? supabase.from('tasks').upsert(allTasks.map((t) => taskToRow(t, userId)))               : null,
@@ -707,8 +745,11 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     allInvestmentPurposes.length > 0 ? supabase.from('investment_purposes').upsert(allInvestmentPurposes.map((p) => investmentPurposeToRow(p, userId)), { onConflict: PER_ACCOUNT_KEY }) : null,
     allTrashItems.length         > 0 ? supabase.from('trash_items').upsert(allTrashItems.map((t) => trashEntryToRow(t, userId))) : null,
     allOverviews.length          > 0 ? supabase.from('overviews').upsert(allOverviews.map((o) => overviewToRow(o, userId))) : null,
+    allConverters.length         > 0 ? supabase.from('converters').upsert(allConverters.map((c) => converterToRow(c, userId))) : null,
     allPictures.length           > 0 ? supabase.from('pictures').upsert(allPictures.map((p) => pictureToRow(p, userId))) : null,
     allPins.length               > 0 ? supabase.from('quick_access_pins').upsert(allPins.map((p) => pinToRow(p, userId)), { onConflict: PER_ACCOUNT_KEY }) : null,
+    allActivities.length         > 0 ? supabase.from('fitness_activities').upsert(allActivities.map((a) => activityToRow(a, userId))) : null,
+    allActivityTypes.length      > 0 ? supabase.from('fitness_activity_types').upsert(allActivityTypes.map((t) => activityTypeToRow(t, userId))) : null,
   ]);
 
   const firstError = results.find((r) => r?.error)?.error;
@@ -722,7 +763,8 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     listItems: allListItems.length, listTypes: allListTypes.length,
     notes: allNotes.length, noteTags: allNoteTags.length, structuredTagEntries: allStructuredTagEntries.length,
     watchlistItems: allWatchlistItems.length, portfolioTags: allPortfolioTags.length, investmentPurposes: allInvestmentPurposes.length,
-    trashItems: allTrashItems.length, overviews: allOverviews.length, pictures: allPictures.length, pins: allPins.length,
+    trashItems: allTrashItems.length, overviews: allOverviews.length, converters: allConverters.length, pictures: allPictures.length, pins: allPins.length,
+    activities: allActivities.length, activityTypes: allActivityTypes.length,
   };
 }
 
@@ -750,7 +792,7 @@ function watch(
   fields: Array<{ prop: string; table: keyof typeof TABLE_DEFS; only?: (r: Records) => Records }>,
 ): () => void {
   return store.subscribe((state, prev) => {
-    if (hydrating) return;
+    if (isHydrating()) return;
     for (const f of fields) {
       if (state[f.prop] === prev[f.prop]) continue;
       const a = f.only ? f.only(prev[f.prop]) : prev[f.prop];
@@ -787,8 +829,13 @@ function setupSubscriptions(userId: string): void {
     ]),
     watch(userId, useTrashStore, [{ prop: 'entries', table: 'trash_items' }]),
     watch(userId, useOverviewStore, [{ prop: 'overviews', table: 'overviews' }]),
+    watch(userId, useConverterStore, [{ prop: 'converters', table: 'converters' }]),
     watch(userId, usePictureStore, [{ prop: 'pictures', table: 'pictures' }]),
     watch(userId, usePinnedItemsStore, [{ prop: 'pins', table: 'quick_access_pins' }]),
+    watch(userId, useFitnessStore, [
+      { prop: 'activities', table: 'fitness_activities' },
+      { prop: 'activityTypes', table: 'fitness_activity_types', only: customActivityTypes as (r: Records) => Records },
+    ]),
   ];
 
   // Retry what didn't get through: when the browser reports it is back online, and on a timer while

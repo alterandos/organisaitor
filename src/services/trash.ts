@@ -9,6 +9,8 @@ import { usePortfolioStore } from '@/store/portfolioStore';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useTrashStore } from '@/store/trashStore';
 import { useOverviewStore } from '@/store/overviewStore';
+import { useConverterStore } from '@/store/converterStore';
+import type { CustomConverter } from '@/types/converters';
 import type { Overview } from '@/types/overview';
 import type { TrashEntryId, TrashableKind } from '@/types/trash';
 import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, ScheduleTemplate, TrackerEntry } from '@/types';
@@ -109,6 +111,10 @@ const RESTORE_TARGETS: { [K in TrashableKind]: RestoreTarget } = {
   overview: {
     has: (id) => id in useOverviewStore.getState().overviews,
     put: (o) => useOverviewStore.setState((s) => ({ overviews: { ...s.overviews, [(o as Overview).id]: o as Overview } })),
+  },
+  converter: {
+    has: (id) => id in useConverterStore.getState().converters,
+    put: (c) => useConverterStore.setState((s) => ({ converters: { ...s.converters, [(c as CustomConverter).id]: c as CustomConverter } })),
   },
 };
 

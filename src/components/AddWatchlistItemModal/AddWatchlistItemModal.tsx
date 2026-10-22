@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import type { FormEvent, KeyboardEvent, MouseEvent } from 'react';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useUIStore } from '@/store/uiStore';
@@ -319,13 +320,7 @@ export function AddWatchlistItemModal() {
           <div className={styles.row}>
             <div className={`${styles.field} ${styles.fieldGrow}`}>
               <label className={styles.fieldLabel} htmlFor="wl-date">Date Added</label>
-              <input
-                id="wl-date"
-                type="date"
-                className={styles.input}
-                value={dateAdded}
-                onChange={(e) => setDateAdded(e.target.value)}
-              />
+              <DateInput id="wl-date" className={styles.input} value={dateAdded} onChange={(v) => setDateAdded(v)} />
             </div>
           </div>
 

@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
+import { useCalendarStore } from '@/store/calendarStore';
+import { ITEM_TYPE_ICON } from '@/config/itemIcons';
+import { eventLinksOf, type EventTargetType } from '@/utils/eventTaskLinks';
+import { unlinkTaskFromEvent } from '@/services/eventTaskLinks';
 import { ITEM_LINK_KINDS } from '@/config/itemLinkKinds';
 import { LABELS } from '@/config/labels';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
@@ -24,7 +28,15 @@ export function TaskLinksField({ task }: { task: Task }) {
   const updateReason   = useTaskStore((s) => s.updateItemLinkReason);
   const openTaskPane   = useUIStore((s) => s.openTaskPane);
   const showAddFollowUp = useUIStore((s) => s.showAddFollowUp);
+  const events         = useCalendarStore((s) => s.events);
+  const deadlines      = useCalendarStore((s) => s.deadlines);
+  const openEventPane  = useUIStore((s) => s.openCalendarEventPane);
+  const openDeadlinePane = useUIStore((s) => s.openCalendarDeadlinePane);
   const [picking, setPicking] = useState<ItemLinkKind | null>(null);
+  // Its links to events and Deadlines (utils/eventTaskLinks.ts); made from the event's pane.
+  const eventLinks = eventLinksOf(task)
+    .map((l) => ({ l, item: l.targetType === 'event' ? events[l.targetId as never] : deadlines[l.targetId as never] }))
+    .filter((x) => x.item);
   const [focusKey, setFocusKey] = useState<string | null>(null);
 
   const relations = taskRelations(task, tasks);
@@ -87,6 +99,20 @@ export function TaskLinksField({ task }: { task: Task }) {
           </ul>
         </div>
       ))}
+
+      {eventLinks.length > 0 && (
+        <ul className={styles.rows}>
+          {eventLinks.map(({ l, item }) => (
+            <li key={`${l.targetType}:${l.targetId}`} className={styles.row}>
+              <span className={styles.groupLabel}>{ITEM_LINK_KINDS[l.kind].icon} {ITEM_LINK_KINDS[l.kind].out}</span>
+              <button type="button" className={styles.other} onClick={() => (l.targetType === 'event' ? openEventPane : openDeadlinePane)(l.targetId)}>
+                {ITEM_TYPE_ICON[l.targetType as 'event' | 'deadline']} {item!.title}
+              </button>
+              <button type="button" className={styles.remove} onClick={() => unlinkTaskFromEvent(task.id, l.targetType as EventTargetType, l.targetId)} aria-label={L.removeLink} title={L.removeLink}><UnlinkIcon /></button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className={styles.adds}>
         <button type="button" className={styles.addBtn} onClick={() => setPicking('dependsOn')}>{L.addDependsOn}</button>

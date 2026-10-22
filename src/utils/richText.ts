@@ -1,6 +1,7 @@
 // A little formatted text inside a block's own fields (a Glossary card's term and fields): bold,
-// italic, underline, strikethrough, superscript, subscript, inline code and line breaks, kept as a
-// short HTML string. Everything that reads a field as text (search, the Glossary, copying, the
+// italic, underline, strikethrough, superscript, subscript, inline code, line breaks, and links to
+// Glossary terms (`<a data-term="entryId">`, 2026-10-22: its only attribute, the id checked),
+// kept as a short HTML string. Everything that reads a field as text (search, the Glossary, copying, the
 // agent) reads it plain through richToPlain; only the card draws it, through sanitizeInlineHtml.
 // Pure and DOM-free, so it runs anywhere. Agreed with the user 2026-10-13.
 //
@@ -20,7 +21,11 @@ const escapeText = (s: string) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;').
 
 export const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// Only the tags above, with no attributes, and every other "<" kept as text: safe to put on a page.
+// A link to a Glossary term: the entry id, nothing else (letters, digits, - and _ only).
+const TERM_ID = /\bdata-term="([A-Za-z0-9_-]{1,64})"/;
+
+// Only the tags above, with no attributes (a term link keeps just its checked id), and every
+// other "<" kept as text: safe to put on a page.
 export function sanitizeInlineHtml(html: string): string {
   let out = '';
   let last = 0;
@@ -30,7 +35,15 @@ export function sanitizeInlineHtml(html: string): string {
     last = m.index! + m[0].length;
     const name = m[2].toLowerCase();
     const kept = KEEP[name];
-    if (kept === 'br') out += '<br>';
+    if (name === 'a') {
+      const id = !m[1] ? TERM_ID.exec(m[0])?.[1] : undefined;
+      if (id) { open.push('a'); out += `<a data-term="${id}">`; }
+      else if (m[1]) {
+        const at = open.lastIndexOf('a');
+        if (at >= 0) for (const t of open.splice(at).reverse()) out += `</${t}>`;
+      }
+      // Any other link: its text stays, the tag goes.
+    } else if (kept === 'br') out += '<br>';
     else if (kept) {
       if (!m[1]) { open.push(kept); out += `<${kept}>`; }
       else {
@@ -55,11 +68,11 @@ const decode = (s: string) => s.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, (a
 // The text of a field, without its formatting. A line break reads as a new line.
 export function richToPlain(value: string): string {
   if (!value.includes('<') && !value.includes('&')) return value;
-  return decode(sanitizeInlineHtml(value).replace(/<br>/g, '\n').replace(/<\/?[a-z]+>/g, ''));
+  return decode(sanitizeInlineHtml(value).replace(/<br>/g, '\n').replace(/<\/?[a-z]+(?: data-term="[^"]*")?>/g, ''));
 }
 
 // Whether a value holds any formatting (otherwise it's stored as plain text).
-export const hasFormatting = (value: string) => /<(b|i|u|s|sup|sub|code)>/.test(sanitizeInlineHtml(value));
+export const hasFormatting = (value: string) => /<(b|i|u|s|sup|sub|code)>|<a data-term=/.test(sanitizeInlineHtml(value));
 
 // The lines of an edited list (one item per line, as a contentEditable writes them: lines as
 // <div>s, or <br>s), each cleaned; empty lines dropped.

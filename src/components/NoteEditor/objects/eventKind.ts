@@ -22,7 +22,7 @@ export interface EventDraft {
   eventType: 'default' | 'birthday' | 'travel';
   important: boolean;
   tentative: boolean;
-  repeat:    { freq: RepeatConfig['freq']; interval: number } | null;
+  repeat:    RepeatConfig | null;
 }
 
 const L = LABELS.noteObjects.event;
@@ -97,7 +97,7 @@ export const eventKind: NoteObjectKind<EventDraft> = {
       notes:        draft.notes,
       eventType:    draft.eventType,
       collectionId: ctx.collectionId,
-      repeat:       draft.repeat ? { ...draft.repeat, endKind: 'forever', count: null, until: null } : null,
+      repeat:       draft.repeat,
       status:       draft.tentative ? 'tentative' : 'confirmed',
       important:    draft.important,
       crossAppRefs: backLinks,

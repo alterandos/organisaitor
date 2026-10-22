@@ -22,7 +22,7 @@ export interface DatedDraft {
   notes:     string | null;   // links found in the text
   important: boolean;
   tentative: boolean;
-  repeat:    { freq: RepeatConfig['freq']; interval: number } | null;
+  repeat:    RepeatConfig | null;
 }
 
 type DatedKindId = 'reminder' | 'deadline';
@@ -100,7 +100,7 @@ export function datedObjectKind(kind: DatedKindId, aliases: string[]): NoteObjec
         time:         draft.time,
         notes:        draft.notes,
         collectionId: ctx.collectionId,
-        repeat:       draft.repeat ? { ...draft.repeat, endKind: 'forever', count: null, until: null } : null,
+        repeat:       draft.repeat,
         status:       draft.tentative ? 'tentative' : 'confirmed',
         important:    draft.important,
         crossAppRefs: backLinks,

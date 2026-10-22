@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { noteIsEmpty } from '@/utils/emptyContent';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { formatDate } from '@/utils/date';
@@ -62,7 +63,7 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
     : undefined;
 
   const deleteNote = async () => {
-    if (!(await confirmDelete('note', `${note.title || 'Untitled'}${locked ? ' (encrypted)' : ''}`))) return;
+    if (!(await confirmDelete('note', `${note.title || 'Untitled'}${locked ? ' (encrypted)' : ''}`, undefined, { empty: !locked && noteIsEmpty(note, children.length > 0) }))) return;
     if (useUIStore.getState().editingNoteId === note.id) useUIStore.getState().closeNote();
     deleteNoteWithCleanup(note.id);
   };

@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { SectionDocument, Section, ColumnBlock, Column } from '../extensions/Section';
 import { ArtifactLinkMark } from '../extensions/ArtifactLinkMark';
 import { useCalendarStore } from '@/store/calendarStore';
+import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { useToastStore } from '@/store/toastStore';
 import { useTrashStore } from '@/store/trashStore';
@@ -864,5 +865,24 @@ describe('repeating items', () => {
     expect(head().textContent).toContain('❗');
     head().querySelector<HTMLElement>('[title="Important — click to remove"]')!.click();
     expect(useCalendarStore.getState().reminders[id as CalendarReminderId].important).toBe(false);
+  });
+});
+
+describe('a task linked in a note (its pane edits the task, as a calendar item’s does)', () => {
+  beforeEach(() => useTaskStore.setState(useTaskStore.getInitialState(), true));
+
+  it('has a body, Important, and an editable deadline and time from the heading', () => {
+    const id = useTaskStore.getState().addTask({ title: 'Write report' } as Parameters<ReturnType<typeof useTaskStore.getState>['addTask']>[0]);
+    const def = ARTIFACT_TYPES.task!;
+    expect(def.Body).toBeDefined();
+    expect(def.editWhen!(id, 'date', '2026-11-03')).toBe(true);
+    expect(useTaskStore.getState().tasks[id].deadline).toBe('2026-11-03');
+    expect(def.editWhen!(id, 'time', '3pm')).toBe(true);
+    expect(useTaskStore.getState().tasks[id].deadlineTime).toBe('15:00');
+    expect(def.editWhen!(id, 'time', '')).toBe(true);
+    expect(useTaskStore.getState().tasks[id].deadlineTime).toBeNull();
+    const important = def.flags!(id).find((f) => f.id === 'important')!;
+    important.toggle();
+    expect(useTaskStore.getState().tasks[id].priority).toBe('high');
   });
 });

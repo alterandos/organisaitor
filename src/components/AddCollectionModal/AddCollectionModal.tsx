@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
@@ -199,13 +200,7 @@ export function AddCollectionModal() {
               <label className={styles.fieldLabel} htmlFor="acm-deadline">
                 Due date
               </label>
-              <input
-                id="acm-deadline"
-                className={styles.input}
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-              />
+              <DateInput id="acm-deadline" className={styles.input} value={deadline} onChange={(v) => setDeadline(v)} />
             </div>
           )}
 

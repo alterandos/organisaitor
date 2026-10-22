@@ -21,13 +21,17 @@ import {
 } from '@/utils/timeGrid';
 import { eventTypeIcon } from '@/config/calendarEventTypes';
 import { ScheduleOccurrencePopover } from '@/components/ScheduleOccurrencePopover/ScheduleOccurrencePopover';
+import { LABELS } from '@/config/labels';
+import { MiniDatePickerPopover } from '@/components/MiniDatePicker/MiniDatePicker';
 import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane';
 import { useTimeGridDrag } from '@/hooks/useTimeGridDrag';
 import { ITEM_FLAG_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import styles from './CalendarView.module.css';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
-import { CloseIcon } from '@/components/Icons';
+import { CloseIcon, DateCalcIcon } from '@/components/Icons';
+import { CalendarItemHoverCard, type HoverCardItem } from './CalendarItemHoverCard';
+import type { AnchorBox } from '@/utils/floatingPlacement';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -156,17 +160,11 @@ const MONTH_NAMES = [
 ];
 const MAX_VISIBLE = 3;
 
-// ── Hover tooltip ─────────────────────────────────────────────────────────────
+// ── Hover card ────────────────────────────────────────────────────────────────
 
 interface TooltipState {
-  x: number;
-  y: number;
-  title: string;
-  notes: string | null;
-  links: string[];
-  collectionName: string | null;
-  collectionColor: string | null;
-  time: string | null;
+  item:   HoverCardItem;
+  anchor: AnchorBox;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -189,6 +187,7 @@ export function CalendarView() {
   const setMonth     = useUIStore((s) => s.setCalendarMonth);
   const selectedDate = useUIStore((s) => s.calendarSelectedDate);
   const setSelectedDate = useUIStore((s) => s.setCalendarSelectedDate);
+  const openDateCalculator = useUIStore((s) => s.openDateCalculator);
   const [tooltip,     setTooltip]     = useState<TooltipState | null>(null);
   const [hoveredHour, setHoveredHour] = useState<number | null>(null);
   const [dayPaneDate, setDayPaneDate] = useState<string | null>(null);
@@ -688,6 +687,8 @@ export function CalendarView() {
   // pair every other navigation action here already keeps in sync (see goToday/shiftWeek/
   // shiftDay below), so whichever of month/week/day view is active lands on the right
   // place: month reads year/month, week/day read selectedDate.
+  // The header's period title opens the go-to-date picker (the side pane's, as a popover).
+  const [periodPicker, setPeriodPicker] = useState<AnchorBox | null>(null);
   const jumpToDate = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
     setYear(d.getFullYear());
@@ -877,20 +878,21 @@ export function CalendarView() {
     openCreateAt(dateStr, timeAddMinutes('00:00', minutes));
   };
 
+  // Hovering an entry shows it whole (CalendarItemHoverCard) when the cell cuts any of it off, or
+  // when it has more than the cell shows (notes, a place, links, an Endeavour, an end time).
   const handleItemMouseEnter = (e: React.MouseEvent<HTMLButtonElement>, item: CalDisplayItem) => {
+    const el = e.currentTarget;
+    const clipped = [el, ...Array.from(el.children)].some((c) => c.scrollWidth > c.clientWidth + 1 || c.scrollHeight > c.clientHeight + 1);
     const links = item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline' ? item.links : [];
-    if (!item.notes && !links.length && !item.collectionId) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const collectionColor = item.collectionId ? (collectionsRecord[item.collectionId]?.color ?? null) : null;
+    const event = item.kind === 'event' ? events[item.id] : undefined;
+    const location = item.kind === 'schedule' ? item.location : event?.location ?? null;
+    const endTime = item.kind === 'schedule' ? item.endTime : event?.endTime ?? null;
+    if (!clipped && !item.notes && !links.length && !item.collectionId && !location && !endTime) { setTooltip(null); return; }
+    const date = item.kind === 'schedule' ? item.date : item.kind === 'task' ? null : item.occurrenceDate;
+    const rect = el.getBoundingClientRect();
     setTooltip({
-      x: rect.left,
-      y: rect.top,
-      title: item.title,
-      notes: item.notes,
-      links,
-      collectionName: item.collectionId ? (collectionsRecord[item.collectionId]?.name ?? null) : null,
-      collectionColor,
-      time: item.time,
+      item: { kind: item.kind, id: item.id, title: item.title, typeIcon: item.typeIcon, time: item.time, endTime, location, date, notes: item.notes, links, collectionId: item.collectionId },
+      anchor: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
     });
   };
 
@@ -1051,9 +1053,22 @@ export function CalendarView() {
           <div className={styles.header}>
             <div className={styles.headerLeft}>
               <button className={styles.navBtn} onClick={desktopPrev} aria-label="Previous">‹</button>
-              <h2 className={styles.monthTitle}>{desktopNavLabel}</h2>
+              <h2 className={styles.monthTitle}>
+                <button type="button" className={styles.monthTitleBtn} title={LABELS.calendarNav.goTo} aria-haspopup="dialog" aria-expanded={!!periodPicker}
+                  onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setPeriodPicker(periodPicker ? null : { left: r.left, top: r.top, right: r.right, bottom: r.bottom }); }}>
+                  {desktopNavLabel}
+                </button>
+              </h2>
+              {periodPicker && (
+                <MiniDatePickerPopover anchor={periodPicker}
+                  anchorDate={desktopMode === 'month' ? `${year}-${String(month + 1).padStart(2, '0')}-01` : selectedDate}
+                  onSelect={jumpToDate} onClose={() => setPeriodPicker(null)} />
+              )}
               <button className={styles.navBtn} onClick={desktopNext} aria-label="Next">›</button>
               <button className={styles.todayBtn} onClick={goToday}>Today</button>
+              <button type="button" className={styles.calcBtn} onClick={openDateCalculator} aria-label={LABELS.dateCalc.open} title={LABELS.dateCalc.open}>
+                <DateCalcIcon aria-hidden="true" />
+              </button>
             </div>
             <div className={styles.viewToggle}>
               {(['month', 'week', 'day'] as const).map((m) => (
@@ -1604,38 +1619,8 @@ export function CalendarView() {
         )}
       </div>{/* end desktopView */}
 
-      {/* ── Hover tooltip ── */}
-      {tooltip && (
-        <div
-          className={styles.hoverTooltip}
-          style={{
-            left: `${tooltip.x}px`,
-            top: `${tooltip.y - 8}px`,
-            transform: 'translateY(-100%)',
-            ...(tooltip.collectionColor ? { borderColor: tooltip.collectionColor } : {}),
-          }}
-          onMouseEnter={() => setTooltip(null)}
-        >
-          {tooltip.collectionName && (
-            <span
-              className={styles.tooltipCollection}
-              style={tooltip.collectionColor ? { color: tooltip.collectionColor } : undefined}
-            >
-              {tooltip.collectionName}
-            </span>
-          )}
-          {tooltip.notes && (
-            <span className={styles.tooltipNotes}>{tooltip.notes}</span>
-          )}
-          {tooltip.links.length > 0 && (
-            <span className={styles.tooltipLinks}>
-              {tooltip.links.map((link) => (
-                <span key={link} className={styles.tooltipLink}>{link}</span>
-              ))}
-            </span>
-          )}
-        </div>
-      )}
+      {/* ── Hover card: an entry shown whole (not while dragging one) ── */}
+      {tooltip && !dragPreview && !isAndroid && <CalendarItemHoverCard item={tooltip.item} anchor={tooltip.anchor} />}
 
       {occurrencePopover && (
         <ScheduleOccurrencePopover

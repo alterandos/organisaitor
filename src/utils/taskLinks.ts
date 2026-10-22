@@ -1,5 +1,5 @@
 import { ITEM_LINK_KINDS, ITEM_LINK_KIND_ORDER } from '@/config/itemLinkKinds';
-import type { ItemLink, ItemLinkKind, Task, TaskId } from '@/types';
+import type { ItemLink, ItemLinkKind, ItemLinkTargetType, Task, TaskId } from '@/types';
 
 // The rules for task links (Task.itemLinks), pure so every caller — store, completion flow, list,
 // pane, agents later — reads them the same way. A link to a task that no longer exists (deleted,
@@ -7,6 +7,9 @@ import type { ItemLink, ItemLinkKind, Task, TaskId } from '@/types';
 // restoring that task brings its links back with it.
 
 type Tasks = Record<string, Task>;
+
+// Links to other tasks only; a task's links to events and Deadlines are utils/eventTaskLinks.ts's.
+const taskLinksOf = (t: Task): ItemLink[] => (t.itemLinks ?? []).filter((l) => (l.targetType ?? 'task') === 'task');
 
 // Done for the purpose of links: completed, or archived (confirmed with the user 2026-10-01 — an
 // archived task has been resolved one way or another, so it no longer holds anything up).
@@ -24,13 +27,13 @@ export interface TaskRelation {
 // Every link touching `task`, both directions, in registry order; missing tasks skipped.
 export function taskRelations(task: Task, tasks: Tasks): TaskRelation[] {
   const out: TaskRelation[] = [];
-  for (const l of task.itemLinks ?? []) {
+  for (const l of taskLinksOf(task)) {
     const other = tasks[l.targetId];
     if (other) out.push({ kind: l.kind, direction: 'out', other, reason: l.reason, ownerId: task.id, targetId: other.id });
   }
   for (const t of Object.values(tasks)) {
     if (t.id === task.id) continue;
-    for (const l of t.itemLinks ?? []) {
+    for (const l of taskLinksOf(t)) {
       if (l.targetId === task.id) out.push({ kind: l.kind, direction: 'in', other: t, reason: l.reason, ownerId: t.id, targetId: task.id });
     }
   }
@@ -42,7 +45,7 @@ export function taskRelations(task: Task, tasks: Tasks): TaskRelation[] {
 export function openBlockers(task: Task, tasks: Tasks): Task[] {
   const seen = new Set<string>();
   const result: Task[] = [];
-  for (const l of task.itemLinks ?? []) {
+  for (const l of taskLinksOf(task)) {
     if (!ITEM_LINK_KINDS[l.kind].blocks || seen.has(l.targetId)) continue;
     const t = tasks[l.targetId];
     if (t && !isResolved(t)) { seen.add(t.id); result.push(t); }
@@ -73,7 +76,7 @@ export function openBlockersDeep(task: Task, tasks: Tasks): Task[] {
 export function unlockedBy(resolvedId: string, tasks: Tasks): Task[] {
   return Object.values(tasks).filter((t) =>
     !isResolved(t)
-    && (t.itemLinks ?? []).some((l) => l.targetId === resolvedId && ITEM_LINK_KINDS[l.kind].blocks)
+    && taskLinksOf(t).some((l) => l.targetId === resolvedId && ITEM_LINK_KINDS[l.kind].blocks)
     && openBlockers(t, tasks).length === 0,
   );
 }
@@ -104,7 +107,7 @@ export function canAddLink(ownerId: string, kind: ItemLinkKind, targetId: string
   if (!owner || !target) return 'missing';
   if (hierarchyIds(owner, tasks).has(targetId)) return 'hierarchy';
   const def = ITEM_LINK_KINDS[kind];
-  const has = (a: Task, b: string) => (a.itemLinks ?? []).some((l) => l.kind === kind && l.targetId === b);
+  const has = (a: Task, b: string) => taskLinksOf(a).some((l) => l.kind === kind && l.targetId === b);
   if (has(owner, targetId) || (def.symmetric && has(target, ownerId))) return 'duplicate';
   // owner would wait on target: a loop if target already (transitively) waits on owner.
   if (def.blocks && waitsOn(target, ownerId, tasks)) return 'cycle';
@@ -116,7 +119,7 @@ function waitsOn(from: Task, onId: string, tasks: Tasks): boolean {
   const stack = [from];
   while (stack.length) {
     const t = stack.pop()!;
-    for (const l of t.itemLinks ?? []) {
+    for (const l of taskLinksOf(t)) {
       if (!ITEM_LINK_KINDS[l.kind].blocks) continue;
       if (l.targetId === onId) return true;
       const next = tasks[l.targetId];
@@ -126,5 +129,5 @@ function waitsOn(from: Task, onId: string, tasks: Tasks): boolean {
   return false;
 }
 
-export const makeItemLink = (kind: ItemLinkKind, targetId: string, reason: string | null, createdAt: string): ItemLink =>
-  ({ kind, targetType: 'task', targetId, reason: reason?.trim() || null, createdAt });
+export const makeItemLink = (kind: ItemLinkKind, targetId: string, reason: string | null, createdAt: string, targetType: ItemLinkTargetType = 'task'): ItemLink =>
+  ({ kind, targetType, targetId, reason: reason?.trim() || null, createdAt });

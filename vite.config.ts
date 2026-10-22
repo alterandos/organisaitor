@@ -126,8 +126,29 @@ function yahooFinanceProxyPlugin(): Plugin {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── No hot-swapping of stores, services or utils (dev only) ─────────────────
+// Hot module replacement re-runs a changed .ts module, and every module importing it, inside the
+// running page: a store would be created a second time beside the first, the encryption and sync
+// services would restart with empty state, and timers and async saves already running would keep
+// writing through the old copies. On 2026-10-22 that cost an encrypted note: a `git stash` swapped
+// a batch of files under the running dev app, and a stale copy of the notes store was saved over the
+// current one 12 seconds later. A change to any .ts file under src/ now reloads the page instead
+// (state is reloaded from storage, as on a restart); .tsx components keep React Fast Refresh.
+function fullReloadForStateModules(): Plugin {
+  return {
+    name: 'full-reload-for-state-modules',
+    apply: 'serve',
+    handleHotUpdate({ file, server }) {
+      if (/\/src\/.+\.ts$/.test(file.replace(/\\/g, '/'))) {
+        server.ws.send({ type: 'full-reload' });
+        return [];
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), yahooFinanceProxyPlugin()],
+  plugins: [react(), yahooFinanceProxyPlugin(), fullReloadForStateModules()],
 
   clearScreen: false,
 

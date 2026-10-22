@@ -36,6 +36,11 @@ export function openOverviewRow(row: OverviewRow): void {
       openNotePassage(noteId, { node: 'questionBlock', attr: 'qid', value: qid });
       return;
     }
+    case 'review': {
+      const [noteId, , passageId] = row.id.split(':');
+      openNotePassage(noteId, { mark: 'noteTag', attr: 'passageId', value: passageId });
+      return;
+    }
     case 'trackerEntry': {
       const entry = useTrackerStore.getState().entries[row.id as never];
       if (!entry) return;

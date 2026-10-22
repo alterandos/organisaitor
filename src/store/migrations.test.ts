@@ -74,6 +74,22 @@ describe('settingsStore migration', () => {
     expect(state.mathSlash).toBe('fraction');
   });
 
+  it('v17 -> v18 adds the 3 min / 10 min / 1 hour backup targets beside the person\'s own', async () => {
+    seed('todo-settings', { autoBackupTargetAgesDays: [1, 7, 30, 90] }, 17);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    expect(useSettingsStore.getState().autoBackupTargetAgesDays).toEqual([3 / 1440, 10 / 1440, 60 / 1440, 1, 7, 30, 90]);
+  });
+
+  it('v18 -> v19 offers Glossary links once per note, as before', async () => {
+    seed('todo-settings', { theme: 'dark' }, 18);
+    const { useSettingsStore } = await import('@/store/settingsStore');
+    await flush();
+    expect(useSettingsStore.getState().linkSuggestions).toBe('once');
+    expect(useSettingsStore.getState().scratchpadPos).toBeNull();
+    expect(useSettingsStore.getState().theme).toBe('dark');
+  });
+
   it('v13 -> v14 backfills an empty list of typing shortcuts and keeps everything else', async () => {
     seed('todo-settings', { clockFormat: '12h', mathSlash: 'slash' }, 13);
     const { useSettingsStore } = await import('@/store/settingsStore');

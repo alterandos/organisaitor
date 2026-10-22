@@ -58,6 +58,8 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph=
 export function LinkIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="link" {...EM} {...props} />; }
 export function UnlinkIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="unlink" {...EM} {...props} />; }
 export function OpenIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="open" {...EM} {...props} />; }
+// Swap one thing for another (put a different note in a pane).
+export function SwapIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="swap" {...EM} {...props} />; }
 export function IndentIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="indent" {...EM} {...props} />; }
 export function OutdentIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="outdent" {...EM} {...props} />; }
 export function ResetIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="reset" {...EM} {...props} />; }
@@ -74,6 +76,9 @@ export function UploadIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph
 export function ListIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="list" {...EM} {...props} />; }
 export function NotebookIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="notebook" {...EM} {...props} />; }
 export function StickyIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="sticky" {...EM} {...props} />; }
+export function ScratchpadIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="scratchpad" {...EM} {...props} />; }
+export function DateCalcIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="dateCalc" {...EM} {...props} />; }
+export function ConverterIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="converter" {...EM} {...props} />; }
 export function PresetIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="preset" {...EM} {...props} />; }
 
 export function ArchiveIcon(props: SVGProps<SVGSVGElement>) {

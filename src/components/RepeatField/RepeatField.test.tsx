@@ -58,14 +58,30 @@ describe('RepeatField', () => {
     expect(last).not.toHaveProperty('daysOfWeek');
   });
 
-  it('monthly: on the same day number, or the nth / last weekday of the date', () => {
-    // 2026-10-27 is the 4th and last Tuesday of October.
+  it('monthly: on the same day number, or the nth weekday, starting from the date’s own', () => {
+    // 2026-10-27 is the 4th (and last) Tuesday of October.
     render(<Host initial={{ ...weekly, freq: 'monthly' }} date="2026-10-27" />);
     const on = screen.getAllByRole('combobox')[1];
-    expect(Array.from(on.querySelectorAll('option')).map((o) => o.textContent)).toEqual(['On day 27', 'On the fourth Tuesday', 'On the last Tuesday']);
-    fireEvent.change(on, { target: { value: 'last' } });
-    expect(last).toMatchObject({ freq: 'monthly', monthWeekday: { week: -1, day: 2 } });
+    expect(Array.from(on.querySelectorAll('option')).map((o) => o.textContent)).toEqual(['On day 27', 'On the…']);
+    fireEvent.change(on, { target: { value: 'weekday' } });
+    expect(last).toMatchObject({ freq: 'monthly', monthWeekday: { week: 4, day: 2 } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Which one in the month' }), { target: { value: '-1' } });
+    expect(last).toMatchObject({ monthWeekday: { week: -1, day: 2 } });
     fireEvent.change(on, { target: { value: 'day' } });
     expect(last).not.toHaveProperty('monthWeekday');
+  });
+
+  it('any nth weekday ("every third Sunday"), and the date moves onto it when the host allows', () => {
+    let moved: string | null = null;
+    function Movable() {
+      const [value, setValue] = useState<RepeatConfig | null>({ ...weekly, freq: 'monthly' });
+      return <RepeatField value={value} onChange={(r) => { last = r; setValue(r); }} date="2026-10-19" onDateChange={(d) => { moved = d; }} />;
+    }
+    render(<Movable />);
+    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'weekday' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Which one in the month' }), { target: { value: '3' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Which day' }), { target: { value: '0' } });
+    expect(last).toMatchObject({ monthWeekday: { week: 3, day: 0 } });
+    expect(moved).toBe('2026-11-15');   // October's third Sunday (the 18th) is before the 19th
   });
 });

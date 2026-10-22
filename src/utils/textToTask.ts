@@ -2,8 +2,9 @@
 // priority, and links. Always shown to the user for confirmation/editing (via the real
 // AddTaskModal, pre-filled) before a task is actually created — never used to silently
 // populate data.
-import type { Priority } from '@/types';
+import type { Priority, RepeatConfig } from '@/types';
 import { extractUrls } from '@/utils/links';
+import { firstNthWeekdayFrom } from '@/utils/recurrence';
 
 export interface InferredTaskFields {
   title:        string;
@@ -297,12 +298,13 @@ export interface InferredCalendarFields {
   date:      string | null;   // YYYY-MM-DD — null = no date found, caller defaults to today
   startTime: string | null;   // HH:MM (24-hour) — for a reminder/deadline, its time
   endTime:   string | null;
-  location:  string | null;   // first link found (a meeting URL reads naturally as an event's location)
-  notes:     string | null;   // any further links
+  location:  string | null;   // an address in the text, else (an event) its first link — a meeting URL reads naturally as a location
+  notes:     string | null;   // the links not used as the location, one per line
+  links:     string[];        // every link in the text (the magic wand fills the Links field from these)
   eventType: 'default' | 'birthday' | 'travel';   // events only
   tentative: boolean;         // "maybe", "TBC", "pencil in"…
   important: boolean;         // "urgent", "important", "!!"…
-  repeat:    { freq: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number } | null;
+  repeat:    RepeatConfig | null;   // with its weekdays, nth weekday and end when the text says them
 }
 
 // ── Cue phrases ──
@@ -338,20 +340,102 @@ const TENTATIVE_STRIP = /\(?\b(?:maybe|possibly|perhaps|tentative(?:ly)?|provisi
 const IMPORTANT_WORDS = /\b(important|urgent|asap|critical|must[\s-]not[\s-]miss|don'?t miss|do not miss)\b|!!/i;
 const IMPORTANT_STRIP = /^\s*(?:important|urgent|asap)\s*[:\-–!]+\s*|!{2,}/gi;
 
-const REPEAT = /\bevery\s+(?:(other)\s+)?(?:(\d+)\s+)?(day|week|fortnight|month|year|(?:mon|tues?|wed(?:nes)?|thu(?:rs?)?|fri|sat(?:ur)?|sun)(?:day)?)s?\b|\b(daily|weekly|fortnightly|monthly|yearly|annually)\b/i;
+const WEEKDAY_WORD = '(sun|mon|tue|tues|wed|wednes|thu|thur|thurs|fri|sat|satur)(?:day)?';
+const ORDINALS: Record<string, number> = { first: 1, '1st': 1, second: 2, '2nd': 2, third: 3, '3rd': 3, fourth: 4, '4th': 4, fifth: 5, '5th': 5, last: -1 };
+const weekdayIndex = (word: string) => ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(word.slice(0, 3).toLowerCase());
 
-function findRepeat(text: string): { freq: 'daily' | 'weekly' | 'monthly' | 'yearly'; interval: number; span: Span } | null {
+// "every 3rd Sunday of the month", "the last Friday of every month", "first Monday monthly". It
+// needs "every"/"each" before it or the month after it: "the first Monday of November" is a date.
+const NTH_WEEKDAY = new RegExp(`\\b(?:(every|each)\\s+(?:the\\s+)?|(?:on\\s+)?the\\s+)?(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last)\\s+${WEEKDAY_WORD}s?(\\s+of\\s+(?:the|every|each)\\s+month|\\s+(?:of\\s+)?(?:every|each)\\s+month|\\s+monthly)?\\b`, 'i');
+// "every weekday", "every Monday and Thursday", "every other Tuesday".
+const WEEKDAYS_REPEAT = new RegExp(`\\bevery\\s+(?:(other)\\s+)?(weekdays?|${WEEKDAY_WORD}s?(?:\\s*(?:,|and|&)\\s*${WEEKDAY_WORD}s?)*)\\b`, 'i');
+const REPEAT = /\bevery\s+(?:(other)\s+)?(?:(\d+)\s+)?(day|week|fortnight|month|year)s?\b|\b(daily|weekly|fortnightly|monthly|yearly|annually)\b/i;
+
+type RepeatRule = Pick<RepeatConfig, 'freq' | 'interval' | 'daysOfWeek' | 'monthWeekday'>;
+
+function findRepeat(text: string): { rule: RepeatRule; span: Span } | null {
+  const nth = NTH_WEEKDAY.exec(text);
+  if (nth && (nth[1] || nth[4])) {
+    return { rule: { freq: 'monthly', interval: 1, monthWeekday: { week: ORDINALS[nth[2].toLowerCase()], day: weekdayIndex(nth[3]) } }, span: spanOf(nth) };
+  }
+  const days = WEEKDAYS_REPEAT.exec(text);
+  if (days) {
+    const list = /^weekdays?$/i.test(days[2])
+      ? [1, 2, 3, 4, 5]
+      : [...days[2].matchAll(new RegExp(WEEKDAY_WORD, 'gi'))].map((m) => weekdayIndex(m[1]));
+    return { rule: { freq: 'weekly', interval: days[1] ? 2 : 1, daysOfWeek: [...new Set(list)].sort((a, b) => a - b) }, span: spanOf(days) };
+  }
   const m = REPEAT.exec(text);
   if (!m) return null;
   const [, other, count, unit, adverb] = m;
   const word = (unit ?? adverb).toLowerCase();
   let interval = count ? parseInt(count, 10) : other ? 2 : 1;
-  let freq: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'weekly';   // "week", "weekly", or a weekday ("every Monday")
+  let freq: RepeatConfig['freq'] = 'weekly';
   if (word === 'day' || word === 'daily') freq = 'daily';
   else if (word === 'fortnight' || word === 'fortnightly') interval *= 2;
   else if (word === 'month' || word === 'monthly') freq = 'monthly';
   else if (word === 'year' || word === 'yearly' || word === 'annually') freq = 'yearly';
-  return { freq, interval: Math.max(1, interval), span: spanOf(m) };
+  return { rule: { freq, interval: Math.max(1, interval) }, span: spanOf(m) };
+}
+
+// How a repeat ends: "until 19 December 2027", "through March 3", "10 times", "for 6 weeks".
+function findRepeatEnd(text: string, now: Date): (({ until: string } | { count: number }) & { span: Span }) | null {
+  const until = /\b(?:until|till|til|through|thru|ending(?:\s+on)?|ends?(?:\s+on)?)\s+/i.exec(text);
+  if (until) {
+    const after = until.index + until[0].length;
+    const date = findDateCandidates(text.slice(after), now).find((c) => c.index === 0);
+    if (date) {
+      const y = resolveYear(date.y, date.m, date.d, date.yearExplicit, now);
+      return { until: toIso(y, date.m, date.d), span: { start: until.index, end: after + date.length } };
+    }
+  }
+  const times = /\b(?:for\s+)?(\d+)\s+(?:times|occurrences|sessions)\b|\bfor\s+(\d+)\s+(?:days|weeks|months|years)\b/i.exec(text);
+  if (times) return { count: Math.max(1, parseInt(times[1] ?? times[2], 10)), span: spanOf(times) };
+  return null;
+}
+
+// An address the text gives: "at Minervastrasse 65, 8032 Zürich", "Location: 12 Smith St".
+// A street needs its number beside it (or a "location:" label), so "meet at the station" or
+// "at 2pm" never reads as one. The value runs to a "·", "|", a new line, a link or the end; what
+// follows it on the same line before a link (usually the town again) comes out of the title too.
+const STREET_WORDS = 'strasse|straße|str\\.?|gasse|weg|platz|allee|street|st\\.?|road|rd\\.?|avenue|ave\\.?|lane|ln\\.?|drive|dr\\.?|boulevard|blvd\\.?|way|place|pl\\.?|court|ct\\.?|terrace|tce\\.?|parade|pde\\.?|highway|hwy\\.?|crescent|cres\\.?|square|sq\\.?';
+const ADDRESS_LABEL = /\b(?:location|address|venue|where)\s*:\s*/i;
+const ADDRESS_AT = /(?:\bat|@)\s+(?=\S)/gi;
+// "Minervastrasse 65", "Rue de Rivoli 12" (a name, then its number) or "12 Smith St" (a number, then a street).
+const STREET_NAME_NUMBER = /^(?:[\p{L}][\p{L}.'-]*\s+){0,3}[\p{L}][\p{L}.'-]*\s+\d+[a-z]?\b(?=\s*[,\n·|]|\s*$)/iu;
+const NUMBER_STREET = new RegExp(`^\\d+[a-z]?\\s+(?:[\\p{L}][\\p{L}.'-]*\\s+){0,3}(?:${STREET_WORDS})(?=[\\s,]|$)`, 'iu');
+const BARE_STREET = new RegExp(`[\\p{L}]+(?:${STREET_WORDS})\\s+\\d+[a-z]?\\b|\\b\\d+[a-z]?\\s+(?:[\\p{L}][\\p{L}.'-]*\\s+){0,3}(?:${STREET_WORDS})(?=[\\s,]|$)`, 'iu');
+
+function findLocation(text: string): { value: string; span: Span } | null {
+  const take = (from: number, spanStart: number) => {
+    const rest = text.slice(from);
+    const stop = rest.search(/\s[·|]\s|\n|https?:\/\/|$/);
+    const value = rest.slice(0, stop).replace(/[\s,;.]+$/, '').trim();
+    const lineEnd = rest.search(/\n|https?:\/\/|$/);
+    return value ? { value, span: { start: spanStart, end: from + Math.max(stop, lineEnd) } } : null;
+  };
+  const label = ADDRESS_LABEL.exec(text);
+  if (label) return take(label.index + label[0].length, label.index);
+  for (const m of text.matchAll(ADDRESS_AT)) {
+    const from = (m.index ?? 0) + m[0].length;
+    const rest = text.slice(from);
+    if (STREET_NAME_NUMBER.test(rest) || NUMBER_STREET.test(rest)) return take(from, m.index ?? 0);
+  }
+  const bare = BARE_STREET.exec(text);
+  return bare ? take(bare.index, bare.index) : null;
+}
+
+// The first date a rule lands on, on or after `from`: "every 3rd Sunday" with no date given (or
+// one the rule doesn't land on) starts on the next 3rd Sunday, since a series' first date always
+// counts as one of its dates.
+function firstDateOfRule(rule: RepeatRule, from: string): string {
+  if (rule.monthWeekday) return firstNthWeekdayFrom(from, rule.monthWeekday);
+  const start = new Date(from + 'T00:00:00');
+  for (let k = 0; rule.daysOfWeek?.length && k < 7; k++) {
+    const d = addDays(start, k);
+    if (rule.daysOfWeek.includes(d.getDay())) return toIso(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  return from;
 }
 
 const allSpans = (re: RegExp, text: string): Span[] =>
@@ -444,11 +528,20 @@ function stripSpans(text: string, spans: Span[]): string {
 // of time anyway), and "remind me to book the flight" is a reminder, not a journey. A best guess
 // only — the modal it opens in still has the Event / Reminder / Deadline toggle.
 export function inferCalendarItemFromSelection(rawText: string, extraLinks: string[] = [], now: Date = new Date()): InferredCalendarFields {
-  const dateMatch = inferDateMatch(rawText, now);
-  const date = dateMatch?.iso ?? null;
-  const range = findTimeRange(rawText);
-  const timeMatch = range ? null : findTimeMatch(rawText);
+  // The repeat and its end are read first and blanked out, so "until 19 December" isn't taken as
+  // the date and "every 3rd Sunday" isn't taken as next Sunday.
   const repeatMatch = findRepeat(rawText);
+  const endMatch = repeatMatch ? findRepeatEnd(rawText, now) : null;
+  const ruleSpans = [...(repeatMatch ? [repeatMatch.span] : []), ...(endMatch ? [endMatch.span] : [])];
+  const masked = ruleSpans.reduce((t, sp) => blank(t, sp.start, sp.end), rawText);
+  const dateMatch = inferDateMatch(masked, now);
+  const range = findTimeRange(masked);
+  const timeMatch = range ? null : findTimeMatch(masked);
+  const fieldSpans = [
+    ...ruleSpans, ...findLinkSpans(rawText),
+    ...(dateMatch ? [dateMatch] : []), ...(range ? [range.span] : timeMatch ? [timeMatch] : []),
+  ];
+  const place = findLocation(fieldSpans.reduce((t, sp) => blank(t, sp.start, sp.end), rawText));
 
   const byDate = !!dateMatch && DEADLINE_DATE_CONNECTOR.test(rawText.slice(0, dateMatch.start));
   const deadlineLead = DEADLINE_LEAD.exec(rawText);
@@ -458,19 +551,18 @@ export function inferCalendarItemFromSelection(rawText: string, extraLinks: stri
   const isReminder = REMINDER_WORDS.test(rawText);
   const isBirthday = BIRTHDAY_WORDS.test(rawText);
   const isTravel = TRAVEL_WORDS.test(rawText);
-  const isEvent = !!range || EVENT_WORDS.test(rawText) || isTravel || isBirthday;
+  // An address means somewhere to be, so an event.
+  const isEvent = !!range || EVENT_WORDS.test(rawText) || isTravel || isBirthday || !!place;
 
   const kind: InferredCalendarFields['kind'] = isDeadline ? 'deadline' : isReminder ? 'reminder' : isEvent ? 'event' : 'reminder';
   const eventType: InferredCalendarFields['eventType'] = kind !== 'event' ? 'default' : isBirthday ? 'birthday' : isTravel ? 'travel' : 'default';
   const tentativeSpans = allSpans(TENTATIVE_STRIP, rawText);
 
-  // Everything that ends up in its own field (date, time(s), links, repeat) and every phrase that
-  // only told us the kind comes out of the title.
+  // Everything that ends up in its own field (date, time(s), links, repeat, address) and every
+  // phrase that only told us the kind comes out of the title.
   const title = tidyTitle(stripSpans(rawText, [
-    ...(dateMatch ? [dateMatch] : []),
-    ...(range ? [range.span] : timeMatch ? [timeMatch] : []),
-    ...findLinkSpans(rawText),
-    ...(repeatMatch ? [repeatMatch.span] : []),
+    ...fieldSpans,
+    ...(place ? [place.span] : []),
     ...(deadlineLeadSpan ? [deadlineLeadSpan] : deadlineIs ? [spanOf(deadlineIs)] : []),
     ...allSpans(REMINDER_STRIP, rawText),
     ...tentativeSpans,
@@ -480,9 +572,18 @@ export function inferCalendarItemFromSelection(rawText: string, extraLinks: stri
   const links = [...new Set([...extractUrls(rawText), ...extraLinks])];
   // A birthday is all-day and comes round every year, whatever else the text says.
   const birthday = eventType === 'birthday';
-  const repeat = birthday
-    ? { freq: 'yearly' as const, interval: 1 }
-    : repeatMatch ? { freq: repeatMatch.freq, interval: repeatMatch.interval } : null;
+  const rule: RepeatRule | null = birthday ? { freq: 'yearly', interval: 1 } : repeatMatch?.rule ?? null;
+  const repeat: RepeatConfig | null = rule && {
+    ...rule,
+    endKind: endMatch ? ('until' in endMatch ? 'until' : 'count') : 'forever',
+    count: endMatch && 'count' in endMatch ? endMatch.count : null,
+    until: endMatch && 'until' in endMatch ? endMatch.until : null,
+  };
+  const today = toIso(now.getFullYear(), now.getMonth(), now.getDate());
+  const date = rule && (rule.monthWeekday || (rule.daysOfWeek?.length && !dateMatch))
+    ? firstDateOfRule(rule, dateMatch?.iso ?? today)
+    : dateMatch?.iso ?? null;
+  const location = place?.value ?? (kind === 'event' ? links[0] ?? null : null);
 
   return {
     title,
@@ -490,11 +591,19 @@ export function inferCalendarItemFromSelection(rawText: string, extraLinks: stri
     date,
     startTime: birthday ? null : range?.start ?? timeMatch?.time ?? null,
     endTime: kind === 'event' && !birthday ? range?.end ?? null : null,
-    location: kind === 'event' ? (links[0] ?? null) : null,
-    notes: (kind === 'event' ? links.slice(1) : links).join('\n') || null,
+    location,
+    notes: links.filter((l) => l !== location).join('\n') || null,
+    links,
     eventType,
     tentative: tentativeSpans.length > 0,
     important: IMPORTANT_WORDS.test(rawText),
     repeat,
   };
+}
+
+// The first date in a piece of text ("1 October 2026", "yesterday", "next Friday", "15/3/2027"),
+// as YYYY-MM-DD, or null: the same reading every text reader here uses (the date calculator's
+// magic wand, utils/dateCalc.ts).
+export function readDate(text: string, now: Date = new Date()): string | null {
+  return inferDateMatch(text, now)?.iso ?? null;
 }

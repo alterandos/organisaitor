@@ -75,11 +75,15 @@ import { EditRoutinePane } from '@/components/EditRoutinePane/EditRoutinePane';
 import { AddRoutineModal } from '@/components/AddRoutineModal/AddRoutineModal';
 import { IntegrationsPane } from '@/components/IntegrationsPane/IntegrationsPane';
 import { RecyclingBinPane } from '@/components/RecyclingBinPane/RecyclingBinPane';
+import { DateCalculator } from '@/components/DateCalculator/DateCalculator';
+import { ConverterPane } from '@/components/ConverterPane/ConverterPane';
+import { ScratchpadPanel } from '@/components/ScratchpadPanel/ScratchpadPanel';
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
 import { HistoryBrowser } from '@/components/HistoryBrowser/HistoryBrowser';
 import { initPictures } from '@/services/pictures';
+import { initEventTaskFollow } from '@/services/eventTaskLinks';
 import { adoptLegacyNotePins } from '@/services/quickAccessPins';
 import { installSpecialCharInput } from '@/specialChars/fieldInput';
 import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
@@ -149,6 +153,9 @@ export default function App() {
   const editingCalendarDeadlineId  = useUIStore((s) => s.editingCalendarDeadlineId);
   const integrationsOpen           = useUIStore((s) => s.integrationsOpen);
   const recyclingBinOpen           = useUIStore((s) => s.recyclingBinOpen);
+  const dateCalcOpen               = useUIStore((s) => s.dateCalcOpen);
+  const convertersOpen             = useUIStore((s) => s.convertersOpen);
+  const scratchpadOpen             = useUIStore((s) => s.scratchpadOpen);
   const openRecyclingBin           = useUIStore((s) => s.openRecyclingBin);
   const closeRecyclingBin          = useUIStore((s) => s.closeRecyclingBin);
   const editTrackerOpen            = useUIStore((s) => s.editTrackerOpen);
@@ -261,6 +268,7 @@ export default function App() {
   useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initPictures(); initAutoBackup(); migrateTaskDeadlineShadows(); adoptLegacyNotePins(); }, []);
   // `//name` → a character (Greek, arrows, maths, super/subscripts) in every text field (src/specialChars/).
   useEffect(() => installSpecialCharInput(), []);
+  useEffect(() => initEventTaskFollow(), []);
 
   const setSession = useAuthStore((s) => s.setSession);
   const authUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -466,6 +474,20 @@ export default function App() {
         e.preventDefault();
         const ui = useUIStore.getState();
         if (ui.recyclingBinOpen) ui.closeRecyclingBin(); else ui.openRecyclingBin();
+        return;
+      }
+      // The converters: from anywhere, a text field too (Alt+= types nothing there).
+      if (matchesHotkeyId(e, 'action-converters')) {
+        e.preventDefault();
+        const ui = useUIStore.getState();
+        if (ui.convertersOpen) ui.closeConverters(); else ui.openConverters();
+        return;
+      }
+      // The scratchpad: from anywhere, a text field too (Alt+P types nothing there).
+      if (matchesHotkeyId(e, 'action-scratchpad')) {
+        e.preventDefault();
+        const ui = useUIStore.getState();
+        if (ui.scratchpadOpen) ui.closeScratchpad(); else ui.openScratchpad();
         return;
       }
       if (matchesHotkeyId(e, 'action-theme')) {
@@ -744,6 +766,9 @@ export default function App() {
         {accountOpen               && <AccountPane />}
         {integrationsOpen          && <IntegrationsPane />}
         {recyclingBinOpen          && <RecyclingBinPane />}
+        {dateCalcOpen              && <DateCalculator />}
+        {convertersOpen            && <ConverterPane />}
+        {scratchpadOpen            && <ScratchpadPanel />}
         {editingCalendarEventId    && <CalendarEventPane key={editingCalendarEventId} />}
         {editingCalendarReminderId && <CalendarReminderPane key={editingCalendarReminderId} />}
         {editingCalendarDeadlineId && <CalendarDeadlinePane key={editingCalendarDeadlineId} />}

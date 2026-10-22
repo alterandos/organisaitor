@@ -1,6 +1,7 @@
 import { LABELS } from '@/config/labels';
+import { DateInput } from '@/components/DateInput/DateInput';
 import type { RepeatConfig, RepeatFreq } from '@/types';
-import { weekOfMonth } from '@/utils/recurrence';
+import { firstNthWeekdayFrom, weekOfMonth } from '@/utils/recurrence';
 import styles from './RepeatField.module.css';
 
 interface Props {
@@ -11,11 +12,14 @@ interface Props {
   labelClassName?: string;
   // The item's (first) date: offers "on the 2nd Tuesday" for monthly/yearly and marks its weekday.
   date?: string | null;
+  // Moves the item's date onto a chosen nth weekday ("third Sunday") when it isn't on it already.
+  onDateChange?: (date: string) => void;
 }
 
 const FREQS: RepeatFreq[] = ['daily', 'weekly', 'monthly', 'yearly'];
 const DEFAULT: RepeatConfig = { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null };
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const NTH_ORDER = [1, 2, 3, 4, -1];
 
 // Drops the parts of a rule that don't apply to its frequency (weekdays only on weekly, the nth
 // weekday only on monthly/yearly), so switching frequency never leaves a hidden setting behind.
@@ -32,7 +36,7 @@ function tidy(r: RepeatConfig): RepeatConfig {
 // date. Controlled: every change hands back the whole rule (null = doesn't repeat). Used by the
 // task pane, the add-task modal, the add-calendar-item modal and the event, reminder and deadline
 // panes: THE repeat editor (pattern test "one repeat-rule editor"). Routines pick weekdays instead.
-export function RepeatField({ value, onChange, hint, labelClassName, date }: Props) {
+export function RepeatField({ value, onChange, hint, labelClassName, date, onDateChange }: Props) {
   const L = LABELS.recurring;
   const set = (patch: Partial<RepeatConfig>) => onChange(tidy({ ...(value ?? DEFAULT), ...patch }));
   const start = date ? new Date(date + 'T00:00:00') : null;
@@ -43,7 +47,15 @@ export function RepeatField({ value, onChange, hint, labelClassName, date }: Pro
     set({ daysOfWeek: next.sort((a, b) => a - b) });
   };
   const nth = date ? weekOfMonth(date) : null;
-  const monthBy = value?.monthWeekday ? (value.monthWeekday.week === -1 ? 'last' : 'nth') : 'day';
+  // "Every third Sunday" (2026-10-19): any week and weekday, not only the date's own. A series'
+  // first date is always one of its dates, so a host that can move the date moves it onto the rule.
+  const pickWeekday = (monthWeekday: RepeatConfig['monthWeekday']) => {
+    set({ monthWeekday });
+    if (monthWeekday && date && onDateChange) {
+      const first = firstNthWeekdayFrom(date, monthWeekday);
+      if (first !== date) onDateChange(first);
+    }
+  };
   return (
     <div className={styles.field}>
       <label className={labelClassName ?? styles.toggle}>
@@ -88,16 +100,32 @@ export function RepeatField({ value, onChange, hint, labelClassName, date }: Pro
               <select
                 className={styles.select}
                 aria-label={L.onDays}
-                value={monthBy}
-                onChange={(e) => {
-                  const by = e.target.value;
-                  set({ monthWeekday: by === 'day' ? undefined : { week: by === 'last' ? -1 : nth.week, day: startDay } });
-                }}
+                value={value.monthWeekday ? 'weekday' : 'day'}
+                onChange={(e) => pickWeekday(e.target.value === 'day' ? undefined : { week: nth.week <= 4 ? nth.week : -1, day: startDay })}
               >
                 <option value="day">{L.monthOnDay(start.getDate())}</option>
-                {nth.week <= 4 && <option value="nth">{L.monthOnWeekday(L.nth[nth.week], L.dayName[startDay])}</option>}
-                {nth.isLast && <option value="last">{L.monthOnWeekday(L.nth[-1], L.dayName[startDay])}</option>}
+                <option value="weekday">{L.monthOnThe}</option>
               </select>
+              {value.monthWeekday && (
+                <>
+                  <select
+                    className={styles.select}
+                    aria-label={L.whichWeek}
+                    value={value.monthWeekday.week}
+                    onChange={(e) => pickWeekday({ week: Number(e.target.value), day: value.monthWeekday!.day })}
+                  >
+                    {NTH_ORDER.map((w) => <option key={w} value={w}>{L.nth[w]}</option>)}
+                  </select>
+                  <select
+                    className={styles.select}
+                    aria-label={L.whichDay}
+                    value={value.monthWeekday.day}
+                    onChange={(e) => pickWeekday({ week: value.monthWeekday!.week, day: Number(e.target.value) })}
+                  >
+                    {WEEK_ORDER.map((d) => <option key={d} value={d}>{L.dayName[d]}</option>)}
+                  </select>
+                </>
+              )}
             </div>
           )}
           <div className={styles.row}>
@@ -124,7 +152,7 @@ export function RepeatField({ value, onChange, hint, labelClassName, date }: Pro
               />
             )}
             {value.endKind === 'until' && (
-              <input type="date" className={styles.date} value={value.until ?? ''} onChange={(e) => set({ until: e.target.value || null })} />
+              <DateInput className={styles.date} value={value.until ?? ''} onChange={(v) => set({ until: v || null })} />
             )}
           </div>
           {hint && <p className={styles.hint}>{hint}</p>}

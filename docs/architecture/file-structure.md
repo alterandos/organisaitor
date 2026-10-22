@@ -59,6 +59,7 @@ src/
   services/sync/
     syncService.ts           — Supabase push/pull
     mappers.ts               — xToRow / rowToX for every entity
+    hydrating.ts             — isHydrating / setHydrating: true while sync writes the cloud's rows into the stores (read by store watchers)
   services/quickAccessPins.ts — togglePin (toast with Undo), isPinned, pinMenuItem, the note-row pin provider, adoptLegacyNotePins: THE way to pin to Quick Access
   hooks/usePinAction.ts     — a pin button's icon/label/action, for a RowAction or a button (PinButton)
   services/newItem.ts       — openNewItem(view): THE N/Space/Ctrl+N routing, section by section (Notes: by focused column) — see "New-item hotkey"
@@ -76,6 +77,7 @@ src/
   services/noteHubs.ts      — idea hubs: addPassageToHub (marks the passage, links it in the hub; Undo), addLinkToHub (a Glossary term or a note), setLinkRelation, removeLink (takes the passage's mark off), openHub / openHubLink / openHubFromMarker, listHubs
   services/noteContentEdit.ts — editNoteContent(noteId, tabId, { inEditor, inJson }): THE way to change a note's content from outside the editor (through the open editor if that text is open, else the stored JSON); editNoteText(…, schema, edit) when the editor's schema is at hand
   services/stickyNotes.ts   — sticky notes: notes in the Stickies notebook (presetKey 'stickies'); addSticky, setStickyContent (paragraphs with bold/italic/underline/strike, through editNoteContent), stickyDocOf/stickyDocFrom/stickyText, removeSticky (to the Recycling Bin, Undo)
+  services/scratchpad.ts    — the scratchpad (Alt+P): one note in its own notebook (presetKey 'scratchpad', pinned after Stickies); ensureScratchpad, scratchpadText, cutScratchpad (with Undo)
   services/glossaryDelete.ts — deleting a Glossary record: asks (saying how many links go too), then removes every link to it in every note
   services/noteLinkTargets.ts — what a note link or embed points at: noteDocFor, linkTarget (the passage as it reads now), ensureBlockId, openNoteLink
   services/liveNoteEditor.ts — THE registry of open note editors (one per pane side by side): registerOpenNoteEditor, the one in front via registerLiveNoteEditor/liveNote(); liveNoteEditorFor(noteId, tabId), liveNoteFor(noteId), liveNotes(), liveNoteOf(view), flushOpenNoteEditors(). A change to a note's content from outside the editor goes through that view when it's open
@@ -115,9 +117,11 @@ src/
   src/demo/resources/       — the user's demo pictures, one file per slot (README lists them)
   components/InboxPickerModal/ — Send to inbox: the picker (inboxes ranked by the selected words, New inbox here, Also make a task)
   config/itemLinkKinds.ts   — ITEM_LINK_KINDS: THE registry of task-link kinds (Waiting on / Follow-up of / Related — icon, labels, blocks, symmetric); see "ItemLink" in Type system
+  utils/eventTaskLinks.ts   — tasks linked to an event or a Deadline (prepFor / followUpOf / related), pure: anchorOf, datesForLink, followMove, tasksLinkedTo
   utils/taskLinks.ts        — the task-link rules, pure: taskRelations (both directions), openBlockers/isBlocked/openBlockersDeep, unlockedBy, canAddLink (self/duplicate/loop), makeItemLink
   services/recurringTasks.ts — recurring tasks: nextOccurrenceDate (pure), spawnNextOccurrence (called on completion by taskListLinks and agent/access), nextOccurrenceOf, discardOccurrence (the toast's Undo), repeatSummary — see "Recurring tasks" in Type system
   services/taskListLinks.ts — a task's linked lists: checklistProgress() (the "📋 3/7" pill), toggleTaskWithLists() (toggles a task and unticks a linked checklist marked reusable — the UI calls it through services/taskCompletion.ts, never directly), toggleChecklistItemWithTasks() (THE way UI ticks a checklist item — offers to complete the linked task when the last one is ticked). Agents don't use it (no list access) — see "Lists: links from tasks, calendar items and notes" in Implemented features
+  services/eventTaskLinks.ts — linking tasks to events and Deadlines (linkTaskToEvent, unlinkTaskFromEvent, linkedTaskDates) and initEventTaskFollow, the calendar-store watcher that moves linked tasks with their event (Undo toast)
   services/taskCalendarLinks.ts — keeps a task's shadow CalendarDeadline (deadline date) and event (scheduled date) matching the task, and flows edits made on the event back — the one place that logic lives (see "Task ⇄ calendar shadow entries" in Implemented features); like crossAppLinkCleanup it may import both taskStore and calendarStore
   services/taskDeadlineMigration.ts — migrateTaskDeadlineShadows(), called once from App.tsx's startup effect: converts any pre-2026-09-27 task shadow that's still a `CalendarReminder` with `reminderType: 'task'` into a `CalendarDeadline` with `deadlineType: 'task'` and repoints the owning task's `calendarDeadlineId`. State-driven (looks for legacy shadows still present, not a run-once flag), so it's naturally idempotent — see "Deadline calendar kind" in Implemented features
   services/trashCapture.ts  — moveToTrash(kind, entity): the write half of the Recycling Bin, called from inside every store's own delete* action. Deliberately imports NO domain store (only trashStore) so every domain store can import it without an import cycle — see "Recycling Bin" above
@@ -132,13 +136,14 @@ src/
   components/ErrorBoundary/ — class ErrorBoundary: `scope="app"` (around <App /> in main.tsx: full-page fallback with Reload + Export backup + collapsed Details) and `scope="section"` (around the section switcher in App.tsx, keyed by `activeView` so navigating away resets it: "Reload this section", nav keeps working). A **new section must render inside that section boundary**; copy is `LABELS.errorBoundary`
   components/ConfirmDialog/ — THE replacement for window.confirm()/alert(): `dialogs.ts` (`confirmDelete`, `confirmDialog`, `choiceDialog`, `alertDialog`) + `ConfirmDialogHost`, mounted once in App.tsx (see "Confirmations and alerts")
   components/OverviewSection/ — the Overview section: sidebar (Endeavours → their automatic Overview; My overviews with RowHoverActions edit/delete; + New overview) + grouped table (row click opens the item in its app)
+  utils/emptyContent.ts      — whether a note or rich text has anything in it (deleting an empty thing doesn't ask)
   components/AddOverviewModal/ — create/edit a saved Overview (sources, Endeavour, open/all, dates + window, title search, sort, group)
   utils/suggestRank.ts      — rankSuggestions/rankSearch: THE ordering for every "link a …" picker (see "Pickers suggest by keywords")
   components/HoverOptions/  — HoverOptions: hovering a button offers labelled alternatives to its plain click (the RowHoverActions machinery, `align`-able, vertical list); on Android a long-press opens them in an ActionSheet. Used for a task's Complete (TaskItem checkbox, ItemActionFooter's `completeOptions`)
   components/BottomSheet/   — BottomSheet: THE phone bottom sheet (portaled, backdrop tap / grabber drag-down / Escape + Android back close it, 85vh, safe-area padding, z-index 1020) — see "Bottom sheets"
   components/ActionSheet/   — ActionSheet (a BottomSheet of `{ label, icon?, onSelect, destructive? }`; choosing closes, then runs) + ActionSheetButton (one row, shared with RowAction in the sheet)
   components/Toast/         — `showToast()` (showToast.ts) + `ToastHost` (Toast.tsx), mounted once in App.tsx — see "Toasts"
-  components/TaskLinks/     — TaskLinksField: TaskPane's "Task links" section (grouped both-direction rows with editable reasons; + Waiting on… / + Follow-up / + Related…)
+  components/TaskLinks/     — EventTasksField: the event and Deadline panes' Tasks (linked tasks, + Preparation / + Follow-up / Link a task…); TaskLinksField: TaskPane's "Task links" section (grouped both-direction rows with editable reasons; + Waiting on… / + Follow-up / + Related…)
   components/TaskPickerModal/ — the "link a task" search dialog (portaled, shares NotePickerModal's CSS module like ListPickerModal)
   components/DecryptPrompt/  — app-wide "enter your passphrase to permanently decrypt this note/list" modal (uiStore.decryptPrompt / requestDecrypt), portaled, z-index 200; opened by every clickable 🔒
   store/noteViews.ts         — React hooks useNoteViews()/useNoteView(id)/useEntryViews(): notes/entries resolved through the cache, re-derived when the store OR the cache changes
@@ -165,7 +170,13 @@ src/
     links.ts                 — openExternalLink(url) (Tauri-aware: routes through @tauri-apps/plugin-opener under Tauri, @capacitor/browser under Android, window.open() in the browser/PWA) and normalizeLinkUrl(raw) (prefixes bare domains with https://); shared by TaskItem/TaskPane/Notes link UI and App.tsx's global external-link click interceptor
     apiFetch.ts               — apiFetch(path, init): THE way to call /api/* (a pattern test fails on a bare fetch('/api…)); routes to the production Vercel URL through a native HTTP client in the packaged apps — @tauri-apps/plugin-http under Tauri, CapacitorHttp under Android (adapted back into a Response; never enable CapacitorHttp globally, it would patch Supabase's fetch too) — plain same-origin fetch in the browser. oauthRedirectOrigin(): the origin OAuth providers redirect back to (production in the packaged apps). See "Desktop (Tauri) API access" and "Android W1: platform services" in Implemented features
     saveFile.ts               — saveFile(filename, blob): THE way to hand the user a file (every export: backups, auto-backup snapshots, ErrorBoundary). Anchor download on web/Tauri; on Android writes to the cache directory and opens the share sheet (@capacitor/filesystem + @capacitor/share)
+    convert.ts               — working out a conversion: convertUnit, runConverter / runConverterBack, readAmount, showAmount
+    formula.ts               — THE formula reader and evaluator (mathjs syntax, no eval): compileFormula, formulaError
+    dateCalc.ts              — the date calculator's rules (countFrom, between) and its wand's reader (readDateCalc)
+    numberNotation.ts        — one number in four notations, exact (parseNumber, formatNumber, numberForms, cycleNotation, numberAt)
     textToTask.ts            — inferTaskFromSelection(text): non-AI date/time/priority/link inference for the Notes "Create ▸ Task" feature, and inferCalendarItemFromSelection(text) for "Create ▸ Calendar item" (kind event/reminder/deadline from phrase cues, plus travel/birthday, tentative, important, repeat — see "Notes Create ▸ Calendar item: phrase cues" in Implemented features) — regex-based, no external dependency; locale-aware (Intl) for ambiguous numeric dates. A new cue goes in with a test in textToTask.test.ts
+    stableId.ts              — stableId(prefix, userId, key): the same id on every device for one imported thing (calendar import's importedEventId, Strava's stravaActivityId); each use is an approved exception to "never a fixed id"
+    fitnessIds.ts            — stravaActivityId(userId, stravaId) and withStableStravaIds (older random-id Strava activities take their stable id on load)
     timelineWhen.ts          — readTimelineWhen (a timeline entry's When as a sortable point: dates in many formats, years, BC/AD, decades, ranges, times, "Day 3" steps) and readTimeline (the order, inherited years). Pure; a new format goes in with a test
     definitionInference.ts   — inferDefinitionFromSelection: term + meaning from "X is Y" / "X: Y" / a term and its sentence, for the Definition and Concept popover
     idbStorage.ts            — IndexedDB persistence for the notes store: preloadIdbStorage() (awaited in main.tsx before the app is imported), persistStorageIdb(), readPersistedValue()/writePersistedValue() for backup/restore, IDB_STORAGE_KEYS, getIdbUsage()
@@ -197,6 +208,8 @@ src/
     NavSidebar/              — left nav: section switcher, settings, account icons (desktop/web only — hidden on Android in favour of MobileNav); navItems.tsx holds CORE_NAV_ITEMS and SECTION_ICONS (THE icon per section)
     NavFlash/                — what a keyboard back/forward (Alt+←/→, Backspace) shows: the compact history carousel (HistoryCarousel) centred on where you went, a small arrow at its side; stays while Alt is held, fades after (uiStore.navFlash, set by App.tsx).
     StickyNotes/             — the sticky notes over Notes (desktop): paper that stays where it's dragged, four designs, its text written in place; right-click: open, design, remove; mounted by NotesSection
+      useSimpleNoteEditor.ts — the small editor over a simple-text note (a sticky, the scratchpad): debounced save, takes up outside changes; simpleNoteExtensions(placeholder)
+    ScratchpadPanel/         — the scratchpad panel (Alt+P, over any section): Copy all / Cut all, Open in Notes, Scratchpad paper or Simple design; mounted by App.tsx
     WelcomePage/             — what a signed-out visitor sees instead of the app: suite name, tagline (LABELS.welcome), logo (public/brand/logo.png → /brand/logo.png), Sign in / Create an account / Continue without an account; App.tsx decides when
     HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores; PlaceCard.tsx is THE card for a place, shared with the phone's recent notes (MobileNotes)
       HistoryCarousel.tsx    — THE history carousel (cards fanned either side of the centred one), drawn full size by the history browser and compact by NavFlash.
@@ -225,6 +238,7 @@ src/
     RecordsView/             — Records section: tracker sidebar + tracker detail + routines
     RoutineChecklist/        — routine card (steps, progress, complete button)
     CalendarView/            — month/week/day calendar; week/day use an hourly time grid (src/utils/timeGrid.ts)
+      CalendarItemHoverCard.tsx — an entry shown whole while hovered (title, when, where, Endeavour, notes, links), placed by useFloatingPlacement
     CalendarEventPane/       — slide-in: edit calendar event
     CalendarReminderPane/    — slide-in: edit calendar reminder
     CalendarDeadlinePane/    — slide-in: edit calendar deadline (structural near-copy of CalendarReminderPane; "Notify me" is always shown, not gated by "no Time set" — a Deadline notifies only before, never at, even with a Time)
@@ -232,6 +246,16 @@ src/
     AddScheduleModal/        — create/edit a Schedule (recurring weekly timetable) and its blocks
     CalendarSidePane/        — left-sliding pane (Calendar section): Layers toggles + Schedule list/manager (active toggle, conflict hint, overlay-preview grid) in one place — supersedes the old CalendarLayersPicker (header dropdown) and ManageSchedulesPane (right-sliding pane), see "Calendar side pane" in Implemented features
     ScheduleOccurrencePopover/ — click a Schedule occurrence on the calendar: skip this date, commit/uncommit (commitment mode), or jump to editing the Schedule
+    AllDayNotifyField/       — NotifyLead.tsx: the Notify field for every calendar item (NotifyRuleField with its on/off box, NotifyRuleEditor, LeadAmountInput: a typed amount + ▾ presets); the rules are utils/notifyRule.ts
+    ConverterPane/           — the converters panel (Alt+=, a Place): built-in units and the person's own; ConverterEditor makes and edits one (Settings → Converters opens it too); ConvertWidget is one conversion as hosted by the `\convert` note block (extensions/Convert.ts), its pure parts in convertValue.ts
+    DateCalculator/          — the date calculator (a Place; the Calendar header's button): count from a date, or between two dates, with the magic wand; rules utils/dateCalc.ts
+    MagicWand/               — MagicWandButton + MagicWandPanel: a form filled in from words, through the form's own reader
+    DateInput/               — the suite's date field (day/month/year segments, the time field's rules, ▾ calendar)
+    MiniDatePicker/          — the go-to-date calendar (the Calendar side pane, the header's period picker as MiniDatePickerPopover, DateInput's ▾)
+    (NoteEditor/extensions/partAdders.ts — "+" buttons beside a block's hovered part; cardImageLayout.ts — a Glossary card's picture width and place; objects/TaskBody.tsx — a task's pane body in a note)
+    (NoteEditor/extensions/AutoBrackets.ts — brackets close themselves; EscapePassThrough.ts — lets an Escape no editor handler uses reach the Escape stack; CardTermLinks.tsx + CardTermLinkParts.tsx — Glossary term links in a card's fields; NoteSplitView/EmptyPane.tsx — a side-by-side pane with no note yet)
+    (TimeInput/SegmentStepper.tsx — the ▲▼ of a segmented field; hooks/useWheelSteps.ts — the wheel steps a segment; utils/focusNext.ts — the next control in Tab order; utils/notifyRule.ts — one notify setting for every calendar item)
+    OverviewRunway/          — an Overview's Runway (time left on a time line, dragging) and Board (time buckets) layouts; the rules are overview/timeline.ts, edits overview/edit.ts
     TimeInput/               — segmented hour/minute/AM-PM combobox respecting settingsStore.clockFormat (not a native <input type="time">, see Clock format setting below and the Timepicker rebuild entry in Implemented features), plus a quick-pick dropdown of half-hour times
     RepeatField/             — the repeat-rule editor (on/off, every N days/weeks/months/years, weekdays for weekly, "on the 2nd Tuesday" for monthly/yearly, ends never/after N/on a date); TaskPane and AddTaskModal
     TravelModePicker/        — how a travel event travels (flight, train, bus, car, ferry); AddCalendarItemModal and CalendarEventPane
@@ -284,6 +308,7 @@ src/
       extensions/Options.ts          — the `\options` note block (a goal and its options, each with status, score and pros/cons; designs Fork / Side by side / Ranked / Tiles / Either-or); optionsMenu.ts its right-click provider
       extensions/designCycle.ts      — Ctrl+] / Ctrl+[ for every block's designs; BLOCK_DESIGN_LISTS is THE map of each block's designs
       noteColorMenu.ts               — a note's colour: setNoteColor, and the Note colour ▸ submenu on a note row's and the editor's right-click
+      notePdf.ts                     — Export as PDF: copies the open note into a print-only layer and opens the print dialog; Note ▾ and right-click entries
       extensions/DictionaryWords.ts  — marks Dictionary words in a note (italic on a faint shade) and shows their meaning on hover
       blockNodes.ts                  — THE lists of note blocks, their parts and what can be linked (plain data)
       extensions/blockIcons.ts       — THE icon slot for a block's part (emoji or a square picture): the cycle's stages and the types

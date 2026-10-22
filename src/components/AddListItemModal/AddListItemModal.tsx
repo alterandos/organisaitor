@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import type { FormEvent } from 'react';
 import { useListStore } from '@/store/listStore';
 import { useListViews, useListItemViews } from '@/store/listViews';
@@ -46,12 +47,7 @@ function FieldInput({
       );
     case 'date':
       return (
-        <input
-          type="date"
-          className={styles.input}
-          value={strVal}
-          onChange={(e) => onChange(e.target.value || null)}
-        />
+        <DateInput className={styles.input} value={strVal} onChange={(v) => onChange(v || null)} />
       );
     case 'url':
       return (

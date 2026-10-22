@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import type { CalendarItemKind, CalendarEventType, EventStatus, NotifyUnit, RepeatConfig, TravelMode } from '@/types';
+import { MagicWandButton, MagicWandPanel } from '@/components/MagicWand/MagicWand';
+import { DateInput } from '@/components/DateInput/DateInput';
+import type { CalendarItemKind, CalendarEventType, EventStatus, RepeatConfig, TravelMode } from '@/types';
 import { TravelModePicker } from '@/components/TravelModePicker/TravelModePicker';
 import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
@@ -7,27 +9,46 @@ import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { LABELS } from '@/config/labels';
+import { ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date';
 import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
+import { inferCalendarItemFromSelection } from '@/utils/textToTask';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
-import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
+import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
+import { datedPatch, defaultRule, eventPatch, fitRule, type NotifyRule } from '@/utils/notifyRule';
 import { LinksField } from '@/components/LinksField/LinksField';
-import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput } from '@/utils/calendarItemInput';
-import { DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE, DEFAULT_ALLDAY_NOTIFY_AT_TIME } from '@/config/notifyDefaults';
+import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput, BIRTHDAY_REPEAT } from '@/utils/calendarItemInput';
 import type { CollectionId } from '@/types';
 import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
 import styles from './AddCalendarItemModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CloseIcon, DisclosureIcon } from '@/components/Icons';
+
+const KINDS: CalendarItemKind[] = ['event', 'reminder', 'deadline'];
+const L = LABELS.calendarForm;
 
 function todayStr(): string {
   return todayIsoInZone(resolveTimezone(useSettingsStore.getState().timezone));
 }
 
+// A checkbox and its words, the same for every option in the form (Important, Tentative, …).
+function Check({ checked, onChange, children }: { checked: boolean; onChange: (on: boolean) => void; children: React.ReactNode }) {
+  return (
+    <label className={styles.check}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {children}
+    </label>
+  );
+}
+
+// The fields every kind has come in the same order (title, notes, when, Important, Notify, then
+// under More options: Tentative, Repeat, Links, Endeavour); an event's own fields (end, type,
+// location, background) sit with its date and time (2026-10-19).
 export function AddCalendarItemModal() {
   const closeModal         = useUIStore((s) => s.closeModal);
   const prefillDate        = useUIStore((s) => s.calendarItemDate);
@@ -62,18 +83,15 @@ export function AddCalendarItemModal() {
   const [color,             setColor]             = useState<string | null>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
-  const [allDayNotifyDays,  setAllDayNotifyDays]  = useState(DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE);
-  const [allDayNotifyAt,    setAllDayNotifyAt]    = useState(DEFAULT_ALLDAY_NOTIFY_AT_TIME);
-  const [notifyBeforeOn,    setNotifyBeforeOn]    = useState(false);
-  const [notifyBeforeValue, setNotifyBeforeValue] = useState(1);
-  const [notifyBeforeUnit,  setNotifyBeforeUnit]  = useState<NotifyUnit>('hours');
-  const [notifyAtTime,      setNotifyAtTime]      = useState('12:00');
-  const [repeat,            setRepeat]            = useState<RepeatConfig | null>(() => prefillExtra?.repeat
-    ? { freq: prefillExtra.repeat.freq, interval: prefillExtra.repeat.interval, endKind: 'forever', count: null, until: null }
-    : null);
-  // Opened when a note selection inferred something that lives in the extra options (repeat,
-  // tentative, important), so the guess is visible rather than silently applied.
-  const [formExpanded,      setFormExpanded]      = useState(!!(prefillExtra?.repeat || prefillExtra?.tentative || prefillExtra?.important));
+  // Reminders and deadlines: ticked by default; a deadline is told about at 17:00 the day before,
+  // a timed reminder at its own time.
+  // null until the person touches Notify: an event starts off (opt-in), a reminder or deadline on.
+  const [notifyRule,        setNotifyRule]        = useState<NotifyRule | null>(null);
+  const [repeat,            setRepeat]            = useState<RepeatConfig | null>(prefillExtra?.repeat ?? null);
+  // Opened when something inferred lives in the extra options (repeat, tentative), so the guess is
+  // visible rather than silently applied. Closed otherwise, for every kind.
+  const [formExpanded,      setFormExpanded]      = useState(!!(prefillExtra?.repeat || prefillExtra?.tentative));
+  const [wandOpen,          setWandOpen]          = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   // Tracks whether `endTime` is still just our own auto-linked guess vs. something the user
   // actually typed into the End field — without this, typing a start time digit-by-digit (hour
@@ -84,6 +102,11 @@ export function AddCalendarItemModal() {
   const endAutoRef = useRef(!prefillExtra?.endTime);
 
   const allCollections = Object.values(collectionsRecord);
+  const isEvent    = kind === 'event';
+  const isBirthday = isEvent && eventType === 'birthday';
+  const timed = isEvent ? !isBirthday && !!startTime : !!time;
+  const shownRule: NotifyRule = notifyRule ?? (isEvent ? { kind: 'off' } : defaultRule(kind, timed));
+  const multiDay   = isEvent && !!endDate && endDate > date;
 
   // Abandoning the modal must drop a pending Notes "Create ▸ Calendar item" link request, or a
   // later unrelated creation could pick it up (same reason AddTaskModal does this).
@@ -93,14 +116,20 @@ export function AddCalendarItemModal() {
   };
 
   useEscapeClose(() => { handleClose(); });
+  useCtrlEnterSubmit(() => formRef.current?.requestSubmit());
 
+  // Ctrl+Tab / Ctrl+Shift+Tab: Event → Reminder → Deadline. Capture phase, so nothing under the
+  // modal (a note's own Ctrl+Tab) also acts on it.
   useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.key !== 'Tab') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setKind((k) => KINDS[(KINDS.indexOf(k) + (e.shiftKey ? KINDS.length - 1 : 1)) % KINDS.length]);
     };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeModal]);
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, []);
 
   const handleStartTimeChange = (val: string) => {
     setStartTime(val);
@@ -125,9 +154,40 @@ export function AddCalendarItemModal() {
     if (type === 'birthday') {
       setStartTime('');
       setEndTime('');
-      setRepeat({ freq: 'yearly', interval: 1, endKind: 'forever', count: null, until: null });
+      setRepeat(BIRTHDAY_REPEAT);
     }
   };
+
+  const handleDateChange = (value: string) => {
+    setDate(value);
+    if (endDate && endDate <= value) setEndDate('');
+  };
+
+  // The magic wand: read a pasted description into the form (the same reader that turns selected
+  // note text into a calendar item), then leave it there to check.
+  function fillFromText(text: string): boolean {
+    const cal = inferCalendarItemFromSelection(text);
+    const found = cal.date || cal.startTime || cal.location || cal.repeat || cal.links.length;
+    if (!found && cal.title === text.trim()) return false;
+    setKind(cal.kind);
+    if (cal.title) setTitle(cal.title);
+    if (cal.date) handleDateChange(cal.date);
+    if (cal.kind === 'event') {
+      setStartTime(cal.startTime ?? '');
+      setEndTime(cal.endTime ?? (cal.startTime ? timeAddMinutes(cal.startTime, 30) : ''));
+      endAutoRef.current = !cal.endTime;
+      setEventType(cal.eventType);
+    } else {
+      setTime(cal.startTime ?? '');
+    }
+    setLocation(cal.location ?? '');
+    setLinks((prev) => [...new Set([...prev, ...cal.links.filter((l) => l !== cal.location)])]);
+    setStatus(cal.tentative ? 'tentative' : 'confirmed');
+    setImportant(cal.important);
+    setRepeat(cal.repeat);
+    if (cal.repeat || cal.tentative) setFormExpanded(true);
+    return true;
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,356 +198,194 @@ export function AddCalendarItemModal() {
     // apply the forward mark. See AddTaskModal's identical handling.
     const pending = useUIStore.getState().pendingArtifactLink;
     const crossAppRefs = pending ? [{ type: 'note' as const, id: pending.noteId, ...(pending.tabId ? { tabId: pending.tabId } : {}) }] : [];
+    const common = { title, date, notes, links, collectionId, repeat, status, important, crossAppRefs };
+    const rule = fitRule(shownRule, kind, timed);
+    const dated = { ...common, time, ...datedPatch(rule) };
 
-    if (kind === 'event') {
-      const eventId = addEvent(buildCalendarEventInput({
-        title,
-        date,
+    const id = kind === 'event'
+      ? addEvent(buildCalendarEventInput({
+        ...common,
         endDate,
         startTime,
         endTime,
-        notes,
-        links,
         location,
         eventType,
         travelMode: eventType === 'travel' ? travelMode : null,
-        collectionId,
-        notifyBeforeValue: notifyBeforeOn ? notifyBeforeValue : null,
-        notifyBeforeUnit,
-        notifyAtTime,
-        repeat,
-        status,
-        important,
-        background: endDate && endDate > date ? background : false,
-        color: endDate && endDate > date && background ? color : null,
-        crossAppRefs,
-      }));
-      if (pending) useUIStore.getState().resolveArtifactLink(eventId, 'event');
-    } else if (kind === 'reminder') {
-      const reminderId = addReminder(buildCalendarReminderInput({
-        title,
-        date,
-        time,
-        notes,
-        links,
-        collectionId,
-        repeat,
-        status,
-        important,
-        crossAppRefs,
-        notifyDaysBefore: allDayNotifyDays,
-        notifyAtTime:     allDayNotifyAt,
-      }));
-      if (pending) useUIStore.getState().resolveArtifactLink(reminderId, 'reminder');
-    } else {
-      const deadlineId = addDeadline(buildCalendarDeadlineInput({
-        title,
-        date,
-        time,
-        notes,
-        links,
-        collectionId,
-        repeat,
-        status,
-        important,
-        crossAppRefs,
-        notifyDaysBefore: allDayNotifyDays,
-        notifyAtTime:     allDayNotifyAt,
-      }));
-      if (pending) useUIStore.getState().resolveArtifactLink(deadlineId, 'deadline');
-    }
+        ...eventPatch(rule),
+        background: multiDay ? background : false,
+        color: multiDay && background ? color : null,
+      }))
+      : kind === 'reminder'
+        ? addReminder(buildCalendarReminderInput(dated))
+        : addDeadline(buildCalendarDeadlineInput(dated));
+    if (pending) useUIStore.getState().resolveArtifactLink(id, kind);
     closeModal();
   };
 
-  const isBirthday = kind === 'event' && eventType === 'birthday';
-  const showAdvanced = kind === 'reminder' || kind === 'deadline' || formExpanded;
+  const kindLabel = LABELS.calendarItemKind[kind];
 
   return (
     <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
       <div className={styles.modal}>
         <div className={styles.header}>
-          <span className={styles.title}>New {LABELS.calendarItemKind[kind]}</span>
+          <span className={styles.title}>
+            <span className={styles.titleIcon} aria-hidden>{ITEM_TYPE_ICON[kind]}</span>
+            {L.newItem(kindLabel)}
+          </span>
           <button className={styles.closeBtn} onClick={handleClose} aria-label="Close"><CloseIcon /></button>
         </div>
 
-        {/* Type toggle */}
-        <div className={styles.kindToggle}>
-          {(['event', 'reminder', 'deadline'] as CalendarItemKind[]).map((k) => (
+        <div className={styles.kindToggle} role="group" aria-label={L.kindSwitch} title={L.kindSwitch}>
+          {KINDS.map((k) => (
             <button
               key={k}
               type="button"
               className={`${styles.kindBtn} ${kind === k ? styles.kindBtnActive : ''}`}
+              aria-pressed={kind === k}
               onClick={() => setKind(k)}
             >
-              {LABELS.calendarItemKind[k]}
+              <span aria-hidden>{ITEM_TYPE_ICON[k]}</span> {LABELS.calendarItemKind[k]}
             </button>
           ))}
         </div>
 
-        <form ref={formRef} onSubmit={handleSubmit}>
-          <input
-            className={styles.titleInput}
-            placeholder={kind === 'event' ? 'Event title' : kind === 'reminder' ? 'Reminder title' : 'Deadline title'}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            autoFocus
-          />
-
-          <textarea
-            ref={notesRef}
-            className={styles.notes}
-            placeholder="Notes (optional) — Ctrl+B/I bold/italic, Ctrl+L to insert a link"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-          />
-
-          <div className={styles.field}>
-            <label className={styles.label}>Date</label>
-            <div className={styles.timeRow}>
+        <form ref={formRef} onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.body}>
+            <div className={styles.titleRow}>
+              <MagicWandButton open={wandOpen} onToggle={() => setWandOpen((v) => !v)} />
               <input
-                type="date"
-                className={styles.dateInput}
-                value={date}
-                onChange={(e) => {
-                  setDate(e.target.value);
-                  if (endDate && endDate <= e.target.value) setEndDate('');
-                }}
-                required
+                className={styles.titleInput}
+                placeholder={L.titleOf(kindLabel)}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                autoFocus
               />
-              {kind === 'event' && !isBirthday && (
-                <>
-                  <span className={styles.timeSep}>→</span>
-                  <input
-                    type="date"
-                    className={styles.dateInput}
-                    value={endDate}
-                    min={date}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    placeholder="End date"
-                  />
-                </>
-              )}
             </div>
-          </div>
 
-          {kind === 'event' && !isBirthday && (
+            {wandOpen && <MagicWandPanel hint={L.wandHint} onRead={fillFromText} onClose={() => setWandOpen(false)} />}
+
+            <textarea
+              ref={notesRef}
+              className={styles.notes}
+              placeholder={L.notes}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
+
             <div className={styles.field}>
-              <label className={styles.label}>Time</label>
+              <label className={styles.label}>{L.date}</label>
               <div className={styles.timeRow}>
-                <TimeInput
-                  className={styles.timeInput}
-                  value={startTime}
-                  onChange={handleStartTimeChange}
-                  placeholder="Start"
-                />
-                <span className={styles.timeSep}>→</span>
-                <TimeInput
-                  className={styles.timeInput}
-                  value={endTime}
-                  onChange={handleEndTimeChange}
-                  placeholder="End"
-                />
+                <DateInput className={styles.dateInput} value={date} onChange={(v) => handleDateChange(v)} required aria-label={L.date} />
+                {isEvent && !isBirthday && (
+                  <>
+                    <span className={styles.timeSep}>→</span>
+                    <DateInput className={styles.dateInput} value={endDate} min={date} onChange={(v) => setEndDate(v)} aria-label={L.endDate} />
+                  </>
+                )}
+                {!isEvent && (
+                  <TimeInput className={styles.timeInput} value={time} onChange={setTime} placeholder={L.timeOptional} />
+                )}
               </div>
             </div>
-          )}
 
-          {kind === 'event' && (
-            <div className={styles.field}>
-              <label className={styles.label}>Event type</label>
-              <div className={styles.typeRow}>
-                {PICKABLE_EVENT_TYPES.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    className={`${styles.typeBtn} ${eventType === t.value ? styles.typeBtnActive : ''}`}
-                    onClick={() => handleEventTypeChange(t.value)}
-                  >
-                    {t.icon && <span>{t.icon}</span>}
-                    {t.label}
-                  </button>
-                ))}
+            {isEvent && !isBirthday && (
+              <div className={styles.field}>
+                <label className={styles.label}>{L.time}</label>
+                <div className={styles.timeRow}>
+                  <TimeInput className={styles.timeInput} value={startTime} onChange={handleStartTimeChange} placeholder={L.start} />
+                  <span className={styles.timeSep}>→</span>
+                  <TimeInput className={styles.timeInput} value={endTime} onChange={handleEndTimeChange} placeholder={L.end} />
+                </div>
               </div>
-              {eventType === 'travel' && <TravelModePicker value={travelMode} onChange={setTravelMode} />}
-            </div>
-          )}
+            )}
 
-          {kind === 'event' && (
-            <div className={styles.field}>
-              <label className={styles.label}>Location (optional)</label>
-              <input
-                type="text"
-                className={styles.textInput}
-                placeholder="Address or link"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </div>
-          )}
+            {isEvent && (
+              <div className={styles.field}>
+                <label className={styles.label}>{L.eventType}</label>
+                <div className={styles.typeRow}>
+                  {PICKABLE_EVENT_TYPES.map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      className={`${styles.typeBtn} ${eventType === t.value ? styles.typeBtnActive : ''}`}
+                      onClick={() => handleEventTypeChange(t.value)}
+                    >
+                      {t.icon && <span>{t.icon}</span>}
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {eventType === 'travel' && <TravelModePicker value={travelMode} onChange={setTravelMode} />}
+              </div>
+            )}
 
-          <div className={styles.field}>
-            <label className={styles.label}>
-              <input
-                type="checkbox"
-                checked={important}
-                onChange={(e) => setImportant(e.target.checked)}
-                className={styles.checkboxInput}
-              />
-              ❗ Important — highlight on the calendar
-            </label>
-          </div>
-
-          {kind === 'event' && endDate && endDate > date && (
-            <div className={styles.field}>
-              <label className={styles.label}>
+            {isEvent && (
+              <div className={styles.field}>
+                <label className={styles.label}>{L.location}</label>
                 <input
-                  type="checkbox"
-                  checked={background}
-                  onChange={(e) => setBackground(e.target.checked)}
-                  className={styles.checkboxInput}
+                  type="text"
+                  className={styles.textInput}
+                  placeholder={L.locationHint}
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
                 />
-                🧳 Background — show as a thin line instead of a normal event (e.g. travel)
-              </label>
-              {background && (
-                <ColorPicker palette="standard" value={color} onChange={setColor} />
-              )}
-            </div>
-          )}
-
-          {isBirthday && (
-            <div className={styles.field}>
-              <label className={styles.label}>Notify at</label>
-              <TimeInput
-                className={styles.timeInput}
-                value={notifyAtTime}
-                onChange={setNotifyAtTime}
-              />
-            </div>
-          )}
-
-          {(kind === 'reminder' || kind === 'deadline') && (
-            <div className={styles.field}>
-              <label className={styles.label}>Time (optional)</label>
-              <TimeInput
-                className={styles.timeInput}
-                value={time}
-                onChange={setTime}
-              />
-            </div>
-          )}
-
-          {kind === 'reminder' && !time && (
-            <div className={styles.field}>
-              <label className={styles.label}>Notify me</label>
-              <AllDayNotifyField
-                daysBefore={allDayNotifyDays}
-                atTime={allDayNotifyAt}
-                onChange={(d, t) => { setAllDayNotifyDays(d); setAllDayNotifyAt(t); }}
-              />
-            </div>
-          )}
-
-          {kind === 'deadline' && (
-            <div className={styles.field}>
-              <label className={styles.label}>Notify me</label>
-              <AllDayNotifyField
-                daysBefore={allDayNotifyDays}
-                atTime={allDayNotifyAt}
-                onChange={(d, t) => { setAllDayNotifyDays(d); setAllDayNotifyAt(t); }}
-              />
-              <p className={styles.repeatSmall}>Deadline notification.</p>
-            </div>
-          )}
-
-          <button
-            type="button"
-            className={styles.formExpandBtn}
-            onClick={() => setFormExpanded((v) => !v)}
-          >
-            <DisclosureIcon open={formExpanded} /> {formExpanded ? 'Fewer options' : 'More options'}
-          </button>
-
-          {showAdvanced && (
-            <>
-              {!isBirthday && (
-                <div className={styles.field}>
-                  <label className={styles.label}>
-                    <input
-                      type="checkbox"
-                      checked={status === 'tentative'}
-                      onChange={(e) => setStatus(e.target.checked ? 'tentative' : 'confirmed')}
-                      className={styles.checkboxInput}
-                    />
-                    Tentative — not confirmed yet, just a placeholder
-                  </label>
-                </div>
-              )}
-
-              {kind === 'event' && !isBirthday && (
-                <div className={styles.field}>
-                  <label className={styles.label}>
-                    <input
-                      type="checkbox"
-                      checked={notifyBeforeOn}
-                      onChange={(e) => setNotifyBeforeOn(e.target.checked)}
-                      className={styles.checkboxInput}
-                    />
-                    Notify before
-                  </label>
-                  {notifyBeforeOn && (
-                    <div className={styles.timeRow}>
-                      <input
-                        type="number"
-                        className={styles.notifyNum}
-                        value={notifyBeforeValue}
-                        min={1}
-                        onChange={(e) => setNotifyBeforeValue(Math.max(1, Number(e.target.value)))}
-                      />
-                      <select
-                        className={styles.select}
-                        value={notifyBeforeUnit}
-                        onChange={(e) => setNotifyBeforeUnit(e.target.value as NotifyUnit)}
-                      >
-                        <option value="minutes">minutes before</option>
-                        <option value="hours">hours before</option>
-                        <option value="days">days before</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className={styles.field}>
-                <RepeatField value={repeat} onChange={setRepeat} labelClassName={styles.label} date={date} />
               </div>
+            )}
 
+            {multiDay && (
               <div className={styles.field}>
-                <label className={styles.label}>Links (optional)</label>
-                <LinksField links={links} onChange={setLinks} />
+                <Check checked={background} onChange={setBackground}>{L.background}</Check>
+                {background && <ColorPicker palette="standard" value={color} onChange={setColor} />}
               </div>
+            )}
 
-              {allCollections.length > 0 && (
+            <div className={styles.field}>
+              <Check checked={important} onChange={setImportant}>{L.important}</Check>
+            </div>
+
+            <NotifyRuleField item={kind} timed={timed} rule={shownRule} onChange={setNotifyRule} labelClassName={styles.check} />
+
+            <button type="button" className={styles.formExpandBtn} onClick={() => setFormExpanded((v) => !v)} aria-expanded={formExpanded}>
+              <DisclosureIcon open={formExpanded} /> {formExpanded ? L.fewerOptions : L.moreOptions}
+            </button>
+
+            {formExpanded && (
+              <>
+                {!isBirthday && (
+                  <div className={styles.field}>
+                    <Check checked={status === 'tentative'} onChange={(on) => setStatus(on ? 'tentative' : 'confirmed')}>{L.tentative}</Check>
+                  </div>
+                )}
+
                 <div className={styles.field}>
-                  <label className={styles.label}>{LABELS.collection} (optional)</label>
-                  <CollectionPicker
-                    collections={allCollections}
-                    value={collectionId}
-                    onChange={(id) => setCollectionId(id)}
-                    noneLabel={`No ${LABELS.collection}`}
-                  />
+                  <RepeatField value={repeat} onChange={setRepeat} labelClassName={styles.check} date={date} onDateChange={handleDateChange} />
                 </div>
-              )}
-            </>
-          )}
+
+                <div className={styles.field}>
+                  <label className={styles.label}>{L.links}</label>
+                  <LinksField links={links} onChange={setLinks} />
+                </div>
+
+                {allCollections.length > 0 && (
+                  <div className={styles.field}>
+                    <label className={styles.label}>{LABELS.collection} (optional)</label>
+                    <CollectionPicker
+                      collections={allCollections}
+                      value={collectionId}
+                      onChange={(id) => setCollectionId(id)}
+                      noneLabel={`No ${LABELS.collection}`}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
           <div className={styles.actions}>
-            <button type="button" className={styles.cancelBtn} onClick={handleClose}>Cancel</button>
-            <button
-              type="submit"
-              className={styles.submitBtn}
-              disabled={!title.trim() || !date}
-            >
-              Add {LABELS.calendarItemKind[kind]}
+            <button type="button" className={styles.cancelBtn} onClick={handleClose}>{L.cancel}</button>
+            <button type="submit" className={styles.submitBtn} disabled={!title.trim() || !date}>
+              {L.addItem(kindLabel)}
             </button>
           </div>
         </form>

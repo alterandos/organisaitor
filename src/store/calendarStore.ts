@@ -105,6 +105,7 @@ export const useCalendarStore = create<CalendarState>()(
           updatedAt:         ts,
           notifyBeforeValue: input.notifyBeforeValue  ?? null,
           notifyBeforeUnit:  input.notifyBeforeUnit   ?? 'hours',
+          notifyMode:        input.notifyMode         ?? 'before',
           remindAt:          null,
           notifyAtTime:      input.notifyAtTime       ?? null,
           repeat:            input.repeat             ?? null,
@@ -184,6 +185,10 @@ export const useCalendarStore = create<CalendarState>()(
           archiveReason: null,
           notifyDaysBefore: input.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE,
           notifyAtTime:     input.notifyAtTime     ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
+          notify:           input.notify ?? true,
+          notifyMode:        input.notifyMode ?? (input.time ? 'atTime' : 'daysAt'),
+          notifyBeforeValue: input.notifyBeforeValue ?? null,
+          notifyBeforeUnit:  input.notifyBeforeUnit ?? 'hours',
           doneDates:        input.doneDates ?? [],
           seriesId:         input.seriesId   ?? null,
           seriesDate:       input.seriesDate ?? null,
@@ -196,9 +201,12 @@ export const useCalendarStore = create<CalendarState>()(
       updateReminder: (id, changes) => set((s) => {
         const reminder = s.reminders[id];
         if (!reminder) return {};
-        const patch = changes.notes !== undefined
+        let patch = changes.notes !== undefined
           ? { ...changes, links: mergeNewLinks(changes.links ?? reminder.links ?? [], changes.notes, reminder.notes) }
           : changes;
+        // A whole-day reminder given a time notifies at that time (as a timed reminder always did),
+        // unless the same change says otherwise (utils/notifyRule.ts).
+        if (changes.time && !reminder.time && changes.notifyMode === undefined && reminder.notifyMode === 'daysAt') patch = { ...patch, notifyMode: 'atTime' };
         return { reminders: { ...s.reminders, [id]: { ...reminder, ...patch, updatedAt: now() } } };
       }),
 
@@ -244,6 +252,10 @@ export const useCalendarStore = create<CalendarState>()(
           archiveReason: null,
           notifyDaysBefore: input.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE,
           notifyAtTime:     input.notifyAtTime     ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
+          notify:           input.notify ?? true,
+          notifyMode:        input.notifyMode ?? 'daysAt',
+          notifyBeforeValue: input.notifyBeforeValue ?? null,
+          notifyBeforeUnit:  input.notifyBeforeUnit ?? 'hours',
           doneDates:        input.doneDates ?? [],
           seriesId:         input.seriesId   ?? null,
           seriesDate:       input.seriesDate ?? null,
@@ -404,7 +416,7 @@ export const useCalendarStore = create<CalendarState>()(
     {
       name: 'todo-calendar',
       storage: persistStorage(),
-      version: 18,
+      version: 20,
       migrate(state: any, version: number) {
         if (version < 2) {
           const events = state.events ?? {};
@@ -507,6 +519,25 @@ export const useCalendarStore = create<CalendarState>()(
             if (ev.sourceUid === undefined) ev.sourceUid = null;
           });
           state.importedSourceKeys = [];
+        }
+        if (version < 19) {
+          // notify: a reminder or deadline can be set not to notify (2026-10-19).
+          for (const slice of [state.reminders, state.deadlines]) {
+            (Object.values(slice ?? {}) as { notify?: boolean }[]).forEach((item) => { if (item.notify === undefined) item.notify = true; });
+          }
+        }
+        if (version < 20) {
+          // One notify setting for every item (2026-10-22, utils/notifyRule.ts): a mode on all three,
+          // and an amount and unit on reminders and deadlines. Each keeps what it did.
+          (Object.values(state.events ?? {}) as { notifyMode?: string }[]).forEach((ev) => { if (ev.notifyMode === undefined) ev.notifyMode = 'before'; });
+          for (const slice of [state.reminders, state.deadlines]) {
+            (Object.values(slice ?? {}) as { notifyMode?: string; notifyBeforeValue?: number | null; notifyBeforeUnit?: string; time?: string | null }[]).forEach((item) => {
+              // A timed reminder notified at its time; a whole-day one and every deadline, days before at a time.
+              if (item.notifyMode === undefined) item.notifyMode = slice === state.reminders && item.time ? 'atTime' : 'daysAt';
+              if (item.notifyBeforeValue === undefined) item.notifyBeforeValue = null;
+              if (item.notifyBeforeUnit === undefined) item.notifyBeforeUnit = 'hours';
+            });
+          }
         }
         return state as CalendarState;
       },

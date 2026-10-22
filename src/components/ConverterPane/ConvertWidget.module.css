@@ -1,0 +1,68 @@
+/* One conversion (ConvertWidget.tsx): Card and Compact, in the family look of the Glossary cards
+   (a box, a small coloured kind line, then the content; compact: one bordered row). The accent is
+   the host's --color-primary (the note block sets its own colour). */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.card, .compact { width: fit-content; max-width: 100%; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.kind { color: var(--color-primary); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.rule { width: 1.2rem; height: 2px; border-radius: var(--radius-pill); background: var(--color-primary); }
+
+.row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); }
+.card .row { font-size: var(--text-lg); }
+.side { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); }
+.field { display: inline-flex; flex-direction: column; gap: 2px; }
+.fieldLabel { color: var(--color-muted); font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+
+.picker, .unit {
+  max-width: 14rem;
+  padding: 2px var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.unit { color: var(--color-text); font-size: 0.85em; }
+.picker:hover, .unit:hover, .picker:focus, .unit:focus { border-color: var(--color-border); outline: none; }
+.picker:disabled, .unit:disabled { cursor: default; }
+
+.amount {
+  min-width: 3ch;
+  padding: 1px var(--space-1);
+  border: none;
+  border-bottom: 1px dashed var(--color-border-strong);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.amount:focus { border-bottom: 1px solid var(--color-primary); outline: none; }
+.result { color: var(--color-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.unitText { color: var(--color-muted); font-size: 0.85em; }
+.arrow { color: var(--color-muted); }
+.swap { display: inline-flex; align-self: center; padding: var(--space-1); border: none; border-radius: var(--radius-sm); background: none; color: var(--color-muted); font-size: var(--text-sm); cursor: pointer; }
+.swap:hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-subtle); }
+.swap:disabled { cursor: default; }
+.gone { color: var(--color-muted); font-size: var(--text-sm); font-style: italic; }

@@ -15,6 +15,7 @@ import type { NoteObjectContext } from '../objects/types';
 import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, moveFromBlock, openBlockPopover, pillButton, placeBlock, registerEnterableBlock, popoverClass as pop, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { deleteForever, trashedBy } from '@/services/trash';
 import { GlossaryCardBody } from './GlossaryCardBody';
+import { IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { cardToChip, insertGlossaryChip, setChipDesigns } from './GlossaryChip';
 
 // A Glossary card in a note (`\definition`, `\acronym`, `\concept`): one atom node that points at a
@@ -45,26 +46,51 @@ export const GLOSSARY_CARD_DESIGNS_WITH_INLINE: BlockDesign<GlossaryCardDesign>[
 ];
 setChipDesigns(GLOSSARY_CARD_DESIGNS_WITH_INLINE);
 
-// How wide a card is. Standard is one width for every card, so cards in a row sit side by side
-// and look alike; the rest are fractions of the column (dragging the edge snaps to them). Unset
-// means the design's own: Standard for Card, the column for Compact (line-shaped).
-export const GLOSSARY_CARD_WIDTHS = ['standard', 'third', 'half', 'full'] as const;
-export type GlossaryCardWidth = typeof GLOSSARY_CARD_WIDTHS[number];
+// How wide a card is. Named widths (the right-click menu's Width ▸): Fit the text (`auto`, a Card's
+// default: Standard, growing with what's typed up to the column), Standard (one width for every card,
+// so cards in a row sit side by side and look alike), a third, half, the column. A drag sets any
+// width, as a share of the column (`"42%"`), snapping to the named ones and to a quarter and three
+// quarters when it passes close to them (agreed with the user 2026-10-22: free, with PowerPoint-style
+// snaps). Once set by hand, it no longer grows with the text. Unset means the design's own: Fit the
+// text for Card, the column for Compact (line-shaped).
+export const GLOSSARY_CARD_WIDTHS = ['auto', 'standard', 'third', 'half', 'full'] as const;
+export type GlossaryCardNamedWidth = typeof GLOSSARY_CARD_WIDTHS[number];
+export type GlossaryCardWidth = GlossaryCardNamedWidth | `${number}%`;
 export const STANDARD_CARD_REM = 26;
+const MIN_PCT = 15;
+const SNAP = 0.025;   // a share of the column within which a drag snaps
+
+const percentOf = (w: string) => { const m = /^(\d{1,3})%$/.exec(w); return m ? Math.max(MIN_PCT, Math.min(100, Number(m[1]))) : null; };
 
 export function cardWidth(attrs: Record<string, unknown>): GlossaryCardWidth {
-  const w = attrs.width as string | null;
-  if ((GLOSSARY_CARD_WIDTHS as readonly string[]).includes(w ?? '')) return w as GlossaryCardWidth;
-  return attrs.variant === 'card' ? 'standard' : 'full';
+  const w = (attrs.width as string | null) ?? '';
+  if ((GLOSSARY_CARD_WIDTHS as readonly string[]).includes(w)) return w as GlossaryCardWidth;
+  const pct = percentOf(w);
+  if (pct !== null) return `${pct}%`;
+  return attrs.variant === 'card' ? 'auto' : 'full';
 }
 
-// The width a drag ends at: the nearest of the four, `fraction` being the card's share of the column.
+// The width a drag ends at, `fraction` being the card's share of the column: a named width or a
+// quarter mark when close to one, otherwise the nearest whole percent.
 export function snapCardWidth(fraction: number, columnPx: number, remPx = 16): GlossaryCardWidth {
   const stops: [GlossaryCardWidth, number][] = [
-    ['third', 1 / 3], ['half', 1 / 2], ['full', 1],
+    ['25%', 1 / 4], ['third', 1 / 3], ['half', 1 / 2], ['75%', 3 / 4], ['full', 1],
     ['standard', Math.min(1, (STANDARD_CARD_REM * remPx) / Math.max(1, columnPx))],
   ];
-  return stops.reduce((best, st) => (Math.abs(st[1] - fraction) < Math.abs(best[1] - fraction) ? st : best))[0];
+  const near = stops.filter((st) => Math.abs(st[1] - fraction) <= SNAP)
+    .sort((a, b) => Math.abs(a[1] - fraction) - Math.abs(b[1] - fraction))[0];
+  if (near) return near[0];
+  if (fraction >= 1) return 'full';
+  return `${Math.max(MIN_PCT, Math.round(fraction * 100))}%`;
+}
+
+const NAMED_PCT: Record<string, number> = { third: 33, half: 50, full: 100 };
+
+// How a width is drawn: the named ones by their attribute, a percentage through --card-w.
+function showWidth(dom: HTMLElement, width: GlossaryCardWidth) {
+  const pct = percentOf(width);
+  dom.setAttribute('data-card-width-shown', pct === null ? width : pct === 100 ? 'full' : 'custom');
+  if (pct === null) dom.style.removeProperty('--card-w'); else dom.style.setProperty('--card-w', `${pct}%`);
 }
 
 const oneOf = <T extends string>(values: readonly T[], v: string | null, fallback: T): T =>
@@ -84,6 +110,10 @@ export const GlossaryCard = Node.create({
       // Split (retired 2026-10-13, at the user's request) reads as Compact, its nearest design.
       variant: { default: 'card', parseHTML: (el) => oneOf(GLOSSARY_CARD_VARIANTS, el.getAttribute('data-variant') === 'split' ? 'compact' : el.getAttribute('data-variant'), 'card'), renderHTML: (a) => ({ 'data-variant': a.variant }) },
       width:   { default: null, parseHTML: (el) => el.getAttribute('data-card-width'), renderHTML: (a) => (a.width ? { 'data-card-width': a.width } : {}) },
+      // How this card shows its record's picture (GlossaryCardBody ImageField): a width in px, and
+      // where it sits (flow: in the fields' order; right; bottom). Presentation, like the width.
+      imageWidth: { default: null, parseHTML: (el) => { const n = parseInt(el.getAttribute('data-image-width') ?? '', 10); return Number.isFinite(n) && n > 0 ? n : null; }, renderHTML: (a) => (a.imageWidth ? { 'data-image-width': String(a.imageWidth) } : {}) },
+      imagePlace: { default: 'flow', parseHTML: (el) => oneOf(IMAGE_PLACES, el.getAttribute('data-image-place'), 'flow'), renderHTML: (a) => (a.imagePlace !== 'flow' ? { 'data-image-place': a.imagePlace } : {}) },
     };
   },
 
@@ -180,7 +210,7 @@ export function setGlossaryCardVariant(view: EditorView, pos: number, variant: G
 export function setGlossaryCardWidth(view: EditorView, pos: number, width: GlossaryCardWidth): void {
   const node = view.state.doc.nodeAt(pos);
   if (node?.type.name !== 'glossaryCard') return;
-  view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, width }));
+  view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, width: width === 'auto' ? null : width }));
 }
 
 // Puts the cursor in the card's term (after `\definition`, Enter on a selected card). `text` is
@@ -344,6 +374,26 @@ class GlossaryCardView {
     if (pos !== undefined) discardFreshCard(this.editor.view, pos, how);
   };
 
+  private setImageLayout = (layout: ImageLayout) => {
+    const pos = this.getPos();
+    const view = this.editor.view;
+    if (pos === undefined || !view.editable) return;
+    view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...this.node.attrs, imageWidth: layout.width, imagePlace: layout.place }));
+  };
+
+  // Ctrl+Z in a card just made, with nothing typed in it: the editor's undo takes the card away
+  // (giving back the typed `\definition`), and the empty record made for it goes for good.
+  private undoCreation = () => {
+    const entryId = this.node.attrs.entryId as string | null;
+    const editor = this.editor;
+    editor.view.focus();
+    editor.commands.undo();
+    if (!entryId) return;
+    let still = false;
+    editor.state.doc.descendants((n) => { if (n.attrs.entryId === entryId) still = true; return !still; });
+    if (!still) for (const t of trashedBy(() => useNoteStore.getState().deleteStructuredTagEntry(entryId as never))) deleteForever(t);
+  };
+
   private showField = (id: string) => {
     if (this.shown.includes(id)) return;
     this.shown = [...this.shown, id];
@@ -381,7 +431,7 @@ class GlossaryCardView {
     view.focus();
   };
 
-  // The right edge: drag to resize, snapping to Standard, a third, half or the column (shown live).
+  // The right edge: drag to any width, snapping near the named ones (shown live, with its name or %).
   private resizeHandle(): HTMLElement {
     const h = document.createElement('div');
     h.setAttribute('data-card-resize', '');
@@ -396,11 +446,21 @@ class GlossaryCardView {
       const columnPx = column.getBoundingClientRect().width;
       const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       let width = cardWidth(this.node.attrs);
+      const W = LABELS.glossaryCard.widths as Record<string, string>;
+      const stdPct = Math.round(Math.min(1, (STANDARD_CARD_REM * remPx) / Math.max(1, columnPx)) * 100);
       const move = (ev: PointerEvent) => {
         width = snapCardWidth((ev.clientX - left) / columnPx, columnPx, remPx);
-        this.dom.setAttribute('data-card-width-shown', width);
+        showWidth(this.dom, width);
+        // The width as a share of the column, always; when it has snapped, the name too, and the
+        // marker turns the accent colour (the snap feedback design tools give).
+        const pct = percentOf(width) ?? NAMED_PCT[width] ?? stdPct;
+        const named = W[width];
+        h.setAttribute('data-label', named ? `${pct}% · ${named}` : `${pct}%`);
+        if (named || pct === 25 || pct === 75) h.setAttribute('data-snapped', ''); else h.removeAttribute('data-snapped');
       };
       const up = () => {
+        h.removeAttribute('data-label');
+        h.removeAttribute('data-snapped');
         h.removeEventListener('pointermove', move);
         h.removeEventListener('pointerup', up);
         h.removeEventListener('pointercancel', up);
@@ -417,7 +477,7 @@ class GlossaryCardView {
   private render() {
     const a = this.node.attrs;
     this.dom.setAttribute('data-variant', a.variant as string);
-    this.dom.setAttribute('data-card-width-shown', cardWidth(a));
+    showWidth(this.dom, cardWidth(a));
     applyFrameAttrs(this.dom, { ...a, outlined: false });   // a card has its own border: no Outline (CARD_BLOCK_NODES)
     const view = this.editor.view;
     const getPos = this.pillPos;
@@ -474,6 +534,9 @@ class GlossaryCardView {
       onAddAnother: this.addAnother,
       onDiscard: this.discard,
       onLeave:  this.leaveBy,
+      onUndo:   this.undoCreation,
+      imageLayout: { width: (a.imageWidth as number | null) ?? null, place: (a.imagePlace as ImageLayout['place']) ?? 'flow' },
+      onImageLayout: this.setImageLayout,
     }));
   }
 

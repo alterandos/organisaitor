@@ -1,5 +1,5 @@
 import { LABELS } from '@/config/labels';
-import { INBOX_ICON, QUESTION_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
+import { INBOX_ICON, QUESTION_ICON, REVIEW_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { addDaysToIso } from '@/utils/date';
 import { expandRepeat } from '@/utils/recurrence';
 import { getNoteEffectiveCollectionId, getNoteNotebookPath } from '@/utils/notes';
@@ -10,7 +10,9 @@ import type {
 } from '@/types';
 import type { List, ListItem } from '@/types/lists';
 import type { Note, NoteTag } from '@/types/notes';
-import type { OverviewRow, OverviewSourceKey, OverviewStatus } from '@/types/overview';
+import type { OverviewPlan, OverviewRow, OverviewSourceKey, OverviewStatus } from '@/types/overview';
+import { collectReviewPassages } from '@/utils/noteContent';
+import { eventLinksOf } from '@/utils/eventTaskLinks';
 
 // Every app's contribution to Overview: how its items map onto the common row shape
 // (What / When / Status / From / Endeavour). THE registry — a new app, or a new kind of item, is
@@ -63,6 +65,26 @@ export function calendarWhen(date: string, endDate: string | null, repeat: Repea
   return { when: date, status: (endDate ?? date) < today ? 'past' : 'open' };
 }
 
+// A repeating reminder's or deadline's row stands for its next date not yet done, so each date
+// already marked done gets a row of its own; otherwise marking one done took it out of an Overview
+// showing done items (found 2026-10-19). A one-off item's done date is its own row's.
+export function doneOccurrences(repeat: RepeatConfig | null, doneDates: string[]): string[] {
+  return repeat ? [...new Set(doneDates)].sort() : [];
+}
+
+// A row's timeline drawing (OverviewPlan); anything not given is off.
+const plan = (shape: OverviewPlan['shape'], p: Partial<Omit<OverviewPlan, 'shape'>>): OverviewPlan =>
+  ({ shape, start: null, endDate: null, endTime: null, important: false, movable: false, ...p });
+
+// A task linked to an event or a Deadline sits under it on the Runway (its first such link).
+const underEvent = (t: Task): string | undefined => {
+  const l = eventLinksOf(t)[0];
+  return l ? `${l.targetType}:${l.targetId}` : undefined;
+};
+
+const occurrenceRow = (source: OverviewSourceKey, id: string, date: string, r: Omit<OverviewRow, 'key' | 'source' | 'id'>): OverviewRow =>
+  ({ ...row(source, id, r), key: `${source}:${id}@${date}` });
+
 export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   {
     key: 'task', icon: ITEM_TYPE_ICON.task, label: LABELS.overview.sources.task,
@@ -75,6 +97,12 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
         status:      t.archived ? 'archived' : t.completed ? 'done' : 'open',
         endeavourId: t.collectionId,
         context:     t.parentId ? snap.tasks[t.parentId]?.title ?? null : null,
+        // Work toward its deadline from its scheduled day (the work window), else a moment, else undated.
+        plan: plan(t.deadline ? 'due' : t.scheduledAt ? 'point' : 'tray', {
+          start: t.deadline && t.scheduledAt && t.scheduledAt <= t.deadline ? t.scheduledAt : null,
+          important: t.priority === 'high', movable: !t.completed && !t.archived,
+          under: underEvent(t),
+        }),
       })),
     }),
   },
@@ -89,6 +117,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
           title: e.title, when: w.when, time: e.startTime,
           status: e.archivedAt ? 'archived' : w.status,
           endeavourId: e.collectionId, context: e.location,
+          plan: plan('block', { endDate: e.repeat ? null : e.endDate, endTime: e.endTime, important: e.important, movable: !e.repeat && !e.archivedAt }),
         });
       }),
     }),
@@ -97,13 +126,13 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     key: 'reminder', icon: ITEM_TYPE_ICON.reminder, label: LABELS.overview.sources.reminder,
     rows: (snap, today) => ({
       locked: [],
-      rows: Object.values(snap.reminders).filter((r) => r.reminderType !== 'task').map((r) => {
+      rows: Object.values(snap.reminders).filter((r) => r.reminderType !== 'task').flatMap((r) => {
         const w = calendarWhen(r.date, null, r.repeat, today, r.doneDates);
-        return row('reminder', r.id, {
-          title: r.title, when: w.when, time: r.time,
-          status: r.archivedAt ? 'archived' : w.status,
-          endeavourId: r.collectionId, context: null,
-        });
+        const base = { title: r.title, time: r.time, endeavourId: r.collectionId, context: null, plan: plan('point', { important: r.important, movable: !r.repeat && !r.archivedAt }) };
+        return [
+          row('reminder', r.id, { ...base, when: w.when, status: r.archivedAt ? 'archived' : w.status }),
+          ...doneOccurrences(r.repeat, r.doneDates).map((date) => occurrenceRow('reminder', r.id, date, { ...base, when: date, status: r.archivedAt ? 'archived' : 'done' })),
+        ];
       }),
     }),
   },
@@ -111,13 +140,13 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     key: 'deadline', icon: ITEM_TYPE_ICON.deadline, label: LABELS.overview.sources.deadline,
     rows: (snap, today) => ({
       locked: [],
-      rows: Object.values(snap.deadlines).filter((d) => d.deadlineType !== 'task').map((d) => {
+      rows: Object.values(snap.deadlines).filter((d) => d.deadlineType !== 'task').flatMap((d) => {
         const w = calendarWhen(d.date, null, d.repeat, today, d.doneDates);
-        return row('deadline', d.id, {
-          title: d.title, when: w.when, time: d.time,
-          status: d.archivedAt ? 'archived' : w.status,
-          endeavourId: d.collectionId, context: null,
-        });
+        const base = { title: d.title, time: d.time, endeavourId: d.collectionId, context: null, plan: plan('due', { important: d.important, movable: !d.repeat && !d.archivedAt }) };
+        return [
+          row('deadline', d.id, { ...base, when: w.when, status: d.archivedAt ? 'archived' : w.status }),
+          ...doneOccurrences(d.repeat, d.doneDates).map((date) => occurrenceRow('deadline', d.id, date, { ...base, when: date, status: d.archivedAt ? 'archived' : 'done' })),
+        ];
       }),
     }),
   },
@@ -172,6 +201,8 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
             status: i.status === 'done' ? 'done' : 'open',
             endeavourId: list.collectionId,
             context: tab ? `${list.name} › ${tab.name}` : list.name,
+            // A list item's date says when it happens (a release, a trip), not work due: a moment.
+            ...(typeof date === 'string' && date ? { plan: plan('point', {}) } : {}),
           });
         }),
       };
@@ -206,6 +237,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
             status: q.status === 'answered' ? 'done' : q.status === 'dropped' ? 'archived' : 'open',
             endeavourId: note ? getNoteEffectiveCollectionId(note, snap.noteTags) : null,
             context: q.noteTitle || '(Untitled)',
+            plan: plan(q.followUp ? 'point' : 'tray', {}),
           });
         }),
       };
@@ -230,7 +262,30 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
             status: it.status === 'built' ? 'done' : 'open',
             endeavourId,
             context: `${where} · ${LABELS.noteBlocks.inbox.statuses[it.status]}`,
+            // The day it arrived isn't a date it's due by: the No date tray.
+            plan: plan('tray', {}),
           }));
+        }),
+      };
+    },
+  },
+  {
+    // Important passages on the review list (Review later): due on their next review day. Their
+    // Endeavour is their note's. Rescheduling is the Review view's spaced repetition, so not draggable.
+    key: 'review', icon: REVIEW_ICON, label: LABELS.overview.sources.review,
+    rows: (snap) => {
+      const readable = Object.values(snap.notes).filter((n) => !snap.lockedNoteIds.has(n.id));
+      return {
+        locked: [],
+        rows: readable.flatMap((n) => {
+          const endeavourId = getNoteEffectiveCollectionId(n, snap.noteTags);
+          const tabs: [string | null, string][] = [[null, n.content], ...n.tabs.map((t): [string, string] => [t.id, t.content])];
+          return tabs.flatMap(([tabId, json]) => collectReviewPassages(json).map((p) => row('review', `${n.id}:${tabId ?? 'main'}:${p.passageId}`, {
+            title: p.text, when: p.reviewDue, time: null,
+            status: 'open',
+            endeavourId, context: n.title || '(Untitled)',
+            plan: plan('point', { important: p.level >= 2 }),
+          })));
         }),
       };
     },

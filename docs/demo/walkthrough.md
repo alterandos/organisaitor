@@ -42,7 +42,11 @@ due in about three and a half weeks.
 - Notes views: **Mosaic** and **Map** (how the notes link).
 
 ## 5. Everything for one thing (Overview, Records, the rest)
+- **Date calculator:** the calculator button in the Calendar header (or Quick Access → Places). Press the wand and type "the 12th Friday from 1 October 2026" or "how many days until 25 December"; Ctrl+Enter shows the answer in the Calendar.
+- **Converters:** Alt+= (or Quick Access → Converters). Lengths in every unit as you type; under Your converters, "CO₂ to carbon": type in either box. "+ New converter" shows the editor (formula checked as you type). In the Climate Systems lecture note, a `\convert` card works out the carbon in 2,400 kg of CO₂ with that converter; change the amount, or the converter from its dropdown.
+- **A number written another way:** in a note, put the cursor on a big number and press Ctrl+] a few times (69000000000 → 69,000,000,000 → 6.9×10¹⁰ → 6.9E10), or right-click it → Number format.
 - **Overview:** pick the Climate essay Endeavour: every task, deadline, event and note for it.
+- **Tasks linked to an event:** open the mid-semester exam in the Calendar. Its Tasks show the revision (preparation, due when the exam starts) and the feedback follow-up. Move the exam's date: the revision moves with it, with Undo in the toast. On an Overview's Runway the two sit under the exam.
   Then the saved "Due in the next fortnight".
 - **Records:** Study hours and Field samples trackers, the Morning revision routine.
 - **Lists:** the Dictionary (words are highlighted in notes), the reading list.
@@ -50,4 +54,9 @@ due in about three and a half weeks.
   reading list, the morning routine, Review) and the Places row. Right-click any note, notebook or
   list → Pin to Quick Access, then Q shows it. **Go to** (Ctrl+G, or Alt+G from the Quick Access
   tab): search, recent notes. **Glossary** and **Review** (Important passages due for review).
+- **Scratchpad** (Alt+P from anywhere, or its pin in Quick Access): a few things jotted down; Copy
+  all / Cut all, and the paper or simple look. It's also the second pinned notebook in Notes.
+- **New calendar item** (Calendar, N): the 🪄 beside the title, then paste "Every 3rd Sunday of
+  the month until December 2027 hash run at Minervastrasse 65, Zürich https://…" and every field
+  fills in. Ctrl+Tab switches Event / Reminder / Deadline.
 - Fitness and Portfolio, briefly, if they're part of the pitch.

@@ -27,6 +27,20 @@ describe('useEscapeClose', () => {
     expect(first).not.toHaveBeenCalled();
   });
 
+  it('an overlay whose `when` says no is passed over, and the one under it closes (the scratchpad under a note toolbar)', () => {
+    const scratchpad = vi.fn();
+    const toolbar = vi.fn();
+    let inNote = false;
+    renderHook(() => useEscapeClose(scratchpad));
+    renderHook(() => useEscapeClose(toolbar, true, { when: () => inNote }));
+    pressEscape();
+    expect(scratchpad).toHaveBeenCalledTimes(1);
+    expect(toolbar).not.toHaveBeenCalled();
+    inNote = true;
+    pressEscape();
+    expect(toolbar).toHaveBeenCalledTimes(1);
+  });
+
   it('once the top overlay unmounts, Escape falls through to the one now on top', () => {
     const first = vi.fn();
     const second = vi.fn();

@@ -51,6 +51,14 @@ export function calendarFlags(item: Flagged | undefined, update: (changes: Parti
   ];
 }
 
+// A task's flags: Important (high priority). Tasks have no tentative state, and repeat through
+// their own rule (the task pane's Repeat), so neither is offered here.
+export function taskFlags(task: { priority: string } | undefined, update: (changes: { priority: 'high' | 'none' }) => void): ArtifactFlag[] {
+  if (!task) return [];
+  const C = LABELS.noteObjects.card;
+  return [{ id: 'important', icon: ITEM_FLAG_ICON.important, label: C.important, on: task.priority === 'high', toggle: () => update({ priority: task.priority === 'high' ? 'none' : 'high' }) }];
+}
+
 // The flags as right-click entries: a ✓ shows which are on; one with choices is a submenu.
 export function flagMenuItems(flags: ArtifactFlag[]): ContextMenuItem[] {
   const C = LABELS.noteObjects.card;

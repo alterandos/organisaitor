@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { richTextIsEmpty } from '@/utils/emptyContent';
 import { createPortal } from 'react-dom';
 import { useEditor, useEditorState, EditorContent, getMarkRange } from '@tiptap/react';
 import { Selection, TextSelection } from '@tiptap/pm/state';
@@ -43,6 +44,7 @@ import { ProsConsExtensions } from './extensions/ProsCons';
 import { ArgumentExtensions } from './extensions/Argument';
 import { OptionsExtensions } from './extensions/Options';
 import { DesignCycle } from './extensions/designCycle';
+import { NumberNotation } from './extensions/NumberNotation';
 import { DictionaryWords } from './extensions/DictionaryWords';
 import { CycleExtensions } from './extensions/Cycle';
 import { BreakdownExtensions } from './extensions/Breakdown';
@@ -63,13 +65,16 @@ import { TrailingLine } from './extensions/TrailingLine';
 import { QuestionExtensions } from './extensions/Question';
 import { CompareExtensions } from './extensions/Compare';
 import { DiagramExtensions } from './extensions/Diagram';
+import { ConvertExtensions } from './extensions/Convert';
 import { InboxPickerModal } from '@/components/InboxPickerModal/InboxPickerModal';
 import { selectionTouchesInbox, sendToInbox } from '@/services/noteInbox';
-import { NoteBlockSelect } from './extensions/blockDesigns';
+import { NoteBlockDelete, NoteBlockSelect } from './extensions/blockDesigns';
+import { AutoBrackets } from './extensions/AutoBrackets';
+import { EscapePassThrough } from './extensions/EscapePassThrough';
 import { NoteBlockPicks } from './extensions/blockPicks';
 import { NoteBackdrop } from './NoteBackdrop';
 import { MobileNoteSidePanel } from './MobileNoteSidePanel';
-import { CloseIcon, ColorDotIcon, DisclosureIcon, PinIcon, TableIcon, TextColorIcon, TrashIcon } from '@/components/Icons';
+import { CloseIcon, ColorDotIcon, DisclosureIcon, PinIcon, TableIcon, TextColorIcon, TrashIcon, SwapIcon } from '@/components/Icons';
 import { SWATCHES, swatchLabel } from '@/config/swatches';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { AcronymOffer } from './extensions/AcronymOffer';
@@ -78,6 +83,7 @@ import './extensions/unsureMenu';
 import { BlockOffers } from './extensions/BlockOffers';
 import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
 import { SpecialCharInput } from './extensions/SpecialCharInput';
+import { LinkBoundary } from './extensions/LinkBoundary';
 import { StickyHeadings } from './StickyHeadings';
 import { HeadingFold, toggleHeadingFoldAtCursor } from './extensions/HeadingFold';
 import { HeadingLevel } from './extensions/HeadingLevel';
@@ -97,6 +103,7 @@ import './contextMenu';
 import { NoteViewMenu } from '@/components/NoteSplitView/NoteViewMenu';
 import { NoteListItem } from './extensions/ListItem';
 import { setNoteColor } from './noteColorMenu';
+import { canExportPdf, exportNoteAsPdf } from './notePdf';
 import type { NoteEditorMenuApi } from './contextMenu';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { usePinAction } from '@/hooks/usePinAction';
@@ -358,7 +365,8 @@ interface NoteEditorProps {
   // One pane of notes side by side (components/NoteSplitView): the note shown here, whether it's
   // the pane in front (its toolbar goes in the shared ribbon; the others show none) and where the
   // ribbon is. Without it the editor shows uiStore's open note, with its own toolbar.
-  pane?: { index: number; noteId: string | null; focused: boolean; ribbon: HTMLElement | null };
+  // onReplace: put another note in this pane (the ⇄ beside its ✕).
+  pane?: { index: number; noteId: string | null; focused: boolean; ribbon: HTMLElement | null; onReplace?: () => void };
 }
 
 // Scrolls the editor's scroll host so the text at pos sits `fraction` of the way down the view:
@@ -455,10 +463,16 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
   // notesLastActiveTabId) so switching to another app and back restores the same tab —
   // same "seed the state directly, don't restore-after-the-fact" pattern ListsSection.tsx
   // uses for selectedListId/selectedTabId. Every later change goes through setTabFor.
+  // This note's own remembered tab comes first (notesTabMemory, written on every tab change): with
+  // notes side by side, the last-active memory holds only the pane in front, and the other panes
+  // fell back to the first tab on coming back to Notes (the user's intermittent bug, 2026-10-22).
   const [activeTabId, setActiveTabId] = useState<string | null>(() => {
     const s = useUIStore.getState();
-    if (!editingNoteId || s.notesLastEditingNoteId !== editingNoteId || !s.notesLastActiveTabId) return null;
-    return note?.tabs?.some((t) => t.id === s.notesLastActiveTabId) ? s.notesLastActiveTabId : null;
+    if (!editingNoteId) return null;
+    const exists = (tabId: string | null) => tabId === null || !!note?.tabs?.some((t) => t.id === tabId);
+    if (editingNoteId in s.notesTabMemory) { const t = s.notesTabMemory[editingNoteId] ?? null; if (exists(t)) return t; }
+    if (s.notesLastEditingNoteId !== editingNoteId || !s.notesLastActiveTabId) return null;
+    return exists(s.notesLastActiveTabId) ? s.notesLastActiveTabId : null;
   });
   // True once the load effect below has run for the first time — distinguishes "this is
   // the initial mount, whose tab was already seeded above, don't reset it" from "the user
@@ -767,6 +781,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ document: false, codeBlock: false, listItem: false, link: { openOnClick: false, HTMLAttributes: { class: styles.link } } }),
+      LinkBoundary,
       NoteListItem,
       SectionDocument,
       Section,
@@ -801,6 +816,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       ...ArgumentExtensions,
       ...OptionsExtensions,
       DesignCycle,
+      NumberNotation,
       DictionaryWords,
       ...CycleExtensions,
       ...BreakdownExtensions,
@@ -816,11 +832,13 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       ...QuestionExtensions,
       ...CompareExtensions,
       ...DiagramExtensions,
+      ...ConvertExtensions,
       TrailingLine,
       BlockIds,
       ...NoteLinkExtensions,
       ...NoteEmbedExtensions,
       NoteBlockSelect,
+      NoteBlockDelete,
       NoteBlockPicks,
       GlossaryAutolink,
       AcronymOffer,
@@ -828,6 +846,8 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       BlockOffers,
       OccurrenceHighlight,
       SpecialCharInput,
+      AutoBrackets,
+      EscapePassThrough,
       HeadingLevel,
       HeadingFold,
       ConceptRefMark,
@@ -1020,6 +1040,30 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     const scroll = scrollHostOf(editor.view.dom)?.scrollTop ?? 0;
     useUIStore.getState().setNoteCursor(noteCursorKey(id, activeTabIdRef.current), { from, to, scroll });
   }
+
+  // Kept current while the person works, not only when the tab or note is left: with notes side by
+  // side a pane never leaves its note, and its memory was hours old or missing (the cursor came
+  // back near the end, or at the end; found 2026-10-22). Saved a moment after the cursor stops
+  // moving, and on leaving the editor. Not while a note is being loaded (its cursor isn't placed yet).
+  const rememberRef = useRef(rememberCursor);
+  useEffect(() => { rememberRef.current = rememberCursor; });
+  useEffect(() => {
+    if (!editor) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const soon = () => {
+      if (isLoadingRef.current) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => rememberRef.current(), 400);
+    };
+    const now = () => { if (timer) clearTimeout(timer); if (!isLoadingRef.current) rememberRef.current(); };
+    editor.on('selectionUpdate', soon);
+    editor.on('blur', now);
+    return () => {
+      if (timer) clearTimeout(timer);
+      editor.off('selectionUpdate', soon);
+      editor.off('blur', now);
+    };
+  }, [editor]);
 
   // Back to where the open tab was left; a tab never opened starts at the end (focused or not).
   // Either way the cursor is scrolled to the middle of the view (asked for by the user
@@ -1317,7 +1361,9 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     // lock placeholder anyway) rather than ever parsing anything derived from ciphertext.
     editor.commands.setContent(noteLocked ? '' : parseContent(nextContent));
     isLoadingRef.current = false;
-    if (!noteLocked) restoreCursor(false);
+    const focusAsked = useUIStore.getState().requestedNoteFocus === note.id;
+    if (focusAsked) useUIStore.getState().setRequestedNoteFocus(null);
+    if (!noteLocked) restoreCursor(focusAsked);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.id, editor]);
 
@@ -1435,9 +1481,13 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     };
   }, []);
 
-  // Focus the editor when the signal increments (Right arrow from nav column)
+  // Focus the editor when the signal increments (Right arrow from nav column). Only the editor in
+  // front answers, and only to the signal changing: a pane taking the focus by a click keeps the
+  // cursor where it was clicked and doesn't scroll (it used to restore the remembered place).
+  const inFrontRef = useRef(inFront);
+  useEffect(() => { inFrontRef.current = inFront; });
   useEffect(() => {
-    if (!focusSignal) return;
+    if (!focusSignal || !inFrontRef.current) return;
     restoreCursor(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusSignal, editor]);
@@ -1726,7 +1776,8 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     e.stopPropagation();
     const id = currentNoteIdRef.current;
     if (!id) return;
-    if (!(await confirmDelete('tab', tabName, 'Everything on this tab is deleted with it.'))) return;
+    const tab = viewOf(id)?.tabs.find((t) => t.id === tabId);
+    if (!(await confirmDelete('tab', tabName, 'Everything on this tab is deleted with it.', { empty: !!tab && richTextIsEmpty(tab.content) }))) return;
     if (currentNoteIdRef.current !== id) return;
     if (activeTabId === tabId) switchTab(null);
     removeNoteTab(id as NoteId, tabId);
@@ -2151,8 +2202,8 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                 className={`${styles.toolbarBtnText} ${noteMenuOpen ? styles.toolbarBtnActive : ''}`}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => { e.stopPropagation(); setNoteMenuOpen((o) => !o); }}
-                title="Note options"
-              >Note ▾</button>
+                title={LABELS.noteMenu.title}
+              >{LABELS.noteMenu.button} ▾</button>
               {noteMenuOpen && (
                 <div className={styles.noteMenu} onClick={(e) => e.stopPropagation()}>
                   <button
@@ -2170,12 +2221,12 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                       setNoteMenuOpen(false);
                     }}
                   >
-                    {abstract !== null ? '✓ Abstract' : 'Add abstract'}
+                    {abstract !== null ? `✓ ${LABELS.noteMenu.abstract}` : LABELS.noteMenu.addAbstract}
                   </button>
                   <button
                     className={styles.noteMenuItem}
                     disabled={!vaultUnlocked && !note?.isEncrypted}
-                    title={!vaultUnlocked && !note?.isEncrypted ? 'Unlock encryption in Settings → Account first' : undefined}
+                    title={!vaultUnlocked && !note?.isEncrypted ? LABELS.noteMenu.unlockFirst : undefined}
                     onClick={() => {
                       const id = currentNoteIdRef.current;
                       if (!id || !editor) return;
@@ -2193,12 +2244,12 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                       }
                       useNoteStore.getState().encryptNote(id as NoteId).catch((err) => {
                         log.error('NoteEditor', 'encryption toggle failed', err);
-                        void alertDialog(err instanceof Error ? err.message : 'Could not change encryption for this note.');
+                        void alertDialog(err instanceof Error ? err.message : LABELS.noteMenu.encryptFailed);
                       });
                       setNoteMenuOpen(false);
                     }}
                   >
-                    {note?.isEncrypted ? '🔓 Remove encryption' : '🔒 Encrypt this note'}
+                    {note?.isEncrypted ? `🔓 ${LABELS.noteMenu.decrypt}` : `🔒 ${LABELS.noteMenu.encrypt}`}
                   </button>
                   <button
                     className={`${styles.noteMenuItem} ${styles.noteMenuIconItem}`}
@@ -2206,6 +2257,15 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                   >
                     {pinNote.icon}{pinNote.label}
                   </button>
+                  {canExportPdf() && (
+                    <button
+                      className={styles.noteMenuItem}
+                      disabled={noteLocked}
+                      onClick={() => { const id = currentNoteIdRef.current; setNoteMenuOpen(false); if (id) void exportNoteAsPdf(id); }}
+                    >
+                      {LABELS.notePdf.menu}
+                    </button>
+                  )}
                   <div className={styles.noteMenuColors} role="group" aria-label={LABELS.noteColors.menu}>
                     <span className={styles.noteMenuLabel}>{LABELS.noteColors.menu}</span>
                     <div className={styles.noteMenuSwatches}>
@@ -2228,6 +2288,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
           </div>
         )}
 
+        {!isAndroid && pane?.onReplace && <button className={styles.closeBtn} onClick={pane.onReplace} title={LABELS.noteViews.replace} aria-label={LABELS.noteViews.replace}><SwapIcon /></button>}
         {!isAndroid && <button className={styles.closeBtn} onClick={closeNote} title="Close (Esc)" aria-label="Close"><CloseIcon /></button>}
       </div>
 

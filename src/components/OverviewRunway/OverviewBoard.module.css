@@ -1,0 +1,54 @@
+/* The Board (OverviewBoard.tsx): columns of when things are; they stack on a narrow screen. */
+.board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(13rem, 1fr);
+  gap: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+}
+@media (max-width: 719px) {
+  .board { grid-auto-flow: row; grid-auto-columns: auto; overflow-x: visible; }
+}
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+}
+.overdue { border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border)); }
+.columnTitle {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.overdue .columnTitle { color: var(--color-danger); }
+.count { font-weight: 600; }
+.cards { display: flex; flex-direction: column; gap: var(--space-2); }
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.card:hover, .card:focus-visible { border-color: var(--color-primary); }
+.cardDone { opacity: 0.55; }
+.cardHead { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; font-size: var(--text-sm); }
+.cardTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.flag { flex: none; }
+.cardMeta { color: var(--color-muted); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

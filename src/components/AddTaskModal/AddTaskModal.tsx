@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { newTagId } from '@/utils/id';
 import { makeItemLink } from '@/utils/taskLinks';
+import { eventTarget, linkedTaskDates } from '@/services/eventTaskLinks';
 import { now, todayIso } from '@/utils/date';
 import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { LABELS } from '@/config/labels';
@@ -33,6 +35,7 @@ export function AddTaskModal() {
   const activeCollectionId = useUIStore(selectActiveCollectionId);
   const pendingParentId    = useUIStore((s) => s.pendingParentId);
   const pendingFollowUpOf  = useUIStore((s) => s.pendingFollowUpOf);
+  const pendingEventLink   = useUIStore((s) => s.pendingEventLink);
   const quickAddPrefill    = useUIStore((s) => s.quickAddPrefill);
   const closeModal         = useUIStore((s) => s.closeModal);
 
@@ -47,17 +50,22 @@ export function AddTaskModal() {
     closeModal();
   };
 
-  const [advanced, setAdvanced] = useState(taskModalAdvanced || !!pendingParentId);
+  // A follow-up of an event shows its start, which sits among the advanced fields.
+  const [advanced, setAdvanced] = useState(taskModalAdvanced || !!pendingParentId || pendingEventLink?.kind === 'followUpOf');
   const [repeat, setRepeat] = useState<RepeatConfig | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const [title,         setTitle]         = useState(quickAddPrefill?.title ?? '');
+  // Preparation for, or a follow-up of, an event or a Deadline: its dates, title and Endeavour.
+  const eventItem  = pendingEventLink ? eventTarget(pendingEventLink.targetType, pendingEventLink.targetId) : undefined;
+  const eventDates = pendingEventLink && eventItem ? linkedTaskDates(pendingEventLink.kind, pendingEventLink.targetType, pendingEventLink.targetId) : {};
+  const eventTitle = eventItem ? (pendingEventLink!.kind === 'prepFor' ? LABELS.taskLinks.event.prepTitle : LABELS.taskLinks.event.followTitle)(eventItem.title) : '';
+  const [title,         setTitle]         = useState(quickAddPrefill?.title ?? eventTitle);
   const [notes,         setNotes]         = useState('');
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
-  const [deadline,      setDeadline]      = useState(quickAddPrefill?.deadline ?? '');
-  const [deadlineTime,  setDeadlineTime]  = useState(quickAddPrefill?.deadlineTime ?? '');
-  const [scheduledAt,   setScheduledAt]   = useState('');
+  const [deadline,      setDeadline]      = useState(quickAddPrefill?.deadline ?? eventDates.deadline ?? '');
+  const [deadlineTime,  setDeadlineTime]  = useState(quickAddPrefill?.deadlineTime ?? eventDates.deadlineTime ?? '');
+  const [scheduledAt,   setScheduledAt]   = useState(eventDates.scheduledAt ?? '');
   const [scheduledTime, setScheduledTime] = useState('');
   // A sub-task starts with its parent's priority, Endeavour, tags and purposes; the user's
   // own pick always wins over that (tracked per-field via a *Touched ref, same pattern as
@@ -78,7 +86,7 @@ export function AddTaskModal() {
   // (docs/android/01-tasks-app.md §3.2) when that took place instead
   const [collectionId,       setCollectionId]       = useState<CollectionId | ''>(
     (quickAddPrefill?.collectionId
-      ?? (seedTask ? (seedTask.collectionId ?? '') : (activeCollectionId ?? ''))
+      ?? (seedTask ? (seedTask.collectionId ?? '') : eventItem?.collectionId ?? (activeCollectionId ?? ''))
     ) as CollectionId | ''
   );
   const collectionTouched = useRef(quickAddPrefill?.collectionId !== undefined);
@@ -225,7 +233,9 @@ export function AddTaskModal() {
       kind:         taskKind,
       parentId:     parentId ? parentId as TaskId : null,
       crossAppRefs,
-      itemLinks:    followUpOrigin ? [makeItemLink('followUpOf', followUpOrigin.id, null, now())] : undefined,
+      itemLinks:    followUpOrigin ? [makeItemLink('followUpOf', followUpOrigin.id, null, now())]
+        : pendingEventLink && eventItem ? [makeItemLink(pendingEventLink.kind, pendingEventLink.targetId, null, now(), pendingEventLink.targetType)]
+        : undefined,
       repeat:       parentId ? null : repeat,
     });
 
@@ -241,6 +251,11 @@ export function AddTaskModal() {
           <button className={styles.closeBtn} onClick={handleClose} aria-label="Close"><CloseIcon /></button>
         </div>
         {followUpOrigin && <div className={styles.followUpBanner}>{ITEM_LINK_KINDS.followUpOf.icon} {LABELS.taskLinks.followUpBanner(followUpOrigin.title)}</div>}
+        {pendingEventLink && eventItem && (
+          <div className={styles.followUpBanner}>
+            {ITEM_LINK_KINDS[pendingEventLink.kind].icon} {(pendingEventLink.kind === 'prepFor' ? LABELS.taskLinks.event.prepBanner : LABELS.taskLinks.event.followBanner)(eventItem.title)}
+          </div>
+        )}
 
         <form ref={formRef} onSubmit={handleSubmit}>
           {/* ── Basic fields ── */}
@@ -268,16 +283,10 @@ export function AddTaskModal() {
                 {taskKind === 'milestone' && <span className={styles.required}>*</span>}
               </label>
               <div className={styles.dateTimeRow}>
-                <input
-                  type="date"
-                  className={styles.dateInput}
-                  value={deadline}
-                  onChange={(e) => {
-                    setDeadline(e.target.value);
-                    if (!e.target.value) setDeadlineTime('');
-                  }}
-                  required={taskKind === 'milestone'}
-                />
+                <DateInput className={styles.dateInput} value={deadline} onChange={(v) => {
+                    setDeadline(v);
+                    if (!v) setDeadlineTime('');
+                  }} required={taskKind === 'milestone'} />
                 {(deadline || taskKind === 'milestone') && (
                   <TimeInput
                     className={styles.timeInput}
@@ -309,15 +318,10 @@ export function AddTaskModal() {
             <div className={styles.field}>
               <label className={styles.label}>{LABELS.scheduledFor}</label>
               <div className={styles.dateTimeRow}>
-                <input
-                  type="date"
-                  className={styles.dateInput}
-                  value={scheduledAt}
-                  onChange={(e) => {
-                    setScheduledAt(e.target.value);
-                    if (!e.target.value) setScheduledTime('');
-                  }}
-                />
+                <DateInput className={styles.dateInput} value={scheduledAt} onChange={(v) => {
+                    setScheduledAt(v);
+                    if (!v) setScheduledTime('');
+                  }} />
                 {scheduledAt && (
                   <TimeInput
                     className={styles.timeInput}

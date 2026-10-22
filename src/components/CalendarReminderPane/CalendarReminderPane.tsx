@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import type { CalendarReminderId } from '@/types';
 import { RepeatField } from '@/components/RepeatField/RepeatField';
@@ -8,7 +9,8 @@ import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
-import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
+import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
+import { datedPatch, datedRule } from '@/utils/notifyRule';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinkedNoteAbstracts } from '@/components/LinkedNoteAbstracts/LinkedNoteAbstracts';
@@ -167,12 +169,7 @@ export function CalendarReminderPane() {
 
           <div className={styles.field}>
             <span className={styles.label}>Date</span>
-            <input
-              type="date"
-              className={styles.dateInput}
-              value={reminder.date}
-              onChange={(e) => updateReminder(id, { date: e.target.value })}
-            />
+            <DateInput className={styles.dateInput} value={reminder.date} onChange={(v) => updateReminder(id, { date: v })} />
           </div>
 
           <div className={styles.field}>
@@ -184,16 +181,15 @@ export function CalendarReminderPane() {
             />
           </div>
 
-          {!reminder.time && (
-            <div className={styles.field}>
-              <span className={styles.label}>Notify me</span>
-              <AllDayNotifyField
-                daysBefore={reminder.notifyDaysBefore ?? 1}
-                atTime={reminder.notifyAtTime ?? '17:00'}
-                onChange={(d, t) => updateReminder(id, { notifyDaysBefore: d, notifyAtTime: t })}
-              />
-            </div>
-          )}
+          <div className={styles.field}>
+            <NotifyRuleField
+              item="reminder"
+              timed={!!reminder.time}
+              rule={datedRule(reminder, 'reminder')}
+              onChange={(r) => updateReminder(id, datedPatch(r))}
+              labelClassName={`${styles.label} ${styles.checkLabel}`}
+            />
+          </div>
 
           <div className={styles.field}>
             <label className={`${styles.label} ${styles.checkLabel}`}>
@@ -219,7 +215,7 @@ export function CalendarReminderPane() {
 
           {/* ── Repeat ── */}
           <div className={styles.field}>
-            <RepeatField value={reminder.repeat ?? null} onChange={(r) => updateReminder(id, { repeat: r })} date={reminder.date} labelClassName={`${styles.label} ${styles.checkLabel}`} />
+            <RepeatField value={reminder.repeat ?? null} onChange={(r) => updateReminder(id, { repeat: r })} date={reminder.date} onDateChange={(d) => updateReminder(id, { date: d })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
           </div>
 
           <div className={styles.field}>

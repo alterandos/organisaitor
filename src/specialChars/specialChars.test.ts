@@ -36,6 +36,14 @@ describe('reading //name', () => {
     expect(matchChars('pi')[0].char).toBe('π');
   });
 
+  it('ticks and crosses, plain and coloured', () => {
+    expect(exactChar('tick')).toBe('✓');
+    expect(exactChar('greentick')).toBe('✅');
+    expect(exactChar('cross')).toBe('✗');
+    expect(exactChar('redcross')).toBe('❌');
+    expect(matchChars('check')[0].char).toBe('✓'); // an alias, in the list
+  });
+
   it('findShortcut: the shortcut just completed, and what to replace', () => {
     expect(findShortcut('a -->')).toEqual({ start: 2, char: '→', typed: '-->' });
     expect(findShortcut('x^2')).toEqual({ start: 1, char: '²', typed: '^2' });

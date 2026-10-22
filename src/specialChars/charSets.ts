@@ -2,9 +2,9 @@
 // `//Delta` → Δ). THE table of them, and the pure rules for reading what's been typed, shared by
 // every text field (fieldInput.ts) and the note editor (NoteEditor/extensions/SpecialCharInput.ts),
 // so they behave the same everywhere. Sets: Greek letters, arrows, maths symbols, and superscript
-// and subscript digits; another set is more entries here, with its own `set`.
+// and subscript digits, and marks (ticks and crosses); another set is more entries here, with its own `set`.
 
-export type CharSet = 'greek' | 'arrows' | 'maths' | 'scripts';
+export type CharSet = 'greek' | 'arrows' | 'maths' | 'scripts' | 'marks';
 
 export interface SpecialChar {
   name:    string;        // as typed, lower case (the upper-case form is the capitalised name)
@@ -49,6 +49,12 @@ const MATHS: [string, string, string[]?][] = [
   ['therefore', '∴'], ['because', '∵'],
 ];
 
+// Ticks and crosses: plain (in the text's own colour) and coloured (the emoji, green and red).
+const MARKS: [string, string, string[]?][] = [
+  ['tick', '✓', ['check', 'checkmark']], ['greentick', '✅', ['gtick', 'greencheck']],
+  ['cross', '✗', ['xmark']], ['redcross', '❌', ['rcross', 'redx']],
+];
+
 const SUPERSCRIPTS = '⁰¹²³⁴⁵⁶⁷⁸⁹';
 const SUBSCRIPTS   = '₀₁₂₃₄₅₆₇₈₉';
 const SCRIPTS: [string, string][] = [
@@ -63,6 +69,7 @@ export const SPECIAL_CHARS: SpecialChar[] = [
   ...ARROWS.map(([name, char, aliases]): SpecialChar => ({ name, char, set: 'arrows', aliases })),
   ...MATHS.map(([name, char, aliases]): SpecialChar => ({ name, char, set: 'maths', aliases })),
   ...SCRIPTS.map(([name, char]): SpecialChar => ({ name, char, set: 'scripts' })),
+  ...MARKS.map(([name, char, aliases]): SpecialChar => ({ name, char, set: 'marks', aliases })),
 ];
 
 // What's being typed, if the text before the cursor ends with `//name`: where the `//` starts and

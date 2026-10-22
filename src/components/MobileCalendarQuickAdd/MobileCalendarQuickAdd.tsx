@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import type { CalendarItemKind } from '@/types';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -96,12 +97,7 @@ export function MobileCalendarQuickAdd() {
         />
 
         <div className={styles.row}>
-          <input
-            type="date"
-            className={styles.dateInput}
-            value={itemDate}
-            onChange={(e) => setItemDate(e.target.value)}
-          />
+          <DateInput className={styles.dateInput} value={itemDate} onChange={(v) => setItemDate(v)} />
           <TimeInput className={styles.timeInput} value={time} onChange={setTime} placeholder="Time (optional)" />
         </div>
 

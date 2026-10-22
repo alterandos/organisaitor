@@ -14,7 +14,9 @@ import { formatObjectDay, formatObjectTimeRange, formatObjectWhen, formatRepeatR
 import { CalendarItemBody } from './CalendarItemBody';
 import { EventBody } from './EventBody';
 import { endAfter, readWhenInput } from './whenInput';
-import { calendarFlags, type ArtifactFlag } from './flags';
+import { calendarFlags, taskFlags, type ArtifactFlag } from './flags';
+import { TaskBody } from './TaskBody';
+import { updateTaskLinked } from '@/services/taskCalendarLinks';
 import { currentOccurrence, datedItem, occurrenceWindow, todayInZone, updateDated, type DatedItem, type DatedKind } from './calendarItems';
 
 // What linked text in a note shows about the item it links to, live: one entry per CrossAppRefType
@@ -220,6 +222,23 @@ function editEventWhen(id: string, part: 'date' | 'time', raw: string): boolean 
   return true;
 }
 
+// A task's deadline and its time, from the heading (the same reading as a calendar item's).
+function editTaskWhen(id: string, part: 'date' | 'time', raw: string): boolean {
+  const task = useTaskStore.getState().tasks[id as TaskId];
+  if (!task) return false;
+  const text = raw.trim();
+  if (part === 'time' && !text) { updateTaskLinked(task.id, { deadlineTime: null }); return true; }
+  const read = readWhenInput(text);
+  if (part === 'time') {
+    if (!read.time) return false;
+    updateTaskLinked(task.id, { deadlineTime: read.time, ...(task.deadline ? {} : { deadline: todayInZone() }) });
+    return true;
+  }
+  if (!read.date) return false;
+  updateTaskLinked(task.id, { deadline: read.date, ...(read.time ? { deadlineTime: read.time } : {}) });
+  return true;
+}
+
 export const ARTIFACT_TYPES: Partial<Record<CrossAppRefType, ArtifactTypeDef>> = {
   task: {
     label:     LABELS.noteObjects.task,
@@ -240,6 +259,9 @@ export const ARTIFACT_TYPES: Partial<Record<CrossAppRefType, ArtifactTypeDef>> =
       };
     },
     toggleDone: (id) => { void toggleTaskCompletion(id as TaskId); },
+    editWhen:   editTaskWhen,
+    flags:      (id) => taskFlags(useTaskStore.getState().tasks[id as TaskId], (changes) => updateTaskLinked(id as TaskId, changes)),
+    Body:       TaskBody,
   },
   event: {
     label:     LABELS.calendarItemKind.event,

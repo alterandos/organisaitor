@@ -1,6 +1,9 @@
 import { createElement } from 'react';
 import type { Editor } from '@tiptap/react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
+import { quoteFromSelection } from './extensions/Quote';
+import { conclusionFromSelection } from './extensions/Conclusion';
+import { mathsFromSelection } from './extensions/Maths';
 import type { ContextMenuScope } from '@/contextMenu/types';
 import { LABELS } from '@/config/labels';
 import { setNormalText } from './extensions/normalText';
@@ -49,9 +52,21 @@ registerContextMenuProvider({
   order: 20,
   items: (_ctx, scope) => {
     const { editor, openLink, openCreate } = api(scope);
+    const { view } = editor;
+    const { from, to, empty } = editor.state.selection;
+    const B = LABELS.noteBlocks;
     return [
       { id: 'link', label: LABELS.contextMenu.link, icon: createElement(LinkIcon), shortcut: 'Ctrl+L', run: openLink },
-      { id: 'create', label: LABELS.contextMenu.createFrom, icon: '🧩', shortcut: 'Ctrl+Q', disabled: editor.state.selection.empty, run: openCreate },
+      { id: 'create', label: LABELS.contextMenu.createFrom, icon: '🧩', shortcut: 'Ctrl+Q', disabled: empty, run: openCreate },
+      // The selection made into a block: the same choices as the `\` menu on a selection.
+      ...(empty ? [] : [{
+        id: 'turn-into', label: LABELS.contextMenu.turnInto, icon: '⇢',
+        submenu: [[
+          { id: 'turn-quote', label: B.quote.turnInto, icon: '❝', run: () => quoteFromSelection(view, from, to) },
+          { id: 'turn-conclusion', label: B.conclusion.turnInto, icon: '∴', run: () => conclusionFromSelection(view, from, to) },
+          { id: 'turn-maths', label: B.maths.turnInto, icon: '∑', run: () => mathsFromSelection(view, from, to) },
+        ]],
+      }]),
     ];
   },
 });

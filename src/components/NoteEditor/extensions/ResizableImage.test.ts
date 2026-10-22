@@ -93,3 +93,12 @@ describe('pictures in a note', () => {
     expect(editor.view.dom.querySelector('img')?.getAttribute('src')).toBe('data:image/webp;base64,DOG');
   });
 });
+
+describe('snapping to another picture’s width while resizing', () => {
+  it('a width within 8px of another snaps to it, the nearest winning; further away it stays', async () => {
+    const { snapWidth } = await import('./imageGeometry');
+    expect(snapWidth(305, [300, 480])).toBe(300);
+    expect(snapWidth(476, [300, 480, 470])).toBe(480);
+    expect(snapWidth(320, [300, 480])).toBeNull();
+  });
+});

@@ -86,6 +86,9 @@
 .h_e  { top: 50%; left: 100%; cursor: ew-resize; }
 .h_w  { top: 50%; left: 0; cursor: ew-resize; }
 
+/* While resizing: this picture and the ones whose width it has snapped to. */
+.sizeMatch { outline: 2px dashed var(--color-primary); outline-offset: 2px; border-radius: 6px; }
+
 .resizing,
 .resizing * { cursor: inherit; user-select: none; }
 

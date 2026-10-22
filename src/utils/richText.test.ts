@@ -14,6 +14,15 @@ describe('formatted text in block fields', () => {
     expect(sanitizeInlineHtml('<a href="javascript:x">link</a>')).not.toMatch(/<a\b/);
   });
 
+  it('keeps a link to a Glossary term with only its checked id, and reads it plain', () => {
+    expect(sanitizeInlineHtml('the <a data-term="e1_x" href="javascript:x" onclick="y">ASX</a> rule')).toBe('the <a data-term="e1_x">ASX</a> rule');
+    expect(sanitizeInlineHtml('<a data-term="bad id">x</a>')).toBe('x');
+    expect(sanitizeInlineHtml('<a data-term="x&quot;>"><b>y</b></a>')).not.toMatch(/<a /);
+    expect(sanitizeInlineHtml('<a data-term="e1"><b>ASX</b>')).toBe('<a data-term="e1"><b>ASX</b></a>');
+    expect(richToPlain('the <a data-term="e1">ASX</a> rule')).toBe('the ASX rule');
+    expect(hasFormatting('<a data-term="e1">ASX</a>')).toBe(true);
+  });
+
   it('plain text with < and > stays as typed', () => {
     expect(sanitizeInlineHtml('a < b and x<y and z>w')).toBe('a &lt; b and x&lt;y and z&gt;w');
     expect(richToPlain('a < b and x<y and z>w')).toBe('a < b and x<y and z>w');

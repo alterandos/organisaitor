@@ -8,8 +8,10 @@ import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
 import type { TrashEntry, TrashEntryId, TrashableKind, DeletedBy } from '@/types/trash';
 import type { Overview } from '@/types/overview';
+import type { CustomConverter } from '@/types/converters';
 import type { Picture } from '@/types/pictures';
 import type { PinnedItem } from '@/store/pinnedItemsStore';
+import type { Activity, ActivityType } from '@/types/fitness';
 
 // ── Task ────────────────────────────────────────────────────────
 
@@ -225,6 +227,7 @@ export function eventToRow(e: CalendarEvent, userId: string) {
     collection_id:       e.collectionId,
     notify_before_value: e.notifyBeforeValue,
     notify_before_unit:  e.notifyBeforeUnit,
+    notify_mode:         e.notifyMode ?? 'before',
     remind_at:           e.remindAt,
     notify_at_time:      e.notifyAtTime,
     repeat:              e.repeat,
@@ -269,6 +272,7 @@ export function rowToEvent(r: Record<string, any>): CalendarEvent {
     collectionId:       r.collection_id       ?? null,
     notifyBeforeValue:  r.notify_before_value ?? null,
     notifyBeforeUnit:   r.notify_before_unit  ?? 'hours',
+    notifyMode:         r.notify_mode === 'daysAt' ? 'daysAt' : 'before',
     remindAt:           r.remind_at           ?? null,
     notifyAtTime:       r.notify_at_time      ?? null,
     repeat:             r.repeat              ?? null,
@@ -314,7 +318,11 @@ export function reminderToRow(r: CalendarReminder, userId: string) {
     important:     r.important,
     status:        r.status ?? 'confirmed',
     notify_days_before: r.notifyDaysBefore ?? 1,
+    notify_mode:         r.notifyMode ?? 'daysAt',
+    notify_before_value: r.notifyBeforeValue ?? null,
+    notify_before_unit:  r.notifyBeforeUnit ?? 'hours',
     notify_at_time:     r.notifyAtTime ?? '17:00',
+    notify:             r.notify ?? true,
     done_dates:         r.doneDates ?? [],
     series_id:          r.seriesId ?? null,
     series_date:        r.seriesDate ?? null,
@@ -344,7 +352,12 @@ export function rowToReminder(r: Record<string, any>): CalendarReminder {
     important:    r.important     ?? false,
     status:       r.status        ?? 'confirmed',
     notifyDaysBefore: r.notify_days_before ?? 1,
+    // A row from before migration 056 has no mode: a timed reminder notified at its time.
+    notifyMode:        r.notify_mode === 'before' || r.notify_mode === 'atTime' || r.notify_mode === 'daysAt' ? r.notify_mode : (r.time ? 'atTime' : 'daysAt'),
+    notifyBeforeValue: r.notify_before_value ?? null,
+    notifyBeforeUnit:  r.notify_before_unit ?? 'hours',
     notifyAtTime:     r.notify_at_time     ?? '17:00',
+    notify:           r.notify             ?? true,
     doneDates:        r.done_dates         ?? [],
     seriesId:         r.series_id          ?? null,
     seriesDate:       r.series_date        ?? null,
@@ -375,7 +388,11 @@ export function deadlineToRow(d: CalendarDeadline, userId: string) {
     important:     d.important,
     status:        d.status ?? 'confirmed',
     notify_days_before: d.notifyDaysBefore ?? 1,
+    notify_mode:         d.notifyMode ?? 'daysAt',
+    notify_before_value: d.notifyBeforeValue ?? null,
+    notify_before_unit:  d.notifyBeforeUnit ?? 'hours',
     notify_at_time:     d.notifyAtTime ?? '17:00',
+    notify:             d.notify ?? true,
     done_dates:         d.doneDates ?? [],
     series_id:          d.seriesId ?? null,
     series_date:        d.seriesDate ?? null,
@@ -406,7 +423,12 @@ export function rowToDeadline(r: Record<string, any>): CalendarDeadline {
     important:    r.important     ?? false,
     status:       r.status        ?? 'confirmed',
     notifyDaysBefore: r.notify_days_before ?? 1,
+    // A row from before migration 056 has no mode: a timed reminder notified at its time.
+    notifyMode:        r.notify_mode === 'before' || r.notify_mode === 'atTime' || r.notify_mode === 'daysAt' ? r.notify_mode : (r.time ? 'atTime' : 'daysAt'),
+    notifyBeforeValue: r.notify_before_value ?? null,
+    notifyBeforeUnit:  r.notify_before_unit ?? 'hours',
     notifyAtTime:     r.notify_at_time     ?? '17:00',
+    notify:           r.notify             ?? true,
     doneDates:        r.done_dates         ?? [],
     seriesId:         r.series_id          ?? null,
     seriesDate:       r.series_date        ?? null,
@@ -492,6 +514,38 @@ export function rowToOverview(r: Record<string, any>): Overview {
     groupBy:      d.groupBy ?? 'none',
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
+  };
+}
+
+// ── Converter ───────────────────────────────────────────────────
+
+export function converterToRow(c: CustomConverter, userId: string) {
+  return {
+    id:         c.id,
+    user_id:    userId,
+    name:       c.name,
+    icon:       c.icon ?? null,
+    // Inputs, output and formulas as one blob, so a new converter option never needs a migration.
+    definition: { inputs: c.inputs, output: c.output, formula: c.formula, inverse: c.inverse },
+    created_at: c.createdAt,
+    updated_at: c.updatedAt,
+    deleted_at: null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToConverter(r: Record<string, any>): CustomConverter {
+  const d = r.definition ?? {};
+  return {
+    id:        r.id,
+    name:      r.name,
+    icon:      r.icon ?? null,
+    inputs:    d.inputs ?? [],
+    output:    d.output ?? { key: 'y', label: '', unit: '' },
+    formula:   d.formula ?? '',
+    inverse:   d.inverse ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }
 
@@ -917,5 +971,90 @@ export function rowToPin(r: Record<string, any>): PinnedItem {
     order:     r.sort_order ?? 0,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+// ── Fitness ─────────────────────────────────────────────────────
+// Activities, and custom activity types only: built-in types have fixed ids and are seeded on
+// every device (the rule list types follow), so they never sync. Plaintext (decided 2026-09-19).
+
+export function activityToRow(a: Activity, userId: string) {
+  return {
+    id:                   a.id,
+    user_id:              userId,
+    type:                 a.type,
+    title:                a.title,
+    started_at:           a.startedAt,
+    timezone:             a.timezone ?? null,
+    distance_meters:      a.distanceMeters ?? null,
+    moving_time_seconds:  a.movingTimeSeconds ?? null,
+    elapsed_time_seconds: a.elapsedTimeSeconds ?? null,
+    average_speed_mps:    a.averageSpeedMps ?? null,
+    data:                 a.data ?? {},
+    notes:                a.notes ?? null,
+    purpose_ids:          a.purposeIds ?? [],
+    source:               a.source,
+    source_id:            a.sourceId ?? null,
+    source_raw:           a.sourceRaw ?? null,
+    archived_at:          a.archivedAt ?? null,
+    created_at:           a.createdAt,
+    updated_at:           a.updatedAt,
+    deleted_at:           null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToActivity(r: Record<string, any>): Activity {
+  return {
+    id:                 r.id,
+    type:               r.type,
+    title:              r.title,
+    startedAt:          r.started_at,
+    timezone:           r.timezone ?? null,
+    distanceMeters:     r.distance_meters ?? null,
+    movingTimeSeconds:  r.moving_time_seconds ?? null,
+    elapsedTimeSeconds: r.elapsed_time_seconds ?? null,
+    averageSpeedMps:    r.average_speed_mps ?? null,
+    data:               r.data ?? {},
+    notes:              r.notes ?? null,
+    purposeIds:         r.purpose_ids ?? [],
+    source:             r.source ?? 'manual',
+    sourceId:           r.source_id ?? null,
+    sourceRaw:          r.source_raw ?? null,
+    archivedAt:         r.archived_at ?? null,
+    createdAt:          r.created_at,
+    updatedAt:          r.updated_at,
+  };
+}
+
+export function activityTypeToRow(t: ActivityType, userId: string) {
+  return {
+    id:              t.id,
+    user_id:         userId,
+    name:            t.name,
+    icon:            t.icon,
+    color:           t.color ?? null,
+    tracks_distance: t.tracksDistance,
+    field_schema:    t.fieldSchema ?? [],
+    archived_at:     t.archivedAt ?? null,
+    created_at:      t.createdAt,
+    updated_at:      t.updatedAt,
+    deleted_at:      null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToActivityType(r: Record<string, any>): ActivityType {
+  return {
+    id:             r.id,
+    name:           r.name,
+    icon:           r.icon,
+    color:          r.color ?? null,
+    tracksDistance: r.tracks_distance ?? true,
+    fieldSchema:    r.field_schema ?? [],
+    isBuiltIn:      false,
+    archivedAt:     r.archived_at ?? null,
+    createdAt:      r.created_at,
+    updatedAt:      r.updated_at,
   };
 }

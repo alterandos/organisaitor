@@ -91,6 +91,7 @@ export interface CreateActivityInput {
   source?:              ActivitySource;
   sourceId?:            string | null;
   sourceRaw?:            Record<string, unknown> | null;
+  id?:                   ActivityId;             // a Strava activity's stable id (utils/fitnessIds.ts); otherwise a random one
 }
 
 export interface CreateActivityTypeInput {

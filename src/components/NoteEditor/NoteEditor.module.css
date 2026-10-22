@@ -1519,11 +1519,12 @@
    A conclusion and, optionally, the reasons written in it that lead to it. Five designs, each its
    own [data-variant] block, each drawing the reasons as feeding the conclusion; the text, the
    placeholders and the pill are shared. data-cc-reasons is on the block when it has reasons.
-   --cc-mid is the middle of a part's first line; --cc-rail where the arrow's rail runs. */
+   --cc-mid is the middle of a part's first line (half a line height, read where it's used, so it
+   follows the text's size); --cc-rail where the arrow's rail runs. */
 
 .editorContent [data-type="conclusion"] {
   --cc-color: var(--color-primary);
-  --cc-mid: 0.8em;
+  --cc-mid: 0.5lh;
   --cc-rail: 0.55rem;
   position: relative;
   margin: 0.75rem 0 1.25rem;
@@ -1552,7 +1553,7 @@
 /* ·· Arrow: a rail down from what's above (or from each reason), turning to point at the text ·· */
 
 .editorContent [data-variant="arrow"] > [data-cc-reason],
-.editorContent [data-variant="arrow"] > [data-cc-text] { padding-left: 2.1rem; }
+.editorContent [data-variant="arrow"] > [data-cc-text] { padding-left: 2.6rem; }
 
 /* Each reason: the rail runs down its left (from its middle, on the first) and a tick joins it. */
 .editorContent [data-variant="arrow"] > [data-cc-reason] {
@@ -1578,13 +1579,15 @@
   left: var(--cc-rail);
   top: -0.7rem;
   width: 1rem;
-  height: calc(0.7rem + var(--cc-mid));
+  /* The turn's 2px line is drawn inside the box's bottom edge: 1px more puts its middle, and the
+     head's, on the text's middle. */
+  height: calc(0.7rem + var(--cc-mid) + 1px);
   border-left: 2px solid var(--cc-color);
   border-bottom: 2px solid var(--cc-color);
   border-bottom-left-radius: var(--radius-sm);
   pointer-events: none;
 }
-.editorContent [data-cc-reasons] [data-cc-arrow] { top: 0; height: var(--cc-mid); }
+.editorContent [data-cc-reasons] [data-cc-arrow] { top: 0; height: calc(var(--cc-mid) + 1px); }
 .editorContent [data-cc-arrow]::after {
   content: '';
   position: absolute;
@@ -5271,6 +5274,28 @@
 .editorContent [data-type="glossary-card"][data-card-width-shown="third"] { width: calc(100% / 3 - 1rem - 0.5px); }
 .editorContent [data-type="glossary-card"][data-card-width-shown="half"]  { width: calc(50% - 1rem - 0.5px); }
 .editorContent [data-type="glossary-card"][data-card-width-shown="full"]  { width: 100%; margin-right: 0; }
+/* Fit the text: Standard at least, growing with what's typed up to the column. */
+.editorContent [data-type="glossary-card"][data-card-width-shown="auto"] { width: fit-content; min-width: min(26rem, calc(100% - 1rem)); max-width: calc(100% - 1rem); }
+/* Any width dragged to: a share of the column (--card-w, set by GlossaryCard.ts). */
+.editorContent [data-type="glossary-card"][data-card-width-shown="custom"] { width: calc(var(--card-w) - 1rem - 0.5px); }
+/* While dragging: the width it will be, by its name or percent. */
+.editorContent [data-card-resize][data-label]::before {
+  content: attr(data-label);
+  position: absolute;
+  top: -1.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-surface);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.editorContent [data-card-resize][data-snapped]::before { background: var(--color-primary); color: var(--color-on-primary); }
+.editorContent [data-card-resize][data-label]::after { background: var(--color-primary); }
 
 /* The right edge, to drag. Shown with the pill; always on touch. */
 .editorContent [data-card-resize] {
@@ -5310,10 +5335,24 @@
    a box with a small coloured kind line, the question large, a short accent rule, then the parts
    with small labels; Compact is one bordered line, an icon, the question, a thin accent rule, the
    answer. The question itself is italic, not bold (the user's ask, 2026-10-17): it reads as a
-   question rather than a term. The accent follows the status: orange open, green answered, grey dropped. */
+   question rather than a term. The accent stays orange whatever the status, so a question is always
+   easy to spot in a note (the user's ask, 2026-10-22); an answered one adds green where the answer
+   is: the answer tinted with a green bar and label, and green joining the orange rule. Dropped greys it. */
 
-.editorContent [data-type="question"] { --qn-accent: var(--color-swatch-orange); position: relative; }
-.editorContent [data-type="question"][data-status="answered"] { --qn-accent: var(--color-swatch-green); }
+.editorContent [data-type="question"] { --qn-accent: var(--color-kind-question); --qn-done: var(--color-success); position: relative; }
+.editorContent [data-type="question"][data-status="answered"] > [data-qn-text]::after {
+  background: linear-gradient(90deg, var(--qn-accent) 0 55%, var(--qn-done) 55% 100%);
+}
+.editorContent [data-type="question"][data-status="answered"] > [data-qn-field="answer"] {
+  padding: var(--space-1) var(--space-3);
+  border-left: 3px solid var(--qn-done);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: color-mix(in srgb, var(--qn-done) 10%, transparent);
+}
+.editorContent [data-type="question"][data-status="answered"] > [data-qn-field="answer"]::before {
+  content: '✓ ' attr(data-qn-label);
+  color: var(--qn-done);
+}
 .editorContent [data-type="question"][data-status="dropped"]  { --qn-accent: var(--color-swatch-grey); }
 .editorContent [data-type="question"][data-status="dropped"] > [data-qn-text] { color: var(--color-muted); text-decoration: line-through; }
 
@@ -5422,6 +5461,16 @@
   border-radius: var(--radius-pill);
   background: var(--qn-accent);
   opacity: 0.7;
+}
+.editorContent [data-type="question"][data-variant="compact"][data-status="answered"] > [data-qn-field="answer"] {
+  border-left: none;
+  padding: 0 var(--space-2) 0 0;
+}
+.editorContent [data-type="question"][data-variant="compact"][data-status="answered"] > [data-qn-field="answer"]::before {
+  content: '';
+  width: 3px;
+  background: var(--qn-done);
+  opacity: 1;
 }
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="why"],
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="lead"] {
@@ -5655,3 +5704,22 @@
 .editorContent [data-glossary-chip-card] { position: relative; }
 .editorContent [data-glossary-chip-card]:hover > [data-glossary-tools],
 .editorContent [data-glossary-chip-card]:focus-within > [data-glossary-tools] { opacity: 1; }
+
+/* ── Block colours ──────────────────────────────────────────────────────────────
+   Each block has its own colour (--color-block-*, index.css). It's applied by setting the accent
+   inside the block, so every part a block draws "in the primary colour" takes the block's: no
+   block keeps a copy. Questions and Glossary cards use their kind's colour (--color-kind-*). A new
+   block adds its token in both themes and a line here. */
+.editorContent [data-type="timeline"] { --color-primary: var(--color-block-timeline); --color-primary-subtle: color-mix(in srgb, var(--color-block-timeline) 10%, transparent); }
+.editorContent [data-type="cycle"] { --color-primary: var(--color-block-cycle); --color-primary-subtle: color-mix(in srgb, var(--color-block-cycle) 10%, transparent); }
+.editorContent [data-type="breakdown"] { --color-primary: var(--color-block-breakdown); --color-primary-subtle: color-mix(in srgb, var(--color-block-breakdown) 10%, transparent); }
+.editorContent [data-type="types"] { --color-primary: var(--color-block-types); --color-primary-subtle: color-mix(in srgb, var(--color-block-types) 10%, transparent); }
+.editorContent [data-type="idkey"] { --color-primary: var(--color-block-idkey); --color-primary-subtle: color-mix(in srgb, var(--color-block-idkey) 10%, transparent); }
+.editorContent [data-type="hierarchy"] { --color-primary: var(--color-block-hierarchy); --color-primary-subtle: color-mix(in srgb, var(--color-block-hierarchy) 10%, transparent); }
+.editorContent [data-type="pyramid"] { --color-primary: var(--color-block-pyramid); --color-primary-subtle: color-mix(in srgb, var(--color-block-pyramid) 10%, transparent); }
+.editorContent [data-type="conclusion"] { --color-primary: var(--color-block-conclusion); --color-primary-subtle: color-mix(in srgb, var(--color-block-conclusion) 10%, transparent); }
+.editorContent [data-type="options"] { --color-primary: var(--color-block-options); --color-primary-subtle: color-mix(in srgb, var(--color-block-options) 10%, transparent); }
+.editorContent [data-type="argument"] { --color-primary: var(--color-block-argument); --color-primary-subtle: color-mix(in srgb, var(--color-block-argument) 10%, transparent); }
+.editorContent [data-type="quote"] { --color-primary: var(--color-block-quote); --color-primary-subtle: color-mix(in srgb, var(--color-block-quote) 10%, transparent); }
+.editorContent [data-type="convert"] { --color-primary: var(--color-block-convert); --color-primary-subtle: color-mix(in srgb, var(--color-block-convert) 10%, transparent); }
+.editorContent [data-type="hub"] { --color-primary: var(--color-block-hub); --color-primary-subtle: color-mix(in srgb, var(--color-block-hub) 10%, transparent); }

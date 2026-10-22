@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { EditorContent, useEditor, type Editor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import { SpecialCharInput } from '@/components/NoteEditor/extensions/SpecialCharInput';
+import { EditorContent, type Editor } from '@tiptap/react';
 import { useNoteStore } from '@/store/noteStore';
 import { useStickyStore, STICKY_DESIGNS, DEFAULT_STICKY_PLACE, type StickyDesign } from '@/store/stickyStore';
 import { useUIStore } from '@/store/uiStore';
-import { isNoteLocked, noteView } from '@/services/noteSecrets';
-import { addSticky, removeSticky, setStickyContent, stickyDocFrom, stickyDocOf, stickyNotes, type StickyDoc, type StickyMark } from '@/services/stickyNotes';
+import { addSticky, removeSticky, stickyNotes, type StickyMark } from '@/services/stickyNotes';
+import { simpleNoteExtensions, useSimpleNoteEditor } from './useSimpleNoteEditor';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { DesignIcon, OpenIcon, TrashIcon } from '@/components/Icons';
@@ -31,7 +28,6 @@ registerContextMenuProvider({
   items: () => [{ id: 'new-sticky', label: LABELS.stickies.add, icon: '🗒️', run: () => { addSticky(); } }],
 });
 
-const SAVE_MS = 400;
 const STICKY_W = 208;       // .sticky's width (13rem), for keeping it on the screen
 const STICKY_MIN_H = 144;   // its least height
 const MIN_W = 144, MIN_H = 96;   // the smallest it can be resized to
@@ -59,16 +55,7 @@ export function StickyNotes() {
 
 const paperFor = (color: string | null) => (color ? SWATCHES.find((s) => s.hex === color)?.pale ?? null : null);
 
-// Only what a sticky can hold (services/stickyNotes.ts STICKY_MARKS), plus the `//name` characters
-// every text field has.
-const STICKY_EXTENSIONS = [
-  StarterKit.configure({
-    heading: false, blockquote: false, bulletList: false, orderedList: false, listItem: false, listKeymap: false,
-    code: false, codeBlock: false, horizontalRule: false, link: false, dropcursor: false, gapcursor: false, trailingNode: false,
-  }),
-  Placeholder.configure({ placeholder: LABELS.stickies.placeholder }),
-  SpecialCharInput,
-];
+const STICKY_EXTENSIONS = simpleNoteExtensions(LABELS.stickies.placeholder);
 
 const MARK_SHORTCUT: Record<StickyMark, string> = { bold: 'Ctrl+B', italic: 'Ctrl+I', underline: 'Ctrl+U', strike: 'Ctrl+Shift+S' };
 const MARK_ICON: Record<StickyMark, string> = { bold: 'B', italic: 'I', underline: 'U', strike: 'S' };
@@ -84,46 +71,8 @@ function toggleMark(editor: Editor, mark: StickyMark) {
 function StickyNote({ note }: { note: Note }) {
   const place = useStickyStore((s) => s.places[note.id]) ?? DEFAULT_STICKY_PLACE;
   const setPlace = useStickyStore((s) => s.setPlace);
-  const locked = isNoteLocked(note);
-  const content = locked ? '' : noteView(note).content;
-  const stored = locked ? null : stickyDocOf(content);
   const L = LABELS.stickies;
-
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pending = useRef<StickyDoc | null>(null);
-  const flush = () => {
-    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    if (pending.current !== null) { setStickyContent(note.id, pending.current); pending.current = null; }
-  };
-  const noteId = note.id;
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-    if (pending.current !== null) setStickyContent(noteId, pending.current);
-  }, [noteId]);
-
-  const editor = useEditor({
-    extensions: STICKY_EXTENSIONS,
-    content: stored ?? '',
-    editorProps: { attributes: { class: styles.text, 'aria-label': L.text, 'aria-multiline': 'true', role: 'textbox' } },
-    onUpdate: ({ editor: ed }) => {
-      const doc = stickyDocFrom(ed.getJSON());
-      if (!doc) return;
-      pending.current = doc;
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(flush, SAVE_MS);
-    },
-    onBlur: () => flush(),
-  });
-
-  // A change from elsewhere (another device, the note's editor) is taken up unless the sticky is
-  // being written in right now.
-  const storedKey = stored ? JSON.stringify(stored) : null;
-  useEffect(() => {
-    if (!editor || editor.isDestroyed || storedKey === null || editor.isFocused || pending.current) return;
-    const now = stickyDocFrom(editor.getJSON());
-    if (now && JSON.stringify(now) === storedKey) return;
-    editor.commands.setContent(JSON.parse(storedKey), { emitUpdate: false });
-  }, [editor, storedKey]);
+  const { editor, locked, stored } = useSimpleNoteEditor(note, STICKY_EXTENSIONS, { class: styles.text, 'aria-label': L.text, 'aria-multiline': 'true', role: 'textbox' });
 
   // Dragging: anywhere but the text, the buttons and the resize grip.
   const rootRef = useRef<HTMLDivElement>(null);

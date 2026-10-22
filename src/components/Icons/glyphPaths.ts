@@ -77,6 +77,7 @@ export const GLYPHS = {
   ],
   // ── Things to make (the + speed dial, Manage, filters) ──
   plus: [['path', { d: 'M5 12h14' }], ['path', { d: 'M12 5v14' }]],
+  swap: [['path', { d: 'm8 3-4 4 4 4' }], ['path', { d: 'M4 7h16' }], ['path', { d: 'm16 21 4-4-4-4' }], ['path', { d: 'M20 17H4' }]],
   // An Endeavour: a folder of work.
   endeavour: [['path', { d: 'M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z' }]],
   // A Purpose: a target (it was ◎).
@@ -95,6 +96,14 @@ export const GLYPHS = {
   list: [['path', { d: 'M3 12h.01' }], ['path', { d: 'M3 18h.01' }], ['path', { d: 'M3 6h.01' }], ['path', { d: 'M8 12h13' }], ['path', { d: 'M8 18h13' }], ['path', { d: 'M8 6h13' }]],
   notebook: [['path', { d: 'M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20' }]],
   sticky: [['path', { d: 'M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z' }], ['path', { d: 'M15 3v4a2 2 0 0 0 2 2h4' }]],
+  // The scratchpad: a ruled pad with its binding rings.
+  scratchpad: [['path', { d: 'M8 2v4' }], ['path', { d: 'M12 2v4' }], ['path', { d: 'M16 2v4' }], ['rect', { x: '4', y: '4', width: '16', height: '18', rx: '2' }], ['path', { d: 'M8 10h6' }], ['path', { d: 'M8 14h8' }], ['path', { d: 'M8 18h5' }]],
+  // The date calculator: a calendar page holding + − × = (drawn for it 2026-10-23).
+  dateCalc: [['rect', { x: '3', y: '4', width: '18', height: '18', rx: '2' }], ['path', { d: 'M8 2v4' }], ['path', { d: 'M16 2v4' }], ['path', { d: 'M3 9h18' }],
+    ['path', { d: 'M6.5 13.5h3' }], ['path', { d: 'M8 12v3' }], ['path', { d: 'M14.5 13.5h3' }],
+    ['path', { d: 'm6.8 17.3 2.4 2.4' }], ['path', { d: 'm9.2 17.3-2.4 2.4' }], ['path', { d: 'M14.5 17.5h3' }], ['path', { d: 'M14.5 19.5h3' }]],
+  // Converters: two arrows, there and back (Lucide's arrow-left-right).
+  converter: [['path', { d: 'M8 3 4 7l4 4' }], ['path', { d: 'M4 7h16' }], ['path', { d: 'm16 21 4-4-4-4' }], ['path', { d: 'M20 17H4' }]],
   // Ready-made sets (tag presets): sparkles.
   preset: [['path', { d: 'M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z' }]],
 } satisfies Record<string, GlyphShape>;

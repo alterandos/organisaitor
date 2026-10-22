@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import { EventTasksField } from '@/components/TaskLinks/EventTasksField';
+import { DateInput } from '@/components/DateInput/DateInput';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import type { CalendarDeadlineId } from '@/types';
 import { RepeatField } from '@/components/RepeatField/RepeatField';
@@ -8,7 +10,8 @@ import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
-import { AllDayNotifyField } from '@/components/AllDayNotifyField/AllDayNotifyField';
+import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
+import { datedPatch, datedRule } from '@/utils/notifyRule';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { LinkedNoteAbstracts } from '@/components/LinkedNoteAbstracts/LinkedNoteAbstracts';
@@ -173,12 +176,7 @@ export function CalendarDeadlinePane() {
 
           <div className={styles.field}>
             <span className={styles.label}>Date</span>
-            <input
-              type="date"
-              className={styles.dateInput}
-              value={deadline.date}
-              onChange={(e) => updateDeadline(id, { date: e.target.value })}
-            />
+            <DateInput className={styles.dateInput} value={deadline.date} onChange={(v) => updateDeadline(id, { date: v })} />
           </div>
 
           <div className={styles.field}>
@@ -191,13 +189,13 @@ export function CalendarDeadlinePane() {
           </div>
 
           <div className={styles.field}>
-            <span className={styles.label}>Notify me</span>
-            <AllDayNotifyField
-              daysBefore={deadline.notifyDaysBefore ?? 1}
-              atTime={deadline.notifyAtTime ?? '17:00'}
-              onChange={(d, t) => updateDeadline(id, { notifyDaysBefore: d, notifyAtTime: t })}
+            <NotifyRuleField
+              item="deadline"
+              timed={!!deadline.time}
+              rule={datedRule(deadline, 'deadline')}
+              onChange={(r) => updateDeadline(id, datedPatch(r))}
+              labelClassName={`${styles.label} ${styles.checkLabel}`}
             />
-            <p className={styles.repeatSmall}></p>
           </div>
 
           <div className={styles.field}>
@@ -224,13 +222,20 @@ export function CalendarDeadlinePane() {
 
           {/* ── Repeat ── */}
           <div className={styles.field}>
-            <RepeatField value={deadline.repeat ?? null} onChange={(r) => updateDeadline(id, { repeat: r })} date={deadline.date} labelClassName={`${styles.label} ${styles.checkLabel}`} />
+            <RepeatField value={deadline.repeat ?? null} onChange={(r) => updateDeadline(id, { repeat: r })} date={deadline.date} onDateChange={(d) => updateDeadline(id, { date: d })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
           </div>
 
           <div className={styles.field}>
             <span className={styles.label}>Links</span>
             <LinksField links={deadline.links ?? []} onChange={(next) => updateDeadline(id, { links: next })} />
           </div>
+
+          {!linkedTask && (
+            <div className={styles.field}>
+              <span className={styles.label}>{LABELS.taskLinks.event.heading}</span>
+              <EventTasksField type="deadline" id={id} title={deadline.title} />
+            </div>
+          )}
 
           <div className={styles.field}>
             <span className={styles.label}>Linked items</span>

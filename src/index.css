@@ -23,6 +23,32 @@
 
   /* ── Semantic ── */
   --color-success: #10b981;
+  /* Each kind of item linked into a note's text (objects/ArtifactLinks.module.css): one colour per
+     kind, from here, never the palette a person picks from. */
+  --color-item-calendar: #10b981;
+  --color-item-task:     #2f5fb3;
+  /* Each note block's own colour, and each Glossary kind's (agreed with the user 2026-10-22: no two
+     blocks alike, Concept and Profile were both indigo). A block applies its colour by setting
+     --color-primary on its root (NoteEditor.module.css "Block colours"), so everything it draws in
+     the accent follows. Not the palette a person picks from (config/swatches.ts). */
+  --color-kind-question: #c2410c;
+  --color-kind-acronym: #4d7c0f;
+  --color-kind-definition: #0f766e;
+  --color-kind-concept: #4338ca;
+  --color-kind-profile: #be185d;
+  --color-block-timeline: #0369a1;
+  --color-block-cycle: #047857;
+  --color-block-breakdown: #854d0e;
+  --color-block-types: #7e22ce;
+  --color-block-idkey: #0e7490;
+  --color-block-hierarchy: #1d4ed8;
+  --color-block-pyramid: #be123c;
+  --color-block-conclusion: #a21caf;
+  --color-block-options: #6d28d9;
+  --color-block-argument: #b45309;
+  --color-block-quote: #57534e;
+  --color-block-hub: #334155;
+  --color-block-convert: #6f7d16;
   --color-success-muted: #d1fae5;
   --color-success-text: #065f46;
   --color-danger: #ef4444;
@@ -163,6 +189,26 @@
 
   /* ── Semantic ── */
   --color-success: #34d399;
+  --color-item-calendar: #34d399;
+  --color-item-task:     #6f9bea;
+  --color-kind-question: #fb923c;
+  --color-kind-acronym: #a3e635;
+  --color-kind-definition: #2dd4bf;
+  --color-kind-concept: #a5b4fc;
+  --color-kind-profile: #f9a8d4;
+  --color-block-timeline: #7dd3fc;
+  --color-block-cycle: #6ee7b7;
+  --color-block-breakdown: #fde68a;
+  --color-block-types: #d8b4fe;
+  --color-block-idkey: #67e8f9;
+  --color-block-hierarchy: #93c5fd;
+  --color-block-pyramid: #fda4af;
+  --color-block-conclusion: #f0abfc;
+  --color-block-options: #c4b5fd;
+  --color-block-argument: #fcd34d;
+  --color-block-quote: #d6d3d1;
+  --color-block-hub: #cbd5e1;
+  --color-block-convert: #c3d34a;
   --color-success-muted: rgba(52, 211, 153, 0.12);
   --color-success-text: #6ee7b7;
   --color-danger: #f87171;
@@ -241,3 +287,45 @@ body {
 @keyframes vt-grow-in { from { transform: scale(0.94); } }
 @keyframes vt-shrink-out { to { transform: scale(0.94); } }
 @keyframes vt-shrink-in { from { transform: scale(1.08); } }
+
+/* Export as PDF (components/NoteEditor/notePdf.ts): a copy of the note in a hidden frame holding only
+   it, laid out as paper whatever media the frame is printed with (WebView2 may print a frame with its
+   screen styles); its wrappers flow as plain blocks. */
+[data-print-frame] { position: fixed; top: 0; left: -10000px; width: 210mm; height: 297mm; border: 0; }
+
+@media print {
+  @page { margin: 16mm 14mm; }
+}
+
+:root[data-printing],
+:root[data-printing] body { height: auto !important; min-height: 0 !important; overflow: visible !important; background: #fff !important; }
+:root[data-printing] body { margin: 0; }
+:root[data-printing] [data-print-root] {
+  display: block;
+  color: var(--color-text);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+:root[data-printing] [data-print-root] * { animation: none !important; transition: none !important; }
+:root[data-printing] [data-print-shell] {
+  display: block !important;
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  transform: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+:root[data-printing] [data-print-root] .ProseMirror { overflow: visible !important; height: auto !important; min-height: 0 !important; padding-bottom: 0 !important; }
+:root[data-printing] [data-print-title] { margin: 0 0 var(--space-2); font-size: var(--text-2xl); }
+:root[data-printing] [data-print-subtitle] { margin: 0 0 var(--space-4); color: var(--color-muted); }
+:root[data-printing] [data-print-root] [data-note-block] { break-inside: avoid; }
+:root[data-printing] [data-print-root] :is(h1, h2, h3, h4, h5, h6) { break-after: avoid; }

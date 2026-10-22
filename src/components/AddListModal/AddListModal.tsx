@@ -22,7 +22,7 @@ const FIELD_TYPES: { value: ListFieldType; label: string }[] = [
   { value: 'number',  label: 'Number'  },
   { value: 'date',    label: 'Date'    },
   { value: 'rating',  label: 'Rating'  },
-  { value: 'select',  label: 'Select'  },
+  { value: 'select',  label: LABELS.lists.choiceField },
   { value: 'boolean', label: 'Yes / No'},
   { value: 'url',     label: 'URL'     },
 ];
@@ -286,7 +286,7 @@ export function AddListModal() {
           <div className={styles.addOptionRow}>
             <input
               className={styles.addOptionInput}
-              placeholder="Add option…"
+              placeholder={LABELS.lists.choicePlaceholder}
               value={newOptionValue}
               onChange={(e) => onNewOptionChange(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAddOption(newOptionValue); } }}

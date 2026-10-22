@@ -57,13 +57,17 @@ export function formatBinding(parsed: ParsedBinding): string {
   return [...mods, keyToken].join('+');
 }
 
+const PUNCTUATION_CODE: Record<string, string> = { '=': 'Equal', '-': 'Minus' };
+
 export function matchesBinding(e: KeyboardEvent, binding: string | null | undefined): boolean {
   if (!binding) return false;
   const p = parseBinding(binding);
   const eventKey = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-  // With Alt held a letter is read from the physical key too: Option+letter types a character on
-  // a Mac (Option+T is †), so `key` alone would never match Alt+T there.
-  const sameKey = eventKey === p.key || (p.alt && /^[A-Z]$/.test(p.key) && e.code === `Key${p.key}`);
+  // With Alt held a letter (or = and -) is read from the physical key too: Option+letter types a
+  // character on a Mac (Option+T is †, Option+= is ≠), so `key` alone would never match there.
+  const sameKey = eventKey === p.key
+    || (p.alt && /^[A-Z]$/.test(p.key) && e.code === `Key${p.key}`)
+    || (p.alt && PUNCTUATION_CODE[p.key] !== undefined && e.code === PUNCTUATION_CODE[p.key]);
   return (
     sameKey &&
     e.ctrlKey  === p.ctrl &&

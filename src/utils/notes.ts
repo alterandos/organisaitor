@@ -1,17 +1,22 @@
 import type { CollectionId, NoteTag } from '@/types';
 
-// The Stickies notebook (services/stickyNotes.ts) is a special set of notes, not one notebook among
-// the others: at the top level it is pinned first, with a line under it, in every Notes view (the
-// Tree, the Mosaic, the Map; 2026-10-18). THE order of notebooks among their siblings is
-// byNotebookOrder: pinned first, then their own order.
+// The Stickies notebook (services/stickyNotes.ts) and the Scratchpad (services/scratchpad.ts, beside
+// it since 2026-10-19) are special sets of notes, not notebooks among the others: at the top level
+// they are pinned first, in this order, with a line under them, in every Notes view (the Tree, the
+// Mosaic, the Map; 2026-10-18). THE order of notebooks among their siblings is byNotebookOrder:
+// pinned first, then their own order.
 export const STICKIES_PRESET = 'stickies';
+export const SCRATCHPAD_PRESET = 'scratchpad';
+const PINNED_PRESETS = [STICKIES_PRESET, SCRATCHPAD_PRESET];
 
 export function isPinnedNotebook(t: Pick<NoteTag, 'kind' | 'presetKey' | 'parentTagId'>): boolean {
-  return t.kind === 'area' && !t.parentTagId && t.presetKey === STICKIES_PRESET;
+  return t.kind === 'area' && !t.parentTagId && PINNED_PRESETS.includes(t.presetKey ?? '');
 }
 
+const pinRank = (t: NoteTag) => (isPinnedNotebook(t) ? PINNED_PRESETS.indexOf(t.presetKey!) : PINNED_PRESETS.length);
+
 export function byNotebookOrder(a: NoteTag, b: NoteTag): number {
-  return Number(isPinnedNotebook(b)) - Number(isPinnedNotebook(a)) || a.order - b.order || a.name.localeCompare(b.name);
+  return pinRank(a) - pinRank(b) || a.order - b.order || a.name.localeCompare(b.name);
 }
 
 // Effective Endeavour for a notebook: its own collectionId, or the nearest

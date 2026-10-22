@@ -1,7 +1,8 @@
 import { useCalendarStore } from '@/store/calendarStore';
 import type { CalendarEvent, CalendarEventId } from '@/types';
 import { ObjectBody } from './ObjectBody';
-import { BeforeNotifyChip, NotifyMeOption } from './NotifyChips';
+import { NotifyChip, NotifyMeOption } from './NotifyChips';
+import { defaultRule, eventPatch, eventRule, type NotifyRule } from '@/utils/notifyRule';
 import { calendarFlags } from './flags';
 import type { ArtifactBodyProps } from './artifactTypes';
 
@@ -12,7 +13,9 @@ export function EventBody({ id, heading, onToggle }: ArtifactBodyProps) {
   const event = useCalendarStore((s) => s.events[id as CalendarEventId]);
   if (!event) return null;
   const update = (changes: Partial<CalendarEvent>) => useCalendarStore.getState().updateEvent(id as CalendarEventId, changes);
-  const notify = (notifyBeforeValue: number | null, notifyBeforeUnit: CalendarEvent['notifyBeforeUnit']) => update({ notifyBeforeValue, notifyBeforeUnit });
+  const timed = event.eventType !== 'birthday' && !!event.startTime;
+  const rule = eventRule(event);
+  const notify = (r: NotifyRule) => update(eventPatch(r));
   return (
     <ObjectBody
       heading={heading}
@@ -25,8 +28,8 @@ export function EventBody({ id, heading, onToggle }: ArtifactBodyProps) {
       onCollection={(collectionId) => update({ collectionId })}
       place={{ value: event.location, onChange: (location) => update({ location }) }}
       flags={calendarFlags(event, update)}
-      extra={<BeforeNotifyChip value={event.notifyBeforeValue} unit={event.notifyBeforeUnit} onChange={notify} />}
-      offExtra={event.notifyBeforeValue === null && <NotifyMeOption onTurnOn={() => notify(1, 'hours')} />}
+      extra={<NotifyChip item="event" timed={timed} rule={rule} onChange={notify} />}
+      offExtra={rule.kind === 'off' && <NotifyMeOption onTurnOn={() => notify(defaultRule('event', timed))} />}
     />
   );
 }

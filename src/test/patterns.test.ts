@@ -108,6 +108,7 @@ describe('pattern: Escape handling goes through useEscapeClose', () => {
   // a lookup table entry) rather than a keydown handler reacting to it.
   const ALLOWED_FILES = new Set([
     'src/hooks/useEscapeClose.ts',
+    'src/components/NoteEditor/extensions/EscapePassThrough.ts', // lets an editor's unused Escape reach the stack
     'src/utils/hotkeyBinding.ts',
     'src/store/hotkeyOverridesStore.ts', // KEY_TOKEN_TO_EVENT_KEY maps the 'Esc' token name, not a handler
     'src/config/hotkeys.ts',            // the 'Esc' hotkey definition/label, not a handler
@@ -176,9 +177,9 @@ describe('pattern: floating panels are placed by utils/floatingPlacement.ts', ()
   // works out its own place from the window's height can open with its bottom off the screen
   // (the backdrop picker did). Every older site moved to the helper on 2026-10-17; NOT_YET is
   // kept for a site found later, listed in BACKLOG.md's Pattern retrofit backlog. Not panels:
-  // StickyNotes (a note dragged on screen) and TaskPane (a textarea's height).
+  // StickyNotes and the scratchpad (dragged on screen) and TaskPane (a textarea's height).
   const NOT_YET = new Set<string>([]);
-  const NOT_PANELS = new Set(['src/components/StickyNotes/StickyNotes.tsx', 'src/components/TaskPane/TaskPane.tsx', 'src/utils/floatingPlacement.ts']);
+  const NOT_PANELS = new Set(['src/components/StickyNotes/StickyNotes.tsx', 'src/components/ScratchpadPanel/ScratchpadPanel.tsx', 'src/components/TaskPane/TaskPane.tsx', 'src/utils/floatingPlacement.ts']);
 
   it('no new file places a panel from window.innerHeight itself', () => {
     const bad = SOURCE_FILES.map(rel)
@@ -267,6 +268,12 @@ describe('pattern: "Endeavour" terminology comes from labels.ts', () => {
 describe('pattern: no raw type="time" outside TimeInput; no raw fetch(\'/api', () => {
   it('type="time" only appears in TimeInput.tsx', () => {
     const hits = findMatches(TSX_FILES.filter((f) => !f.endsWith(path.join('TimeInput', 'TimeInput.tsx'))), /type=["']time["']/);
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  it('type="date" only appears in DateInput (the one exception: the phone quick-add bar’s hidden field that opens the phone’s own date picker)', () => {
+    const allowed = [path.join('DateInput', 'DateInput.tsx'), path.join('MobileQuickAddBar', 'MobileQuickAddBar.tsx')];
+    const hits = findMatches(TSX_FILES.filter((f) => !allowed.some((a) => f.endsWith(a))), /type=["']date["']/);
     expect(hits, describeHits(hits)).toEqual([]);
   });
 
@@ -826,7 +833,7 @@ describe('pattern: styles use the design tokens in index.css (CLAUDE.md "Design 
   // agreed (2026-10-09). Replace them as files are touched; the counts may only go down. When
   // this fails because a count went DOWN, lower the number here to lock the gain in. When it
   // fails because one went UP, use the token (var(--text-sm), var(--space-3), var(--z-toast)…).
-  const BASELINE = { hex: 124, fontSize: 1218, zIndex: 136, radius: 303, shadow: 123 };
+  const BASELINE = { hex: 123, fontSize: 1204, zIndex: 136, radius: 303, shadow: 121 };
   const CSS = walk(SRC, ['.css']).filter((f) => f.endsWith('.module.css'))
     .map((f) => fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''));
   const count = (re: RegExp) => CSS.reduce((n, s) => n + (s.match(re) ?? []).length, 0);
@@ -1021,6 +1028,12 @@ describe('pattern: automatic changes as you type are undoable straight after (CL
       .toMatch(/'Mod-z':\s*\(\)\s*=>\s*this\.editor\.commands\.undoInputRule\(\)/);
   });
 
+  it('every rich-text editor loads EscapePassThrough (else Escape typed in it never reaches the Escape stack)', () => {
+    const editors = SOURCE_FILES.filter((f) => /useEditor\(|new Editor\(/.test(fs.readFileSync(f, 'utf8')));
+    const missing = editors.filter((f) => !/\bEscapePassThrough\b|simpleNoteExtensions/.test(fs.readFileSync(f, 'utf8'))).map(rel);
+    expect(missing).toEqual([]);
+  });
+
   it('text fields and typing offers take Ctrl+Z as well as Backspace', () => {
     for (const f of ['specialChars/fieldInput.ts', 'components/NoteEditor/extensions/typingOffer.ts']) {
       expect(fs.readFileSync(path.join(SRC, f), 'utf8'), f).toMatch(/key === 'z'/);
@@ -1060,7 +1073,7 @@ describe('pattern: the editor library\'s classes are :global in scoped CSS (CLAU
 
 describe('pattern: marks on text keep out of the palette (CLAUDE.md "Colours a person picks")', () => {
   // The marks the app draws over words to say what they are. A new one joins this list.
-  const TEXT_MARKS = ['[data-dict-word]', '[data-hub-ref]', '[data-autolink]', '[data-concept-ref]', '[data-concept-hover]', '[data-unsure-flag]', '[data-unsure-marker]'];
+  const TEXT_MARKS = ['[data-artifact-type]', '[data-term]', '[data-dict-word]', '[data-hub-ref]', '[data-autolink]', '[data-concept-ref]', '[data-concept-hover]', '[data-unsure-flag]', '[data-unsure-marker]'];
   it('no rule for a text mark uses a palette colour (--color-swatch-*), which is kept for colours a person picks', () => {
     const hits: string[] = [];
     for (const f of walk(SRC, ['.css'])) {
@@ -1145,6 +1158,65 @@ describe('pattern: a note is named with its notebook (CLAUDE.md "A note is named
   it('no other place shows a bare note title', () => {
     const files = SOURCE_FILES.filter((f) => /src[/\\](components|overview)[/\\]/.test(f));
     const hits = findMatches(files, /\b(n|note|target)\??\.title\s*\|\|/, { skipComments: true }).filter((h) => !ALLOWED.has(h.file));
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: each note block has its own colour (CLAUDE.md "Block colours")', () => {
+  const index = fs.readFileSync(path.join(SRC, 'index.css'), 'utf8');
+  const editorCss = fs.readFileSync(path.join(SRC, 'components', 'NoteEditor', 'NoteEditor.module.css'), 'utf8');
+  it('every --color-block-* and --color-kind-* token is defined in both themes', () => {
+    const names = [...new Set([...index.matchAll(/(--color-(?:block|kind)-[a-z]+):/g)].map((m) => m[1]))];
+    expect(names.length).toBeGreaterThan(10);
+    const twice = names.filter((n) => index.split(`${n}:`).length - 1 !== 2);
+    expect(twice).toEqual([]);
+  });
+  it('every block colour is applied by a block in NoteEditor.module.css, and no two blocks share one', () => {
+    const tokens = [...new Set([...index.matchAll(/--color-block-([a-z]+):/g)].map((m) => m[1]))];
+    const unused = tokens.filter((t) => !editorCss.includes(`--color-primary: var(--color-block-${t})`));
+    expect(unused).toEqual([]);
+    const light = index.slice(0, index.indexOf('[data-theme="dark"]'));
+    const values = [...light.matchAll(/--color-(?:block|kind)-[a-z]+:\s*(#[0-9a-f]{6})/gi)].map((m) => m[1].toLowerCase());
+    expect(new Set(values).size).toBe(values.length);
+  });
+});
+
+describe('pattern: "+" buttons beside a block\'s parts come from partAdders.ts (CLAUDE.md "Block designs")', () => {
+  it('only partAdders.ts draws them', () => {
+    const hits = SOURCE_FILES.filter((f) => !f.endsWith('partAdders.ts') && /styles\.adders?\b/.test(fs.readFileSync(f, 'utf8')));
+    expect(hits.map((f) => path.relative(ROOT, f))).toEqual([]);
+  });
+});
+
+describe('pattern: making a block is its own undo step (CLAUDE.md "Note blocks")', () => {
+  it('replaceTypedWithBlock closes the history before it changes the note', () => {
+    const src = fs.readFileSync(path.join(SRC, 'components', 'NoteEditor', 'extensions', 'blockDesigns.ts'), 'utf8');
+    const fn = src.slice(src.indexOf('export function replaceTypedWithBlock'), src.indexOf('// ── Spectrum colours'));
+    expect(fn).toMatch(/closeHistory\(state\.tr\)/);
+  });
+});
+
+describe('pattern: deleting something empty doesn\'t ask (CLAUDE.md "Confirmations and alerts")', () => {
+  // A ratchet: delete confirmations that don't yet say whether the thing is empty. It may only go
+  // down; lower it as sites are converted (BACKLOG.md "Pattern retrofit backlog").
+  const NOT_YET = 17;
+  it('confirmDelete calls without { empty } are no more than the baseline', () => {
+    const calls = SOURCE_FILES.filter((f) => !f.endsWith('dialogs.ts'))
+      .flatMap((f) => fs.readFileSync(f, 'utf8').split('\n').filter((l) => l.includes('confirmDelete(') && !l.includes('import')));
+    expect(calls.filter((l) => !l.includes('empty')).length).toBeLessThanOrEqual(NOT_YET);
+  });
+});
+
+describe('pattern: the magic wand comes from components/MagicWand (CLAUDE.md "Magic wand")', () => {
+  it('the wand button is drawn nowhere else', () => {
+    const hits = SOURCE_FILES.filter((f) => !rel(f).startsWith('src/components/MagicWand/') && fs.readFileSync(f, 'utf8').includes('🪄'));
+    expect(hits.map(rel)).toEqual([]);
+  });
+});
+
+describe('pattern: a formula is worked out only by utils/formula.ts (CLAUDE.md "Single entry points")', () => {
+  it('no eval or new Function anywhere', () => {
+    const hits = findMatches(SOURCE_FILES, /\beval\(|new Function\(/, { skipComments: true });
     expect(hits, describeHits(hits)).toEqual([]);
   });
 });

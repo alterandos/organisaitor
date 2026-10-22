@@ -11,7 +11,7 @@ import { GlossaryCardBody } from './GlossaryCardBody';
 import { blockPill, designButtons, placeBlock, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { entryCardContent } from './ConceptRef';
 import { registerMarginSource, type MarginItem } from './MarginColumn';
-import { BUILTIN_TAGS } from '../builtinTags';
+import { kindColor } from '../builtinTags';
 
 // A Glossary record shown inside a line of text (the card family's Inline design, agreed with the
 // user 2026-10-16): a chip with the kind's icon, the term and the start of the meaning. Like the
@@ -299,6 +299,7 @@ function openCard(view: EditorView, chipPos: number, entryId: string, focus: { n
     onAddAnother: () => {},
     onDiscard: () => close(true),
     onLeave: (forward: boolean) => close(forward),
+    onUndo: () => close(true),
   }));
   render();
   (dom as HTMLElement & { unmountCard?: () => void }).unmountCard = () => setTimeout(() => root.unmount(), 0);
@@ -384,7 +385,7 @@ registerMarginSource('glossary-chip', (state) => {
       from: pos,
       to: pos + node.nodeSize,
       icon: () => document.createTextNode(entry ? (entry.locked ? '🔒' : entry.icon) : '?'),
-      color: BUILTIN_TAGS.find((t) => t.typeKey === entry?.typeKey)?.color ?? 'var(--color-muted)',
+      color: kindColor(entry?.typeKey, 'var(--color-muted)'),
       title: entry ? `${entry.term || LABELS.glossary.untitled} · ${entry.kindLabel}` : LABELS.glossary.missing,
       open: (view) => toggleChip(view, pos),
     });

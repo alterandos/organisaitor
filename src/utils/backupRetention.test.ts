@@ -3,77 +3,58 @@ import { selectSnapshotsToKeep, type SnapshotMeta } from '@/utils/backupRetentio
 
 const NOW = new Date('2030-01-31T00:00:00.000Z');
 const daysAgo = (n: number): string => new Date(NOW.getTime() - n * 86_400_000).toISOString();
+const minAgo = (n: number): string => new Date(NOW.getTime() - n * 60_000).toISOString();
+const MIN = 1 / 1440;
+const TARGETS = [3 * MIN, 10 * MIN, 60 * MIN, 1, 7, 14, 30];
 
 describe('selectSnapshotsToKeep', () => {
   it('keeps nothing when there are no snapshots', () => {
-    expect(selectSnapshotsToKeep([], [1, 7, 14, 30], NOW)).toEqual(new Set());
+    expect(selectSnapshotsToKeep([], TARGETS, NOW)).toEqual(new Set());
   });
 
-  it('with exactly one snapshot per target age, keeps every one of them', () => {
+  it('keeps the newest, and for each target the youngest snapshot at least that old', () => {
     const snapshots: SnapshotMeta[] = [
-      { id: 1, createdAt: daysAgo(1) },
-      { id: 2, createdAt: daysAgo(7) },
-      { id: 3, createdAt: daysAgo(14) },
-      { id: 4, createdAt: daysAgo(30) },
+      { id: 1, createdAt: minAgo(1) },
+      { id: 2, createdAt: minAgo(4) },    // ≥ 3 min
+      { id: 3, createdAt: minAgo(6) },    // dropped: 2 is younger and ≥ 3 min; 4 fills 10 min
+      { id: 4, createdAt: minAgo(12) },   // ≥ 10 min
+      { id: 5, createdAt: minAgo(70) },   // ≥ 60 min
+      { id: 6, createdAt: minAgo(200) },  // dropped
+      { id: 7, createdAt: daysAgo(2) },   // ≥ 1 day
+      { id: 8, createdAt: daysAgo(8) },   // ≥ 7 days
+      { id: 9, createdAt: daysAgo(40) },  // ≥ 14 and ≥ 30 days
     ];
-    expect(selectSnapshotsToKeep(snapshots, [1, 7, 14, 30], NOW)).toEqual(new Set([1, 2, 3, 4]));
+    expect(selectSnapshotsToKeep(snapshots, TARGETS, NOW)).toEqual(new Set([1, 2, 4, 5, 7, 8, 9]));
   });
 
-  it('always force-keeps the single most recent snapshot, even if younger than every target', () => {
-    const snapshots: SnapshotMeta[] = [{ id: 1, createdAt: daysAgo(0.01) }];
-    expect(selectSnapshotsToKeep(snapshots, [1, 7, 14, 30], NOW)).toEqual(new Set([1]));
+  // The 2026-10-22 incident: the damage itself set off several snapshots seconds apart. They must
+  // not push out the good ones from before it.
+  it('a burst of new snapshots never evicts the older ones holding each slot', () => {
+    const good: SnapshotMeta[] = [
+      { id: 1, createdAt: minAgo(5) },
+      { id: 2, createdAt: minAgo(15) },
+      { id: 3, createdAt: minAgo(90) },
+      { id: 4, createdAt: daysAgo(3) },
+    ];
+    const burst: SnapshotMeta[] = [0.05, 0.1, 0.2, 0.3].map((m, i) => ({ id: 100 + i, createdAt: minAgo(m) }));
+    const kept = selectSnapshotsToKeep([...good, ...burst], TARGETS, NOW);
+    for (const g of good) expect(kept.has(g.id)).toBe(true);
+    expect(kept.has(100)).toBe(true);   // the newest
+    expect([101, 102, 103].some((id) => kept.has(id))).toBe(false);
   });
 
-  it('picks the closest snapshot to each target when there are more snapshots than targets', () => {
-    // Dense cluster around "1 day ago" (the realistic change-volume-triggered case — several
-    // snapshots from one busy afternoon) plus one much older one.
+  it('with nothing old enough for a target, the oldest snapshot fills it', () => {
     const snapshots: SnapshotMeta[] = [
-      { id: 1, createdAt: daysAgo(0.1) },
-      { id: 2, createdAt: daysAgo(0.5) },
-      { id: 3, createdAt: daysAgo(0.9) }, // closest to target 1
-      { id: 4, createdAt: daysAgo(20) },  // closest to target 14
+      { id: 1, createdAt: minAgo(1) },
+      { id: 2, createdAt: minAgo(2) },
     ];
-    const kept = selectSnapshotsToKeep(snapshots, [1, 7, 14, 30], NOW);
-    // Newest (id 1) is always force-kept. Target 1 claims id 3 (nearest, diff 0.1). Target 7
-    // has only id 2 and id 4 left — id 2 (diff 6.5) is nearer than id 4 (diff 13), so it wins
-    // even though it "looks like" a target-1 match too; every snapshot is closest to SOME
-    // target once its nearer neighbours are already claimed. Target 14 then takes id 4 (the
-    // only one left). Target 30 has nothing left to claim — with only 4 snapshots for 4
-    // targets, one target inevitably goes unfilled once the newest is force-kept outside the
-    // normal claiming order. All four snapshots end up kept.
-    expect(kept).toEqual(new Set([1, 2, 3, 4]));
+    expect(selectSnapshotsToKeep(snapshots, TARGETS, NOW)).toEqual(new Set([1, 2]));
   });
 
-  it("two targets don't fight over the same snapshot — each claims its own nearest match, closest-target-first", () => {
-    const snapshots: SnapshotMeta[] = [
-      { id: 1, createdAt: daysAgo(0) },
-      { id: 2, createdAt: daysAgo(5) },
-      { id: 3, createdAt: daysAgo(9) },
-    ];
-    // Target 1 → id 2 (|5-1|=4) is closer than id 3 (|9-1|=8). Target 7 processed next, id 2
-    // already claimed, so it takes id 3 (|9-7|=2).
-    const kept = selectSnapshotsToKeep(snapshots, [1, 7], NOW);
-    expect(kept).toEqual(new Set([1, 2, 3]));
-  });
-
-  it('a target with no remaining candidates (everything already claimed) is simply left unfilled, not an error', () => {
-    const snapshots: SnapshotMeta[] = [{ id: 1, createdAt: daysAgo(0) }];
-    expect(() => selectSnapshotsToKeep(snapshots, [1, 7, 14, 30], NOW)).not.toThrow();
-    expect(selectSnapshotsToKeep(snapshots, [1, 7, 14, 30], NOW)).toEqual(new Set([1]));
-  });
-
-  it('actually thins the set — a dense run of snapshots leaves several dropped, not just reordered', () => {
-    // One snapshot roughly every 2 days for 40 days — realistic for a change-volume trigger
-    // firing regularly. Should end up close to 4 kept, not all 20.
-    const snapshots: SnapshotMeta[] = Array.from({ length: 20 }, (_, i) => ({
-      id: i + 1,
-      createdAt: daysAgo(i * 2),
-    }));
-    const kept = selectSnapshotsToKeep(snapshots, [1, 7, 14, 30], NOW);
-    expect(kept.size).toBeLessThan(snapshots.length);
-    // At most one slot per target (4) plus the always-forced newest (5) — never all 20.
-    expect(kept.size).toBeLessThanOrEqual(5);
-    // The newest is always in the kept set.
+  it('actually thins a dense run', () => {
+    const snapshots: SnapshotMeta[] = Array.from({ length: 40 }, (_, i) => ({ id: i + 1, createdAt: daysAgo(i) }));
+    const kept = selectSnapshotsToKeep(snapshots, TARGETS, NOW);
+    expect(kept.size).toBeLessThanOrEqual(TARGETS.length + 1);
     expect(kept.has(1)).toBe(true);
   });
 

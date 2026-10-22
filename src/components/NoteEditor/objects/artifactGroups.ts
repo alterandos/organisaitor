@@ -142,6 +142,7 @@ function widgetRoot(className: string, group: ArtifactGroup, part: string, state
   const span = el('span', className);
   span.contentEditable = 'false';
   span.dataset.artifactTarget = group.key;
+  span.dataset.artifactType = group.targetType;
   span.dataset.artifactPart = part;
   span.dataset.artifactState = state;
   return span;
@@ -341,7 +342,7 @@ export function buildArtifactDecorations(doc: PMNode, now: Date = new Date()): {
       stopEvent: () => true, ignoreSelection: true,
     }));
     for (const f of group.fragments) {
-      decos.push(Decoration.inline(f.from, f.to, { class: styles.paneText, 'data-artifact-state': state, 'data-artifact-target': group.key }));
+      decos.push(Decoration.inline(f.from, f.to, { class: styles.paneText, 'data-artifact-state': state, 'data-artifact-target': group.key, 'data-artifact-type': group.targetType }));
     }
     // side 1: the cursor at the end of the text sits before the date and buttons, so typing there
     // extends the title (the mark is inclusive), as it looks like it should.
@@ -364,7 +365,7 @@ export function buildArtifactDecorations(doc: PMNode, now: Date = new Date()): {
       paned.add(b.pos);
       const role = blocks.length === 1 ? styles.paneBlockOnly : i === 0 ? styles.paneBlockFirst : i === blocks.length - 1 ? styles.paneBlockLast : styles.paneBlockMiddle;
       decos.push(Decoration.node(b.pos, b.end, {
-        class: `${styles.paneBlock} ${role}`, 'data-artifact-pane': 'expanded', 'data-artifact-key': group.key, 'data-artifact-state': state,
+        class: `${styles.paneBlock} ${role}`, 'data-artifact-pane': 'expanded', 'data-artifact-key': group.key, 'data-artifact-state': state, 'data-artifact-type': group.targetType,
       }));
     });
     decos.push(Decoration.widget(blocks[blocks.length - 1].contentEnd, bodyWidget(group, `${group.key}|${nth}`), {

@@ -7,7 +7,7 @@ import { useSecretsVersion } from '@/services/noteSecrets';
 import { glossaryEntry } from '@/services/glossary';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
 import { LABELS } from '@/config/labels';
-import { BUILTIN_TAGS } from '../builtinTags';
+import { kindColor } from '../builtinTags';
 import { openBlockPopover, popoverClass } from './blockDesigns';
 import { refreshMarginColumns, registerMarginSource } from './MarginColumn';
 import { createGlyph } from '@/components/Icons';
@@ -22,7 +22,7 @@ import { createGlyph } from '@/components/Icons';
 // a background is drawn once per run of marked text, never per mark element: ProseMirror splits
 // a mark into a piece per line and around bold words, so per-element drawing would repeat.
 
-const colorOf = (typeKey: string | null) => BUILTIN_TAGS.find((t) => t.typeKey === typeKey)?.color ?? '#6366f1';
+const colorOf = (typeKey: string | null) => kindColor(typeKey, 'var(--color-kind-concept)');
 
 export const ConceptRefMark = Mark.create({
   name: 'conceptRef',

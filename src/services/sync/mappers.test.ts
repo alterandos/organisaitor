@@ -23,7 +23,7 @@ import {
   watchlistItemToRow, rowToWatchlistItem,
   portfolioTagToRow, rowToPortfolioTag,
   investmentPurposeToRow, rowToInvestmentPurpose,
-  trashEntryToRow, overviewToRow, rowToOverview, rowToTrashEntry, pinToRow, rowToPin,
+  trashEntryToRow, overviewToRow, rowToOverview, converterToRow, rowToConverter, rowToTrashEntry, pinToRow, rowToPin,
   pictureToRow, rowToPicture,
 } from '@/services/sync/mappers';
 import type {
@@ -35,8 +35,11 @@ import type { Note, NoteTag, StructuredTagEntry, NoteId, NoteTagId, StructuredTa
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose, WatchlistItemId, PortfolioTagId, InvestmentPurposeId } from '@/types/portfolio';
 import type { TrashEntry, TrashEntryId } from '@/types/trash';
 import type { Overview, OverviewId } from '@/types/overview';
+import type { ConverterId, CustomConverter } from '@/types/converters';
 import type { PinnedItem } from '@/store/pinnedItemsStore';
 import type { Picture, PictureId } from '@/types/pictures';
+import type { Activity, ActivityId, ActivityType, ActivityTypeId } from '@/types/fitness';
+import { activityToRow, rowToActivity, activityTypeToRow, rowToActivityType } from './mappers';
 
 const USER = 'user-1';
 
@@ -84,7 +87,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       id: 'e1' as CalendarEventId, title: 'Meeting', date: '2030-01-01', endDate: null, startTime: '09:00', endTime: '10:00',
       notes: 'n', links: [], location: 'Room 1', eventType: 'default', collectionId: null,
       createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
-      notifyBeforeValue: 30, notifyBeforeUnit: 'minutes', remindAt: null, notifyAtTime: null,
+      notifyBeforeValue: 30, notifyBeforeUnit: 'minutes', remindAt: null, notifyAtTime: null, notifyMode: 'before',
       repeat: { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null },
       status: 'confirmed', important: true, background: false, color: null, crossAppRefs: [{ type: 'note', id: 'n1' }],
       archivedAt: null, archiveReason: null, seriesId: 'e0', seriesDate: '2030-01-08', remindOccurrence: '2030-01-08', seenDates: ['2030-01-01'],
@@ -99,7 +102,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       id: 'r1' as CalendarReminderId, title: 'Pay bill', date: '2030-01-01', time: null, notes: null, links: [],
       collectionId: null, reminderType: 'default', createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
       remindAt: null, repeat: null, important: false, status: 'confirmed', crossAppRefs: [], archivedAt: null, archiveReason: null,
-      notifyDaysBefore: 1, notifyAtTime: '17:00', doneDates: ['2030-01-01'], seriesId: 'r0', seriesDate: '2030-01-01', remindOccurrence: null,
+      notifyDaysBefore: 1, notifyAtTime: '17:00', notify: false, notifyMode: 'before', notifyBeforeValue: 15, notifyBeforeUnit: 'minutes', doneDates: ['2030-01-01'], seriesId: 'r0', seriesDate: '2030-01-01', remindOccurrence: null,
     };
     expect(rowToReminder(reminderToRow(r, USER))).toEqual(r);
   });
@@ -110,7 +113,7 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       collectionId: null, deadlineType: 'default', createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
       remindAt: null, repeat: { freq: 'yearly', interval: 1, endKind: 'forever', count: null, until: null },
       important: true, status: 'confirmed', crossAppRefs: [], archivedAt: null, archiveReason: null,
-      notifyDaysBefore: 3, notifyAtTime: '09:00', doneDates: ['2030-04-15'], seriesId: null, seriesDate: null, remindOccurrence: '2030-04-15', seenDates: ['2030-04-15'],
+      notifyDaysBefore: 3, notifyAtTime: '09:00', notify: true, notifyMode: 'daysAt', notifyBeforeValue: null, notifyBeforeUnit: 'hours', doneDates: ['2030-04-15'], seriesId: null, seriesDate: null, remindOccurrence: '2030-04-15', seenDates: ['2030-04-15'],
     };
     expect(rowToDeadline(deadlineToRow(d, USER))).toEqual(d);
   });
@@ -144,6 +147,17 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-02T00:00:00.000Z',
     };
     expect(rowToOverview(overviewToRow(o, USER))).toEqual(o);
+  });
+
+  it('Converter (inputs, output and formulas folded into one definition blob)', () => {
+    const c: CustomConverter = {
+      id: 'cv1' as ConverterId, name: 'CO₂ to carbon', icon: '🌍',
+      inputs: [{ key: 'co2', label: 'CO₂', unit: 'kg' }], output: { key: 'c', label: 'Carbon', unit: 'kg' },
+      formula: 'co2 * 12/44', inverse: 'c * 44/12',
+      createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-02T00:00:00.000Z',
+    };
+    expect(rowToConverter(converterToRow(c, USER))).toEqual(c);
+    expect(converterToRow(c, USER).deleted_at).toBeNull();
   });
 
   it('Quick Access pin', () => {
@@ -246,4 +260,23 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     };
     expect(rowToTrashEntry(trashEntryToRow(t, USER))).toEqual(t);
   });
+  it('Fitness Activity', () => {
+    const a: Activity = {
+      id: 'a1' as ActivityId, type: 'run' as ActivityTypeId, title: 'Morning run', startedAt: '2030-01-01T07:00:00Z', timezone: 'Europe/Zurich',
+      distanceMeters: 5012.4, movingTimeSeconds: 1500, elapsedTimeSeconds: 1600, averageSpeedMps: 3.34, data: { f1: 150 }, notes: 'Easy',
+      purposeIds: ['p1' as never], source: 'strava', sourceId: '987', sourceRaw: { kudos: 3 }, archivedAt: null,
+      createdAt: '2030-01-01T08:00:00.000Z', updatedAt: '2030-01-01T08:00:00.000Z',
+    };
+    expect(rowToActivity(activityToRow(a, USER))).toEqual(a);
+  });
+
+  it('Fitness ActivityType (custom)', () => {
+    const t: ActivityType = {
+      id: 'at1' as ActivityTypeId, name: 'Climbing', icon: '🧗', color: '#f00', tracksDistance: false,
+      fieldSchema: [{ id: 'grade', name: 'Grade', type: 'text' }], isBuiltIn: false, archivedAt: null,
+      createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
+    };
+    expect(rowToActivityType(activityTypeToRow(t, USER))).toEqual(t);
+  });
+
 });

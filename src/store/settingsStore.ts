@@ -23,6 +23,8 @@ const DEFAULT_THEME: 'light' | 'dark' | 'system' =
 // 'tentative' is a cross-cutting filter on top of 'events' (a tentative event is still an
 // 'events'-layer item — hiding 'events' hides it too; this toggle only lets tentative ones
 // specifically be hidden while confirmed events keep showing). See CLAUDE.md "Tentative events".
+export const LINK_SUGGESTIONS = ['never', 'once', 'always'] as const;
+export type LinkSuggestions = typeof LINK_SUGGESTIONS[number];
 export type CalendarLayerKey = 'events' | 'reminders' | 'deadlines' | 'taskScheduled' | 'taskDeadlines' | 'tentative';
 export type CalendarLayerVisibility = Record<CalendarLayerKey, boolean>;
 // How a note's colour shows on its title bar and tab bar: nothing, a line under each, a frame
@@ -32,6 +34,11 @@ export type NoteColorBars = typeof NOTE_COLOR_BARS[number];
 // What `/` makes in maths: a fraction, or a plain slash (extensions/Maths.ts).
 export type MathSlash = 'fraction' | 'slash';
 export type NoteMarginColumn = 'auto' | 'open' | 'closed';
+
+// Automatic backups (services/autoBackup.ts): for each age, the youngest snapshot at least that old
+// is kept (utils/backupRetention.ts). 3 min, 10 min, 1 hour (added 2026-10-22), then 1, 7, 14, 30 days.
+export const SHORT_BACKUP_TARGETS = [3 / 1440, 10 / 1440, 60 / 1440];
+export const AUTO_BACKUP_TARGET_AGES_DAYS = [...SHORT_BACKUP_TARGETS, 1, 7, 14, 30];
 
 export const STICKY_SCALE_MIN = 0.8;
 export const STICKY_SCALE_MAX = 1.6;
@@ -122,6 +129,17 @@ interface SettingsState {
   // and keeps it collapsed on a narrow one (side by side, a phone); open / closed once chosen.
   noteMarginColumn: NoteMarginColumn;
   setNoteMarginColumn: (v: NoteMarginColumn) => void;
+  // How the scratchpad (Alt+P) is drawn on this device: a ruled paper pad, or plain (2026-10-19).
+  scratchpadDesign: 'paper' | 'simple';
+  setScratchpadDesign: (v: 'paper' | 'simple') => void;
+  // Offering to link a Glossary term as it's typed (extensions/GlossaryAutolink.ts): never; once
+  // per note per term (not where the note already links it, nor again once passed over); or every
+  // time the term is typed (2026-10-22).
+  linkSuggestions: LinkSuggestions;
+  setLinkSuggestions: (v: LinkSuggestions) => void;
+  // Where the scratchpad was dragged to on this device (its top-left, px); null = its usual place.
+  scratchpadPos: { x: number; y: number } | null;
+  setScratchpadPos: (v: { x: number; y: number } | null) => void;
   setNoteHeadingStyle: (s: 'academic' | 'highlight') => void;
 
   noteEditorZoom:      number;   // multiplier on editor font size; 1.0 = default, range 0.7–2.0
@@ -209,6 +227,12 @@ export const useSettingsStore = create<SettingsState>()(
       setMathSlash:        (mathSlash) => set({ mathSlash }),
       noteMarginColumn:    'auto',
       setNoteMarginColumn: (noteMarginColumn) => set({ noteMarginColumn }),
+      scratchpadDesign:    'paper',
+      linkSuggestions:     'once',
+      setLinkSuggestions:  (linkSuggestions) => set({ linkSuggestions }),
+      scratchpadPos:       null,
+      setScratchpadPos:    (scratchpadPos) => set({ scratchpadPos }),
+      setScratchpadDesign: (scratchpadDesign) => set({ scratchpadDesign }),
 
       noteEditorZoom:      1.0,
       nudgeNoteEditorZoom: (delta) => set((s) => ({
@@ -262,7 +286,7 @@ export const useSettingsStore = create<SettingsState>()(
       autoBackupEnabled:         true,
       autoBackupChangeThreshold: 40,
       autoBackupMaxCount:        4,
-      autoBackupTargetAgesDays:  [1, 7, 14, 30],
+      autoBackupTargetAgesDays:  AUTO_BACKUP_TARGET_AGES_DAYS,
       setAutoBackupEnabled:         (v) => set({ autoBackupEnabled: v }),
       setAutoBackupChangeThreshold: (n) => set({ autoBackupChangeThreshold: Math.round(Math.max(5, Math.min(500, n))) }),
       setAutoBackupMaxCount:        (n) => set({ autoBackupMaxCount: Math.round(Math.max(1, Math.min(10, n))) }),
@@ -270,7 +294,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 16,
+      version: 19,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -347,6 +371,15 @@ export const useSettingsStore = create<SettingsState>()(
         if (version < 15) state.textShortcuts = [...(state.textShortcuts ?? []), ...missingDefaultShortcuts(state.textShortcuts ?? [])];
         // v15 → v16: the margin column beside a note (2026-10-17).
         if (version < 16 && state.noteMarginColumn === undefined) state.noteMarginColumn = 'auto';
+        // v16 → v17: the scratchpad's design (2026-10-19).
+        if (version < 17 && state.scratchpadDesign === undefined) state.scratchpadDesign = 'paper';
+        // v17 → v18: backup snapshots also kept from 3 minutes, 10 minutes and an hour back (2026-10-22,
+        // after a note was lost and the nearest snapshot was hours old).
+        if (version < 18) state.autoBackupTargetAgesDays = [...new Set([...SHORT_BACKUP_TARGETS, ...(state.autoBackupTargetAgesDays ?? [1, 7, 14, 30])])].sort((a: number, b: number) => a - b);
+        // v18 → v19: when Glossary terms are offered as links while typing (2026-10-22).
+        // v18 → v19 also: where the scratchpad was moved to (none yet).
+        if (version < 19 && state.linkSuggestions === undefined) state.linkSuggestions = 'once';
+        if (version < 19 && state.scratchpadPos === undefined) state.scratchpadPos = null;
         return state;
       },
     }

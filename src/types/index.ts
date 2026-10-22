@@ -14,6 +14,10 @@ export type Priority       = 'none' | 'low' | 'medium' | 'high';
 export type CollectionKind = 'project' | 'list' | 'tracker' | 'routine';  // extensible
 export type TaskKind       = 'action'  | 'waiting' | 'milestone'; // extensible — add more as needed
 export type NotifyUnit     = 'minutes' | 'hours'   | 'days';
+// Which notify setting a calendar item uses (2026-10-22; utils/notifyRule.ts reads it): N units
+// before its time ('before', needs a time), N days before at a time of day ('daysAt'), or at its
+// own time ('atTime', a timed reminder).
+export type NotifyMode     = 'before' | 'daysAt' | 'atTime';
 
 // ── Cross-app links ──────────────────────────────────────────────────────────────
 // Generic backlink shape shared by every entity that can be created FROM a Notes
@@ -40,12 +44,14 @@ export type TimeIntensity  = 'low' | 'medium' | 'high'; // extensible — add mo
 // Stored once, on the item that owns it (Task.itemLinks — "this task <kind> target"); the other
 // side is derived at render time (utils/taskLinks.ts), so the two can never disagree. The kinds,
 // their labels and what they mean (e.g. whether they block) live in ONE registry,
-// config/itemLinkKinds.ts. Task-to-task only today — targetType is there so other item types can
-// use the same shape later.
-export type ItemLinkKind = 'dependsOn' | 'followUpOf' | 'related' | 'repeatOf';
+// config/itemLinkKinds.ts. A link's target is another task, or (2026-10-23) a calendar event or a
+// standalone Deadline: a task that prepares for it, follows it up, or is related to it
+// (utils/eventTaskLinks.ts). Old links have targetType 'task'.
+export type ItemLinkKind = 'dependsOn' | 'followUpOf' | 'related' | 'repeatOf' | 'prepFor';
+export type ItemLinkTargetType = 'task' | 'event' | 'deadline';
 export interface ItemLink {
   kind:       ItemLinkKind;
-  targetType: 'task';
+  targetType: ItemLinkTargetType;
   targetId:   string;
   reason:     string | null;
   createdAt:  string;
@@ -319,6 +325,7 @@ export interface CalendarEvent {
   notifyBeforeUnit:   NotifyUnit;
   remindAt:           string | null;
   notifyAtTime:       string | null;
+  notifyMode:         NotifyMode;       // 'before' (default) or 'daysAt': notifyBeforeValue days before, at notifyAtTime
   repeat:             RepeatConfig | null;
   status:             EventStatus;      // 'confirmed' (default) | 'tentative' — see EventStatus
   important:          boolean;          // flagged important — red outline + ❗ on the calendar
@@ -376,6 +383,10 @@ export interface CalendarReminder {
   // day), at this HH:MM. Ignored when `time` is set — that notifies at the time itself.
   notifyDaysBefore: number;
   notifyAtTime:     string;
+  notify:           boolean;          // false = never notifies (the Notify checkbox, 2026-10-19)
+  notifyMode:        NotifyMode;      // see utils/notifyRule.ts; 'daysAt' for items made before 2026-10-22
+  notifyBeforeValue: number | null;   // with notifyMode 'before': how long before its time
+  notifyBeforeUnit:  NotifyUnit;
   doneDates:        string[];         // occurrence dates (YYYY-MM-DD) marked done — struck through, no more notifications for them (2026-10-06)
   seriesId:         string | null;    // see CalendarEvent.seriesId
   seriesDate:       string | null;
@@ -396,6 +407,7 @@ export interface CreateCalendarEventInput {
   notifyBeforeValue?: number | null;
   notifyBeforeUnit?:  NotifyUnit;
   notifyAtTime?:      string | null;
+  notifyMode?:        NotifyMode;
   repeat?:            RepeatConfig | null;
   status?:            EventStatus;
   important?:         boolean;
@@ -453,6 +465,10 @@ export interface CreateCalendarReminderInput {
   seenDates?:    string[];
   notifyDaysBefore?: number;
   notifyAtTime?:     string;
+  notify?:           boolean;
+  notifyMode?:        NotifyMode;
+  notifyBeforeValue?: number | null;
+  notifyBeforeUnit?:  NotifyUnit;
 }
 
 // A point-in-time deadline, structurally close to CalendarReminder (same field shapes,
@@ -482,6 +498,10 @@ export interface CalendarDeadline {
   archiveReason: string | null;
   notifyDaysBefore: number;
   notifyAtTime:     string;
+  notify:           boolean;          // false = never notifies (the Notify checkbox, 2026-10-19)
+  notifyMode:        NotifyMode;      // see utils/notifyRule.ts; 'daysAt' for items made before 2026-10-22
+  notifyBeforeValue: number | null;   // with notifyMode 'before': how long before its time
+  notifyBeforeUnit:  NotifyUnit;
   doneDates:        string[];         // occurrence dates marked done — same as CalendarReminder.doneDates
   seriesId:         string | null;    // see CalendarEvent.seriesId
   seriesDate:       string | null;
@@ -507,6 +527,10 @@ export interface CreateCalendarDeadlineInput {
   seenDates?:    string[];
   notifyDaysBefore?: number;
   notifyAtTime?:     string;
+  notify?:           boolean;
+  notifyMode?:        NotifyMode;
+  notifyBeforeValue?: number | null;
+  notifyBeforeUnit?:  NotifyUnit;
 }
 
 // ── Schedule (recurring weekly timetable, e.g. a university/gym schedule) ───────

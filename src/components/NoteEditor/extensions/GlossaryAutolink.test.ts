@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { useSettingsStore } from '@/store/settingsStore';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { undo } from '@tiptap/pm/history';
@@ -129,6 +130,20 @@ describe('linking to the Glossary as you type', () => {
     make('<p></p>', 'note-w');                // a different note still gets the offer
     type('eukaryote');
     expect(chip()).not.toBeNull();
+  });
+
+  it('the setting: Never offers nothing; Every time offers it again, passed over or already linked', () => {
+    useSettingsStore.setState({ linkSuggestions: 'never' });
+    make();
+    type('A eukaryote');
+    expect(chip()).toBeNull();
+    useSettingsStore.setState({ linkSuggestions: 'always' });
+    type(' and a eukaryote');
+    expect(chip()).not.toBeNull();
+    press('Enter');
+    type(' and one more eukaryote');
+    expect(chip()).not.toBeNull();             // already linked in this note: still offered
+    useSettingsStore.setState({ linkSuggestions: 'once' });
   });
 
   it('not inside the term’s own definition', () => {

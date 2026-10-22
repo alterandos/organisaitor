@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import { useTaskStore } from '@/store/taskStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useUIStore } from '@/store/uiStore';
@@ -256,11 +257,11 @@ export function AddScheduleModal() {
             <div className={styles.dateRow}>
               <div className={styles.field}>
                 <label className={styles.label}>Start date</label>
-                <input type="date" className={styles.dateInput} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                <DateInput className={styles.dateInput} value={startDate} onChange={(v) => setStartDate(v)} />
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>End date</label>
-                <input type="date" className={styles.dateInput} value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} />
+                <DateInput className={styles.dateInput} value={endDate} min={startDate || undefined} onChange={(v) => setEndDate(v)} />
               </div>
             </div>
             <p className={styles.hint}>Blocks only appear on the calendar within this date range — e.g. a semester's start/end.</p>
@@ -347,12 +348,7 @@ export function AddScheduleModal() {
                       </div>
                       <div className={styles.fieldMini}>
                         <label className={styles.miniLabel}>First occurrence</label>
-                        <input
-                          type="date"
-                          className={styles.dateInput}
-                          value={row.intervalAnchor}
-                          onChange={(e) => updateBlockRow(idx, { intervalAnchor: e.target.value })}
-                        />
+                        <DateInput className={styles.dateInput} value={row.intervalAnchor} onChange={(v) => updateBlockRow(idx, { intervalAnchor: v })} />
                         <p className={styles.miniHint}>
                           {row.interval > 1
                             ? 'The week containing this date counts as week 1 — e.g. set this to the second week of term for a block that starts every-other-week from week 2.'
@@ -460,7 +456,7 @@ export function AddScheduleModal() {
                   </div>
                   <div className={styles.fieldMini}>
                     <label className={styles.miniLabel}>First occurrence</label>
-                    <input type="date" className={styles.dateInput} value={newAnchor} onChange={(e) => setNewAnchor(e.target.value)} />
+                    <DateInput className={styles.dateInput} value={newAnchor} onChange={(v) => setNewAnchor(v)} />
                     <p className={styles.hint}>
                       {newInterval > 1
                         ? 'The week containing this date counts as week 1 — e.g. set this to the second week of term for a block that starts every-other-week from week 2.'

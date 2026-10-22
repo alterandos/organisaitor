@@ -2,6 +2,7 @@ import { supabase } from '@/services/supabase';
 import { mintOAuthState } from '@/services/oauthState';
 import { useFitnessStore } from '@/store/fitnessStore';
 import type { ActivityTypeId } from '@/types/fitness';
+import { stravaActivityId } from '@/utils/fitnessIds';
 import { apiFetch, oauthRedirectOrigin } from '@/utils/apiFetch';
 
 export interface StravaStatus {
@@ -73,8 +74,10 @@ export async function checkStravaStatus(): Promise<StravaStatus> {
 // upserts each into fitnessStore by source+sourceId, so repeat syncs update existing
 // rows instead of duplicating them. Returns the number of activities synced.
 export async function syncStrava(): Promise<number> {
-  const token = await accessToken();
-  if (!token) throw new Error('Not signed in');
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  const userId = data.session?.user.id;
+  if (!token || !userId) throw new Error('Not signed in');
 
   const res = await apiFetch('/api/strava-sync', {
     method:  'POST',
@@ -97,6 +100,7 @@ export async function syncStrava(): Promise<number> {
       elapsedTimeSeconds: a.elapsedTimeSeconds,
       averageSpeedMps:    a.averageSpeedMps,
       sourceRaw:          a.sourceRaw,
+      id:                 stravaActivityId(userId, a.sourceId),
     });
   }
   return activities.length;

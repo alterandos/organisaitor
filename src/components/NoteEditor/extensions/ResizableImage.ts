@@ -7,7 +7,7 @@ import type { Editor } from '@tiptap/core';
 import { LABELS } from '@/config/labels';
 import { registerEscapeClose } from '@/hooks/useEscapeClose';
 import {
-  type Crop, type Handle, NO_CROP, CORNERS, EDGES, cropDrag, isCropped, parseCrop, resizeDrag, serializeCrop,
+  type Crop, type Handle, NO_CROP, CORNERS, EDGES, cropDrag, isCropped, parseCrop, resizeDrag, snapWidth, serializeCrop,
 } from './imageGeometry';
 import styles from './ResizableImage.module.css';
 
@@ -227,8 +227,23 @@ class ImageView {
     const stretched = !!this.attrs.height;
     let result = { width: start.w, height: start.h, stretched };
     this.dom.classList.add(styles.resizing);
+    // The widths it can snap to: the note's other pictures, and the column.
+    const others = Array.from(this.editor.view.dom.querySelectorAll<HTMLElement>(`.${styles.frame}`)).filter((f) => f !== this.frame);
+    const widthOf = (f: HTMLElement) => Math.round(f.getBoundingClientRect().width);
+    const column = Math.round(this.dom.getBoundingClientRect().width);
+    const targets = [...others.map(widthOf), column].filter((w) => w > 0);
+    const clearMatches = () => { for (const f of [...others, this.frame]) f.classList.remove(styles.sizeMatch); };
     this.follow(e, (ev) => {
       result = resizeDrag(handle, start, ev.clientX - start.x, ev.clientY - start.y, stretched);
+      const corner = handle.length === 2;
+      const snapped = handle !== 'n' && handle !== 's' ? snapWidth(result.width, targets) : null;
+      clearMatches();
+      if (snapped !== null) {
+        result = { ...result, width: snapped, height: corner ? result.height * (snapped / result.width) : result.height };
+        // The pictures it now matches are outlined with it, as a design tool's guides show.
+        this.frame.classList.add(styles.sizeMatch);
+        for (const f of others) if (Math.abs(widthOf(f) - snapped) <= 1) f.classList.add(styles.sizeMatch);
+      }
       this.frame.style.width = `${result.width}px`;
       const framed = isCropped(this.attrs.crop) || result.stretched;
       this.frame.classList.toggle(styles.framed, framed);
@@ -236,6 +251,7 @@ class ImageView {
       if (framed) this.positionImage();
       else this.img.style.width = '100%';
     }, () => {
+      clearMatches();
       this.dom.classList.remove(styles.resizing);
       this.commit({ width: result.width, height: result.stretched ? result.height : null });
     });

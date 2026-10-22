@@ -38,29 +38,115 @@ describe('TimeInput — 24-hour mode', () => {
     expect(onChange).toHaveBeenLastCalledWith('23:59');
   });
 
-  it('an impossible first hour digit (24h: only 0/1/2 can start an hour) flashes red and clears, rather than silently swallowing the keystroke', () => {
-    vi.useFakeTimers();
+  it('a first hour digit no second digit could continue ("3": no 30s hour) is complete at once as 03', () => {
     const onChange = vi.fn();
     render(<TimeInput value="" onChange={onChange} />);
     fireEvent.focus(hourInput());
-
     type(hourInput(), '3');
-    expect(hourInput().value).toBe('');
-    expect(onChange).toHaveBeenCalledWith('');
-    expect(hourInput().className).toMatch(/segmentError|Error/);
-
-    act(() => { vi.advanceTimersByTime(420); });
-    expect(hourInput().className).not.toMatch(/segmentError|Error/);
-    vi.useRealTimers();
+    expect(hourInput().value).toBe('03');
+    expect(onChange).toHaveBeenLastCalledWith('03:00');
+    expect(minuteInput()).toHaveFocus();
   });
 
-  it('a minute\'s first digit above 5 (tens digit can never stay <=59) flashes and clears', () => {
+  it('too big an hour ("25") becomes the largest (23), flashes, and stays in the hour, selected', () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    render(<TimeInput value="" onChange={onChange} />);
+    act(() => hourInput().focus());
+    type(hourInput(), '2');
+    type(hourInput(), '5');
+    expect(hourInput().value).toBe('23');
+    expect(onChange).toHaveBeenLastCalledWith('23:00');
+    expect(hourInput()).toHaveFocus();
+    expect(hourInput().className).toMatch(/segmentError/);
+    act(() => { vi.advanceTimersByTime(420); });
+    expect(hourInput().className).not.toMatch(/segmentError/);
+    vi.useRealTimers();
+    type(hourInput(), '1'); // selected, so the next digit starts over
+    expect(hourInput().value).toBe('1');
+  });
+
+  it('too big a minute ("77") becomes 59, selected, rather than being rejected', () => {
     const onChange = vi.fn();
     render(<TimeInput value="09:00" onChange={onChange} />);
+    act(() => minuteInput().focus());
+    type(minuteInput(), '7');
+    expect(minuteInput().value).toBe('7'); // one digit: still waiting
+    type(minuteInput(), '7');
+    expect(minuteInput().value).toBe('59');
+    expect(onChange).toHaveBeenLastCalledWith('09:59');
+    expect(minuteInput()).toHaveFocus();
+  });
+
+  it('typing the minutes first, then the hour, keeps the minutes', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<TimeInput value="" onChange={onChange} />);
     fireEvent.focus(minuteInput());
-    type(minuteInput(), '6');
-    expect(minuteInput().value).toBe('');
-    expect(onChange).toHaveBeenCalledWith('');
+    type(minuteInput(), '4');
+    type(minuteInput(), '5');
+    expect(hourInput()).toHaveFocus(); // the hour is still empty, so it goes there
+    type(hourInput(), '0');
+    type(hourInput(), '9');
+    expect(onChange).toHaveBeenLastCalledWith('09:45');
+    rerender(<TimeInput value="09:45" onChange={onChange} />);
+    expect(minuteInput().value).toBe('45');
+  });
+
+  it('a half-typed time reported as "" upward does not wipe the other segment when it echoes back', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<TimeInput value="14:30" onChange={onChange} />);
+    fireEvent.focus(hourInput());
+    type(hourInput(), '1'); // starts the hour over
+    fireEvent.keyDown(hourInput(), { key: 'Backspace' });
+    expect(onChange).toHaveBeenLastCalledWith('');
+    rerender(<TimeInput value="" onChange={onChange} />);
+    expect(minuteInput().value).toBe('30');
+  });
+
+  it('a value changed from outside still resets the segments', () => {
+    const { rerender } = render(<TimeInput value="14:30" onChange={vi.fn()} />);
+    rerender(<TimeInput value="08:15" onChange={vi.fn()} />);
+    expect(hourInput().value).toBe('08');
+    expect(minuteInput().value).toBe('15');
+  });
+
+  it('complete minutes in 24-hour mode move on to the next control after the field', () => {
+    const onChange = vi.fn();
+    render(<form><TimeInput value="10:00" onChange={onChange} /><input aria-label="after" /></form>);
+    act(() => minuteInput().focus());
+    type(minuteInput(), '1');
+    type(minuteInput(), '5');
+    expect(onChange).toHaveBeenLastCalledWith('10:15');
+    expect(screen.getByLabelText('after')).toHaveFocus();
+  });
+
+  it('↑ ↓ step the hour and minute, and the ▲▼ buttons step minutes by 5', () => {
+    const onChange = vi.fn();
+    render(<TimeInput value="23:58" onChange={onChange} />);
+    fireEvent.keyDown(hourInput(), { key: 'ArrowUp' });
+    expect(onChange).toHaveBeenLastCalledWith('00:58'); // wraps
+    fireEvent.keyDown(minuteInput(), { key: 'ArrowDown' });
+    expect(onChange).toHaveBeenLastCalledWith('00:57');
+    fireEvent.click(screen.getByLabelText('Increase minute'));
+    expect(onChange).toHaveBeenLastCalledWith('00:00'); // the next multiple of 5 is 60, which wraps
+    fireEvent.click(screen.getByLabelText('Decrease hour'));
+    expect(onChange).toHaveBeenLastCalledWith('23:00');
+  });
+
+  it('the wheel over a segment steps it', () => {
+    const onChange = vi.fn();
+    render(<TimeInput value="10:00" onChange={onChange} />);
+    fireEvent.wheel(hourInput(), { deltaY: -100 });
+    expect(onChange).toHaveBeenLastCalledWith('11:00');
+    fireEvent.wheel(minuteInput(), { deltaY: 100 });
+    expect(onChange).toHaveBeenLastCalledWith('11:55');
+  });
+
+  it('the ▾, ✕ and ▲▼ buttons are out of the Tab order', () => {
+    render(<TimeInput value="10:00" onChange={vi.fn()} />);
+    for (const name of ['Clear time', 'Choose a time', 'Increase hour', 'Decrease minute']) {
+      expect(screen.getByLabelText(name)).toHaveAttribute('tabindex', '-1');
+    }
   });
 
   it('the auto-advance commit is not double-fired by the blur it causes (the blur-before-flush race)', () => {
@@ -101,7 +187,7 @@ describe('TimeInput — 24-hour mode', () => {
     type(hourInput(), '1'); // now mid-edit — the "just focused" flag is spent
     fireEvent.keyDown(hourInput(), { key: 'Backspace' });
     expect(hourInput().value).toBe('');
-    expect(onChange).toHaveBeenLastCalledWith('');
+    expect(onChange).not.toHaveBeenCalled(); // nothing was ever complete, so nothing to report
   });
 
   it('the ✕ clear button empties both segments and commits ""', () => {
@@ -154,14 +240,43 @@ describe('TimeInput — 12-hour mode', () => {
     render(<TimeInput value="14:05" onChange={vi.fn()} />);
     expect(hourInput().value).toBe('2');
     expect(minuteInput().value).toBe('05');
-    expect(screen.getByRole('button', { name: 'PM' })).toHaveClass(/meridiemBtnActive|Active/);
+    expect(screen.getByRole('button', { name: /AM or PM, now PM/ })).toBeInTheDocument();
   });
 
   it('clicking AM/PM re-commits using the already-typed hour/minute', () => {
     const onChange = vi.fn();
     render(<TimeInput value="09:15" onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: 'PM' }));
+    fireEvent.click(screen.getByRole('button', { name: /AM or PM/ }));
     expect(onChange).toHaveBeenLastCalledWith('21:15');
+  });
+
+  it('too big an hour ("14") becomes 12', () => {
+    render(<TimeInput value="" onChange={vi.fn()} />);
+    act(() => hourInput().focus());
+    type(hourInput(), '1');
+    type(hourInput(), '4');
+    expect(hourInput().value).toBe('12');
+    expect(hourInput()).toHaveFocus();
+  });
+
+  it('complete minutes move on to AM/PM, and typing P there sets PM', () => {
+    const onChange = vi.fn();
+    render(<TimeInput value="09:00" onChange={onChange} />);
+    act(() => minuteInput().focus());
+    type(minuteInput(), '1');
+    type(minuteInput(), '0');
+    const mer = screen.getByRole('button', { name: /AM or PM/ });
+    expect(mer).toHaveFocus();
+    fireEvent.keyDown(mer, { key: 'p' });
+    expect(onChange).toHaveBeenLastCalledWith('21:10');
+  });
+
+  it('stepping the hour past 11 AM turns it to PM', () => {
+    const onChange = vi.fn();
+    render(<TimeInput value="11:30" onChange={onChange} />);
+    fireEvent.keyDown(hourInput(), { key: 'ArrowUp' });
+    expect(onChange).toHaveBeenLastCalledWith('12:30');
+    expect(screen.getByRole('button', { name: /now PM/ })).toBeInTheDocument();
   });
 });
 

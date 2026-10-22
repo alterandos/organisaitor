@@ -677,3 +677,10 @@ async function upgradeLegacyImpl(id: NoteId): Promise<void> {
     upgrading.delete(id);
   }
 }
+
+// A notebook with no notes and no notebooks inside it: deleting it doesn't ask (utils/emptyContent.ts).
+export function notebookIsEmpty(tagId: NoteTagId): boolean {
+  const { notes, noteTags } = useNoteStore.getState();
+  return !Object.values(noteTags).some((t) => t.parentTagId === tagId)
+    && !Object.values(notes).some((n) => n.tagIds.includes(tagId));
+}

@@ -1,6 +1,6 @@
 import type {
   CalendarEventType, CollectionId, CreateCalendarEventInput, CreateCalendarReminderInput, CreateCalendarDeadlineInput,
-  CrossAppRef, EventStatus, NotifyUnit, RepeatConfig, TravelMode,
+  CrossAppRef, EventStatus, NotifyUnit, RepeatConfig, TravelMode, NotifyMode,
 } from '@/types';
 import { mergeNewLinks } from '@/utils/links';
 
@@ -21,6 +21,7 @@ export interface CalendarEventFields {
   notifyBeforeValue?: number | null;
   notifyBeforeUnit?:  NotifyUnit;
   notifyAtTime?:      string | null;
+  notifyMode?:        NotifyMode;
   repeat?:            RepeatConfig | null;
   status?:            EventStatus;
   important?:         boolean;
@@ -49,7 +50,8 @@ export function buildCalendarEventInput(f: CalendarEventFields): CreateCalendarE
     collectionId:      f.collectionId || null,
     notifyBeforeValue: f.notifyBeforeValue ?? null,
     notifyBeforeUnit:  f.notifyBeforeUnit,
-    notifyAtTime:      birthday ? f.notifyAtTime || null : null,
+    notifyAtTime:      birthday || f.notifyMode === 'daysAt' ? f.notifyAtTime || null : null,
+    notifyMode:        f.notifyMode,
     repeat:            birthday ? (f.repeat ?? BIRTHDAY_REPEAT) : (f.repeat ?? null),
     status:            f.status,
     important:         f.important,
@@ -72,6 +74,10 @@ export interface CalendarReminderFields {
   crossAppRefs?:     CrossAppRef[];
   notifyDaysBefore?: number;
   notifyAtTime?:     string;
+  notify?:           boolean;
+  notifyMode?:        NotifyMode;
+  notifyBeforeValue?: number | null;
+  notifyBeforeUnit?:  NotifyUnit;
 }
 
 export function buildCalendarReminderInput(f: CalendarReminderFields): CreateCalendarReminderInput {
@@ -88,6 +94,10 @@ export function buildCalendarReminderInput(f: CalendarReminderFields): CreateCal
     crossAppRefs:     f.crossAppRefs,
     notifyDaysBefore: f.notifyDaysBefore,
     notifyAtTime:     f.notifyAtTime,
+    notify:           f.notify,
+    notifyMode:        f.notifyMode,
+    notifyBeforeValue: f.notifyBeforeValue,
+    notifyBeforeUnit:  f.notifyBeforeUnit,
   };
 }
 
@@ -104,6 +114,10 @@ export interface CalendarDeadlineFields {
   crossAppRefs?:     CrossAppRef[];
   notifyDaysBefore?: number;
   notifyAtTime?:     string;
+  notify?:           boolean;
+  notifyMode?:        NotifyMode;
+  notifyBeforeValue?: number | null;
+  notifyBeforeUnit?:  NotifyUnit;
 }
 
 export function buildCalendarDeadlineInput(f: CalendarDeadlineFields): CreateCalendarDeadlineInput {
@@ -120,5 +134,9 @@ export function buildCalendarDeadlineInput(f: CalendarDeadlineFields): CreateCal
     crossAppRefs:     f.crossAppRefs,
     notifyDaysBefore: f.notifyDaysBefore,
     notifyAtTime:     f.notifyAtTime,
+    notify:           f.notify,
+    notifyMode:        f.notifyMode,
+    notifyBeforeValue: f.notifyBeforeValue,
+    notifyBeforeUnit:  f.notifyBeforeUnit,
   };
 }

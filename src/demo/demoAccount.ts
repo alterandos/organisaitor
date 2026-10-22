@@ -19,7 +19,9 @@ import { useListStore } from '@/store/listStore';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useOverviewStore } from '@/store/overviewStore';
+import { useConverterStore } from '@/store/converterStore';
 import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
+import { linkTaskToEvent } from '@/services/eventTaskLinks';
 import { editNoteContent } from '@/services/noteContentEdit';
 import { pictureRef } from '@/services/pictures';
 import { MAIN_TAB_ID } from '@/utils/noteTabs';
@@ -234,6 +236,10 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   const fieldTrip = cal.addEvent({ title: 'Field trip: Kiama coast', date: day(4), startTime: '07:00', endTime: '17:30', location: 'Kiama Blowhole, NSW', collectionId: fieldReport, important: true, notifyBeforeValue: 1, notifyBeforeUnit: 'days', crossAppRefs: [noteRef(trip)], notes: 'Bus leaves from the Earth Sciences car park. Bring lunch.' });
   const consult = cal.addEvent({ title: 'Consult with my tutor about the essay', date: day(9), startTime: '11:00', endTime: '11:30', location: 'Room 4.12, Madsen Building', status: 'tentative', collectionId: essay, crossAppRefs: [noteRef(essayNote)] });
   const midsem = cal.addEvent({ title: 'Climate Systems mid-semester exam', date: day(12), startTime: '09:00', endTime: '11:00', location: 'Exam Hall B', important: true, crossAppRefs: [noteRef(carbon)] });
+  // Tasks linked to the exam (utils/eventTaskLinks.ts): revision due when it starts, a follow-up after.
+  const revise = T({ title: 'Revise the carbon cycle lectures', scheduledAt: day(5), crossAppRefs: [noteRef(carbon)] });
+  linkTaskToEvent(revise, 'prepFor', 'event', midsem);
+  linkTaskToEvent(T({ title: 'Go over the exam feedback' }), 'followUpOf', 'event', midsem);
   cal.addEvent({ title: 'Study group', date: day(nextDow(4)), startTime: '16:00', endTime: '17:30', location: 'Fisher Library, level 3', repeat: { freq: 'weekly', interval: 1, endKind: 'count', count: 10, until: null } });
   cal.addEvent({ title: 'Geology club trivia night', date: day(6), startTime: '19:00', endTime: '21:00', location: 'Uni bar' });
   cal.addEvent({ title: 'Mid-semester break', date: day(20), endDate: day(26), background: true });
@@ -335,6 +341,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   usePortfolioStore.getState().addWatchlistItem({ ticker: 'ICLN', name: 'iShares Global Clean Energy ETF', assetClass: 'etf', exchange: 'NASDAQ', status: 'watching', notes: 'Started looking after the climate essay reading. Small amount from my summer job, one day.', links: ['https://www.ishares.com'] });
 
   // ── Overviews ──
+  const co2Converter = useConverterStore.getState().addConverter({ name: 'CO₂ to carbon', icon: '🌍', inputs: [{ key: 'co2', label: 'CO₂', unit: 'kg' }], output: { key: 'c', label: 'Carbon', unit: 'kg' }, formula: 'co2 * 12/44', inverse: 'c * 44/12' });
   useOverviewStore.getState().addOverview({ name: 'Due in the next fortnight', icon: '📆', sources: ['task', 'deadline', 'event', 'reminder'], collectionId: null, status: 'open', when: 'upcoming', windowDays: 14, search: '', sort: 'when-asc', groupBy: 'none' });
   useOverviewStore.getState().addOverview({ name: 'Open questions and ideas', icon: '❓', sources: ['question', 'inboxItem'], collectionId: null, status: 'open', when: 'any', windowDays: null, search: '', sort: 'source', groupBy: 'source' });
 
@@ -580,6 +587,8 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     } }),
     card(feedback),
     p('Anthropogenic CO₂ is a forcing, not a feedback. ', node('movedStub', { noteId: essayNote, inboxId, itemId: 'demo-ib-sinks', title: 'Essay ideas' })),
+    p('Burning a tonne of coal releases about 2.4 t of CO₂. How much carbon is that?'),
+    node('convertBlock', { variant: 'card', converter: co2Converter, values: { co2: '2400' } }),
     h(1, 'Working with the data'),
     p('The tutorial’s script for the annual means (data from ', weblink('NOAA GML', 'https://gml.noaa.gov/ccgg/trends/data.html'), '):'),
     code('python', [

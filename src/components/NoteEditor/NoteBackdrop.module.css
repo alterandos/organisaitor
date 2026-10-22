@@ -8,6 +8,14 @@
   background-position: center top;
   border-top: 1px solid var(--color-border-strong);
 }
+/* A picture, whole and the note's width: at least the usual room, taller when the picture is
+   (aspect-ratio from NoteBackdrop.tsx; below the picture, the plain fill). */
+.picture {
+  flex: 0 0 auto;
+  min-height: 80%;
+  background-size: 100% auto;
+  background-repeat: no-repeat;
+}
 
 .change {
   display: flex;

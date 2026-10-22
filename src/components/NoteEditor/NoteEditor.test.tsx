@@ -116,6 +116,15 @@ describe('NoteEditor tab restore on note switch', () => {
     expect(liveEditor().state.selection.from).toBe(2);
   });
 
+  it('the place is remembered as the cursor moves, without leaving the note (a pane side by side never leaves it)', async () => {
+    useUIStore.setState({ activeView: 'notes' });
+    act(() => { useUIStore.getState().openNote('note-b'); });
+    render(<NoteEditor />);
+    act(() => { liveEditor().commands.setTextSelection(4); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 450)); });
+    expect(useUIStore.getState().noteCursorMemory['note-b:main']).toMatchObject({ from: 4, to: 4 });
+  });
+
   it('coming back to Notes from another app puts the cursor where it was left', async () => {
     useUIStore.setState({ activeView: 'notes' });
     act(() => { useUIStore.getState().openNote('note-b'); });
@@ -144,6 +153,20 @@ describe('NoteEditor tab restore on note switch', () => {
     expect(state.selection.from).toBe(Selection.atEnd(state.doc).from);   // the end of the text
   });
 
+  it('a note asked to be focused (just created) opens with the cursor in it, and only once', async () => {
+    useUIStore.setState({ activeView: 'notes' });
+    act(() => { useUIStore.getState().openNote('note-b'); });
+    render(<StrictMode><NoteEditor /></StrictMode>);
+    expect(liveEditor().isFocused).toBe(false);
+    act(() => {
+      useUIStore.getState().setRequestedNoteFocus('note-a');
+      useUIStore.getState().openNote('note-a');
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });   // Tiptap focuses on the next frame
+    expect(liveEditor().isFocused).toBe(true);
+    expect(useUIStore.getState().requestedNoteFocus).toBeNull();
+  });
+
   it('a note whose last-open tab was Main still opens on Main (only an unvisited note goes to its last tab)', () => {
     useUIStore.setState({ activeView: 'notes', notesTabMemory: { 'note-a': null } });
     act(() => { useUIStore.getState().openNote('note-b'); });
@@ -162,6 +185,15 @@ describe('NoteEditor tab restore on note switch', () => {
     await userEvent.click(screen.getByText('Main'));
     expect(stored('note-a').tabs[0].content).toContain('TAB2-A');
     expect(stored('note-a').content).toContain('MAIN-A');
+  });
+
+  it('side by side, a pane not in front comes back on its own remembered tab, not the first', () => {
+    useUIStore.setState({
+      activeView: 'notes', editingNoteId: 'note-b', notesLastEditingNoteId: 'note-b', notesLastActiveTabId: null,
+      notesTabMemory: { 'note-a': 't2' },
+    });
+    render(<NoteEditor pane={{ index: 1, noteId: 'note-a', focused: false, ribbon: null }} />);
+    expect(editorText()).toContain('TAB2-A');
   });
 });
 

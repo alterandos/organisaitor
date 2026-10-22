@@ -35,6 +35,11 @@ describe('planNotifications', () => {
     expect(planNotifications(snap, opts('2030-03-01T00:00:00Z', '2030-03-31T00:00:00Z'))).toEqual([]);
   });
 
+  it('a reminder or deadline with Notify unticked never notifies', () => {
+    const snap = { ...empty(), reminders: { r1: reminder({ time: '08:30', notify: false }) }, deadlines: { d1: deadline({ notify: false }) } };
+    expect(planNotifications(snap, opts('2030-03-01T00:00:00Z', '2030-03-31T00:00:00Z'))).toEqual([]);
+  });
+
   it('a timed reminder fires at its time; a whole-day one at its own notify moment', () => {
     const snap = { ...empty(), reminders: { r1: reminder({ time: '08:30' }), r2: reminder({ id: 'r2' }) } };
     const plan = planNotifications(snap, opts('2030-03-01T00:00:00Z', '2030-03-31T00:00:00Z'));
@@ -105,5 +110,32 @@ describe('planNotifications', () => {
     const [n] = planNotifications(snap, opts('2030-03-01T00:00:00Z', '2030-03-31T00:00:00Z'));
     expect(n.itemId).toBe('s1::b1::2030-03-12');
     expect(n.at.toISOString()).toBe('2030-03-12T17:30:00.000Z');
+  });
+});
+
+describe('one notify setting for every calendar item (utils/notifyRule.ts)', () => {
+  const at = (snap: NotificationSnapshot) => planNotifications(snap, opts('2030-03-01T00:00:00Z', '2030-03-31T00:00:00Z')).map((n) => n.at.toISOString());
+
+  it('a deadline can be told N hours before its time, and a reminder N minutes before', () => {
+    expect(at({ ...empty(), deadlines: { d1: deadline({ time: '14:00', notifyMode: 'before', notifyBeforeValue: 3, notifyBeforeUnit: 'hours' }) } }))
+      .toEqual(['2030-03-10T11:00:00.000Z']);
+    expect(at({ ...empty(), reminders: { r1: reminder({ time: '08:30', notifyMode: 'before', notifyBeforeValue: 15, notifyBeforeUnit: 'minutes' }) } }))
+      .toEqual(['2030-03-10T08:15:00.000Z']);
+  });
+
+  it('an event can be told N days before, at a time of day', () => {
+    expect(at({ ...empty(), events: { e1: event({ notifyMode: 'daysAt', notifyBeforeValue: 2, notifyBeforeUnit: 'days', notifyAtTime: '18:00' }) } }))
+      .toEqual(['2030-03-08T18:00:00.000Z']);
+  });
+
+  it('the gap is kept when the time changes (3 hours before 14:00, then before 16:00)', () => {
+    const dl = (time: string) => ({ ...empty(), deadlines: { d1: deadline({ time, notifyMode: 'before', notifyBeforeValue: 3, notifyBeforeUnit: 'hours' }) } });
+    expect(at(dl('14:00'))).toEqual(['2030-03-10T11:00:00.000Z']);
+    expect(at(dl('16:00'))).toEqual(['2030-03-10T13:00:00.000Z']);
+  });
+
+  it('a mode that needs a time falls back to days before, at a time, once the item has none', () => {
+    expect(at({ ...empty(), deadlines: { d1: deadline({ time: null, notifyMode: 'before', notifyBeforeValue: 3, notifyBeforeUnit: 'hours' }) } }))
+      .toEqual(['2030-03-09T17:00:00.000Z']);
   });
 });

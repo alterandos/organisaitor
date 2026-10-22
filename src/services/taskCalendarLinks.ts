@@ -9,6 +9,7 @@
 // crossAppLinkCleanup does: it needs both taskStore and calendarStore.
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
+import { deleteForever, trashedBy } from '@/services/trash';
 import type { CalendarEvent, CalendarEventId, CreateTaskInput, Task, TaskId } from '@/types';
 
 const SHARED_TASK_FIELDS = ['title', 'deadline', 'deadlineTime', 'scheduledAt', 'scheduledTime'] as const;
@@ -94,4 +95,50 @@ export function updateCalendarEventLinked(eventId: CalendarEventId, changes: Par
 
   useTaskStore.getState().updateTask(task.id, patch);
   syncTaskShadows(task.id);
+}
+
+// "Plan the work" on a standalone Deadline (decided with the user 2026-10-22): setting a date for
+// the work to start turns it into a task that keeps that Deadline as its own (deadlineType 'task',
+// the task's calendarDeadlineId), so nothing is duplicated and the Deadline stays on the calendar
+// with its notify setting. The task gets its title, notes, links, Endeavour and links back to
+// notes, Important as high priority, and the start as its scheduled day (whose calendar entry is
+// made as for any task). Done explicitly (the Runway's left handle, or "Plan the work…"), never
+// silently, and undoable: undoDeadlineWork puts the Deadline back as it was and removes the task.
+// A repeating Deadline isn't converted (a task repeats by its own rule).
+export interface DeadlineWorkUndo { taskId: TaskId; deadlineId: string }
+
+export function planDeadlineWork(deadlineId: string, start: string): DeadlineWorkUndo | null {
+  const cal = useCalendarStore.getState();
+  const d = cal.deadlines[deadlineId as never];
+  if (!d || d.deadlineType === 'task' || d.repeat) return null;
+  const tasks = useTaskStore.getState();
+  const taskId = tasks.addTask({
+    title:        d.title,
+    notes:        d.notes ?? null,
+    links:        d.links ?? [],
+    collectionId: d.collectionId ?? null,
+    priority:     d.important ? 'high' : undefined,
+    deadline:     d.date,
+    deadlineTime: d.time ?? null,
+    scheduledAt:  start <= d.date ? start : d.date,
+    crossAppRefs: d.crossAppRefs ?? [],
+  });
+  tasks.updateTask(taskId, { calendarDeadlineId: d.id });
+  cal.updateDeadline(d.id, { deadlineType: 'task' });
+  syncTaskShadows(taskId);
+  return { taskId, deadlineId: d.id };
+}
+
+export function undoDeadlineWork({ taskId, deadlineId }: DeadlineWorkUndo): void {
+  const tasks = useTaskStore.getState();
+  if (!tasks.tasks[taskId]) return;
+  // Undone, not deleted: no Recycling Bin entry for the task or its start's calendar entry, which
+  // only existed for a moment. The Deadline is unhooked first, so removing the task can't take it.
+  const gone = trashedBy(() => {
+    tasks.updateTask(taskId, { calendarDeadlineId: null, deadline: null, deadlineTime: null });
+    useCalendarStore.getState().updateDeadline(deadlineId as never, { deadlineType: 'default' });
+    updateTaskLinked(taskId, { scheduledAt: null, scheduledTime: null });
+    useTaskStore.getState().deleteTask(taskId);
+  });
+  for (const t of gone) deleteForever(t);
 }

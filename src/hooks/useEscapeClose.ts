@@ -22,13 +22,22 @@ import { useEffect, useRef } from 'react';
 
 // `docked`: a panel beside the page rather than over it (Calendar's side pane): Escape still
 // closes it, but it doesn't stop the page's own keys (hasOpenOverlay ignores it).
-interface Entry { handler: { current: () => void }; docked?: boolean }
+// `when`: asked at the moment Escape is pressed; an overlay that answers false is passed over this
+// time, and the next one down takes it. For an overlay that stays open while the person works
+// somewhere else (the note's selection toolbar while the scratchpad is being typed in, found
+// 2026-10-22: Escape went to the toolbar and the scratchpad never closed).
+interface Entry { handler: { current: () => void }; docked?: boolean; when?: { current: (() => boolean) | undefined } }
+type Opts = { docked?: boolean; when?: () => boolean };
 
 const stack: Entry[] = [];
+const topEntry = () => {
+  for (let i = stack.length - 1; i >= 0; i--) if (stack[i].when?.current?.() ?? true) return stack[i];
+  return undefined;
+};
 
 function onKeyDown(e: KeyboardEvent) {
   if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
-  const top = stack[stack.length - 1];
+  const top = topEntry();
   if (!top) return;
   e.preventDefault();
   e.stopImmediatePropagation();
@@ -38,7 +47,7 @@ function onKeyDown(e: KeyboardEvent) {
 // The Android back button (App.tsx) uses the same stack: back closes exactly what Escape would.
 // Returns whether there was an overlay to close.
 export function closeTopOverlay(): boolean {
-  const top = stack[stack.length - 1];
+  const top = topEntry();
   if (!top) return false;
   top.handler.current();
   return true;
@@ -57,8 +66,8 @@ if (typeof document !== 'undefined') document.addEventListener('keydown', onKeyD
 
 // The same, for an overlay that isn't a React component (a popover a ProseMirror widget opens,
 // extensions/blockDesigns.ts). Returns the unregister function; call it when the overlay closes.
-export function registerEscapeClose(onClose: () => void, opts?: { docked?: boolean }): () => void {
-  const entry: Entry = { handler: { current: onClose }, docked: opts?.docked };
+export function registerEscapeClose(onClose: () => void, opts?: Opts): () => void {
+  const entry: Entry = { handler: { current: onClose }, docked: opts?.docked, when: { current: opts?.when } };
   stack.push(entry);
   return () => {
     const i = stack.indexOf(entry);
@@ -66,14 +75,15 @@ export function registerEscapeClose(onClose: () => void, opts?: { docked?: boole
   };
 }
 
-export function useEscapeClose(onClose: () => void, active = true, opts?: { docked?: boolean }) {
+export function useEscapeClose(onClose: () => void, active = true, opts?: Opts) {
   const ref = useRef(onClose);
-  useEffect(() => { ref.current = onClose; });
+  const when = useRef(opts?.when);
+  useEffect(() => { ref.current = onClose; when.current = opts?.when; });
   const docked = !!opts?.docked;
 
   useEffect(() => {
     if (!active) return;
-    const entry: Entry = { handler: ref, docked };
+    const entry: Entry = { handler: ref, docked, when };
     stack.push(entry);
     return () => {
       const i = stack.indexOf(entry);

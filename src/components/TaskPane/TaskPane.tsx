@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import { linkedListIds } from '@/services/taskListLinks';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import { LinkedChecklists } from '@/components/LinkedChecklists/LinkedChecklists';
@@ -107,15 +108,15 @@ export function TaskPane() {
   };
 
   // The shadow calendar reminder/event follow from these — see services/taskCalendarLinks.ts.
-  const handleDeadlineChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value || null;
+  const handleDeadlineChange = (v: string) => {
+    const val = v || null;
     updateTaskLinked(taskId, val ? { deadline: val } : { deadline: null, deadlineTime: null });
   };
 
   const handleDeadlineTimeChange = (v: string) => updateTaskLinked(taskId, { deadlineTime: v || null });
 
-  const handleScheduledAtChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value || null;
+  const handleScheduledAtChange = (v: string) => {
+    const val = v || null;
     updateTaskLinked(taskId, val ? { scheduledAt: val } : { scheduledAt: null, scheduledTime: null });
   };
 
@@ -219,13 +220,7 @@ export function TaskPane() {
               {task.kind === 'milestone' ? LABELS.milestoneDate : 'Due date'}
             </span>
             <div className={styles.dateTimeRow}>
-              <input
-                type="date"
-                className={styles.dateInput}
-                value={task.deadline ?? ''}
-                onChange={handleDeadlineChange}
-                required={task.kind === 'milestone'}
-              />
+              <DateInput className={styles.dateInput} value={task.deadline ?? ''} onChange={handleDeadlineChange} required={task.kind === 'milestone'} />
               {(task.deadline || task.kind === 'milestone') && (
                 <TimeInput
                   className={styles.timeInput}
@@ -240,12 +235,7 @@ export function TaskPane() {
           <div className={styles.field}>
             <span className={styles.label}>{LABELS.scheduledFor}</span>
             <div className={styles.dateTimeRow}>
-              <input
-                type="date"
-                className={styles.dateInput}
-                value={task.scheduledAt ?? ''}
-                onChange={handleScheduledAtChange}
-              />
+              <DateInput className={styles.dateInput} value={task.scheduledAt ?? ''} onChange={handleScheduledAtChange} />
               {task.scheduledAt && (
                 <TimeInput
                   className={styles.timeInput}

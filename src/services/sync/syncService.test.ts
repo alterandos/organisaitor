@@ -14,6 +14,10 @@ import { useNoteStore } from '@/store/noteStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
+import { useFitnessStore } from '@/store/fitnessStore';
+import { stravaActivityId } from '@/utils/fitnessIds';
+import { activityToRow } from './mappers';
+import type { Activity, ActivityId, ActivityTypeId } from '@/types/fitness';
 import type { TaskId, TagId } from '@/types';
 
 const fake = vi.hoisted(() => {
@@ -139,6 +143,7 @@ beforeEach(async () => {
   // initSync, racing whatever that specific test is actually checking. Cleared explicitly
   // rather than worked around, since none of these tests are about Portfolio.
   usePortfolioStore.setState({ investmentPurposes: {}, watchlistItems: {}, portfolioTags: {} });
+  useFitnessStore.setState(useFitnessStore.getInitialState(), true);
   fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] } });
 });
 
@@ -422,6 +427,33 @@ describe('customListTypes — built-in list types are never uploaded', () => {
     expect(uploadedIds).toEqual(['custom-1']);
     expect(builtinIds.some((id) => uploadedIds.includes(id))).toBe(false);
     expect(counts.listTypes).toBe(1);
+  });
+});
+
+describe('Fitness (synced since 2026-10-22, migration 055)', () => {
+  const run = (o: Partial<Activity>): Activity => ({
+    id: 'a1' as ActivityId, type: 'run' as ActivityTypeId, title: 'Run', startedAt: '2030-01-01', timezone: null, distanceMeters: null,
+    movingTimeSeconds: null, elapsedTimeSeconds: null, averageSpeedMps: null, data: {}, notes: null, purposeIds: [], source: 'manual',
+    sourceId: null, sourceRaw: null, archivedAt: null, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z', ...o,
+  });
+
+  it('a load brings activities in; only custom activity types are uploaded', async () => {
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, fitness_activities: { rows: [activityToRow(run({ id: 'cloud-1' as ActivityId, title: 'From the cloud' }), USER)] } });
+    await initSync(USER);
+    expect(useFitnessStore.getState().activities['cloud-1' as ActivityId]?.title).toBe('From the cloud');
+    useFitnessStore.getState().addActivityType({ name: 'Climbing' });
+    await forceUpload(USER);
+    expect([...new Set((fake.upserts.fitness_activity_types ?? []).map((r) => r.name))]).toEqual(['Climbing']);   // never a built-in
+  });
+
+  it('a Strava activity made before sync folds into its stable id, keeping the newer copy', async () => {
+    const stable = stravaActivityId(USER, '987');
+    useFitnessStore.setState({ activities: { rand1: run({ id: 'rand1' as ActivityId, source: 'strava', sourceId: '987', title: 'Old local', updatedAt: '2030-01-01T00:00:00.000Z' }) } as never });
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, fitness_activities: { rows: [activityToRow(run({ id: stable, source: 'strava', sourceId: '987', title: 'Cloud', updatedAt: '2030-02-01T00:00:00.000Z' }), USER)] } });
+    await initSync(USER);
+    const ids = Object.keys(useFitnessStore.getState().activities);
+    expect(ids).toEqual([stable]);
+    expect(useFitnessStore.getState().activities[stable].title).toBe('Cloud');
   });
 });
 

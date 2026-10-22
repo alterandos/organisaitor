@@ -35,18 +35,37 @@ function useFill(b: ShownBackdrop | null): { preset?: string; src?: string } {
   return {};
 }
 
+// A picture's width / height, once it has loaded (null until then, or with no picture).
+function usePictureRatio(src: string | null | undefined): number | null {
+  const [ratio, setRatio] = useState<{ src: string; value: number } | null>(null);
+  useEffect(() => {
+    if (!src) return;
+    const img = new Image();
+    img.onload = () => { if (img.naturalWidth && img.naturalHeight) setRatio({ src, value: img.naturalWidth / img.naturalHeight }); };
+    img.src = src;
+    return () => { img.onload = null; };
+  }, [src]);
+  return ratio && ratio.src === src ? ratio.value : null;
+}
+
 export function NoteBackdrop({ note }: { note: Note | null }) {
   const noteTags = useNoteStore((s) => s.noteTags);
   const appWide = useSettingsStore((s) => s.noteBackdrop);
   const { backdrop } = resolveNoteBackdrop(note, noteTags, appWide);
   const fill = useFill(backdrop);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const ratio = usePictureRatio(fill.src);
 
+  // A picture is shown whole, the full width of the note: the room below grows to its height when
+  // that's more than the usual room, and never shrinks below it (the user's ask, 2026-10-22).
+  const style = fill.src
+    ? { backgroundImage: `url("${fill.src}")`, ...(ratio ? { aspectRatio: String(ratio) } : {}) }
+    : undefined;
   return (
     <div
-      className={styles.area}
+      className={`${styles.area} ${fill.src ? styles.picture : ''}`}
       data-backdrop={fill.preset}
-      style={fill.src ? { backgroundImage: `url("${fill.src}")` } : undefined}
+      style={style}
     >
       <button
         type="button"

@@ -44,6 +44,7 @@ import { GlossaryChipExtensions } from '@/components/NoteEditor/extensions/Gloss
 import { QuestionExtensions } from '@/components/NoteEditor/extensions/Question';
 import { CompareExtensions } from '@/components/NoteEditor/extensions/Compare';
 import { DiagramExtensions } from '@/components/NoteEditor/extensions/Diagram';
+import { ConvertExtensions } from '@/components/NoteEditor/extensions/Convert';
 import { BlockIds } from '@/components/NoteEditor/extensions/BlockIds';
 import { NoteLinkExtensions } from '@/components/NoteEditor/extensions/NoteLink';
 import { NoteEmbedExtensions } from '@/components/NoteEditor/extensions/NoteEmbed';
@@ -70,7 +71,7 @@ const schema: Schema = getSchema([
   ...ProsConsExtensions, ...ArgumentExtensions, ...OptionsExtensions, ...CycleExtensions, ...BreakdownExtensions,
   ...HierarchyExtensions, ...PyramidExtensions, ...ChartExtensions, ...CodeBlockExtensions, ...MathExtensions,
   ...InboxExtensions, ...HubExtensions, ...GlossaryCardExtensions, ...GlossaryChipExtensions, ...QuestionExtensions,
-  ...CompareExtensions, ...DiagramExtensions, BlockIds, ...NoteLinkExtensions, ...NoteEmbedExtensions,
+  ...CompareExtensions, ...DiagramExtensions, ...ConvertExtensions, BlockIds, ...NoteLinkExtensions, ...NoteEmbedExtensions,
   ...UnsureFlagExtensions, ConceptRefMark,
 ]);
 

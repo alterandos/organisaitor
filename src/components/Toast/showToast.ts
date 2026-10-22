@@ -1,5 +1,9 @@
 import { useToastStore, type ToastAction } from '@/store/toastStore';
 
+// How long a toast stays (the user's choice, 2026-10-22). Pass durationMs only for a toast that
+// must stay longer (none do today).
+export const TOAST_MS = 4000;
+
 let nextId = 1;
 
 // See toastStore.ts. Returns the toast's id (for dismissToast).
@@ -10,7 +14,7 @@ export function showToast(opts: { message: string; detail?: string; actions?: To
     message:    opts.message,
     detail:     opts.detail,
     actions:    opts.actions ?? [],
-    durationMs: opts.durationMs ?? 7000,
+    durationMs: opts.durationMs ?? TOAST_MS,
   });
   return id;
 }

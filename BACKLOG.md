@@ -9,13 +9,7 @@ Format: brief description + context/motivation.
 
 ---
 
-## Fitness Supabase sync — not built (Notes and Portfolio sync built 2026-09-19)
-
-Notes and Portfolio sync are built ("Notes Supabase sync", "Portfolio Supabase sync" in implemented-features.md). Fitness is the one domain left with no cloud copy:
-- `Activity` + `ActivityType` (custom types only; built-ins never sync, the rule `list_types` follows). Upsert by `(source, sourceId)` so Strava-imported activities never duplicate (`docs/features/fitness.md`).
-- Plaintext, no encryption (confirmed 2026-09-19).
-- Needs: a migration with its own grant, mappers, the five sync touch points in CLAUDE.md "How sync works", and `fitnessStore` added to `clearSyncedLocalData()` in the same change.
-- Paused 2026-09-19 so the user could test Notes and Portfolio sync live; nothing has blocked it since.
+## ~~Fitness Supabase sync~~ — built 2026-10-22 ("Fitness syncs" in implemented-features.md; migration 055)
 
 ---
 
@@ -225,6 +219,12 @@ Built: see CLAUDE.md "Note blocks" (under "Inline objects in notes") and "Note b
 - ~~**Code and maths blocks**~~: built 2026-10-09 (`\code`, `\maths`; see "Code and maths blocks" in implemented-features.md). Follow-ups: referring to a numbered equation from the text ("see (3)"); a code block that runs ("Running code in notes" under Proposed Ideas); more languages than lowlight's common set (each is one grammar import); maths in other fields (a task's notes) and in search (the LaTeX isn't searched today).
 - **More blocks**, each one node in `extensions/` + a `*Block.ts` in `objects/` + one `NOTE_BLOCK_KINDS` entry: a callout (`\callout`: an icon, a tint, text), a toggle/collapsible section, a pros/cons table, a definition list (`\term`), ~~a quote with source~~ (built 2026-10-07, `\quote`), a kanban-like board.
 - **Quote follow-ups:** a default style for new quotes in Settings (the user first suggested Settings; per-quote choice was built instead); quotes of more than one paragraph (today Shift+Enter line breaks); a Link field that opens the source; a "copy as citation" action (APA / MLA from the fields).
+
+### Overview timelines — follow-ups (logged 2026-10-22)
+Tasks linked to events (built 2026-10-23), still to do: a follow-up of an event shown as waiting until the event ends; linking to an event from the task's own pane (an event picker); "Prepare for this" / "Follow up" in a calendar event's right-click menu; agent commands for event links; grouping on the Board. The Runway and the Board are built ("Overview: the Runway and the Board…" in implemented-features.md). Still to do: **a load strip** (a calendar strip coloured by how much is due each day, for spotting crunch weeks: option C of the design discussion); **dragging a card between the Board's columns** (moves its date to the column's first day); **dates editable on a phone** from a Board card (long-press → a dates sheet), since the Runway isn't offered there.
+
+### Any block from selected text (confirmed 2026-10-22)
+Selected text can become a Quote, a Conclusion or Maths today (the `\` menu on a selection). The user wants every block makeable from a selection, with "sophisticated rules and eventually AI": e.g. a selected paragraph → a Concept card (term from the first noun phrase, meaning from the rest), a list → a Timeline (dates read by `utils/timelineWhen.ts`), a Cycle, a Breakdown or Pros and cons (lines starting "+"/"−"). Build: a `fromSelection?(view, from, to)` on `NoteBlockKind`, so the selection menu lists every block that has one; rules first (pure, tested in `utils/`), an AI command later through the agent layer (`docs/ai/`). The Turn into choices are in the right-click menu too (Turn into ▸, 2026-10-22); a new one goes in both.
 
 ### Block designs — how to develop them (the pattern, and ideas; logged 2026-10-07)
 
@@ -537,7 +537,7 @@ Drag-to-create (drag an empty range to set a new item's start and end); moving a
 
 ### Base fields vs More options — a shared layout pattern (deferred 2026-09-27)
 
-`AddCalendarItemModal` and `AddTaskModal` each built their own "More options" toggle and field order. Confirmed with the user as not worth doing now. If wanted: agree the rule, record it in CLAUDE.md, extract a shared `MoreOptionsSection`, move both modals onto it, and log the retrofit.
+`AddCalendarItemModal` and `AddTaskModal` each built their own "More options" toggle and field order. Confirmed with the user as not worth doing now. (2026-10-19: the calendar modal now has one order for all its kinds and More options closed for each; `AddTaskModal` is unchanged.) If wanted: agree the rule, record it in CLAUDE.md, extract a shared `MoreOptionsSection`, move both modals onto it, and log the retrofit.
 
 ### Mini-calendar toggle in the task list view
 A setting (in the Settings pane) to display a condensed calendar alongside
@@ -562,6 +562,9 @@ Built: Google Calendar, one way, rebuilt 2026-10-18 (Google's edits and deletion
 ---
 
 ## AI Agent Integration
+
+### Magic wand readers through the AI (logged 2026-10-23)
+Every magic wand (`components/MagicWand`: the calendar item modal, the date calculator) reads its text with built-in rules (`utils/textToTask.ts`, `utils/dateCalc.ts`). `MagicWandPanel`'s `onRead` may return a promise, so a reader can ask the AI agent instead (or when the rules find nothing) without changing the forms.
 
 ### Notes-dump → tasks
 Ability to paste or speak a block of free-form text (e.g. meeting notes,
@@ -704,7 +707,6 @@ Built: live quotes through `api/ticker-quote.ts`, `ticker-search.ts` and `ticker
 ## Fitness — open items
 
 Built: `docs/features/fitness.md` (the original spec moved there verbatim 2026-10-14). Not built:
-- Supabase sync for activities and custom types ("Fitness Supabase sync", top of this file).
 - Strava: webhook push (`api/strava-webhook.ts`), an automatic throttled sync on load, mapping more `sport_type` values, the wider `activity:read_all` scope, and a real end-to-end OAuth test on the deployment.
 - Desktop: confirm that connecting once on the web lets the desktop app use the same connection.
 - An imperial units toggle (data is stored in SI; render-only, `utils/fitnessFormat.ts`).
@@ -799,12 +801,24 @@ The suite-wide Recycling Bin is built (see "Recycling Bin" in CLAUDE.md and `doc
 
 ---
 
+## Encryption by notebook and Endeavour (decided 2026-10-23, to build)
+Discussed with the user; their decision: build **notebook-level encryption** (a notebook setting that encrypts every note in it through today's per-note encryption; new notes inherit it; moving a note out asks first) and **"encrypt the notes and lists in this Endeavour"** (the same rule for the notes and lists filed under it). **Not now:** encrypting an Endeavour's tasks and calendar items (or a whole section). While locked, the Calendar, notifications (Android shows them with the app closed), Overview and Google/Outlook sync couldn't show or match them, and it needs a new encryption layer for tasks and calendar items; reconsider when there's a real need.
+
+### Converters, later (logged 2026-10-23)
+- **mathjs** if formulas need more (units in formulas, matrices): swap it in inside `utils/formula.ts` only; stored formulas already use its syntax (`ln` is ours: alias it).
+- The `\convert` note block is built (2026-10-23). Still to do: making one from a selected number ("250 m" → a conversion of it), and an inline design in a sentence.
+
 ## Pattern retrofit backlog
 
 The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record it, apply it to new code, and audit existing code; every site the audit finds that isn't converted yet is listed here **with the check to re-run**. An entry stays until its check finds zero sites. Deliberate exceptions are listed too.
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **Formulas only through utils/formula.ts** (2026-10-23, CLAUDE.md "Single entry points") | `src/test/patterns.test.ts` "a formula is worked out only by utils/formula.ts" | **Fully applied 2026-10-23** (new; nothing older evaluated formulas). |
+| **Magic wand** (2026-10-23, CLAUDE.md "Magic wand", `components/MagicWand`) | `src/test/patterns.test.ts` "the magic wand comes from components/MagicWand" | **Fully applied 2026-10-23**: the calendar item modal (moved onto it) and the date calculator. |
+| **One date field** (2026-10-22, CLAUDE.md "Single entry points", `components/DateInput`) | `src/test/patterns.test.ts` "type=\"date\" only appears in DateInput" | **Fully applied 2026-10-22** (25 fields). Deliberate exception: `MobileQuickAddBar`'s hidden field that opens the phone's own date picker. |
+| **Block colours** and **"+" beside a part** (2026-10-22, CLAUDE.md "Block designs") | `src/test/patterns.test.ts` "each note block has its own colour", "\"+\" buttons beside a block's parts" | **Applied 2026-10-22**: every block with an accent; the "+" on hierarchy nodes. Candidates for the "+" (a choice, not a breach): types, breakdown, cycle, pyramid, timeline. Blocks without a colour token yet (they use status or neutral colours): inbox, pros and cons, compare, chart, diagram, code, maths, embed. |
+| **Deleting something empty doesn't ask** (2026-10-22, the user's rule; CLAUDE.md "Confirmations and alerts"; `confirmDelete(…, { empty })`, `utils/emptyContent.ts`, `deleteBlock`'s `isEmptyBlock`) | `src/test/patterns.test.ts` "deleting something empty doesn't ask" (ratchet `NOT_YET`, 17 on 2026-10-22) | **Applied 2026-10-22:** note blocks (pill, right-click, Ctrl+Delete), notes (tree and phone), tabs, notebooks (tree and phone), lists, list items (list and checklist), trackers, routines, Glossary records (no term, fields or links). **Remaining:** activities, activity types, schedules (modal and side pane), Endeavours / Purposes / tags (Manage, Sidebar: "empty" = used by nothing), watchlist items, saved Overviews, typing shortcuts, and the task and calendar item panes (`useItemActions` / `ItemActionDialog`: a title is required, so rarely empty). Never empty: Recycling Bin's Delete forever, backdrop pictures. |
 | **Pin to Quick Access** (2026-10-18, CLAUDE.md) | `src/test/patterns.test.ts` "Pin to Quick Access" (only `services/quickAccessPins.ts` pins or unpins; every pinnable type has a provider) | **Fully applied 2026-10-18** (new pattern, no older code). Pin entries not yet offered on: Map nodes, Glossary view rows, Overview rows. |
 | **A modal or pane is never taller than the screen** (2026-10-18, CLAUDE.md "Modals") | Review: a `.modal` / `.pane` rule in a `*.module.css` with no `max-height` (or full-height `top: 0; bottom: 0` / `height`) | **Fixed:** AccountPane (2026-10-18). **Remaining** (small, but can run off a very short window): `AddPurposeModal`, `AddTagModal`, `AddPortfolioTagModal`, `AddInvestmentPurposeModal`, `ConfirmDialog`, `ItemActionDialog`, `MarkdownLinkPrompt`. No mechanical check yet. |
 | **Hover to preview, click to open** (2026-10-18, CLAUDE.md "Modals", `hooks/useHoverOpen.ts`) | `grep -n "onMouseEnter" src/App.tsx` (hover timers kept by hand) | Bell and Settings use the hook. **Remaining:** the ☰ Sidebar's own `closeTimerRef` timers in App.tsx. |

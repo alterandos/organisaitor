@@ -22,8 +22,9 @@ describe('titlePrefillFor', () => {
   it('uses the Main tab\'s own name once renamed', () => expect(titlePrefillFor({ ...n, mainTabName: 'Overview' }, null)).toBe('Overview'));
 });
 
-describe('tabDatesText (a tab\'s hover in the tab bar)', () => {
+describe('tabDatesText (a tab\'s hover in the tab bar: its name and dates)', () => {
   const note = {
+    mainTabName: 'Main',
     createdAt: '2026-10-01T09:00:00.000Z',
     mainTabUpdatedAt: '2026-10-08T10:30:00.000Z',
     tabs: [
@@ -32,12 +33,12 @@ describe('tabDatesText (a tab\'s hover in the tab bar)', () => {
     ],
   };
   it('the main tab: created with the note, modified when its content last changed', () => {
-    expect(tabDatesText(note, null)).toMatch(/^Created .*2026.* · Modified .*2026/);
+    expect(tabDatesText(note, null)).toMatch(/^Main · Created .*2026.* · Modified .*2026/);
     expect(tabDatesText(note, MAIN_TAB_ID)).toBe(tabDatesText(note, null));
   });
   it('a tab: its own dates; a tab from before they were kept says so', () => {
     expect(tabDatesText(note, 't1')).not.toContain('not recorded');
-    expect(tabDatesText(note, 'old')).toBe('Created not recorded · Modified not recorded');
+    expect(tabDatesText(note, 'old')).toBe('Old · Created not recorded · Modified not recorded');
     expect(tabDatesText({ ...note, mainTabUpdatedAt: null }, null)).toMatch(/Modified not recorded$/);
   });
 });

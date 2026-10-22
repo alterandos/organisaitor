@@ -1,0 +1,106 @@
+/* The go-to-date picker (MiniDatePicker.tsx): the Calendar side pane's Go to date and the header's period picker. */
+/* ── Go to date (MiniDatePicker) ── */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.pickerYearRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+}
+.pickerStepBtn {
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.pickerStepBtn:hover { background: var(--color-bg); color: var(--color-text); }
+.pickerYearInput {
+  width: 4rem;
+  padding: 0.3rem 0.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: center;
+  background: var(--color-surface);
+  color: var(--color-text);
+  /* Hide the native spinner arrows — the «/‹/›/» buttons already cover stepping, and the
+     spinner's tiny hit target invited mis-clicks right next to them. */
+  -moz-appearance: textfield;
+}
+.pickerYearInput::-webkit-outer-spin-button,
+.pickerYearInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pickerMonthRow {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.pickerMonthSelect {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.pickerDayLabels {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+}
+.pickerDayLabels span {
+  font-size: 0.62rem;
+  color: var(--color-muted);
+}
+.pickerGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.pickerDay {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-size: 0.74rem;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+.pickerDay:hover { background: var(--color-bg); }
+.pickerDayOther { color: var(--color-muted); opacity: 0.5; }
+.pickerDayToday { border-color: var(--color-primary); }
+.pickerDaySelected { background: var(--color-primary); color: var(--color-on-primary); }
+.pickerDaySelected:hover { background: var(--color-primary); }
+
+/* As a popover, from the calendar header's period title (MiniDatePickerPopover). */
+.popover {
+  position: fixed;
+  z-index: var(--z-picker);
+  width: 17rem;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}

@@ -58,15 +58,15 @@ export function titlePrefillFor(note: Pick<Note, 'title' | 'tabs' | 'mainTabName
   return note.mainTabName && note.mainTabName !== 'Main' ? note.mainTabName : note.title;
 }
 
-// A tab's created and modified dates, as the tab bar shows them on hover (bottom left, through the
+// A tab's name with its created and modified dates, as the tab bar shows them on hover (bottom left, through the
 // app's link preview). The main tab was created with the note; tabs made before 2026-10-08 and a
 // main tab untouched since then have no recorded date for that part.
-export function tabDatesText(note: Pick<Note, 'tabs' | 'createdAt' | 'mainTabUpdatedAt'>, tabId: string | null): string {
+export function tabDatesText(note: Pick<Note, 'tabs' | 'createdAt' | 'mainTabUpdatedAt' | 'mainTabName'>, tabId: string | null): string {
   const L = LABELS.noteTabDates;
   const when = (iso: string | null | undefined) => (iso
     ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : L.notRecorded);
-  if (!tabId || tabId === MAIN_TAB_ID) return L.text(when(note.createdAt), when(note.mainTabUpdatedAt));
+  if (!tabId || tabId === MAIN_TAB_ID) return L.text(tabNameOf(note, MAIN_TAB_ID) ?? '', when(note.createdAt), when(note.mainTabUpdatedAt));
   const tab = note.tabs.find((t) => t.id === tabId);
-  return L.text(when(tab?.createdAt), when(tab?.updatedAt));
+  return L.text(tabNameOf(note, tabId) ?? '', when(tab?.createdAt), when(tab?.updatedAt));
 }

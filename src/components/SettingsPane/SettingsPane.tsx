@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import type { AppView } from '@/store/uiStore';
 import { useUIStore } from '@/store/uiStore';
-import { useSettingsStore, NOTE_COLOR_BARS } from '@/store/settingsStore';
+import { useSettingsStore, NOTE_COLOR_BARS, LINK_SUGGESTIONS } from '@/store/settingsStore';
 import { LABELS } from '@/config/labels';
 import { HOTKEYS, HOTKEY_GROUPS } from '@/config/hotkeys';
 import { useHotkeyOverridesStore, findConflicts, getEffectiveBinding } from '@/store/hotkeyOverridesStore';
@@ -12,6 +12,7 @@ import { rezoneAllCalendarData } from '@/services/timezoneMigration';
 import { StorageSection } from './StorageSection';
 import { NotificationsSection } from './NotificationsSection';
 import { TypingShortcutsSection } from './TypingShortcutsSection';
+import { ConvertersSection } from './ConvertersSection';
 import { SettingRow, Toggle } from './SettingControls';
 import { usePlatform } from '@/hooks/usePlatform';
 import styles from './SettingsPane.module.css';
@@ -54,7 +55,7 @@ function HotkeyCell({
   );
 }
 
-type SettingsSectionId = 'appearance' | 'voice' | 'typing' | 'notifications' | 'storage' | 'tasks' | 'notes' | 'calendar' | 'hotkeys';
+type SettingsSectionId = 'appearance' | 'voice' | 'typing' | 'converters' | 'notifications' | 'storage' | 'tasks' | 'notes' | 'calendar' | 'hotkeys';
 
 // Two ways in, as with the library (the ☰ hover Sidebar and its Manage modal): hovering the
 // Settings button peeks this as a narrow pane beside the page (`peek`, closed when the mouse
@@ -183,6 +184,8 @@ export function SettingsPane({ variant, hoverHandlers, onClosePeek }: {
   const toggleHideBlockedTasks  = useSettingsStore((s) => s.toggleHideBlockedTasks);
   const stickyHeadings          = useSettingsStore((s) => s.stickyHeadings);
   const dictionaryHighlight     = useSettingsStore((s) => s.dictionaryHighlight);
+  const linkSuggestions         = useSettingsStore((s) => s.linkSuggestions);
+  const setLinkSuggestions      = useSettingsStore((s) => s.setLinkSuggestions);
   const noteColorBars           = useSettingsStore((s) => s.noteColorBars);
   const setNoteColorBars        = useSettingsStore((s) => s.setNoteColorBars);
   const noteColorHeadings       = useSettingsStore((s) => s.noteColorHeadings);
@@ -329,6 +332,20 @@ export function SettingsPane({ variant, hoverHandlers, onClosePeek }: {
 
               <SettingRow name={LABELS.noteHeadings.sticky} desc={LABELS.noteHeadings.stickyDesc}>
                 <Toggle on={stickyHeadings} onToggle={toggleStickyHeadings} label={LABELS.noteHeadings.sticky} />
+              </SettingRow>
+
+              <SettingRow name={LABELS.glossary.linkSuggestions} desc={LABELS.glossary.linkSuggestionsDesc}>
+                <div className={styles.themeToggle} role="group" aria-label={LABELS.glossary.linkSuggestions}>
+                  {LINK_SUGGESTIONS.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={`${styles.themeBtn} ${linkSuggestions === v ? styles.themeBtnActive : ''}`}
+                      aria-pressed={linkSuggestions === v}
+                      onClick={() => setLinkSuggestions(v)}
+                    >{LABELS.glossary.linkSuggestionModes[v]}</button>
+                  ))}
+                </div>
               </SettingRow>
 
               <SettingRow name={LABELS.dictionary.setting} desc={LABELS.dictionary.settingDesc}>
@@ -495,6 +512,7 @@ export function SettingsPane({ variant, hoverHandlers, onClosePeek }: {
     { id: 'appearance', label: LABELS.settings.sections.appearance, node: appearanceSection },
     { id: 'voice',      label: LABELS.settings.sections.voice,      node: voiceSection },
     { id: 'typing',     label: LABELS.typingShortcuts.section,        node: <TypingShortcutsSection /> },
+    { id: 'converters', label: LABELS.converters.settings.heading,   node: <ConvertersSection /> },
     ...(isAndroid ? [{ id: 'notifications' as const, label: LABELS.settings.sections.notifications, node: <NotificationsSection /> }] : []),
     { id: 'storage',    label: LABELS.settings.sections.storage,    node: <StorageSection /> },
     { id: 'tasks',      label: LABELS.settings.sections.tasks,      here: 'tasks',    node: tasksSection },

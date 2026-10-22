@@ -46,6 +46,15 @@ export function resizeDrag(
   return { width: start.w, height: Math.max(MIN_PX, start.h + sy * dy), stretched: true };
 }
 
+// While resizing, a width within SNAP_PX of another picture's in the note (or the column's) snaps to
+// it, as PowerPoint and Word do, so pictures can be made exactly the same width. The nearest wins.
+export const SNAP_PX = 8;
+export function snapWidth(width: number, targets: readonly number[], tolerance = SNAP_PX): number | null {
+  let best: number | null = null;
+  for (const t of targets) if (Math.abs(t - width) <= tolerance && (best === null || Math.abs(t - width) < Math.abs(best - width))) best = t;
+  return best;
+}
+
 // Dragging a crop handle by a fraction of the whole picture (dx of its width, dy of its height).
 // Each side moves on its own, as in a word processor; a crop always leaves some of the picture.
 export function cropDrag(handle: Handle, start: Crop, dx: number, dy: number): Crop {

@@ -13,12 +13,30 @@ const order = () => Object.values(usePinnedItemsStore.getState().pins).sort((a, 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2030-01-01T09:00:00Z'));
-  usePinnedItemsStore.setState(usePinnedItemsStore.getInitialState(), true);
+  // Starts empty: the scratchpad's default pin has its own tests below.
+  usePinnedItemsStore.setState({ ...usePinnedItemsStore.getInitialState(), pins: {} }, true);
   useNoteStore.setState(useNoteStore.getInitialState(), true);
   useTaskStore.setState(useTaskStore.getInitialState(), true);
   useUIStore.setState(useUIStore.getInitialState(), true);
 });
 afterEach(() => vi.useRealTimers());
+
+describe('the scratchpad is pinned by default', () => {
+  it('a fresh install starts with it pinned', () => {
+    expect(Object.keys(usePinnedItemsStore.getInitialState().pins)).toEqual(['place:scratchpad']);
+  });
+
+  it('an existing install gets it once, after its own pins (v1 → v2)', async () => {
+    localStorage.setItem('quick-access-pins', JSON.stringify({ version: 1, state: { pins: {
+      'note:n1': { id: 'note:n1', type: 'note', entityId: 'n1', order: 0, createdAt: 'x', updatedAt: 'x' },
+    } } }));
+    vi.resetModules();
+    const { usePinnedItemsStore: fresh } = await import('@/store/pinnedItemsStore');
+    const pins = Object.values(fresh.getState().pins).sort((a, b) => a.order - b.order).map((p) => p.id);
+    expect(pins).toEqual(['note:n1', 'place:scratchpad']);
+    localStorage.removeItem('quick-access-pins');
+  });
+});
 
 describe('pinnedItemsStore', () => {
   it('pins once per item, at the end, and unpins', () => {

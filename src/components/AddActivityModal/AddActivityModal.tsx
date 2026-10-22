@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { DateInput } from '@/components/DateInput/DateInput';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -88,12 +89,7 @@ function ActivityFieldInput({ field, value, onChange }: FieldInputProps) {
 
     case 'date':
       return (
-        <input
-          className={styles.input}
-          type="date"
-          value={String(value ?? '')}
-          onChange={(e) => onChange(e.target.value || null)}
-        />
+        <DateInput className={styles.input} value={String(value ?? '')} onChange={(v) => onChange(v || null)} />
       );
 
     case 'duration': {
@@ -319,14 +315,7 @@ export function AddActivityModal() {
 
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor="aam-date">Date</label>
-            <input
-              id="aam-date"
-              className={styles.input}
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-            />
+            <DateInput id="aam-date" className={styles.input} value={date} onChange={(v) => setDate(v)} required />
           </div>
 
           <div className={tracksDistance ? styles.row : undefined}>

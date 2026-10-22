@@ -6,10 +6,11 @@ import { NodeSelection } from '@tiptap/pm/state';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { TimelineExtensions } from './Timeline';
 import { CycleExtensions } from './Cycle';
-import { NoteBlockSelect, NOTE_BLOCK_NODES, deleteBlock } from './blockDesigns';
+import { NoteBlockDelete, NoteBlockSelect, NOTE_BLOCK_NODES, deleteBlock, isEmptyBlock } from './blockDesigns';
+import { useDialogStore } from '@/store/dialogStore';
 import { NoteBlockPicks, BLOCK_PART_NODES, deletePicked, partAt, pickedText, picksOf, togglePick, clearPicks } from './blockPicks';
 
-vi.mock('@/components/ConfirmDialog/dialogs', () => ({ alertDialog: vi.fn(async () => {}) }));
+vi.mock('@/components/ConfirmDialog/dialogs', async (orig) => ({ ...(await orig<typeof import('@/components/ConfirmDialog/dialogs')>()), alertDialog: vi.fn(async () => {}) }));
 
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
 Range.prototype.getClientRects = noRects;
@@ -29,7 +30,7 @@ const CYCLE = '<div data-type="cycle"><div data-cycle-name>Loop</div>'
 function make(block: string) {
   editor = new Editor({
     element: document.createElement('div'),
-    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, ...TimelineExtensions, ...CycleExtensions, NoteBlockSelect, NoteBlockPicks],
+    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, ...TimelineExtensions, ...CycleExtensions, NoteBlockSelect, NoteBlockDelete, NoteBlockPicks],
     content: `<p>before</p>${block}<p>after</p>`,
   });
 }
@@ -42,8 +43,8 @@ const pick = (pos: number) => togglePick(editor.view, partAt(editor.state.doc, p
 const blocks = () => { const out: string[] = []; editor.state.doc.forEach((s) => s.forEach((b) => out.push(b.type.name))); return out; };
 
 describe('picking parts of a note block', () => {
-  it('every note block names its part type, except the ones with no parts (chart, maths, Glossary card: one atom; code: one text)', () => {
-    const NO_PARTS = new Set(['chart', 'codeBlock', 'mathBlock', 'glossaryCard', 'diagram']);
+  it('every note block names its part type, except the ones with no parts (chart, maths, Glossary card, diagram, convert: one atom; code: one text)', () => {
+    const NO_PARTS = new Set(['chart', 'codeBlock', 'mathBlock', 'glossaryCard', 'diagram', 'convertBlock']);
     const missing = [...NOTE_BLOCK_NODES].filter((b) => !NO_PARTS.has(b) && !BLOCK_PART_NODES[b]);
     expect(missing).toEqual([]);
   });
@@ -103,12 +104,52 @@ describe('picking parts of a note block', () => {
 });
 
 describe('deleting a whole block', () => {
-  it('deleteBlock removes the block (the pill and right-click Delete)', () => {
+  const posOf = (name: string) => { let pos = -1; editor.state.doc.descendants((n, p) => { if (n.type.name === name) pos = p; }); return pos; };
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  afterEach(() => useDialogStore.setState({ queue: [] }));
+
+  it('a block with something in it asks first (the pill, right-click Delete, Ctrl+Delete); cancel keeps it', async () => {
     make(TIMELINE);
-    let pos = -1;
-    editor.state.doc.descendants((n, p) => { if (n.type.name === 'timeline') pos = p; });
-    deleteBlock(editor.view, pos);
+    void deleteBlock(editor.view, posOf('timeline'));
+    await flush();
+    const asked = useDialogStore.getState().queue[0];
+    expect(asked.title).toBe('Delete this block?');
+    asked.resolve('cancel');
+    await flush();
+    expect(blocks()).toEqual(['paragraph', 'timeline', 'paragraph']);
+    useDialogStore.setState({ queue: [] });
+    void deleteBlock(editor.view, posOf('timeline'));
+    await flush();
+    useDialogStore.getState().queue[0].resolve('confirm');
+    await flush();
     expect(blocks()).toEqual(['paragraph', 'paragraph']);
     expect(editor.state.selection).not.toBeInstanceOf(NodeSelection);
+  });
+
+  it('an empty block goes at once, without asking', async () => {
+    make('<div data-type="timeline"><div data-type="timeline-item"><div data-timeline-when></div><p></p></div></div>');
+    expect(isEmptyBlock(editor.state.doc.nodeAt(posOf('timeline'))!)).toBe(true);
+    await deleteBlock(editor.view, posOf('timeline'));
+    expect(useDialogStore.getState().queue).toHaveLength(0);
+    expect(blocks()).toEqual(['paragraph', 'paragraph']);
+  });
+
+  it('Ctrl+Delete typed in an input of the block’s own (a card field, maths) deletes the block too', async () => {
+    make('<div data-type="timeline"><div data-type="timeline-item"><div data-timeline-when></div><p></p></div></div>');
+    const field = document.createElement('div');
+    field.contentEditable = 'true';
+    editor.view.dom.querySelector('[data-type="timeline"]')!.appendChild(field);
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', ctrlKey: true, bubbles: true, cancelable: true }));
+    await flush();
+    expect(blocks()).toEqual(['paragraph', 'paragraph']);
+  });
+
+  it('Ctrl+Delete with the cursor inside a block deletes that block', async () => {
+    make('<div data-type="timeline"><div data-type="timeline-item"><div data-timeline-when></div><p></p></div></div>');
+    editor.commands.setTextSelection(posOf('timeline') + 3);
+    const event = new KeyboardEvent('keydown', { key: 'Delete', ctrlKey: true, bubbles: true, cancelable: true });
+    editor.view.someProp('handleKeyDown', (f) => f(editor.view, event));
+    await flush();
+    expect(blocks()).toEqual(['paragraph', 'paragraph']);
   });
 });

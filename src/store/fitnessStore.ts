@@ -64,7 +64,7 @@ export const useFitnessStore = create<FitnessStore>()(
 
       addActivity: (input) => {
         const ts = now();
-        const id = nanoid() as ActivityId;
+        const id = input.id ?? (nanoid() as ActivityId);
         const activity: Activity = {
           id,
           type:               input.type,

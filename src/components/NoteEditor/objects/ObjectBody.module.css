@@ -74,7 +74,7 @@
 .whenPart:hover,
 .placeText:hover,
 .placeOpen:hover {
-  background: color-mix(in srgb, var(--color-success) 20%, transparent);
+  background: color-mix(in srgb, var(--pane-accent, var(--color-item-calendar)) 20%, transparent);
   color: var(--color-text);
 }
 

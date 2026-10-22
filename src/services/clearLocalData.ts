@@ -4,6 +4,7 @@ import { clearMicrosoftCursors } from '@/services/microsoftCalendar';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useOverviewStore } from '@/store/overviewStore';
+import { useConverterStore } from '@/store/converterStore';
 import { useNoteStore } from '@/store/noteStore';
 import { usePictureStore } from '@/store/pictureStore';
 import { useTrashStore } from '@/store/trashStore';
@@ -15,6 +16,7 @@ import { useNotificationStore } from '@/store/notificationStore';
 import { useUIStore } from '@/store/uiStore';
 import { useAgentLogStore } from '@/store/agentLogStore';
 import { useAgentBatchStore } from '@/store/agentBatchStore';
+import { useFitnessStore } from '@/store/fitnessStore';
 
 // Empties this device's copy of every CLOUD-SYNCED store (the persist middleware rewrites each
 // store's localStorage key with the empty state, so nothing is left behind there either) plus
@@ -22,7 +24,7 @@ import { useAgentBatchStore } from '@/store/agentBatchStore';
 // must have confirmed the data is in the cloud — see requestSignOut() in ./signOut.ts.
 //
 // Deliberately NOT touched, because it exists only on this device and wiping it would destroy
-// the user's only copy: fitnessStore, routineStore, portfolioStore.columnConfig, settingsStore,
+// the user's only copy: routineStore, portfolioStore.columnConfig, settingsStore,
 // hotkeyOverridesStore, notificationStore.notifiedLog. When one of those gains cloud sync, add
 // it here in the same change.
 //
@@ -41,7 +43,11 @@ export function clearSyncedLocalData(): void {
   useTrackerStore.setState({ entries: useTrackerStore.getInitialState().entries });
   useScheduleStore.setState({ schedules: useScheduleStore.getInitialState().schedules });
   useOverviewStore.setState({ overviews: useOverviewStore.getInitialState().overviews });
+  useConverterStore.setState({ converters: useConverterStore.getInitialState().converters, recent: [] });
   usePinnedItemsStore.setState({ pins: usePinnedItemsStore.getInitialState().pins });
+  // Synced since 2026-10-22 (before that it stayed on the device, and showed under the next account).
+  const fitness = useFitnessStore.getInitialState();
+  useFitnessStore.setState({ activities: fitness.activities, activityTypes: fitness.activityTypes });
 
   const note = useNoteStore.getInitialState();
   useNoteStore.setState({ notes: note.notes, noteTags: note.noteTags, structuredTagEntries: note.structuredTagEntries });

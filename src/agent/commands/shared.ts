@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { datedRule } from '@/utils/notifyRule';
 import { AgentError } from '@/agent/errors';
 import { read } from '@/agent/access';
 import { repeatPattern } from '@/utils/recurrence';
@@ -207,8 +208,9 @@ export function reminderDetail(r: CalendarReminder) {
     ...compact({
       notes: r.notes,
       links: r.links,
-      notifyDaysBefore: r.time ? null : r.notifyDaysBefore,
-      notifyAtTime: r.time ? null : r.notifyAtTime,
+      notifyDaysBefore: datedRule(r, 'reminder').kind === 'daysAt' ? r.notifyDaysBefore : null,
+      notifyAtTime: datedRule(r, 'reminder').kind === 'daysAt' ? r.notifyAtTime : null,
+      notify: r.notify === false ? false : null,
       archiveReason: r.archiveReason,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
@@ -243,6 +245,7 @@ export function deadlineDetail(d: CalendarDeadline) {
       // when one is set (see CalendarDeadline's own doc comment in types/index.ts).
       notifyDaysBefore: d.notifyDaysBefore,
       notifyAtTime: d.notifyAtTime,
+      notify: d.notify === false ? false : null,
       archiveReason: d.archiveReason,
       createdAt: d.createdAt,
       updatedAt: d.updatedAt,

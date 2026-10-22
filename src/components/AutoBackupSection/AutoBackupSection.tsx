@@ -17,7 +17,6 @@ export function AutoBackupSection() {
   const setEnabled    = useSettingsStore((s) => s.setAutoBackupEnabled);
   const threshold      = useSettingsStore((s) => s.autoBackupChangeThreshold);
   const setThreshold   = useSettingsStore((s) => s.setAutoBackupChangeThreshold);
-  const maxCount       = useSettingsStore((s) => s.autoBackupMaxCount);
   const user = useAuthStore((s) => s.user);
 
   const [snapshots,   setSnapshots]   = useState<BackupSnapshotMeta[]>([]);
@@ -72,7 +71,7 @@ export function AutoBackupSection() {
         </label>
       </div>
       <p className={styles.desc}>
-        Saves a snapshot on this device once enough has changed — no account needed, nothing leaves your device. Keeps up to {maxCount}, spaced out over time (recent ones dense, older ones sparse).
+        Saves a snapshot on this device once enough has changed — no account needed, nothing leaves your device. Keeps the newest, and one from at least 3 minutes, 10 minutes, an hour, a day, a week, two weeks and a month back.
       </p>
       {enabled && (
         <label className={styles.thresholdRow}>

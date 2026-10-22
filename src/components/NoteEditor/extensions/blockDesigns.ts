@@ -12,6 +12,8 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { ContextMenuItem } from '@/contextMenu/types';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { registerEscapeClose } from '@/hooks/useEscapeClose';
+import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
+import { closeHistory } from '@tiptap/pm/history';
 import { LABELS } from '@/config/labels';
 import { SWATCH_IDS } from '@/config/swatches';
 import { createElement } from 'react';
@@ -77,7 +79,9 @@ export function placeBlock(tr: Transaction, from: number, node: PMNode): number 
 export function replaceTypedWithBlock(state: EditorState, from: number, to: number, node: PMNode): { tr: Transaction; at: number } | null {
   const $start = state.doc.resolve(from);
   while (from > $start.start() && /\s/.test(state.doc.textBetween(from - 1, from))) from--;
-  const tr = state.tr.delete(from, to);
+  // Its own undo step, so Ctrl+Z straight after takes the new block away (giving back what was
+  // typed), rather than that and the typing before it together.
+  const tr = closeHistory(state.tr).delete(from, to);
   const at = placeBlock(tr, from, node);
   return at === null ? null : { tr, at };
 }
@@ -201,7 +205,7 @@ export function setBlockFrame(view: EditorView, pos: number, settings: FrameSett
 // Blocks drawn as a card, with a border of their own (a Glossary card, a question): they take a
 // Shade but no Outline, which drew a second, larger border around theirs (decided with the user
 // 2026-10-13; the bigger blocks, a cycle or a timeline, keep it). A new card-like block joins here.
-export const CARD_BLOCK_NODES = new Set(['glossaryCard', 'questionBlock']);
+export const CARD_BLOCK_NODES = new Set(['glossaryCard', 'questionBlock', 'convertBlock']);
 export const takesOutline = (nodeName: string | undefined): boolean => !nodeName || !CARD_BLOCK_NODES.has(nodeName);
 const framesFor = (nodeName: string | undefined): BlockFrame[] => BLOCK_FRAMES.filter((f) => f !== 'outlined' || takesOutline(nodeName));
 
@@ -517,11 +521,64 @@ export function selectBlock(view: EditorView, pos: number): void {
 }
 
 // Deletes the whole block (Ctrl+Z brings it back).
-export function deleteBlock(view: EditorView, pos: number): void {
+// Attributes that hold content of their own (a picture, an icon, a formula, a chart's data, a
+// linked note or record), so a block with one of them set isn't empty though it has no text.
+const CONTENT_ATTRS = ['image', 'icon', 'src', 'pictureId', 'latex', 'spec', 'entryId', 'noteId'];
+const hasValue = (v: unknown) => v !== null && v !== undefined && v !== '' && !(typeof v === 'object' && Object.keys(v as object).length === 0);
+
+// A block with nothing in it (just made, or emptied): deleting it doesn't ask.
+export function isEmptyBlock(node: PMNode): boolean {
+  if (node.textContent.trim()) return false;
+  let empty = !CONTENT_ATTRS.some((k) => hasValue(node.attrs[k]));
+  node.descendants((n) => {
+    if (!empty) return false;
+    if (CONTENT_ATTRS.some((k) => hasValue(n.attrs[k]))) empty = false;
+    return empty;
+  });
+  return empty;
+}
+
+// Blocks whose deletion asks its own question (a Glossary card: the record and its links go too).
+const ASKS_ITSELF = new Set(['glossaryCard', 'glossaryChip']);
+
+// Deletes a whole block (the pill's trash, right-click Delete block, Ctrl+Delete inside it). One
+// with something in it asks first (the user's rule, 2026-10-22: anything deleted asks, unless it's
+// empty); it's still one undo step.
+export async function deleteBlock(view: EditorView, pos: number): Promise<void> {
   const node = view.state.doc.nodeAt(pos);
   if (!node || !NOTE_BLOCK_NODES.has(node.type.name)) return;
-  view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize).scrollIntoView());
+  let at = pos;
+  if (!ASKS_ITSELF.has(node.type.name) && !isEmptyBlock(node)) {
+    const L = LABELS.noteBlocks;
+    const text = node.textContent.trim();
+    const ok = await confirmDialog({
+      title:        L.deleteBlockTitle,
+      itemName:     text ? (text.length > 60 ? `${text.slice(0, 60)}…` : text) : undefined,
+      message:      L.deleteBlockMessage,
+      confirmLabel: L.deleteBlock,
+      destructive:  true,
+    });
+    if (!ok || view.isDestroyed) return;
+    // The note may have changed while it asked: find the same block again.
+    if (view.state.doc.nodeAt(at) !== node) {
+      at = -1;
+      view.state.doc.descendants((n, p) => { if (n === node) at = p; return at < 0; });
+      if (at < 0) return;
+    }
+  }
+  view.dispatch(view.state.tr.delete(at, at + node.nodeSize).scrollIntoView());
   view.focus();
+}
+
+// The innermost block holding the cursor, or the block selected whole.
+function blockUnderCursor(state: EditorState): number | null {
+  const sel = state.selection;
+  if (sel instanceof NodeSelection && NOTE_BLOCK_NODES.has(sel.node.type.name)) return sel.from;
+  const { $from } = sel;
+  for (let d = $from.depth; d > 0; d--) {
+    if (NOTE_BLOCK_NODES.has($from.node(d).type.name)) return $from.before(d);
+  }
+  return null;
 }
 
 // The block a DOM element is in, as a document position.
@@ -553,7 +610,7 @@ export function selectButton(view: EditorView, getPos: () => number | undefined)
   select.innerHTML = SELECT_ICON;
   const del = pillButton(LABELS.noteBlocks.deleteBlock, () => {
     const p = getPos();
-    if (p !== undefined) deleteBlock(view, p - 1);
+    if (p !== undefined) void deleteBlock(view, p - 1);
   });
   del.setAttribute('data-block-delete', '');
   del.innerHTML = DELETE_ICON;
@@ -583,6 +640,48 @@ export const NoteBlockSelect = Extension.create({
         return true;
       },
     };
+  },
+});
+
+// Ctrl+Delete inside a block deletes the block (asking first if it has anything in it). Above
+// the editor's own keymap (priority 100), which would otherwise delete the next word.
+export const NoteBlockDelete = Extension.create({
+  name: 'noteBlockDelete',
+  priority: 110,
+
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Delete': () => {
+        const pos = blockUnderCursor(this.editor.state);
+        if (pos === null) return false;
+        void deleteBlock(this.editor.view, pos);
+        return true;
+      },
+    };
+  },
+
+  // A block's own inputs (a Glossary card's fields, maths, a chart's table) keep their keys from
+  // the editor's keymap, so Ctrl+Delete typed in one is caught here, before it reaches the input,
+  // and deletes the block that input is in.
+  addProseMirrorPlugins() {
+    return [new Plugin({
+      key: new PluginKey('noteBlockDeleteFromInput'),
+      view(view) {
+        const onKey = (e: KeyboardEvent) => {
+          if (e.key !== 'Delete' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+          const target = e.target instanceof Element ? e.target : null;
+          if (!target || target === view.dom || !target.closest('[data-note-block]')) return;
+          const pos = blockPosAt(view, target);
+          if (pos === null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          (document.activeElement as HTMLElement | null)?.blur();
+          void deleteBlock(view, pos);
+        };
+        view.dom.addEventListener('keydown', onKey, true);
+        return { destroy: () => view.dom.removeEventListener('keydown', onKey, true) };
+      },
+    })];
   },
 });
 
@@ -733,7 +832,7 @@ registerContextMenuProvider({
     if (pos === null) return [];
     return [
       { id: 'select-block', label: LABELS.noteBlocks.selectBlock, icon: '⬚', shortcut: 'Esc', run: () => selectBlock(view, pos) },
-      { id: 'delete-block', label: LABELS.noteBlocks.deleteBlock, icon: createElement(TrashIcon), destructive: true, run: () => deleteBlock(view, pos) },
+      { id: 'delete-block', label: LABELS.noteBlocks.deleteBlock, icon: createElement(TrashIcon), destructive: true, run: () => { void deleteBlock(view, pos); } },
     ];
   },
 });

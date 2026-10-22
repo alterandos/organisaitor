@@ -4,6 +4,8 @@ import { effectiveLevels } from './extensions/hierarchyLayout';
 import { chartToTable, normalizeChart } from '@/charts/chartSpec';
 import { glossaryEntry } from '@/services/glossary';
 import { diagramToText, normalizeDiagram } from '@/diagrams/diagramSpec';
+import { convertText } from '@/components/ConverterPane/convertValue';
+import { useConverterStore } from '@/store/converterStore';
 
 // The plain text a copy from a note puts on the clipboard (editorProps.clipboardTextSerializer).
 // Rich targets (Word, Docs, mail) take the HTML copy and keep everything; a plain-text target (a
@@ -137,6 +139,9 @@ function block(node: PMNode): string {
       });
       return lines.join('\n');
     }
+    case 'convertBlock':
+      // "5 m = 16.4 ft", worked out as it reads now.
+      return convertText({ converter: node.attrs.converter, from: node.attrs.from, to: node.attrs.to, values: node.attrs.values ?? {}, reverse: !!node.attrs.reverse }, useConverterStore.getState().converters);
     case 'diagram':
       // Each arrow as "A → B", then any box on its own.
       return diagramToText(normalizeDiagram(node.attrs.spec));

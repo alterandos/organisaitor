@@ -17,14 +17,29 @@
   width: 100%;
   max-width: 480px;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 1.5rem;
+  padding: 1.5rem 1.5rem 1rem;
   box-shadow: 0 -4px 28px rgba(0,0,0,0.14);
-  max-height: 92vh;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The header, kind switch and buttons stay; the fields between them scroll. */
+.form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.body {
   overflow-y: auto;
+  min-height: 0;
+  margin: 0 -0.25rem;
+  padding: 0 0.25rem;
 }
 
 @media (min-width: 520px) {
-  .modal { border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+  .modal { border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0,0,0,0.18); max-height: calc(100dvh - 2rem); }
 }
 
 .header {
@@ -34,7 +49,8 @@
   margin-bottom: 1rem;
 }
 
-.title { font-size: 1rem; font-weight: 600; }
+.title { display: inline-flex; align-items: center; gap: var(--space-3); font-size: var(--text-base); font-weight: 600; }
+.titleIcon { font-size: var(--text-lg); line-height: 1; }
 
 .closeBtn {
   background: none;
@@ -81,9 +97,18 @@
 }
 
 /* ── Form fields ── */
+.titleRow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+
 .titleInput {
   display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   font-size: 1rem;
   font-family: inherit;
   color: var(--color-text);
@@ -92,7 +117,6 @@
   border-radius: var(--radius-md);
   padding: 0.65rem 0.85rem;
   outline: none;
-  margin-bottom: 0.75rem;
   transition: border-color 140ms ease;
 }
 .titleInput:focus { border-color: var(--color-primary); }
@@ -146,8 +170,6 @@
 .select     { width: 100%; cursor: pointer; }
 .dateInput  { width: fit-content; }
 .timeInput  { width: 7.5rem; }
-.notifyNum  { width: 4rem; font-size: 0.9rem; font-family: inherit; color: var(--color-text); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.5rem 0.7rem; outline: none; transition: border-color 140ms ease; }
-.notifyNum:focus { border-color: var(--color-primary); }
 .select:focus,
 .dateInput:focus,
 .timeInput:focus { border-color: var(--color-primary); }
@@ -155,6 +177,7 @@
 .timeRow {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -167,7 +190,8 @@
   display: flex;
   justify-content: flex-end;
   gap: 0.65rem;
-  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
 }
 
 .cancelBtn {
@@ -239,12 +263,6 @@
   color: var(--color-primary);
 }
 
-.repeatSmall {
-  font-size: 0.82rem;
-  color: var(--color-muted);
-  white-space: nowrap;
-}
-
 .formExpandBtn {
   display: flex;
   align-items: center;
@@ -265,6 +283,14 @@
 }
 .formExpandBtn:hover { color: var(--color-text); }
 
-.checkboxInput {
-  margin-right: 0.4rem;
+/* Every checkbox option (Important, Notify, Tentative, Repeat, Background) looks the same. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
 }
+.check input { margin: 0; }

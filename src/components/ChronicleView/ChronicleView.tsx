@@ -1,4 +1,5 @@
 import { NoteSplitView } from '@/components/NoteSplitView/NoteSplitView';
+import { notebookIsEmpty } from '@/store/noteStore';
 import { pageKeyBlocked } from '@/utils/pageKeys';
 import { usePinAction } from '@/hooks/usePinAction';
 import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
@@ -209,7 +210,7 @@ function NoteTagTreeNode({
   };
 
   const handleDelete = async () => {
-    if (!(await confirmDelete('notebook', tag.name, 'All its contents will be deleted too.'))) return;
+    if (!(await confirmDelete('notebook', tag.name, 'All its contents will be deleted too.', { empty: notebookIsEmpty(tag.id as NoteTagId) }))) return;
     deleteNoteTag(tag.id as NoteTagId);
     if (isSelected) setSelected(null);
   };
@@ -419,10 +420,18 @@ export function ChronicleView() {
   // pressed again, so Up/Down keep moving through the notes (asked for 2026-10-05).
   const [kbOpenedNoteId, setKbOpenedNoteId] = useState<string | null>(null);
   const [prevEditingNoteIdForFocus, setPrevEditingNoteIdForFocus] = useState(editingNoteId);
+  // Not when notes are side by side and the focus just moved to another pane (a click into a note
+  // already showing): that pane's editor already has the click, and a focus signal would move the
+  // cursor to its remembered place (found 2026-10-22).
+  const notePanes = useUIStore((s) => s.notePanes);
   if (editingNoteId !== prevEditingNoteIdForFocus) {
     setPrevEditingNoteIdForFocus(editingNoteId);
-    if (editingNoteId && editingNoteId !== kbOpenedNoteId) setEditorFocusSignal((s) => s + 1);
-    else if (kbOpenedNoteId) setKbOpenedNoteId(null);
+    const paneSwitch = noteLayout !== 'single' && !!editingNoteId && !!prevEditingNoteIdForFocus
+      && notePanes.includes(editingNoteId) && notePanes.includes(prevEditingNoteIdForFocus);
+    if (!paneSwitch) {
+      if (editingNoteId && editingNoteId !== kbOpenedNoteId) setEditorFocusSignal((s) => s + 1);
+      else if (kbOpenedNoteId) setKbOpenedNoteId(null);
+    }
   }
   // Opening a note by keyboard also zeroes the focus signal: NoteEditor focuses on any non-zero
   // signal when it mounts (no note was open before), and a stale count would do exactly that.

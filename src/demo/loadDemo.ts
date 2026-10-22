@@ -11,6 +11,7 @@ import { clearSyncedLocalData } from '@/services/clearLocalData';
 import { flushOpenNoteEditors } from '@/services/liveNoteEditor';
 import { addPicture, setBackdrop } from '@/services/pictures';
 import { addSticky, docForText, setStickyContent, stickyDocOf } from '@/services/stickyNotes';
+import { ensureScratchpad } from '@/services/scratchpad';
 import { useAuthStore } from '@/store/authStore';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useRoutineStore } from '@/store/routineStore';
@@ -86,6 +87,13 @@ function livedIn(demo: DemoAccount, base: Date) {
     if (doc) setStickyContent(id, doc);
     useStickyStore.getState().setPlace(id, place);
   }
+  // The scratchpad (Alt+P): a few things jotted down in passing.
+  const pad = stickyDocOf(docForText([
+    'Room 3.14 for the GEOS215 tute (moved!)',
+    'Library card PIN reset: ask at the desk',
+    'Sam: borrow the field notebook back before Thursday',
+  ].join('\n')));
+  if (pad) setStickyContent(ensureScratchpad(), pad, true);
 
   const recent = useRecentItemsStore.getState();
   for (const id of [demo.notes.hub, demo.notes.minerals, demo.notes.trip, demo.notes.carbon, demo.notes.essay]) recent.recordVisit('note', id);

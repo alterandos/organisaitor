@@ -29,6 +29,7 @@ const reminderFields = {
   time: timeStr.nullish().describe('Leave out for an all-day reminder'),
   notifyDaysBefore: z.number().int().min(0).max(60).optional().describe('For an untimed reminder: how many days before to notify (0 = on the day)'),
   notifyAtTime: timeStr.optional().describe('For an untimed reminder: what time of day to notify'),
+  notify: z.boolean().optional().describe('Reminders and deadlines: false = never notify (default true)'),
 };
 
 const CALENDAR_HELP =
@@ -68,7 +69,7 @@ export const createCalendarItem = defineCommand({
         const id = write.createReminder(buildCalendarReminderInput({
           title: input.title, date: input.date, time: input.time, notes: input.notes, links: input.links,
           collectionId: (input.endeavourId ?? null) as never, repeat, important: input.important,
-          notifyDaysBefore: input.notifyDaysBefore, notifyAtTime: input.notifyAtTime,
+          notifyDaysBefore: input.notifyDaysBefore, notifyAtTime: input.notifyAtTime, notify: input.notify,
         }));
         ctx.seen('reminder', id);
         return { created: reminderDetail(read.reminder(id) as CalendarReminder) };
@@ -76,7 +77,7 @@ export const createCalendarItem = defineCommand({
       const id = write.createDeadline(buildCalendarDeadlineInput({
         title: input.title, date: input.date, time: input.time, notes: input.notes, links: input.links,
         collectionId: (input.endeavourId ?? null) as never, repeat, important: input.important,
-        notifyDaysBefore: input.notifyDaysBefore, notifyAtTime: input.notifyAtTime,
+        notifyDaysBefore: input.notifyDaysBefore, notifyAtTime: input.notifyAtTime, notify: input.notify,
       }));
       ctx.seen('deadline', id);
       return { created: deadlineDetail(read.deadline(id) as CalendarDeadline) };
@@ -141,6 +142,9 @@ export const updateCalendarItem = defineCommand({
       if (input.time !== undefined) changes.time = input.time;
       if (input.notifyDaysBefore !== undefined) changes.notifyDaysBefore = input.notifyDaysBefore;
       if (input.notifyAtTime !== undefined) changes.notifyAtTime = input.notifyAtTime;
+      // Days before / a time of day are the "days before, at" setting (utils/notifyRule.ts).
+      if (input.notifyDaysBefore !== undefined || input.notifyAtTime !== undefined) changes.notifyMode = 'daysAt';
+      if (input.notify !== undefined) changes.notify = input.notify;
       if (Object.keys(changes).length === 0) throw new AgentError('invalid', 'Nothing to change: pass at least one field besides id.');
       if (ref.kind === 'reminder') {
         write.updateReminder(r.id, changes);
@@ -184,6 +188,7 @@ export const updateCalendarItem = defineCommand({
     if (input.notifyBefore !== undefined) {
       changes.notifyBeforeValue = input.notifyBefore ? input.notifyBefore.value : null;
       if (input.notifyBefore) changes.notifyBeforeUnit = input.notifyBefore.unit;
+      if (input.notifyBefore) changes.notifyMode = 'before';
     }
     if (Object.keys(changes).length === 0) throw new AgentError('invalid', 'Nothing to change: pass at least one field besides id.');
     write.updateEvent(e.id, changes);

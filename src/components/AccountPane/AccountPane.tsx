@@ -332,8 +332,7 @@ export function AccountPane() {
               ) : vaultStatus === 'unavailable' ? (
                 <>
                 <p className={styles.hint}>
-                  Encryption is unavailable right now — the vault couldn't be read from Supabase
-                  (check that migrations 019 and 022 have been run). Everything else syncs normally.
+                  Encryption is unavailable right now — the vault couldn't be read from the cloud. Everything else syncs normally.
                   {getVaultError() && <><br /><code>{getVaultError()}</code></>}
                 </p>
                 <button className={styles.exportBtn} type="button" onClick={() => user && retryVaultCheck(user.id)}>Retry</button>

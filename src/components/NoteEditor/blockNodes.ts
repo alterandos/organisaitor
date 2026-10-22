@@ -4,7 +4,7 @@
 // them. A new block adds its root node here, and its part type if it has parts.
 
 // Every note block's root node: selectable whole, framable, linkable.
-export const NOTE_BLOCK_NODES = new Set(['timeline', 'quoteBlock', 'conclusion', 'types', 'idKey', 'prosCons', 'argument', 'options', 'cycle', 'breakdown', 'hierarchy', 'pyramid', 'chart', 'codeBlock', 'mathBlock', 'inbox', 'glossaryCard', 'questionBlock', 'compareBlock', 'diagram', 'hub']);
+export const NOTE_BLOCK_NODES = new Set(['timeline', 'quoteBlock', 'conclusion', 'types', 'idKey', 'prosCons', 'argument', 'options', 'cycle', 'breakdown', 'hierarchy', 'pyramid', 'chart', 'codeBlock', 'mathBlock', 'inbox', 'glossaryCard', 'questionBlock', 'compareBlock', 'diagram', 'hub', 'convertBlock']);
 
 // A block's part type: what Ctrl+click picks, and what a link can point at inside a block.
 export const BLOCK_PART_NODES: Record<string, string> = {

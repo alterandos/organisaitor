@@ -15,6 +15,7 @@ import { setImportance, toggleReview } from '../extensions/Importance';
 import { BUILTIN_TAGS } from '../builtinTags';
 import { quoteFromSelection } from '../extensions/Quote';
 import { conclusionFromSelection } from '../extensions/Conclusion';
+import { mathsFromSelection } from '../extensions/Maths';
 import { addWordFromSelection } from '@/services/dictionaryActions';
 import { closeSelectionMenu, getSelectionMenu } from './selectionMenuState';
 import { objectTriggerStorage } from './NoteObjectTrigger';
@@ -132,6 +133,7 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
       { key: 'review', group: 'mark', icon: <ReviewIcon />, label: reviewing ? LABELS.importance.stopReviewing : LABELS.importance.reviewLater, run: after(() => toggleReview(view, range.from, range.to)) },
       { key: 'quote', group: 'turn', icon: '❝', label: LABELS.noteBlocks.quote.turnInto, run: () => { closeSelectionMenu(view); quoteFromSelection(view, range.from, range.to); } },
       { key: 'conclusion', group: 'turn', icon: '∴', label: LABELS.noteBlocks.conclusion.turnInto, run: () => { closeSelectionMenu(view); conclusionFromSelection(view, range.from, range.to); } },
+      { key: 'maths', group: 'turn', icon: '∑', label: LABELS.noteBlocks.maths.turnInto, run: () => { closeSelectionMenu(view); mathsFromSelection(view, range.from, range.to); } },
       { key: 'dictionary', group: 'turn', icon: '📕', label: LABELS.dictionary.add, run: () => { closeSelectionMenu(view); void addWordFromSelection(view.state.doc.textBetween(range.from, range.to, ' ')); } },
       { key: 'send-to-inbox', group: 'turn', icon: INBOX_ICON, label: LABELS.sendToInbox.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openSendToInbox?.(); } },
       { key: 'link-to-note', group: 'turn', icon: NOTE_LINK_ICON, label: LABELS.noteLinks.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openNoteLinkPicker?.({ purpose: 'link', from: range.from, to: range.to }); } },

@@ -1,6 +1,10 @@
 import { useState, useRef } from 'react';
+import { EventTasksField } from '@/components/TaskLinks/EventTasksField';
+import { DateInput } from '@/components/DateInput/DateInput';
+import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
+import { eventPatch, eventRule } from '@/utils/notifyRule';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
-import type { CalendarEventId, NotifyUnit } from '@/types';
+import type { CalendarEventId } from '@/types';
 import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -62,7 +66,6 @@ export function CalendarEventPane() {
   const [notes,          setNotes]          = useState(() => event?.notes ?? '');
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
-  const [notifyAtTime,   setNotifyAtTime]   = useState(event?.notifyAtTime ?? '12:00');
   // See AddCalendarItemModal's identical ref for why this exists — prevents the linked-end-time
   // cascade from getting "stuck" on its own previous guess while a start time is typed digit by
   // digit. A pre-existing endTime here counts as genuinely user-set (it was saved), not one of our
@@ -220,12 +223,10 @@ export function CalendarEventPane() {
           <div className={styles.field}>
             <span className={styles.label}>Date</span>
             <div className={styles.timeRow}>
-              <input
-                type="date"
+              <DateInput
                 className={styles.dateInput}
                 value={event.date}
-                onChange={(e) => {
-                  const v = e.target.value;
+                onChange={(v) => {
                   updateEvent(id, { date: v });
                   if (event.endDate && event.endDate <= v) updateEvent(id, { endDate: null });
                 }}
@@ -233,13 +234,7 @@ export function CalendarEventPane() {
               {(event.eventType ?? 'default') !== 'birthday' && (
                 <>
                   <span className={styles.timeSep}>→</span>
-                  <input
-                    type="date"
-                    className={styles.dateInput}
-                    value={event.endDate ?? ''}
-                    min={event.date}
-                    onChange={(e) => updateEvent(id, { endDate: e.target.value || null })}
-                  />
+                  <DateInput className={styles.dateInput} value={event.endDate ?? ''} min={event.date} onChange={(v) => updateEvent(id, { endDate: v || null })} />
                 </>
               )}
             </div>
@@ -352,60 +347,30 @@ export function CalendarEventPane() {
             </div>
           )}
 
-          {(event.eventType ?? 'default') === 'birthday' ? (
-            <div className={styles.field}>
-              <span className={styles.label}>Notify at</span>
-              <TimeInput
-                className={styles.timeInput}
-                value={notifyAtTime}
-                onChange={(v) => {
-                  setNotifyAtTime(v);
-                  updateEvent(id, { notifyAtTime: v || null });
-                }}
-              />
-            </div>
-          ) : (
-            <div className={styles.field}>
-              <label className={`${styles.label} ${styles.checkLabel}`}>
-                <input
-                  type="checkbox"
-                  checked={event.notifyBeforeValue !== null}
-                  onChange={(e) => updateEvent(id, { notifyBeforeValue: e.target.checked ? 1 : null })}
-                />
-                Notify before
-              </label>
-              {event.notifyBeforeValue !== null && (
-                <div className={styles.timeRow}>
-                  <input
-                    type="number"
-                    className={styles.notifyNum}
-                    value={event.notifyBeforeValue}
-                    min={1}
-                    onChange={(e) => updateEvent(id, { notifyBeforeValue: Math.max(1, Number(e.target.value)) })}
-                  />
-                  <select
-                    className={styles.select}
-                    value={event.notifyBeforeUnit}
-                    onChange={(e) => updateEvent(id, { notifyBeforeUnit: e.target.value as NotifyUnit })}
-                  >
-                    <option value="minutes">minutes before</option>
-                    <option value="hours">hours before</option>
-                    <option value="days">days before</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          )}
+          <NotifyRuleField
+            item="event"
+            timed={(event.eventType ?? 'default') !== 'birthday' && !!event.startTime}
+            rule={eventRule(event)}
+            onChange={(r) => updateEvent(id, eventPatch(r))}
+            labelClassName={`${styles.label} ${styles.checkLabel}`}
+          />
 
           {/* ── Repeat — not offered on a task's scheduled event: the task itself doesn't repeat ── */}
           {!isTaskShadow && <div className={styles.field}>
-            <RepeatField value={event.repeat ?? null} onChange={(r) => updateEvent(id, { repeat: r })} date={event.date} labelClassName={`${styles.label} ${styles.checkLabel}`} />
+            <RepeatField value={event.repeat ?? null} onChange={(r) => updateEvent(id, { repeat: r })} date={event.date} onDateChange={(d) => updateEvent(id, { date: d, ...(event.endDate && event.endDate <= d ? { endDate: null } : {}) })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
           </div>}
 
           <div className={styles.field}>
             <span className={styles.label}>Links</span>
             <LinksField links={event.links ?? []} onChange={(next) => updateEvent(id, { links: next })} />
           </div>
+
+          {!isTaskShadow && (
+            <div className={styles.field}>
+              <span className={styles.label}>{LABELS.taskLinks.event.heading}</span>
+              <EventTasksField type="event" id={id} title={event.title} />
+            </div>
+          )}
 
           <div className={styles.field}>
             <span className={styles.label}>Linked items</span>

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { notebookIsEmpty } from '@/store/noteStore';
+import { noteIsEmpty } from '@/utils/emptyContent';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews } from '@/store/noteViews';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -147,7 +149,7 @@ function NotebookRow({ tag, depth }: { tag: NoteTag; depth: number }) {
     {
       label: LABELS.rowActions.delete, icon: <TrashIcon width="1em" height="1em" />, destructive: true,
       onSelect: async () => {
-        if (!(await confirmDelete('notebook', tag.name, 'All its contents will be deleted too.'))) return;
+        if (!(await confirmDelete('notebook', tag.name, 'All its contents will be deleted too.', { empty: notebookIsEmpty(tag.id as NoteTagId) }))) return;
         useNoteStore.getState().deleteNoteTag(tag.id as NoteTagId);
         if (useUIStore.getState().selectedNoteTagId === tag.id) useUIStore.getState().setSelectedNoteTag(null);
       },
@@ -204,7 +206,8 @@ function NoteRow({ note, raw, depth }: { note: Note; raw: Note; depth: number })
     {
       label: LABELS.rowActions.delete, icon: <TrashIcon width="1em" height="1em" />, destructive: true,
       onSelect: async () => {
-        if (!(await confirmDelete('note', title))) return;
+        const subNotes = Object.values(useNoteStore.getState().notes).some((n) => n.parentId === note.id);
+        if (!(await confirmDelete('note', title, undefined, { empty: !locked && noteIsEmpty(note, subNotes) }))) return;
         deleteNoteWithCleanup(note.id);
       },
     },

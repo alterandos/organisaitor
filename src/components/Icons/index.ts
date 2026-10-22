@@ -2,7 +2,7 @@
 // than one place draws its icon from here, so it looks the same everywhere. A site can still
 // size or tint one through className/props. Item-kind icons (task, event, deadline…) are emoji
 // in config/itemIcons.ts instead.
-export { AccountIcon, ArchiveIcon, CheckCircleIcon, CloseIcon, DesignIcon, EditIcon, EndeavourIcon, ImageIcon, IndentIcon, LinkIcon, ListIcon, NotebookIcon, OpenIcon, OutdentIcon, PaletteIcon, PinIcon, PlusIcon, PresetIcon, PurposeIcon, QuickAccessIcon, ReminderIcon, ResetIcon, RestoreIcon, RoutineIcon, SearchIcon, StatusIcon, StickyIcon, TrackerIcon, TrashIcon, UnlinkIcon, UnpinIcon, UploadIcon } from './ActionIcons';
+export { AccountIcon, ArchiveIcon, CheckCircleIcon, CloseIcon, DesignIcon, EditIcon, EndeavourIcon, ImageIcon, IndentIcon, LinkIcon, ListIcon, NotebookIcon, OpenIcon, OutdentIcon, PaletteIcon, PinIcon, PlusIcon, PresetIcon, PurposeIcon, QuickAccessIcon, ReminderIcon, ResetIcon, RestoreIcon, RoutineIcon, ScratchpadIcon, DateCalcIcon, ConverterIcon, SearchIcon, StatusIcon, StickyIcon, SwapIcon, TrackerIcon, TrashIcon, UnlinkIcon, UnpinIcon, UploadIcon } from './ActionIcons';
 export { NoteLayoutIcon, TableIcon } from './LayoutIcons';
 export { createGlyph } from './glyphDom';
 export { DisclosureIcon } from './DisclosureIcon';

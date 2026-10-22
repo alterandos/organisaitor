@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useUIStore, type QuickAccessTab } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -78,6 +78,21 @@ export function QuickAccessPane() {
     setHighlightIndex(0);
     inputRef.current?.focus();
   };
+
+  // Ctrl+Tab / Ctrl+Shift+Tab switch between Quick Access and Go to. Caught on the window in the
+  // capture phase and stopped there, so the note or list under the pane doesn't also change tab.
+  const switchTabRef = useRef(switchTab);
+  useLayoutEffect(() => { switchTabRef.current = switchTab; });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !e.ctrlKey || e.altKey || e.metaKey) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      switchTabRef.current(useUIStore.getState().quickAccessTab === 'pinned' ? 'goto' : 'pinned');
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
 
   const select = (item: QuickAccessItem) => {
     navigateToQuickAccessItem(item);
