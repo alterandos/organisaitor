@@ -4593,10 +4593,10 @@
    A thin column right of the text: on each line holding a marked passage, that mark's icon (up to
    three, then +N), and a thin bracket down a passage over several lines. Collapsed, a short tick
    per line, opening while hovered. The editor makes room for it on the right. */
-.editorContent[data-margin-column="open"]   { padding-right: 5.25rem; }
-.editorContent[data-margin-column="closed"] { padding-right: 1.5rem; }
+.editorContent[data-margin-mode="open"]   { padding-right: 5.25rem; }
+.editorContent[data-margin-mode="closed"] { padding-right: 1.5rem; }
 
-.editor [data-margin-column=""] {   /* the layer only: the editor surface carries data-margin-column="open|closed" */
+.editor [data-margin-column] {   /* the layer; the editor surface says whether it shows with data-margin-mode="open|closed" */
   position: absolute;
   top: 0;
   left: 0;

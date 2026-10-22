@@ -5,6 +5,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { isNoteLocked, noteView } from '@/services/noteSecrets';
 import { flushOpenNoteEditors, liveNote, liveNoteFor } from '@/services/liveNoteEditor';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
+import type { ContextMenuItem } from '@/contextMenu/types';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 import { LABELS } from '@/config/labels';
 import { log } from '@/utils/log';
@@ -67,6 +68,7 @@ export function buildPrintRoot(content: HTMLElement, opts: PrintRootOptions): HT
   }
 
   copy.querySelectorAll(NOT_PRINTED).forEach((el) => el.remove());
+  copy.querySelectorAll<HTMLElement>('.ProseMirror[data-margin-mode]').forEach((el) => { delete el.dataset.marginMode; });   // no room kept for the column
   copy.querySelectorAll('[data-fold-hidden]').forEach((el) => el.removeAttribute('data-fold-hidden'));
   copy.querySelectorAll('[data-folded]').forEach((el) => el.removeAttribute('data-folded'));
   copy.querySelectorAll('.ProseMirror-selectednode').forEach((el) => el.classList.remove('ProseMirror-selectednode'));
@@ -122,7 +124,7 @@ async function editorFor(noteId: string): Promise<{ view: EditorView; tabId: str
 // the PDF with only the title (found 2026-10-22).
 let frame: HTMLIFrameElement | null = null;
 
-async function printInFrame(root: HTMLElement, title: string): Promise<void> {
+async function printInFrame(root: HTMLElement, title: string, compact: boolean): Promise<void> {
   frame?.remove();
   const f = document.createElement('iframe');
   frame = f;
@@ -140,6 +142,7 @@ async function printInFrame(root: HTMLElement, title: string): Promise<void> {
   if (!doc?.body || !win) throw new Error('The print frame could not be made.');
   doc.documentElement.setAttribute('data-theme', 'light');
   doc.documentElement.setAttribute('data-printing', '');
+  if (compact) doc.documentElement.setAttribute('data-print-compact', '');
   doc.documentElement.lang = document.documentElement.lang;
   doc.title = title;
   const loads: Promise<unknown>[] = [];
@@ -190,7 +193,11 @@ function unreadable(doc: Document, expected: string): string | null {
 
 let busy = false;
 
-export async function exportNoteAsPdf(noteId: string): Promise<void> {
+// Compact (asked for 2026-10-22): everything at 0.7 of its size (20px text comes out about 10.5pt,
+// a 27px heading 14pt) and lines within a paragraph closer together; the gaps between paragraphs stay.
+export interface PdfOptions { compact?: boolean }
+
+export async function exportNoteAsPdf(noteId: string, opts: PdfOptions = {}): Promise<void> {
   if (busy || !canExportPdf()) return;
   const raw = useNoteStore.getState().notes[noteId as NoteId];
   if (!raw) return;
@@ -227,7 +234,7 @@ export async function exportNoteAsPdf(noteId: string): Promise<void> {
     } finally {
       if (darkCharts) html.setAttribute('data-theme', 'dark');
     }
-    await printInFrame(root, title);
+    await printInFrame(root, title, !!opts.compact);
   } catch (e) {
     log.error('notePdf', 'export failed', e);
     await alertDialog(L.failed);
@@ -236,13 +243,25 @@ export async function exportNoteAsPdf(noteId: string): Promise<void> {
   }
 }
 
+function pdfMenuItem(noteId: string): ContextMenuItem {
+  const L = LABELS.notePdf;
+  return {
+    id: 'export-pdf',
+    label: L.menu,
+    submenu: [[
+      { id: 'standard', label: L.standard, run: () => exportNoteAsPdf(noteId) },
+      { id: 'compact', label: L.compact, run: () => exportNoteAsPdf(noteId, { compact: true }) },
+    ]],
+  };
+}
+
 registerContextMenuProvider({
   id: 'note-row.export-pdf',
   kind: 'note-row',
   order: 60,
   items: (_ctx, scope) => {
     const id = (scope.data as { noteId?: string } | undefined)?.noteId;
-    return id && canExportPdf() ? [{ id: 'export-pdf', label: LABELS.notePdf.menu, run: () => exportNoteAsPdf(id) }] : [];
+    return id && canExportPdf() ? [pdfMenuItem(id)] : [];
   },
 });
 
@@ -252,6 +271,6 @@ registerContextMenuProvider({
   order: 210,
   items: () => {
     const open = liveNote();
-    return open && canExportPdf() ? [{ id: 'export-pdf', label: LABELS.notePdf.menu, run: () => exportNoteAsPdf(open.noteId) }] : [];
+    return open && canExportPdf() ? [pdfMenuItem(open.noteId)] : [];
   },
 });

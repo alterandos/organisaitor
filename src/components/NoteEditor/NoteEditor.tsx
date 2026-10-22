@@ -2257,15 +2257,16 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                   >
                     {pinNote.icon}{pinNote.label}
                   </button>
-                  {canExportPdf() && (
+                  {canExportPdf() && [false, true].map((compact) => (
                     <button
+                      key={String(compact)}
                       className={styles.noteMenuItem}
                       disabled={noteLocked}
-                      onClick={() => { const id = currentNoteIdRef.current; setNoteMenuOpen(false); if (id) void exportNoteAsPdf(id); }}
+                      onClick={() => { setNoteMenuOpen(false); if (note) void exportNoteAsPdf(note.id, { compact }); }}
                     >
-                      {LABELS.notePdf.menu}
+                      {compact ? LABELS.notePdf.menuCompact : LABELS.notePdf.menu}
                     </button>
-                  )}
+                  ))}
                   <div className={styles.noteMenuColors} role="group" aria-label={LABELS.noteColors.menu}>
                     <span className={styles.noteMenuLabel}>{LABELS.noteColors.menu}</span>
                     <div className={styles.noteMenuSwatches}>

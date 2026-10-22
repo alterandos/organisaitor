@@ -45,6 +45,15 @@ describe('buildPrintRoot', () => {
     expect(root.textContent).toContain('Hidden');
   });
 
+  it('keeps the note when the margin column is showing, and keeps no room for it', () => {
+    const content = mount('<div class="ProseMirror" data-margin-mode="open"><p>Kept</p></div><div data-margin-column=""><span>⚑</span></div>');
+    const root = buildPrintRoot(content, { title: null });
+    const pm = root.querySelector('.ProseMirror');
+    expect(pm?.textContent).toBe('Kept');
+    expect(pm?.hasAttribute('data-margin-mode')).toBe(false);
+    expect(root.textContent).not.toContain('⚑');
+  });
+
   it('keeps what was typed into a block’s fields', () => {
     const content = mount('<div class="ProseMirror"><input><textarea></textarea><select><option>a</option><option>b</option></select></div>');
     (content.querySelector('input') as HTMLInputElement).value = 'typed';

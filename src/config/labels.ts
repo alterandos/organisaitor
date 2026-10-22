@@ -680,6 +680,9 @@ export const LABELS = {
   // Export a note as PDF (components/NoteEditor/notePdf.ts, 2026-10-22).
   notePdf: {
     menu:   'Export as PDF…',
+    menuCompact: 'Export as PDF, compact…',
+    standard: 'Standard',
+    compact:  'Compact (smaller text, closer lines)',
     locked: 'This note is encrypted and locked. Unlock it to export it.',
     failed: 'The note couldn’t be exported. Open it and try again.',
     unreadable: (detail: string) => `The note’s text didn’t come out in the copy to print, so nothing was printed. Please send this to have it fixed: ${detail}`,

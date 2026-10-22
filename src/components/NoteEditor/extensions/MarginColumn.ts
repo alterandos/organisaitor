@@ -85,7 +85,7 @@ class MarginColumnView {
     this.observer?.disconnect();
     this.unsubscribe();
     this.layer.remove();
-    delete (this.view.dom as HTMLElement).dataset.marginColumn;
+    delete (this.view.dom as HTMLElement).dataset.marginMode;
   }
 
   // Also redrawn when something a source reads changes outside the document (a Glossary entry
@@ -102,12 +102,12 @@ class MarginColumnView {
     const items = marginItems(view.state);
     if (items.length === 0) {
       this.layer.replaceChildren();
-      delete dom.dataset.marginColumn;
+      delete dom.dataset.marginMode;
       return;
     }
     const open = isOpen(dom);
     const mode = open ? 'open' : 'closed';
-    if (dom.dataset.marginColumn !== mode) dom.dataset.marginColumn = mode;
+    if (dom.dataset.marginMode !== mode) dom.dataset.marginMode = mode;
     this.layer.toggleAttribute('data-open', open);
 
     // Positions in the layer's own (unzoomed) pixels: the editor may be CSS-zoomed.

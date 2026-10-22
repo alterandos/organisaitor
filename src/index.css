@@ -329,3 +329,7 @@ body {
 :root[data-printing] [data-print-subtitle] { margin: 0 0 var(--space-4); color: var(--color-muted); }
 :root[data-printing] [data-print-root] [data-note-block] { break-inside: avoid; }
 :root[data-printing] [data-print-root] :is(h1, h2, h3, h4, h5, h6) { break-after: avoid; }
+/* Compact: everything at 0.7 of its size, lines within a paragraph closer (the gaps between paragraphs stay). */
+:root[data-print-compact] [data-print-root] { zoom: 0.7; }
+:root[data-print-compact] [data-print-root] .ProseMirror,
+:root[data-print-compact] [data-print-root] .ProseMirror :is(p, li, blockquote) { line-height: 1.3; }
