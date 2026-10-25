@@ -644,7 +644,7 @@ describe('pattern: notifications are delivered only from the planned paths', () 
 describe('pattern: special characters work in every text field (CLAUDE.md "Special characters")', () => {
   it('App installs the field listener once, and the note editor has the extension', () => {
     const app = fs.readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
-    const editorSrc = fs.readFileSync(path.join(SRC, 'components/NoteEditor/NoteEditor.tsx'), 'utf8');
+    const editorSrc = fs.readFileSync(path.join(SRC, 'components/NoteEditor/noteEditorExtensions.ts'), 'utf8');
     expect(app).toContain('installSpecialCharInput()');
     expect(editorSrc).toMatch(/\n\s+SpecialCharInput,\r?\n/);
   });
@@ -802,7 +802,7 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
     const list = registry.slice(registry.indexOf('NOTE_BLOCK_KINDS'));
     const missing = blockFiles.map((f) => path.basename(f, '.ts')).filter((name) => !list.includes(name));
     expect(missing).toEqual([]);
-    const editorSrc = fs.readFileSync(path.join(SRC, 'components/NoteEditor/NoteEditor.tsx'), 'utf8');
+    const editorSrc = fs.readFileSync(path.join(SRC, 'components/NoteEditor/noteEditorExtensions.ts'), 'utf8');
     expect(editorSrc).toContain('...TimelineExtensions');
     expect(editorSrc).toContain('...QuoteExtensions');
     expect(editorSrc).toContain('...CycleExtensions');
@@ -1022,16 +1022,19 @@ describe('pattern: automatic changes as you type are undoable straight after (CL
   it('every rich-text editor loads SpecialCharInput (its Mod-z undoes any input rule)', () => {
     const editors = SOURCE_FILES.filter((f) => /useEditor\(|new Editor\(/.test(fs.readFileSync(f, 'utf8')));
     expect(editors.length).toBeGreaterThan(0);
-    const missing = editors.filter((f) => !/\bSpecialCharInput\b/.test(fs.readFileSync(f, 'utf8'))).map(rel);
+    // An editor built from the note editor's list (noteEditorExtensions.ts, checked below) has it.
+    const missing = editors.filter((f) => !/\bSpecialCharInput\b|noteEditorExtensions\(/.test(fs.readFileSync(f, 'utf8'))).map(rel);
     expect(missing).toEqual([]);
+    expect(fs.readFileSync(path.join(SRC, 'components/NoteEditor/noteEditorExtensions.ts'), 'utf8')).toMatch(/\bSpecialCharInput,/);
     expect(fs.readFileSync(path.join(SRC, 'components/NoteEditor/extensions/SpecialCharInput.ts'), 'utf8'))
       .toMatch(/'Mod-z':\s*\(\)\s*=>\s*this\.editor\.commands\.undoInputRule\(\)/);
   });
 
   it('every rich-text editor loads EscapePassThrough (else Escape typed in it never reaches the Escape stack)', () => {
     const editors = SOURCE_FILES.filter((f) => /useEditor\(|new Editor\(/.test(fs.readFileSync(f, 'utf8')));
-    const missing = editors.filter((f) => !/\bEscapePassThrough\b|simpleNoteExtensions/.test(fs.readFileSync(f, 'utf8'))).map(rel);
+    const missing = editors.filter((f) => !/\bEscapePassThrough\b|simpleNoteExtensions|noteEditorExtensions\(/.test(fs.readFileSync(f, 'utf8'))).map(rel);
     expect(missing).toEqual([]);
+    expect(fs.readFileSync(path.join(SRC, 'components/NoteEditor/noteEditorExtensions.ts'), 'utf8')).toMatch(/\bEscapePassThrough,/);
   });
 
   it('text fields and typing offers take Ctrl+Z as well as Backspace', () => {

@@ -5705,6 +5705,348 @@
 .editorContent [data-glossary-chip-card]:hover > [data-glossary-tools],
 .editorContent [data-glossary-chip-card]:focus-within > [data-glossary-tools] { opacity: 1; }
 
+/* ── Case study (extensions/CaseStudy.ts, `\case`) ──────────────────────────────
+   A title, then each part with its small label (data-cs-label). Card: a box with an accent edge;
+   Report: a heading and sections; Compact: one row, the title and what it shows. "What it shows"
+   (the principle: why the case is in the note) stands out in every design. An empty part shows
+   only while the case is being edited (data-cs-hide otherwise). */
+
+.editorContent [data-type="case-study"] { position: relative; margin: 1rem 0 1.25rem; }
+.editorContent [data-cs-title] { font-size: var(--text-lg); font-weight: 700; line-height: 1.35; }
+.editorContent [data-cs-field] { margin-top: 0.55rem; line-height: 1.55; }
+.editorContent [data-cs-field]::before {
+  content: attr(data-cs-label);
+  display: block;
+  margin-bottom: 1px;
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.editorContent [data-cs-field="setting"] { color: var(--color-muted); font-style: italic; }
+.editorContent [data-cs-field="shows"] {
+  padding: 0.45rem 0.7rem;
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-subtle);
+  font-weight: 500;
+}
+.editorContent [data-cs-field="shows"]::before { color: var(--color-primary); }
+.editorContent [data-cs-field="sources"] { font-size: var(--text-sm); color: var(--color-muted); }
+.editorContent [data-cs-hide] { display: none; }
+.editorContent [data-cs-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-cs-empty]::after { content: attr(data-cs-placeholder); color: var(--color-muted); opacity: 0.6; font-weight: 400; font-style: normal; pointer-events: none; }
+
+.editorContent [data-type="case-study"][data-cs-kind]::before {
+  content: attr(data-cs-kind);
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--color-primary);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.editorContent [data-type="case-study"][data-variant="card"] {
+  padding: 0.85rem 1.15rem 1rem;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.editorContent [data-type="case-study"][data-variant="report"] { padding: 0.25rem 0; }
+.editorContent [data-variant="report"] > [data-cs-title] {
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid var(--color-primary);
+  font-size: var(--text-xl);
+}
+.editorContent [data-variant="report"] > [data-cs-field] { margin-top: 0.8rem; }
+.editorContent [data-variant="report"] > [data-cs-field]::before { color: var(--color-primary); font-size: var(--text-2xs); }
+
+.editorContent [data-type="case-study"][data-variant="compact"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.editorContent [data-type="case-study"][data-variant="compact"][data-cs-kind]::before { margin: 0; }
+.editorContent [data-variant="compact"] > [data-cs-title] { font-size: var(--text-base); }
+.editorContent [data-variant="compact"] > [data-cs-field] { margin-top: 0; }
+.editorContent [data-variant="compact"] > [data-cs-field="shows"] { padding: 0; border: none; background: none; color: var(--color-muted); font-weight: 400; }
+.editorContent [data-variant="compact"] > [data-cs-field="shows"]::before { display: none; }
+.editorContent [data-type="case-study"][data-variant="compact"][data-cs-current] > [data-cs-field] { flex-basis: 100%; }
+.editorContent [data-type="case-study"][data-variant="compact"][data-cs-current] > [data-cs-field]::before { display: block; }
+
+.editorContent [data-case-tools] { top: -14px; right: 0; }
+.editorContent [data-case-tools] [data-cs-fields] { display: flex; gap: 1px; }
+.editorContent [data-case-tools] [data-cs-tool="field"] { padding: 0 6px; font-weight: 600; }
+.editorContent [data-case-tools] [data-cs-tool="field"][aria-pressed="false"] { opacity: 0.6; text-decoration: line-through; text-decoration-thickness: 1px; }
+.editorContent [data-type="case-study"]:hover > [data-case-tools],
+.editorContent [data-type="case-study"][data-cs-current] > [data-case-tools] { opacity: 1; }
+
+/* ── Cause and effect (extensions/CauseEffect.ts, `\cause`) ─────────────────────
+   Columns of causes and effects. Flow: side by side, the arrows drawn behind them (an SVG the
+   layout fills after each render, [data-ce-arrows]); List: one column under another, each item
+   saying what it leads to and comes from. Tracing: the lit chain stays, the rest fades. Linking:
+   the dot on an item, then an item in the next column (marked while linking). */
+
+.editorContent [data-type="cause-effect"] { position: relative; margin: 1rem 0 1.25rem; }
+.editorContent [data-type="cause-effect"][data-variant="flow"] {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(8rem, 1fr);
+  align-items: start;
+  column-gap: 3.5rem;
+}
+.editorContent [data-type="cause-effect"][data-variant="list"] { display: flex; flex-direction: column; gap: 1rem; }
+.editorContent [data-ce-arrows] { position: absolute; inset: 0; z-index: calc(var(--z-sticky) - 5); pointer-events: none; }
+.editorContent [data-type="cause-effect"][data-variant="list"] > [data-ce-arrows] { display: none; }
+.editorContent [data-ce-arrows] svg { position: absolute; inset: 0; overflow: visible; }
+.editorContent [data-ce-arrows] path { fill: none; stroke: var(--color-primary); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; opacity: 0.55; transition: opacity 150ms ease; }
+.editorContent [data-ce-arrows] path[data-state="lit"] { opacity: 1; stroke-width: 2.25; }
+.editorContent [data-ce-arrows] path[data-state="dim"] { opacity: 0.12; }
+
+.editorContent [data-ce-column] { position: relative; z-index: calc(var(--z-sticky) - 4); display: flex; flex-direction: column; gap: 0.45rem; min-width: 0; }
+.editorContent [data-ce-head] { color: var(--color-primary); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.editorContent [data-ce-item] {
+  position: relative;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  line-height: 1.45;
+  transition: opacity 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.editorContent [data-ce-lit] { border-color: var(--color-primary); background: var(--color-primary-subtle); }
+.editorContent [data-ce-dim] { opacity: 0.35; }
+.editorContent [data-ce-source] { border-color: var(--color-primary); }
+.editorContent [data-ce-target] { border-style: dashed; border-color: var(--color-primary); cursor: pointer; }
+.editorContent [data-ce-linked] { background: var(--color-primary-subtle); }
+.editorContent [data-ce-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-ce-empty]::after { content: attr(data-ce-placeholder); color: var(--color-muted); opacity: 0.6; font-weight: 400; letter-spacing: normal; text-transform: none; pointer-events: none; }
+
+.editorContent [data-ce-connect] {
+  position: absolute;
+  top: 50%;
+  right: -0.45rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-top: -0.4rem;
+  padding: 0;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  background: var(--color-surface);
+  cursor: crosshair;
+  opacity: 0;
+}
+.editorContent [data-ce-item]:hover > [data-ce-connect],
+.editorContent [data-ce-source] > [data-ce-connect],
+.editorContent [data-type="cause-effect"][data-ce-current] [data-ce-connect] { opacity: 1; }
+.editorContent [data-ce-source] > [data-ce-connect] { background: var(--color-primary); }
+
+.editorContent [data-ce-add] {
+  align-self: flex-start;
+  padding: 0.1rem 0.55rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  opacity: 0;
+}
+.editorContent [data-ce-add]:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.editorContent [data-type="cause-effect"]:hover [data-ce-add],
+.editorContent [data-type="cause-effect"][data-ce-current] [data-ce-add] { opacity: 1; }
+
+.editorContent [data-ce-list-links] { display: block; margin-top: 0.2rem; color: var(--color-muted); font-size: var(--text-xs); }
+.editorContent [data-ce-list-links] > span { display: block; }
+/* ProseMirror's filler break and separator after a widget at a line's end would add an empty
+   line (its own stylesheet forces the separator inline with !important, hence the !important). */
+.editorContent [data-ce-list-links] ~ br:global(.ProseMirror-trailingBreak),
+.editorContent [data-ce-list-links] ~ img:global(.ProseMirror-separator) { display: none !important; }
+
+/* Fishbone: one grid for the whole block (the columns are `display: contents`): the main bones
+   in columns, the head (the effect) in the last, the spine row between the upper and lower bones
+   (--fb-rows). Column headings and + Add aren't part of this drawing (List and Flow have them). */
+.editorContent [data-type="cause-effect"][data-variant="fishbone"] {
+  display: grid;
+  grid-template-columns: repeat(var(--fb-slots), minmax(10rem, 1fr)) minmax(7rem, 11rem);
+  grid-template-rows: var(--fb-rows);
+  align-items: center;
+  gap: 0.6rem 1rem;
+  padding: 0.5rem 0;
+}
+.editorContent [data-variant="fishbone"] > [data-ce-column] { display: contents; }
+.editorContent [data-variant="fishbone"] [data-ce-head],
+.editorContent [data-variant="fishbone"] [data-ce-add] { display: none; }
+.editorContent [data-variant="fishbone"] [data-ce-item] { position: relative; z-index: calc(var(--z-sticky) - 4); }
+.editorContent [data-variant="fishbone"] [data-fb-role="major"] { justify-self: center; font-weight: 600; border-color: var(--color-primary); }
+.editorContent [data-variant="fishbone"] [data-fb-role="minor"] {
+  justify-self: start;
+  max-width: 46%;
+  padding: 0.15rem 0.35rem;
+  border-color: transparent;
+  background: none;
+  font-size: var(--text-sm);
+}
+.editorContent [data-variant="fishbone"] [data-fb-role="head"] {
+  border: 2px solid var(--color-primary);
+  background: var(--color-primary-subtle);
+  font-weight: 700;
+}
+.editorContent [data-ce-arrows] path[data-fb-line="spine"] { stroke-width: 2.5; opacity: 0.8; }
+
+.editorContent [data-ce-tools] { top: -14px; right: 0; }
+.editorContent [data-type="cause-effect"]:hover > [data-ce-tools],
+.editorContent [data-type="cause-effect"][data-ce-current] > [data-ce-tools] { opacity: 1; }
+
+@media (hover: none) {
+  .editorContent [data-ce-connect],
+  .editorContent [data-ce-add] { opacity: 1; }
+}
+
+/* ── Venn diagram (extensions/Venn.ts, `\venn`) ─────────────────────────────────
+   Circles: the block keeps the diagram's shape (--venn-ratio); the circles are drawn behind
+   ([data-venn-canvas]) and each set's name and each thing are placed at the middle of their region
+   (--x, --y, from vennLayout.ts). Table: a row per thing, a tick per set. Each set has its own
+   colour (--venn-a/b/c); the set buttons show beside the thing being edited (or hovered). */
+
+.editorContent [data-type="venn"] {
+  --venn-a: var(--color-item-task);
+  --venn-b: var(--color-warning);
+  --venn-c: var(--color-item-calendar);
+  position: relative;
+  margin: 1rem 0 1.25rem;
+}
+.editorContent [data-type="venn"][data-variant="circles"] {
+  aspect-ratio: var(--venn-ratio);
+  max-width: 34rem;
+  margin-inline: auto;
+  font-size: var(--text-sm);
+}
+.editorContent [data-venn-canvas] { position: absolute; inset: 0; pointer-events: none; }
+.editorContent [data-venn-canvas] svg { display: block; width: 100%; height: 100%; }
+.editorContent [data-venn-canvas] circle { fill-opacity: 0.1; stroke-width: 0.45; }
+.editorContent [data-venn-canvas] circle[data-sid="a"] { fill: var(--venn-a); stroke: var(--venn-a); }
+.editorContent [data-venn-canvas] circle[data-sid="b"] { fill: var(--venn-b); stroke: var(--venn-b); }
+.editorContent [data-venn-canvas] circle[data-sid="c"] { fill: var(--venn-c); stroke: var(--venn-c); }
+
+.editorContent [data-venn-set] { font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.editorContent [data-venn-set][data-sid="a"] { color: color-mix(in srgb, var(--venn-a) 75%, var(--color-text)); }
+.editorContent [data-venn-set][data-sid="b"] { color: color-mix(in srgb, var(--venn-b) 60%, var(--color-text)); }
+.editorContent [data-venn-set][data-sid="c"] { color: color-mix(in srgb, var(--venn-c) 70%, var(--color-text)); }
+
+.editorContent [data-variant="circles"] > [data-venn-set],
+.editorContent [data-variant="circles"] > [data-venn-item] {
+  position: absolute;
+  z-index: calc(var(--z-sticky) - 4);
+  top: var(--y);
+  left: var(--x);
+  max-width: 9rem;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+.editorContent [data-variant="circles"] > [data-venn-item] { padding: 0 0.2rem; border-radius: var(--radius-sm); line-height: 1.3; }
+.editorContent [data-variant="circles"] > [data-venn-item][data-venn-editing] { z-index: calc(var(--z-sticky) - 3); background: var(--color-surface); outline: 1px solid var(--color-border-strong); }
+.editorContent [data-venn-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-venn-empty]::after { content: attr(data-venn-placeholder); color: var(--color-muted); opacity: 0.6; font-weight: 400; letter-spacing: normal; text-transform: none; pointer-events: none; }
+
+.editorContent [data-venn-sets] { display: none; gap: 2px; white-space: nowrap; }
+.editorContent [data-variant="circles"] [data-venn-sets] { position: absolute; z-index: calc(var(--z-sticky) - 2); top: 100%; left: 50%; transform: translateX(-50%); }
+.editorContent [data-variant="circles"] > [data-venn-item][data-venn-editing] > [data-venn-sets] { display: flex; }
+@media (hover: hover) {
+  .editorContent [data-variant="circles"] > [data-venn-item]:hover > [data-venn-sets] { display: flex; }
+}
+.editorContent [data-venn-sets] button {
+  padding: 0 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+  cursor: pointer;
+}
+.editorContent [data-venn-sets] button[data-sid="a"][aria-pressed="true"] { border-color: var(--venn-a); background: color-mix(in srgb, var(--venn-a) 18%, var(--color-surface)); color: var(--color-text); }
+.editorContent [data-venn-sets] button[data-sid="b"][aria-pressed="true"] { border-color: var(--venn-b); background: color-mix(in srgb, var(--venn-b) 22%, var(--color-surface)); color: var(--color-text); }
+.editorContent [data-venn-sets] button[data-sid="c"][aria-pressed="true"] { border-color: var(--venn-c); background: color-mix(in srgb, var(--venn-c) 18%, var(--color-surface)); color: var(--color-text); }
+
+.editorContent [data-venn-add] {
+  padding: 0.1rem 0.55rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  opacity: 0;
+}
+.editorContent [data-venn-add]:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.editorContent [data-variant="circles"] > [data-venn-add] { position: absolute; z-index: calc(var(--z-sticky) - 3); right: 0; bottom: 0; }
+.editorContent [data-type="venn"]:hover [data-venn-add],
+.editorContent [data-type="venn"][data-venn-current] [data-venn-add] { opacity: 1; }
+@media (hover: none) { .editorContent [data-venn-add] { opacity: 1; } }
+
+.editorContent [data-type="venn"][data-variant="table"] {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) repeat(var(--venn-cols), 6rem);
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.editorContent [data-variant="table"] > [data-venn-set] {
+  grid-row: 1;
+  grid-column: var(--col);
+  padding: 0.45rem 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.editorContent [data-variant="table"] > [data-venn-item] {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  padding-left: 0.7rem;
+  border-bottom: 1px solid var(--color-border);
+  min-height: 2.1rem;
+}
+.editorContent [data-variant="table"] [data-venn-sets] { display: flex; flex: none; gap: 0; margin-left: auto; }
+.editorContent [data-variant="table"] [data-venn-sets] button { width: 6rem; border: none; border-radius: 0; background: none; font-size: 0; line-height: 2.1rem; }
+.editorContent [data-variant="table"] [data-venn-sets] button::before { content: '–'; color: var(--color-border-strong); font-size: var(--text-md); }
+.editorContent [data-variant="table"] [data-venn-sets] button[aria-pressed="true"] { background: none; }
+.editorContent [data-variant="table"] [data-venn-sets] button[aria-pressed="true"]::before { content: '✓'; font-weight: 700; }
+.editorContent [data-variant="table"] [data-venn-sets] button[data-sid="a"][aria-pressed="true"]::before { color: color-mix(in srgb, var(--venn-a) 80%, var(--color-text)); }
+.editorContent [data-variant="table"] [data-venn-sets] button[data-sid="b"][aria-pressed="true"]::before { color: color-mix(in srgb, var(--venn-b) 65%, var(--color-text)); }
+.editorContent [data-variant="table"] [data-venn-sets] button[data-sid="c"][aria-pressed="true"]::before { color: color-mix(in srgb, var(--venn-c) 75%, var(--color-text)); }
+.editorContent [data-variant="table"] > [data-venn-add] { grid-column: 1 / -1; justify-self: start; margin: 0.35rem 0.6rem; }
+
+.editorContent [data-venn-tools] { top: -14px; right: 0; }
+.editorContent [data-type="venn"]:hover > [data-venn-tools],
+.editorContent [data-type="venn"][data-venn-current] > [data-venn-tools] { opacity: 1; }
+
+/* ── A read-only editor (the block guide's examples, and any note shown read-only) ─────────────
+   Editing controls do nothing there, so they don't show: a block's button bar, its + buttons, the
+   cause-and-effect dots, a Venn thing's set buttons. Only the root has the class, so a widget's own
+   contenteditable="false" doesn't match. */
+.editorContent[contenteditable="false"] [data-block-tools],
+.editorContent[contenteditable="false"] [data-ce-connect],
+.editorContent[contenteditable="false"] [data-ce-add],
+.editorContent[contenteditable="false"] [data-venn-add],
+.editorContent[contenteditable="false"] [data-venn-sets],
+.editorContent[contenteditable="false"] [data-timeline-add] { display: none !important; }
+
 /* ── Block colours ──────────────────────────────────────────────────────────────
    Each block has its own colour (--color-block-*, index.css). It's applied by setting the accent
    inside the block, so every part a block draws "in the primary colour" takes the block's: no
@@ -5721,5 +6063,8 @@
 .editorContent [data-type="options"] { --color-primary: var(--color-block-options); --color-primary-subtle: color-mix(in srgb, var(--color-block-options) 10%, transparent); }
 .editorContent [data-type="argument"] { --color-primary: var(--color-block-argument); --color-primary-subtle: color-mix(in srgb, var(--color-block-argument) 10%, transparent); }
 .editorContent [data-type="quote"] { --color-primary: var(--color-block-quote); --color-primary-subtle: color-mix(in srgb, var(--color-block-quote) 10%, transparent); }
+.editorContent [data-type="case-study"] { --color-primary: var(--color-block-case); --color-primary-subtle: color-mix(in srgb, var(--color-block-case) 10%, transparent); }
+.editorContent [data-type="cause-effect"] { --color-primary: var(--color-block-cause); --color-primary-subtle: color-mix(in srgb, var(--color-block-cause) 10%, transparent); }
+.editorContent [data-type="venn"] { --color-primary: var(--color-block-venn); --color-primary-subtle: color-mix(in srgb, var(--color-block-venn) 10%, transparent); }
 .editorContent [data-type="convert"] { --color-primary: var(--color-block-convert); --color-primary-subtle: color-mix(in srgb, var(--color-block-convert) 10%, transparent); }
 .editorContent [data-type="hub"] { --color-primary: var(--color-block-hub); --color-primary-subtle: color-mix(in srgb, var(--color-block-hub) 10%, transparent); }

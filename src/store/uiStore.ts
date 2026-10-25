@@ -269,6 +269,11 @@ interface UIState {
   dateCalcOpen:      boolean;
   // The converters panel (components/ConverterPane): a Place, Alt+=. `converterTarget` opens it
   // on a converter (`select`: a unit category's id or a converter's) or its editor (`edit`).
+  // The block guide (components/BlockGuide): a Place; the `\\` menu opens it on the highlighted block.
+  blockGuideOpen:    boolean;
+  blockGuideStart:   string | null;
+  openBlockGuide:    (kindId?: string) => void;
+  closeBlockGuide:   () => void;
   convertersOpen:    boolean;
   converterTarget:   { select?: string; edit?: string } | null;
   openConverters:    (target?: { select?: string; edit?: string }) => void;
@@ -746,6 +751,10 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 
   recyclingBinOpen:  false,
   dateCalcOpen:      false,
+  blockGuideOpen:    false,
+  blockGuideStart:   null,
+  openBlockGuide:    (kindId) => { useRecentItemsStore.getState().recordVisit('place', 'block-guide'); set({ blockGuideOpen: true, blockGuideStart: kindId ?? null }); },
+  closeBlockGuide:   () => set({ blockGuideOpen: false, blockGuideStart: null }),
   convertersOpen:    false,
   converterTarget:   null,
   openConverters:    (target) => { useRecentItemsStore.getState().recordVisit('place', 'converters'); set({ convertersOpen: true, converterTarget: target ?? null }); },

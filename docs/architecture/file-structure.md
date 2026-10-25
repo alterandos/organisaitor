@@ -117,6 +117,9 @@ src/
   src/demo/resources/       — the user's demo pictures, one file per slot (README lists them)
   components/InboxPickerModal/ — Send to inbox: the picker (inboxes ranked by the selected words, New inbox here, Also make a task)
   config/itemLinkKinds.ts   — ITEM_LINK_KINDS: THE registry of task-link kinds (Waiting on / Follow-up of / Related — icon, labels, blocks, symmetric); see "ItemLink" in Type system
+  components/NoteEditor/noteEditorExtensions.ts — THE note editor's list of extensions (NoteEditor, the block guide, the demo's schema check)
+  demo/noteContent.ts, demo/blockExamples.ts — writing note content in code, and one example per note block (the demo and the block guide)
+  components/NoteEditor/extensions/CaseStudy.ts, CauseEffect.ts (+ causeEffectChain.ts), Venn.ts (+ vennLayout.ts) — the case study, cause and effect, and Venn note blocks (2026-10-23)
   utils/eventTaskLinks.ts   — tasks linked to an event or a Deadline (prepFor / followUpOf / related), pure: anchorOf, datesForLink, followMove, tasksLinkedTo
   utils/taskLinks.ts        — the task-link rules, pure: taskRelations (both directions), openBlockers/isBlocked/openBlockersDeep, unlockedBy, canAddLink (self/duplicate/loop), makeItemLink
   services/recurringTasks.ts — recurring tasks: nextOccurrenceDate (pure), spawnNextOccurrence (called on completion by taskListLinks and agent/access), nextOccurrenceOf, discardOccurrence (the toast's Undo), repeatSummary — see "Recurring tasks" in Type system
@@ -247,6 +250,7 @@ src/
     CalendarSidePane/        — left-sliding pane (Calendar section): Layers toggles + Schedule list/manager (active toggle, conflict hint, overlay-preview grid) in one place — supersedes the old CalendarLayersPicker (header dropdown) and ManageSchedulesPane (right-sliding pane), see "Calendar side pane" in Implemented features
     ScheduleOccurrencePopover/ — click a Schedule occurrence on the calendar: skip this date, commit/uncommit (commitment mode), or jump to editing the Schedule
     AllDayNotifyField/       — NotifyLead.tsx: the Notify field for every calendar item (NotifyRuleField with its on/off box, NotifyRuleEditor, LeadAmountInput: a typed amount + ▾ presets); the rules are utils/notifyRule.ts
+    BlockGuide/              — the block guide (a Place): every note block by category, its designs, a live read-only example (guideData.ts: keyword → node, examples from demo/blockExamples.ts)
     ConverterPane/           — the converters panel (Alt+=, a Place): built-in units and the person's own; ConverterEditor makes and edits one (Settings → Converters opens it too); ConvertWidget is one conversion as hosted by the `\convert` note block (extensions/Convert.ts), its pure parts in convertValue.ts
     DateCalculator/          — the date calculator (a Place; the Calendar header's button): count from a date, or between two dates, with the magic wand; rules utils/dateCalc.ts
     MagicWand/               — MagicWandButton + MagicWandPanel: a form filled in from words, through the form's own reader

@@ -77,6 +77,8 @@ import { IntegrationsPane } from '@/components/IntegrationsPane/IntegrationsPane
 import { RecyclingBinPane } from '@/components/RecyclingBinPane/RecyclingBinPane';
 import { DateCalculator } from '@/components/DateCalculator/DateCalculator';
 import { ConverterPane } from '@/components/ConverterPane/ConverterPane';
+// The block guide draws its examples with the whole note editor: its own chunk, loaded when opened.
+const BlockGuide = lazy(() => import('@/components/BlockGuide/BlockGuidePane'));
 import { ScratchpadPanel } from '@/components/ScratchpadPanel/ScratchpadPanel';
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
@@ -155,6 +157,7 @@ export default function App() {
   const recyclingBinOpen           = useUIStore((s) => s.recyclingBinOpen);
   const dateCalcOpen               = useUIStore((s) => s.dateCalcOpen);
   const convertersOpen             = useUIStore((s) => s.convertersOpen);
+  const blockGuideOpen             = useUIStore((s) => s.blockGuideOpen);
   const scratchpadOpen             = useUIStore((s) => s.scratchpadOpen);
   const openRecyclingBin           = useUIStore((s) => s.openRecyclingBin);
   const closeRecyclingBin          = useUIStore((s) => s.closeRecyclingBin);
@@ -768,6 +771,7 @@ export default function App() {
         {recyclingBinOpen          && <RecyclingBinPane />}
         {dateCalcOpen              && <DateCalculator />}
         {convertersOpen            && <ConverterPane />}
+        {blockGuideOpen            && <Suspense fallback={null}><BlockGuide /></Suspense>}
         {scratchpadOpen            && <ScratchpadPanel />}
         {editingCalendarEventId    && <CalendarEventPane key={editingCalendarEventId} />}
         {editingCalendarReminderId && <CalendarReminderPane key={editingCalendarReminderId} />}

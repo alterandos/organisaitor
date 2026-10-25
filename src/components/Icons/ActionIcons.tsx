@@ -78,6 +78,7 @@ export function NotebookIcon(props: SVGProps<SVGSVGElement>) { return <Glyph gly
 export function StickyIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="sticky" {...EM} {...props} />; }
 export function ScratchpadIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="scratchpad" {...EM} {...props} />; }
 export function DateCalcIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="dateCalc" {...EM} {...props} />; }
+export function BlockGuideIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="blockGuide" {...EM} {...props} />; }
 export function ConverterIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="converter" {...EM} {...props} />; }
 export function PresetIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="preset" {...EM} {...props} />; }
 

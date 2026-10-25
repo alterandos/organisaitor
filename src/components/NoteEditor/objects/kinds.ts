@@ -18,7 +18,9 @@ export function exactKind<K extends PickableKind>(word: string, kinds: K[]): K |
 export function exactKind(word: string): AnyNoteObjectKind | null;
 export function exactKind(word: string, kinds: PickableKind[] = NOTE_OBJECT_KINDS): PickableKind | null {
   const w = word.toLowerCase();
-  return kinds.find((k) => keywordsOf(k).includes(w)) ?? null;
+  // A kind's own name beats another kind's alias (`\case` is the case study, though the argument
+  // also answers to "case").
+  return kinds.find((k) => k.id === w) ?? kinds.find((k) => keywordsOf(k).includes(w)) ?? null;
 }
 
 // Kinds matching a partly typed keyword, best first: an exact keyword, then a keyword it starts,

@@ -6,6 +6,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import type { NoteObjectContext } from './types';
 import { isBlockKind, type PickableKind } from './types';
 import { categoryLabel } from './blockCategories';
+import { useUIStore } from '@/store/uiStore';
 import { getSession } from './session';
 import { acceptKind, commitSession, dismissSession, resolveDraft, setHighlight, setOverride } from './actions';
 import { objectTriggerStorage } from './NoteObjectTrigger';
@@ -121,7 +122,14 @@ export function NoteObjectMenu({ editor, getContext }: Props) {
             </Fragment>
           ))}
         </ul>
-        <div className={styles.footer}>{LABELS.noteObjects.pickHint}</div>
+        <div className={`${styles.footer} ${styles.footerRow}`}>
+          <span>{LABELS.noteObjects.pickHint}</span>
+          {/* The block guide, on the block that's highlighted. */}
+          <button type="button" className={styles.guideLink} onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { const k = matches[session.highlight]; useUIStore.getState().openBlockGuide(k && isBlockKind(k) ? k.id : undefined); }}>
+            {LABELS.blockGuide.link}
+          </button>
+        </div>
       </>
     );
   } else {

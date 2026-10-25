@@ -102,6 +102,8 @@ export const GLYPHS = {
   dateCalc: [['rect', { x: '3', y: '4', width: '18', height: '18', rx: '2' }], ['path', { d: 'M8 2v4' }], ['path', { d: 'M16 2v4' }], ['path', { d: 'M3 9h18' }],
     ['path', { d: 'M6.5 13.5h3' }], ['path', { d: 'M8 12v3' }], ['path', { d: 'M14.5 13.5h3' }],
     ['path', { d: 'm6.8 17.3 2.4 2.4' }], ['path', { d: 'm9.2 17.3-2.4 2.4' }], ['path', { d: 'M14.5 17.5h3' }], ['path', { d: 'M14.5 19.5h3' }]],
+  // The block guide: a page of blocks (Lucide's layout-template).
+  blockGuide: [['rect', { x: '3', y: '3', width: '18', height: '7', rx: '1' }], ['rect', { x: '3', y: '14', width: '9', height: '7', rx: '1' }], ['rect', { x: '16', y: '14', width: '5', height: '7', rx: '1' }]],
   // Converters: two arrows, there and back (Lucide's arrow-left-right).
   converter: [['path', { d: 'M8 3 4 7l4 4' }], ['path', { d: 'M4 7h16' }], ['path', { d: 'm16 21 4-4-4-4' }], ['path', { d: 'M20 17H4' }]],
   // Ready-made sets (tag presets): sparkles.

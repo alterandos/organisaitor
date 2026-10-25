@@ -801,6 +801,11 @@ The suite-wide Recycling Bin is built (see "Recycling Bin" in CLAUDE.md and `doc
 
 ---
 
+## Note blocks: follow-ups to case study, cause and effect, Venn (logged 2026-10-23)
+- Cause and effect: links that skip a column (today a link joins neighbouring columns only, so "Burning fossil fuels" reaches "Sea level rises" through the items between). The Fishbone design was built 2026-10-26.
+- Venn: four sets as an Euler or UpSet-style view (four circles can't show every overlap).
+- Case study: an inline chip design (the card category's pattern).
+
 ## Encryption by notebook and Endeavour (decided 2026-10-23, to build)
 Discussed with the user; their decision: build **notebook-level encryption** (a notebook setting that encrypts every note in it through today's per-note encryption; new notes inherit it; moving a note out asks first) and **"encrypt the notes and lists in this Endeavour"** (the same rule for the notes and lists filed under it). **Not now:** encrypting an Endeavour's tasks and calendar items (or a whole section). While locked, the Calendar, notifications (Android shows them with the app closed), Overview and Google/Outlook sync couldn't show or match them, and it needs a new encryption layer for tasks and calendar items; reconsider when there's a real need.
 
@@ -814,6 +819,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **One list of note editor extensions** (2026-10-26, CLAUDE.md "Single entry points", `noteEditorExtensions.ts`) | `src/test/patterns.test.ts` (SpecialCharInput / EscapePassThrough checks read the list); `guideData.test.ts` | **Fully applied 2026-10-26**: NoteEditor, the block guide, the demo test. |
 | **Formulas only through utils/formula.ts** (2026-10-23, CLAUDE.md "Single entry points") | `src/test/patterns.test.ts` "a formula is worked out only by utils/formula.ts" | **Fully applied 2026-10-23** (new; nothing older evaluated formulas). |
 | **Magic wand** (2026-10-23, CLAUDE.md "Magic wand", `components/MagicWand`) | `src/test/patterns.test.ts` "the magic wand comes from components/MagicWand" | **Fully applied 2026-10-23**: the calendar item modal (moved onto it) and the date calculator. |
 | **One date field** (2026-10-22, CLAUDE.md "Single entry points", `components/DateInput`) | `src/test/patterns.test.ts` "type=\"date\" only appears in DateInput" | **Fully applied 2026-10-22** (25 fields). Deliberate exception: `MobileQuickAddBar`'s hidden field that opens the phone's own date picker. |

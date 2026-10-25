@@ -3,25 +3,12 @@ import { richTextIsEmpty } from '@/utils/emptyContent';
 import { createPortal } from 'react-dom';
 import { useEditor, useEditorState, EditorContent, getMarkRange } from '@tiptap/react';
 import { Selection, TextSelection } from '@tiptap/pm/state';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableCell } from '@tiptap/extension-table-cell';
-import { TableHeader } from '@tiptap/extension-table-header';
-import Superscript from '@tiptap/extension-superscript';
-import Subscript from '@tiptap/extension-subscript';
-import { TextStyle, Color, FontSize } from '@tiptap/extension-text-style';
-import { ResizableImage } from './extensions/ResizableImage';
-import { HeadingNumbering } from './extensions/HeadingNumbering';
-import { SectionDocument, Section, ColumnBlock, Column, MAX_SECTION_COLUMNS } from './extensions/Section';
+import { MAX_SECTION_COLUMNS } from './extensions/Section';
 import { useNoteStore } from '@/store/noteStore';
 import { noteCursorKey, useUIStore } from '@/store/uiStore';
 import { scrollHostOf } from './headingTrail';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { NoteId, Note, CollectionId } from '@/types';
-import { NoteTagMark } from './extensions/NoteTagMark';
-import { ArtifactLinkMark } from './extensions/ArtifactLinkMark';
 import { NoteBacklinks } from './NoteBacklinks';
 import { handleArtifactDrop } from './artifactLinkInsert';
 import { RemoveMarkStep } from '@tiptap/pm/transform';
@@ -33,66 +20,23 @@ import { removeCrossAppRefFromTarget } from '@/services/crossAppLinkCleanup';
 import { collectArtifactTargets, isNodeFind } from '@/utils/noteContent';
 import { lastTabId, linkTabIdFor, MAIN_TAB_ID, resolveNoteTab, titlePrefillFor, tabDatesText } from '@/utils/noteTabs';
 import { setNormalText } from './extensions/normalText';
-import { NoteTitle } from './extensions/NoteTitle';
-import { DuplicateLine } from './extensions/DuplicateLine';
-import { TimelineExtensions } from './extensions/Timeline';
-import { QuoteExtensions } from './extensions/Quote';
-import { ConclusionExtensions } from './extensions/Conclusion';
-import { TypesExtensions } from './extensions/Types';
-import { IdKeyExtensions } from './extensions/IdKey';
-import { ProsConsExtensions } from './extensions/ProsCons';
-import { ArgumentExtensions } from './extensions/Argument';
-import { OptionsExtensions } from './extensions/Options';
-import { DesignCycle } from './extensions/designCycle';
-import { NumberNotation } from './extensions/NumberNotation';
-import { DictionaryWords } from './extensions/DictionaryWords';
-import { CycleExtensions } from './extensions/Cycle';
-import { BreakdownExtensions } from './extensions/Breakdown';
-import { HierarchyExtensions } from './extensions/Hierarchy';
-import { PyramidExtensions } from './extensions/Pyramid';
-import { ChartExtensions } from './extensions/Chart';
-import { CodeBlockExtensions } from './extensions/CodeBlock';
-import { MathExtensions } from './extensions/Maths';
-import { InboxExtensions } from './extensions/Inbox';
-import { HubExtensions } from './extensions/Hub';
 import { HubPickerModal } from '@/components/HubPickerModal/HubPickerModal';
 import { addLinkToHub, addPassageToHub, selectedCardEntry, selectionTouchesHub } from '@/services/noteHubs';
 import { glossaryEntry } from '@/services/glossary';
-import { GlossaryCardExtensions, cardFromSelection, insertCardAfter } from './extensions/GlossaryCard';
-import { GlossaryChipExtensions } from './extensions/GlossaryChip';
+import { cardFromSelection, insertCardAfter } from './extensions/GlossaryCard';
 import { deleteGlossaryEntryAsked } from '@/services/glossaryDelete';
-import { TrailingLine } from './extensions/TrailingLine';
-import { QuestionExtensions } from './extensions/Question';
-import { CompareExtensions } from './extensions/Compare';
-import { DiagramExtensions } from './extensions/Diagram';
-import { ConvertExtensions } from './extensions/Convert';
 import { InboxPickerModal } from '@/components/InboxPickerModal/InboxPickerModal';
 import { selectionTouchesInbox, sendToInbox } from '@/services/noteInbox';
-import { NoteBlockDelete, NoteBlockSelect } from './extensions/blockDesigns';
-import { AutoBrackets } from './extensions/AutoBrackets';
-import { EscapePassThrough } from './extensions/EscapePassThrough';
-import { NoteBlockPicks } from './extensions/blockPicks';
 import { NoteBackdrop } from './NoteBackdrop';
 import { MobileNoteSidePanel } from './MobileNoteSidePanel';
 import { CloseIcon, ColorDotIcon, DisclosureIcon, PinIcon, TableIcon, TextColorIcon, TrashIcon, SwapIcon } from '@/components/Icons';
 import { SWATCHES, swatchLabel } from '@/config/swatches';
-import { GlossaryAutolink } from './extensions/GlossaryAutolink';
-import { AcronymOffer } from './extensions/AcronymOffer';
-import { UnsureFlagExtensions } from './extensions/UnsureFlag';
 import './extensions/unsureMenu';
-import { BlockOffers } from './extensions/BlockOffers';
-import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
-import { SpecialCharInput } from './extensions/SpecialCharInput';
-import { LinkBoundary } from './extensions/LinkBoundary';
 import { StickyHeadings } from './StickyHeadings';
-import { HeadingFold, toggleHeadingFoldAtCursor } from './extensions/HeadingFold';
-import { HeadingLevel } from './extensions/HeadingLevel';
-import { NoteSubtitle, NoteAuthor } from './extensions/NoteBylines';
+import { toggleHeadingFoldAtCursor } from './extensions/HeadingFold';
 import { FONT_SIZES, currentFontSize, setFontSize, stepFontSize } from './extensions/fontSize';
 import { noteClipboardText } from './noteClipboardText';
-import { ConceptRefMark, ConceptMargin } from './extensions/ConceptRef';
 import { cycleImportance } from './extensions/Importance';
-import { MarginColumn } from './extensions/MarginColumn';
 import { SelectionMenu } from './objects/SelectionMenu';
 import './extensions/annotationMenu';
 import { liveNote, registerLiveNoteEditor, registerOpenNoteEditor } from '@/services/liveNoteEditor';
@@ -101,17 +45,16 @@ import { addPicture } from '@/services/pictures';
 import { FloatingToolbar, type FloatingToolbarActions } from './FloatingToolbar';
 import './contextMenu';
 import { NoteViewMenu } from '@/components/NoteSplitView/NoteViewMenu';
-import { NoteListItem } from './extensions/ListItem';
 import { setNoteColor } from './noteColorMenu';
 import { canExportPdf, exportNoteAsPdf } from './notePdf';
 import type { NoteEditorMenuApi } from './contextMenu';
+import { noteEditorExtensions } from './noteEditorExtensions';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { usePinAction } from '@/hooks/usePinAction';
 import { NoteTOC } from './NoteTOC';
-import { NoteObjectTrigger, objectTriggerStorage } from './objects/NoteObjectTrigger';
+import { objectTriggerStorage } from './objects/NoteObjectTrigger';
 import { NoteObjectMenu } from './objects/NoteObjectMenu';
 import { applyResolvedArtifactLink, insertObjectTrigger } from './objects/actions';
-import { ArtifactLinkGroups } from './objects/artifactGroups';
 import type { NoteObjectContext } from './objects/types';
 import './objects/contextMenu';
 import './extensions/timelineMenu';
@@ -137,9 +80,8 @@ import './extensions/diagramMenu';
 import './extensions/inboxMenu';
 import './extensions/hubMenu';
 import './extensions/noteLinkMenu';
-import { BlockIds } from './extensions/BlockIds';
-import { NoteLinkExtensions, applyNoteLink } from './extensions/NoteLink';
-import { NoteEmbedExtensions, insertEmbedAt } from './extensions/NoteEmbed';
+import { applyNoteLink } from './extensions/NoteLink';
+import { insertEmbedAt } from './extensions/NoteEmbed';
 import { NoteLinkPicker } from './NoteLinkPicker';
 import { formatFocusedBlockField } from './blockFieldFormat';
 import { NoteLinksFrom } from './NoteLinksFrom';
@@ -779,81 +721,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
   }
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ document: false, codeBlock: false, listItem: false, link: { openOnClick: false, HTMLAttributes: { class: styles.link } } }),
-      LinkBoundary,
-      NoteListItem,
-      SectionDocument,
-      Section,
-      ColumnBlock,
-      Column,
-      Placeholder.configure({ placeholder: 'Start writing…' }),
-      NoteTagMark,
-      ArtifactLinkMark,
-      ArtifactLinkGroups,
-      NoteObjectTrigger,
-      ResizableImage.configure({ allowBase64: true, inline: false, noteEncrypted: openNoteEncrypted }),
-      Superscript,
-      Subscript,
-      TextStyle,
-      Color,
-      FontSize,
-      Table.configure({ resizable: false }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      HeadingNumbering,
-      NoteTitle,
-      NoteSubtitle,
-      NoteAuthor,
-      DuplicateLine,
-      ...TimelineExtensions,
-      ...QuoteExtensions,
-      ...ConclusionExtensions,
-      ...TypesExtensions,
-      ...IdKeyExtensions,
-      ...ProsConsExtensions,
-      ...ArgumentExtensions,
-      ...OptionsExtensions,
-      DesignCycle,
-      NumberNotation,
-      DictionaryWords,
-      ...CycleExtensions,
-      ...BreakdownExtensions,
-      ...HierarchyExtensions,
-      ...PyramidExtensions,
-      ...ChartExtensions,
-      ...CodeBlockExtensions,
-      ...MathExtensions,
-      ...InboxExtensions,
-      ...HubExtensions,
-      ...GlossaryCardExtensions,
-      ...GlossaryChipExtensions,
-      ...QuestionExtensions,
-      ...CompareExtensions,
-      ...DiagramExtensions,
-      ...ConvertExtensions,
-      TrailingLine,
-      BlockIds,
-      ...NoteLinkExtensions,
-      ...NoteEmbedExtensions,
-      NoteBlockSelect,
-      NoteBlockDelete,
-      NoteBlockPicks,
-      GlossaryAutolink,
-      AcronymOffer,
-      ...UnsureFlagExtensions,
-      BlockOffers,
-      OccurrenceHighlight,
-      SpecialCharInput,
-      AutoBrackets,
-      EscapePassThrough,
-      HeadingLevel,
-      HeadingFold,
-      ConceptRefMark,
-      ConceptMargin,
-      MarginColumn,
-    ],
+    extensions: noteEditorExtensions({ noteEncrypted: openNoteEncrypted, linkClass: styles.link }),
     content: '',
     editorProps: {
       attributes: { class: styles.editorContent },

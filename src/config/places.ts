@@ -2,7 +2,7 @@ import type { ComponentType, SVGProps } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { dueReviews } from '@/services/noteReview';
-import { ConverterIcon, DateCalcIcon, AccountIcon, GlossaryIcon, HistoryIcon, HubIcon, IntegrationsIcon, LibraryIcon, MapIcon, ReviewIcon, ScratchpadIcon, SettingsIcon, TrashIcon } from '@/components/Icons';
+import { BlockGuideIcon, ConverterIcon, DateCalcIcon, AccountIcon, GlossaryIcon, HistoryIcon, HubIcon, IntegrationsIcon, LibraryIcon, MapIcon, ReviewIcon, ScratchpadIcon, SettingsIcon, TrashIcon } from '@/components/Icons';
 
 // Places: destinations that aren't items — a section's tools (Glossary, Review) and the suite's
 // own panes (Settings, Account, …). Quick Access shows them as its Places row, ordered by use
@@ -10,7 +10,7 @@ import { ConverterIcon, DateCalcIcon, AccountIcon, GlossaryIcon, HistoryIcon, Hu
 // name. A new tool or pane worth jumping to is one entry here, plus `recordVisit('place', id)` in
 // its open action. Sections aren't places: they have the 0–7 hotkeys and the nav rail.
 
-export type PlaceId = 'glossary' | 'review' | 'hubs' | 'map' | 'history' | 'manage' | 'settings' | 'account' | 'integrations' | 'recycling-bin' | 'scratchpad' | 'date-calculator' | 'converters';
+export type PlaceId = 'glossary' | 'review' | 'hubs' | 'map' | 'history' | 'manage' | 'settings' | 'account' | 'integrations' | 'recycling-bin' | 'scratchpad' | 'date-calculator' | 'converters' | 'block-guide';
 
 export interface Place {
   id:    PlaceId;
@@ -35,6 +35,7 @@ export const PLACES: Place[] = [
   { id: 'recycling-bin', label: LABELS.recyclingBin.title,  Icon: TrashIcon,        open: () => useUIStore.getState().openRecyclingBin() },
   { id: 'date-calculator', label: LABELS.dateCalc.title,     Icon: DateCalcIcon,     open: () => useUIStore.getState().openDateCalculator() },
   { id: 'converters',    label: LABELS.converters.title,    Icon: ConverterIcon,    open: () => useUIStore.getState().openConverters() },
+  { id: 'block-guide',   label: LABELS.blockGuide.title,    Icon: BlockGuideIcon,   open: () => useUIStore.getState().openBlockGuide() },
   { id: 'scratchpad',    label: LABELS.scratchpad.title,    Icon: ScratchpadIcon,   open: () => useUIStore.getState().openScratchpad() },
 ];
 

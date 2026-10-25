@@ -49,6 +49,9 @@
   --color-block-quote: #57534e;
   --color-block-hub: #334155;
   --color-block-convert: #6f7d16;
+  --color-block-case: #166534;
+  --color-block-cause: #b91c1c;
+  --color-block-venn: #a16207;
   --color-success-muted: #d1fae5;
   --color-success-text: #065f46;
   --color-danger: #ef4444;
@@ -209,6 +212,9 @@
   --color-block-quote: #d6d3d1;
   --color-block-hub: #cbd5e1;
   --color-block-convert: #c3d34a;
+  --color-block-case: #4ade80;
+  --color-block-cause: #f87171;
+  --color-block-venn: #facc15;
   --color-success-muted: rgba(52, 211, 153, 0.12);
   --color-success-text: #6ee7b7;
   --color-danger: #f87171;

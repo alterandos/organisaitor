@@ -28,6 +28,8 @@ import { MAIN_TAB_ID } from '@/utils/noteTabs';
 import { DICTIONARY_TYPE_ID, DICT_FIELDS } from '@/services/dictionary';
 import { SWATCHES, type SwatchId } from '@/config/swatches';
 import { LABELS } from '@/config/labels';
+import { node, kids, bold, italic, sub, sup, weblink, p, pId, h, bullets, numbered, table, section, columns, doc, important, tagged, itemLink, noteLink, termLink, hubPassage, unsure, chip, mathInline, card, embed, mathBlock } from './noteContent';
+import { EX } from './blockExamples';
 import type { ActivityTypeId } from '@/types/fitness';
 import type { CollectionId, CrossAppRef, NoteId, NoteTagId, PictureId, TagId, TaskId } from '@/types';
 import type { ListId, ListTypeId } from '@/types/lists';
@@ -38,58 +40,6 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const isoDay = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 // ── Note content ─────────────────────────────────────────────────────────────
-
-type J = Record<string, unknown>;
-type Inline = string | J | Inline[];
-
-const flat = (c: Inline[]): J[] => c.flatMap((x): J[] => (Array.isArray(x) ? flat(x) : typeof x === 'string' ? (x ? [{ type: 'text', text: x }] : []) : [x]));
-const node = (type: string, attrs: J | null, ...c: Inline[]): J => {
-  const content = flat(c);
-  return { type, ...(attrs ? { attrs } : {}), ...(content.length ? { content } : {}) };
-};
-const kids = (type: string, attrs: J | null, children: J[]): J => ({ type, ...(attrs ? { attrs } : {}), content: children });
-
-const marked = (text: string, ...marks: J[]): J => ({ type: 'text', text, marks });
-const bold = (text: string) => marked(text, { type: 'bold' });
-const italic = (text: string) => marked(text, { type: 'italic' });
-const sub = (text: string) => marked(text, { type: 'subscript' });
-const sup = (text: string) => marked(text, { type: 'superscript' });
-const weblink = (text: string, href: string) => marked(text, { type: 'link', attrs: { href } });
-
-const p = (...c: Inline[]) => node('paragraph', null, ...c);
-const pId = (blockId: string, ...c: Inline[]) => node('paragraph', { blockId }, ...c);
-const h = (level: number, text: string, blockId?: string) => node('heading', { level, ...(blockId ? { blockId } : {}) }, text);
-const bullets = (...items: Inline[][]) => kids('bulletList', null, items.map((c) => kids('listItem', null, [p(...c)])));
-const numbered = (...items: Inline[][]) => kids('orderedList', null, items.map((c) => kids('listItem', null, [p(...c)])));
-const table = (head: string[], rows: string[][]) => kids('table', null, [
-  kids('tableRow', null, head.map((c) => kids('tableHeader', null, [p(c)]))),
-  ...rows.map((r) => kids('tableRow', null, r.map((c) => kids('tableCell', null, [p(c)])))),
-]);
-
-const section = (...blocks: J[]) => kids('section', { columns: 1, locked: false }, blocks);
-const columns = (...cols: J[][]) => kids('section', { columns: cols.length, locked: false }, [kids('columnBlock', null, cols.map((c) => kids('column', null, c)))]);
-const doc = (...sections: J[]) => JSON.stringify({ type: 'doc', content: sections });
-
-// Marks the app puts on text.
-const IMPORTANT = { tagId: 'builtin-important', color: '#f59e0b', typeKey: 'important' };
-const important = (text: string, level: 1 | 2 | 3, passageId: string, reviewDue: string | null = null) =>
-  marked(text, { type: 'noteTag', attrs: { ...IMPORTANT, level, passageId, reviewDue, reviewStep: reviewDue ? 0 : null } });
-const tagged = (text: string, tagId: string, color: string) => marked(text, { type: 'noteTag', attrs: { tagId, color } });
-const itemLink = (text: string, targetType: CrossAppRef['type'], targetId: string, display: 'basic' | 'expanded' = 'basic') =>
-  marked(text, { type: 'artifactLink', attrs: { targetType, targetId, display } });
-const noteLink = (text: string, noteId: string, blockId: string | null = null) => marked(text, { type: 'noteLink', attrs: { noteId, tabId: null, blockId } });
-const termLink = (text: string, entryId: string, typeKey: string) => marked(text, { type: 'conceptRef', attrs: { entryId, typeKey } });
-const hubPassage = (text: string, hub: { hubId: string; noteId: string; title: string }, linkId: string) =>
-  marked(text, { type: 'hubRef', attrs: { hubId: hub.hubId, linkId, hubNoteId: hub.noteId, hubTitle: hub.title } });
-const unsure = (text: string, flagId: string, reason: string | null = null) => marked(text, { type: 'unsureFlag', attrs: { flagId, reason, qid: null } });
-const chip = (entryId: string) => node('glossaryChip', { entryId });
-const mathInline = (latex: string) => node('mathInline', { latex });
-
-// Blocks.
-const card = (entryId: string, variant: 'card' | 'compact' = 'card', frame: J = {}) => node('glossaryCard', { entryId, variant, ...frame });
-const embed = (noteId: string, blockId: string, variant: 'quote' | 'card' | 'plain' = 'card') => node('noteEmbed', { noteId, tabId: null, blockId, variant });
-const mathBlock = (latex: string, variant: 'centred' | 'left' | 'numbered' = 'centred') => node('mathBlock', { latex, variant });
-const code = (language: string, text: string) => node('codeBlock', { language, variant: 'numbered' }, text);
 
 const BOOKS = 'lt-books' as ListTypeId;
 
@@ -400,37 +350,18 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   set(rock, doc(section(
     h(1, 'Big picture'),
     pId('rc-big', important('Rocks are not permanent: every rock is on its way to becoming another kind of rock.', 2, 'demo-imp-rc', reviewTomorrow), ' The rock cycle is how geologists describe those changes and what drives them.'),
-    kids('cycle', { variant: 'ring', numbered: true, colours: 'spectrum', iconShape: 'circle', iconSize: 'm', blockId: 'rc-cycle' }, [
-      node('cycleName', null, 'The rock cycle'),
-      ...([
-        ['🔥', 'Magma', 'Molten rock below the surface.', 'Cooling'],
-        ['🌋', 'Igneous rock', 'Crystallises as magma or lava cools.', 'Weathering & erosion'],
-        ['🏖️', 'Sediment', 'Grains carried by water, wind and ice.', 'Burial & lithification'],
-        ['🏜️', 'Sedimentary rock', 'Layers compacted and cemented.', 'Heat & pressure'],
-        ['💎', 'Metamorphic rock', 'Changed without melting.', 'Melting'],
-      ]).map(([icon, label, text, arrowLabel]) => kids('cycleStage', { arrow: 'forward', arrowLabel, icon, image: null }, [node('cycleLabel', null, label), node('cycleText', null, text)])),
-    ]),
+    EX.cycle(),
     h(1, 'The three families'),
-    kids('types', { variant: 'guide' }, [
-      node('typesCategory', null, 'Rock'),
-      ...([
-        ['🌋', 'Igneous', 'Forms from cooled magma or lava; interlocking crystals', 'Basalt, granite, latite'],
-        ['🏜️', 'Sedimentary', 'Layers of compacted, cemented grains; may hold fossils', 'Sandstone, limestone, shale'],
-        ['💎', 'Metamorphic', 'Recrystallised by heat and pressure without melting; often banded', 'Slate, schist, marble'],
-      ]).map(([icon, name, trait, example]) => kids('typesItem', { icon, image: null }, [node('typesName', null, name), node('typesTrait', null, trait), node('typesExample', null, example)])),
-    ]),
+    EX.types(),
     p('Sediment only becomes rock through ', termLink('lithification', lithification, 'definition'), ':'),
     card(lithification),
     p('Volcanic ash can skip most of the cycle: it settles and compacts straight into tuff.'),
     h(1, 'Why it matters for climate'),
     pId('rc-weathering', hubPassage('Chemical weathering of silicate rocks draws CO₂ out of the atmosphere, locking it into carbonate rock over millions of years.', hub, 'demo-hl-weathering'), ' This is the planet’s slow thermostat, and it links this unit to Climate Systems.'),
-    node('quoteBlock', { variant: 'pull' }, node('quoteText', null, 'The result, therefore, of our present enquiry is, that we find no vestige of a beginning, no prospect of an end.'),
-      node('quoteField', { field: 'who' }, 'James Hutton'), node('quoteField', { field: 'source' }, 'Theory of the Earth'), node('quoteField', { field: 'when' }, '1788')),
+    EX.quoteBlock(),
     h(1, 'Things to check'),
     p(unsure('I think slate forms at lower temperatures than schist.', 'demo-flag-slate', 'Check the metamorphic grade chart in Lecture 7'), ' Ask in the lab if the chart isn’t clear.'),
-    node('questionBlock', { qid: 'demo-q-granite', status: 'answered', answeredAt: at(-4, '15:20'), variant: 'card' },
-      node('questionText', null, 'Why does granite have much bigger crystals than basalt?'),
-      node('questionField', { field: 'answer' }, 'Granite cools slowly deep underground, so its crystals have time to grow. Basalt erupts and cools in days.')),
+    EX.questionAnswered(at(-4, '15:20')),
     p('Lab write-up for this topic: ', noteLink('Lab 3: hand samples', lab), '.'),
   )));
 
@@ -446,23 +377,9 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
 
   set(minerals, doc(section(
     p('Hand-sample identification first, then the lab confirms with ', chip(xrd), ' when it matters.'),
-    kids('idKey', { variant: 'couplets', blockId: 'min-key' }, [
-      node('idKeyTitle', null, 'Common rock-forming minerals'),
-      ...([
-        ['Does it scratch glass?', [['Yes, it scratches glass', '2'], ['No', '3']]],
-        ['How does it break?', [['Two flat cleavage planes, near 90°', 'Feldspar'], ['No cleavage; curved, shell-like fracture', 'Quartz']]],
-        ['Does it fizz in dilute HCl?', [['Yes', 'Calcite'], ['No', '4']]],
-        ['Does it peel into thin sheets?', [['Yes, flexible sheets', 'Mica'], ['No; feels greasy, scratched by a fingernail', 'Talc']]],
-      ] as [string, [string, string][]][]).map(([question, leads]) => kids('idKeyStep', null, [
-        node('idKeyQuestion', null, question),
-        ...leads.map(([choice, result]) => kids('idKeyLead', null, [node('idKeyChoice', null, choice), node('idKeyResult', null, result)])),
-      ])),
-    ]),
+    EX.idKey(),
     h(1, 'The two I mix up'),
-    kids('compareBlock', { variant: 'table' }, ([
-      ['Quartz', ['Hardness: 7, scratches glass', 'In acid: no reaction', 'Breaks: conchoidal fracture, no cleavage']],
-      ['Calcite', ['Hardness: 3, a knife scratches it', 'In acid: fizzes in dilute HCl', 'Breaks: into rhombs along three cleavages']],
-    ] as [string, string[]][]).map(([title, points]) => kids('compareSide', null, [node('compareTitle', null, title), ...points.map((pt) => node('comparePoint', null, pt))]))),
+    EX.compareBlock(),
     card(quartz),
     pId('min-tip', bold('Field tip: '), 'always test hardness on a fresh surface. A weathered rind is softer than the mineral underneath, and it will fool the key.'),
     h(1, 'Hardness and density'),
@@ -477,28 +394,13 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
 
   set(time, doc(section(
     p('Deep time is the hardest thing to picture. The units nest inside each other (before the Phanerozoic come the Proterozoic, Archean and Hadean eons, nearly 90% of Earth’s history):'),
-    kids('hierarchy', { variant: 'tree', colours: 'spectrum', tiers: ['Eon', 'Era', 'Period'] }, ([
-      [0, 'Phanerozoic: the last 541 million years'], [1, 'Cenozoic'], [2, 'Quaternary'], [2, 'Neogene'],
-      [1, 'Mesozoic'], [2, 'Cretaceous'], [2, 'Jurassic'],
-      [1, 'Paleozoic'], [2, 'Permian'], [2, 'Cambrian'],
-    ] as [number, string][]).map(([level, text]) => node('hierarchyItem', { level }, text))),
+    EX.hierarchy(),
     h(1, 'How we date rocks'),
-    kids('breakdown', { variant: 'pillars', colours: 'accent' }, [
-      node('breakdownWhole', null, 'Dating methods'),
-      ...([
-        ['Relative dating', 'Superposition: younger layers sit on older ones; a dyke is younger than what it cuts.'],
-        ['Radiometric dating', 'Measure parent and daughter isotopes and use the known half-life.'],
-        ['Biostratigraphy', 'Index fossils that lived only briefly pin a layer to a narrow window.'],
-      ]).map(([label, text]) => kids('breakdownPart', null, [node('breakdownLabel', null, label), node('breakdownText', null, text)])),
-    ]),
+    EX.breakdown(),
     p('Radioactive decay is exponential, so a half-life is constant:'),
     mathBlock('N(t) = N_0 \\, e^{-\\lambda t} \\qquad t_{1/2} = \\frac{\\ln 2}{\\lambda}'),
     p('For carbon-14, ', mathInline('t_{1/2} \\approx 5730'), ' years, which is why it is useless for rocks millions of years old.'),
-    kids('conclusion', { variant: 'therefore' }, [
-      node('conclusionReason', null, 'Radiometric dating puts the Earth at about 4.54 billion years old'),
-      node('conclusionReason', null, 'Anatomically modern humans appeared about 300,000 years ago'),
-      node('conclusionText', null, 'If Earth’s history were one day, we would arrive in the last six seconds before midnight.'),
-    ]),
+    EX.conclusion(),
     p('Hutton saw this first, at Siccar Point: see ', noteLink('his line in the rock cycle note', rock), '.'),
   )));
 
@@ -509,13 +411,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
       [itemLink('Pack the field kit', 'task', packKit), ' using the ', itemLink('Field trip packing list', 'list', packing)],
     ),
     h(1, 'The day'),
-    kids('timeline', { variant: 'horizontal', order: 'asc' }, ([
-      ['7:00am', 'Leave campus'],
-      ['9:30am', 'Kiama Blowhole: latite columns and the blowhole itself'],
-      ['12:00pm', 'Lunch at Bombo Beach'],
-      ['1:00pm', 'Bombo Headland quarry: columnar jointing'],
-      ['4:30pm', 'Back on the bus'],
-    ]).map(([when, what]) => kids('timelineItem', null, [node('timelineWhen', null, when), p(what)]))),
+    EX.timeline(),
     ...(pictures.kiama ? [node('image', { pictureId: pictures.kiama, src: null, alt: 'The Kiama coast' })] : []),
     h(1, 'What to look for'),
     p('The whole coast is ', chip(latite), ', a Permian volcanic rock.'),
@@ -543,12 +439,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
 
   set(carbon, doc(section(
     pId('cc-rise', important('CO₂ has risen about 50% since pre-industrial times, from 280 ppm to over 420 ppm.', 3, 'demo-imp-co2', reviewTomorrow), ' ', tagged('Almost certainly in the exam.', examTag, colour('red'))),
-    node('chart', { variant: 'line', spec: {
-      title: 'Atmospheric CO₂ at Mauna Loa', xTitle: 'Year', yTitle: 'ppm',
-      labels: ['1960', '1970', '1980', '1990', '2000', '2010', '2020'],
-      series: [{ name: 'Annual mean CO₂', values: [316.9, 325.7, 338.8, 354.4, 369.7, 389.9, 414.2] }],
-      stacking: 'none', waterfallTotal: true,
-    } }),
+    EX.chart(),
     h(1, 'How we found out'),
     kids('timeline', { variant: 'rail', order: 'asc' }, ([
       ['1824', 'Joseph Fourier suggests the atmosphere keeps the Earth warmer than it would otherwise be.'],
@@ -573,71 +464,35 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     mathBlock('j^{*} = \\varepsilon \\sigma T^{4}'),
     h(1, 'Feedbacks'),
     pId('cc-ice', hubPassage('As sea ice melts, darker ocean is exposed, the albedo falls and more sunlight is absorbed, which melts more ice.', hub, 'demo-hl-ice'), ' This is the textbook positive feedback.'),
-    node('diagram', { variant: 'free', spec: {
-      nodes: [
-        { id: 'warm', label: 'Warming', shape: 'oval', x: 0, y: 0 },
-        { id: 'melt', label: 'Sea ice melts', shape: 'round', x: 300, y: 0 },
-        { id: 'dark', label: 'Darker surface (lower albedo)', shape: 'round', x: 300, y: 150 },
-        { id: 'absorb', label: 'More sunlight absorbed', shape: 'round', x: 0, y: 150 },
-      ],
-      edges: [
-        { id: 'e1', from: 'warm', to: 'melt', label: '' }, { id: 'e2', from: 'melt', to: 'dark', label: '' },
-        { id: 'e3', from: 'dark', to: 'absorb', label: '' }, { id: 'e4', from: 'absorb', to: 'warm', label: 'amplifies' },
-      ],
-    } }),
+    EX.diagram(),
     card(feedback),
     p('Anthropogenic CO₂ is a forcing, not a feedback. ', node('movedStub', { noteId: essayNote, inboxId, itemId: 'demo-ib-sinks', title: 'Essay ideas' })),
     p('Burning a tonne of coal releases about 2.4 t of CO₂. How much carbon is that?'),
     node('convertBlock', { variant: 'card', converter: co2Converter, values: { co2: '2400' } }),
+    h(1, 'Why it’s warming'),
+    EX.causeEffect(),
+    h(1, 'Weather or climate?'),
+    EX.vennBlock(),
+    h(1, 'A case that worked'),
+    EX.caseStudy(),
     h(1, 'Working with the data'),
     p('The tutorial’s script for the annual means (data from ', weblink('NOAA GML', 'https://gml.noaa.gov/ccgg/trends/data.html'), '):'),
-    code('python', [
-      'import pandas as pd',
-      '',
-      'co2 = pd.read_csv("co2_mm_mlo.csv", comment="#")',
-      'annual = co2.groupby("year")["average"].mean()',
-      'print(annual.loc[1960:2020:10].round(1))',
-    ].join('\n')),
+    EX.codeBlock(),
     node('questionBlock', { qid: 'demo-q-ocean', status: 'open', variant: 'card' },
       node('questionText', null, 'How quickly does the ocean take up the extra CO₂, and does it slow down as the water warms?'),
       node('questionField', { field: 'why' }, 'It decides how much of each year’s emissions stays in the air.')),
   )));
 
-  const point = (text: string, weight = 1) => node('prosConsPoint', { weight }, text);
-  const prosCons = (side: 'pro' | 'con', points: J[]) => kids('prosConsList', { side }, points);
   set(essayNote, doc(section(
     p('Due ', itemLink('Climate essay due', 'deadline', essayDue), '. Draft first (', itemLink('Write the first draft', 'task', draft), '), then take it to ', itemLink('Consult with my tutor about the essay', 'event', consult), '.'),
     p('Background: ', noteLink('the CO₂ numbers from Week 6', carbon, 'cc-rise'), ', and why ', termLink('albedo', albedo, 'definition'), ' is the lever geoengineering pulls.'),
     h(1, 'The argument'),
-    kids('argument', { variant: 'debate', sides: 'both' }, [
-      node('argumentClaim', null, 'Solar geoengineering should be researched, but not deployed.'),
-      prosCons('pro', [point('Volcanic eruptions show it would cool the planet quickly (Pinatubo, 1991: about 0.5 °C)', 3), point('Research now means we understand it before anyone is desperate enough to try it', 2)]),
-      prosCons('con', [point('Deployment would mask warming without removing any CO₂', 3), point('Stopping suddenly would cause rapid “termination shock” warming', 3), point('Research itself may weaken the push to cut emissions (moral hazard)', 1)]),
-      node('argumentField', { field: 'why' }, 'The cooling is real but the risks of relying on it are worse than the risks of studying it.'),
-      node('argumentField', { field: 'sources' }, 'IPCC AR6 WG1 ch. 4; Kolbert, Under a White Sky'),
-    ]),
-    kids('prosCons', { variant: 'scales' }, [
-      node('prosConsSubject', null, 'Stratospheric aerosol injection'),
-      prosCons('pro', [point('Fast: cooling within a year or two', 3), point('Cheap compared with cutting emissions', 2)]),
-      prosCons('con', [point('Does nothing for ocean acidification', 3), point('Termination shock if it stops', 3), point('Could shift monsoon rainfall', 2)]),
-      node('prosConsVerdict', null, 'Too risky as a strategy; at most a last-resort backstop.'),
-    ]),
+    EX.argument(),
+    EX.prosCons(),
     h(1, 'The alternatives'),
-    kids('options', { variant: 'ranked' }, [node('optionsGoal', null, 'Keep warming to 1.5 °C'), ...([
-      ['Cut emissions fast', 'The only option that stops the cause.', 'chosen', 3, ['Deals with the cause', 'Cheaper every year as renewables fall in price'], ['Politically slow']],
-      ['Carbon dioxide removal', 'Forests, enhanced weathering, direct air capture.', 'considering', 2, ['Reverses some of the damage'], ['Expensive at scale', 'Unproven at gigatonne scale']],
-      ['Solar geoengineering', 'Reflect sunlight with aerosols.', 'ruled', 0, ['Fast'], ['Masks the problem', 'Termination shock']],
-    ] as [string, string, string, number, string[], string[]][]).map(([name, note, status, score, pros, cons]) => kids('optionsItem', { status, score }, [
-      node('optionsName', null, name), node('optionsNote', null, note),
-      prosCons('pro', pros.map((t) => point(t))), prosCons('con', cons.map((t) => point(t))),
-    ]))]),
+    EX.options(),
     h(1, 'Evidence I’ll lean on'),
-    kids('pyramid', { variant: 'pyramid', colours: 'spectrum' }, ([
-      ['IPCC assessments', 'Thousands of studies, reviewed and weighed'],
-      ['Peer-reviewed studies', 'Field data and experiments'],
-      ['Model projections', 'Useful, but only as good as their assumptions'],
-      ['News and opinion', 'For quotes and context, not evidence'],
-    ]).map(([label, text]) => kids('pyramidLayer', null, [node('pyramidLabel', null, label), node('pyramidText', null, text)]))),
+    EX.pyramid(),
     p(unsure('I think the 2 °C target was first agreed at Copenhagen, not Paris.', 'demo-flag-2c', 'Check before quoting it'), ' Either way, Paris added the 1.5 °C aim.'),
     kids('inbox', { inboxId, variant: 'board', order: 'newest' }, [
       node('inboxTitle', null, 'Essay ideas'),

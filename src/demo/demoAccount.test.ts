@@ -7,49 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import { getSchema } from '@tiptap/core';
 import type { Node as PMNode, Schema } from '@tiptap/pm/model';
-import StarterKit from '@tiptap/starter-kit';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableCell } from '@tiptap/extension-table-cell';
-import { TableHeader } from '@tiptap/extension-table-header';
-import Superscript from '@tiptap/extension-superscript';
-import Subscript from '@tiptap/extension-subscript';
-import { TextStyle, Color, FontSize } from '@tiptap/extension-text-style';
-import { ResizableImage } from '@/components/NoteEditor/extensions/ResizableImage';
-import { SectionDocument, Section, ColumnBlock, Column } from '@/components/NoteEditor/extensions/Section';
-import { NoteListItem } from '@/components/NoteEditor/extensions/ListItem';
-import { NoteTagMark } from '@/components/NoteEditor/extensions/NoteTagMark';
-import { ArtifactLinkMark } from '@/components/NoteEditor/extensions/ArtifactLinkMark';
-import { NoteTitle } from '@/components/NoteEditor/extensions/NoteTitle';
-import { NoteSubtitle, NoteAuthor } from '@/components/NoteEditor/extensions/NoteBylines';
-import { TimelineExtensions } from '@/components/NoteEditor/extensions/Timeline';
-import { QuoteExtensions } from '@/components/NoteEditor/extensions/Quote';
-import { ConclusionExtensions } from '@/components/NoteEditor/extensions/Conclusion';
-import { TypesExtensions } from '@/components/NoteEditor/extensions/Types';
-import { IdKeyExtensions } from '@/components/NoteEditor/extensions/IdKey';
-import { ProsConsExtensions } from '@/components/NoteEditor/extensions/ProsCons';
-import { ArgumentExtensions } from '@/components/NoteEditor/extensions/Argument';
-import { OptionsExtensions } from '@/components/NoteEditor/extensions/Options';
-import { CycleExtensions } from '@/components/NoteEditor/extensions/Cycle';
-import { BreakdownExtensions } from '@/components/NoteEditor/extensions/Breakdown';
-import { HierarchyExtensions } from '@/components/NoteEditor/extensions/Hierarchy';
-import { PyramidExtensions } from '@/components/NoteEditor/extensions/Pyramid';
-import { ChartExtensions } from '@/components/NoteEditor/extensions/Chart';
-import { CodeBlockExtensions } from '@/components/NoteEditor/extensions/CodeBlock';
-import { MathExtensions } from '@/components/NoteEditor/extensions/Maths';
-import { InboxExtensions } from '@/components/NoteEditor/extensions/Inbox';
-import { HubExtensions } from '@/components/NoteEditor/extensions/Hub';
-import { GlossaryCardExtensions } from '@/components/NoteEditor/extensions/GlossaryCard';
-import { GlossaryChipExtensions } from '@/components/NoteEditor/extensions/GlossaryChip';
-import { QuestionExtensions } from '@/components/NoteEditor/extensions/Question';
-import { CompareExtensions } from '@/components/NoteEditor/extensions/Compare';
-import { DiagramExtensions } from '@/components/NoteEditor/extensions/Diagram';
-import { ConvertExtensions } from '@/components/NoteEditor/extensions/Convert';
-import { BlockIds } from '@/components/NoteEditor/extensions/BlockIds';
-import { NoteLinkExtensions } from '@/components/NoteEditor/extensions/NoteLink';
-import { NoteEmbedExtensions } from '@/components/NoteEditor/extensions/NoteEmbed';
-import { UnsureFlagExtensions } from '@/components/NoteEditor/extensions/UnsureFlag';
-import { ConceptRefMark } from '@/components/NoteEditor/extensions/ConceptRef';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useNoteStore } from '@/store/noteStore';
@@ -59,21 +16,11 @@ import { buildBackupSnapshot } from '@/utils/backupExport';
 import { PERSISTED_STORAGE_KEYS } from '@/config/backup';
 import { NOTE_BLOCK_NODES } from '@/components/NoteEditor/blockNodes';
 import { buildDemoAccount, DEMO_BACKUP_KEYS } from './demoAccount';
+import { noteEditorExtensions } from '@/components/NoteEditor/noteEditorExtensions';
 import type { CrossAppRefType } from '@/types';
 
-// The note editor's schema: the node, mark and attribute extensions NoteEditor.tsx loads.
-const schema: Schema = getSchema([
-  StarterKit.configure({ document: false, codeBlock: false, listItem: false }), NoteListItem,
-  SectionDocument, Section, ColumnBlock, Column, NoteTagMark, ArtifactLinkMark,
-  ResizableImage.configure({ allowBase64: true, inline: false }), Superscript, Subscript, TextStyle, Color, FontSize,
-  Table, TableRow, TableHeader, TableCell, NoteTitle, NoteSubtitle, NoteAuthor,
-  ...TimelineExtensions, ...QuoteExtensions, ...ConclusionExtensions, ...TypesExtensions, ...IdKeyExtensions,
-  ...ProsConsExtensions, ...ArgumentExtensions, ...OptionsExtensions, ...CycleExtensions, ...BreakdownExtensions,
-  ...HierarchyExtensions, ...PyramidExtensions, ...ChartExtensions, ...CodeBlockExtensions, ...MathExtensions,
-  ...InboxExtensions, ...HubExtensions, ...GlossaryCardExtensions, ...GlossaryChipExtensions, ...QuestionExtensions,
-  ...CompareExtensions, ...DiagramExtensions, ...ConvertExtensions, BlockIds, ...NoteLinkExtensions, ...NoteEmbedExtensions,
-  ...UnsureFlagExtensions, ConceptRefMark,
-]);
+// The note editor's schema: from the very list NoteEditor.tsx builds its editor with.
+const schema: Schema = getSchema(noteEditorExtensions({ noteEncrypted: () => null, linkClass: '' }));
 
 // Node-only (fs, process), so tsconfig.app.json leaves it out of the app's type check.
 const env = process.env;

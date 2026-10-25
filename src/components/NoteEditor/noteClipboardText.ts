@@ -139,6 +139,41 @@ function block(node: PMNode): string {
       });
       return lines.join('\n');
     }
+    case 'caseStudy': {
+      // "Case: The Montreal Protocol", then each part shown: "Situation: …".
+      const L = LABELS.noteBlocks.caseStudy;
+      const lines = [`${L.label}: ${inlineText(node.child(0)).trim()}`];
+      node.forEach((child, _o, i) => { if (i > 0 && child.textContent.trim()) lines.push(`${L.fields[child.attrs.field as keyof typeof L.fields] ?? ''}: ${inlineText(child)}`); });
+      return lines.join('\n');
+    }
+    case 'causeEffect': {
+      // Each column as a heading and its items, an item saying what it comes from.
+      const text = new Map<string, string>();
+      node.forEach((col) => col.forEach((c, _o, i) => { if (i > 0) text.set(c.attrs.cid, c.textContent.trim()); }));
+      const links = (node.attrs.links ?? []) as { from: string; to: string }[];
+      const out: string[] = [];
+      node.forEach((col) => {
+        out.push(`${inlineText(col.child(0)).trim()}:`);
+        col.forEach((c, _o, i) => {
+          if (i === 0) return;
+          const from = links.filter((l) => l.to === c.attrs.cid).map((l) => text.get(l.from)).filter(Boolean);
+          out.push(`- ${inlineText(c)}${from.length ? ` (${LABELS.noteBlocks.causeEffect.comesFrom.replace(':', '').toLowerCase()} ${from.join(', ')})` : ''}`);
+        });
+      });
+      return out.join('\n');
+    }
+    case 'vennBlock': {
+      // Each thing with the sets it's in: "Whales: Mammals, Ocean".
+      const names: Record<string, string> = {};
+      node.forEach((c) => { if (c.type.name === 'vennSet') names[c.attrs.sid] = c.textContent.trim(); });
+      const out = [Object.values(names).join(' / ')];
+      node.forEach((c) => {
+        if (c.type.name !== 'vennItem') return;
+        const sets = ((c.attrs.sets ?? []) as string[]).map((s) => names[s]).filter(Boolean);
+        out.push(`- ${inlineText(c)}${sets.length ? `: ${sets.join(', ')}` : ''}`);
+      });
+      return out.join('\n');
+    }
     case 'convertBlock':
       // "5 m = 16.4 ft", worked out as it reads now.
       return convertText({ converter: node.attrs.converter, from: node.attrs.from, to: node.attrs.to, values: node.attrs.values ?? {}, reverse: !!node.attrs.reverse }, useConverterStore.getState().converters);
