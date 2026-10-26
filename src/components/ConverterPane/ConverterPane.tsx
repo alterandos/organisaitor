@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useUIStore } from '@/store/uiStore';
 import { useConverterStore } from '@/store/converterStore';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -62,7 +63,7 @@ export function ConverterPane() {
   const row = (it: Item, keyPrefix = '') => (
     <li key={keyPrefix + it.id}>
       <button type="button" className={`${styles.item} ${current?.id === it.id && !editing ? styles.itemOn : ''}`} onClick={() => pick(it.id)}>
-        <span className={styles.itemIcon} aria-hidden="true">{it.kind === 'custom' ? it.converter.icon ?? '🧮' : '📏'}</span>
+        <span className={styles.itemIcon} aria-hidden="true">{it.kind === 'custom' ? <ItemIcon icon={it.converter.icon} fallback="🧮" /> : '📏'}</span>
         {it.name}
       </button>
     </li>
@@ -172,7 +173,7 @@ function CustomView({ converter: c, onEdit, onDelete }: { converter: CustomConve
   return (
     <div className={styles.view}>
       <div className={styles.viewHead}>
-        <h3 className={styles.viewTitle}>{c.icon && <span aria-hidden="true">{c.icon} </span>}{c.name}</h3>
+        <h3 className={styles.viewTitle}>{c.icon && <span aria-hidden="true"><ItemIcon icon={c.icon} /> </span>}{c.name}</h3>
         <button type="button" className={styles.iconBtn} onClick={onEdit} aria-label={L.edit} title={L.edit}><EditIcon /></button>
         <button type="button" className={styles.iconBtn} onClick={onDelete} aria-label={L.delete} title={L.delete}><TrashIcon width="1em" height="1em" /></button>
       </div>

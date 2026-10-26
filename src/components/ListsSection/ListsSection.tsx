@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { pageKeyBlocked } from '@/utils/pageKeys';
 import { usePinAction } from '@/hooks/usePinAction';
 import { PinButton } from '@/components/PinButton/PinButton';
@@ -288,7 +289,7 @@ function SidebarListItem({
       onClick={onSelect}
       style={isSelected && list.color ? { borderLeftColor: list.color } : undefined}
     >
-      <RowOptionsMenu rowRef={rowRef} title={list.name} icon={<span className={styles.sidebarItemIcon}>{list.icon ?? listType?.icon ?? '📋'}</span>}>
+      <RowOptionsMenu rowRef={rowRef} title={list.name} icon={<ItemIcon className={styles.sidebarItemIcon} icon={list.icon} fallback={listType?.icon ?? '📋'} />}>
         {!isLocked && (
           <RowAction className={styles.sidebarActionBtn} icon={<EditIcon />} label={LABELS.rowActions.editThing(LABELS.list)} onClick={onEdit} />
         )}
@@ -647,7 +648,7 @@ export function ListsSection() {
             <div className={styles.mainHeader}>
               <div className={styles.mainHeaderLeft}>
                 <span className={styles.mainListIcon}>
-                  {selectedList.icon ?? (selectedList.typeId ? listTypes[selectedList.typeId]?.icon : null) ?? '📋'}
+                  <ItemIcon icon={selectedList.icon} fallback={(selectedList.typeId ? listTypes[selectedList.typeId]?.icon : null) ?? '📋'} />
                 </span>
                 <div>
                   <h2 className={styles.mainListName}>{selectedList.name}</h2>

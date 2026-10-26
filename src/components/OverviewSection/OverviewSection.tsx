@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useTaskStore } from '@/store/taskStore';
 import { useOverviewStore } from '@/store/overviewStore';
 import { useUIStore } from '@/store/uiStore';
@@ -51,7 +52,7 @@ function SavedRow({ overview, active }: { overview: Overview; active: boolean })
   const deleteOverview = useOverviewStore((s) => s.deleteOverview);
   return (
     <div ref={rowRef} className={`${styles.navItem} ${active ? styles.navItemActive : ''}`}>
-      <RowOptionsMenu rowRef={rowRef} title={overview.name} icon={<span className={styles.navIcon}>{overview.icon ?? '📊'}</span>}>
+      <RowOptionsMenu rowRef={rowRef} title={overview.name} icon={<ItemIcon className={styles.navIcon} icon={overview.icon} fallback="📊" />}>
         <RowAction className={styles.actionBtn} icon={<EditIcon />} label={L.edit} onClick={() => openEdit(overview.id)} />
         <RowAction
           className={`${styles.actionBtn} ${styles.actionBtnDelete}`}

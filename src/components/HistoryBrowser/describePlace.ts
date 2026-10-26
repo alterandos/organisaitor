@@ -1,4 +1,5 @@
 import { LABELS } from '@/config/labels';
+import { iconText } from '@/components/IconPicker/iconValue';
 import { useNoteStore } from '@/store/noteStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useListStore } from '@/store/listStore';
@@ -97,7 +98,7 @@ export function describePlace(p: NavPlace): PlaceSummary {
       const items = Object.values(listItems).filter((i) => i.listId === raw.id);
       const titles = locked ? [] : items.slice(0, 6).map((i) => itemView(i).title).filter(Boolean);
       return {
-        title: locked ? L.lockedList : `${list.icon ? `${list.icon} ` : ''}${list.name}`,
+        title: locked ? L.lockedList : `${iconText(list.icon) ? `${iconText(list.icon)} ` : ''}${list.name}`,
         path: [],
         detail: L.items(items.length),
         preview: titles.length ? titles.join(' · ') : null,

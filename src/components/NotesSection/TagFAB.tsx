@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { BUILTIN_TAGS, type BuiltinTag } from '../NoteEditor/builtinTags';
@@ -89,7 +90,7 @@ export function TagFAB() {
                   style={isSelected(t.id) ? { borderLeft: `3px solid ${t.color}` } : undefined}
                 >
                   <span className={styles.tagHotkey}>{i + 1}</span>
-                  <span>{t.icon}</span>
+                  <ItemIcon icon={t.icon} />
                   <span className={styles.tagName}>{t.name}</span>
                   {isSelected(t.id) && <span className={styles.check}>✓</span>}
                 </button>
@@ -108,7 +109,7 @@ export function TagFAB() {
                   style={isSelected(t.id) && t.color ? { borderLeft: `3px solid ${t.color}` } : undefined}
                 >
                   <span className={styles.tagHotkey}>{BUILTIN_TAGS.length + i + 1 <= 9 ? BUILTIN_TAGS.length + i + 1 : ''}</span>
-                  <span>{t.icon ?? '📁'}</span>
+                  <ItemIcon icon={t.icon} fallback="📁" />
                   <span className={styles.tagName}>{t.name}</span>
                   {isSelected(t.id) && <span className={styles.check}>✓</span>}
                 </button>

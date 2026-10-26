@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { DateInput } from '@/components/DateInput/DateInput';
 import type { FormEvent } from 'react';
 import { useListStore } from '@/store/listStore';
@@ -208,7 +209,7 @@ export function AddListItemModal() {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <span className={styles.listBadge}>
-              {list.icon ?? '📋'} {list.name}
+              <ItemIcon icon={list.icon} fallback="📋" /> {list.name}
             </span>
             <span className={styles.title}>{isEditing ? LABELS.lists.form.editTitle : LABELS.lists.form.newTitle}</span>
           </div>

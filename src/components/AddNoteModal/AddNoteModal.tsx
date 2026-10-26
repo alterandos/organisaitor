@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -161,7 +162,7 @@ export function AddNoteModal() {
                       }`}
                       onClick={() => handleTagSelect(tag.id as NoteTagId)}
                     >
-                      <span className={styles.tagPickerIcon}>{tag.icon ?? '📁'}</span>
+                      <span className={styles.tagPickerIcon}><ItemIcon icon={tag.icon} fallback="📁" /></span>
                       <span>{tag.name}</span>
                       {selectedTagIds.includes(tag.id as NoteTagId) && (
                         <span className={styles.checkmark}>✓</span>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { richTextIsEmpty } from '@/utils/emptyContent';
 import { createPortal } from 'react-dom';
 import { useEditor, useEditorState, EditorContent, getMarkRange } from '@tiptap/react';
@@ -2327,7 +2328,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
             return (
               <div key={tag.id} className={styles.attrGroup}>
                 <span className={styles.attrGroupLabel}>
-                  {tag.icon || '🏷️'} {tag.name}
+                  <ItemIcon icon={tag.icon} fallback="🏷️" /> {tag.name}
                 </span>
                 <div className={styles.attrFields}>
                   {tag.fieldSchema.map((field) => {

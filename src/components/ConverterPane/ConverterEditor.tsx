@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { IconField } from '@/components/IconPicker/IconField';
 import { useConverterStore } from '@/store/converterStore';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
@@ -69,7 +70,7 @@ export function ConverterEditor({ converter, onDone }: { converter: CustomConver
     <div className={styles.view}>
       <h3 className={styles.viewTitle}>{converter ? L.editTitle : L.newTitle}</h3>
       <div className={styles.editRow}>
-        <input className={styles.iconInput} value={icon} maxLength={4} placeholder="🧮" aria-label="Icon" onChange={(e) => setIcon(e.target.value)} />
+        <IconField value={icon || null} onChange={(v) => setIcon(v ?? '')} fallback="🧮" />
         <input className={styles.textInput} value={name} placeholder={L.namePlaceholder} aria-label={L.name} autoFocus onChange={(e) => setName(e.target.value)} />
       </div>
 

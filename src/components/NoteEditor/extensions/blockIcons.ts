@@ -1,4 +1,5 @@
 import { LABELS } from '@/config/labels';
+import { COMMON_EMOJI } from '@/config/emojiSet';
 import { squareIconDataUrl } from '@/utils/imageCompress';
 import { openBlockPopover, popoverClass as pop } from './blockDesigns';
 
@@ -21,7 +22,8 @@ export interface IconSlotOptions extends BlockIcon {
   extra?: (partPos: number, done: () => void) => HTMLElement[];
 }
 
-const ICON_CHOICES = ['☀️', '💧', '☁️', '🌧️', '❄️', '🌊', '🌱', '🌳', '🍂', '🔥', '⚡', '🌍', '♻️', '🔄', '⚙️', '🏭', '📦', '🚚', '🛒', '💰', '📈', '📉', '💡', '🧠', '✍️', '🔍', '🧪', '✅', '🎯', '❤️', '😴', '🏃', '🐦', '🦅', '🦆', '🐟', '🌸', '🍄', '🐾', '🏛️'];
+// The emoji offered: the shared set's common ones (config/emojiSet.ts); any other can be typed.
+const ICON_CHOICES = COMMON_EMOJI;
 
 async function setImage(o: IconSlotOptions, pos: number, file: File | undefined | null): Promise<void> {
   if (!file || !file.type.startsWith('image/')) return;

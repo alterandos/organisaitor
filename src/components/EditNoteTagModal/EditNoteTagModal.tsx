@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { IconField } from '@/components/IconPicker/IconField';
 import { nanoid } from 'nanoid';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
@@ -110,14 +111,8 @@ export function EditNoteTagModal() {
 
           <div className={styles.row}>
             <div className={styles.field}>
-              <label className={styles.label}>Icon <span className={styles.optional}>(emoji)</span></label>
-              <input
-                type="text"
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                placeholder={isAnnotationTag ? '🏷️' : '📁'}
-                className={`${styles.input} ${styles.iconInput}`}
-              />
+              <span className={styles.label}>{LABELS.iconPicker.label}</span>
+              <IconField value={icon || null} onChange={(v) => setIcon(v ?? '')} fallback={isAnnotationTag ? '🏷️' : '📁'} />
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Color</label>

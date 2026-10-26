@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useUIStore } from '@/store/uiStore';
 import { getActivityType } from '@/utils/fitnessActivityTypes';
@@ -88,7 +89,7 @@ function ActivityRow({ activity, activityTypes }: { activity: Activity; activity
 
   return (
     <div className={styles.row} onClick={() => openEditActivity(activity)}>
-      <span className={styles.typeIcon} title={typeDef.name}>{typeDef.icon}</span>
+      <span className={styles.typeIcon} title={typeDef.name}><ItemIcon icon={typeDef.icon} /></span>
       <div className={styles.rowMain}>
         <span className={styles.title}>{activity.title}</span>
         <span className={styles.date}>{formatDate(activity.startedAt)}</span>

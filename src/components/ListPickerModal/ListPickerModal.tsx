@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { createPortal } from 'react-dom';
 import { useListStore } from '@/store/listStore';
 import { useListViews } from '@/store/listViews';
@@ -128,7 +129,7 @@ export function ListPickerModal({ excludeIds, suggestFrom, onPick, onClose }: Pr
               >
                 <button type="button" className={styles.resultMain} onClick={() => pick(l)}>
                   <span className={styles.resultTop}>
-                    <span className={styles.resultTitle}>{l.isEncrypted ? '🔒 ' : ''}{l.icon ? `${l.icon} ` : ''}{l.name}</span>
+                    <span className={styles.resultTitle}>{l.isEncrypted ? '🔒 ' : ''}{l.icon ? <><ItemIcon icon={l.icon} />{' '}</> : ''}{l.name}</span>
                   </span>
                   <span className={styles.resultPath}>{meta}</span>
                 </button>

@@ -1,4 +1,5 @@
 import { useNoteStore } from '@/store/noteStore';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useUIStore } from '@/store/uiStore';
 import { getNotebookIcon } from '@/utils/notes';
 import type { NoteTagId } from '@/types';
@@ -51,7 +52,7 @@ export function NotebookLocationView({ tagId, noteIds, visibleTagIds }: Props) {
                 onClick={() => { if (!isCurrent) setSelected(tag.id as NoteTagId); }}
               >
                 {depth > 0 && <span className={styles.branch}>└</span>}
-                <span className={styles.icon}>{getNotebookIcon(tag, noteTags, notes)}</span>
+                <span className={styles.icon}><ItemIcon icon={getNotebookIcon(tag, noteTags, notes)} /></span>
                 <span className={styles.name}>{tag.name}</span>
                 {isCurrent && <span className={styles.marker}>◀ here</span>}
               </button>
@@ -67,7 +68,7 @@ export function NotebookLocationView({ tagId, noteIds, visibleTagIds }: Props) {
               onClick={() => setSelected(tag.id as NoteTagId)}
             >
               <span className={styles.branch}>├</span>
-              <span className={styles.icon}>{getNotebookIcon(tag, noteTags, notes)}</span>
+              <span className={styles.icon}><ItemIcon icon={getNotebookIcon(tag, noteTags, notes)} /></span>
               <span className={styles.name}>{tag.name}</span>
             </button>
           ))}

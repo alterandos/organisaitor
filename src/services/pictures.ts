@@ -10,7 +10,7 @@ import { useTrashStore } from '@/store/trashStore';
 import { encryptField, decryptField, isVaultUnlocked, onVaultStatus } from '@/services/vault';
 import { entryView, isEntryLocked, isNoteLocked, noteView } from '@/services/noteSecrets';
 import { editNoteContent } from '@/services/noteContentEdit';
-import { compressImageBlob, recompressDataUrl } from '@/utils/imageCompress';
+import { compressImageBlob, recompressDataUrl, squareIconDataUrl } from '@/utils/imageCompress';
 import { now } from '@/utils/date';
 import { log } from '@/utils/log';
 
@@ -127,6 +127,20 @@ export async function encryptedCopyOf(id: PictureId): Promise<PictureId | null> 
   if (p.isEncrypted) return id;
   const existing = Object.values(all()).find((q) => q.isEncrypted && q.copyOf === id);
   return existing ? existing.id : put(p.src, p.origin, { payload: await encryptField(p.src), copyOf: id });
+}
+
+// ── Icons: a small square picture used as an icon (components/IconPicker) ───
+
+// A picture made into an icon: centre-cropped to 96 px and re-encoded (a few KB), stored once (the
+// same icon added again is reused) and offered under "Your icons" from then on.
+export async function addIconPicture(file: Blob): Promise<PictureId> {
+  return store(await squareIconDataUrl(file, 96), { encrypted: false, origin: 'icon' });
+}
+
+// The icons added so far, newest first.
+export function useIconPictures(): Picture[] {
+  const pictures = usePictureStore((s) => s.pictures);
+  return Object.values(pictures).filter((p) => p.origin === 'icon' && !p.isEncrypted).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 // ── A Glossary card's picture: `picture:<id>` in its image field ──────────

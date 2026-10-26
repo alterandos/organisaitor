@@ -717,7 +717,8 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
     const glyphAllowed = /itemLinkKinds\.ts$/;
     const more = findMatches(files.filter((f) => !glyphAllowed.test(f)), /[⊘↺↗↳↰◐◫▦◎▤✦◉]/, { skipComments: true });
     expect(more, describeHits(more)).toEqual([]);
-    const linkAllowed = /itemIcons\.ts$|itemLinkKinds\.ts$|artifactTypes\.ts$|CrossAppRefPicker\.tsx$|EditActivityTypeModal\.tsx$|EditTrackerPane\.tsx$/;
+    // config/emojiSet.ts: 🔗 is one of the emoji a person can pick as an icon, not a control.
+    const linkAllowed = /itemIcons\.ts$|itemLinkKinds\.ts$|artifactTypes\.ts$|CrossAppRefPicker\.tsx$|EditActivityTypeModal\.tsx$|EditTrackerPane\.tsx$|emojiSet\.ts$/;
     const links = findMatches(files.filter((f) => !linkAllowed.test(f)), /🔗/, { skipComments: true });
     expect(links, describeHits(links)).toEqual([]);
   });
@@ -1223,3 +1224,16 @@ describe('pattern: a formula is worked out only by utils/formula.ts (CLAUDE.md "
     expect(hits, describeHits(hits)).toEqual([]);
   });
 });
+
+describe('pattern: an icon a person picks comes from the icon field (CLAUDE.md "Icon picker")', () => {
+  it('the places that give something an icon use IconField, and no emoji list is kept anywhere but config/emojiSet.ts', () => {
+    const editors = ['AddNoteTagModal/AddNoteTagModal.tsx', 'EditNoteTagModal/EditNoteTagModal.tsx', 'AddListModal/AddListModal.tsx', 'AddOverviewModal/AddOverviewModal.tsx', 'EditActivityTypeModal/EditActivityTypeModal.tsx', 'ConverterPane/ConverterEditor.tsx'];
+    const missing = editors.filter((f) => !fs.readFileSync(path.join(SRC, 'components', f), 'utf8').includes('<IconField'));
+    expect(missing).toEqual([]);
+    const lists = SOURCE_FILES.filter((f) => !rel(f).endsWith('config/emojiSet.ts') && /const \w*(EMOJI|ICON_CHOICES)\w* = \[/.test(fs.readFileSync(f, 'utf8')));
+    expect(lists.map(rel)).toEqual([]);
+    const freeText = findMatches(SOURCE_FILES, /\(emoji\)</);
+    expect(freeText, describeHits(freeText)).toEqual([]);
+  });
+});
+

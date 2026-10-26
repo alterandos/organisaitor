@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { createPortal } from 'react-dom';
 import { useUIStore, type QuickAccessTab } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -295,7 +296,7 @@ function ItemRow({ item, active, reorderable, first, last, dragging, onHover, on
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
     >
       <button type="button" className={styles.item} onClick={onSelect}>
-        <span className={styles.itemIcon}>{item.icon}</span>
+        <ItemIcon className={styles.itemIcon} icon={item.icon} />
         <span className={styles.itemText}>
           <span className={styles.itemTitle}>{item.title}</span>
           <span className={styles.itemSubtitle}>{item.subtitle}</span>

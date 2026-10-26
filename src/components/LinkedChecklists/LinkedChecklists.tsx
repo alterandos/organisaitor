@@ -1,4 +1,5 @@
 import { useListItemViews, useListViews } from '@/store/listViews';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { toggleChecklistItemWithTasks } from '@/services/taskListLinks';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { LABELS } from '@/config/labels';
@@ -26,7 +27,7 @@ export function LinkedChecklists({ listIds }: { listIds: ListId[] }) {
         return (
           <div key={list.id} className={styles.list}>
             <button type="button" className={styles.header} onClick={() => openArtifactTarget('list', list.id)} title="Open list">
-              <span>{list.isEncrypted ? '🔒' : (list.icon ?? '📋')}</span>
+              <span>{list.isEncrypted ? '🔒' : <ItemIcon icon={list.icon} fallback="📋" />}</span>
               <span className={styles.name}>{list.name}</span>
               {list.resetOnTaskComplete && <span className={styles.reusable} title={LABELS.checklist.reusableHint}>↻ {LABELS.checklist.reusable}</span>}
               <span className={`${styles.progress} ${complete ? styles.progressDone : ''}`}>{done}/{own.length}</span>

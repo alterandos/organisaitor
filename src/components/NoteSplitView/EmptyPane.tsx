@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { usePinnedItemsStore } from '@/store/pinnedItemsStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { resolvePinnedItems, resolveRecentItems, searchQuickAccessItems, type QuickAccessItem } from '@/utils/quickAccess';
@@ -30,7 +31,7 @@ export function EmptyPane({ openIds, onPick, onChoose }: { openIds: ReadonlySet<
   const row = (item: QuickAccessItem) => (
     <li key={item.key}>
       <button type="button" className={styles.pickRow} onClick={() => onPick(item.entityId)}>
-        <span className={styles.pickIcon} aria-hidden="true">{item.icon}</span>
+        <span className={styles.pickIcon} aria-hidden="true"><ItemIcon icon={item.icon} /></span>
         <span className={styles.pickTitle}>{item.title}</span>
         {item.subtitle && <span className={styles.pickSub}>{item.subtitle}</span>}
       </button>
@@ -61,7 +62,7 @@ export function EmptyPane({ openIds, onPick, onChoose }: { openIds: ReadonlySet<
               <div className={styles.pickCards}>
                 {pinned.map((item) => (
                   <button key={item.key} type="button" className={styles.pickCard} onClick={() => onPick(item.entityId)} title={item.subtitle || item.title}>
-                    <span className={styles.pickCardIcon} aria-hidden="true">{item.icon}</span>
+                    <span className={styles.pickCardIcon} aria-hidden="true"><ItemIcon icon={item.icon} /></span>
                     <span className={styles.pickCardTitle}>{item.title}</span>
                     {item.subtitle && <span className={styles.pickCardSub}>{item.subtitle}</span>}
                   </button>

@@ -1850,6 +1850,22 @@ export const LABELS = {
     rowTitle:   (rule: string) => `Repeats: ${rule}`,
   },
 
+  // The icon field and picker (components/IconPicker), wherever something is given an icon.
+  iconPicker: {
+    label:    'Icon',
+    title:    'Choose an icon',
+    search:   'Search, or type or paste any emoji…',
+    pickTyped: (emoji: string) => `Use ${emoji}`,
+    noMatch:  'No emoji matches. Type or paste one instead.',
+    yours:    'Your icons',
+    yourIcon: 'One of your icons',
+    upload:   'Upload a picture (or paste or drop one here)',
+    making:   'Making the icon…',
+    remove:   'No icon',
+    failed:   (why: string) => `That picture couldn’t be made into an icon: ${why}`,
+    groups:   { study: 'Study and notes', work: 'Work', nature: 'Nature and weather', animals: 'Animals', activities: 'Activities and travel', food: 'Food and drink', people: 'People and feelings', symbols: 'Shapes and symbols' },
+  },
+
   // The block guide (components/BlockGuide): every note block, its designs, an example.
   blockGuide: {
     title:    'Block guide',

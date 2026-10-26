@@ -1,4 +1,5 @@
 import { NoteSplitView } from '@/components/NoteSplitView/NoteSplitView';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { notebookIsEmpty } from '@/store/noteStore';
 import { pageKeyBlocked } from '@/utils/pageKeys';
 import { usePinAction } from '@/hooks/usePinAction';
@@ -301,7 +302,7 @@ function NoteTagTreeNode({
             : <span className={styles.togglePlaceholder} />}
         </button>
 
-        <RowOptionsMenu rowRef={rowRef} title={tag.name} icon={<span className={styles.nodeIcon}>{getNotebookIcon(tag, noteTags, notes)}</span>}>
+        <RowOptionsMenu rowRef={rowRef} title={tag.name} icon={<span className={styles.nodeIcon}><ItemIcon icon={getNotebookIcon(tag, noteTags, notes)} /></span>}>
           {canIndent && (
             <RowAction className={styles.nodeActionBtn} icon={<IndentIcon />} label={LABELS.rowActions.indent} onClick={() => indentNoteTag(tag.id as NoteTagId)} />
           )}

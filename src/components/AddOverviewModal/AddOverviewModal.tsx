@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { IconField } from '@/components/IconPicker/IconField';
 import type { FormEvent } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useOverviewStore } from '@/store/overviewStore';
@@ -80,14 +81,7 @@ export function AddOverviewModal() {
           <div className={styles.field}>
             <label className={styles.fieldLabel}>{L.name}</label>
             <div className={styles.nameRow}>
-              <input
-                className={`${styles.input} ${styles.iconInput}`}
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                placeholder="📊"
-                maxLength={4}
-                aria-label="Icon"
-              />
+              <IconField value={icon || null} onChange={(v) => setIcon(v ?? '')} fallback="📊" />
               <input
                 className={styles.input}
                 value={name}

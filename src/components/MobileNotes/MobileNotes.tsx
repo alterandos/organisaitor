@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { notebookIsEmpty } from '@/store/noteStore';
 import { noteIsEmpty } from '@/utils/emptyContent';
 import { useNoteStore } from '@/store/noteStore';
@@ -166,7 +167,7 @@ function NotebookRow({ tag, depth }: { tag: NoteTag; depth: number }) {
         onClick={toggle}
       >
         <span className={styles.chevron} aria-hidden="true"><DisclosureIcon open={expanded} /></span>
-        <span className={styles.rowIcon} aria-hidden="true">{getNotebookIcon(tag, noteTags, notes)}</span>
+        <span className={styles.rowIcon} aria-hidden="true"><ItemIcon icon={getNotebookIcon(tag, noteTags, notes)} /></span>
         <span className={styles.rowName} style={tag.color && selected ? { color: tag.color } : undefined}>{tag.name}</span>
         {count > 0 && <span className={styles.count}>{count}</span>}
       </button>

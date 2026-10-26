@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
+import { IconField } from '@/components/IconPicker/IconField';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -151,7 +153,7 @@ export function AddNoteTagModal() {
                       style={{ paddingLeft: `${0.6 + d}rem` }}
                       onClick={() => { setParentId(tag.id as NoteTagId); setParentPickerOpen(false); }}
                     >
-                      <span className={styles.parentOptionIcon}>{tag.icon ?? '📁'}</span>
+                      <span className={styles.parentOptionIcon}><ItemIcon icon={tag.icon} fallback="📁" /></span>
                       {tag.name}
                     </button>
                   ))}
@@ -195,17 +197,8 @@ export function AddNoteTagModal() {
 
           <div className={styles.row}>
             <div className={styles.field}>
-              <label htmlFor="nb-icon" className={styles.label}>
-                Icon <span className={styles.optional}>(emoji)</span>
-              </label>
-              <input
-                id="nb-icon"
-                type="text"
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                placeholder="📓"
-                className={`${styles.input} ${styles.iconInput}`}
-              />
+              <span className={styles.label}>{LABELS.iconPicker.label}</span>
+              <IconField value={icon || null} onChange={(v) => setIcon(v ?? '')} fallback="📓" />
             </div>
 
             <div className={styles.field}>

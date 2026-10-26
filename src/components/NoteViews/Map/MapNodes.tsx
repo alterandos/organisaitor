@@ -1,4 +1,5 @@
 import { useContext, type CSSProperties } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { MapHover } from './mapHover';
 import { BaseEdge, Handle, Position, useStore, type EdgeProps, type Node, type NodeProps } from '@xyflow/react';
 import { ITEM_TYPE_ICON } from '@/config/itemIcons';
@@ -45,7 +46,7 @@ export function BlobNode({ data }: NodeProps<Node<BlobData>>) {
       </svg>
       {closed && blob.r * zoom >= 14 && (
         <span className={styles.blobInside} style={{ fontSize: `${inner * 0.55}px` }}>
-          {blob.icon && <span className={styles.blobIcon} style={{ fontSize: `${inner}px` }}>{blob.icon}</span>}
+          {blob.icon && <span className={styles.blobIcon} style={{ fontSize: `${inner}px` }}><ItemIcon icon={blob.icon} /></span>}
           <span>{blob.total}</span>
         </span>
       )}
@@ -66,7 +67,7 @@ export function BlobLabelNode({ data }: NodeProps<Node<BlobData>>) {
   if (blob.depth !== 1 && blob.r * zoom < (closed ? 14 : 36)) return null;
   const style = { fontSize: labelSize(blob.depth === 1 ? 14 : 12, zoom, Math.max(10, blob.r / 2.5)), ...(blob.color ? { '--blob-color': blob.color } : {}) } as CSSProperties;
   const className = `${styles.blobLabel} ${blob.depth === 1 ? styles.islandLabel : ''}`;
-  const text = <>{blob.icon ? `${blob.icon} ` : ''}{blob.label}</>;
+  const text = <>{blob.icon ? <><ItemIcon icon={blob.icon} />{' '}</> : ''}{blob.label}</>;
   // A closed blob's name is a button (reached with the arrow keys like the notes): Enter opens it.
   if (closed) {
     return (

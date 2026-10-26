@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect, useRef } from 'react';
+import { IconField } from '@/components/IconPicker/IconField';
 import type { FormEvent } from 'react';
 import { nanoid } from 'nanoid';
 import { useListStore } from '@/store/listStore';
@@ -27,7 +28,6 @@ const FIELD_TYPES: { value: ListFieldType; label: string }[] = [
   { value: 'url',     label: 'URL'     },
 ];
 
-const EMOJI_PRESETS = ['📋', '🛒', '🎬', '📚', '📺', '🎵', '🔬', '📍', '🎮', '🍽️', '✈️', '💡', '⭐'];
 
 export function AddListModal() {
   const lists      = useListViews();
@@ -349,14 +349,7 @@ export function AddListModal() {
         <form ref={formRef} onSubmit={handleSubmit} className={styles.form}>
           {/* Name + icon row */}
           <div className={styles.nameRow}>
-            <div className={styles.iconPickerWrap}>
-              <span className={styles.iconPreview}>{icon ?? (selectedTypeId ? listTypes[selectedTypeId]?.icon : null) ?? '📋'}</span>
-              <div className={styles.emojiGrid}>
-                {EMOJI_PRESETS.map((e) => (
-                  <button key={e} type="button" className={`${styles.emojiBtn} ${icon === e ? styles.emojiBtnActive : ''}`} onClick={() => setIcon(icon === e ? null : e)}>{e}</button>
-                ))}
-              </div>
-            </div>
+            <IconField value={icon} onChange={setIcon} fallback={(selectedTypeId ? listTypes[selectedTypeId]?.icon : null) ?? '📋'} />
             <input
               className={styles.nameInput}
               placeholder="List name…"

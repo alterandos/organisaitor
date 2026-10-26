@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { TERM_RICH } from '@/config/structuredTagTypes';
 import { richToPlain } from '@/utils/richText';
 import { useNoteStore } from '@/store/noteStore';
@@ -241,7 +242,7 @@ export function TagView() {
                   style={{ borderLeft: `4px solid ${group.color}` }}
                 >
                   <span className={styles.groupToggle}><DisclosureIcon open={!isCollapsed} /></span>
-                  <span className={styles.groupIcon}>{group.icon}</span>
+                  <ItemIcon className={styles.groupIcon} icon={group.icon} />
                   <span className={styles.groupName}>{group.name}</span>
                   <span className={styles.groupCount}>{group.total}</span>
                 </button>

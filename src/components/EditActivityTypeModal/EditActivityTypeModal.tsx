@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { LABELS } from '@/config/labels';
+import { IconField } from '@/components/IconPicker/IconField';
 import { nanoid } from 'nanoid';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useUIStore } from '@/store/uiStore';
@@ -190,15 +192,8 @@ export function EditActivityTypeModal() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="eatm-icon">Icon <span className={styles.optional}>(emoji)</span></label>
-            <input
-              id="eatm-icon"
-              className={`${styles.input} ${styles.iconInput}`}
-              type="text"
-              value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              placeholder="⛰️"
-            />
+            <span className={styles.label}>{LABELS.iconPicker.label}</span>
+            <IconField value={icon || null} onChange={(v) => setIcon(v ?? '')} fallback="⛰️" />
           </div>
 
           <div className={styles.field}>

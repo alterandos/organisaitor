@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useUIStore } from '@/store/uiStore';
 import { isPinned, togglePin } from '@/services/quickAccessPins';
 import { useNoteStore } from '@/store/noteStore';
@@ -107,7 +108,7 @@ function EditNoteMetaForm({ note }: { note: Note }) {
                       checked={selectedTagIds.has(tag.id)}
                       onChange={() => toggleTag(tag.id)}
                     />
-                    <span className={styles.tagIcon}>{tag.icon || '📁'}</span>
+                    <span className={styles.tagIcon}><ItemIcon icon={tag.icon} fallback="📁" /></span>
                     <span className={styles.tagName} style={tag.color ? { color: tag.color } : undefined}>
                       {tag.name}
                     </span>
@@ -130,7 +131,7 @@ function EditNoteMetaForm({ note }: { note: Note }) {
                       checked={selectedTagIds.has(tag.id)}
                       onChange={() => toggleTag(tag.id)}
                     />
-                    <span className={styles.tagIcon}>{tag.icon || '🏷️'}</span>
+                    <span className={styles.tagIcon}><ItemIcon icon={tag.icon} fallback="🏷️" /></span>
                     <span className={styles.tagName} style={tag.color ? { color: tag.color } : undefined}>
                       {tag.name}
                     </span>

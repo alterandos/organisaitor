@@ -1,4 +1,5 @@
 import { LABELS } from '@/config/labels';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useConverterStore } from '@/store/converterStore';
 import { useUIStore } from '@/store/uiStore';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
@@ -28,7 +29,7 @@ export function ConvertersSection() {
         <ul className={styles.shortcutList}>
           {list.map((c) => (
             <li key={c.id} className={styles.shortcutRow}>
-              <span aria-hidden="true">{c.icon ?? '🧮'}</span>
+              <ItemIcon icon={c.icon} fallback="🧮" />
               <span className={styles.shortcutText}>{c.name}</span>
               <code className={styles.settingDesc}>{c.output.key} = {c.formula}</code>
               <button type="button" className={styles.shortcutRemove} onClick={() => open({ select: c.id, edit: c.id })} aria-label={`${L.edit} ${c.name}`} title={L.edit}><EditIcon /></button>

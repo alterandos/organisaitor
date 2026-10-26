@@ -819,6 +819,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **Icon picker** (2026-10-26, CLAUDE.md "Icon picker", `components/IconPicker`) | `src/test/patterns.test.ts` "an icon a person picks comes from the icon field"; review: `{x.icon}` rendered as text for a person-picked icon | **Applied 2026-10-26**: notebooks and tags, lists, Overviews, activity types, converters (editors and about 25 display sites). Not person-pickable yet, so not converted: custom list types' icons, built-in tag types. |
 | **One list of note editor extensions** (2026-10-26, CLAUDE.md "Single entry points", `noteEditorExtensions.ts`) | `src/test/patterns.test.ts` (SpecialCharInput / EscapePassThrough checks read the list); `guideData.test.ts` | **Fully applied 2026-10-26**: NoteEditor, the block guide, the demo test. |
 | **Formulas only through utils/formula.ts** (2026-10-23, CLAUDE.md "Single entry points") | `src/test/patterns.test.ts` "a formula is worked out only by utils/formula.ts" | **Fully applied 2026-10-23** (new; nothing older evaluated formulas). |
 | **Magic wand** (2026-10-23, CLAUDE.md "Magic wand", `components/MagicWand`) | `src/test/patterns.test.ts` "the magic wand comes from components/MagicWand" | **Fully applied 2026-10-23**: the calendar item modal (moved onto it) and the date calculator. |

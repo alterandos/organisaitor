@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import type { NoteGroup } from '@/utils/notesBrowse';
@@ -93,7 +94,7 @@ export function MosaicTile({ group, size, notes, nameOf, onEnter, onEnterGroup, 
         onKeyDown={onKey}
       >
         <span className={styles.tileHead}>
-          {group.icon && <span className={styles.tileIcon} aria-hidden="true">{group.icon}</span>}
+          {group.icon && <span className={styles.tileIcon} aria-hidden="true"><ItemIcon icon={group.icon} /></span>}
           <span className={styles.tileName}>{group.label}</span>
         </span>
         <span className={styles.tileCount}>
@@ -102,7 +103,7 @@ export function MosaicTile({ group, size, notes, nameOf, onEnter, onEnterGroup, 
         </span>
         {subGroups.length > 0 && (
           <span className={styles.tileGroups}>
-            {subGroups.map((c) => <span key={c.id} className={styles.tileGroup}>{c.icon ? `${c.icon} ` : ''}{c.label}</span>)}
+            {subGroups.map((c) => <span key={c.id} className={styles.tileGroup}>{c.icon ? <><ItemIcon icon={c.icon} />{' '}</> : ''}{c.label}</span>)}
           </span>
         )}
         {recent.length > 0 && (
@@ -120,7 +121,7 @@ export function MosaicTile({ group, size, notes, nameOf, onEnter, onEnterGroup, 
               <div className={styles.peekGroups}>
                 {group.children.map((c) => (
                   <button key={c.id} type="button" className={styles.peekGroup} onClick={() => { close(); onEnterGroup(c.id); }}>
-                    {c.icon ? `${c.icon} ` : ''}{c.label} · {c.total}
+                    {c.icon ? <><ItemIcon icon={c.icon} />{' '}</> : ''}{c.label} · {c.total}
                   </button>
                 ))}
               </div>

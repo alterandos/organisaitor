@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { CloseIcon, LinkIcon, TextColorIcon, UnlinkIcon } from '@/components/Icons';
 import { NodeSelection } from '@tiptap/pm/state';
 import { createPortal } from 'react-dom';
@@ -444,7 +445,7 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
                   onClick={() => selectCreateOption(option)}
                 >
                   <span className={styles.tagShortcut}>{i + 1}</span>
-                  <span className={styles.tagIcon}>{option.icon}</span>
+                  <ItemIcon className={styles.tagIcon} icon={option.icon} />
                   <span>{option.label}</span>
                   {!option.enabled && <span className={styles.createMenuSoon}>soon</span>}
                 </button>
@@ -499,7 +500,7 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
                     style={{ borderLeft: `3px solid ${tag.color}` }}
                   >
                     <span className={styles.tagShortcut}>{i + 1}</span>
-                    <span className={styles.tagIcon}>{tag.icon}</span>
+                    <ItemIcon className={styles.tagIcon} icon={tag.icon} />
                     <span>{tag.name}</span>
                   </button>
                 ))}
@@ -514,7 +515,7 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
                     style={tag.color !== '#6b7280' ? { borderLeft: `3px solid ${tag.color}` } : undefined}
                   >
                     <span className={styles.tagShortcut}>{filteredBuiltin.length + i + 1 <= 9 ? filteredBuiltin.length + i + 1 : ''}</span>
-                    <span className={styles.tagIcon}>{tag.icon}</span>
+                    <ItemIcon className={styles.tagIcon} icon={tag.icon} />
                     <span>{tag.name}</span>
                   </button>
                 ))}

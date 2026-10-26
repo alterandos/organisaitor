@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import { iconText } from '@/components/IconPicker/iconValue';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { DateInput } from '@/components/DateInput/DateInput';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -274,7 +276,7 @@ export function AddActivityModal() {
                     className={`${styles.typeBtn} ${type === t.id ? styles.typeBtnActive : ''}`}
                     onClick={() => setType(t.id)}
                   >
-                    <span>{t.icon}</span> {t.name}
+                    <ItemIcon icon={t.icon} /> {t.name}
                   </button>
                 ))}
               </div>
@@ -286,7 +288,7 @@ export function AddActivityModal() {
               >
                 <option value="" disabled>More…</option>
                 {activeTypes.map((t) => (
-                  <option key={t.id} value={t.id}>{t.icon} {t.name}</option>
+                  <option key={t.id} value={t.id}>{iconText(t.icon)} {t.name}</option>
                 ))}
                 <option value={NEW_TYPE_VALUE}>+ New activity type…</option>
               </select>

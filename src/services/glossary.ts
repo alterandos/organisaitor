@@ -1,4 +1,5 @@
 import { useNoteStore } from '@/store/noteStore';
+import { iconText } from '@/components/IconPicker/iconValue';
 import { entryView, isEntryLocked, isNoteLocked, noteView } from '@/services/noteSecrets';
 import { BUILTIN_TAGS } from '@/components/NoteEditor/builtinTags';
 import { GLOSSARY_TYPES, glossaryMeaning } from '@/config/structuredTagTypes';
@@ -38,7 +39,7 @@ export function toGlossaryEntry(raw: StructuredTagEntry, notes: Record<NoteId, N
   const note = notes[e.noteId];
   return {
     id: e.id, typeKey: e.typeKey, term: e.term, meaning: glossaryMeaning(e),
-    icon: tag?.icon ?? '📖', color: tag?.color ?? '#10b981', kindLabel: tag?.name ?? e.typeKey,
+    icon: iconText(tag?.icon, '📖'), color: tag?.color ?? '#10b981', kindLabel: tag?.name ?? e.typeKey,
     noteId: e.noteId, noteTitle: note ? noteView(note).title : '',
     notebookPath: note ? getNoteNotebookPath(noteView(note), noteTags) : [],
     locked: isEntryLocked(raw), updatedAt: e.updatedAt,
