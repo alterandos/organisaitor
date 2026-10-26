@@ -21,6 +21,7 @@ import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
 import type { TrashEntry } from '@/types/trash';
 import { log } from '@/utils/log';
+import { heldFromSync, scopeContext } from '@/services/encryption/kinds';
 import { importKeyOf } from '@/services/calendarImport/draft';
 import {
   taskToRow,       rowToTask,
@@ -180,9 +181,14 @@ async function pushIds(userId: string, table: keyof typeof TABLE_DEFS, ids: stri
   const sent = new Map(ids.map((id) => [id, pending?.tables[table]?.[id]]));
   const upserts: Record<string, unknown>[] = [];
   const deletes: string[] = [];
+  // Encryption by scope: a covered record not yet encrypted stays on the device, its change still
+  // queued; encrypting it is a change of its own, which is then pushed (services/encryption/kinds.ts).
+  const held = new Set<string>();
+  const ctx = scopeContext();
   for (const id of ids) {
-    if (id in records) upserts.push(def.toRow(records[id], userId));
-    else deletes.push(id);
+    if (!(id in records)) deletes.push(id);
+    else if (heldFromSync(table, records[id], ctx)) held.add(id);
+    else upserts.push(def.toRow(records[id], userId));
   }
 
   let error: string | null = null;
@@ -210,11 +216,11 @@ async function pushIds(userId: string, table: keyof typeof TABLE_DEFS, ids: stri
 
   const t = pending?.tables[table];
   if (t) {
-    for (const id of ids) if (t[id] === sent.get(id)) delete t[id];
+    for (const id of ids) if (!held.has(id) && t[id] === sent.get(id)) delete t[id];
     if (Object.keys(t).length === 0) delete pending!.tables[table];
     savePending();
   }
-  if (pushFailed && pendingCount() === 0 && syncStatus !== 'syncing') { pushFailed = false; setStatus('idle'); }
+  if (pushFailed && pendingCount() === held.size && syncStatus !== 'syncing') { pushFailed = false; setStatus('idle'); }
   return true;
 }
 
@@ -697,32 +703,35 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const { pictures } = usePictureStore.getState();
   const { pins } = usePinnedItemsStore.getState();
   const { activities, activityTypes } = useFitnessStore.getState();
+  // Encryption by scope: covered records not yet encrypted aren't uploaded (see pushIds).
+  const ctx = scopeContext();
+  const unheld = <T,>(table: string, rows: T[]) => rows.filter((r) => !heldFromSync(table, r, ctx));
 
-  const allTasks       = Object.values(tasks);
-  const allCollections = Object.values(collections);
-  const allTags        = Object.values(tags);
-  const allPurposes    = Object.values(purposes);
-  const allEvents      = Object.values(events);
-  const allReminders   = Object.values(reminders);
-  const allDeadlines   = Object.values(deadlines);
-  const allEntries     = Object.values(entries);
-  const allSchedules   = Object.values(schedules);
-  const allLists       = Object.values(lists);
-  const allListItems   = Object.values(listItems);
-  const allListTypes   = Object.values(customListTypes(listTypes));
-  const allNotes       = Object.values(notes);
-  const allNoteTags    = Object.values(noteTags);
-  const allStructuredTagEntries = Object.values(structuredTagEntries);
-  const allWatchlistItems     = Object.values(watchlistItems);
-  const allPortfolioTags      = Object.values(portfolioTags);
-  const allInvestmentPurposes = Object.values(investmentPurposes);
-  const allTrashItems         = Object.values(trashEntries);
-  const allOverviews          = Object.values(overviews);
-  const allConverters         = Object.values(converters);
-  const allPictures           = Object.values(pictures);
-  const allPins               = Object.values(pins);
-  const allActivities         = Object.values(activities);
-  const allActivityTypes      = Object.values(customActivityTypes(activityTypes as Record<string, ActivityType>));
+  const allTasks       = unheld('tasks', Object.values(tasks));
+  const allCollections = unheld('collections', Object.values(collections));
+  const allTags        = unheld('tags', Object.values(tags));
+  const allPurposes    = unheld('purposes', Object.values(purposes));
+  const allEvents      = unheld('calendar_events', Object.values(events));
+  const allReminders   = unheld('calendar_reminders', Object.values(reminders));
+  const allDeadlines   = unheld('calendar_deadlines', Object.values(deadlines));
+  const allEntries     = unheld('tracker_entries', Object.values(entries));
+  const allSchedules   = unheld('schedules', Object.values(schedules));
+  const allLists       = unheld('lists', Object.values(lists));
+  const allListItems   = unheld('list_items', Object.values(listItems));
+  const allListTypes   = unheld('list_types', Object.values(customListTypes(listTypes)));
+  const allNotes       = unheld('notes', Object.values(notes));
+  const allNoteTags    = unheld('note_tags', Object.values(noteTags));
+  const allStructuredTagEntries = unheld('structured_tag_entries', Object.values(structuredTagEntries));
+  const allWatchlistItems     = unheld('watchlist_items', Object.values(watchlistItems));
+  const allPortfolioTags      = unheld('portfolio_tags', Object.values(portfolioTags));
+  const allInvestmentPurposes = unheld('investment_purposes', Object.values(investmentPurposes));
+  const allTrashItems         = unheld('trash_items', Object.values(trashEntries));
+  const allOverviews          = unheld('overviews', Object.values(overviews));
+  const allConverters         = unheld('converters', Object.values(converters));
+  const allPictures           = unheld('pictures', Object.values(pictures));
+  const allPins               = unheld('quick_access_pins', Object.values(pins));
+  const allActivities         = unheld('fitness_activities', Object.values(activities));
+  const allActivityTypes      = unheld('fitness_activity_types', Object.values(customActivityTypes(activityTypes as Record<string, ActivityType>)));
 
   const results = await Promise.all([
     allTasks.length       > 0 ? supabase.from('tasks').upsert(allTasks.map((t) => taskToRow(t, userId)))               : null,

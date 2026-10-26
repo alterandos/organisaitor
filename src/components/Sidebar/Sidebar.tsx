@@ -42,6 +42,7 @@ function SidebarCollectionRow({ col, onEdit, onDelete }: { col: Collection; onEd
       </RowOptionsMenu>
       <div className={styles.rowMain}>
         <TruncatedText text={col.name} className={styles.name} />
+        {col.encryptContents && <span className={styles.lockBadge} title={LABELS.encryptionScope.encryptsBadge} aria-label={LABELS.encryptionScope.encryptsBadge} role="img">🔒</span>}
       </div>
     </div>
   );

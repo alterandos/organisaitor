@@ -15,6 +15,7 @@ import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import '@/components/NoteEditor/noteColorMenu';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
+import { useWaitingForEncryption } from '@/hooks/useWaitingForEncryption';
 import { EditIcon, IndentIcon, OutdentIcon, TrashIcon } from '@/components/Icons';
 
 interface NoteListProps {
@@ -38,6 +39,7 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
   useSecretsVersion((s) => s.version);
   const note = noteView(rawNote);
   const locked = isNoteLocked(rawNote);
+  const waiting = useWaitingForEncryption('note', rawNote);
   const openNote         = useUIStore((s) => s.openNote);
   const showEditNoteMeta = useUIStore((s) => s.showEditNoteMeta);
   const editingNoteId    = useUIStore((s) => s.editingNoteId);
@@ -97,6 +99,9 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
             title="Encrypted note. Click to decrypt."
             aria-label="Decrypt this note"
           >🔒</button>
+        )}
+        {waiting && (
+          <span className={styles.noteWaiting} title={LABELS.encryptionScope.waitingHint} aria-label={LABELS.encryptionScope.waiting} role="img">🔓</span>
         )}
         <button className={styles.noteMain} onClick={() => openNote(note.id)}>
           <TruncatedText

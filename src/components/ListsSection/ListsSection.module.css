@@ -1051,3 +1051,9 @@
 .backlinkChip:hover { border-color: var(--color-primary); color: var(--color-primary); }
 .backlinkChipDone { text-decoration: line-through; color: var(--color-muted); }
 
+
+/* Encryption by scope: a list in an encrypted Endeavour, not encrypted yet (the vault is locked). */
+.waitingBadge {
+  flex-shrink: 0; font-size: var(--text-sm); line-height: 1; padding: 2px 3px;
+  border-radius: var(--radius-sm); outline: 1px dashed var(--color-warning); cursor: help;
+}

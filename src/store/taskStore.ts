@@ -45,7 +45,7 @@ export interface TaskActions {
 
   // Collections (projects, lists, trackers …)
   addCollection:    (input: CreateCollectionInput) => CollectionId;
-  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt'>>) => void;
+  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt' | 'encryptContents'>>) => void;
   deleteCollection: (id: CollectionId) => void;
 
   // Purposes

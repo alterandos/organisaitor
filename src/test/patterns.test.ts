@@ -1237,3 +1237,28 @@ describe('pattern: an icon a person picks comes from the icon field (CLAUDE.md "
   });
 });
 
+
+describe('pattern: encryption by scope (CLAUDE.md "Encryption by scope")', () => {
+  const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+
+  it('sync asks heldFromSync before every upload: in pushIds, and for every table in forceUpload', () => {
+    const sync = read('services/sync/syncService.ts');
+    expect(sync).toMatch(/heldFromSync\(table, records\[id\], ctx\)/);
+    const unfiltered = sync.split('\n').filter((l) => /const all\w+\s*= Object\.values\(/.test(l));
+    expect(unfiltered).toEqual([]);
+  });
+
+  it('every table that holds an encrypted item or a copy of one is held by the kinds registry', () => {
+    const kinds = read('services/encryption/kinds.ts');
+    for (const table of ['notes', 'structured_tag_entries', 'lists', 'list_items', 'trash_items']) {
+      expect(kinds, table).toMatch(new RegExp(`\\b${table}: \\(r`));
+    }
+  });
+
+  it('only the rules file decides what a scope covers; items are encrypted only through their store’s action', () => {
+    const decides = findMatches(SOURCE_FILES.filter((f) => !rel(f).endsWith('utils/encryptionScopes.ts')), /\.encryptContents\s*&&\s*!?\w*\(?\s*\w*\.(kind|parentTagId)/, { skipComments: true });
+    expect(decides, describeHits(decides)).toEqual([]);
+    const enforcer = read('services/encryption/enforcer.ts');
+    expect(enforcer).not.toMatch(/encryptSecrets|encryptField/);
+  });
+});

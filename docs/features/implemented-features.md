@@ -1964,3 +1964,42 @@ Three tiers were identified, cheapest first:
   - **Also:** the block parts' icon popover (`blockIcons.ts`) offers the shared set's common emoji (`COMMON_EMOJI`) instead of its own list.
   - Tests: `IconPicker/IconField.test.tsx` (values, the emoji set has no repeats, search, ItemIcon for emoji and pictures, picking from a group and a search, a typed emoji, No icon, a picture becoming `picture:<id>`), a pattern test. Checked in a real browser (Playwright): a new notebook's icon picker, search, uploading a photo (it showed in the tree), and the next dialog offering it under Your icons. Android: the field and picker are taps; the phone's notebooks list shows picture icons.
   - **Not built:** icons for custom list types and the built-in tag types (they stay emoji); a way to delete an icon from Your icons (unused library pictures stay, as for note pictures: CLAUDE.md "Known issues").
+- [x] **Encryption by scope: a notebook or an Endeavour keeps everything in it encrypted** (2026-10-26, Stage 6f). The rules are CLAUDE.md "Encryption by scope".
+  - **What:** a notebook's "Encrypt every note in this notebook" (Edit Notebook) and an Endeavour's "Encrypt the notes and lists in this Endeavour" (its edit pane; project and list kinds). Notes in the notebook and in the notebooks inside it, and notes and lists filed under the Endeavour, are encrypted with the existing per-item model, new ones included. The setting applies at once and asks first, saying how many notes and lists will be encrypted now. It needs the vault unlocked to turn on.
+  - **Why built this way:** the user asked for special care, and expects to encrypt tasks, calendar items and possibly everything later. So nothing about how an item is encrypted changed (always `encryptNote` / `encryptList`). On top of that are three small pieces, each a registry or a pure rule: `utils/encryptionScopes.ts` (what covers what), `services/encryption/kinds.ts` (`ENCRYPTABLE_KINDS`: notes and lists, and the sync tables each holds) and `services/encryption/enforcer.ts`.
+  - **The sync hold:** `pushIds` and `forceUpload` (syncService.ts) skip a record `heldFromSync` says is covered but not encrypted, and keep its change queued. Encrypting it is a change of its own, which then goes up. Held: `notes`, `structured_tag_entries` (a covered note's Glossary entries), `lists`, `list_items`, and `trash_items` (a Recycling Bin copy of a covered item deleted before it was encrypted; it stays on the device).
+  - **The enforcer:** started in App.tsx (`initEncryptionScopes`). While the vault is unlocked it encrypts every covered, unencrypted item, one at a time, on unlock and on any change to notes, notebooks, lists or Endeavours. It's single-flight; a change during a pass asks for another one once it settles. An item that fails is retried after 30 s or at sign-out. `encryptAllWaiting()` encrypts everything at once and returns how many are still waiting.
+  - **Decisions (with the user):**
+    - Sub-notebooks inherit the setting.
+    - Turning it off leaves existing items encrypted; new ones aren't.
+    - An item moved out stays encrypted.
+    - A covered item can't have its encryption removed on its own: `DecryptPrompt` shows "This stays encrypted" and why.
+    - Made while the vault is locked, an item waits on the device: a 🔓 badge with a dashed outline on note and list rows (`useWaitingForEncryption`). It's encrypted on unlock.
+    - Names of notebooks and Endeavours stay plaintext.
+    - Stickies and the Scratchpad never take the setting.
+    - An Endeavour covers notes and lists for now.
+    - A notebook or Endeavour with the setting on shows 🔒 in the tree and the Tasks sidebar.
+  - **Rejected:** "born encrypted" notes (encrypting in `addNote` itself). It's unnecessary with the sync hold, and it would have added a second kind of payload-less encrypted note for `noteSecretsSync`'s legacy upgrade to tell apart.
+  - **Sign-out:** `requestSignOut` calls `encryptAllWaiting()` before locking the vault. If anything is still waiting (the vault is locked), a destructive confirm explains that it was never saved to the account. Cancel is the default.
+  - **Sync before migration 058:** `encrypt_contents` is sent only once the setting has been changed on a record (`encryptContentsColumn` in mappers.ts), so everything syncs as before until it's run. The flags are optional fields (absent means off), so no store version bump was needed.
+  - **Files:**
+    - New: `utils/encryptionScopes.ts`, `services/encryption/kinds.ts`, `services/encryption/enforcer.ts`, `components/EncryptContentsField/`, `hooks/useWaitingForEncryption.ts`, `supabase/migrations/058_encryption_settings.sql`.
+    - Changed: types (`NoteTag.encryptContents`, `Collection.encryptContents`), mappers, syncService, signOut, DecryptPrompt, EditNoteTagModal, AddCollectionModal, ChronicleView, NoteList, ListsSection, Sidebar, labels (`LABELS.encryptionScope`, `LABELS.signOut.waiting*`).
+  - **Tests:**
+    - `utils/encryptionScopes.test.ts`: nesting, several notebooks, an inherited Endeavour, archived, pinned, a loop.
+    - `services/encryption/encryption.test.ts`: the enforcer on the real stores with a faked vault, including a new note, a note made while locked, turning on and off, moving in, an Endeavour's lists and items, and Recycling Bin copies. It checks that no planted secret reaches a sync row.
+    - `syncService.test.ts` "encryption by scope": through the real pipeline, a covered note isn't pushed, stays queued and goes up once encrypted; `forceUpload` leaves out a covered list; no `encrypt_contents` column is sent before the setting is set.
+    - Mapper round trips, `signOut.test.ts`, and a pattern test.
+  - **Checked in a real browser** (Playwright, the real WebCrypto vault; a guest's vault upload was answered by the test):
+    - The switch is disabled with no vault.
+    - The count shows in the confirm.
+    - Existing notes in a notebook and its sub-notebook were encrypted, and their sync rows held no planted text.
+    - A new note was encrypted at once.
+    - A note made after locking waited, held from sync, with its badge.
+    - "This stays encrypted" appeared.
+    - The tree showed the lock.
+  - **Not verified:** a real two-device sync against Supabase (needs migration 058 and an account).
+  - **Known limit:** a device still running an older version of the app doesn't know the setting, so a note it makes in an encrypted notebook goes up unencrypted until a device with this version encrypts it.
+  - **Android:** works as-is (the switch is a checkbox in the same panes, and the badges are visual). The badge's explanation is its accessible name and tooltip, so on a phone it's read out but not shown on tap.
+  - **Demo account:** not added. The demo has no vault, and encryption needs a passphrase.
+  - **Not built:** scopes for tasks, calendar items and the rest (BACKLOG.md "Encryption by scope: more kinds"); agents can't read notes or lists yet, so there was nothing to filter. When note or list commands come, `access.read` must drop covered items as well as encrypted ones.

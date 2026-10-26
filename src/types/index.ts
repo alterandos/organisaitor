@@ -146,6 +146,7 @@ export interface Collection {
   repeatConfig: RepeatConfig | null;  // meaningful for kind='routine'
   collectionId: CollectionId | null;  // Endeavour this belongs to — meaningful for kind='tracker'|'routine' (trackers/routines can be filed under a project/list Endeavour, same as Task.collectionId)
   archivedAt:   string | null;  // sunset, not deleted — hidden from pickers/filters, restorable
+  encryptContents?: boolean;    // project/list kinds: everything filed under it that can be encrypted is kept encrypted (utils/encryptionScopes.ts); absent = never set, off
   createdAt:    string;
   updatedAt:    string;
 }

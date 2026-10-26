@@ -63,7 +63,8 @@ src/
   services/quickAccessPins.ts — togglePin (toast with Undo), isPinned, pinMenuItem, the note-row pin provider, adoptLegacyNotePins: THE way to pin to Quick Access
   hooks/usePinAction.ts     — a pin button's icon/label/action, for a RowAction or a button (PinButton)
   services/newItem.ts       — openNewItem(view): THE N/Space/Ctrl+N routing, section by section (Notes: by focused column) — see "New-item hotkey"
-  services/signOut.ts       — requestSignOut(): THE way to sign out — confirms (and says what stays on the device), locks the vault, force-uploads and only wipes if that succeeded (else warns, user can cancel), then authStore.signOut(). Never call authStore.signOut() directly from UI
+  services/signOut.ts       — requestSignOut(): THE way to sign out — confirms (and says what stays on the device), encrypts what an encrypted notebook or Endeavour covers (or warns), locks the vault, force-uploads and only wipes if that succeeded (else warns, user can cancel), then authStore.signOut(). Never call authStore.signOut() directly from UI
+  services/encryption/      — encryption by scope: kinds.ts (ENCRYPTABLE_KINDS, heldFromSync, waitingForEncryption), enforcer.ts (initEncryptionScopes, encryptAllWaiting); the rules are utils/encryptionScopes.ts
   services/welcome.ts       — whether this device chose to carry on without an account (the welcome page): per device, not in backups, forgotten by requestSignOut
   services/glossary.ts      — the Glossary model (Definitions, Concepts, Acronyms across notes): glossaryEntries/glossaryEntry/glossaryReferences, through the views — see "Annotations"
   services/noteFromItem.ts  — createNoteForItem(place, title): a new note in a notebook, or a new tab of a note, returned as the CrossAppRef to link; newNoteTitleFor(title, date). "+ New note" in the calendar panes
@@ -250,6 +251,7 @@ src/
     CalendarSidePane/        — left-sliding pane (Calendar section): Layers toggles + Schedule list/manager (active toggle, conflict hint, overlay-preview grid) in one place — supersedes the old CalendarLayersPicker (header dropdown) and ManageSchedulesPane (right-sliding pane), see "Calendar side pane" in Implemented features
     ScheduleOccurrencePopover/ — click a Schedule occurrence on the calendar: skip this date, commit/uncommit (commitment mode), or jump to editing the Schedule
     AllDayNotifyField/       — NotifyLead.tsx: the Notify field for every calendar item (NotifyRuleField with its on/off box, NotifyRuleEditor, LeadAmountInput: a typed amount + ▾ presets); the rules are utils/notifyRule.ts
+    EncryptContentsField/    — the "encrypt everything in it" switch on a notebook or Endeavour (encryption by scope)
     IconPicker/              — IconField (pick an icon: emoji, search, your icons, a picture made into a 96 px icon), ItemIcon (show one), iconValue.ts (an icon is an emoji or picture:<id>); the emoji are config/emojiSet.ts
     BlockGuide/              — the block guide (a Place): every note block by category, its designs, a live read-only example (guideData.ts: keyword → node, examples from demo/blockExamples.ts)
     ConverterPane/           — the converters panel (Alt+=, a Place): built-in units and the person's own; ConverterEditor makes and edits one (Settings → Converters opens it too); ConvertWidget is one conversion as hosted by the `\convert` note block (extensions/Convert.ts), its pure parts in convertValue.ts

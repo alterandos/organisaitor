@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useWaitingForEncryption } from '@/hooks/useWaitingForEncryption';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { pageKeyBlocked } from '@/utils/pageKeys';
 import { usePinAction } from '@/hooks/usePinAction';
@@ -282,6 +283,7 @@ function SidebarListItem({
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const pin = usePinAction('list', list.id);
+  const waiting = useWaitingForEncryption('list', list);
   return (
     <div
       ref={rowRef}
@@ -313,6 +315,9 @@ function SidebarListItem({
           title={LABELS.lists.encryptedHint}
           aria-label={LABELS.lists.decrypt}
         >🔒</button>
+      )}
+      {waiting && (
+        <span className={styles.waitingBadge} title={LABELS.encryptionScope.waitingHint} aria-label={LABELS.encryptionScope.waiting} role="img">🔓</span>
       )}
     </div>
   );

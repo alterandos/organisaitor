@@ -97,6 +97,11 @@ export function rowToTask(r: Record<string, any>): Task {
 
 // ── Collection ──────────────────────────────────────────────────
 
+// `encrypt_contents` (migration 058) is sent only once the flag has been set on this record, so
+// notebooks and Endeavours keep syncing on a database where 058 hasn't been run yet. Once set (on
+// or off) it is always sent, so turning it off reaches the other devices too.
+const encryptContentsColumn = (v: boolean | undefined) => (v === undefined ? {} : { encrypt_contents: v });
+
 export function collectionToRow(c: Collection, userId: string) {
   return {
     id:            c.id,
@@ -113,6 +118,7 @@ export function collectionToRow(c: Collection, userId: string) {
     repeat_config: c.repeatConfig  ?? null,
     collection_id: c.collectionId  ?? null,
     archived_at:   c.archivedAt    ?? null,
+    ...encryptContentsColumn(c.encryptContents),
     created_at:    c.createdAt,
     updated_at:    c.updatedAt,
     deleted_at:    null,
@@ -135,6 +141,7 @@ export function rowToCollection(r: Record<string, any>): Collection {
     repeatConfig: r.repeat_config ?? null,
     collectionId: r.collection_id ?? null,
     archivedAt:   r.archived_at   ?? null,
+    ...(r.encrypt_contents != null ? { encryptContents: !!r.encrypt_contents } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
   };
@@ -742,6 +749,7 @@ export function noteTagToRow(t: NoteTag, userId: string) {
     preset_key:    t.presetKey ?? null,
     collection_id: t.collectionId ?? null,
     backdrop:      t.backdrop ?? null,
+    ...encryptContentsColumn(t.encryptContents),
     created_at:    t.createdAt,
     updated_at:    t.updatedAt,
     deleted_at:    null,
@@ -764,6 +772,7 @@ export function rowToNoteTag(r: Record<string, any>): NoteTag {
     presetKey:    r.preset_key ?? undefined,
     collectionId: r.collection_id ?? null,
     backdrop:     r.backdrop ?? null,
+    ...(r.encrypt_contents != null ? { encryptContents: !!r.encrypt_contents } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
     userId:       r.user_id,

@@ -10,6 +10,7 @@ import type { CollectionId, CollectionKind, PurposeId } from '@/types';
 import styles from './AddCollectionModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { CloseIcon } from '@/components/Icons';
+import { EncryptContentsField } from '@/components/EncryptContentsField/EncryptContentsField';
 
 export function AddCollectionModal() {
   const addCollection    = useTaskStore((s) => s.addCollection);
@@ -23,6 +24,8 @@ export function AddCollectionModal() {
   const closeEditCollection = useUIStore((s) => s.closeEditCollection);
 
   const isEditMode = editingCollection !== null;
+  // The live record (editingCollection is the copy taken when the pane opened), for settings that apply at once.
+  const liveCollection = useTaskStore((s) => (editingCollection ? s.collections[editingCollection.id] : undefined));
   const isVisible  = isEditMode || openModal === 'add-collection';
 
   // ── Form state ──────────────────────────────────────────────────────────────
@@ -225,6 +228,17 @@ export function AddCollectionModal() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Encrypt the notes and lists in it — edit mode, project/list kinds; applies at once */}
+          {liveCollection && (liveCollection.kind === 'project' || liveCollection.kind === 'list') && (
+            <EncryptContentsField
+              label={LABELS.encryptionScope.endeavourToggle(LABELS.collection)}
+              hint={LABELS.encryptionScope.endeavourHint(LABELS.collection)}
+              value={!!liveCollection.encryptContents}
+              withFlag={(ctx) => ({ ...ctx, collections: { ...ctx.collections, [liveCollection.id]: { ...liveCollection, encryptContents: true } } })}
+              onChange={(next) => updateCollection(liveCollection.id, { encryptContents: next })}
+            />
           )}
 
           {/* Milestones preview — edit mode, projects with tasks */}

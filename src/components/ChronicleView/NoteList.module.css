@@ -114,6 +114,16 @@
   background: var(--color-surface-alt);
 }
 
+.noteWaiting {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: var(--radius-sm);
+  outline: 1px dashed var(--color-warning);
+  cursor: help;
+}
+
 .noteTypeIcon {
   flex-shrink: 0;
   font-size: 0.85rem;

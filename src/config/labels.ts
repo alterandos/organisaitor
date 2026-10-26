@@ -1362,6 +1362,36 @@ export const LABELS = {
     unsavedTitle:  "Some changes couldn't be saved",
     unsavedMessage: (reason: string) => `Your latest changes couldn't be saved to your account (${reason}). Signing out now will discard anything that hasn't been saved.`,
     unsavedConfirm: 'Sign out and discard',
+    waitingTitle:   'Some notes or lists aren’t encrypted yet',
+    waitingMessage: (n: number) => `${n === 1 ? 'One note or list is' : `${n} notes or lists are`} in an encrypted notebook or Endeavour but couldn’t be encrypted yet (unlock encryption to encrypt them). They were never saved to your account, so signing out now removes them for good.`,
+    waitingConfirm: 'Sign out and remove them',
+  },
+
+  // Encryption by scope: a notebook or an Endeavour that keeps everything in it encrypted
+  // (utils/encryptionScopes.ts, services/encryption/)
+  encryptionScope: {
+    notebookToggle:   'Encrypt every note in this notebook',
+    notebookHint:     'Notes in it, and in the notebooks inside it, are encrypted on this device before they’re saved to your account, including new ones. The notebook’s name isn’t encrypted.',
+    endeavourToggle:  (endeavour: string) => `Encrypt the notes and lists in this ${endeavour}`,
+    endeavourHint:    (endeavour: string) => `Notes and lists filed under it are encrypted on this device before they’re saved to your account, including new ones. The ${endeavour.toLowerCase()}’s own name isn’t encrypted.`,
+    unlockFirst:      'Unlock encryption in Account to change this.',
+    notSetUp:         'Set up encryption in Account to use this.',
+    inherited:        (notebook: string) => `On, because it’s inside “${notebook}”.`,
+    onTitle:          'Encrypt everything in it?',
+    onMessage:        (notes: number, lists: number) => {
+      const parts = [notes ? `${notes} note${notes === 1 ? '' : 's'}` : '', lists ? `${lists} list${lists === 1 ? '' : 's'}` : ''].filter(Boolean);
+      return parts.length ? `${parts.join(' and ')} will be encrypted now, and anything you add from now on.` : 'Anything you add from now on is encrypted.';
+    },
+    onConfirm:        'Encrypt',
+    offTitle:         'Stop encrypting new ones?',
+    offMessage:       'Notes and lists already encrypted stay encrypted (you can remove encryption from each one). New ones won’t be encrypted.',
+    offConfirm:       'Turn off',
+    waiting:          'Waiting to be encrypted',
+    waitingHint:      'In an encrypted notebook or Endeavour: unlock encryption to encrypt it. Until then it stays on this device and isn’t saved to your account.',
+    encryptsBadge:    'Encrypts everything in it',
+    cantRemoveTitle:  'This stays encrypted',
+    cantRemove:       (where: string) => `It’s in ${where}, which keeps everything in it encrypted. Move it out, or turn that off, to remove its encryption.`,
+    scopeName:        (kind: 'notebook' | 'endeavour', name: string, endeavour: string) => kind === 'notebook' ? `the notebook “${name}”` : `the ${endeavour.toLowerCase()} “${name}”`,
   },
 
   // Returning to the Android app from a provider's sign-in page (services/oauthState.ts)

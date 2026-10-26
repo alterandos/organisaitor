@@ -41,6 +41,7 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `055` | **Applied** | `055_fitness_sync.sql` (new tables `fitness_activities` and `fitness_activity_types`: Fitness sync, 2026-10-22). Until it runs, Fitness changes stay queued on each device and their uploads are refused (sync isolates the failure per table), and signing out reports unsaved changes (it uploads everything first), so run it before using this build. |
 | `056` | **Applied** | `056_calendar_notify_mode.sql` (`notify_mode` on `calendar_events`; `notify_mode`, `notify_before_value`, `notify_before_unit` on `calendar_reminders` and `calendar_deadlines`: one notify setting for every calendar item, 2026-10-22). Every event, reminder and deadline upsert now sends these columns, so the three tables refuse writes until it runs (sync isolates the failure per table; changes stay queued and go up once it's applied). Run it before using this build. |
 | `057` | **Applied** | `057_converters.sql` (new table `converters`: the person's own converters, 2026-10-23). Until it runs, a converter syncs nowhere (the table's failure is isolated; changes stay queued), and a full upload (backup restore) stops at it, so run it before restoring a backup. |
+| `058` | **Applied** | `058_encryption_settings.sql` (`encrypt_contents` on `note_tags` and `collections`: a notebook or Endeavour that keeps everything in it encrypted, 2026-10-26). Until it runs, everything syncs as before; but turning the setting on for a notebook or Endeavour sends the column, and that table's pushes then fail (isolated, kept queued) until it's run. |
 
 ## Migration history
 
@@ -103,6 +104,7 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `055_fitness_sync.sql` | New tables `fitness_activities` (mirrors `Activity`) and `fitness_activity_types` (custom `ActivityType`s only; built-ins are seeded per device). Keyed by `id` (a Strava activity's id is a per-account hash of its Strava id, `utils/fitnessIds.ts`). RLS + their own grants. |
 | `056_calendar_notify_mode.sql` | `notify_mode text` on `calendar_events` (default `'before'`), and `notify_mode text` (default `'daysAt'`), `notify_before_value integer`, `notify_before_unit text` (default `'hours'`) on `calendar_reminders` and `calendar_deadlines`; sets existing timed reminders to `'atTime'` (they notified at their time). Additive; no new table, so no grant. Read by `utils/notifyRule.ts`. |
 | `057_converters.sql` | New table `converters` (`id`, `user_id`, `name`, `icon`, `definition` jsonb: inputs, output, formula, formula back; timestamps, `deleted_at`), RLS on `user_id`, and its grant. Read by `converterToRow` / `rowToConverter`. |
+| `058_encryption_settings.sql` | Adds `encrypt_contents boolean not null default false` to `note_tags` and `collections` (encryption by scope). No new table, so no grant. `noteTagToRow` / `collectionToRow` send it only once the setting has been changed on that record. |
 
 ## Supabase tables (summary)
 

@@ -584,3 +584,52 @@ describe('restore marker (sync_markers) — a restore on another device wins ove
     expect(useTaskStore.getState().tasks[id].title).toBe('Local newer'); // not re-applied to itself
   });
 });
+
+describe('encryption by scope — a covered record is held on the device until it is encrypted', () => {
+  const SECRET = 'HELD-SECRET-4410';
+
+  it('a note in an encrypted notebook is not pushed, stays pending, and goes up once encrypted', async () => {
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, notes: { rows: [] }, note_tags: { rows: [] } });
+    await initSync(USER);
+    const nb = useNoteStore.getState().addNoteTag({ name: 'Private', kind: 'area', parentTagId: null } as never);
+    useNoteStore.getState().updateNoteTag(nb, { encryptContents: true });
+    const id = useNoteStore.getState().addNote({ title: SECRET, content: SECRET, tagIds: [nb] });
+    await tick();
+
+    expect(JSON.stringify(fake.upserts.notes ?? [])).not.toContain(SECRET);
+    expect(pendingState().tables.notes?.[id]).toBeDefined();
+    expect((fake.upserts.note_tags ?? []).some((r) => r.id === nb && r.encrypt_contents === true)).toBe(true);
+
+    // What the store's encryptNote leaves: sensitive fields blank, the payload set.
+    const n = useNoteStore.getState().notes[id];
+    useNoteStore.setState((s) => ({ notes: { ...s.notes, [id]: { ...n, title: '', content: '', isEncrypted: true, encryptedPayload: 'cipher', updatedAt: '2031-01-01T00:00:00.000Z' } } }));
+    await tick();
+
+    expect((fake.upserts.notes ?? []).some((r) => r.id === id && r.is_encrypted === true)).toBe(true);
+    expect(JSON.stringify(fake.upserts.notes ?? [])).not.toContain(SECRET);
+    expect(pendingState().tables.notes).toBeUndefined();
+  });
+
+  it('forceUpload leaves out a covered list and its items, and sends the rest', async () => {
+    await initSync(USER);
+    const e = useTaskStore.getState().addCollection({ kind: 'project', name: 'Health' } as never);
+    useTaskStore.getState().updateCollection(e, { encryptContents: true });
+    const held = useListStore.getState().addList({ name: SECRET, kind: 'reference', collectionId: e } as never);
+    useListStore.getState().addListItem({ listId: held, title: SECRET } as never);
+    useListStore.getState().addList({ name: 'Shopping', kind: 'reference', collectionId: null } as never);
+    await forceUpload(USER);
+
+    expect(JSON.stringify([fake.upserts.lists ?? [], fake.upserts.list_items ?? []])).not.toContain(SECRET);
+    expect((fake.upserts.lists ?? []).some((r) => r.name === 'Shopping')).toBe(true);
+  });
+
+  it('an Endeavour or notebook never given the setting sends no encrypt_contents column (works before migration 058)', async () => {
+    await initSync(USER);
+    useTaskStore.getState().addCollection({ kind: 'project', name: 'Plain' } as never);
+    useNoteStore.getState().addNoteTag({ name: 'Plain', kind: 'area', parentTagId: null } as never);
+    await tick();
+    const rows = [...(fake.upserts.collections ?? []), ...(fake.upserts.note_tags ?? [])].filter((r) => r.name === 'Plain');
+    expect(rows.length).toBe(2);
+    expect(rows.every((r) => !('encrypt_contents' in r))).toBe(true);
+  });
+});

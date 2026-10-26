@@ -67,6 +67,8 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       collectionId: null, archivedAt: null, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
     };
     expect(rowToCollection(collectionToRow(c, USER))).toEqual(c);
+    expect('encrypt_contents' in collectionToRow(c, USER)).toBe(false);
+    expect(rowToCollection(collectionToRow({ ...c, encryptContents: true }, USER))).toEqual({ ...c, encryptContents: true });
   });
 
   it('Tag', () => {
@@ -213,6 +215,11 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       collectionId: null, backdrop: { kind: 'preset', id: 'ocean' }, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z', userId: USER,
     };
     expect(rowToNoteTag(noteTagToRow(t, USER))).toEqual(t);
+    // Encryption by scope (migration 058): the setting round-trips once set, and isn't sent before.
+    expect('encrypt_contents' in noteTagToRow(t, USER)).toBe(false);
+    for (const encryptContents of [true, false]) {
+      expect(rowToNoteTag(noteTagToRow({ ...t, encryptContents }, USER))).toEqual({ ...t, encryptContents });
+    }
   });
 
   it('Picture (an encrypted copy: src blank, the data URL in the payload)', () => {

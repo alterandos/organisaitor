@@ -14,6 +14,9 @@ import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 import { BackdropField } from '@/components/NoteEditor/NoteBackdrop';
 import { CloseIcon, ColorDotIcon, TrashIcon } from '@/components/Icons';
+import { EncryptContentsField } from '@/components/EncryptContentsField/EncryptContentsField';
+import { notebookEncryptionSource } from '@/utils/encryptionScopes';
+import { isPinnedNotebook } from '@/utils/notes';
 
 const FIELD_TYPES: { value: NoteTagFieldType; label: string }[] = [
   { value: 'text',    label: 'Text'   },
@@ -146,6 +149,18 @@ export function EditNoteTagModal() {
                 noneLabel={`No ${LABELS.collection}`}
               />
             </div>
+          )}
+
+          {/* ── Encrypt everything in it (notebooks only; applies at once) ── */}
+          {!isAnnotationTag && !isPinnedNotebook(tag) && (
+            <EncryptContentsField
+              label={LABELS.encryptionScope.notebookToggle}
+              hint={LABELS.encryptionScope.notebookHint}
+              value={!!tag.encryptContents}
+              inheritedFrom={tag.encryptContents ? null : notebookEncryptionSource(tag, noteTags)?.name ?? null}
+              withFlag={(ctx) => ({ ...ctx, noteTags: { ...ctx.noteTags, [tag.id]: { ...tag, encryptContents: true } } })}
+              onChange={(next) => updateNoteTag(tag.id, { encryptContents: next })}
+            />
           )}
 
           {/* ── Backdrop (notebooks only; applies at once) ─────────────── */}

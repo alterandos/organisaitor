@@ -83,6 +83,7 @@ export interface NoteTag {
   presetKey?: string;                 // Set when created from a preset pack (e.g. 'academic'); undefined = fully user-created
   collectionId: CollectionId | null;  // Endeavour this notebook belongs to (meaningful for kind='area'); notes tagged with this notebook inherit it on create
   backdrop?: NoteBackdropChoice | null; // Notebooks only: the backdrop its notes (and sub-notebooks) take unless they choose their own; absent/null = as its parent
+  encryptContents?: boolean;          // Notebooks only: every note in it (and in the notebooks inside it) is kept encrypted (utils/encryptionScopes.ts); absent = never set, off
   createdAt: string;                  // ISO 8601
   updatedAt: string;
   userId: string;

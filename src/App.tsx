@@ -14,6 +14,7 @@ import { startDeepLinks } from '@/services/android/deepLinks';
 import { initAndroidNotifications, scheduleReconcile, watchForChanges } from '@/services/notifications/androidScheduler';
 import { registerOAuthReturn } from '@/services/android/oauthReturn';
 import { initListSecretsSync } from '@/services/listSecretsSync';
+import { initEncryptionScopes } from '@/services/encryption/enforcer';
 import { initAutoBackup } from '@/services/autoBackup';
 import { migrateTaskDeadlineShadows } from '@/services/taskDeadlineMigration';
 import { DecryptPrompt } from '@/components/DecryptPrompt/DecryptPrompt';
@@ -272,6 +273,7 @@ export default function App() {
   // `//name` → a character (Greek, arrows, maths, super/subscripts) in every text field (src/specialChars/).
   useEffect(() => installSpecialCharInput(), []);
   useEffect(() => initEventTaskFollow(), []);
+  useEffect(() => initEncryptionScopes(), []);
 
   const setSession = useAuthStore((s) => s.setSession);
   const authUserId = useAuthStore((s) => s.user?.id ?? null);

@@ -819,6 +819,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **Encryption by scope** (2026-10-26, CLAUDE.md "Encryption by scope") | `src/test/patterns.test.ts` "encryption by scope" | **Applied 2026-10-26** (new code; nothing existed before to retrofit). |
 | **Icon picker** (2026-10-26, CLAUDE.md "Icon picker", `components/IconPicker`) | `src/test/patterns.test.ts` "an icon a person picks comes from the icon field"; review: `{x.icon}` rendered as text for a person-picked icon | **Applied 2026-10-26**: notebooks and tags, lists, Overviews, activity types, converters (editors and about 25 display sites). Not person-pickable yet, so not converted: custom list types' icons, built-in tag types. |
 | **One list of note editor extensions** (2026-10-26, CLAUDE.md "Single entry points", `noteEditorExtensions.ts`) | `src/test/patterns.test.ts` (SpecialCharInput / EscapePassThrough checks read the list); `guideData.test.ts` | **Fully applied 2026-10-26**: NoteEditor, the block guide, the demo test. |
 | **Formulas only through utils/formula.ts** (2026-10-23, CLAUDE.md "Single entry points") | `src/test/patterns.test.ts` "a formula is worked out only by utils/formula.ts" | **Fully applied 2026-10-23** (new; nothing older evaluated formulas). |
@@ -934,3 +935,7 @@ Signing out can only safely clear data that is confirmed in the cloud, so these 
 ### OAuth flow hardening — bind the connect flow to the browser that started it
 
 *(Logged 2026-09-20, from agent brief 01 task 1.)* Strava / Google Calendar connect uses a single-use `state` nonce (migration 032), but nothing ties the nonce to the browser that started the flow, so "login CSRF" (an attacker starts a flow on their own account and tricks a victim into approving the consent screen, attaching the victim's calendar/Strava to the attacker) is an accepted residual risk. Fix: run the OAuth in the system browser with a deep-link return (Tauri/Android) and a PKCE-style verifier stored by the app and checked at completion, or, web-only, an HttpOnly cookie on the Vercel origin compared with `state` by the callback. Both need the Tauri/Android hand-off first. Reasoning in `implemented-features.md` "OAuth `state` nonces".
+
+## Encryption by scope: more kinds (confirmed 2026-10-26)
+
+The user expects to be able to encrypt calendars, tasks and other items, possibly everything. Notebooks and Endeavours can already keep their notes and lists encrypted (CLAUDE.md "Encryption by scope"); each new kind follows the recipe there: the per-item model on its store first (an `encryptedPayload`, a view function, an encrypt action), then its scope rule, an `ENCRYPTABLE_KINDS` entry with its sync holds, and agents not seeing covered items. Open questions to settle with the user per kind: which fields stay plaintext for the app to work (a calendar item's date and time drive notifications on every device; a task's dates drive its views), and which new scopes make sense (a calendar, a whole section, the account).

@@ -12,6 +12,9 @@ import type { ListId } from '@/types/lists';
 import styles from './DecryptPrompt.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { CloseIcon } from '@/components/Icons';
+import { useTaskStore } from '@/store/taskStore';
+import { LABELS } from '@/config/labels';
+import { listScopes, noteScopes } from '@/utils/encryptionScopes';
 
 // "Enter your passphrase to permanently decrypt this note/list." Opened by the clickable 🔒
 // icons (uiStore.requestDecrypt). Deliberately asks for the passphrase (or recovery code) even
@@ -31,6 +34,13 @@ export function DecryptPrompt() {
 
   useEffect(() => onVaultStatus(setStatus), []);
 
+  // Encryption by scope: an item a notebook or Endeavour keeps encrypted can't lose its encryption
+  // on its own (the enforcer would only encrypt it again).
+  const notes       = useNoteStore((s) => s.notes);
+  const noteTags    = useNoteStore((s) => s.noteTags);
+  const lists       = useListStore((s) => s.lists);
+  const collections = useTaskStore((s) => s.collections);
+
   useEscapeClose(close);
 
   useEffect(() => {
@@ -43,6 +53,30 @@ export function DecryptPrompt() {
 
   if (!prompt) return null;
   const noun = prompt.kind === 'note' ? 'note' : 'list';
+  const ctx = { noteTags, collections };
+  const note = prompt.kind === 'note' ? notes[prompt.id as NoteId] : undefined;
+  const list = prompt.kind === 'list' ? lists[prompt.id as ListId] : undefined;
+  const keptBy = note ? noteScopes(note, ctx) : list ? listScopes(list, ctx) : [];
+  if (keptBy.length > 0) {
+    const where = keptBy.map((sc) => LABELS.encryptionScope.scopeName(sc.kind, sc.name, LABELS.collection)).join(' and ');
+    return createPortal(
+      <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+        <div className={styles.modal} role="dialog" aria-label={LABELS.encryptionScope.cantRemoveTitle}>
+          <div className={styles.header}>
+            <span className={styles.title}>🔒 {LABELS.encryptionScope.cantRemoveTitle}</span>
+            <button className={styles.closeBtn} type="button" onClick={close} aria-label="Close"><CloseIcon /></button>
+          </div>
+          <div className={styles.body}>
+            <p className={styles.text}>{LABELS.encryptionScope.cantRemove(where)}</p>
+            <div className={styles.actions}>
+              <button className={styles.submitBtn} type="button" onClick={close} autoFocus>OK</button>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
   const usable = status === 'locked' || status === 'unlocked';
 
   const handleSubmit = async (e: FormEvent) => {

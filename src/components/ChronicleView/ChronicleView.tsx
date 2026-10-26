@@ -327,6 +327,9 @@ function NoteTagTreeNode({
             style={tag.color ? { color: isSelected ? tag.color : undefined } : undefined}
             reveal="extend"
           />
+          {tag.encryptContents && !isPinnedNotebook(tag) && (
+            <span className={styles.nodeLock} title={LABELS.encryptionScope.encryptsBadge} aria-label={LABELS.encryptionScope.encryptsBadge} role="img">🔒</span>
+          )}
           {noteCount > 0 && <span className={styles.nodeCount}>{noteCount}</span>}
         </button>
 
