@@ -106,7 +106,7 @@ describe('the matching rules', () => {
   });
 
   it('a pair just finished, in any pattern, for the as-you-type offer', () => {
-    expect(acronymPairJustTyped('We watched the Australian Broadcasting Corporation (ABC)')).toEqual({ term: 'ABC', expansion: 'Australian Broadcasting Corporation', termFrom: 52 });
+    expect(acronymPairJustTyped('We watched the Australian Broadcasting Corporation (ABC)')).toEqual({ term: 'ABC', expansion: 'Australian Broadcasting Corporation', termFrom: 52, termLength: 3 });
     expect(acronymPairJustTyped('Shares trade on the ASX (Australian Stock Exchange)')).toMatchObject({ term: 'ASX', expansion: 'Australian Stock Exchange', termFrom: 20 });
     expect(acronymPairJustTyped('ASX - Australian Stock Exchange ')).toMatchObject({ term: 'ASX', expansion: 'Australian Stock Exchange', termFrom: 0 });
     expect(acronymPairJustTyped('An API stands for Application Programming Interface.')).toMatchObject({ term: 'API', expansion: 'Application Programming Interface' });
@@ -134,5 +134,23 @@ describe('the matching rules', () => {
   it('what looks like an acronym', () => {
     for (const w of ['ASX', 'DoD', 'COVID-19', '(ABC)', 'U.S.']) expect(looksLikeAcronym(w)).toBe(true);
     for (const w of ['McDonald', 'Hello', 'A', 'the']) expect(looksLikeAcronym(w)).toBe(false);
+  });
+});
+
+describe('plurals and other ways of writing the pair (2026-10-27)', () => {
+  it.each([
+    ['RECs (Renewable Energy Certificate)'],
+    ['RECs (Renewable Energy Certificates)'],
+    ['Renewable Energy Certificates (RECs)'],
+    ['RECs = Renewable Energy Certificates'],
+    ['RECs, or Renewable Energy Certificates'],
+    ['Renewable Energy Certificate, or REC'],
+    ['REC, i.e. Renewable Energy Certificate'],
+  ])('%s is the record REC, Renewable Energy Certificate', (text) => {
+    expect(inferAcronymFromSelection(text, text)).toEqual({ term: 'REC', expansion: 'Renewable Energy Certificate' });
+  });
+
+  it('as typed, a plural acronym is offered in the singular and linked whole', () => {
+    expect(acronymPairJustTyped('We bought RECs (Renewable Energy Certificates) ')).toMatchObject({ term: 'REC', expansion: 'Renewable Energy Certificate', termLength: 4 });
   });
 });

@@ -108,7 +108,7 @@ describe('deleting a whole block', () => {
   const flush = () => new Promise((r) => setTimeout(r, 0));
   afterEach(() => useDialogStore.setState({ queue: [] }));
 
-  it('a block with something in it asks first (the pill, right-click Delete, Ctrl+Delete); cancel keeps it', async () => {
+  it('a block with something in it asks first (the pill, right-click Delete, Alt+Delete); cancel keeps it', async () => {
     make(TIMELINE);
     void deleteBlock(editor.view, posOf('timeline'));
     await flush();
@@ -134,22 +134,31 @@ describe('deleting a whole block', () => {
     expect(blocks()).toEqual(['paragraph', 'paragraph']);
   });
 
-  it('Ctrl+Delete typed in an input of the block’s own (a card field, maths) deletes the block too', async () => {
+  it('Alt+Delete typed in an input of the block’s own (a card field, maths) deletes the block too', async () => {
     make('<div data-type="timeline"><div data-type="timeline-item"><div data-timeline-when></div><p></p></div></div>');
     const field = document.createElement('div');
     field.contentEditable = 'true';
     editor.view.dom.querySelector('[data-type="timeline"]')!.appendChild(field);
-    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', ctrlKey: true, bubbles: true, cancelable: true }));
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', altKey: true, bubbles: true, cancelable: true }));
     await flush();
     expect(blocks()).toEqual(['paragraph', 'paragraph']);
   });
 
-  it('Ctrl+Delete with the cursor inside a block deletes that block', async () => {
+  it('Alt+Delete with the cursor inside a block deletes that block', async () => {
+    make('<div data-type="timeline"><div data-type="timeline-item"><div data-timeline-when></div><p></p></div></div>');
+    editor.commands.setTextSelection(posOf('timeline') + 3);
+    const event = new KeyboardEvent('keydown', { key: 'Delete', altKey: true, bubbles: true, cancelable: true });
+    editor.view.someProp('handleKeyDown', (f) => f(editor.view, event));
+    await flush();
+    expect(blocks()).toEqual(['paragraph', 'paragraph']);
+  });
+
+  it('Ctrl+Delete is left to delete the next word', async () => {
     make('<div data-type="timeline"><div data-type="timeline-item"><div data-timeline-when></div><p></p></div></div>');
     editor.commands.setTextSelection(posOf('timeline') + 3);
     const event = new KeyboardEvent('keydown', { key: 'Delete', ctrlKey: true, bubbles: true, cancelable: true });
     editor.view.someProp('handleKeyDown', (f) => f(editor.view, event));
     await flush();
-    expect(blocks()).toEqual(['paragraph', 'paragraph']);
+    expect(blocks()).toContain('timeline');
   });
 });

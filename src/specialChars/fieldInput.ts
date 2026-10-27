@@ -5,7 +5,9 @@ import { hideCharPicker, showCharPicker, type CaretBox } from './charPicker';
 // `//name` in every ordinary text field (inputs and textareas, anywhere in the app): one set of
 // listeners for the whole document, installed once from App.tsx, so no field has to opt in. The
 // note editor isn't an ordinary field — ProseMirror owns its text — and has its own extension
-// (NoteEditor/extensions/SpecialCharInput.ts) on the same rules.
+// (NoteEditor/extensions/SpecialCharInput.ts) on the same rules. A field that is its own small
+// contentEditable (a Glossary card's fields, 2026-10-27) is served here too: its text is read
+// and replaced in the text node the cursor is in.
 //
 // While a name is being typed a list of characters shows under the cursor: ↑/↓ move, Enter or Tab
 // puts the character in, Esc keeps the text. Typing the whole name and a space does it too.
@@ -17,6 +19,7 @@ import { hideCharPicker, showCharPicker, type CaretBox } from './charPicker';
 // A field inside `data-no-shortcuts` (the fields where those shortcuts are written) gets none.
 
 const TEXT_TYPES = new Set(['text', 'search', 'url', 'email', 'tel', '']);
+const NO_SHORTCUTS = new Set(['url', 'email', 'search']);
 
 type Field = HTMLInputElement | HTMLTextAreaElement;
 
@@ -24,85 +27,134 @@ const isField = (t: EventTarget | null): t is Field =>
   (t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && TEXT_TYPES.has(t.type)))
   && !t.readOnly && !t.disabled;
 
-interface Open { field: Field; start: number; end: number; matches: CharMatch[]; selected: number }
+// A contentEditable of its own, not the note editor (ProseMirror has its own extension).
+const isEditableHost = (t: EventTarget | null): t is HTMLElement =>
+  t instanceof HTMLElement && t.getAttribute('contenteditable') === 'true' && !t.classList.contains('ProseMirror');
+
+// Where typing is: the text before the cursor, and a way to replace part of it. For an input or a
+// textarea that's its value; for a contentEditable, the text node the cursor is in.
+interface Spot {
+  el:      HTMLElement;
+  before:  string;
+  caret:   number;
+  replace: (start: number, end: number, text: string) => void;
+  slice:   (start: number, end: number) => string;
+  caretAt: () => number | null;
+  box:     () => CaretBox;
+  shortcuts: boolean;
+}
+
+function spotOf(t: EventTarget | null): Spot | null {
+  if (isField(t)) {
+    const field = t;
+    const caret = field.selectionStart ?? 0;
+    if (field.selectionEnd !== caret) return null;
+    return {
+      el: field, caret, before: field.value.slice(0, caret),
+      // The way typing would, so a React field's onChange sees it (setRangeText changes the value
+      // under React's tracker; the input event reports it).
+      replace: (start, end, text) => { field.setRangeText(text, start, end, 'end'); field.dispatchEvent(new Event('input', { bubbles: true })); },
+      slice: (start, end) => field.value.slice(start, end),
+      caretAt: () => (field.selectionStart === field.selectionEnd ? field.selectionStart : null),
+      box: () => caretBox(field),
+      shortcuts: !(field instanceof HTMLInputElement && NO_SHORTCUTS.has(field.type)),
+    };
+  }
+  if (!isEditableHost(t)) return null;
+  const host = t;
+  const sel = window.getSelection();
+  const node = sel?.anchorNode;
+  if (!sel || !sel.isCollapsed || !node || node.nodeType !== Node.TEXT_NODE || !host.contains(node)) return null;
+  const text = node as Text;
+  return {
+    el: host, caret: sel.anchorOffset, before: text.data.slice(0, sel.anchorOffset),
+    replace: (start, end, s) => {
+      text.replaceData(start, end - start, s);
+      const at = document.createRange();
+      at.setStart(text, start + s.length);
+      at.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(at);
+      host.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+    slice: (start, end) => text.data.slice(start, end),
+    caretAt: () => { const s = window.getSelection(); return s?.isCollapsed && s.anchorNode === text ? s.anchorOffset : null; },
+    box: () => {
+      const r = sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : host.getBoundingClientRect();
+      return { left: r.left - TRIGGER.length * 4, top: r.top, bottom: r.bottom || r.top + 18 };
+    },
+    shortcuts: true,
+  };
+}
+
+interface Open { spot: Spot; start: number; end: number; matches: CharMatch[]; selected: number }
 let open: Open | null = null;
 
-const NO_SHORTCUTS = new Set(['url', 'email', 'search']);
 // The last shortcut made, so Backspace or Ctrl+Z straight after can put the typed text back.
-let lastShortcut: { field: Field; at: number; char: string; typed: string } | null = null;
+let lastShortcut: { spot: Spot; at: number; char: string; typed: string } | null = null;
 
 function close() {
   open = null;
   hideCharPicker();
 }
 
-// Puts the text in place of field[start..end] the way typing would, so a React field's onChange
-// sees it (setRangeText changes the value under React's tracker; the input event reports it).
-function replace(field: Field, start: number, end: number, text: string) {
-  field.setRangeText(text, start, end, 'end');
-  field.dispatchEvent(new Event('input', { bubbles: true }));
-}
-
 function choose(i: number) {
   if (!open) return;
-  const { field, start, end, matches } = open;
+  const { spot, start, end, matches } = open;
   const m = matches[i];
   close();
-  if (m) replace(field, start, end, m.char);
+  if (m) spot.replace(start, end, m.char);
 }
 
 function render() {
   if (!open) return;
-  showCharPicker(caretBox(open.field), open.matches, open.selected, choose);
+  showCharPicker(open.spot.box(), open.matches, open.selected, choose);
 }
 
 function onInput(e: Event) {
-  const field = e.target;
-  if (!isField(field)) return;
-  const caret = field.selectionStart ?? 0;
-  if (field.selectionEnd !== caret) { close(); return; }
-  const before = field.value.slice(0, caret);
+  const spot = spotOf(e.target);
+  if (!spot) { if (isField(e.target) || isEditableHost(e.target)) close(); return; }
+  const { before, caret } = spot;
   lastShortcut = null;
   // A shortcut just completed by typing (not by pasting, or our own replace(), which is a plain Event).
-  if (e instanceof InputEvent && e.inputType === 'insertText' && !(field instanceof HTMLInputElement && NO_SHORTCUTS.has(field.type))
-      && !field.closest('[data-no-shortcuts]')) {
+  if (e instanceof InputEvent && e.inputType === 'insertText' && spot.shortcuts && !spot.el.closest('[data-no-shortcuts]')) {
     const s = findShortcut(before) ?? findUserShortcut(before, useSettingsStore.getState().textShortcuts);
     if (s) {
       close();
-      replace(field, s.start, caret, s.char);
-      lastShortcut = { field, at: s.start + s.char.length, char: s.char, typed: s.typed };
+      spot.replace(s.start, caret, s.char);
+      lastShortcut = { spot, at: s.start + s.char.length, char: s.char, typed: s.typed };
       return;
     }
   }
-  // The whole name and a space: the character, keeping the space.
+  // The whole name and a space: the character, keeping the space, the cursor after it (replacing
+  // only the name left the cursor before the space, so the next letter went in front of it).
   if (before.endsWith(' ')) {
     const t = findCharTrigger(before.slice(0, -1));
     const ch = t && exactChar(t.query);
-    if (t && ch) { close(); replace(field, t.start, caret - 1, ch); return; }
+    if (t && ch) { close(); spot.replace(t.start, caret, `${ch} `); return; }
   }
   const t = findCharTrigger(before);
-  if (!t) { if (open?.field === field) close(); return; }
+  if (!t) { if (open?.spot.el === spot.el) close(); return; }
   const matches = matchChars(t.query);
-  open = { field, start: t.start, end: caret, matches, selected: 0 };
+  open = { spot, start: t.start, end: caret, matches, selected: 0 };
   render();
 }
 
 // Capture on window, so these keys are seen before anything else (the Escape stack, a form's
-// Enter, a pane's Ctrl+Enter) while the list is up.
+// Enter, a pane's Ctrl+Enter, a card's Enter) while the list is up.
 function onKeyDown(e: KeyboardEvent) {
   const s = lastShortcut;
   const undoKey = e.key === 'Backspace' ? !e.ctrlKey && !e.metaKey
     : (e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey;
-  if (s && undoKey && e.target === s.field && !e.altKey
-      && s.field.selectionStart === s.at && s.field.selectionEnd === s.at
-      && s.field.value.slice(s.at - s.char.length, s.at) === s.char) {
+  if (s && undoKey && e.target === s.spot.el && !e.altKey
+      && s.spot.caretAt() === s.at && s.spot.slice(s.at - s.char.length, s.at) === s.char) {
     e.preventDefault();
     lastShortcut = null;
-    replace(s.field, s.at - s.char.length, s.at, s.typed);
+    s.spot.replace(s.at - s.char.length, s.at, s.typed);
     return;
   }
   if (e.key !== 'Shift') lastShortcut = null;
-  if (!open || e.target !== open.field) return;
+  if (!open || e.target !== open.spot.el) return;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault();
     e.stopPropagation();
@@ -157,7 +209,7 @@ function caretBox(field: Field): CaretBox {
   const caret = field.selectionStart ?? field.value.length;
   mirror.textContent = field.value.slice(0, caret);
   const mark = document.createElement('span');
-  mark.textContent = '\u200b';
+  mark.textContent = '​';
   mirror.append(mark);
   document.body.append(mirror);
   const left = r.left + mark.offsetLeft - field.scrollLeft;

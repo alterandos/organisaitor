@@ -10,6 +10,7 @@ import { openOAuthFlow } from '@/services/oauthState';
 import type { Activity, ActivityId, ActivityType } from '@/types/fitness';
 import styles from './FitnessSection.module.css';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { activityIsEmpty } from '@/utils/emptyContent';
 import { EditIcon, TrashIcon } from '@/components/Icons';
 
 function StravaConnect() {
@@ -84,7 +85,7 @@ function ActivityRow({ activity, activityTypes }: { activity: Activity; activity
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (await confirmDelete('activity', activity.title)) deleteActivity(activity.id);
+    if (await confirmDelete('activity', activity.title, undefined, { empty: activityIsEmpty(activity) })) deleteActivity(activity.id);
   };
 
   return (

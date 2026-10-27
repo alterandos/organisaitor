@@ -7,7 +7,8 @@ import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { NoteTagMark } from './NoteTagMark';
 import { ConceptRefMark } from './ConceptRef';
 import { moveFromBlock } from './blockDesigns';
-import { GlossaryCardExtensions, cardFromSelection, cardWidth, insertCardAfter, morePillSide, setGlossaryCardWidth, snapCardWidth } from './GlossaryCard';
+import { GlossaryCardExtensions, cardFromSelection, cardWidth, insertCardAfter, morePillSide, sendCardToGlossary } from './GlossaryCard';
+import { setBlockWidth, snapBlockWidth } from './blockWidth';
 import { useTrashStore } from '@/store/trashStore';
 import { GapCursor } from '@tiptap/pm/gapcursor';
 import { AcronymOffer } from './AcronymOffer';
@@ -20,6 +21,7 @@ import { noteClipboardText } from '../noteClipboardText';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { glossaryEntries } from '@/services/glossary';
+import { glossaryTerms } from './GlossaryAutolink';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
 import type { NoteId, StructuredTagEntryId } from '@/types';
 
@@ -99,6 +101,44 @@ describe('Glossary cards', () => {
     expect([...(dl?.querySelectorAll('dd') ?? [])].map((e) => e.textContent)).toEqual(['Accipitridae', '1.8–2.3 m']);
   });
 
+  it('Enter makes a new line in a card; a finished "Name: value" line becomes a field of that name, or fills an empty one the card has', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Osmosis', fields: { meaning: 'Water moving across a membrane' }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
+    await flush();
+    const meaning = editor.view.dom.querySelector('[data-type="glossary-card"] [data-field="meaning"] [data-card-input]') as HTMLElement;
+    meaning.focus();
+    meaning.innerHTML = 'Water moving across a membrane<br>Origin: Greek, a push';
+    meaning.dispatchEvent(new Event('input', { bubbles: true }));
+    const enter = (el: HTMLElement, init: KeyboardEventInit = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init }));
+    expect(enter(meaning)).toBe(false);   // handled in the card, never by the note
+    await flush();
+    expect(entry(id)?.fields.facts).toEqual([{ label: 'Origin', value: 'Greek, a push' }]);
+    expect(meaning.textContent).toBe('Water moving across a membrane');
+    expect(cards()).toHaveLength(1);
+
+    meaning.innerHTML = 'Water moving across a membrane<br>Example: Roots take up water';
+    meaning.dispatchEvent(new Event('input', { bubbles: true }));
+    meaning.blur();
+    await flush();
+    expect(entry(id)?.fields.example).toBe('Roots take up water');
+    expect(entry(id)?.fields.facts).toEqual([{ label: 'Origin', value: 'Greek, a push' }]);
+  });
+
+  it('Shift+Enter in any field: another card of the same kind; Enter in the term goes to the next field', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Osmosis', fields: { meaning: 'Water moving' }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
+    await flush();
+    const inputs = () => [...editor.view.dom.querySelectorAll<HTMLElement>('[data-type="glossary-card"] [data-card-input]')];
+    inputs()[0].focus();
+    inputs()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(inputs()[1]);
+    inputs()[0].focus();
+    inputs()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true }));
+    await flush();
+    expect(cards()).toHaveLength(2);
+    expect(entry(cards()[1].entryId)?.typeKey).toBe('definition');
+  });
+
   it('the cursor lands in the new card\'s term once it is drawn, and a key typed on a selected card goes there, never replacing it', async () => {
     await make();
     type('\\definition ');
@@ -112,7 +152,7 @@ describe('Glossary cards', () => {
     expect(document.activeElement).toBe(term());
   });
 
-  it('Ctrl+Enter in a card saves what was typed and puts the cursor in the text after it', async () => {
+  it('Ctrl+Enter in a card saves what was typed and leaves it onto a new line', async () => {
     await make();
     type('\\definition ');
     await flush();
@@ -122,6 +162,7 @@ describe('Glossary cards', () => {
     expect(entry(cards()[0].entryId).term).toBe('Osmosis');
     const sel = editor.state.selection;
     expect(sel.$from.parent.type.name).toBe('paragraph');
+    expect(sel.$from.parent.textContent).toBe('');
     expect(sel.from).toBeGreaterThan(cards()[0].pos);
   });
 
@@ -131,7 +172,7 @@ describe('Glossary cards', () => {
     const card = () => editor.view.dom.querySelector('[data-type="glossary-card"]')!;
     expect(editor.state.doc.nodeAt(cards()[0].pos)!.attrs.variant).toBe('compact');
     expect(card().querySelector('[class*="compactIcon"]')?.textContent).toBe('📖');
-    expect(card().querySelector('[class*="pipe"]')).not.toBeNull();
+    expect(card().querySelector('[class*="compactLead"] [class*="compactIcon"]')).not.toBeNull();
     expect(fieldsIn(card()).map(textOf)).toEqual(['Osmosis', 'Water moving across a membrane']);
     editor.view.dispatch(editor.state.tr.setNodeMarkup(cards()[0].pos, undefined, { ...editor.state.doc.nodeAt(cards()[0].pos)!.attrs, variant: 'card' }));
     await flush();
@@ -147,21 +188,21 @@ describe('Glossary cards', () => {
     expect(cardWidth({ variant: 'card', width: '42%' })).toBe('42%');
     expect(cardWidth({ variant: 'card', width: 'nonsense' })).toBe('auto');
     expect(cardWidth({ variant: 'card', width: '3%' })).toBe('15%');        // never too narrow to use
-    expect(snapCardWidth(0.32, 960)).toBe('third');                         // close to a third
-    expect(snapCardWidth(0.42, 1600)).toBe('42%');                          // nowhere near a stop: free
-    expect(snapCardWidth(0.98, 960)).toBe('full');
-    expect(snapCardWidth(0.51, 1600)).toBe('half');
-    expect(snapCardWidth(0.74, 1600)).toBe('75%');
-    expect(snapCardWidth(0.26, 1600)).toBe('standard');   // 416 / 1600 = 0.26, nearer than a quarter
+    expect(snapBlockWidth(0.32, 960)).toBe('third');                         // close to a third
+    expect(snapBlockWidth(0.42, 1600)).toBe('42%');                          // nowhere near a stop: free
+    expect(snapBlockWidth(0.98, 960)).toBe('full');
+    expect(snapBlockWidth(0.51, 1600)).toBe('half');
+    expect(snapBlockWidth(0.74, 1600)).toBe('75%');
+    expect(snapBlockWidth(0.26, 1600)).toBe('standard');   // 416 / 1600 = 0.26, nearer than a quarter
   });
 
-  it('a dragged width is stored as a share and drawn through --card-w', async () => {
+  it('a dragged width is stored as a share and drawn through --block-w', async () => {
     await make('<div data-type="glossary-card" data-entry-id="e1"></div>');
-    setGlossaryCardWidth(editor.view, cards()[0].pos, '42%');
+    setBlockWidth(editor.view, cards()[0].pos, '42%');
     const dom = editor.view.dom.querySelector('[data-type="glossary-card"]') as HTMLElement;
-    expect(dom.getAttribute('data-card-width-shown')).toBe('custom');
-    expect(dom.style.getPropertyValue('--card-w')).toBe('42%');
-    setGlossaryCardWidth(editor.view, cards()[0].pos, 'auto');
+    expect(dom.getAttribute('data-block-width-shown')).toBe('custom');
+    expect(dom.style.getPropertyValue('--block-w')).toBe('42%');
+    setBlockWidth(editor.view, cards()[0].pos, 'auto');
     expect(editor.state.doc.nodeAt(cards()[0].pos)!.attrs.width).toBeNull();
   });
 
@@ -175,11 +216,11 @@ describe('Glossary cards', () => {
 
   it('a set width is stored on the card and round-trips', async () => {
     await make('<div data-type="glossary-card" data-entry-id="e1"></div>');
-    setGlossaryCardWidth(editor.view, cards()[0].pos, 'half');
-    expect(editor.getHTML()).toContain('data-card-width="half"');
+    setBlockWidth(editor.view, cards()[0].pos, 'half');
+    expect(editor.getHTML()).toContain('data-block-width="half"');
     editor.commands.setContent(editor.getHTML());
     expect(editor.state.doc.nodeAt(cards()[0].pos)!.attrs.width).toBe('half');
-    expect(editor.view.dom.querySelector('[data-type="glossary-card"]')!.getAttribute('data-card-width-shown')).toBe('half');
+    expect(editor.view.dom.querySelector('[data-type="glossary-card"]')!.getAttribute('data-block-width-shown')).toBe('half');
   });
 
   it('a record with no term yet is not listed in the Glossary; once named it is', async () => {
@@ -274,11 +315,9 @@ describe('adding fields and more cards', () => {
     expect(morePillSide(r(0, 1000), 120, bounds, [])).toBe('none');
   });
 
-  it('Shift+Enter in the last field makes another card of the same kind, design and width below, its term focused', async () => {
+  it('Shift+Enter in any field makes another card of the same kind, design and width below, its term focused', async () => {
     await oneCard();
     const meaning = cardEls()[0].querySelector('[data-field="meaning"] [data-card-input]')!;
-    await keyOn(cardEls()[0].querySelector('[data-card-input]')!, 'Enter', { shiftKey: true });   // the term isn't the last field
-    expect(cards()).toHaveLength(1);
     await keyOn(meaning, 'Enter', { shiftKey: true });
     await flush();
     expect(cards()).toHaveLength(2);
@@ -411,6 +450,40 @@ describe('recording an acronym as you type', () => {
 
   const chipEl = () => editor.view.dom.querySelector('[data-autolink-chip]');
 
+  it('an Acronym card whose long form is already a record offers to add itself there; that card shows instead, the empty record goes', async () => {
+    const defId = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'definition', term: 'Australian Securities Exchange', fields: { meaning: 'The main stock exchange' }, noteId, collectionId: null });
+    defineInItsNote(defId);
+    const acrId = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'acronym', tagId: 'acronym', term: 'ASX', fields: { expansion: 'australian securities exchange' }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${acrId}"></div>`);
+    const button = [...editor.view.dom.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Add ASX to it'));
+    expect(button).toBeDefined();
+    await act(async () => { button!.click(); });
+    await flush();
+    expect(cards()[0].entryId).toBe(defId);
+    expect(useNoteStore.getState().structuredTagEntries[acrId as never]).toBeUndefined();
+    expect(useNoteStore.getState().structuredTagEntries[defId as never].fields).toMatchObject({ acronym: 'ASX' });
+  });
+
+  it('when the long form is already a record, the offer adds the acronym to it: one record, linked by either name', async () => {
+    const defId = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'definition', term: 'Australian Broadcasting Corporation', fields: { meaning: 'A broadcaster' }, noteId, collectionId: null });
+    defineInItsNote(defId);
+    await make();
+    type('We watched the Australian Broadcasting Corporation (ABC)');
+    expect(chipEl()?.textContent).toContain('Add ABC to');
+    expect(press('Enter')).toBe(true);
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0].fields).toMatchObject({ acronym: 'ABC' });
+    let linked = '';
+    editor.state.doc.descendants((n) => { if (n.isText && n.marks.some((m) => m.type.name === 'conceptRef' && m.attrs.entryId === defId)) linked += n.text; });
+    expect(linked).toBe('ABC');
+    const listed = glossaryEntries().find((e) => e.id === defId)!;
+    expect(listed.kinds).toEqual(['definition', 'acronym']);
+    expect(glossaryTerms().filter((t) => t.entryId === defId).map((t) => t.term).sort()).toEqual(['ABC', 'Australian Broadcasting Corporation']);
+    // Typed again, it's a name the Glossary has: no second offer to record it.
+    type(' and ABC (Australian Broadcasting Corporation)');
+    expect(chipEl()?.textContent ?? '').not.toContain('Record');
+  });
+
   it('every pattern detection knows is offered as you type, with what it stands for', async () => {
     await make();
     type('ASX - Australian Stock Exchange ');
@@ -509,6 +582,28 @@ describe('making and deleting definitions', () => {
     expect(editor.state.doc.textContent).toContain('Plants use photosynthesis.');
     expect(useNoteStore.getState().notes[other].content).not.toContain(id);
     expect(useNoteStore.getState().notes[other].content).toContain('see photosynthesis');
+  });
+
+  it('Send to Glossary: the card goes, the term stays linked, the record stays listed; removing the link never asks', async () => {
+    await make('<p>Plants use photosynthesis.</p>');
+    const from = 2 + editor.state.doc.textContent.indexOf('photosynthesis');
+    cardFromSelection(editor.view, from, from + 14, 'definition', { noteId, collectionId: null, now: new Date() });
+    await flush();
+    const id = entries()[0].id;
+    const before = linksIn(id);
+    expect(sendCardToGlossary(editor.view, cards()[0].pos)).toBe(true);
+    await flush();
+    expect(cards()).toHaveLength(0);
+    expect(asked.count).toBe(0);
+    expect(linksIn(id)).toBe(before + 1);   // the term, linked where the card was
+    useNoteStore.getState().updateNote(noteId, { content: JSON.stringify(editor.getJSON()) });
+    expect(glossaryEntries().map((e) => e.id)).toEqual([id]);
+    // Take every link out: the record stays in the Glossary, nothing asked.
+    editor.commands.setContent('<p>Nothing here.</p>');
+    useNoteStore.getState().updateNote(noteId, { content: JSON.stringify(editor.getJSON()) });
+    await flush();
+    expect(asked.count).toBe(0);
+    expect(glossaryEntries().map((e) => e.id)).toEqual([id]);
   });
 
   it('cancelled, nothing changes; a cut card is not asked about (it is being moved)', async () => {

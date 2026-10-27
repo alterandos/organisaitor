@@ -237,7 +237,7 @@ describe('during a session', () => {
     type('\\');
     press('ArrowDown');
     expect(press('Enter')).toBe(true);
-    expect(text()).toBe('\\event ');   // the arrow moved to the second kind
+    expect(text()).toBe('\\reminder ');   // the arrow moved to the second kind
   });
 
   it('typing a space after a word that names nothing ends it', () => {
@@ -693,6 +693,21 @@ describe('every kind, the whole way through', () => {
       expect(getNoteBacklinks(NOTE_ID).map((b) => `${b.type}:${b.id}`)).toContain(`${kind.targetType}:${link.targetId}`);
     });
   }
+});
+
+describe('tasks', () => {
+  const tasks = () => Object.values(useTaskStore.getState().tasks);
+
+  it('\\task reads a deadline, its time and priority; nothing about when leaves it without a deadline', () => {
+    make();
+    type('\\task essay by fri 5pm');
+    press('Enter');
+    expect(tasks().find((t) => t.title.toLowerCase() === 'essay')).toMatchObject({ deadline: '2026-10-09', deadlineTime: '17:00', crossAppRefs: [{ type: 'note', id: NOTE_ID }] });
+    make();
+    type('\\todo water the plants');
+    press('Enter');
+    expect(tasks().find((t) => t.title.toLowerCase() === 'water the plants')).toMatchObject({ deadline: null, deadlineTime: null });
+  });
 });
 
 describe('deadlines', () => {

@@ -26,7 +26,7 @@ import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectBut
 // Sorting happens when the cursor leaves an entry (never while you type in it), and the entry
 // that moved flashes in its new place.
 
-export const TIMELINE_VARIANTS = ['rail', 'horizontal'] as const;
+export const TIMELINE_VARIANTS = ['rail', 'horizontal', 'ledger'] as const;
 export type TimelineVariant = typeof TIMELINE_VARIANTS[number];
 export const TIMELINE_ORDERS = ['asc', 'desc', 'manual'] as const satisfies readonly TimelineOrder[];
 
@@ -454,6 +454,7 @@ function inferredYearChip(year: number): HTMLElement {
 const DESIGN_ICONS: Record<TimelineVariant, string> = {
   rail:       '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3.5v9"/><circle cx="4" cy="3.5" r="1.6"/><circle cx="4" cy="12.5" r="1.6"/><path d="M8 3.5h6M8 12.5h4.5"/></svg>',
   horizontal: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h13"/><circle cx="4.5" cy="8" r="1.6"/><circle cx="11.5" cy="8" r="1.6"/><path d="M4.5 6.2V2.5M11.5 9.8v3.7"/></svg>',
+  ledger:     '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 3.5h3M2.5 10.5h2M7 2v12"/><circle cx="7" cy="3.5" r="1.4"/><circle cx="7" cy="10.5" r="1.4"/><rect x="9.5" y="2" width="5" height="4" rx="1"/><rect x="9.5" y="9" width="5" height="4" rx="1"/></svg>',
 };
 export const TIMELINE_DESIGNS: BlockDesign<TimelineVariant>[] = TIMELINE_VARIANTS.map((id) => ({ id, label: LABELS.noteBlocks.timeline.styles[id], icon: DESIGN_ICONS[id] }));
 const NEXT_ORDER: Record<TimelineOrder, TimelineOrder> = { asc: 'desc', desc: 'manual', manual: 'asc' };

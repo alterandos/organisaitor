@@ -937,7 +937,7 @@
 .editorContent ul > li > ul > li > ul { list-style-type: square; }
 
 /* ── Timeline (extensions/Timeline.ts, `\timeline`) ──────────────────────────
-   Two styles, each its own [data-variant] block; what's outside one (placeholders, the inferred
+   Three styles, each its own [data-variant] block; what's outside one (placeholders, the inferred
    year, the buttons, the flash of a moved entry) is shared. Lengths are px/rem, not em: zoom is
    CSS `zoom`, which scales them anyway. */
 
@@ -991,6 +991,106 @@
 .editorContent [data-variant="rail"] [data-timeline-when] {
   font-size: 0.8125rem;
   line-height: 20px;
+}
+
+/* ·· Ledger (2026-10-27): the Whens in a column of their own on the left, read straight down; the
+   rail beside them; each entry a soft card on the right. For timelines whose dates matter as much
+   as what happened (a history, a project log). The When column is one width for every entry, so
+   the cards line up. ············································································ */
+
+.editorContent [data-type="timeline"][data-variant="ledger"] { --tl-date-w: 7.5rem; --tl-rail-x: calc(var(--tl-date-w) + 16px); }
+
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"] {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--tl-date-w) minmax(0, 1fr);
+  column-gap: 34px;
+  padding-bottom: 0.6rem;
+}
+
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"] > [data-timeline-when] {
+  grid-column: 1;
+  grid-row: 1 / span 50;
+  margin: 0;
+  padding-top: 0.45rem;
+  text-align: right;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.editorContent [data-variant="ledger"] [data-timeline-when][data-tl-empty]::before { float: right; }
+.editorContent [data-variant="ledger"] [data-tl-inferred] { display: block; margin-left: 0; font-size: var(--text-xs); }
+.editorContent [data-variant="ledger"] [data-tl-inferred]::before { content: none; }
+
+/* The card: the entry's lines on a light shade of the block's colour, rounded as one. */
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"] > :not([data-timeline-when]) {
+  grid-column: 2;
+  margin: 0;
+  padding: 0.1rem 0.85rem;
+  background: var(--color-primary-subtle);
+}
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"] > [data-timeline-when] + * {
+  padding-top: 0.45rem;
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"] > :last-child:not([data-timeline-when]) {
+  padding-bottom: 0.45rem;
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+/* The dot on the rail, level with the When; filled while the cursor's in its entry (shared). */
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"]::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--tl-rail-x) - 6px);
+  top: 0.55rem;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-sizing: border-box;
+  transition: background 0.15s, transform 0.15s;
+}
+
+/* The rail, through every entry; from the first dot, to the last. */
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"]::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--tl-rail-x) - 1px);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-primary-border);
+}
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"]:first-of-type::after { top: 0.9rem; }
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"]:last-of-type::after { bottom: auto; height: 0.9rem; }
+.editorContent [data-variant="ledger"] > [data-type="timeline-item"]:only-of-type::after { display: none; }
+
+.editorContent [data-variant="ledger"] > [data-timeline-add] {
+  margin: 0.15rem 0 0 calc(var(--tl-date-w) + 34px);
+}
+.editorContent [data-variant="ledger"] > [data-timeline-add]::before {
+  content: '+';
+  position: absolute;
+  left: -25px;
+  top: 3px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: 50%;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1;
+  transition: border-color 0.15s;
+}
+
+@media (max-width: 520px) {
+  .editorContent [data-type="timeline"][data-variant="ledger"] { --tl-date-w: 5rem; }
 }
 
 /* ·· Horizontal: a line across, entries alternating above and below it ·························
@@ -3858,6 +3958,14 @@
 
 /* The pill's Delete shows only while the block is selected (blockDesigns.ts selectButton). */
 .editorContent [data-block-select-group] { display: flex; gap: 1px; }
+/* ★ and ▾ (BlockImportance.ts): the ★ lit in the level's colour while the block is important. The
+   ▾ is narrow, read as part of the ★. */
+.editorContent [data-block-importance] { display: flex; gap: 0; }
+.editorContent [data-block-importance] > button { font-size: var(--text-sm); line-height: 1; }
+.editorContent [data-block-star-more] { min-width: 0; padding-inline: 2px; font-size: var(--text-2xs) !important; }
+.editorContent [data-importance="1"] [data-block-star] { color: var(--color-important-1); }
+.editorContent [data-importance="2"] [data-block-star] { color: var(--color-important-2); }
+.editorContent [data-importance="3"] [data-block-star] { color: var(--color-important-3); }
 .editorContent [data-block-tools] [data-block-delete] { width: 26px; }
 .editorContent [data-block-tools] [data-block-delete]:hover { color: var(--color-danger); }
 
@@ -4607,6 +4715,9 @@
 }
 
 .editor [data-margin-strip] { position: absolute; top: 0; width: 4.5rem; }
+/* Collapsed, the strip is only as wide as the room the editor leaves it (1.5rem less the 6px gap),
+   so nothing reaches past the note and no sideways scroll bar appears (2026-10-27). */
+.editor [data-margin-column]:not([data-open]) [data-margin-strip] { width: calc(1.5rem - 6px); }
 
 .editor [data-margin-toggle] {
   position: absolute;
@@ -4639,10 +4750,25 @@
 
 .editor [data-margin-row] {
   position: absolute;
-  left: 10px;
+  left: 6px;
   display: flex;
   gap: 2px;
   height: 22px;
+}
+/* Open, a row that holds a "+N" opens leftwards (it's wider than the room beside the text). */
+.editor [data-margin-column][data-open] [data-margin-row]:has([data-margin-more]) { left: auto; right: 0; }
+/* Collapsed, the line's icons open to the left of its tick, over the text, on the page's own
+   surface: never out to the right, where they'd be cut off or scroll the note sideways (asked for
+   by the user 2026-10-27). */
+.editor [data-margin-column]:not([data-open]) [data-margin-row] {
+  left: auto;
+  right: 0;
+  flex-direction: row-reverse;
+  padding: 2px;
+  margin-top: -2px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .editor [data-margin-icon],
@@ -5261,25 +5387,63 @@
 }
 
 /* Glossary cards (extensions/GlossaryCard.ts; the card itself is GlossaryCard.module.css). */
-/* Cards sit side by side: each is an inline block whose width plus its 1rem right gap is its share
-   of the column (data-card-width-shown: the stored width, or the one a drag is showing). */
+/* Cards sit side by side, by their width ("Block widths" below). */
 .editorContent [data-type="glossary-card"] {
   position: relative;
   display: inline-block;
   vertical-align: top;
   box-sizing: border-box;
   margin: 0.25rem 1rem 0.25rem 0;
-  width: min(26rem, calc(100% - 1rem));   /* STANDARD_CARD_REM in GlossaryCard.ts */
+  width: min(26rem, calc(100% - 1rem));   /* STANDARD_BLOCK_REM; the rest are "Block widths" below */
 }
-.editorContent [data-type="glossary-card"][data-card-width-shown="third"] { width: calc(100% / 3 - 1rem - 0.5px); }
-.editorContent [data-type="glossary-card"][data-card-width-shown="half"]  { width: calc(50% - 1rem - 0.5px); }
-.editorContent [data-type="glossary-card"][data-card-width-shown="full"]  { width: 100%; margin-right: 0; }
+/* ── Block widths (extensions/blockWidth.ts) ─────────────────────────────────────
+   A block with a width (WIDTH_BLOCK_NODES) narrower than the column is an inline block, so it sits
+   beside the next one; its width plus a 1rem right gap is its share of the column
+   (data-block-width-shown: the stored width, or the one a drag is showing). */
+.editorContent [data-block-width-shown]:not([data-block-width-shown="full"]) {
+  display: inline-block;
+  vertical-align: top;
+  box-sizing: border-box;
+  margin-right: 1rem;
+}
+.editorContent [data-block-width-shown="standard"] { width: min(26rem, calc(100% - 1rem)); }   /* STANDARD_BLOCK_REM */
+.editorContent [data-block-width-shown="third"] { width: calc(100% / 3 - 1rem - 0.5px); }
+.editorContent [data-block-width-shown="half"]  { width: calc(50% - 1rem - 0.5px); }
+.editorContent [data-block-width-shown="full"]  { width: 100%; margin-right: 0; }
 /* Fit the text: Standard at least, growing with what's typed up to the column. */
-.editorContent [data-type="glossary-card"][data-card-width-shown="auto"] { width: fit-content; min-width: min(26rem, calc(100% - 1rem)); max-width: calc(100% - 1rem); }
-/* Any width dragged to: a share of the column (--card-w, set by GlossaryCard.ts). */
-.editorContent [data-type="glossary-card"][data-card-width-shown="custom"] { width: calc(var(--card-w) - 1rem - 0.5px); }
+.editorContent [data-block-width-shown="auto"] { width: fit-content; min-width: min(26rem, calc(100% - 1rem)); max-width: calc(100% - 1rem); }
+/* Any width dragged to: a share of the column (--block-w). */
+.editorContent [data-block-width-shown="custom"] { width: calc(var(--block-w) - 1rem - 0.5px); }
+
+/* The right edge, to drag. Shown with the block's pill; always on touch. */
+.editorContent [data-block-resize] {
+  position: absolute;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  right: -0.5rem;
+  width: 0.75rem;
+  cursor: ew-resize;
+  touch-action: none;
+  opacity: 0;
+}
+.editorContent [data-block-resize]::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 2rem;
+  margin: -1rem 0 0 -2px;
+  border-radius: var(--radius-pill);
+  background: var(--color-border);
+}
+.editorContent [data-note-block]:hover > [data-block-resize],
+.editorContent [data-note-block]:global(.ProseMirror-selectednode) > [data-block-resize],
+.editorContent [data-block-resize][data-label] { opacity: 1; }
+.editorContent [data-block-resize]:hover::after { background: var(--color-primary); }
+@media (hover: none) { .editorContent [data-block-resize] { opacity: 1; } }
 /* While dragging: the width it will be, by its name or percent. */
-.editorContent [data-card-resize][data-label]::before {
+.editorContent [data-block-resize][data-label]::before {
   content: attr(data-label);
   position: absolute;
   top: -1.6rem;
@@ -5294,35 +5458,16 @@
   white-space: nowrap;
   pointer-events: none;
 }
-.editorContent [data-card-resize][data-snapped]::before { background: var(--color-primary); color: var(--color-on-primary); }
-.editorContent [data-card-resize][data-label]::after { background: var(--color-primary); }
+.editorContent [data-block-resize][data-snapped]::before { background: var(--color-primary); color: var(--color-on-primary); }
+.editorContent [data-block-resize][data-label]::after { background: var(--color-primary); }
+/* While any block's width is dragged, the blocks' menus step aside so the width can be read. */
+:global(:root[data-block-resizing]) .editorContent [data-block-tools],
+:global(:root[data-block-resizing]) .editorContent [data-card-more] {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+:global(:root[data-block-resizing]) { cursor: ew-resize; user-select: none; }
 
-/* The right edge, to drag. Shown with the pill; always on touch. */
-.editorContent [data-card-resize] {
-  position: absolute;
-  top: 0.75rem;
-  bottom: 0.75rem;
-  right: -0.5rem;
-  width: 0.75rem;
-  cursor: ew-resize;
-  touch-action: none;
-  opacity: 0;
-}
-.editorContent [data-card-resize]::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 4px;
-  height: 2rem;
-  margin: -1rem 0 0 -2px;
-  border-radius: var(--radius-pill);
-  background: var(--color-border);
-}
-.editorContent [data-type="glossary-card"]:hover > [data-card-resize],
-.editorContent [data-type="glossary-card"]:global(.ProseMirror-selectednode) > [data-card-resize] { opacity: 1; }
-.editorContent [data-card-resize]:hover::after { background: var(--color-primary); }
-@media (hover: none) { .editorContent [data-card-resize] { opacity: 1; } }
 .editorContent [data-glossary-tools] { top: -6px; right: 8px; }
 /* A Compact card is one short line: its pill sits above it rather than over the meaning. */
 .editorContent [data-type="glossary-card"][data-variant="compact"] > [data-glossary-tools] { top: -22px; }
@@ -5417,15 +5562,17 @@
 }
 
 /* Compact: the question and its answer on one line; why it matters and the leads, if any, on a
-   smaller line beneath (nothing is hidden). */
+   smaller line beneath (nothing is hidden). The icon and the question sit on a light shade of the
+   block's colour, ruled off from the top edge to the bottom (2026-10-27, as the Glossary card's
+   Compact: keep them in step). */
 .editorContent [data-type="question"][data-variant="compact"] {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  column-gap: var(--space-3);
+  align-items: stretch;
+  column-gap: 0;
   row-gap: 2px;
   margin: var(--space-1) 0;
-  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-3);
+  padding: 0 var(--space-4) 0 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -5434,49 +5581,45 @@
 .editorContent [data-type="question"][data-variant="compact"]::before {
   content: attr(data-qn-icon);
   flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-radius: calc(var(--radius-md) - 1px) 0 0 calc(var(--radius-md) - 1px);
+  background: color-mix(in srgb, var(--qn-accent) 10%, var(--color-surface));
   font-size: var(--text-md);
   line-height: 1;
 }
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-text] {
   flex: 0 1 auto;
   min-width: 7.5rem;
+  max-width: 45%;
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  border-right: 2px solid color-mix(in srgb, var(--qn-accent) 70%, transparent);
+  background: color-mix(in srgb, var(--qn-accent) 10%, var(--color-surface));
   font-style: italic;
+}
+.editorContent [data-type="question"][data-variant="compact"][data-status="answered"] > [data-qn-text] {
+  border-right: 3px solid var(--qn-done);
 }
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field] { margin-top: 0; }
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="answer"] {
   order: 1;
   flex: 1;
   min-width: 8rem;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  align-self: center;
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
 }
-/* The answer's rule takes the place of its label. */
-.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="answer"]::before {
-  content: '';
-  flex: none;
-  align-self: stretch;
-  width: 2px;
-  margin: var(--space-1) 0;
-  border-radius: var(--radius-pill);
-  background: var(--qn-accent);
-  opacity: 0.7;
-}
+/* The rule on the question takes the place of the answer's label. */
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="answer"]::before { content: none; }
 .editorContent [data-type="question"][data-variant="compact"][data-status="answered"] > [data-qn-field="answer"] {
   border-left: none;
-  padding: 0 var(--space-2) 0 0;
-}
-.editorContent [data-type="question"][data-variant="compact"][data-status="answered"] > [data-qn-field="answer"]::before {
-  content: '';
-  width: 3px;
-  background: var(--qn-done);
-  opacity: 1;
+  padding-right: var(--space-2);
 }
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="why"],
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="lead"] {
   order: 2;
   flex-basis: 100%;
-  padding-left: calc(var(--text-md) + var(--space-3));
+  padding-left: calc(var(--text-md) + 2 * var(--space-3));
   color: var(--color-muted);
   font-size: var(--text-sm);
 }
@@ -5485,7 +5628,7 @@
   display: inline;
   margin-right: var(--space-2);
 }
-.editorContent [data-type="question"][data-variant="compact"] > [data-qn-answered-by] { order: 3; flex-basis: 100%; margin-top: 0; padding-left: calc(var(--text-md) + var(--space-3)); }
+.editorContent [data-type="question"][data-variant="compact"] > [data-qn-answered-by] { order: 3; flex-basis: 100%; margin-top: 0; padding-left: calc(var(--text-md) + 2 * var(--space-3)); }
 
 .editorContent [data-qn-answered-by] { margin-top: var(--space-3); color: var(--color-muted); font-size: var(--text-sm); }
 .editorContent [data-qn-answered-by] button { padding: 0; border: none; background: none; color: var(--color-primary); font: inherit; font-weight: 600; cursor: pointer; }
@@ -5624,6 +5767,18 @@
   transition: opacity 0.25s;
 }
 .designFlash[data-hidden] { opacity: 0; }
+
+/* A number ready for other notations (extensions/NumberNotation.ts): marked in the margin column
+   always; on hover, a light pill in the neutral text-mark tint beside the ▾ that lists its
+   notations (the user's ask, 2026-10-27: the pill only on hover). The padding is kept either way,
+   so the text doesn't shift when the pill appears; none vertical, so the line keeps its height. */
+.editorContent [data-number-ready] {
+  border-radius: var(--radius-pill);
+  padding: 0 0.3em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.editorContent [data-number-ready]:hover { background: var(--color-text-mark); }
 
 /* A word from the Dictionary (extensions/DictionaryWords.ts): italic on a faint rounded shade (not
    an underline, which read as a spelling mark); its card on hover. The shade is a neutral tint of the
@@ -6050,8 +6205,9 @@
 /* ── Block colours ──────────────────────────────────────────────────────────────
    Each block has its own colour (--color-block-*, index.css). It's applied by setting the accent
    inside the block, so every part a block draws "in the primary colour" takes the block's: no
-   block keeps a copy. Questions and Glossary cards use their kind's colour (--color-kind-*). A new
-   block adds its token in both themes and a line here. */
+   block keeps a copy, and a selected block is outlined in its own colour. Questions and Glossary
+   cards use their kind's colour (--color-kind-*; a card's kind is data-glossary-kind on the card).
+   A new block adds its token in both themes and a line here (pattern test). */
 .editorContent [data-type="timeline"] { --color-primary: var(--color-block-timeline); --color-primary-subtle: color-mix(in srgb, var(--color-block-timeline) 10%, transparent); }
 .editorContent [data-type="cycle"] { --color-primary: var(--color-block-cycle); --color-primary-subtle: color-mix(in srgb, var(--color-block-cycle) 10%, transparent); }
 .editorContent [data-type="breakdown"] { --color-primary: var(--color-block-breakdown); --color-primary-subtle: color-mix(in srgb, var(--color-block-breakdown) 10%, transparent); }
@@ -6068,3 +6224,15 @@
 .editorContent [data-type="venn"] { --color-primary: var(--color-block-venn); --color-primary-subtle: color-mix(in srgb, var(--color-block-venn) 10%, transparent); }
 .editorContent [data-type="convert"] { --color-primary: var(--color-block-convert); --color-primary-subtle: color-mix(in srgb, var(--color-block-convert) 10%, transparent); }
 .editorContent [data-type="hub"] { --color-primary: var(--color-block-hub); --color-primary-subtle: color-mix(in srgb, var(--color-block-hub) 10%, transparent); }
+.editorContent [data-type="proscons"] { --color-primary: var(--color-block-proscons); --color-primary-subtle: color-mix(in srgb, var(--color-block-proscons) 10%, transparent); }
+.editorContent [data-type="compare"] { --color-primary: var(--color-block-compare); --color-primary-subtle: color-mix(in srgb, var(--color-block-compare) 10%, transparent); }
+.editorContent [data-type="chart"] { --color-primary: var(--color-block-chart); --color-primary-subtle: color-mix(in srgb, var(--color-block-chart) 10%, transparent); }
+.editorContent [data-type="code-block"] { --color-primary: var(--color-block-code); --color-primary-subtle: color-mix(in srgb, var(--color-block-code) 10%, transparent); }
+.editorContent [data-type="math"] { --color-primary: var(--color-block-maths); --color-primary-subtle: color-mix(in srgb, var(--color-block-maths) 10%, transparent); }
+.editorContent [data-type="inbox"] { --color-primary: var(--color-block-inbox); --color-primary-subtle: color-mix(in srgb, var(--color-block-inbox) 10%, transparent); }
+.editorContent [data-type="diagram"] { --color-primary: var(--color-block-diagram); --color-primary-subtle: color-mix(in srgb, var(--color-block-diagram) 10%, transparent); }
+.editorContent [data-type="glossary-card"][data-glossary-kind="definition"] { --color-primary: var(--color-kind-definition); --color-primary-subtle: color-mix(in srgb, var(--color-kind-definition) 10%, transparent); }
+.editorContent [data-type="glossary-card"][data-glossary-kind="concept"] { --color-primary: var(--color-kind-concept); --color-primary-subtle: color-mix(in srgb, var(--color-kind-concept) 10%, transparent); }
+.editorContent [data-type="glossary-card"][data-glossary-kind="acronym"] { --color-primary: var(--color-kind-acronym); --color-primary-subtle: color-mix(in srgb, var(--color-kind-acronym) 10%, transparent); }
+.editorContent [data-type="glossary-card"][data-glossary-kind="profile"] { --color-primary: var(--color-kind-profile); --color-primary-subtle: color-mix(in srgb, var(--color-kind-profile) 10%, transparent); }
+.editorContent [data-type="question"] { --color-primary: var(--color-kind-question); --color-primary-subtle: color-mix(in srgb, var(--color-kind-question) 10%, transparent); }

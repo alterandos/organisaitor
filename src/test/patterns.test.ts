@@ -1077,7 +1077,7 @@ describe('pattern: the editor library\'s classes are :global in scoped CSS (CLAU
 
 describe('pattern: marks on text keep out of the palette (CLAUDE.md "Colours a person picks")', () => {
   // The marks the app draws over words to say what they are. A new one joins this list.
-  const TEXT_MARKS = ['[data-artifact-type]', '[data-term]', '[data-dict-word]', '[data-hub-ref]', '[data-autolink]', '[data-concept-ref]', '[data-concept-hover]', '[data-unsure-flag]', '[data-unsure-marker]'];
+  const TEXT_MARKS = ['[data-artifact-type]', '[data-term]', '[data-dict-word]', '[data-hub-ref]', '[data-autolink]', '[data-concept-ref]', '[data-concept-hover]', '[data-unsure-flag]', '[data-unsure-marker]', '[data-number-ready]'];
   it('no rule for a text mark uses a palette colour (--color-swatch-*), which is kept for colours a person picks', () => {
     const hits: string[] = [];
     for (const f of walk(SRC, ['.css'])) {
@@ -1166,6 +1166,14 @@ describe('pattern: a note is named with its notebook (CLAUDE.md "A note is named
   });
 });
 
+// A `new Set([...])` of names declared in a source file, read as text.
+const setFrom = (file: string, name: string) => {
+  const src = fs.readFileSync(file, 'utf8');
+  const at = src.indexOf(`${name} = new Set([`);
+  const m = at < 0 ? null : /\[([^\]]*)\]/.exec(src.slice(at));
+  return new Set([...(m?.[1] ?? '').matchAll(/'([A-Za-z]+)'/g)].map((x) => x[1]));
+};
+
 describe('pattern: each note block has its own colour (CLAUDE.md "Block colours")', () => {
   const index = fs.readFileSync(path.join(SRC, 'index.css'), 'utf8');
   const editorCss = fs.readFileSync(path.join(SRC, 'components', 'NoteEditor', 'NoteEditor.module.css'), 'utf8');
@@ -1182,6 +1190,50 @@ describe('pattern: each note block has its own colour (CLAUDE.md "Block colours"
     const light = index.slice(0, index.indexOf('[data-theme="dark"]'));
     const values = [...light.matchAll(/--color-(?:block|kind)-[a-z]+:\s*(#[0-9a-f]{6})/gi)].map((m) => m[1].toLowerCase());
     expect(new Set(values).size).toBe(values.length);
+  });
+  // A block's root node name, mapped to the data-type its DOM carries, read from its extension file.
+  const extDir = path.join(SRC, 'components', 'NoteEditor', 'extensions');
+  const extFiles = walk(extDir, ['.ts']).filter((f) => !f.endsWith('.test.ts'));
+  const dataTypeOf = (node: string) => {
+    // A node that extends a library's keeps its name there (codeBlock): found by its file's name.
+    const own = extFiles.find((f) => path.basename(f, '.ts').toLowerCase() === node.toLowerCase());
+    for (const src of extFiles.map((f) => fs.readFileSync(f, 'utf8'))) {
+      const at = src.includes(`name: '${node}'`) ? src.indexOf(`name: '${node}'`) : own && src === fs.readFileSync(own, 'utf8') ? 0 : -1;
+      if (at < 0) continue;
+      const m = /['"]data-type['"](?::|,)\s*['"]([a-z-]+)['"]/.exec(src.slice(at));
+      if (m) return m[1];
+    }
+    return null;
+  };
+  it('every note block sets its own colour, so a selected block is outlined in it', () => {
+    const NOTE_BLOCK_NODES = setFrom(path.join(SRC, 'components', 'NoteEditor', 'blockNodes.ts'), 'NOTE_BLOCK_NODES');
+    expect(NOTE_BLOCK_NODES.size).toBeGreaterThan(20);
+    const missing = [...NOTE_BLOCK_NODES].filter((node) => {
+      const type = dataTypeOf(node);
+      return !type || !new RegExp(`\\[data-type="${type}"\\][^{]*\\{[^}]*--color-primary:`).test(editorCss);
+    });
+    expect(missing).toEqual([]);
+  });
+});
+
+describe('pattern: a block\'s width comes from blockWidth.ts (CLAUDE.md "Block designs")', () => {
+  const extDir = path.join(SRC, 'components', 'NoteEditor', 'extensions');
+  it('every block with a width takes the shared attribute, handle and menu item', () => {
+    const WIDTH_BLOCK_NODES = setFrom(path.join(extDir, 'blockWidth.ts'), 'WIDTH_BLOCK_NODES');
+    expect(WIDTH_BLOCK_NODES.size).toBeGreaterThan(1);
+    const files = walk(extDir, ['.ts']).filter((f) => !f.endsWith('.test.ts'));
+    const bad = [...WIDTH_BLOCK_NODES].filter((node) => {
+      const file = files.find((f) => fs.readFileSync(f, 'utf8').includes(`name: '${node}'`));
+      if (!file) return true;
+      const src = fs.readFileSync(file, 'utf8');
+      const menu = files.filter((f) => f.endsWith('Menu.ts')).some((f) => { const m = fs.readFileSync(f, 'utf8'); return m.includes('widthMenuItem(') && m.includes(`from './${path.basename(file, '.ts')}'`); });
+      return !src.includes('...blockWidthAttributes()') || !src.includes('blockResizeHandle(') || !menu;
+    });
+    expect(bad).toEqual([]);
+  });
+  it('nothing else draws a resize handle on a block', () => {
+    const hits = SOURCE_FILES.filter((f) => !f.endsWith('blockWidth.ts') && /data-(?:card|block)-resize/.test(fs.readFileSync(f, 'utf8')));
+    expect(hits.map((f) => path.relative(ROOT, f))).toEqual([]);
   });
 });
 
@@ -1201,13 +1253,20 @@ describe('pattern: making a block is its own undo step (CLAUDE.md "Note blocks")
 });
 
 describe('pattern: deleting something empty doesn\'t ask (CLAUDE.md "Confirmations and alerts")', () => {
-  // A ratchet: delete confirmations that don't yet say whether the thing is empty. It may only go
-  // down; lower it as sites are converted (BACKLOG.md "Pattern retrofit backlog").
-  const NOT_YET = 17;
+  // Every delete confirmation says whether the thing is empty (fully applied 2026-10-26); one that's
+  // never empty says so with { empty: false } and why.
+  const NOT_YET = 0;
   it('confirmDelete calls without { empty } are no more than the baseline', () => {
     const calls = SOURCE_FILES.filter((f) => !f.endsWith('dialogs.ts'))
       .flatMap((f) => fs.readFileSync(f, 'utf8').split('\n').filter((l) => l.includes('confirmDelete(') && !l.includes('import')));
     expect(calls.filter((l) => !l.includes('empty')).length).toBeLessThanOrEqual(NOT_YET);
+  });
+});
+
+describe('pattern: the hidden attribute always hides (CLAUDE.md "Design tokens and theming")', () => {
+  it('index.css makes [hidden] display: none !important, so no component display can override it', () => {
+    const css = fs.readFileSync(path.join(SRC, 'index.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(css).toMatch(/(^|\n)\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/);
   });
 });
 

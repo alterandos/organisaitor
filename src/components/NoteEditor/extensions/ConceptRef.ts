@@ -11,6 +11,7 @@ import { kindColor } from '../builtinTags';
 import { openBlockPopover, popoverClass } from './blockDesigns';
 import { refreshMarginColumns, registerMarginSource } from './MarginColumn';
 import { createGlyph } from '@/components/Icons';
+import { glossaryKindLine } from '@/services/glossary';
 
 // Text that refers to a Glossary entry (a Definition, Concept or Acronym defined somewhere in
 // Notes): highlighted in the entry's colour; hovering it shows the term's card. Its icon is in the
@@ -105,9 +106,11 @@ export function entryCardContent(entry: ReturnType<typeof glossaryEntry>): Node[
   const L = LABELS.glossary;
   if (!entry) return [document.createTextNode(L.missingDetail)];
   const head = document.createElement('strong');
-  head.textContent = entry.term || L.untitled;
+  head.textContent = entry.short && entry.long ? `${entry.term} · ${entry.term === entry.short ? entry.long : entry.short}` : entry.term || L.untitled;
   const kind = document.createElement('em');
-  kind.textContent = entry.kindLabel;
+  // A Key / Very important / Critical term says so, with its level's icon (BlockImportance.ts).
+  kind.textContent = glossaryKindLine(entry);
+  if (entry.importance) kind.setAttribute('data-importance', String(entry.importance));
   const meaning = document.createElement('span');
   meaning.textContent = entry.locked ? L.locked : entry.meaning || L.noMeaning;
   const where = document.createElement('small');

@@ -5,6 +5,11 @@
 export type GlyphShape = [tag: 'path' | 'line' | 'circle' | 'rect', attrs: Record<string, string>][];
 
 export const GLYPHS = {
+  // Text alignment (Lucide's text-align-*), as a word processor's ribbon shows it.
+  alignLeft:    [['path', { d: 'M21 6H3' }], ['path', { d: 'M15 12H3' }], ['path', { d: 'M17 18H3' }]],
+  alignCenter:  [['path', { d: 'M21 6H3' }], ['path', { d: 'M17 12H7' }], ['path', { d: 'M19 18H5' }]],
+  alignRight:   [['path', { d: 'M21 6H3' }], ['path', { d: 'M21 12H9' }], ['path', { d: 'M21 18H7' }]],
+  alignJustify: [['path', { d: 'M3 6h18' }], ['path', { d: 'M3 12h18' }], ['path', { d: 'M3 18h18' }]],
   trash: [
     ['path', { d: 'M3 6h18' }],
     ['path', { d: 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6' }],

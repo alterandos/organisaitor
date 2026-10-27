@@ -69,6 +69,33 @@ export function factsFromText(text: string): Fact[] {
 }
 export const factsToText = (facts: Fact[]): string => facts.map((f) => (f.label ? `${f.label}: ${f.value}` : f.value)).join('\n');
 
+// A field of the person's own (asked for by the user 2026-10-27): a line written "Name: value" on a
+// new line of a card's text field becomes a field of that name, kept in the card's facts field.
+// The name is a word or a few (up to 30 characters) starting with a letter, so "10:30" or a web
+// address never is. A field's first line never is: it's the field's own text ("Note: …").
+export const NAMED_FIELD_ID = 'facts';
+export function namedFieldLine(line: string): Fact | null {
+  const m = /^\s*(\p{L}[\p{L}\p{N} '’&/()-]{0,29}):\s*(.*)$/u.exec(line);
+  if (!m || /\s$/.test(m[1]) || /^https?$/i.test(m[1]) || m[2].startsWith('//')) return null;
+  return { label: m[1], value: m[2].trim() };
+}
+
+// The "Name: value" lines of a field's formatted text (every line but its first), taken out.
+export function takeNamedLines(html: string): { html: string; facts: Fact[] } {
+  const lines = html.replace(/<\/?(div|p)\b[^<>]*>/gi, '<br>').split(/<br\s*\/?>/i);
+  const first = lines.findIndex((l) => richToPlain(l).trim() !== '');
+  const facts: Fact[] = [];
+  const kept = lines.filter((l, i) => {
+    if (first < 0 || i <= first) return true;
+    const fact = namedFieldLine(richToPlain(l));
+    if (fact) facts.push(fact);
+    return !fact;
+  });
+  return facts.length ? { html: kept.join('<br>').replace(/(<br>)+$/, ''), facts } : { html, facts };
+}
+
+const OWN_FIELDS_PLACEHOLDER = 'One per line, e.g. Origin: Latin';
+
 // The fields the quick create/edit popover shows; the card shows and edits every field.
 export const isQuickField = (f: StructuredTagFieldDef) => f.type === 'text' || f.type === 'textarea';
 
@@ -91,9 +118,12 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
     label: 'Acronym',
     fields: [
       { id: 'expansion',   name: 'Stands for',  type: 'text',     placeholder: 'e.g. Australian Stock Exchange' },
+      // What it is, when that's worth learning too: then it's also a definition (glossaryKinds).
+      { id: 'meaning',     name: 'Means',       type: 'textarea', placeholder: 'What it is, if that’s worth learning too' },
       { id: 'explanation', name: 'Explanation', type: 'textarea', placeholder: 'Optional notes for yourself' },
       { id: 'image',       name: 'Picture',     type: 'image' },
       { id: 'weblinks',    name: 'Links',       type: 'urls',     placeholder: 'A web address, one per line' },
+      { id: 'facts',       name: 'Your fields', type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER },
     ],
     infer: (selectedText, contextText) => {
       const { term, expansion } = inferAcronymFromSelection(selectedText, contextText);
@@ -107,10 +137,12 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
     label: 'Definition',
     fields: [
       { id: 'meaning', name: 'Means',   type: 'textarea', placeholder: 'What the term means' },
+      { id: 'acronym', name: 'Acronym', type: 'text',     placeholder: 'Its short form, e.g. ASX' },
       { id: 'example', name: 'Example', type: 'textarea', placeholder: 'A sentence that uses it' },
       { id: 'image',   name: 'Picture', type: 'image' },
       { id: 'source',  name: 'Source',  type: 'text',     placeholder: 'Where it comes from: a book, a link…' },
       { id: 'weblinks', name: 'Links',  type: 'urls',     placeholder: 'A web address, one per line' },
+      { id: 'facts',   name: 'Your fields', type: 'facts', placeholder: OWN_FIELDS_PLACEHOLDER },
     ],
     infer: (selectedText, contextText) => {
       const { term, meaning } = inferDefinitionFromSelection(selectedText, contextText);
@@ -122,6 +154,7 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
     label: 'Concept',
     fields: [
       { id: 'summary',     name: 'In short',          type: 'textarea', placeholder: 'The idea in a sentence' },
+      { id: 'acronym',     name: 'Acronym',           type: 'text',     placeholder: 'Its short form, if it has one' },
       { id: 'explanation', name: 'Explanation',       type: 'textarea', placeholder: 'The idea in full' },
       { id: 'keyPoints',   name: 'Key points',        type: 'list',     placeholder: 'A key point' },
       { id: 'examples',    name: 'Examples',          type: 'list',     placeholder: 'An example' },
@@ -131,6 +164,7 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       { id: 'related',     name: 'Related',           type: 'links' },
       { id: 'sources',     name: 'Sources',           type: 'list',     placeholder: 'A book, a link…' },
       { id: 'weblinks',    name: 'Links',             type: 'urls',     placeholder: 'A web address, one per line' },
+      { id: 'facts',       name: 'Your fields',       type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER },
     ],
     infer: (selectedText, contextText) => {
       const { term, meaning } = inferDefinitionFromSelection(selectedText, contextText);
@@ -145,6 +179,7 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
     label: 'Profile',
     fields: [
       { id: 'summary',  name: 'In short', type: 'textarea', placeholder: 'What it is, in a sentence' },
+      { id: 'acronym',  name: 'Acronym',  type: 'text',     placeholder: 'Its short form, e.g. WHO' },
       { id: 'image',    name: 'Picture',  type: 'image' },
       { id: 'facts',    name: 'Facts',    type: 'facts',    placeholder: 'One per line, e.g. Habitat: wetlands' },
       { id: 'about',    name: 'About',    type: 'textarea', placeholder: 'More about it' },
@@ -160,6 +195,28 @@ export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', c
 
 export const glossaryMeaning = (entry: { typeKey: string; fields: Record<string, unknown> }): string =>
   fieldText(entry.fields, GLOSSARY_TYPES[entry.typeKey] ?? '');
+
+// A record's names, whichever way it was made (agreed with the user 2026-10-27: an acronym and what
+// it stands for are one record, made from either end). An Acronym holds its short form as the term
+// and the long one in "Stands for"; a Definition, Concept or Profile holds the long form as the
+// term and may hold its short form in "Acronym". Everything that matches, links or lists a term by
+// name reads it here, so the two directions can't drift apart.
+export interface GlossaryNames { short: string | null; long: string | null }
+export function glossaryNames(entry: { typeKey: string; term: string; fields: Record<string, unknown> }): GlossaryNames {
+  const clean = (s: string) => s.trim() || null;
+  if (entry.typeKey === 'acronym') return { short: clean(entry.term), long: clean(fieldText(entry.fields, 'expansion')) };
+  return { short: clean(fieldText(entry.fields, 'acronym')), long: clean(entry.term) };
+}
+
+// The kinds a record counts as: its own, plus an acronym when a Definition, Concept or Profile has
+// one, plus a definition when an Acronym says what it is. Its own kind still decides its card,
+// colour and icon, and never changes.
+export function glossaryKinds(entry: { typeKey: string; term: string; fields: Record<string, unknown> }): string[] {
+  const kinds = [entry.typeKey];
+  if (entry.typeKey !== 'acronym' && glossaryNames(entry).short) kinds.push('acronym');
+  if (entry.typeKey === 'acronym' && fieldText(entry.fields, 'meaning').trim()) kinds.push('definition');
+  return kinds;
+}
 
 export function getStructuredTagType(typeKey: string | null | undefined): StructuredTagTypeDef | undefined {
   return typeKey ? STRUCTURED_TAG_TYPES.find((t) => t.key === typeKey) : undefined;

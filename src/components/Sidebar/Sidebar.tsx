@@ -6,6 +6,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import styles from './Sidebar.module.css';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { endeavourInUse, purposeInUse, tagInUse } from '@/services/inUse';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
@@ -114,19 +115,19 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
   const lists    = allCollections.filter((c) => c.kind === 'list');
 
   const handleDeleteTag = async (id: TagId, name: string) => {
-    if (await confirmDelete('tag', name, 'It will be removed from all tasks.')) {
+    if (await confirmDelete('tag', name, 'It will be removed from all tasks.', { empty: !tagInUse(id) })) {
       deleteTag(id);
     }
   };
 
   const handleDeletePurpose = async (id: PurposeId, name: string) => {
-    if (await confirmDelete('purpose', name, 'It will be removed from all tasks.')) {
+    if (await confirmDelete('purpose', name, 'It will be removed from all tasks.', { empty: !purposeInUse(id) })) {
       deletePurpose(id);
     }
   };
 
   const handleDeleteCollection = async (id: CollectionId, name: string) => {
-    if (await confirmDelete(LABELS.collection.toLowerCase(), name, 'Tasks will be detached but not deleted.')) {
+    if (await confirmDelete(LABELS.collection.toLowerCase(), name, 'Tasks will be detached but not deleted.', { empty: !endeavourInUse(id) })) {
       deleteCollection(id);
     }
   };

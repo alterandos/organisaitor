@@ -221,7 +221,7 @@ export function AddScheduleModal() {
 
   const handleDelete = async () => {
     if (!editingSchedule) return;
-    if (!(await confirmDelete('schedule', editingSchedule.name, 'This removes all its blocks and any exceptions.'))) return;
+    if (!(await confirmDelete('schedule', editingSchedule.name, 'This removes all its blocks and any exceptions.', { empty: editingSchedule.blocks.length === 0 }))) return;
     deleteSchedule(editingSchedule.id);
     closeEditSchedule();
   };

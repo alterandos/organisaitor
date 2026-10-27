@@ -5,7 +5,7 @@ import { useListStore } from '@/store/listStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
-import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem, placesByUse } from '@/utils/quickAccess';
+import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem, placesAlphabetical } from '@/utils/quickAccess';
 import { PLACES } from '@/config/places';
 import type { TaskId } from '@/types';
 import type { NoteId } from '@/types/notes';
@@ -147,15 +147,11 @@ describe('schedules in Quick Access', () => {
 });
 
 describe('Places', () => {
-  it('the row keeps the registry order until places are used, then puts the most used first', () => {
-    expect(placesByUse({}).map((p) => p.id)).toEqual(PLACES.map((p) => p.id));
-    const ui = useUIStore.getState();
-    ui.openSettings();
-    ui.openSettings();
-    ui.openRecyclingBin();
-    const ids = placesByUse(useRecentItemsStore.getState().items).map((p) => p.id);
-    expect(ids.slice(0, 2)).toEqual(['settings', 'recycling-bin']);
-    expect(ids.slice(2)).toEqual(PLACES.map((p) => p.id).filter((id) => id !== 'settings' && id !== 'recycling-bin'));
+  it('the row is A to Z, however often each place is used', () => {
+    useUIStore.getState().openSettings();
+    const labels = placesAlphabetical().map((p) => p.label);
+    expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
+    expect(labels).toHaveLength(PLACES.length);
   });
 
   it('opening the Glossary or Review from anywhere counts as a use', () => {

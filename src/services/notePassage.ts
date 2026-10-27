@@ -40,11 +40,13 @@ export function openNotePassage(noteId: string, findOrFinds: PassageFind | Passa
 }
 
 // Where a Glossary entry is defined: the passage its structured tag marks, else its card
-// (`\definition`, extensions/GlossaryCard.ts), else its chip (extensions/GlossaryChip.ts).
+// (`\definition`, extensions/GlossaryCard.ts), else its chip (extensions/GlossaryChip.ts), else (a
+// record sent to the Glossary) the term linked where its card was, in the note it came from.
 export const definitionPassage = (entryId: string): PassageFind[] => [
   { mark: 'noteTag', attr: 'structuredEntryId', value: entryId },
   { node: 'glossaryCard', attr: 'entryId', value: entryId },
   { node: 'glossaryChip', attr: 'entryId', value: entryId },
+  { mark: 'conceptRef', attr: 'entryId', value: entryId },
 ];
 
 // Whether a document holds the passage (a node, or text with the mark).

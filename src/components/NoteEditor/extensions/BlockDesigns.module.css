@@ -239,6 +239,13 @@
   background: var(--color-primary);
   color: var(--color-on-primary);
 }
+/* A part's delete button (partAdders.ts `remove`): the same round button, a trash can, red on hover. */
+.adderRemove { font-size: var(--text-xs); }
+.adderRemove:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-on-primary);
+}
 .adder:disabled {
   opacity: 0.4;
   cursor: default;

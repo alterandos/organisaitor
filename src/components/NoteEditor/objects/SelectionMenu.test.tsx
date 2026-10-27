@@ -75,6 +75,14 @@ describe('SelectionMenu', () => {
     expect(onMarkAs).toHaveBeenCalledWith('concept', from, to);
   });
 
+  it('offers every Glossary kind to mark it as, Acronym and Profile included', () => {
+    setup();
+    fireEvent.change(screen.getByPlaceholderText(/Link to a term/), { target: { value: 'acro' } });
+    expect(screen.getAllByRole('option').some((o) => o.textContent?.endsWith('Acronym…'))).toBe(true);
+    fireEvent.change(screen.getByPlaceholderText(/Link to a term/), { target: { value: 'profile' } });
+    expect(screen.getAllByRole('option').some((o) => o.textContent?.endsWith('Profile…'))).toBe(true);
+  });
+
   it('marks it Critical, filtered by typing', () => {
     const { from } = setup();
     fireEvent.change(screen.getByPlaceholderText(/Link to a term/), { target: { value: 'crit' } });

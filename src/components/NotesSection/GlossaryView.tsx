@@ -3,7 +3,8 @@ import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { useSecretsVersion } from '@/services/noteSecrets';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { glossaryEntries, glossaryReferences, type GlossaryEntry } from '@/services/glossary';
+import { glossaryEntries, glossaryKindLine, glossaryReferences, type GlossaryEntry } from '@/services/glossary';
+import { getStructuredTagType } from '@/config/structuredTagTypes';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
 import { noteView } from '@/services/noteSecrets';
 import { rankSearch } from '@/utils/suggestRank';
@@ -14,6 +15,10 @@ import { CloseIcon, DisclosureIcon, GlossaryIcon } from '@/components/Icons';
 
 type Filter = 'all' | 'definition' | 'concept' | 'acronym';
 const FILTERS: Filter[] = ['all', 'definition', 'concept', 'acronym'];
+// How important, at least (BlockImportance.ts; a record's level is entryImportance): to study the
+// key terms only.
+type Importance = 0 | 1 | 3;
+const IMPORTANCE_FILTERS: Importance[] = [0, 1, 3];
 
 const letterOf = (term: string) => {
   const c = term.trim().charAt(0).toUpperCase();
@@ -32,6 +37,7 @@ export function GlossaryView() {
   const secrets = useSecretsVersion((s) => s.version);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [minImportance, setMinImportance] = useState<Importance>(0);
   const [openRefs, setOpenRefs] = useState<string | null>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const L = LABELS.glossary;
@@ -44,16 +50,22 @@ export function GlossaryView() {
   const kinds = useMemo(() => {
     const seen = new Map<string, string>();
     for (const e of all) if (!seen.has(e.typeKey)) seen.set(e.typeKey, e.kindLabel);
+    // A kind only some record also counts as (an acronym held on a definition) gets its filter too.
+    for (const e of all) for (const k of e.kinds) if (!seen.has(k)) seen.set(k, getStructuredTagType(k)?.label ?? k);
     return seen;
   }, [all]);
 
   const shown = useMemo(() => {
-    const byKind = filter === 'all' ? all : all.filter((e) => e.typeKey === filter);
+    // Under Acronyms a record is listed by its acronym (ASX), whichever way it was made.
+    const byKind = (filter === 'all' ? all : all.filter((e) => e.kinds.includes(filter)))
+      .filter((e) => e.importance >= minImportance)
+      .map((e) => (filter === 'acronym' && e.short && e.short !== e.term ? { ...e, term: e.short, meaning: e.long ? `${e.long}${e.meaning ? ` · ${e.meaning}` : ''}` : e.meaning } : e))
+      .sort((a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: 'base' }));
     if (!query.trim()) return byKind;
     return rankSearch(byKind, (e: GlossaryEntry) => [
       { text: e.term, weight: 3 }, { text: e.meaning, weight: 1, counted: true }, { text: e.noteTitle, weight: 1 },
     ], () => 0, query);
-  }, [all, filter, query]);
+  }, [all, filter, query, minImportance]);
 
   const sections = useMemo(() => {
     if (query.trim()) return [{ letter: '', entries: shown }];
@@ -91,6 +103,15 @@ export function GlossaryView() {
               {f === 'all' ? L.all : kinds.get(f)}
             </button>
           ))}
+          {all.some((e) => e.importance) && (
+            <span className={styles.importanceChips}>
+              {IMPORTANCE_FILTERS.map((lv) => (
+                <button key={lv} type="button" className={`${styles.chip} ${minImportance === lv ? styles.chipOn : ''}`} onClick={() => setMinImportance(lv)}>
+                  {lv === 0 ? LABELS.importance.filterAll : lv === 1 ? `⭐ ${LABELS.importance.filterKey}` : `❗ ${LABELS.importance.filterCritical}`}
+                </button>
+              ))}
+            </span>
+          )}
           {!query.trim() && sections.length > 1 && (
             <span className={styles.letters}>
               {sections.map((s) => (
@@ -120,7 +141,7 @@ export function GlossaryView() {
                     <header className={styles.cardHead}>
                       <span className={styles.cardIcon} aria-hidden="true">{e.locked ? '🔒' : e.icon}</span>
                       <span className={styles.term}>{e.term || L.untitled}</span>
-                      <span className={styles.kind}>{e.kindLabel}</span>
+                      <span className={styles.kind}>{glossaryKindLine(e)}</span>
                     </header>
                     <p className={styles.meaning}>{e.locked ? L.locked : e.meaning || <span className={styles.muted}>{L.noMeaning}</span>}</p>
                     <footer className={styles.cardFoot}>

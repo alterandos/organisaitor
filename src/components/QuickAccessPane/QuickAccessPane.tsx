@@ -5,7 +5,7 @@ import { useUIStore, type QuickAccessTab } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useRecentItemsStore, type RecentItemEntry } from '@/store/recentItemsStore';
 import { usePinnedItemsStore, pinKey, type PinnableType } from '@/store/pinnedItemsStore';
-import { searchQuickAccessItems, resolveRecentItems, resolvePinnedItems, pruneStaleRecentEntries, navigateToQuickAccessItem, placesByUse, type QuickAccessItem } from '@/utils/quickAccess';
+import { searchQuickAccessItems, resolveRecentItems, resolvePinnedItems, pruneStaleRecentEntries, navigateToQuickAccessItem, placesAlphabetical, type QuickAccessItem } from '@/utils/quickAccess';
 import { isPinnable, togglePin, pinMenuItem } from '@/services/quickAccessPins';
 import type { Place } from '@/config/places';
 import styles from './QuickAccessPane.module.css';
@@ -117,7 +117,7 @@ export function QuickAccessPane() {
   };
 
   // Ordered when the pane opens, so the row doesn't reshuffle under the pointer.
-  const [places] = useState(() => placesByUse(useRecentItemsStore.getState().items));
+  const [places] = useState(placesAlphabetical);
   const [badges] = useState(() => new Map(places.map((p) => [p.id, p.badge?.() ?? 0])));
   const openPlace = (place: Place) => {
     closeQuickAccess();

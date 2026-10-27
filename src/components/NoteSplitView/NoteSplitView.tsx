@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { notePaneCount, useUIStore } from '@/store/uiStore';
 import './openBeside';
 import { NoteEditor } from '@/components/NoteEditor/NoteEditor';
-import { useNoteView } from '@/store/noteViews';
+import { LABELS } from '@/config/labels';
 import { NotePickerModal } from '@/components/NotePickerModal/NotePickerModal';
 import { SplitDivider } from '@/components/ResizeHandle/SplitDivider';
 import { NoteViewMenu } from './NoteViewMenu';
@@ -32,9 +32,6 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
   const [live, setLive] = useState<{ x?: number; y?: number }>({});
   const [picking, setPicking] = useState<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  // Suggestions from the note in front, as every picker suggests from what it's opened beside.
-  const frontNote = useNoteView(panes[focused] ?? null);
-  const frontTitle = frontNote?.title ?? '';
 
   const n = notePaneCount(layout);
   const x = live.x ?? split.x;
@@ -98,7 +95,11 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
       {picking !== null && (
         <NotePickerModal
           excludeIds={openIds}
-          suggestFrom={frontTitle}
+          // Nothing to suggest from: the note in this pane is being replaced, not linked to, and
+          // suggestions drawn from its title read as its title copied into the search (found
+          // 2026-10-27). Recent notes show instead.
+          suggestFrom=""
+          title={LABELS.noteViews.replaceTitle}
           onPick={(noteId, tabId) => { openInPane(picking, noteId, tabId); setPicking(null); }}
           onClose={() => setPicking(null)}
         />

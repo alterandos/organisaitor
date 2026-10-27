@@ -104,7 +104,9 @@ export function EditRoutinePane() {
 
   async function handleDelete() {
     if (!routine) return;
-    if (!(await confirmDelete('routine', routine.name, 'Its history will be deleted too.'))) return;
+    // No steps and no history: nothing goes with it.
+    const hasHistory = Object.values(useRoutineStore.getState().instances).some((i) => i.routineId === routine.id);
+    if (!(await confirmDelete('routine', routine.name, 'Its history will be deleted too.', { empty: routine.routineTasks.length === 0 && !hasHistory }))) return;
     deleteInstances(routine.id as CollectionId);
     deleteCollection(routine.id as CollectionId);
     if (activeRoutineId === routine.id) setActiveRoutine(null);

@@ -5,7 +5,8 @@ import { GLOSSARY_TYPES } from '@/config/structuredTagTypes';
 import { glossaryEntry } from '@/services/glossary';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
-import { GLOSSARY_CARD_DESIGNS_WITH_INLINE, GLOSSARY_CARD_WIDTHS, cardWidth, focusGlossaryCard, glossaryCardPosAt, insertCardAfter, setGlossaryCardVariant, setGlossaryCardWidth, type GlossaryCardDesign } from './GlossaryCard';
+import { GLOSSARY_CARD_DESIGNS_WITH_INLINE, focusGlossaryCard, glossaryCardPosAt, insertCardAfter, sendCardToGlossary, setGlossaryCardVariant, type GlossaryCardDesign } from './GlossaryCard';
+import { widthMenuItem } from './blockWidth';
 import { cardToChip, chipToCard, glossaryChipPosAt, openChip } from './GlossaryChip';
 import { EditIcon } from '@/components/Icons';
 
@@ -26,13 +27,8 @@ registerContextMenuProvider({
     return [
       { id: 'glossary-card-edit', label: LABELS.glossaryCard.edit, icon: createElement(EditIcon), shortcut: 'Enter', run: () => focusGlossaryCard(view, pos) },
       designMenuItem(GLOSSARY_CARD_DESIGNS_WITH_INLINE, node.attrs.variant as GlossaryCardDesign, (v) => (v === 'inline' ? cardToChip(view, pos) : setGlossaryCardVariant(view, pos, v))),
-      {
-        id: 'glossary-card-width', label: LABELS.glossaryCard.width, icon: '↔',
-        submenu: [GLOSSARY_CARD_WIDTHS.map((w) => ({
-          id: `glossary-card-width-${w}`, label: LABELS.glossaryCard.widths[w], icon: cardWidth(node.attrs) === w ? '✓' : undefined,
-          run: () => setGlossaryCardWidth(view, pos, w),
-        }))],
-      },
+      { id: 'glossary-card-send', label: LABELS.glossaryCard.sendToGlossary, title: LABELS.glossaryCard.sendToGlossaryHint, run: () => { sendCardToGlossary(view, pos); } },
+      widthMenuItem(view, pos, node.attrs, node.attrs.variant === 'card' ? 'auto' : 'full'),
       frameMenuItem(view, pos, node.attrs),
     ];
   },
@@ -72,6 +68,7 @@ registerContextMenuProvider({
     return [
       { id: 'glossary-chip-open', label: LABELS.glossaryCard.edit, icon: createElement(EditIcon), shortcut: 'Enter', run: () => openChip(view, pos) },
       { id: 'glossary-chip-card', label: LABELS.glossaryCard.showAsCard, icon: '▭', run: () => chipToCard(view, pos) },
+      { id: 'glossary-chip-send', label: LABELS.glossaryCard.sendToGlossary, title: LABELS.glossaryCard.sendToGlossaryHint, run: () => { sendCardToGlossary(view, pos); } },
       designMenuItem(GLOSSARY_CARD_DESIGNS_WITH_INLINE, 'inline', (v) => { if (v !== 'inline') chipToCard(view, pos, v); }),
     ];
   },

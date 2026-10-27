@@ -175,6 +175,58 @@ describe('in any text field', () => {
   });
 });
 
+describe('in a field that is its own contentEditable (a Glossary card\'s fields, 2026-10-27)', () => {
+  let uninstall: () => void;
+  let host: HTMLDivElement;
+  beforeEach(() => {
+    uninstall = installSpecialCharInput();
+    host = document.createElement('div');
+    host.setAttribute('contenteditable', 'true');
+    host.append(document.createTextNode(''));
+    document.body.append(host);
+    host.focus();
+  });
+  afterEach(() => { uninstall(); document.body.replaceChildren(); });
+
+  const text = () => host.firstChild as Text;
+  const caret = (at: number) => {
+    const r = document.createRange();
+    r.setStart(text(), at);
+    r.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(r);
+  };
+  const typeKeys = (s: string) => {
+    for (const ch of s) {
+      const at = window.getSelection()!.anchorOffset;
+      text().insertData(at, ch);
+      caret(at + 1);
+      host.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
+    }
+  };
+  const key = (k: string) => {
+    const e = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true });
+    host.dispatchEvent(e);
+    return e;
+  };
+
+  it('shortcuts and //names work there too, and Backspace straight after undoes one', () => {
+    caret(0);
+    typeKeys('CO2 --> x //alpha ');
+    expect(host.textContent).toBe('CO₂ → x α ');
+    typeKeys('<=');
+    expect(key('Backspace').defaultPrevented).toBe(true);
+    expect(host.textContent).toBe('CO₂ → x α <=');
+  });
+
+  it('never in the note editor itself (ProseMirror has its own extension)', () => {
+    host.classList.add('ProseMirror');
+    caret(0);
+    typeKeys('a -->');
+    expect(host.textContent).toBe('a -->');
+  });
+});
+
 describe('the person’s own shortcuts (findUserShortcut, textShortcutProblem)', () => {
   const list = [{ id: 'a', typed: 'govt', text: 'government' }, { id: 'b', typed: 'e.g', text: 'for example' }, { id: 'c', typed: 'UK', text: 'United Kingdom' }];
   it('fires once the word ends, keeping what ended it, and only on a whole word', () => {

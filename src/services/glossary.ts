@@ -1,8 +1,10 @@
 import { useNoteStore } from '@/store/noteStore';
 import { iconText } from '@/components/IconPicker/iconValue';
+import { LABELS } from '@/config/labels';
+import { importanceLevel } from '@/components/NoteEditor/extensions/importanceLevels';
 import { entryView, isEntryLocked, isNoteLocked, noteView } from '@/services/noteSecrets';
 import { BUILTIN_TAGS } from '@/components/NoteEditor/builtinTags';
-import { GLOSSARY_TYPES, glossaryMeaning } from '@/config/structuredTagTypes';
+import { GLOSSARY_TYPES, glossaryKinds, glossaryMeaning, glossaryNames } from '@/config/structuredTagTypes';
 import { countConceptRefs } from '@/utils/noteContent';
 import { getNoteNotebookPath } from '@/utils/notes';
 import { liveNotes } from '@/services/liveNoteEditor';
@@ -27,6 +29,10 @@ export interface GlossaryEntry {
   noteTitle: string;
   notebookPath: string[];   // root notebook → the note's notebook; [] when it's in none
   locked:    boolean;
+  importance: 0 | 1 | 2 | 3;
+  short:     string | null;   // its acronym, whichever way it was made (glossaryNames)
+  long:      string | null;   // what that stands for
+  kinds:     string[];        // its own kind first, then any it also counts as (glossaryKinds)
   updatedAt: string;
 }
 
@@ -42,8 +48,41 @@ export function toGlossaryEntry(raw: StructuredTagEntry, notes: Record<NoteId, N
     icon: iconText(tag?.icon, '📖'), color: tag?.color ?? '#10b981', kindLabel: tag?.name ?? e.typeKey,
     noteId: e.noteId, noteTitle: note ? noteView(note).title : '',
     notebookPath: note ? getNoteNotebookPath(noteView(note), noteTags) : [],
-    locked: isEntryLocked(raw), updatedAt: e.updatedAt,
+    locked: isEntryLocked(raw), importance: entryImportance(e), ...glossaryNames(e), kinds: glossaryKinds(e), updatedAt: e.updatedAt,
   };
+}
+
+// Sent to the Glossary (asked for by the user 2026-10-26): a record whose card was taken out of
+// its note, leaving the term linked there. It lives in the Glossary alone, so it counts as defined
+// without a card, and removing its linked text never deletes it; it goes only when deleted from
+// the Glossary. Kept in the record's fields (so it syncs and encrypts with it; no migration).
+export const SENT_TO_GLOSSARY = 'inGlossary';
+export const isSentToGlossary = (e: Pick<StructuredTagEntry, 'fields'>) => e.fields?.[SENT_TO_GLOSSARY] === true;
+
+// How important a record is (asked for by the user 2026-10-26): 0, or the Important levels 1–3
+// ("Key concept", "Very important concept", "Critical concept"). On the record, not its card, so
+// the Glossary, hover cards and every card of it agree; in its fields, like SENT_TO_GLOSSARY.
+export const IMPORTANCE_FIELD = 'importance';
+export const entryImportance = (e: Pick<StructuredTagEntry, 'fields'>): 0 | 1 | 2 | 3 => {
+  const v = e.fields?.[IMPORTANCE_FIELD];
+  return v === 1 || v === 2 || v === 3 ? v : 0;
+};
+
+// How a record's kind reads wherever it's listed: its importance (Key concept…) and the kinds it
+// also counts as ("Definition · also an acronym").
+export function glossaryKindLine(e: Pick<GlossaryEntry, 'kindLabel' | 'importance' | 'kinds'>): string {
+  const base = e.importance ? `${importanceLevel(e.importance).icon} ${LABELS.importance.kindLevel(e.importance, e.kindLabel)}` : e.kindLabel;
+  const also = e.kinds.slice(1).map((k) => LABELS.glossary.kindNames[k as keyof typeof LABELS.glossary.kindNames] ?? k);
+  return also.length ? `${base} · ${LABELS.glossary.alsoKinds(also)}` : base;
+}
+
+export function setEntryImportance(id: string, level: 0 | 1 | 2 | 3): void {
+  const store = useNoteStore.getState();
+  const raw = store.structuredTagEntries[id as StructuredTagEntryId];
+  if (!raw || isEntryLocked(raw)) return;
+  const fields = { ...entryView(raw).fields };
+  if (level) fields[IMPORTANCE_FIELD] = level; else delete fields[IMPORTANCE_FIELD];
+  store.updateStructuredTagEntry(raw.id, { fields });
 }
 
 // The records whose note still holds their card or marked text. One whose definition was deleted
@@ -64,6 +103,7 @@ function stillDefined(entries: StructuredTagEntry[], notes: Record<NoteId, Note>
     if (!raw) continue;
     if (live.some((l) => l.noteId === e.noteId) && inLive.has(e.id)) { out.add(e.id); continue; }
     if (isNoteLocked(raw)) { out.add(e.id); continue; }
+    if (!isEntryLocked(e) && isSentToGlossary(entryView(e))) { out.add(e.id); continue; }
     const n = noteView(raw);
     if ([n.content, ...n.tabs.map((t) => t.content)].some((c) => c?.includes(e.id))) out.add(e.id);
   }

@@ -1,3 +1,7 @@
+/* The hidden attribute always hides (adopted 2026-10-27): a component's own `display` would
+   otherwise override it, and the element stays on screen (a note's number ▾ did). */
+[hidden] { display: none !important; }
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -36,6 +40,10 @@
   --color-kind-definition: #0f766e;
   --color-kind-concept: #4338ca;
   --color-kind-profile: #be185d;
+  /* The Important levels (NoteEditor/extensions/importanceLevels.ts): accent colours, the same in both themes. */
+  --color-important-1: #f59e0b;
+  --color-important-2: #f97316;
+  --color-important-3: #ef4444;
   --color-block-timeline: #0369a1;
   --color-block-cycle: #047857;
   --color-block-breakdown: #854d0e;
@@ -52,6 +60,13 @@
   --color-block-case: #166534;
   --color-block-cause: #b91c1c;
   --color-block-venn: #a16207;
+  --color-block-proscons: #0d9488;
+  --color-block-compare: #9333ea;
+  --color-block-chart: #2563eb;
+  --color-block-code: #475569;
+  --color-block-maths: #92400e;
+  --color-block-inbox: #ea580c;
+  --color-block-diagram: #0891b2;
   --color-success-muted: #d1fae5;
   --color-success-text: #065f46;
   --color-danger: #ef4444;
@@ -215,6 +230,13 @@
   --color-block-case: #4ade80;
   --color-block-cause: #f87171;
   --color-block-venn: #facc15;
+  --color-block-proscons: #5eead4;
+  --color-block-compare: #e9d5ff;
+  --color-block-chart: #60a5fa;
+  --color-block-code: #94a3b8;
+  --color-block-maths: #fde047;
+  --color-block-inbox: #fdba74;
+  --color-block-diagram: #22d3ee;
   --color-success-muted: rgba(52, 211, 153, 0.12);
   --color-success-text: #6ee7b7;
   --color-danger: #f87171;

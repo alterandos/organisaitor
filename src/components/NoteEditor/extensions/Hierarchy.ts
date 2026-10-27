@@ -3,6 +3,7 @@ import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } 
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import {
   blockFrameAttributes, blockPill, designButtons, frameButtons, openBlockPopover, pillButton, popoverClass, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour,
 } from './blockDesigns';
@@ -214,6 +215,36 @@ export function addHierarchyItem(view: EditorView, pos: number, index: number, a
   view.focus();
 }
 
+// Deletes an item and everything under it (the hover trash button). An item on its own goes at once
+// (Ctrl+Z brings it back, as for a breakdown's part); one taking items with text under it asks first.
+// The last item left takes the block with it, leaving an empty line.
+export async function deleteHierarchyItem(view: EditorView, pos: number, index: number): Promise<void> {
+  const node = view.state.doc.nodeAt(pos);
+  if (!node || node.type.name !== 'hierarchy' || index >= node.childCount) return;
+  const end = subtreeEnd(levelsOf(node), index);
+  const under = end - index - 1;
+  if (under > 0) {
+    let text = '';
+    for (let i = index; i < end; i++) text += node.child(i).textContent;
+    const L = LABELS.noteBlocks.hierarchy;
+    const ok = await confirmDelete(L.itemNoun, node.child(index).textContent.trim(), L.itemsUnder(under), { empty: !text.trim() });
+    if (!ok || view.isDestroyed || view.state.doc.nodeAt(pos) !== node) return;
+  }
+  const from = itemPos(node, pos, index);
+  const to = end < node.childCount ? itemPos(node, pos, end) : pos + node.nodeSize - 1;
+  const tr = view.state.tr;
+  if (index === 0 && end === node.childCount) {
+    tr.replaceWith(pos, pos + node.nodeSize, view.state.schema.nodes.paragraph.create());
+    tr.setSelection(TextSelection.create(tr.doc, pos + 1));
+  } else {
+    tr.delete(from, to);
+    const target = index > 0 ? itemEnd(node, pos, index - 1) : pos + 2;
+    tr.setSelection(TextSelection.create(tr.doc, Math.min(target, tr.doc.content.size)));
+  }
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
 // Where the two "+" go for each design: the child on the side children grow, the sibling on the other.
 function itemAdders(view: EditorView, part: HTMLElement): PartAdder[] | null {
   const inner = part.querySelector('[data-hi-box]');
@@ -225,9 +256,11 @@ function itemAdders(view: EditorView, part: HTMLElement): PartAdder[] | null {
   const L = LABELS.noteBlocks.hierarchy;
   const add = (as: 'child' | 'sibling') => () => addHierarchyItem(view, h.pos, h.index, as);
   const child: PartAdder = { side: variant === 'tree' ? 'below' : variant === 'columns' ? 'right' : 'below-indent', label: L.addChild, run: add('child'), disabled: level >= MAX_LEVEL };
+  const under = subtreeEnd(levelsOf(h.node), h.index) - h.index - 1;
+  const remove: PartAdder = { side: 'corner', remove: true, label: under ? L.deleteItemTree(under) : L.deleteItem, run: () => { void deleteHierarchyItem(view, h.pos, h.index); } };
   // The top item has no siblings to add.
-  if (level === 0 && h.index === 0) return [child];
-  return [child, { side: variant === 'tree' ? 'right' : variant === 'columns' ? 'below' : 'below-left', label: L.addSibling, run: add('sibling') }];
+  if (level === 0 && h.index === 0) return [child, remove];
+  return [child, { side: variant === 'tree' ? 'right' : variant === 'columns' ? 'below' : 'below-left', label: L.addSibling, run: add('sibling') }, remove];
 }
 
 // ── Keys ─────────────────────────────────────────────────────────────────────

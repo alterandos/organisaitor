@@ -166,3 +166,19 @@ export function SearchIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+// A filled triangle pointing up or down: step a value by one (the ▲▼ of a segmented date or time
+// field). Filled, as spin buttons conventionally are, so it reads at a small size.
+export function StepIcon({ direction, ...props }: SVGProps<SVGSVGElement> & { direction: 'up' | 'down' }) {
+  return (
+    <svg width="1em" height="1em" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
+      <path d={direction === 'up' ? 'M5 2.2 9 7.8H1z' : 'M5 7.8 1 2.2h8z'} />
+    </svg>
+  );
+}
+
+// Text alignment: left, centre, right, justified (the note ribbon's four buttons).
+const ALIGN_GLYPH = { left: 'alignLeft', center: 'alignCenter', right: 'alignRight', justify: 'alignJustify' } as const;
+export function AlignIcon({ align, ...props }: SVGProps<SVGSVGElement> & { align: keyof typeof ALIGN_GLYPH }) {
+  return <Glyph glyph={ALIGN_GLYPH[align]} {...EM} {...props} />;
+}

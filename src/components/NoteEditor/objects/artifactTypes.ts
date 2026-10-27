@@ -241,7 +241,7 @@ function editTaskWhen(id: string, part: 'date' | 'time', raw: string): boolean {
 
 export const ARTIFACT_TYPES: Partial<Record<CrossAppRefType, ArtifactTypeDef>> = {
   task: {
-    label:     LABELS.noteObjects.task,
+    label:     LABELS.noteObjects.task.label,
     icon:      ITEM_TYPE_ICON.task,
     subscribe: (cb) => useTaskStore.subscribe(cb),
     summarize: (id, now) => {

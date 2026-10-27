@@ -187,7 +187,7 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
   async function remove(p: Picture) {
     const uses = pictureUses(p.id);
     if (uses.length === 0) {
-      if (await confirmDelete('picture', '', L.usedNowhere)) deletePictureEverywhere(p.id);
+      if (await confirmDelete('picture', '', L.usedNowhere, { empty: false })) deletePictureEverywhere(p.id);   // a picture is never empty
       return;
     }
     const here = isCurrentPicture(p);

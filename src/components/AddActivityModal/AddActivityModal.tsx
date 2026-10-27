@@ -13,6 +13,7 @@ import type { PurposeId } from '@/types';
 import styles from './AddActivityModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { activityIsEmpty } from '@/utils/emptyContent';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CloseIcon } from '@/components/Icons';
 
@@ -240,7 +241,7 @@ export function AddActivityModal() {
 
   async function handleDelete() {
     if (!editingActivity) return;
-    if (!(await confirmDelete('activity', editingActivity.title))) return;
+    if (!(await confirmDelete('activity', editingActivity.title, undefined, { empty: activityIsEmpty(editingActivity) }))) return;
     useFitnessStore.getState().deleteActivity(editingActivity.id);
     closeEditActivity();
   }

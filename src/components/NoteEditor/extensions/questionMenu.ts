@@ -6,6 +6,7 @@ import type { QuestionStatus } from '@/utils/noteQuestions';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
+import { widthMenuItem } from './blockWidth';
 import { QUESTION_DESIGNS, QUESTION_STATUSES, answerWithCard, openFollowUpPicker, questionPosAt, setQuestionAttrs, setQuestionStatus, type QuestionVariant } from './Question';
 
 // Right-click on a question: its status, follow-up, answer with a card; its design and frame.
@@ -36,6 +37,7 @@ registerContextMenuProvider({
         }))],
       },
       designMenuItem(QUESTION_DESIGNS, node.attrs.variant as QuestionVariant, (v) => setQuestionAttrs(view, pos, { variant: v })),
+      widthMenuItem(view, pos, node.attrs, 'full'),
       frameMenuItem(view, pos, node.attrs),
     ];
   },

@@ -1,11 +1,11 @@
 import { nanoid } from 'nanoid';
 import type { EditorState } from '@tiptap/pm/state';
-import type { Node as PMNode, Schema, Slice } from '@tiptap/pm/model';
+import { Fragment, Slice as PMSlice, type Node as PMNode, type Schema, type Slice } from '@tiptap/pm/model';
 import type { Transform } from '@tiptap/pm/transform';
 import type { EditorView } from '@tiptap/pm/view';
 import { useNoteStore } from '@/store/noteStore';
 import { useTaskStore } from '@/store/taskStore';
-import { isNoteLocked, noteView } from '@/services/noteSecrets';
+import { entryView, isEntryLocked, isNoteLocked, noteView } from '@/services/noteSecrets';
 import { editNoteText } from '@/services/noteContentEdit';
 import { liveNoteOf } from '@/services/liveNoteEditor';
 import { noteHasPassage, openNotePassage } from '@/services/notePassage';
@@ -98,6 +98,60 @@ interface Sent {
   schema:       Schema;
   taskId:       string | null;
   createdInbox: boolean;
+  kept:         number;   // blocks of Glossary cards left after the marker (keptCards)
+}
+
+// ── Glossary cards in a passage sent away (2026-10-27, the user: "the card shouldn't have been
+// sent, but a link to it should") ─────────────────────────────────────────────────────────
+// A card or chip belongs to the note that defines it, so it stays there, just after the marker
+// the passage leaves; the inbox's copy holds its term as linked text instead (as Send to
+// Glossary leaves it).
+const CARD_NODES = new Set(['glossaryCard', 'glossaryChip']);
+
+function termLink(node: PMNode, schema: Schema): PMNode | null {
+  const raw = useNoteStore.getState().structuredTagEntries[node.attrs.entryId as never];
+  const link = schema.marks.conceptRef;
+  if (!raw || isEntryLocked(raw) || !link) return null;
+  const entry = entryView(raw);
+  return entry.term.trim() ? schema.text(entry.term, [link.create({ entryId: raw.id, typeKey: entry.typeKey })]) : null;
+}
+
+function cardsAsLinks(fragment: Fragment, schema: Schema): Fragment {
+  const out: PMNode[] = [];
+  fragment.forEach((n) => {
+    if (CARD_NODES.has(n.type.name)) {
+      const text = termLink(n, schema);
+      if (text) out.push(n.isInline ? text : schema.nodes.paragraph.create(null, text));
+      return;
+    }
+    out.push(n.isLeaf ? n : n.copy(cardsAsLinks(n.content, schema)));
+  });
+  return Fragment.from(out);
+}
+
+// The cards in the selection, as the blocks they'll be after the marker: each card as it is, and
+// the chips together in one line.
+function keptCards(state: EditorState): PMNode[] {
+  const { from, to } = state.selection;
+  const cards: PMNode[] = [];
+  const chips: PMNode[] = [];
+  state.doc.nodesBetween(from, to, (n, pos) => {
+    if (!CARD_NODES.has(n.type.name)) return true;
+    if (pos >= from && pos + n.nodeSize <= to && n.attrs.entryId) (n.isInline ? chips : cards).push(n);
+    return false;
+  });
+  if (chips.length) {
+    const parts = chips.flatMap((c, i) => (i ? [state.schema.text(' '), c] : [c]));
+    cards.push(state.schema.nodes.paragraph.create(null, parts));
+  }
+  return cards;
+}
+
+// Puts the kept cards straight after the marker.
+function keepAfterStub(tr: Transform, itemId: string, kept: PMNode[]): void {
+  if (!kept.length) return;
+  const stub = findNode(tr.doc, 'movedStub', 'itemId', itemId);
+  if (stub) tr.insert(stub.pos + stub.node.nodeSize, kept);
 }
 
 const isEncrypted = (noteId: string) => !!useNoteStore.getState().notes[noteId as NoteId]?.isEncrypted;
@@ -125,7 +179,8 @@ function moveToInbox(view: EditorView, source: NoteText, target: SendTarget, opt
   if (selectionTouchesInbox(state)) { void alertDialog(L.fromInside); return false; }
   const { schema } = state;
   const slice = state.selection.content();
-  const blocks = sliceToBlocks(slice, schema);
+  const kept = keptCards(state);
+  const blocks = sliceToBlocks(new PMSlice(cardsAsLinks(slice.content, schema), slice.openStart, slice.openEnd), schema);
   const createdInbox = 'newHere' in target;
   const to = createdInbox
     ? { noteId: source.noteId, tabId: source.tabId, inboxId: nanoid(10), title: LABELS.noteBlocks.inbox.defaultTitle }
@@ -152,16 +207,18 @@ function moveToInbox(view: EditorView, source: NoteText, target: SendTarget, opt
   if (sameText) {
     const tr = state.tr.deleteSelection();
     tr.replaceSelectionWith(stub, false);
+    keepAfterStub(tr, itemId, kept);
     if (!putIn(tr)) { if (taskId) discardTask(taskId); void alertDialog(L.failed); return false; }
     view.dispatch(tr);
   } else {
     if (!editNoteText(to.noteId, to.tabId, schema, putIn)) { if (taskId) discardTask(taskId); void alertDialog(L.failed); return false; }
     const tr = view.state.tr.deleteSelection();
     tr.replaceSelectionWith(stub, false);
+    keepAfterStub(tr, itemId, kept);
     view.dispatch(tr.setMeta('addToHistory', false));
   }
 
-  const sent: Sent = { source, target: to, itemId, slice, schema, taskId, createdInbox };
+  const sent: Sent = { source, target: to, itemId, slice, schema, taskId, createdInbox, kept: kept.length };
   showToast({
     message: L.moved(to.title),
     actions: [
@@ -185,7 +242,10 @@ function undoSend(sent: Sent): void {
   editNoteText(sent.source.noteId, sent.source.tabId, sent.schema, (tr) => {
     const stub = findNode(tr.doc, 'movedStub', 'itemId', sent.itemId);
     if (!stub) return false;
-    tr.replace(stub.pos, stub.pos + stub.node.nodeSize, sent.slice);
+    // The cards kept after the marker go back into the passage (the slice holds them).
+    let end = stub.pos + stub.node.nodeSize;
+    for (let i = 0; i < sent.kept; i++) end += tr.doc.nodeAt(end)?.nodeSize ?? 0;
+    tr.replace(stub.pos, end, sent.slice);
     return true;
   });
   if (sent.taskId) discardTask(sent.taskId);

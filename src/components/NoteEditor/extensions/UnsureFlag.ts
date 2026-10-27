@@ -294,7 +294,8 @@ function acceptUnsure(state: EditorState, o: UnsureOffer): Transaction | null {
 const decoKey = new PluginKey<DecorationSet>('unsureFlagMarkers');
 
 export const UnsureFlag = Extension.create({
-  name: 'unsureFlag',
+  // Not 'unsureFlag': that's the mark's name, and Tiptap warns on two extensions sharing one.
+  name: 'unsureFlagTools',
   // Alongside the other typing offers: Enter and Tab are the offer's while it shows.
   priority: 130,
 

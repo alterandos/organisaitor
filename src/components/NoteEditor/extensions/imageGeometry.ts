@@ -55,6 +55,30 @@ export function snapWidth(width: number, targets: readonly number[], tolerance =
   return best;
 }
 
+// Snapping a resize to the note's other pictures, width and height separately (asked for by the user
+// 2026-10-26): a side handle snaps the dimension it moves; a corner, which keeps the shape, snaps
+// whichever dimension is nearer a match, the other following. All in CSS pixels, the size the
+// pictures are stored and drawn at. `snapped` says which dimension matched, to outline the pictures
+// that now share it.
+export function snapSize(
+  handle: Handle, size: { width: number; height: number },
+  targets: { widths: readonly number[]; heights: readonly number[] }, tolerance = SNAP_PX,
+): { width: number; height: number; snapped: 'width' | 'height' | null } {
+  const sx = xSign(handle) !== 0;
+  const sy = ySign(handle) !== 0;
+  const w = sx ? snapWidth(size.width, targets.widths, tolerance) : null;
+  const h = sy ? snapWidth(size.height, targets.heights, tolerance) : null;
+  if (sx && sy) {
+    const useW = w !== null && (h === null || Math.abs(w - size.width) <= Math.abs(h - size.height));
+    if (useW) return { width: w, height: size.height * (w / size.width), snapped: 'width' };
+    if (h !== null) return { width: size.width * (h / size.height), height: h, snapped: 'height' };
+    return { ...size, snapped: null };
+  }
+  if (w !== null) return { width: w, height: size.height, snapped: 'width' };
+  if (h !== null) return { width: size.width, height: h, snapped: 'height' };
+  return { ...size, snapped: null };
+}
+
 // Dragging a crop handle by a fraction of the whole picture (dx of its width, dy of its height).
 // Each side moves on its own, as in a word processor; a crop always leaves some of the picture.
 export function cropDrag(handle: Handle, start: Crop, dx: number, dy: number): Crop {

@@ -7,7 +7,7 @@ import type { Editor } from '@tiptap/core';
 import { LABELS } from '@/config/labels';
 import { registerEscapeClose } from '@/hooks/useEscapeClose';
 import {
-  type Crop, type Handle, NO_CROP, CORNERS, EDGES, cropDrag, isCropped, parseCrop, resizeDrag, snapWidth, serializeCrop,
+  type Crop, type Handle, NO_CROP, CORNERS, EDGES, cropDrag, isCropped, parseCrop, resizeDrag, snapSize, serializeCrop,
 } from './imageGeometry';
 import styles from './ResizableImage.module.css';
 
@@ -222,27 +222,34 @@ class ImageView {
   private startResize(e: PointerEvent, handle: Handle) {
     e.preventDefault();
     e.stopPropagation();
+    // The editor can be zoomed (CSS zoom): the screen measures zoomed pixels, while a picture's
+    // size is stored and drawn in CSS pixels. Everything here is worked in CSS pixels.
     const rect = this.clip.getBoundingClientRect();
-    const start = { x: e.clientX, y: e.clientY, w: rect.width, h: rect.height };
+    const zoom = rect.width / (this.clip.offsetWidth || rect.width) || 1;
+    const css = (px: number) => px / zoom;
+    const start = { x: e.clientX, y: e.clientY, w: css(rect.width), h: css(rect.height) };
     const stretched = !!this.attrs.height;
     let result = { width: start.w, height: start.h, stretched };
     this.dom.classList.add(styles.resizing);
-    // The widths it can snap to: the note's other pictures, and the column.
+    // The sizes it can snap to: the note's other pictures (width and height), and the column's width.
     const others = Array.from(this.editor.view.dom.querySelectorAll<HTMLElement>(`.${styles.frame}`)).filter((f) => f !== this.frame);
-    const widthOf = (f: HTMLElement) => Math.round(f.getBoundingClientRect().width);
-    const column = Math.round(this.dom.getBoundingClientRect().width);
-    const targets = [...others.map(widthOf), column].filter((w) => w > 0);
+    const sizeOf = (f: HTMLElement) => { const r = f.getBoundingClientRect(); return { w: Math.round(css(r.width)), h: Math.round(css(r.height)) }; };
+    const sizes = others.map(sizeOf);
+    const column = Math.round(css(this.dom.getBoundingClientRect().width));
+    const targets = { widths: [...sizes.map((s) => s.w), column].filter((w) => w > 0), heights: sizes.map((s) => s.h).filter((h) => h > 0) };
     const clearMatches = () => { for (const f of [...others, this.frame]) f.classList.remove(styles.sizeMatch); };
     this.follow(e, (ev) => {
-      result = resizeDrag(handle, start, ev.clientX - start.x, ev.clientY - start.y, stretched);
-      const corner = handle.length === 2;
-      const snapped = handle !== 'n' && handle !== 's' ? snapWidth(result.width, targets) : null;
+      const dragged = resizeDrag(handle, start, css(ev.clientX - start.x), css(ev.clientY - start.y), stretched);
+      const snap = snapSize(handle, dragged, targets);
+      result = { ...dragged, width: snap.width, height: snap.height };
       clearMatches();
-      if (snapped !== null) {
-        result = { ...result, width: snapped, height: corner ? result.height * (snapped / result.width) : result.height };
+      if (snap.snapped) {
         // The pictures it now matches are outlined with it, as a design tool's guides show.
         this.frame.classList.add(styles.sizeMatch);
-        for (const f of others) if (Math.abs(widthOf(f) - snapped) <= 1) f.classList.add(styles.sizeMatch);
+        others.forEach((f, i) => {
+          const v = snap.snapped === 'width' ? sizes[i].w : sizes[i].h;
+          if (Math.abs(v - (snap.snapped === 'width' ? snap.width : snap.height)) <= 1) f.classList.add(styles.sizeMatch);
+        });
       }
       this.frame.style.width = `${result.width}px`;
       const framed = isCropped(this.attrs.crop) || result.stretched;

@@ -54,7 +54,7 @@ export function RecyclingBinPane() {
   const visible = filter ? all.filter((e) => e.sourceSection === filter) : all;
 
   const handleDeleteForever = async (entry: TrashEntry) => {
-    const ok = await confirmDelete(KIND_LABELS[entry.kind].toLowerCase(), entry.title);
+    const ok = await confirmDelete(KIND_LABELS[entry.kind].toLowerCase(), entry.title, undefined, { empty: false });   // Delete forever: never without asking
     if (ok) deleteForever(entry.id);
   };
 

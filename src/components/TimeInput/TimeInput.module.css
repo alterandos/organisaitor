@@ -12,7 +12,7 @@
   border-color: var(--color-primary);
 }
 
-/* A segment and its ▲▼ steppers, which float just above and below it on hover. */
+/* A segment and its ▲▼ (.stepper), which grow out of it on hover. */
 .segWrap {
   position: relative;
   display: inline-flex;
@@ -42,43 +42,58 @@
   animation: timeInputErrorFlash 420ms ease-out;
 }
 
-.step {
+/* The segment's ▲▼ (SegmentStepper.tsx): one box drawn around the digits, ▲ in the room above them
+   and ▼ below, with no gap between the digits and either arrow. The middle lets clicks through to
+   the digits. Shown while the segment is hovered, and for a moment after (the visibility delay),
+   so a pointer that overshoots by a few pixels finds them still there. */
+.stepper {
+  --step-h: 0.95rem;
   position: absolute;
+  top: calc(-1 * var(--step-h));
+  bottom: calc(-1 * var(--step-h));
   left: 50%;
+  width: max(100%, 1.5rem);
   transform: translateX(-50%);
-  width: 1.4rem;
-  height: 0.85rem;
-  padding: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-muted);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
-  cursor: pointer;
+  pointer-events: none;
   z-index: 1;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.1s ease, visibility 0s linear 0.18s;
 }
-.step svg {
-  width: 0.55rem;
-  height: 0.35rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+
+.step {
+  height: var(--step-h);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  cursor: pointer;
+  pointer-events: auto;
 }
+.step svg { width: 0.55rem; height: 0.55rem; }
+.step:first-child { border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+.step:last-child  { border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
 .step:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
 }
-.stepUp   { bottom: calc(100% + 1px); }
-.stepDown { top: calc(100% + 1px); }
 
 /* Hover only: on a touch screen :hover sticks, and typing or the quick-pick list is the touch path. */
 @media (hover: hover) {
-  .segWrap:hover .step { display: inline-flex; }
+  .segWrap:hover .stepper {
+    visibility: visible;
+    opacity: 1;
+    transition-delay: 0s;
+  }
 }
 
 .sep {

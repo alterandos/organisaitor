@@ -208,8 +208,24 @@ export const LABELS = {
   },
 
   // Inline objects in notes: type \ to create something as you write (components/NoteEditor/objects/).
+  textAlign: {
+    left:    'Align left (Ctrl+Shift+[ / ] to step through)',
+    center:  'Centre (Ctrl+Shift+[ / ] to step through)',
+    right:   'Align right (Ctrl+Shift+[ / ] to step through)',
+    justify: 'Justify: full width (Ctrl+Shift+[ / ] to step through)',
+  },
   noteObjects: {
-    task:          'Task',
+    task: {
+      label:            'Task',
+      hint:             'Something to do — "finish the essay by fri 5pm"',
+      fieldTitle:       'What',
+      fieldDate:        'Due',
+      fieldTime:        'By',
+      titlePlaceholder: 'What to do',
+      datePlaceholder:  'No deadline',
+      timePlaceholder:  'End of the day',
+      needsTitle:       'Type what to do first',
+    },
     pickHint:      'Tab or Enter to choose · Esc to keep a plain \\',
     newKind:       (label: string) => `New ${label.toLowerCase()}`,
     composeHint:   'Tab: edit · Esc: cancel',
@@ -219,7 +235,7 @@ export const LABELS = {
     created:       (label: string) => `${label} created`,
     open:          'Open',
     undo:          'Undo',
-    toolbarButton: 'Create a reminder or event, or add a timeline, as you type — or just type \\',
+    toolbarButton: 'Create a task, reminder or event, or add a timeline, as you type — or just type \\',
     reminder: {
       hint:             'Nudge me at a time — "call mum tomorrow 5pm"',
       fieldTitle:       'What',
@@ -342,6 +358,8 @@ export const LABELS = {
   },
   // The Glossary card (`\definition`, `cronym`, `\concept`; NoteEditor/extensions/GlossaryCard.ts).
   glossaryCard: {
+    sendToGlossary:     'Send to Glossary',
+    sendToGlossaryHint: 'Take the card out of the note and keep it in the Glossary; the term stays here, linked',
     termPlaceholder: { definition: 'Term', acronym: 'Acronym', concept: 'Concept', profile: 'Name' } as Record<string, string>,
     add:          'Add',
     remove:       'Remove',
@@ -370,9 +388,6 @@ export const LABELS = {
     addField:     '+ Add',
     addFieldTitle: 'Add a field to this card',
     addFieldHeading: 'Add to the card',
-    width:        'Width',
-    widths:       { auto: 'Fit the text', standard: 'Standard', third: 'A third', half: 'Half', full: 'Fit column' },
-    resize:       'Drag to resize',
     relations: {
       typeOf: 'is a type of', typeOfInverse: 'has the type',
       dependsOn: 'depends on', dependsOnInverse: 'is needed for',
@@ -387,6 +402,13 @@ export const LABELS = {
     linkSuggestionsDesc: 'While you type a term from the Glossary: never offer to link it, offer it once per note, or offer it every time.',
     linkSuggestionModes: { never: 'Never', once: 'Once per note', always: 'Every time' },
     title:         'Glossary',
+    // A record that also counts as another kind (an acronym and what it stands for: one record).
+    kindNames:     { acronym: 'an acronym', definition: 'a definition', concept: 'a concept', profile: 'a profile' },
+    alsoKinds:     (kinds: string[]) => `also ${kinds.join(' and ')}`,
+    alsoDefined:   (long: string) => `“${long}” is already in the Glossary.`,
+    addAcronymThere: (short: string) => `Add ${short} to it and show that card here`,
+    alsoAcronym:   (short: string) => `${short} already has its own Acronym card.`,
+    acronymOffer:  (short: string, long: string) => `Add ${short} to${long ? ` ${long}` : ''}`,
     open:          'Glossary',
     openHint:      'Every definition, concept and acronym in your notes',
     search:        'Search terms and meanings…',
@@ -413,6 +435,14 @@ export const LABELS = {
   importance: {
     menuLevel:     'Importance',
     levels:        { 1: 'Important', 2: 'Very important', 3: 'Critical' } as Record<1 | 2 | 3, string>,
+    // A Glossary record's level, said with its kind: "Key concept", "Critical acronym".
+    kindLevel:     (level: 1 | 2 | 3, kind: string) => `${({ 1: 'Key', 2: 'Very important', 3: 'Critical' } as const)[level]} ${kind.toLowerCase()}`,
+    notImportant:  'Not important',
+    toggle:        'Important (Ctrl+1 on the selected block steps through the levels)',
+    choose:        'How important',
+    filterAll:     'Any importance',
+    filterKey:     'Important and up',
+    filterCritical: 'Critical',
     onReviewList:  'on your review list',
     reviewLater:   'Review later',
     stopReviewing: 'Stop reviewing',
@@ -448,6 +478,8 @@ export const LABELS = {
     turnGroup:   'Turn into',
     definition:  'Definition…',
     concept:     'Concept…',
+    acronym:     'Acronym…',
+    profile:     'Profile…',
     noTerms:     'No terms yet: mark this as a Definition or Concept to start the Glossary.',
     hint:        '↑↓ to choose · Enter · Esc',
   },
@@ -507,6 +539,7 @@ export const LABELS = {
     empty:     'No note here yet',
     closePane: 'Close this pane',
     replace:   'Put another note here',
+    replaceTitle: 'Open a note here',
     searchNotes: 'Search notes',
     openBeside: 'Open beside',
   },
@@ -859,6 +892,9 @@ export const LABELS = {
     deleteBlock: 'Delete block',
     deleteBlockTitle:   'Delete this block?',
     deleteBlockMessage: 'Everything in it goes too. Ctrl+Z straight after brings it back.',
+    width:       'Width',
+    widths:      { auto: 'Fit the text', standard: 'Standard', third: 'A third', half: 'Half', full: 'Fit column' },
+    resize:      'Drag to resize',
     picked: {
       delete:  (n: number) => `Delete ${n} selected ${n === 1 ? 'part' : 'parts'}`,
       copy:    (n: number) => `Copy ${n} selected ${n === 1 ? 'part' : 'parts'}`,
@@ -966,6 +1002,10 @@ export const LABELS = {
       outdent:          'Move the item up a level (Shift+Tab)',
       addChild:         'Add an item under this one',
       addSibling:       'Add an item beside this one, at the same level',
+      deleteItem:       'Delete this item',
+      deleteItemTree:   (n: number) => `Delete this item and the ${n} under it`,
+      itemNoun:         'item',
+      itemsUnder:       (n: number) => `The ${n === 1 ? 'item' : `${n} items`} under it go${n === 1 ? 'es' : ''} too. Ctrl+Z straight after brings them back.`,
       colours:          { spectrum: 'A colour per level' },
       colourTitle:      (now: string) => `Colours: ${now}. Click to change.`,
     },
@@ -1012,7 +1052,7 @@ export const LABELS = {
       bodyPlaceholder: 'What happened…',
       addEntry:        'Add entry',
       inferredYear:    'The year of the entry before; type a year to change it',
-      styles:          { rail: 'Vertical', horizontal: 'Horizontal' },
+      styles:          { rail: 'Vertical', horizontal: 'Horizontal', ledger: 'Ledger' },
       style:           'Style',
       sort:            'Order',
       orders:          { asc: 'Oldest first', desc: 'Newest first', manual: 'As typed' },
@@ -1942,8 +1982,10 @@ export const LABELS = {
 
   // A number in another notation (extensions/NumberNotation.ts, utils/numberNotation.ts).
   numberNotation: {
-    menu:  'Number format',
-    names: { plain: 'Plain', grouped: 'Grouped', scientific: 'Scientific', e: 'E notation' },
+    menu:   'Number format',
+    names:  { plain: 'Plain', grouped: 'Grouped', scientific: 'Scientific', e: 'E notation' },
+    choose: 'Write this number another way (or Ctrl+] / Ctrl+[)',
+    offer:  'Write as',
   },
 
   // Converters (components/ConverterPane; units config/units.ts, custom types/converters.ts).

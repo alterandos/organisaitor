@@ -60,7 +60,7 @@ function SavedRow({ overview, active }: { overview: Overview; active: boolean })
           label={LABELS.rowActions.delete}
           destructive
           onClick={async () => {
-            if (await confirmDelete(L.deleteNoun, overview.name)) deleteOverview(overview.id);
+            if (await confirmDelete(L.deleteNoun, overview.name, undefined, { empty: false })) deleteOverview(overview.id);   // a saved Overview always holds its question
           }}
         />
       </RowOptionsMenu>

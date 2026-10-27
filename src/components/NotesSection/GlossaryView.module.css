@@ -256,3 +256,6 @@
   flex-direction: column;
   gap: 0.2rem;
 }
+
+/* How important, at least: set off from the kinds by a thin rule. */
+.importanceChips { display: inline-flex; gap: inherit; padding-left: var(--space-2); border-left: 1px solid var(--color-border); }

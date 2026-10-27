@@ -8,6 +8,7 @@ import { QuestionExtensions, answerWithCard, setQuestionFollowUp, setQuestionSta
 import { GlossaryCardExtensions } from './GlossaryCard';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { noteClipboardText } from '../noteClipboardText';
+import { setBlockWidth } from './blockWidth';
 import { useNoteStore } from '@/store/noteStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { collectQuestions, questionSubject, questionsInContent } from '@/utils/noteQuestions';
@@ -173,6 +174,40 @@ describe('question block', () => {
     expect(q().attrs).toMatchObject({ status: 'answered', entryId: entries[0].id });
     expect(editor.state.doc.nodeAt(qPos() + q().nodeSize)?.attrs.entryId).toBe(entries[0].id);
     expect(parts()).toContain('Q:What is osmosis?');   // the question stays
+  });
+
+  it('a question has a width like a card: the column until set, then drawn narrower, with a handle; it round-trips', () => {
+    make('<div data-type="question" data-qid="q1"><div data-qn-text>Why?</div></div>');
+    const pos = () => { let p = -1; editor.state.doc.descendants((n, at) => { if (n.type.name === 'questionBlock') p = at; }); return p; };
+    const dom = () => editor.view.dom.querySelector('[data-type="question"]') as HTMLElement;
+    expect(dom().hasAttribute('data-block-width-shown')).toBe(false);
+    expect(dom().querySelector(':scope > [data-block-resize]')).not.toBeNull();
+    setBlockWidth(editor.view, pos(), 'half');
+    expect(dom().getAttribute('data-block-width-shown')).toBe('half');
+    setBlockWidth(editor.view, pos(), '42%');
+    expect(dom().getAttribute('data-block-width-shown')).toBe('custom');
+    expect(dom().style.getPropertyValue('--block-w')).toBe('42%');
+    editor.commands.setContent(editor.getHTML());
+    expect(editor.state.doc.nodeAt(pos())!.attrs.width).toBe('42%');
+  });
+
+  it('a drag on the width handle ends on release, though the drag redrew the question and its handle', () => {
+    make('<div data-type="question" data-qid="q1"><div data-qn-text>Why?</div></div>');
+    const dom = () => editor.view.dom.querySelector('[data-type="question"]') as HTMLElement;
+    const handle = dom().querySelector(':scope > [data-block-resize]') as HTMLElement;
+    handle.setPointerCapture = () => {};
+    const ev = (type: string, x: number) => Object.assign(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x }), { pointerId: 1 });
+    dom().getBoundingClientRect = () => ({ left: 0, width: 400 } as DOMRect);
+    (dom().parentElement as HTMLElement).getBoundingClientRect = () => ({ left: 0, width: 400 } as DOMRect);
+    handle.dispatchEvent(ev('pointerdown', 400));
+    expect(document.documentElement.hasAttribute('data-block-resizing')).toBe(true);
+    window.dispatchEvent(ev('pointermove', 200));
+    expect(handle.isConnected).toBe(false);   // the question was redrawn under the drag
+    window.dispatchEvent(ev('pointerup', 200));
+    expect(document.documentElement.hasAttribute('data-block-resizing')).toBe(false);
+    let width: unknown;
+    editor.state.doc.descendants((n) => { if (n.type.name === 'questionBlock') width = n.attrs.width; });
+    expect(width).toBe('half');
   });
 
   it('round-trips through JSON and HTML, and copies as text', () => {

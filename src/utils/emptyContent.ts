@@ -1,4 +1,5 @@
 import type { Note } from '@/types/notes';
+import type { Activity } from '@/types/fitness';
 
 // Whether something about to be deleted has anything in it. Deleting an empty thing doesn't ask
 // (the user's rule, 2026-10-22: anything deleted asks first, unless it's empty) — pass the answer
@@ -23,4 +24,11 @@ export function richTextIsEmpty(json: string | null | undefined): boolean {
 export function noteIsEmpty(note: Pick<Note, 'isEncrypted' | 'title' | 'abstract' | 'content' | 'tabs'>, hasSubNotes: boolean): boolean {
   if (note.isEncrypted || hasSubNotes) return false;
   return !note.title.trim() && !(note.abstract ?? '').trim() && richTextIsEmpty(note.content) && note.tabs.every((t) => richTextIsEmpty(t.content));
+}
+
+// An activity with nothing recorded: no distance, time, notes or field values, and not imported
+// (an imported one is a record of something that happened).
+export function activityIsEmpty(a: Pick<Activity, 'source' | 'distanceMeters' | 'movingTimeSeconds' | 'elapsedTimeSeconds' | 'notes' | 'data'>): boolean {
+  return a.source === 'manual' && a.distanceMeters == null && a.movingTimeSeconds == null && a.elapsedTimeSeconds == null
+    && !(a.notes ?? '').trim() && Object.values(a.data ?? {}).every((v) => v === null || v === undefined || v === '');
 }

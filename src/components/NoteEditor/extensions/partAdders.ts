@@ -1,16 +1,19 @@
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
+import { createGlyph } from '@/components/Icons';
 import styles from './BlockDesigns.module.css';
 
 // "+" buttons beside a block's part, to add another part next to it without the keyboard (the
 // hierarchy's nodes first, 2026-10-22). Shown while the part is hovered, or on a touch screen for
 // the part holding the cursor. Each button sits on one side of the part's box, so the direction it
-// adds in reads from where it is (a child below a tree node, a sibling to its right).
+// adds in reads from where it is (a child below a tree node, a sibling to its right). A part that
+// can be deleted the same way gets a trash button on its top-right corner (`remove`, 2026-10-26),
+// so taking a part away is as easy as adding one.
 //
 // Drawn once per editor, portaled to <body> and placed from the part's box; hidden on scroll.
 
-export type AdderSide = 'below' | 'right' | 'below-left' | 'below-indent';
-export interface PartAdder { side: AdderSide; label: string; run: () => void; disabled?: boolean }
+export type AdderSide = 'below' | 'right' | 'below-left' | 'below-indent' | 'corner';
+export interface PartAdder { side: AdderSide; label: string; run: () => void; disabled?: boolean; remove?: boolean }
 
 const HIDE_DELAY = 220;
 const touchOnly = () => typeof window !== 'undefined' && !!window.matchMedia?.('(hover: none)').matches;
@@ -44,8 +47,8 @@ export function partAddersPlugin(
         box.replaceChildren(...list.map((a) => {
           const b = document.createElement('button');
           b.type = 'button';
-          b.className = styles.adder;
-          b.textContent = '+';
+          b.className = a.remove ? `${styles.adder} ${styles.adderRemove}` : styles.adder;
+          if (a.remove) b.appendChild(createGlyph('trash')); else b.textContent = '+';
           b.title = a.label;
           b.setAttribute('aria-label', a.label);
           b.disabled = !!a.disabled;
@@ -53,6 +56,7 @@ export function partAddersPlugin(
           const [left, top] = a.side === 'below' ? [r.left + r.width / 2 - S / 2, r.bottom + 4]
             : a.side === 'right' ? [r.right + 4, r.top + r.height / 2 - S / 2]
             : a.side === 'below-indent' ? [r.left + 24, r.bottom + 2]
+            : a.side === 'corner' ? [r.right - S / 2 - 2, r.top - S / 2 + 2]
             : [r.left, r.bottom + 2];
           b.style.left = `${left}px`;
           b.style.top = `${top}px`;

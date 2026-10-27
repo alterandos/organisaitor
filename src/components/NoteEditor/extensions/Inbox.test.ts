@@ -6,6 +6,8 @@ import { TextSelection } from '@tiptap/pm/state';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { InboxExtensions, addItem, setInboxOrder, setItemStatus } from './Inbox';
 import { NoteBlockSelect } from './blockDesigns';
+import { GlossaryCardExtensions } from './GlossaryCard';
+import { ConceptRefMark } from './ConceptRef';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { noteClipboardText } from '../noteClipboardText';
 import { registerLiveNoteEditor } from '@/services/liveNoteEditor';
@@ -45,11 +47,12 @@ afterEach(() => { registerLiveNoteEditor(null); editor?.destroy(); });
 const INBOX = '<div data-type="inbox" data-inbox-id="IB1" data-order="newest"><div data-inbox-title>Ideas</div></div>';
 
 // A note in the store, open in the editor (registered as the live one, as NoteEditor does).
-function make(content = '<p></p>') {
+function make(content = '<p></p>', before?: () => void) {
   noteId = useNoteStore.getState().addNote({ title: 'Here' });
+  before?.();
   editor = new Editor({
     element: document.createElement('div'),
-    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, ...InboxExtensions, NoteBlockSelect],
+    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, ...InboxExtensions, NoteBlockSelect, ...GlossaryCardExtensions, ConceptRefMark],
     content,
   });
   objectTriggerStorage(editor).getContext = () => ({ noteId, collectionId: null, now: new Date() });
@@ -171,6 +174,32 @@ describe('send to inbox', () => {
     expect(find('inboxItem')).toHaveLength(0);
     expect(find('movedStub')).toHaveLength(0);
     expect(editor.state.doc.firstChild!.firstChild!.textContent).toBe('Keep this. Move this idea. Keep that.');
+  });
+
+  it('a Glossary card in the passage stays in its note, after the marker; the inbox gets its term as a link', async () => {
+    let entryId = '';
+    make(`<p>Before the card.</p><div data-type="glossary-card" data-entry-id="E"></div><p>After it.</p>${INBOX}`, () => {
+      entryId = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Osmosis', fields: { meaning: 'Water moving' }, noteId: noteId as NoteId, collectionId: null });
+    });
+    editor.commands.setContent(`<p>Before the card.</p><div data-type="glossary-card" data-entry-id="${entryId}"></div><p>After it.</p>${INBOX}`);
+    let from = -1, to = -1;
+    editor.state.doc.descendants((n, pos) => {
+      if (n.isText && n.text === 'Before the card.') from = pos;
+      if (n.isText && n.text === 'After it.') to = pos + n.nodeSize;
+    });
+    editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, from, to)));
+    expect(await sendToInbox(editor.view, here(), inboxHere())).toBe(true);
+    const cards = find('glossaryCard');
+    expect(cards).toHaveLength(1);
+    expect(cards[0].attrs.entryId).toBe(entryId);
+    expect(cards[0].pos).toBeGreaterThan(find('movedStub')[0].pos);
+    expect(cards[0].pos).toBeLessThan(find('inbox')[0].pos);
+    const [item] = find('inboxItem');
+    expect(item.text).toBe('Before the card.OsmosisAfter it.');
+    let linked = '';
+    editor.state.doc.descendants((n, pos) => { if (pos > find('inbox')[0].pos && n.isText && n.marks.some((m) => m.type.name === 'conceptRef' && m.attrs.entryId === entryId)) linked = n.text!; });
+    expect(linked).toBe('Osmosis');
+    expect(useNoteStore.getState().structuredTagEntries[entryId as never]).toBeDefined();
   });
 
   it('the marker can be removed, and Ctrl+Z brings it back; the item stays', async () => {

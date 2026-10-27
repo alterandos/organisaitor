@@ -19,6 +19,7 @@ import { objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import type { NoteObjectContext } from '../objects/types';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, openBlockPopover, pillButton, replaceTypedWithBlock, selectButton, type BlockDesign } from './blockDesigns';
 import { newGlossaryRecord } from './GlossaryCard';
+import { blockResizeHandle, blockWidth, blockWidthAttributes, blockWidthDomAttrs } from './blockWidth';
 
 // A question in a note (`\question`): something not known yet, noted now to answer later. Agreed
 // with the user 2026-10-13. Note-taking structure, like the quote (extensions/Quote.ts):
@@ -61,6 +62,7 @@ export const QuestionBlock = Node.create({
   addAttributes() {
     return {
       ...blockFrameAttributes(),
+      ...blockWidthAttributes(),
       qid:        { default: null, parseHTML: (el) => el.getAttribute('data-qid'), renderHTML: (a) => (a.qid ? { 'data-qid': a.qid } : {}) },
       status:     { default: 'open', parseHTML: (el) => oneOf(QUESTION_STATUSES, el.getAttribute('data-status'), 'open'), renderHTML: (a) => ({ 'data-status': a.status }) },
       answeredAt: str('answered-at'),
@@ -86,7 +88,7 @@ export const QuestionBlock = Node.create({
     // A question is drawn as a card, with its own border: no Outline (CARD_BLOCK_NODES).
     const { 'data-outlined': _outlined, ...attrs } = HTMLAttributes as Record<string, unknown>;
     void _outlined;
-    return ['div', mergeAttributes(attrs, {
+    return ['div', mergeAttributes(attrs, node.attrs.width ? blockWidthDomAttrs(blockWidth(node.attrs, 'full')) : {}, {
       'data-type': 'question', 'data-note-block': '',
       'data-qn-heading': status === 'open' ? L.label : `${L.label} · ${L.statuses[status]}`,
       'data-qn-icon': QUESTION_STATUS_ICON[status],
@@ -469,6 +471,9 @@ function questionDecorations(state: EditorState, ctx: () => NoteObjectContext | 
     decos.push(Decoration.widget(pos + 1, (view, getPos) => toolsWidget(view, getPos, node, ctx), {
       side: -1, ignoreSelection: true, stopEvent: () => true,
       key: `qn-tools-${t}-${a.variant}-${a.status}-${a.followUp ?? ''}-${fieldsOf(node).join(',')}-${a.outlined ? 'o' : ''}${a.shaded ? 's' : ''}`,
+    }));
+    decos.push(Decoration.widget(pos + 1, (view, getPos) => blockResizeHandle(() => view, () => { const p = getPos(); return p === undefined ? undefined : p - 1; }, () => 'full'), {
+      side: -1, ignoreSelection: true, stopEvent: () => true, key: `qn-resize-${t}`,
     }));
     if (editing) decos.push(Decoration.node(pos, pos + node.nodeSize, { 'data-qn-current': '' }));
     let childPos = pos + 1;

@@ -30,7 +30,9 @@ import { InboxPickerModal } from '@/components/InboxPickerModal/InboxPickerModal
 import { selectionTouchesInbox, sendToInbox } from '@/services/noteInbox';
 import { NoteBackdrop } from './NoteBackdrop';
 import { MobileNoteSidePanel } from './MobileNoteSidePanel';
-import { CloseIcon, ColorDotIcon, DisclosureIcon, PinIcon, TableIcon, TextColorIcon, TrashIcon, SwapIcon } from '@/components/Icons';
+import { AlignIcon, CloseIcon, ColorDotIcon, DisclosureIcon, PinIcon, TableIcon, TextColorIcon, TrashIcon, SwapIcon } from '@/components/Icons';
+import { TEXT_ALIGNS, setTextAlign, textAlignAt } from './extensions/TextAlign';
+import { cycleBlockImportance, selectedBlock } from './extensions/BlockImportance';
 import { SWATCHES, swatchLabel } from '@/config/swatches';
 import './extensions/unsureMenu';
 import { StickyHeadings } from './StickyHeadings';
@@ -1485,6 +1487,9 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
         if (digit >= 1 && digit <= BUILTIN_TAGS.length) {
           const tag = BUILTIN_TAGS[digit - 1];
           e.preventDefault();
+          // Ctrl+1 on a block selected whole: the block's importance (BlockImportance.ts).
+          const block = tag.typeKey === 'important' ? selectedBlock(editor.state) : null;
+          if (block !== null) { cycleBlockImportance(editor.view, block); return; }
           const applyTag = () => {
             // Important steps through its levels (Important, Very important, Critical) and then off.
             if (tag.typeKey === 'important') { cycleImportance(editor.view); return; }
@@ -1871,6 +1876,26 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
             >
               <OrderedIcon />
             </button>
+
+            <div className={styles.toolbarDivider} />
+
+            {/* Text alignment, as in Word (extensions/TextAlign.ts); Ctrl+Shift+] / [ step through them */}
+            {TEXT_ALIGNS.map((align) => {
+              const active = editor ? textAlignAt(editor.state) === align : false;
+              return (
+                <button
+                  key={align}
+                  className={`${styles.toolbarBtn} ${active ? styles.toolbarBtnActive : ''}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { if (editor) { setTextAlign(editor.view, align); editor.view.focus(); } }}
+                  title={LABELS.textAlign[align]}
+                  aria-label={LABELS.textAlign[align]}
+                  aria-pressed={active}
+                >
+                  <AlignIcon align={align} />
+                </button>
+              );
+            })}
 
             {/* `\` objects: same as typing \. Android only: it's the touch path (\ is a few taps away
                 on a phone keyboard, gap F11); with a keyboard, typing \ is quicker. */}

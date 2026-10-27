@@ -88,3 +88,39 @@ describe('a number written another way', () => {
     expect(text()).toContain('25,000');
   });
 });
+
+describe('numbers ready for other notations', () => {
+  const plain = (key: string) => editor.view.someProp('handleKeyDown', (f) => f(editor.view, new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))) ?? false;
+
+  it('a number of seven or more digits, or with a power of ten, is drawn as a pill; shorter ones are not', () => {
+    make('<p>About 69000000000 cells, 6.9E10, in 2024.</p>');
+    const pills = [...editor.view.dom.querySelectorAll('[data-number-ready]')].map((el) => el.textContent);
+    expect(pills).toEqual(['69000000000', '6.9E10']);
+  });
+
+  it('typing one, then a space, offers its scientific form; Enter writes it', () => {
+    make('<p></p>');
+    editor.commands.focus('end');
+    type('About 69000000000 ');
+    expect(editor.view.dom.querySelector('[data-autolink-chip]')?.textContent).toContain('6.9×10¹⁰');
+    expect(plain('Enter')).toBe(true);
+    expect(text()).toBe('About 6.9×10¹⁰');
+  });
+
+  it('a short number, or one already scientific, offers nothing', () => {
+    make('<p></p>');
+    editor.commands.focus('end');
+    type('In 2024 and 6.9E10 ');
+    expect(editor.view.dom.querySelector('[data-autolink-chip]')).toBeNull();
+  });
+});
+
+describe('a number’s margin mark', () => {
+  it('each ready number has a 10ⁿ mark in the margin column, beside its line', async () => {
+    const { marginItems } = await import('./MarginColumn');
+    make('<p>About 69000000000 cells</p><p>and 2024</p>');
+    const marks = marginItems(editor.state).filter((m) => m.key.startsWith('number-'));
+    expect(marks).toHaveLength(1);
+    expect(editor.state.doc.textBetween(marks[0].from, marks[0].to)).toBe('69000000000');
+  });
+});

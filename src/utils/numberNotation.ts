@@ -93,3 +93,22 @@ export function numberAt(text: string, offset: number): { from: number; to: numb
   }
   return null;
 }
+
+// A number worth showing as ready for other notations (asked for 2026-10-26): seven or more
+// digits as written (1,000,000 and up, or 0.0000012), or one already written with a power of ten.
+export function notationReady(text: string): boolean {
+  if (!parseNumber(text)) return false;
+  const notation = notationOf(text);
+  if (notation === 'scientific' || notation === 'e') return true;
+  return (text.match(/\d/g)?.length ?? 0) >= 7;
+}
+
+// The ready numbers in a line of text, as [from, to).
+export function readyNumbersIn(text: string): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
+  for (const m of text.matchAll(NUMBER_RE)) {
+    const from = m.index ?? 0;
+    if (notationReady(m[0])) out.push({ from, to: from + m[0].length });
+  }
+  return out;
+}

@@ -316,7 +316,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
                       <button
                         type="button"
                         className={`${styles.rowActionBtn} ${styles.rowActionBtnDelete}`}
-                        onClick={async () => { if (await confirmDelete('schedule', schedule.name)) deleteSchedule(schedule.id); }}
+                        onClick={async () => { if (await confirmDelete('schedule', schedule.name, undefined, { empty: schedule.blocks.length === 0 })) deleteSchedule(schedule.id); }}
                         title="Delete"
                       >
                         🗑

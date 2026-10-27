@@ -9,6 +9,7 @@ import type { Collection, Purpose, Tag, CollectionId, PurposeId, TagId } from '@
 import styles from './ManagePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { endeavourInUse, purposeInUse, tagInUse } from '@/services/inUse';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
@@ -91,7 +92,7 @@ function EndeavoursSection() {
 
   const toggleArchive = (c: Collection) => updateCollection(c.id as CollectionId, { archivedAt: c.archivedAt ? null : now() });
   const handleDelete = async (c: Collection) => {
-    if (await confirmDelete(LABELS.collection.toLowerCase(), c.name, 'Tasks will be detached but not deleted.')) {
+    if (await confirmDelete(LABELS.collection.toLowerCase(), c.name, 'Tasks will be detached but not deleted.', { empty: !endeavourInUse(c.id as CollectionId) })) {
       deleteCollection(c.id as CollectionId);
     }
   };
@@ -176,7 +177,7 @@ function PurposesSection() {
 
   const toggleArchive = (p: Purpose) => updatePurpose(p.id as PurposeId, { archivedAt: p.archivedAt ? null : now() });
   const handleDelete = async (p: Purpose) => {
-    if (await confirmDelete('purpose', p.name, 'It will be removed from all tasks.')) {
+    if (await confirmDelete('purpose', p.name, 'It will be removed from all tasks.', { empty: !purposeInUse(p.id as PurposeId) })) {
       deletePurpose(p.id as PurposeId);
     }
   };
@@ -233,7 +234,7 @@ function TagsSection() {
   const tags = Object.values(tagsRecord);
 
   const handleDelete = async (t: Tag) => {
-    if (await confirmDelete('tag', t.name, 'It will be removed from all tasks.')) {
+    if (await confirmDelete('tag', t.name, 'It will be removed from all tasks.', { empty: !tagInUse(t.id as TagId) })) {
       deleteTag(t.id as TagId);
     }
   };

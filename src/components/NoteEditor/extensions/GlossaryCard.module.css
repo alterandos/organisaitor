@@ -283,17 +283,31 @@
 
 .remove:hover { color: var(--color-danger); }
 
-/* Compact: one line. The kind's icon, the term, a thin rule in the kind's colour, the meaning. */
+/* Compact: one line. The kind's icon and the term on a light shade of the kind's colour, ruled off
+   in that colour from the card's top edge to its bottom (asked for by the user 2026-10-27), then
+   the meaning. */
 .compact {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-3);
   margin: var(--space-1) 0;
-  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-3);
+  padding: 0 var(--space-4) 0 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
+}
+
+.compactLead {
+  flex: 0 1 auto;
+  max-width: 45%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border-right: 2px solid color-mix(in srgb, var(--gc-accent) 70%, transparent);
+  border-radius: calc(var(--radius-md) - 1px) 0 0 calc(var(--radius-md) - 1px);
+  background: color-mix(in srgb, var(--gc-accent) 10%, var(--color-surface));
 }
 
 .compactIcon {
@@ -306,23 +320,12 @@
   flex: 0 1 auto;
   width: auto;
   min-width: 7.5rem;   /* so the rules of Compact cards in a run line up */
-  max-width: 40%;
   font-size: var(--text-base);
   font-weight: 650;
   field-sizing: content;
 }
 
-.pipe {
-  flex: none;
-  align-self: stretch;
-  width: 2px;
-  margin: var(--space-1) 0;
-  border-radius: var(--radius-pill);
-  background: var(--gc-accent);
-  opacity: 0.7;
-}
-
-.compactMeaning { flex: 1; min-width: 0; }
+.compactMeaning { flex: 1; min-width: 0; align-self: center; padding: var(--space-1) 0; }
 .compactMeaning .primary { color: var(--color-text); }
 
 .missing {
@@ -401,3 +404,16 @@
 }
 .termCard em { color: var(--color-muted); font-size: var(--text-xs); font-style: normal; text-transform: uppercase; letter-spacing: 0.04em; }
 .termCard button { align-self: flex-start; padding: 0; border: none; background: none; color: var(--color-primary); font: inherit; font-weight: 600; cursor: pointer; }
+
+/* An acronym held on a Definition, Concept or Profile, before what it stands for. */
+.acronymShort { font-weight: 700; letter-spacing: 0.04em; }
+
+/* "Already in the Glossary": one record per thing (GlossaryCardBody's duplicate hint). */
+.duplicate {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-subtle);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}

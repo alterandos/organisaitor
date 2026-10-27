@@ -25,8 +25,17 @@ const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const isAlnum = (c: string | undefined) => !!c && /[\p{L}\p{N}]/u.test(c);
 const stripPunct = (w: string) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
-// The letters and digits an acronym is spelt with: "U.S.A." → "usa", "COVID-19" → "covid19".
-const acronymLetters = (term: string) => term.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+// The letters and digits an acronym is spelt with: "U.S.A." → "usa", "COVID-19" → "covid19". A
+// plural's s isn't one of them ("RECs" → "rec"), so it pairs with a singular long form too.
+const acronymLetters = (term: string) => term.replace(/(?<=\p{Lu})s$/u, '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+// An acronym is recorded in the singular, as its long form is (2026-10-27: "RECs (Renewable Energy
+// Certificate)" is the record REC, Renewable Energy Certificate), so either form links to it.
+function singular(result: AcronymInferenceResult): AcronymInferenceResult {
+  if (!/\p{Lu}s$/u.test(result.term)) return result;
+  const one = (w: string) => (/ies$/i.test(w) ? w.slice(0, -3) + 'y' : /[^s]s$/i.test(w) ? w.slice(0, -1) : w);
+  return { term: result.term.slice(0, -1), expansion: result.expansion?.replace(/[\p{L}]+$/u, one) ?? null };
+}
 
 // Shaped like an acronym: 2–12 characters, at least two capitals, no run of 3+ lowercase
 // letters (so "DoD" and "COVID-19" are, "McDonald" isn't).
@@ -184,6 +193,10 @@ function findInContextAt(term: string, context: string, bracketsOnly = false): {
 
 // Main entry point. `selectedText` is what was highlighted; `contextText` is its paragraph.
 export function inferAcronymFromSelection(selectedText: string, contextText: string): AcronymInferenceResult {
+  return singular(inferAcronym(selectedText, contextText));
+}
+
+function inferAcronym(selectedText: string, contextText: string): AcronymInferenceResult {
   const trimmed = selectedText.trim();
   const ws = words(trimmed);
   if (ws.length === 0) return { term: '', expansion: null };
@@ -198,8 +211,9 @@ export function inferAcronymFromSelection(selectedText: string, contextText: str
   // its long form if the letters match (either side of it), else the context's.
   const candidates = acronymCandidates(trimmed);
   for (const c of [...candidates].reverse()) {
-    const before = trimmed.slice(0, c.index).replace(/[\s(]+$/u, '');
-    const after = trimmed.slice(c.index + c.word.length).replace(/^[\s)\-–—:]+/u, '');
+    // Joined by brackets, a dash, a colon, "=", ", or", "i.e.", "aka", "stands for" or "means".
+    const before = trimmed.slice(0, c.index).replace(/[\s(]+$/u, '').replace(/[\s,]+(?:or|i\.e\.?|aka)$/iu, '').replace(/[\s:=\-–—,]+$/u, '');
+    const after = trimmed.slice(c.index + c.word.length).replace(/^[\s)\-–—:=,]+/u, '').replace(/^(?:or|i\.e\.?|aka|stands for|is short for|means)\s+/iu, '');
     const expansion = longFormBefore(c.word, before) ?? (c.lowerCase ? null : longFormAfter(c.word, after));
     if (expansion) return { term: acronymTerm(c.word), expansion };
   }
@@ -243,7 +257,7 @@ export function deduceAcronym(phrase: string): string | null {
 // type (AcronymOffer.ts), so `text` is what's before the cursor, ending with what was just typed (a
 // space, a bracket, a full stop). Only the sentence being written is looked at, and only a pair
 // that reaches its end, so an older pair earlier in the paragraph isn't offered again.
-export function acronymPairJustTyped(text: string): { term: string; expansion: string; termFrom: number } | null {
+export function acronymPairJustTyped(text: string): { term: string; expansion: string; termFrom: number; termLength: number } | null {
   const body = text.slice(0, -1);
   const start = Math.max(body.lastIndexOf('. '), body.lastIndexOf('! '), body.lastIndexOf('? '), body.lastIndexOf('\n')) + 1;
   const clause = text.slice(start);
@@ -254,7 +268,8 @@ export function acronymPairJustTyped(text: string): { term: string; expansion: s
     const longEnd = clause.lastIndexOf(found.expansion) + found.expansion.length;
     const pairEnd = Math.max(found.at + word.length, longEnd);
     if (clause.slice(pairEnd, end).replace(/[)\s]/gu, '') !== '') continue;   // the pair isn't what was just finished
-    return { term: acronymTerm(word), expansion: found.expansion, termFrom: start + found.at };
+    const one = singular({ term: acronymTerm(word), expansion: found.expansion });
+    return { term: one.term, expansion: one.expansion ?? found.expansion, termFrom: start + found.at, termLength: word.length };
   }
   return null;
 }

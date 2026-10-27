@@ -24,6 +24,8 @@ interface Props {
   // tabId is set only for a note that has extra tabs: MAIN_TAB_ID or a NoteTab id.
   onPick:     (noteId: string, tabId?: string) => void;
   onClose:    () => void;
+  // Its heading, when it picks a note for something other than a link (a pane of notes side by side).
+  title?:     string;
 }
 
 interface TabCandidate {
@@ -128,7 +130,7 @@ function combine(stats: TermStat[], weights: number[], tabCount: number): { scor
 // the hits, weighting a keyword by how rare it is across the user's notes (so "exchange" outranks
 // "meeting" when few notes mention it). Nothing is indexed up front: the per-tab plain text is
 // cached (utils/noteSearchText.ts) and the scoring is a substring scan of it.
-export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode = 'link', onPlace }: Props) {
+export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode = 'link', onPlace, title }: Props) {
   const placing = mode === 'place';
   const notes    = useNoteViews();
   const noteTags = useNoteStore((s) => s.noteTags);
@@ -279,9 +281,9 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
       // Keeps App's global single-key hotkeys from firing behind the picker when a result has focus.
       onKeyDown={(e) => { if (e.key !== 'Escape' && !e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
     >
-      <div className={styles.modal} role="dialog" aria-label={placing ? L.placeTitle : 'Link a note'}>
+      <div className={styles.modal} role="dialog" aria-label={placing ? L.placeTitle : title ?? 'Link a note'}>
         <div className={styles.header}>
-          <span className={styles.title}>{placing ? `📝 ${L.placeTitle}` : '📝 Link a note'}</span>
+          <span className={styles.title}>{placing ? `📝 ${L.placeTitle}` : `📝 ${title ?? 'Link a note'}`}</span>
           <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
         </div>
 

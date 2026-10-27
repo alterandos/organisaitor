@@ -125,6 +125,10 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
     const marks: Item[] = [
       { key: 'definition', group: 'mark', icon: tag('definition').icon, label: L.definition, color: tag('definition').color, run: () => { closeSelectionMenu(view); onMarkAs('definition', range.from, range.to); } },
       { key: 'concept', group: 'mark', icon: tag('concept').icon, label: L.concept, color: tag('concept').color, run: () => { closeSelectionMenu(view); onMarkAs('concept', range.from, range.to); } },
+      // An acronym from "RECs (Renewable Energy Certificate)", "ASX: Australian Stock Exchange"…:
+      // its fields filled by inferAcronymFromSelection.
+      { key: 'acronym', group: 'mark', icon: tag('acronym').icon, label: L.acronym, color: tag('acronym').color, run: () => { closeSelectionMenu(view); onMarkAs('acronym', range.from, range.to); } },
+      { key: 'profile', group: 'mark', icon: tag('profile').icon, label: L.profile, color: tag('profile').color, run: () => { closeSelectionMenu(view); onMarkAs('profile', range.from, range.to); } },
       ...IMPORTANCE_LEVELS.map((lv): Item => ({
         key: `important-${lv.level}`, group: 'mark', icon: lv.icon, label: lv.label, color: lv.color,
         run: after(() => setImportance(view, range.from, range.to, lv.level)),

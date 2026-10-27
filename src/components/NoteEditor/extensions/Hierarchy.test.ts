@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
-import { HierarchyExtensions, addHierarchyItem, setHierarchySettings } from './Hierarchy';
+import { HierarchyExtensions, addHierarchyItem, deleteHierarchyItem, setHierarchySettings } from './Hierarchy';
+
+const asked = vi.hoisted(() => ({ count: 0, answer: true }));
+vi.mock('@/components/ConfirmDialog/dialogs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/ConfirmDialog/dialogs')>()),
+  confirmDelete: async (_n: string, _i: string, _d?: string, o?: { empty?: boolean }) => { if (o?.empty) return true; asked.count++; return asked.answer; },
+}));
 import { PyramidExtensions, deleteLayer, layerWidths, setPyramidSettings } from './Pyramid';
 import { effectiveLevels, hierarchyLayout, subtreeEnd } from './hierarchyLayout';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
@@ -184,5 +190,40 @@ describe('adding an item from a node (the hover +)', () => {
     expect(outline()).toBe('0:A 1:B 2:B1 1: 1:C');
     addHierarchyItem(editor.view, posOf('hierarchy'), 4, 'sibling');
     expect(outline()).toBe('0:A 1:B 2:B1 1: 1:C 1:');
+  });
+});
+
+describe('deleting an item from a node (the hover trash)', () => {
+  const html = '<div data-type="hierarchy"><div data-type="hierarchy-item" data-level="0"><div data-hi-box>A</div></div>'
+    + '<div data-type="hierarchy-item" data-level="1"><div data-hi-box>B</div></div>'
+    + '<div data-type="hierarchy-item" data-level="2"><div data-hi-box>B1</div></div>'
+    + '<div data-type="hierarchy-item" data-level="1"><div data-hi-box>C</div></div></div>';
+
+  it('an item on its own goes at once', async () => {
+    make(html);
+    asked.count = 0;
+    await deleteHierarchyItem(editor.view, posOf('hierarchy'), 3);
+    expect(outline()).toBe('0:A 1:B 2:B1');
+    expect(asked.count).toBe(0);
+  });
+
+  it('an item with text under it asks, and takes its subtree; No keeps it', async () => {
+    make(html);
+    asked.count = 0;
+    asked.answer = false;
+    await deleteHierarchyItem(editor.view, posOf('hierarchy'), 1);
+    expect(outline()).toBe('0:A 1:B 2:B1 1:C');
+    asked.answer = true;
+    await deleteHierarchyItem(editor.view, posOf('hierarchy'), 1);
+    expect(outline()).toBe('0:A 1:C');
+    expect(asked.count).toBe(2);
+  });
+
+  it('deleting the top item and everything under it leaves an empty line', async () => {
+    make('<div data-type="hierarchy"><div data-type="hierarchy-item" data-level="0"><div data-hi-box>A</div></div>'
+      + '<div data-type="hierarchy-item" data-level="1"><div data-hi-box></div></div></div>');
+    await deleteHierarchyItem(editor.view, posOf('hierarchy'), 0);
+    expect(posOf('hierarchy')).toBe(-1);
+    expect(editor.state.doc.textContent).toBe('');
   });
 });

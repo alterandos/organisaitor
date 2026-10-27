@@ -464,7 +464,7 @@ export function WatchlistView() {
     });
 
   const handleDelete = async (id: WatchlistItemId, name: string) => {
-    if (!(await confirmDelete('watchlist item', name))) return;
+    if (!(await confirmDelete('watchlist item', name, undefined, { empty: !name.trim() }))) return;
     if (selectedItemId === id) selectItem(null);
     deleteWatchlistItem(id);
   };

@@ -38,9 +38,12 @@ function terms(): Term[] {
   const entries = useNoteStore.getState().structuredTagEntries;
   const version = useSecretsVersion.getState().version;
   if (cache && cache.entries === entries && cache.version === version) return cache.terms;
+  // Every name a record has (its term, and its acronym or what that stands for: glossaryNames), so
+  // typing either offers the same record.
   const list = glossaryEntries()
-    .filter((e) => !e.locked && e.term.trim().length >= MIN_TERM)
-    .map((e) => ({ entryId: e.id, typeKey: e.typeKey, term: e.term.trim(), lower: e.term.trim().toLowerCase(), icon: e.icon, meaning: e.meaning }))
+    .filter((e) => !e.locked)
+    .flatMap((e) => [...new Set([e.term.trim(), e.short, e.long].filter((n): n is string => !!n && n.length >= MIN_TERM))]
+      .map((name) => ({ entryId: e.id, typeKey: e.typeKey, term: name, lower: name.toLowerCase(), icon: e.icon, meaning: e.meaning })))
     .sort((a, b) => b.lower.length - a.lower.length);
   cache = { entries, version, terms: list };
   return list;

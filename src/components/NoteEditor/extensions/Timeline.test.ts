@@ -327,3 +327,21 @@ describe('horizontal style', () => {
     expect(saved?.attrs).toMatchObject({ variant: 'horizontal', order: 'asc' });
   });
 });
+
+describe('ledger style (2026-10-27)', () => {
+  it('the third design button switches to it, keeping every entry, and it round-trips', () => {
+    make();
+    type('\\tl 1914');
+    press('Enter');
+    type('War');
+    const ledger = editor.view.dom.querySelector('[data-block-design="ledger"]') as HTMLButtonElement;
+    ledger.click();
+    const timeline = editor.view.dom.querySelector('[data-type="timeline"]') as HTMLElement;
+    expect(timeline.getAttribute('data-variant')).toBe('ledger');
+    expect(timeline.querySelectorAll('[data-type="timeline-item"]')).toHaveLength(1);
+    expect(timeline.querySelector('[data-type="timeline-item"]')?.hasAttribute('data-tl-side')).toBe(false);
+    editor.commands.setContent(editor.getHTML());
+    const saved = editor.getJSON().content?.[0].content?.[0] as { attrs?: Record<string, unknown> } | undefined;
+    expect(saved?.attrs).toMatchObject({ variant: 'ledger' });
+  });
+});

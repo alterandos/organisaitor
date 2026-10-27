@@ -134,7 +134,7 @@ function ShortcutRow({ shortcut, all }: { shortcut: TextShortcut; all: TextShort
           className={styles.shortcutRemove}
           title={L.remove}
           aria-label={L.remove}
-          onClick={async () => { if (await confirmDelete(L.noun, shortcut.typed)) remove(shortcut.id); }}
+          onClick={async () => { if (await confirmDelete(L.noun, shortcut.typed, undefined, { empty: !shortcut.typed.trim() || !shortcut.text.trim() })) remove(shortcut.id); }}
         ><TrashIcon /></button>
       </div>
       {problem && <p className={styles.shortcutProblem} role="alert">{problem}</p>}

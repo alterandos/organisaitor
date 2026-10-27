@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cycleNotation, formatNumber, numberAt, numberForms, parseNumber } from './numberNotation';
+import { cycleNotation, formatNumber, notationReady, numberAt, numberForms, parseNumber, readyNumbersIn } from './numberNotation';
 
 // One number, four ways of writing it (utils/numberNotation.ts).
 
@@ -39,5 +39,22 @@ describe('cycling and finding', () => {
     expect(numberAt(line, 18)).toEqual({ from: 15, to: 21 });
     expect(numberAt(line, 28)).toBeNull();
     expect(numberAt(line, 38)).toEqual({ from: 34, to: 38 });
+  });
+});
+
+describe('numbers ready for other notations', () => {
+  it('seven or more digits as written, or a power of ten already', () => {
+    expect(notationReady('1000000')).toBe(true);
+    expect(notationReady('1,000,000')).toBe(true);
+    expect(notationReady('0.0000012')).toBe(true);
+    expect(notationReady('6.9×10¹⁰')).toBe(true);
+    expect(notationReady('6.9E10')).toBe(true);
+    expect(notationReady('999999')).toBe(false);
+    expect(notationReady('2026')).toBe(false);
+    expect(notationReady('CO2')).toBe(false);
+  });
+  it('finds them in a line, leaving short numbers and words alone', () => {
+    const line = 'In 2024 about 69000000000 cells, or 6.9E10, not v2.';
+    expect(readyNumbersIn(line).map((r) => line.slice(r.from, r.to))).toEqual(['69000000000', '6.9E10']);
   });
 });

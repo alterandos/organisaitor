@@ -313,11 +313,9 @@ export function navigateToQuickAccessItem(item: QuickAccessItem): void {
 }
 
 // The Places row: most used first; places never opened keep their PLACES order.
-export function placesByUse(entries: Record<string, RecentItemEntry>): Place[] {
-  const uses = (p: Place) => entries[`place:${p.id}`]?.visitCount ?? 0;
-  return PLACES.map((p, i) => ({ p, i, n: uses(p) }))
-    .sort((a, b) => b.n - a.n || a.i - b.i)
-    .map(({ p }) => p);
+// The Places row, A to Z (2026-10-27, the user: ordered by use, it moved about and read as random).
+export function placesAlphabetical(): Place[] {
+  return [...PLACES].sort((a, b) => a.label.localeCompare(b.label));
 }
 
 // One item as it is now, from its type and id (a pin's title follows a rename); null when it's

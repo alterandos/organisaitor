@@ -184,6 +184,10 @@ export function applyFrameAttrs(dom: HTMLElement, attrs: Record<string, unknown>
       dom.style.setProperty(v.slice(0, at).trim(), v.slice(at + 1).trim());
     }
   }
+  // How important the block is (BlockImportance.ts), which renderHTML draws for the other blocks.
+  const level = attrs.importance;
+  if (level === 1 || level === 2 || level === 3) dom.setAttribute('data-importance', String(level));
+  else dom.removeAttribute('data-importance');
 }
 
 export type FrameSettings = Partial<{
@@ -541,7 +545,7 @@ export function isEmptyBlock(node: PMNode): boolean {
 // Blocks whose deletion asks its own question (a Glossary card: the record and its links go too).
 const ASKS_ITSELF = new Set(['glossaryCard', 'glossaryChip']);
 
-// Deletes a whole block (the pill's trash, right-click Delete block, Ctrl+Delete inside it). One
+// Deletes a whole block (the pill's trash, right-click Delete block, Alt+Delete inside it). One
 // with something in it asks first (the user's rule, 2026-10-22: anything deleted asks, unless it's
 // empty); it's still one undo step.
 export async function deleteBlock(view: EditorView, pos: number): Promise<void> {
@@ -596,6 +600,14 @@ const SELECT_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5V3
 // The trash can of components/Icons (TrashIcon), as markup: the pill is plain DOM, not React.
 const DELETE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
+// Buttons every block's pill carries before Select and Delete, added by a feature that applies to
+// all blocks (BlockImportance.ts's ★ and ▾) without touching each block. Keyed, so re-registering
+// (HMR) replaces it.
+const PILL_ADDITIONS = new Map<string, (view: EditorView, blockPos: () => number | undefined) => HTMLElement | null>();
+export function registerPillAddition(id: string, build: (view: EditorView, blockPos: () => number | undefined) => HTMLElement | null): void {
+  PILL_ADDITIONS.set(id, build);
+}
+
 // The pill's Select button, and its Delete button (shown only while the block is selected, CSS).
 // Every block's pill ends with these (pattern test). `getPos` is the pill widget's; the block
 // starts just before it.
@@ -614,7 +626,9 @@ export function selectButton(view: EditorView, getPos: () => number | undefined)
   });
   del.setAttribute('data-block-delete', '');
   del.innerHTML = DELETE_ICON;
-  group.append(select, del);
+  const blockPos = () => { const p = getPos(); return p === undefined ? undefined : p - 1; };
+  const added = [...PILL_ADDITIONS.values()].map((build) => build(view, blockPos)).filter((el): el is HTMLElement => !!el);
+  group.append(...added, select, del);
   return group;
 }
 
@@ -643,15 +657,16 @@ export const NoteBlockSelect = Extension.create({
   },
 });
 
-// Ctrl+Delete inside a block deletes the block (asking first if it has anything in it). Above
-// the editor's own keymap (priority 100), which would otherwise delete the next word.
+// Alt+Delete inside a block deletes the block (asking first if it has anything in it). Not
+// Ctrl+Delete (2026-10-26, the user's call): that deletes the next word in text and in every input,
+// and a block's text is still text. Above the editor's own keymap (priority 100).
 export const NoteBlockDelete = Extension.create({
   name: 'noteBlockDelete',
   priority: 110,
 
   addKeyboardShortcuts() {
     return {
-      'Mod-Delete': () => {
+      'Alt-Delete': () => {
         const pos = blockUnderCursor(this.editor.state);
         if (pos === null) return false;
         void deleteBlock(this.editor.view, pos);
@@ -661,14 +676,14 @@ export const NoteBlockDelete = Extension.create({
   },
 
   // A block's own inputs (a Glossary card's fields, maths, a chart's table) keep their keys from
-  // the editor's keymap, so Ctrl+Delete typed in one is caught here, before it reaches the input,
+  // the editor's keymap, so Alt+Delete typed in one is caught here, before it reaches the input,
   // and deletes the block that input is in.
   addProseMirrorPlugins() {
     return [new Plugin({
       key: new PluginKey('noteBlockDeleteFromInput'),
       view(view) {
         const onKey = (e: KeyboardEvent) => {
-          if (e.key !== 'Delete' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+          if (e.key !== 'Delete' || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
           const target = e.target instanceof Element ? e.target : null;
           if (!target || target === view.dom || !target.closest('[data-note-block]')) return;
           const pos = blockPosAt(view, target);

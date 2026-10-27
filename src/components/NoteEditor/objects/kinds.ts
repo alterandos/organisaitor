@@ -4,12 +4,13 @@ import { isBlockKind } from './types';
 import { reminderKind } from './reminderKind';
 import { eventKind } from './eventKind';
 import { deadlineKind } from './deadlineKind';
+import { taskKind } from './taskKind';
 import { NOTE_BLOCK_KINDS } from './blockKinds';
 
 // THE registry of what `\` can create. A new kind is one entry here (plus an ARTIFACT_TYPES entry
 // for its targetType, if it doesn't have one yet — a pattern test checks). Note blocks (things
 // that live in the note itself) have their own registry, blockKinds.ts.
-export const NOTE_OBJECT_KINDS: AnyNoteObjectKind[] = [reminderKind, eventKind, deadlineKind];
+export const NOTE_OBJECT_KINDS: AnyNoteObjectKind[] = [taskKind, reminderKind, eventKind, deadlineKind];
 
 const keywordsOf = (k: PickableKind) => [k.id, ...k.aliases].map((w) => w.toLowerCase());
 

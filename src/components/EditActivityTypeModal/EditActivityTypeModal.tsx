@@ -160,7 +160,8 @@ export function EditActivityTypeModal() {
     const detail = activityCount > 0
       ? `${activityCount} activit${activityCount === 1 ? 'y' : 'ies'} using it will show as an unknown type.`
       : undefined;
-    if (!(await confirmDelete('activity type', editingType.name, detail))) return;
+    // Used by no activity and holding no fields of its own: nothing goes with it.
+    if (!(await confirmDelete('activity type', editingType.name, detail, { empty: activityCount === 0 && editingType.fieldSchema.length === 0 }))) return;
     deleteActivityType(editingType.id);
     closeEditActivityType();
   }

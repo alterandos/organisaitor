@@ -14,9 +14,12 @@ import { BUILTIN_TAGS } from '../builtinTags';
 import type { NoteObjectContext } from '../objects/types';
 import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, moveFromBlock, openBlockPopover, pillButton, placeBlock, registerEnterableBlock, popoverClass as pop, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { deleteForever, trashedBy } from '@/services/trash';
+import { entryView, isEntryLocked } from '@/services/noteSecrets';
+import { SENT_TO_GLOSSARY, entryImportance, isSentToGlossary } from '@/services/glossary';
 import { GlossaryCardBody } from './GlossaryCardBody';
 import { IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { cardToChip, insertGlossaryChip, setChipDesigns } from './GlossaryChip';
+import { blockResizeHandle, blockWidth, blockWidthAttributes, showBlockWidth, type BlockNamedWidth, type BlockWidth } from './blockWidth';
 
 // A Glossary card in a note (`\definition`, `\acronym`, `\concept`): one atom node that points at a
 // Glossary record (StructuredTagEntry) by `entryId`, never a copy of it. Marked text in a sentence
@@ -46,52 +49,10 @@ export const GLOSSARY_CARD_DESIGNS_WITH_INLINE: BlockDesign<GlossaryCardDesign>[
 ];
 setChipDesigns(GLOSSARY_CARD_DESIGNS_WITH_INLINE);
 
-// How wide a card is. Named widths (the right-click menu's Width ▸): Fit the text (`auto`, a Card's
-// default: Standard, growing with what's typed up to the column), Standard (one width for every card,
-// so cards in a row sit side by side and look alike), a third, half, the column. A drag sets any
-// width, as a share of the column (`"42%"`), snapping to the named ones and to a quarter and three
-// quarters when it passes close to them (agreed with the user 2026-10-22: free, with PowerPoint-style
-// snaps). Once set by hand, it no longer grows with the text. Unset means the design's own: Fit the
+// How wide a card is: the shared block width (blockWidth.ts). Unset is the design's own: Fit the
 // text for Card, the column for Compact (line-shaped).
-export const GLOSSARY_CARD_WIDTHS = ['auto', 'standard', 'third', 'half', 'full'] as const;
-export type GlossaryCardNamedWidth = typeof GLOSSARY_CARD_WIDTHS[number];
-export type GlossaryCardWidth = GlossaryCardNamedWidth | `${number}%`;
-export const STANDARD_CARD_REM = 26;
-const MIN_PCT = 15;
-const SNAP = 0.025;   // a share of the column within which a drag snaps
-
-const percentOf = (w: string) => { const m = /^(\d{1,3})%$/.exec(w); return m ? Math.max(MIN_PCT, Math.min(100, Number(m[1]))) : null; };
-
-export function cardWidth(attrs: Record<string, unknown>): GlossaryCardWidth {
-  const w = (attrs.width as string | null) ?? '';
-  if ((GLOSSARY_CARD_WIDTHS as readonly string[]).includes(w)) return w as GlossaryCardWidth;
-  const pct = percentOf(w);
-  if (pct !== null) return `${pct}%`;
-  return attrs.variant === 'card' ? 'auto' : 'full';
-}
-
-// The width a drag ends at, `fraction` being the card's share of the column: a named width or a
-// quarter mark when close to one, otherwise the nearest whole percent.
-export function snapCardWidth(fraction: number, columnPx: number, remPx = 16): GlossaryCardWidth {
-  const stops: [GlossaryCardWidth, number][] = [
-    ['25%', 1 / 4], ['third', 1 / 3], ['half', 1 / 2], ['75%', 3 / 4], ['full', 1],
-    ['standard', Math.min(1, (STANDARD_CARD_REM * remPx) / Math.max(1, columnPx))],
-  ];
-  const near = stops.filter((st) => Math.abs(st[1] - fraction) <= SNAP)
-    .sort((a, b) => Math.abs(a[1] - fraction) - Math.abs(b[1] - fraction))[0];
-  if (near) return near[0];
-  if (fraction >= 1) return 'full';
-  return `${Math.max(MIN_PCT, Math.round(fraction * 100))}%`;
-}
-
-const NAMED_PCT: Record<string, number> = { third: 33, half: 50, full: 100 };
-
-// How a width is drawn: the named ones by their attribute, a percentage through --card-w.
-function showWidth(dom: HTMLElement, width: GlossaryCardWidth) {
-  const pct = percentOf(width);
-  dom.setAttribute('data-card-width-shown', pct === null ? width : pct === 100 ? 'full' : 'custom');
-  if (pct === null) dom.style.removeProperty('--card-w'); else dom.style.setProperty('--card-w', `${pct}%`);
-}
+export const cardWidth = (attrs: Record<string, unknown>): BlockWidth => blockWidth(attrs, cardDefaultWidth(attrs));
+const cardDefaultWidth = (attrs: Record<string, unknown>): BlockNamedWidth => (attrs.variant === 'card' ? 'auto' : 'full');
 
 const oneOf = <T extends string>(values: readonly T[], v: string | null, fallback: T): T =>
   (values as readonly string[]).includes(v ?? '') ? (v as T) : fallback;
@@ -109,7 +70,7 @@ export const GlossaryCard = Node.create({
       entryId: { default: null, parseHTML: (el) => el.getAttribute('data-entry-id'), renderHTML: (a) => ({ 'data-entry-id': a.entryId }) },
       // Split (retired 2026-10-13, at the user's request) reads as Compact, its nearest design.
       variant: { default: 'card', parseHTML: (el) => oneOf(GLOSSARY_CARD_VARIANTS, el.getAttribute('data-variant') === 'split' ? 'compact' : el.getAttribute('data-variant'), 'card'), renderHTML: (a) => ({ 'data-variant': a.variant }) },
-      width:   { default: null, parseHTML: (el) => el.getAttribute('data-card-width'), renderHTML: (a) => (a.width ? { 'data-card-width': a.width } : {}) },
+      ...blockWidthAttributes(),
       // How this card shows its record's picture (GlossaryCardBody ImageField): a width in px, and
       // where it sits (flow: in the fields' order; right; bottom). Presentation, like the width.
       imageWidth: { default: null, parseHTML: (el) => { const n = parseInt(el.getAttribute('data-image-width') ?? '', 10); return Number.isFinite(n) && n > 0 ? n : null; }, renderHTML: (a) => (a.imageWidth ? { 'data-image-width': String(a.imageWidth) } : {}) },
@@ -207,11 +168,6 @@ export function setGlossaryCardVariant(view: EditorView, pos: number, variant: G
   view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, variant }));
 }
 
-export function setGlossaryCardWidth(view: EditorView, pos: number, width: GlossaryCardWidth): void {
-  const node = view.state.doc.nodeAt(pos);
-  if (node?.type.name !== 'glossaryCard') return;
-  view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, width: width === 'auto' ? null : width }));
-}
 
 // Puts the cursor in the card's term (after `\definition`, Enter on a selected card). `text` is
 // typed there: keys that reached the note while the card was selected rather than its term.
@@ -228,13 +184,16 @@ registerEnterableBlock('glossaryCard', (view, pos, edge) => {
 
 
 // Done with the card (Ctrl+Enter in it): the cursor to the text after it, a new line if there's none.
-export function leaveGlossaryCard(view: EditorView, pos: number): void {
+// `newLine` (Ctrl+Enter, 2026-10-27): onto a new line after the card, or the empty one already
+// there, rather than into the text that follows.
+export function leaveGlossaryCard(view: EditorView, pos: number, newLine = false): void {
   const node = view.state.doc.nodeAt(pos);
   if (!node) return;
   const after = pos + node.nodeSize;
   let tr = view.state.tr;
+  const next = tr.doc.nodeAt(after);
   const found = Selection.findFrom(tr.doc.resolve(after), 1, true);
-  if (found && found.from >= after) tr = tr.setSelection(found);
+  if (found && found.from >= after && (!newLine || (next?.type.name === 'paragraph' && next.content.size === 0))) tr = tr.setSelection(found);
   else {
     const paragraph = view.state.schema.nodes.paragraph;
     const $after = tr.doc.resolve(after);
@@ -339,7 +298,7 @@ class GlossaryCardView {
     this.pill = document.createElement('div');
     this.body = document.createElement('div');
     this.body.setAttribute('data-glossary-card-body', '');
-    this.handle = this.resizeHandle();
+    this.handle = blockResizeHandle(() => this.editor.view, () => this.getPos(), () => cardDefaultWidth(this.node.attrs), (w) => showBlockWidth(this.dom, w));
     this.dom.append(this.pill, this.body, this.handle);
     this.root = createRoot(this.body);
     this.dom.addEventListener('glossary-card-focus', (e) => {
@@ -350,13 +309,23 @@ class GlossaryCardView {
     });
     this.dom.addEventListener('mouseenter', this.placePills);
     this.render();
+    // Its record's importance can change from anywhere (another card of it, the margin column).
+    this.unsubscribe = useNoteStore.subscribe(() => {
+      const id = this.node.attrs.entryId as string | null;
+      const record = id ? useNoteStore.getState().structuredTagEntries[id as never] : undefined;
+      const level = record && !isEntryLocked(record) ? entryImportance(entryView(record)) : 0;
+      if (String(level || '') !== (this.dom.getAttribute('data-importance') ?? '')) {
+        if (level) this.dom.setAttribute('data-importance', String(level)); else this.dom.removeAttribute('data-importance');
+      }
+    });
   }
+  private unsubscribe: () => void;
 
   private pillPos = () => { const p = this.getPos(); return p === undefined ? undefined : p + 1; };
 
   private leave = () => {
     const pos = this.getPos();
-    if (pos !== undefined) leaveGlossaryCard(this.editor.view, pos);
+    if (pos !== undefined) leaveGlossaryCard(this.editor.view, pos, true);
   };
 
   private context = (): NoteObjectContext | null => {
@@ -392,6 +361,19 @@ class GlossaryCardView {
     let still = false;
     editor.state.doc.descendants((n) => { if (n.attrs.entryId === entryId) still = true; return !still; });
     if (!still) for (const t of trashedBy(() => useNoteStore.getState().deleteStructuredTagEntry(entryId as never))) deleteForever(t);
+  };
+
+  // Shows another record on this card, and lets this one (holding nothing else) go for good: an
+  // Acronym whose long form was already defined, now added there (GlossaryCardBody).
+  private switchTo = (otherId: string) => {
+    const pos = this.getPos();
+    const view = this.editor.view;
+    const ownId = this.node.attrs.entryId as string | null;
+    if (pos === undefined || !view.editable || !ownId) return;
+    view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...this.node.attrs, entryId: otherId }).setMeta(CONFIRMED, true));
+    let still = false;
+    view.state.doc.descendants((n) => { if (n.attrs.entryId === ownId) still = true; return !still; });
+    if (!still) for (const t of trashedBy(() => useNoteStore.getState().deleteStructuredTagEntry(ownId as never))) deleteForever(t);
   };
 
   private showField = (id: string) => {
@@ -431,54 +413,15 @@ class GlossaryCardView {
     view.focus();
   };
 
-  // The right edge: drag to any width, snapping near the named ones (shown live, with its name or %).
-  private resizeHandle(): HTMLElement {
-    const h = document.createElement('div');
-    h.setAttribute('data-card-resize', '');
-    h.title = LABELS.glossaryCard.resize;
-    h.addEventListener('pointerdown', (e) => {
-      const view = this.editor.view;
-      const column = this.dom.parentElement;
-      if (!view.editable || !column) return;
-      e.preventDefault();
-      h.setPointerCapture(e.pointerId);
-      const left = this.dom.getBoundingClientRect().left;
-      const columnPx = column.getBoundingClientRect().width;
-      const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-      let width = cardWidth(this.node.attrs);
-      const W = LABELS.glossaryCard.widths as Record<string, string>;
-      const stdPct = Math.round(Math.min(1, (STANDARD_CARD_REM * remPx) / Math.max(1, columnPx)) * 100);
-      const move = (ev: PointerEvent) => {
-        width = snapCardWidth((ev.clientX - left) / columnPx, columnPx, remPx);
-        showWidth(this.dom, width);
-        // The width as a share of the column, always; when it has snapped, the name too, and the
-        // marker turns the accent colour (the snap feedback design tools give).
-        const pct = percentOf(width) ?? NAMED_PCT[width] ?? stdPct;
-        const named = W[width];
-        h.setAttribute('data-label', named ? `${pct}% · ${named}` : `${pct}%`);
-        if (named || pct === 25 || pct === 75) h.setAttribute('data-snapped', ''); else h.removeAttribute('data-snapped');
-      };
-      const up = () => {
-        h.removeAttribute('data-label');
-        h.removeAttribute('data-snapped');
-        h.removeEventListener('pointermove', move);
-        h.removeEventListener('pointerup', up);
-        h.removeEventListener('pointercancel', up);
-        const p = this.getPos();
-        if (p !== undefined) setGlossaryCardWidth(view, p, width);
-      };
-      h.addEventListener('pointermove', move);
-      h.addEventListener('pointerup', up);
-      h.addEventListener('pointercancel', up);
-    });
-    return h;
-  }
-
   private render() {
     const a = this.node.attrs;
     this.dom.setAttribute('data-variant', a.variant as string);
-    showWidth(this.dom, cardWidth(a));
-    applyFrameAttrs(this.dom, { ...a, outlined: false });   // a card has its own border: no Outline (CARD_BLOCK_NODES)
+    // Its kind, for the block colour (a selected card is outlined in its kind's colour).
+    const kind = a.entryId ? useNoteStore.getState().structuredTagEntries[a.entryId as never]?.typeKey : undefined;
+    if (kind) this.dom.setAttribute('data-glossary-kind', kind); else this.dom.removeAttribute('data-glossary-kind');
+    showBlockWidth(this.dom, cardWidth(a));
+    const record = a.entryId ? useNoteStore.getState().structuredTagEntries[a.entryId as never] : undefined;
+    applyFrameAttrs(this.dom, { ...a, outlined: false, importance: record && !isEntryLocked(record) ? entryImportance(entryView(record)) : 0 });   // a card has its own border: no Outline (CARD_BLOCK_NODES)
     const view = this.editor.view;
     const getPos = this.pillPos;
     const bar = blockPill('data-glossary-tools');
@@ -537,6 +480,7 @@ class GlossaryCardView {
       onUndo:   this.undoCreation,
       imageLayout: { width: (a.imageWidth as number | null) ?? null, place: (a.imagePlace as ImageLayout['place']) ?? 'flow' },
       onImageLayout: this.setImageLayout,
+      onSwitchTo: this.switchTo,
     }));
   }
 
@@ -559,6 +503,7 @@ class GlossaryCardView {
 
   // Unmounting while React may be mid-render isn't allowed synchronously (artifactGroups.ts).
   destroy() {
+    this.unsubscribe();
     this.dom.removeEventListener('mouseenter', this.placePills);
     const root = this.root;
     setTimeout(() => root.unmount(), 0);
@@ -597,8 +542,10 @@ function definitionsDeleted(tr: Transaction, noteId: string | null): string[] {
   const gone: string[] = [];
   for (const id of before.keys()) {
     if (after.has(id)) continue;
-    const raw = useNoteStore.getState().structuredTagEntries[id as never] as { noteId?: string } | undefined;
-    if (raw && raw.noteId === noteId) gone.push(id);
+    const raw = useNoteStore.getState().structuredTagEntries[id as never];
+    // A record sent to the Glossary lives there: a card of it taken out never deletes it.
+    const shown = raw && !isEntryLocked(raw) ? entryView(raw) : null;
+    if (raw && raw.noteId === noteId && !(shown && isSentToGlossary(shown))) gone.push(id);
   }
   return gone;
 }
@@ -627,6 +574,31 @@ async function askThenApply(view: EditorView, tr: Transaction, gone: string[]): 
   again.setSelection(Selection.fromJSON(again.doc, tr.selection.toJSON()));
   view.dispatch(again.setMeta(CONFIRMED, true).scrollIntoView());
   for (const id of gone) deleteGlossaryEntryNow(id, view.state.schema);
+}
+
+// ── Send to Glossary ─────────────────────────────────────────────────────────
+// A card (or chip) taken out of the note, its record kept in the Glossary alone (asked for by the
+// user 2026-10-26: a card can clutter a note when a link would do). The term stays where the card
+// was, linked to the record, so the note still says where it was first defined (definitionPassage
+// finds it); the record is marked as sent (services/glossary.ts SENT_TO_GLOSSARY), so it stays
+// listed with no card and goes only when deleted from the Glossary. One undo step for the note;
+// the record's mark stays (harmless: a card brought back by undo shows it as before).
+export function sendCardToGlossary(view: EditorView, pos: number): boolean {
+  const node = view.state.doc.nodeAt(pos);
+  if (!node || (node.type.name !== 'glossaryCard' && node.type.name !== 'glossaryChip') || !node.attrs.entryId || !view.editable) return false;
+  const store = useNoteStore.getState();
+  const raw = store.structuredTagEntries[node.attrs.entryId as never];
+  if (!raw || isEntryLocked(raw)) return false;
+  const entry = entryView(raw);
+  const { conceptRef: link, paragraph } = { conceptRef: view.state.schema.marks.conceptRef, paragraph: view.state.schema.nodes.paragraph };
+  if (!entry.term.trim() || !link) return false;
+  store.updateStructuredTagEntry(raw.id, { fields: { ...entry.fields, [SENT_TO_GLOSSARY]: true } });
+  const text = view.state.schema.text(entry.term, [link.create({ entryId: raw.id, typeKey: entry.typeKey })]);
+  const replacement = node.isInline ? text : paragraph.create(null, text);
+  const tr = view.state.tr.replaceWith(pos, pos + node.nodeSize, replacement).setMeta(CONFIRMED, true);
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+  return true;
 }
 
 // Enter on a selected card puts the cursor in its term, and typing on a selected card types into

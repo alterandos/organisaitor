@@ -123,6 +123,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   });
   const ipcc = entry('acronym', 'IPCC', carbon, {
     expansion: 'Intergovernmental Panel on Climate Change',
+    meaning: 'The UN body that assesses the science of climate change for governments.',   // also a definition (glossaryKinds)
     explanation: 'The UN body that assesses climate science. Its Assessment Reports (AR6 is the latest) are the reference for the essay.',
     weblinks: ['https://www.ipcc.ch'],
   });
@@ -133,6 +134,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     examples: ['Ice–albedo feedback', 'Water vapour feedback', 'Silicate weathering (negative, over millions of years)'],
     nonExamples: ['A forcing, such as adding CO₂: that starts the change rather than responding to it'],
     related: [{ kind: 'dependsOn', entryId: albedo }],
+    importance: 1,   // a Key concept (BlockImportance.ts): shows in its card, hover card and the Glossary filter
   });
   const quartz = entry('profile', 'Quartz', minerals, {
     summary: 'The most common mineral in the continental crust, and the one I keep mistaking for calcite.',

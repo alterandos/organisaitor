@@ -67,6 +67,8 @@ import { ArtifactLinkGroups } from './objects/artifactGroups';
 import { BlockIds } from './extensions/BlockIds';
 import { NoteLinkExtensions } from './extensions/NoteLink';
 import { NoteEmbedExtensions } from './extensions/NoteEmbed';
+import { TextAlign } from './extensions/TextAlign';
+import { BlockImportance } from './extensions/BlockImportance';
 
 // THE note editor's extensions, in order: every block, mark and behaviour a note has. NoteEditor
 // builds its editor from this, and anything else that shows note content as a note shows it (the
@@ -93,6 +95,8 @@ export function noteEditorExtensions({ noteEncrypted, linkClass }: { noteEncrypt
       TextStyle,
       Color,
       FontSize,
+      TextAlign,
+      BlockImportance,
       Table.configure({ resizable: false }),
       TableRow,
       TableHeader,

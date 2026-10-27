@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { noteIsEmpty, richTextIsEmpty } from './emptyContent';
+import { activityIsEmpty, noteIsEmpty, richTextIsEmpty } from './emptyContent';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { useDialogStore } from '@/store/dialogStore';
 
@@ -29,5 +29,16 @@ describe('what counts as empty when deleting', () => {
     useDialogStore.setState({ queue: [] });
     await expect(confirmDelete('note', '', undefined, { empty: true })).resolves.toBe(true);
     expect(useDialogStore.getState().queue).toHaveLength(0);
+  });
+});
+
+describe('an activity with nothing recorded', () => {
+  const blank = { source: 'manual' as const, distanceMeters: null, movingTimeSeconds: null, elapsedTimeSeconds: null, notes: null, data: {} };
+  it('is empty; any measurement, note, field value or import is content', () => {
+    expect(activityIsEmpty(blank)).toBe(true);
+    expect(activityIsEmpty({ ...blank, distanceMeters: 5000 })).toBe(false);
+    expect(activityIsEmpty({ ...blank, notes: 'felt good' })).toBe(false);
+    expect(activityIsEmpty({ ...blank, data: { rpe: 7 } })).toBe(false);
+    expect(activityIsEmpty({ ...blank, source: 'strava' as const })).toBe(false);
   });
 });
