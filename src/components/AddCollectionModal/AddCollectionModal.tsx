@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { DateInput } from '@/components/DateInput/DateInput';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -9,11 +9,14 @@ import { formatDate, now } from '@/utils/date';
 import type { CollectionId, CollectionKind, PurposeId } from '@/types';
 import styles from './AddCollectionModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CloseIcon } from '@/components/Icons';
 import { EncryptContentsField } from '@/components/EncryptContentsField/EncryptContentsField';
+import { EndeavourLinksField } from '@/components/EndeavourLinksField/EndeavourLinksField';
 
 export function AddCollectionModal() {
   const addCollection    = useTaskStore((s) => s.addCollection);
+  const addEndeavourLink = useTaskStore((s) => s.addEndeavourLink);
   const updateCollection = useTaskStore((s) => s.updateCollection);
   const purposes         = useTaskStore((s) => s.purposes);
   const tasksRecord      = useTaskStore((s) => s.tasks);
@@ -35,19 +38,19 @@ export function AddCollectionModal() {
   const [color, setColor]             = useState<string | null>(() => editingCollection?.color ?? null);
   const [deadline, setDeadline]       = useState(() => editingCollection?.deadline ?? '');
   const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>([]);
+  // Creating: the links picked before the Endeavour exists, made once it does.
+  // Made from an Endeavour's home, it starts as part of that Endeavour.
+  const [partOf, setPartOf]   = useState<CollectionId[]>(() => {
+    const ui = useUIStore.getState();
+    return !ui.editingCollection && ui.activeView === 'endeavours' && ui.endeavourHomeId ? [ui.endeavourHomeId as CollectionId] : [];
+  });
+  const [related, setRelated] = useState<CollectionId[]>([]);
 
   const formRef = useRef<HTMLFormElement>(null);
 
   useEscapeClose(() => { if (isEditMode) closeEditCollection(); else closeModal(); }, isVisible);
 
-  useEffect(() => {
-    if (!isVisible) return;
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isVisible, isEditMode, closeEditCollection, closeModal]);
+  useCtrlEnterSubmit(() => formRef.current?.requestSubmit(), isVisible);
 
   if (!isVisible) return null;
 
@@ -85,7 +88,7 @@ export function AddCollectionModal() {
       });
       closeEditCollection();
     } else {
-      addCollection({
+      const id = addCollection({
         kind,
         name:        trimmedName,
         description: description.trim() || null,
@@ -93,6 +96,8 @@ export function AddCollectionModal() {
         purposeIds:  selectedPurposeIds,
         deadline:    deadline || null,
       });
+      for (const target of partOf) addEndeavourLink(id, 'partOf', target);
+      for (const target of related) addEndeavourLink(id, 'related', target);
       closeModal();
     }
   }
@@ -229,6 +234,10 @@ export function AddCollectionModal() {
               </div>
             </div>
           )}
+
+          {/* Links to other Endeavours: editing, they apply at once; creating, they're made with it */}
+          <EndeavourLinksField kind="partOf" selfId={isEditMode ? editingCollection.id : null} value={partOf} onChange={setPartOf} />
+          <EndeavourLinksField kind="related" selfId={isEditMode ? editingCollection.id : null} value={related} onChange={setRelated} />
 
           {/* Encrypt the notes and lists in it — edit mode, project/list kinds; applies at once */}
           {liveCollection && (liveCollection.kind === 'project' || liveCollection.kind === 'list') && (

@@ -4,8 +4,10 @@ import type {
   AppData, Task, TaskId, TagId, Tag,
   CollectionId, Collection, Purpose, PurposeId,
   CreateTaskInput, CreateCollectionInput, CreatePurposeInput,
-  FieldSchema, RoutineTask, ItemLinkKind,
+  FieldSchema, RoutineTask, ItemLinkKind, EndeavourLinkKind,
 } from '@/types';
+import { canAddEndeavourLink, type EndeavourLinkRefusal } from '@/utils/endeavourGraph';
+import { ENDEAVOUR_LINK_KINDS } from '@/config/endeavourLinkKinds';
 import { canAddLink, makeItemLink, type LinkCheck } from '@/utils/taskLinks';
 import { newCollectionId, newPurposeId } from '@/utils/id';
 import { createTask } from '@/services/taskService';
@@ -47,6 +49,10 @@ export interface TaskActions {
   addCollection:    (input: CreateCollectionInput) => CollectionId;
   updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt' | 'encryptContents'>>) => void;
   deleteCollection: (id: CollectionId) => void;
+  // Links between Endeavours (utils/endeavourGraph.ts has the rules). Returns why a link was refused,
+  // or null once it's made.
+  addEndeavourLink:    (fromId: CollectionId, kind: EndeavourLinkKind, targetId: CollectionId) => EndeavourLinkRefusal | null;
+  removeEndeavourLink: (fromId: CollectionId, kind: EndeavourLinkKind, targetId: CollectionId) => void;
 
   // Purposes
   addPurpose:    (input: CreatePurposeInput) => PurposeId;
@@ -262,6 +268,30 @@ export const useTaskStore = create<TaskStore>()(
               [id]: { ...col, ...changes, updatedAt: now() },
             },
           };
+        }),
+
+      addEndeavourLink: (fromId, kind, targetId) => {
+        const refusal = canAddEndeavourLink(get().collections, fromId, kind, targetId);
+        if (refusal) return refusal;
+        set((state) => {
+          const col = state.collections[fromId];
+          if (!col) return {};
+          const ts = now();
+          return { collections: { ...state.collections, [fromId]: { ...col, links: [...(col.links ?? []), { kind, targetId, createdAt: ts }], updatedAt: ts } } };
+        });
+        return null;
+      },
+
+      // A symmetric link is stored once, on either end, so it's taken off whichever end holds it.
+      removeEndeavourLink: (fromId, kind, targetId) =>
+        set((state) => {
+          const strip = (id: CollectionId, other: CollectionId) => {
+            const col = state.collections[id];
+            const left = (col?.links ?? []).filter((l) => !(l.kind === kind && l.targetId === other));
+            return col && left.length !== (col.links ?? []).length ? { [id]: { ...col, links: left, updatedAt: now() } } : {};
+          };
+          const changed = { ...strip(fromId, targetId), ...(ENDEAVOUR_LINK_KINDS[kind].symmetric ? strip(targetId, fromId) : {}) };
+          return Object.keys(changed).length ? { collections: { ...state.collections, ...changed } } : {};
         }),
 
       deleteCollection: (id) => {

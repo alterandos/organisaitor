@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { ItemTypePaneField } from '@/components/ItemTypeField/ItemTypeField';
 import { DateInput } from '@/components/DateInput/DateInput';
 import { linkedListIds } from '@/services/taskListLinks';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
@@ -251,6 +252,8 @@ export function TaskPane() {
               </span>
             )}
           </div>
+
+          <ItemTypePaneField target={{ kind: 'task', id: taskId }} />
 
           {/* Repeat (services/recurringTasks.ts). Not on a sub-task: it repeats with its parent.
               A repeating task with no date starts from today. */}

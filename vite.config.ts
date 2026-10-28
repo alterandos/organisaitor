@@ -132,15 +132,19 @@ function yahooFinanceProxyPlugin(): Plugin {
 // services would restart with empty state, and timers and async saves already running would keep
 // writing through the old copies. On 2026-10-22 that cost an encrypted note: a `git stash` swapped
 // a batch of files under the running dev app, and a stale copy of the notes store was saved over the
-// current one 12 seconds later. A change to any .ts file under src/ now reloads the page instead
-// (state is reloaded from storage, as on a restart); .tsx components keep React Fast Refresh.
+// current one 12 seconds later. A change to any .ts file under src/ is not applied to the running
+// page at all: the page is told, and shows a bar to reload when the person is ready (main.tsx). A
+// forced reload instead (the first fix) reloaded the app under the person each time an agent saved a
+// file and lost what they'd just typed (2026-10-28). .tsx files too: a .tsx that isn't purely a
+// component (main.tsx, one that also exports a hook) makes Vite reload the page on its own. Styles
+// (.css) still update live, which can't touch any data.
 function fullReloadForStateModules(): Plugin {
   return {
     name: 'full-reload-for-state-modules',
     apply: 'serve',
     handleHotUpdate({ file, server }) {
-      if (/\/src\/.+\.ts$/.test(file.replace(/\\/g, '/'))) {
-        server.ws.send({ type: 'full-reload' });
+      if (/\/src\/.+\.tsx?$/.test(file.replace(/\\/g, '/'))) {
+        server.ws.send({ type: 'custom', event: 'organisaitor:code-changed', data: {} });
         return [];
       }
     },

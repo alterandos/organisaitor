@@ -3,6 +3,7 @@ import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 import { LABELS } from '@/config/labels';
 
 import { log } from '@/utils/log';
+import { recordFirstRead } from '@/utils/persistFirstRead';
 // THE storage every persisted store uses (`storage: persistStorage()` in its persist options).
 //
 // Browsers give a site roughly 5 MB of localStorage, shared by every store. Zustand's persist calls
@@ -58,7 +59,7 @@ function warnStorageFull(failedKey: string) {
 }
 
 export const guardedLocalStorage: StateStorage = {
-  getItem:    (name) => localStorage.getItem(name),
+  getItem:    (name) => { const v = localStorage.getItem(name); recordFirstRead(name, v); return v; },
   setItem:    (name, value) => {
     try {
       localStorage.setItem(name, value);

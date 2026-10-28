@@ -1,6 +1,7 @@
 import { createJSONStorage, type StateStorage } from 'zustand/middleware';
 import { LABELS } from '@/config/labels';
 import { guardedLocalStorage, reportPersistFailure } from '@/utils/persistStorage';
+import { recordFirstRead } from '@/utils/persistFirstRead';
 
 import { log } from '@/utils/log';
 // IndexedDB-backed persistence for the stores that can outgrow localStorage's ~5 MB (see
@@ -123,7 +124,55 @@ async function flush() {
 
 function queueWrite(key: string) {
   dirty.add(key);
-  void flush();
+  if (leaving) writeAllNow();
+  else void flush();
+}
+
+// The page is being hidden, reloaded or closed. One write at a time is fine while it stays open, but
+// a page that goes away never starts the writes still waiting behind the one in flight, and those
+// were the person's last edits (2026-10-28: a reload lost what had just been typed). So from here
+// every waiting write starts at once, as does any made after (an editor's own save on leaving runs
+// after this). Writes to one key keep their order: IndexedDB runs read-write transactions in the
+// order they were made.
+let leaving = false;
+const pending = new Set<Promise<void>>();
+
+function track(p: Promise<void>) {
+  pending.add(p);
+  void p.finally(() => pending.delete(p));
+}
+
+function writeAllNow() {
+  for (const key of [...dirty]) {
+    dirty.delete(key);
+    const value = cache.get(key);
+    const write: Promise<unknown> = value === undefined ? idbDelete(key) : idbPut(key, value);
+    track(write.then(() => undefined, (e) => reportPersistFailure(key, e)));
+  }
+}
+
+function onLeave() {
+  leaving = true;
+  writeAllNow();
+}
+
+function onReturn() {
+  leaving = false;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', onLeave);
+  window.addEventListener('pageshow', onReturn);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') onLeave(); else onReturn(); });
+}
+
+// Resolves once every write made so far has reached IndexedDB: before a reload the app asks for.
+export async function settlePersistWrites(): Promise<void> {
+  writeAllNow();
+  while (flushing || pending.size > 0) {
+    await Promise.all([...pending]);
+    if (flushing) await new Promise((r) => setTimeout(r, 10));
+  }
 }
 
 function assertReady(name: string) {
@@ -138,7 +187,9 @@ const idbBacked: StateStorage = {
   getItem: (name) => {
     assertReady(name);
     if (localKeys.has(name)) return guardedLocalStorage.getItem(name) as string | null;
-    return cache.get(name) ?? null;
+    const v = cache.get(name) ?? null;
+    recordFirstRead(name, v);
+    return v;
   },
   setItem: (name, value) => {
     assertReady(name);

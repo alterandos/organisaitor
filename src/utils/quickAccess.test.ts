@@ -100,11 +100,11 @@ describe('navigateToQuickAccessItem', () => {
     expect(useUIStore.getState().editingTaskId).toBe(id);
   });
 
-  it('an endeavour item switches to Tasks and focuses that Endeavour filter', () => {
+  it('an endeavour item opens its home (the Endeavours section, 2026-10-28)', () => {
     const id = useTaskStore.getState().addCollection({ kind: 'project', name: 'Proj' });
     navigateToQuickAccessItem({ key: `endeavour:${id}`, type: 'endeavour', entityId: id, title: 'Proj', subtitle: '', icon: '' });
-    expect(useUIStore.getState().activeView).toBe('tasks');
-    expect(useUIStore.getState().activeCollectionIdByView.tasks).toBe(id);
+    expect(useUIStore.getState().activeView).toBe('endeavours');
+    expect(useUIStore.getState().endeavourHomeId).toBe(id);
   });
 
   it('a notebook item switches to Notes and selects that notebook', () => {

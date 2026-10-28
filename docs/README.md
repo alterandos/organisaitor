@@ -8,6 +8,7 @@ Rules, patterns and architecture live in [`../CLAUDE.md`](../CLAUDE.md); confirm
 | [`features/fitness.md`](features/fitness.md) | Fitness app, Strava integration, and the add-on app architecture |
 | [`features/schedules.md`](features/schedules.md) | Calendar Schedules — recurring weekly timetables, commitment mode |
 | [`features/external-calendar-sync.md`](features/external-calendar-sync.md) | Google Calendar sync (Phase 1, read-only ingest) |
+| [`features/endeavours.md`](features/endeavours.md) | Endeavours, Types, Rhythms and Goals — the agreed design (not built): nested Endeavours, homes, typed items, generalised routines, goals; phases and reversibility |
 | [`features/overview.md`](features/overview.md) | Overview — the suite-level section: everything from every app for a question (sources, engine, saved Overviews, Endeavour Overview) |
 | [`features/notes-objects.md`](features/notes-objects.md) | How `\` inline objects in notes look and behave (the design spec; the rules are in CLAUDE.md) |
 | [`supabase/migrations.md`](supabase/migrations.md) | The migration record: which SQL is live, what each migration does, every table. Read only for migration work |

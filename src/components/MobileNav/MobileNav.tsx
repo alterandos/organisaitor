@@ -1,5 +1,6 @@
 import { useUIStore } from '@/store/uiStore';
-import { CORE_NAV_ITEMS } from '@/components/NavSidebar/navItems';
+import { SECTION_ICONS } from '@/components/NavSidebar/navItems';
+import { SECTIONS } from '@/config/sections';
 import styles from './MobileNav.module.css';
 
 // Android-only bottom tab bar (docs/android/00-architecture.md §5b, corrected tab list).
@@ -8,8 +9,9 @@ import styles from './MobileNav.module.css';
 // touches this component. This is separate from NavSidebar's own `@media` narrow-browser
 // collapse (which shows all 7 sections) — the two never render at once, since App.tsx
 // renders NavSidebar only when !isAndroid.
-const TAB_VIEWS = ['tasks', 'calendar', 'records', 'lists'] as const;
-const TABS = CORE_NAV_ITEMS.filter((item) => (TAB_VIEWS as readonly string[]).includes(item.view));
+// The sections marked `tab` in the registry (config/sections.ts): Endeavours first (the user's
+// choice, 2026-10-28), then the four Organizer sections; the rest are in the More sheet.
+const TABS = SECTIONS.filter((sec) => sec.tab).map((sec) => ({ view: sec.view, label: sec.label, icon: SECTION_ICONS[sec.view] }));
 
 const MoreIcon = (
   <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
@@ -25,8 +27,7 @@ export function MobileNav() {
   const mobileMoreSheetOpen  = useUIStore((s) => s.mobileMoreSheetOpen);
   const openMobileMoreSheet  = useUIStore((s) => s.openMobileMoreSheet);
 
-  const moreActive = mobileMoreSheetOpen
-    || activeView === 'notes' || activeView === 'portfolio' || activeView === 'fitness';
+  const moreActive = mobileMoreSheetOpen || !TABS.some((t) => t.view === activeView);
 
   return (
     <nav className={styles.bar} aria-label="App navigation">

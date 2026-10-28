@@ -1,4 +1,6 @@
 import { useRef } from 'react';
+import { useEndeavourScope } from '@/hooks/useEndeavourScope';
+import { inEndeavourScope } from '@/utils/endeavourGraph';
 import { useTaskStore } from '@/store/taskStore';
 import { usePinAction } from '@/hooks/usePinAction';
 import { PinButton } from '@/components/PinButton/PinButton';
@@ -263,8 +265,11 @@ export function RecordsView() {
 
   const allTrackers = Object.values(collections).filter((c) => c.kind === 'tracker');
   const allRoutines = Object.values(collections).filter((c) => c.kind === 'routine');
-  const trackers = activeCollectionId ? allTrackers.filter((c) => c.collectionId === activeCollectionId) : allTrackers;
-  const routines = activeCollectionId ? allRoutines.filter((c) => c.collectionId === activeCollectionId) : allRoutines;
+  // A tracker or routine filed under the chosen Endeavour, or under anything part of it.
+  const endeavourScope = useEndeavourScope(activeCollectionId);
+  const inScope = (c: { id: string }) => !endeavourScope || (c.id !== activeCollectionId && inEndeavourScope(endeavourScope, c.id));
+  const trackers = allTrackers.filter(inScope);
+  const routines = allRoutines.filter(inScope);
   const activeTracker = activeTrackerId
     ? (collections[activeTrackerId as CollectionId] ?? null)
     : null;

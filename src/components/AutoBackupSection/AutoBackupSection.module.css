@@ -132,3 +132,13 @@
   opacity: 0.5;
   cursor: default;
 }
+
+.rowKind {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-primary-subtle);
+  border-radius: var(--radius-pill);
+  padding: 0.05rem var(--space-2);
+  white-space: nowrap;
+}

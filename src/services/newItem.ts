@@ -4,9 +4,11 @@ import { useUIStore, type AppView } from '@/store/uiStore';
 // thing to create (Records and Lists pick by what's selected). In Notes it follows the focused
 // column: the Chronicle tree makes a notebook inside the selected one; the notes list (or the
 // editor, via Ctrl+N) makes a note.
+// Endeavours: the page makes an Endeavour; a home makes a task, filed under that Endeavour.
 export function openNewItem(view: AppView): void {
   const ui = useUIStore.getState();
-  if (view === 'overview') ui.showAddOverview();
+  if (view === 'endeavours') { if (ui.endeavourHomeId) ui.showAddTask(); else ui.showAddCollection(); }
+  else if (view === 'overview') ui.showAddOverview();
   else if (view === 'calendar') ui.showAddCalendarItem();
   else if (view === 'portfolio') ui.showAddWatchlistItem();
   else if (view === 'lists') { if (ui.activeListId) ui.showAddListItem(ui.activeListId); else ui.showAddList(); }

@@ -110,6 +110,7 @@ export function AutoBackupSection() {
           {snapshots.map((s) => (
             <li key={s.id} className={styles.row}>
               <span className={styles.rowDate}>{new Date(s.createdAt).toLocaleString()}</span>
+              {s.kind === 'upgrade' && <span className={styles.rowKind} title={LABELS.autoBackup.beforeUpgradeHint}>{LABELS.autoBackup.beforeUpgrade}</span>}
               <button
                 className={styles.restoreBtn}
                 onClick={() => handleRestore(s.id, s.createdAt)}

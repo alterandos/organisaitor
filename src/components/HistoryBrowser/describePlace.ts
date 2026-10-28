@@ -112,6 +112,10 @@ export function describePlace(p: NavPlace): PlaceSummary {
       const c = id ? useTaskStore.getState().collections[id as CollectionId] : null;
       return plain(c?.name ?? section, c ? (p.trackerId ? LABELS.tracker : LABELS.routine) : null);
     }
+    case 'endeavours': {
+      const c = p.endeavourId ? useTaskStore.getState().collections[p.endeavourId as CollectionId] : null;
+      return plain(c?.name ?? section, c ? LABELS.collection : null);
+    }
     case 'overview': {
       const sel = p.overview;
       if (!sel) return plain(section);

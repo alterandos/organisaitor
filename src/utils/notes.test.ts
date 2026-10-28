@@ -160,15 +160,25 @@ describe('getVisibleNoteTagIds', () => {
       child: tag('child', { parentTagId: 'root' as never, collectionId: 'c1' as CollectionId }),
       other: tag('other', { collectionId: 'c2' as CollectionId }),
     };
-    const visible = getVisibleNoteTagIds(tags, 'c1' as CollectionId);
+    const visible = getVisibleNoteTagIds(tags, new Set(['c1']));
     expect(visible.has('child')).toBe(true);
     expect(visible.has('root')).toBe(true); // ancestor kept reachable
     expect(visible.has('other')).toBe(false);
   });
 
+  it('a scope with several Endeavours (a parent and its parts) keeps the notebooks of each', () => {
+    const tags = {
+      a: tag('a', { collectionId: 'parent' as CollectionId }),
+      b: tag('b', { collectionId: 'child' as CollectionId }),
+      c: tag('c', { collectionId: 'elsewhere' as CollectionId }),
+    };
+    const visible = getVisibleNoteTagIds(tags, new Set(['parent', 'child']));
+    expect([...visible].sort()).toEqual(['a', 'b']);
+  });
+
   it('excludes an annotation tag entirely (only area tags are considered)', () => {
     const tags = { tagKind: tag('tagKind', { kind: 'tag', collectionId: 'c1' as CollectionId }) };
-    expect(getVisibleNoteTagIds(tags, 'c1' as CollectionId).has('tagKind')).toBe(false);
+    expect(getVisibleNoteTagIds(tags, new Set(['c1'])).has('tagKind')).toBe(false);
   });
 });
 

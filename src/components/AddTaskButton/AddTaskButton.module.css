@@ -112,6 +112,21 @@
 
 .optionIcon { display: block; }
 
+/* A Type (docs/features/endeavours.md screen D): its own icon on a plain circle, the person's types
+   set off from the section's options by a short rule. */
+.typeBtn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+.typeIcon { font-size: var(--text-lg); line-height: 1; }
+.typeDivider {
+  align-self: flex-end;
+  width: 2.6rem;
+  height: 0;
+  border-top: 1px solid var(--color-border-strong);
+}
+
 .fabIcon {
   font-size: 1.75rem;
   line-height: 1;

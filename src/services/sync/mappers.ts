@@ -1,7 +1,7 @@
 import type {
   Task, Collection, Tag, Purpose,
   CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry,
-  ScheduleTemplate,
+  ScheduleTemplate, ItemType, TypedItem,
 } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
@@ -12,6 +12,12 @@ import type { CustomConverter } from '@/types/converters';
 import type { Picture } from '@/types/pictures';
 import type { PinnedItem } from '@/store/pinnedItemsStore';
 import type { Activity, ActivityType } from '@/types/fitness';
+
+// A typed item's Type and field values (migration 060), sent only once the item has had a Type,
+// like encrypt_contents below, so untyped items sync before the migration has run.
+const typeColumns = (i: TypedItem) => (i.typeId === undefined ? {} : { type_id: i.typeId, type_fields: i.typeFields ?? {} });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const typeFromRow = (r: Record<string, any>): TypedItem => (r.type_id == null ? {} : { typeId: r.type_id, typeFields: r.type_fields ?? {} });
 
 // ── Task ────────────────────────────────────────────────────────
 
@@ -49,6 +55,7 @@ export function taskToRow(t: Task, userId: string) {
     repeat:         t.repeat         ?? null,
     created_at:     t.createdAt,
     updated_at:     t.updatedAt,
+    ...typeColumns(t),
     // Explicit null on every live upsert (not merely omitted) so a row previously
     // tombstoned by another device — e.g. restored from the Recycling Bin — has its
     // tombstone actually cleared. Supabase's upsert() only touches columns present in the
@@ -92,6 +99,7 @@ export function rowToTask(r: Record<string, any>): Task {
     repeat:        r.repeat        ?? null,
     createdAt:     r.created_at,
     updatedAt:     r.updated_at,
+    ...typeFromRow(r),
   };
 }
 
@@ -101,6 +109,8 @@ export function rowToTask(r: Record<string, any>): Task {
 // notebooks and Endeavours keep syncing on a database where 058 hasn't been run yet. Once set (on
 // or off) it is always sent, so turning it off reaches the other devices too.
 const encryptContentsColumn = (v: boolean | undefined) => (v === undefined ? {} : { encrypt_contents: v });
+// Sent only once an Endeavour has had a link (migration 059), like encrypt_contents above.
+const linksColumn = (v: Collection['links']) => (v === undefined ? {} : { links: v });
 
 export function collectionToRow(c: Collection, userId: string) {
   return {
@@ -119,6 +129,7 @@ export function collectionToRow(c: Collection, userId: string) {
     collection_id: c.collectionId  ?? null,
     archived_at:   c.archivedAt    ?? null,
     ...encryptContentsColumn(c.encryptContents),
+    ...linksColumn(c.links),
     created_at:    c.createdAt,
     updated_at:    c.updatedAt,
     deleted_at:    null,
@@ -142,6 +153,7 @@ export function rowToCollection(r: Record<string, any>): Collection {
     collectionId: r.collection_id ?? null,
     archivedAt:   r.archived_at   ?? null,
     ...(r.encrypt_contents != null ? { encryptContents: !!r.encrypt_contents } : {}),
+    ...(Array.isArray(r.links) && r.links.length ? { links: r.links } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
   };
@@ -259,6 +271,7 @@ export function eventToRow(e: CalendarEvent, userId: string) {
     source_raw:           e.sourceRaw,
     created_at:          e.createdAt,
     updated_at:          e.updatedAt,
+    ...typeColumns(e),
     deleted_at:          null,
   };
 }
@@ -304,6 +317,7 @@ export function rowToEvent(r: Record<string, any>): CalendarEvent {
     sourceRaw:           r.source_raw           ?? null,
     createdAt:          r.created_at,
     updatedAt:          r.updated_at,
+    ...typeFromRow(r),
   };
 }
 
@@ -410,6 +424,7 @@ export function deadlineToRow(d: CalendarDeadline, userId: string) {
     archive_reason: d.archiveReason ?? null,
     created_at:    d.createdAt,
     updated_at:    d.updatedAt,
+    ...typeColumns(d),
     deleted_at:    null,
   };
 }
@@ -446,6 +461,7 @@ export function rowToDeadline(r: Record<string, any>): CalendarDeadline {
     archiveReason: r.archive_reason ?? null,
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
+    ...typeFromRow(r),
   };
 }
 
@@ -1065,5 +1081,40 @@ export function rowToActivityType(r: Record<string, any>): ActivityType {
     archivedAt:     r.archived_at ?? null,
     createdAt:      r.created_at,
     updatedAt:      r.updated_at,
+  };
+}
+
+// ── Type (item_types, migration 060) ────────────────────────────
+
+export function itemTypeToRow(t: ItemType, userId: string) {
+  return {
+    id:          t.id,
+    user_id:     userId,
+    name:        t.name,
+    icon:        t.icon ?? null,
+    extends_id:  t.extendsId ?? null,
+    // Fields, defaults and parts as one blob, so a new kind of default or part never needs a migration.
+    definition:  { fields: t.fields, defaults: t.defaults, parts: t.parts },
+    archived_at: t.archivedAt ?? null,
+    created_at:  t.createdAt,
+    updated_at:  t.updatedAt,
+    deleted_at:  null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToItemType(r: Record<string, any>): ItemType {
+  const d = r.definition ?? {};
+  return {
+    id:         r.id,
+    name:       r.name,
+    icon:       r.icon ?? null,
+    extendsId:  r.extends_id ?? null,
+    fields:     d.fields ?? [],
+    defaults:   d.defaults ?? {},
+    parts:      d.parts ?? [],
+    archivedAt: r.archived_at ?? null,
+    createdAt:  r.created_at,
+    updatedAt:  r.updated_at,
   };
 }

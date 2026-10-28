@@ -1,11 +1,13 @@
+import { EndeavourIcon } from '@/components/Icons';
 import type { AppView } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 
-// The sections' nav entries and icons: the sidebar and MobileNav's tab bar draw from them, and
-// SECTION_ICONS gives any other place that shows a section the same icon (the history browser).
-// A file of its own so the components that use them stay component-only (fast refresh).
+// Each section's icon (SECTION_ICONS, below: every section must have one), for the nav rail, the
+// phone's tab bar and any other place that shows a section (the history browser). Everything else
+// about a section is config/sections.ts. A file of its own so the components that use them stay
+// component-only (fast refresh).
 
-export const CORE_NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNode }[] = [
+const CORE_NAV_ITEMS: { view: AppView; label: string; icon: React.ReactNode }[] = [
   {
     view: 'tasks',
     label: LABELS.views.tasks,
@@ -94,10 +96,21 @@ export const FitnessIcon = (
   </svg>
 );
 
-// Every section's icon, for places outside the sidebar that show a section (the history browser).
+// The Endeavours section (2026-10-28): at the top of the rail, above Overview; in the phone's tab bar.
+// The same drawing as the Endeavour icon everywhere else (components/Icons).
+export const EndeavoursIcon = <EndeavourIcon width="22" height="22" />;
+
+const coreIcon = (view: AppView) => CORE_NAV_ITEMS.find((i) => i.view === view)!.icon;
+
+// Every section's icon. A Record over AppView, so a new section can't be left without one.
 export const SECTION_ICONS: Record<AppView, React.ReactNode> = {
-  overview: OverviewIcon,
-  portfolio: PortfolioIcon,
-  fitness: FitnessIcon,
-  ...Object.fromEntries(CORE_NAV_ITEMS.map((i) => [i.view, i.icon])),
-} as Record<AppView, React.ReactNode>;
+  endeavours: EndeavoursIcon,
+  overview:   OverviewIcon,
+  tasks:      coreIcon('tasks'),
+  calendar:   coreIcon('calendar'),
+  records:    coreIcon('records'),
+  lists:      coreIcon('lists'),
+  notes:      coreIcon('notes'),
+  portfolio:  PortfolioIcon,
+  fitness:    FitnessIcon,
+};

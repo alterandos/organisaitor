@@ -25,6 +25,7 @@ export interface NavPlace {
   trackerId?:  string | null;          // records
   routineId?:  string | null;
   overview?:   OverviewSelection;
+  endeavourId?: string | null;         // endeavours: the home open (null: the page of every Endeavour)
 }
 
 // Deep enough to browse a working session; the oldest drop off.
@@ -39,6 +40,7 @@ export function placeKey(p: NavPlace): string {
       const extra = `${p.notesView && p.notesView !== 'tree' ? `|v:${p.notesView}` : ''}${p.focusGroupId ? `|g:${p.focusGroupId}` : ''}`;
       return `notes:${p.noteId ?? `nb:${p.notebookId ?? ''}${extra}`}`;
     }
+    case 'endeavours': return `endeavours:${p.endeavourId ?? ''}`;
     default:      return p.view;
   }
 }

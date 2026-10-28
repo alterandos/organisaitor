@@ -12,7 +12,8 @@ export type TrashableKind =
   | 'watchlistItem' | 'portfolioTag' | 'investmentPurpose'
   | 'activity' | 'activityType'
   | 'overview'
-  | 'converter';
+  | 'converter'
+  | 'itemType';
 
 // Agents can't delete anything today (see access.ts's "no delete, ever" boundary) — this
 // union exists so a trash entry can distinguish who deleted it once they can, without a

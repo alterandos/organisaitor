@@ -1,6 +1,6 @@
 # 07 — The demo account: keep it showing everything
 
-Status: Ongoing — built 2026-10-17/18 (see "Demo account" in `docs/features/implemented-features.md`). Not a one-off task: every new user-facing feature should be added to the demo.
+Status: Ongoing — built 2026-10-17/18 (see "Demo account" in `docs/features/implemented-features.md`); last added to 2026-10-29 (Types). Not a one-off task: every new user-facing feature should be added to the demo.
 
 The demo account is a believable semester of a second-year Earth Sciences student that shows off
 the whole suite, Notes most of all, and how notes, tasks and the calendar link together. The user

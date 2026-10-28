@@ -24,6 +24,7 @@ export const PERSISTED_STORAGE_KEYS = [
   'agent-batches',      // agentBatchStore: before-snapshots so an assistant change can be undone
   'overviews-storage', // overviewStore: saved (custom) Overviews — definitions only
   'converters-storage', // converterStore: the person's own converters (and this device's recent ones)
+  'item-types-storage', // itemTypeStore: the person's Types (Exam, Essay…)
   'notes-stickies',     // stickyStore: where each sticky note sits on this device's screen, and its design
   'trash-storage',      // trashStore: Recycling Bin — deleted-item snapshots — lives in IndexedDB, not
                         // localStorage: read/write it via readPersistedValue/writePersistedValue (same as notes-storage)

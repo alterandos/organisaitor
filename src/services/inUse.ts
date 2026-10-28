@@ -4,6 +4,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
 import { useFitnessStore } from '@/store/fitnessStore';
 import type { CollectionId, PurposeId, TagId } from '@/types';
+import { childrenOf } from '@/utils/endeavourGraph';
 
 // Whether an Endeavour, a Purpose or a tag is used by anything, across the apps. Deleting one that
 // isn't doesn't ask (the user's rule, 2026-10-22: anything deleted asks first, unless it's empty;
@@ -15,7 +16,8 @@ export function endeavourInUse(id: CollectionId): boolean {
   const { tasks, collections } = useTaskStore.getState();
   const { events, reminders, deadlines } = useCalendarStore.getState();
   const { notes, noteTags } = useNoteStore.getState();
-  return has(tasks) || Object.values(collections).some((c) => c.id !== id && c.collectionId === id)
+  // An Endeavour other Endeavours are part of (a link, or the old "filed under" field) is in use.
+  return has(tasks) || childrenOf(id, collections).length > 0
     || has(events) || has(reminders) || has(deadlines)
     || has(notes) || has(noteTags) || has(useListStore.getState().lists);
 }

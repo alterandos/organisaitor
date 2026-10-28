@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEndeavourScope } from '@/hooks/useEndeavourScope';
+import { inEndeavourScope } from '@/utils/endeavourGraph';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { notebookIsEmpty } from '@/store/noteStore';
 import { noteIsEmpty } from '@/utils/emptyContent';
@@ -85,11 +87,12 @@ function MobileNotesHome() {
 function useEndeavourFilter() {
   const noteTags = useNoteStore((s) => s.noteTags);
   const activeCollectionId = useUIStore(selectActiveCollectionId) as CollectionId | null;
+  const endeavourScope = useEndeavourScope(activeCollectionId);
   const visibleTagIds = useMemo(
-    () => (activeCollectionId ? getVisibleNoteTagIds(noteTags, activeCollectionId) : null),
-    [noteTags, activeCollectionId],
+    () => (endeavourScope ? getVisibleNoteTagIds(noteTags, endeavourScope) : null),
+    [noteTags, endeavourScope],
   );
-  return { activeCollectionId, visibleTagIds };
+  return { endeavourScope, visibleTagIds };
 }
 
 function childNotebooks(noteTags: Record<string, NoteTag>, parentId: string | null, visible: Set<string> | null) {
@@ -122,7 +125,7 @@ function NotebookRow({ tag, depth }: { tag: NoteTag; depth: number }) {
   const views      = useNoteViews();
   const expanded   = useUIStore((s) => s.expandedNoteTagIds.includes(tag.id as NoteTagId));
   const selected   = useUIStore((s) => s.selectedNoteTagId === tag.id);
-  const { activeCollectionId, visibleTagIds } = useEndeavourFilter();
+  const { endeavourScope, visibleTagIds } = useEndeavourFilter();
   const rowRef = useRef<HTMLButtonElement>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   useLongPress(rowRef, () => setSheetOpen(true));
@@ -131,7 +134,7 @@ function NotebookRow({ tag, depth }: { tag: NoteTag; depth: number }) {
   const children = childNotebooks(noteTags, tag.id, visibleTagIds);
   const topNotes = Object.values(notes)
     .filter((n) => n.tagIds.includes(tag.id) && !n.archivedAt && !n.parentId)
-    .filter((n) => !activeCollectionId || getNoteEffectiveCollectionId(n, noteTags) === activeCollectionId)
+    .filter((n) => inEndeavourScope(endeavourScope, getNoteEffectiveCollectionId(n, noteTags)))
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   const count = Object.values(notes).filter((n) => n.tagIds.includes(tag.id) && !n.archivedAt).length;
 
@@ -239,10 +242,10 @@ function NoteRow({ note, raw, depth }: { note: Note; raw: Note; depth: number })
 function RecentNotes() {
   const notes    = useNoteStore((s) => s.notes);
   const noteTags = useNoteStore((s) => s.noteTags);
-  const { activeCollectionId } = useEndeavourFilter();
+  const { endeavourScope } = useEndeavourFilter();
   const recent = Object.values(notes)
     .filter((n) => n.lastViewedAt && !n.archivedAt)
-    .filter((n) => !activeCollectionId || getNoteEffectiveCollectionId(n, noteTags) === activeCollectionId)
+    .filter((n) => inEndeavourScope(endeavourScope, getNoteEffectiveCollectionId(n, noteTags)))
     .sort((a, b) => (b.lastViewedAt ?? '').localeCompare(a.lastViewedAt ?? ''))
     .slice(0, RECENT_LIMIT);
 

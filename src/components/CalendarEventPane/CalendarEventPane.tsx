@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { ItemTypePaneField } from '@/components/ItemTypeField/ItemTypeField';
 import { EventTasksField } from '@/components/TaskLinks/EventTasksField';
 import { DateInput } from '@/components/DateInput/DateInput';
 import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
@@ -354,6 +355,9 @@ export function CalendarEventPane() {
             onChange={(r) => updateEvent(id, eventPatch(r))}
             labelClassName={`${styles.label} ${styles.checkLabel}`}
           />
+
+          {/* A task's scheduled event takes no Type of its own: the task has it. */}
+          {!isTaskShadow && <ItemTypePaneField target={{ kind: 'event', id }} />}
 
           {/* ── Repeat — not offered on a task's scheduled event: the task itself doesn't repeat ── */}
           {!isTaskShadow && <div className={styles.field}>

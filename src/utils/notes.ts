@@ -1,4 +1,5 @@
 import type { CollectionId, NoteTag } from '@/types';
+import { inEndeavourScope } from '@/utils/endeavourGraph';
 
 // The Stickies notebook (services/stickyNotes.ts) and the Scratchpad (services/scratchpad.ts, beside
 // it since 2026-10-19) are special sets of notes, not notebooks among the others: at the top level
@@ -144,16 +145,17 @@ export function noteName(
   return { title, notebook, path: path.join(' › '), full: notebook ? `${title} · ${notebook}` : title };
 }
 
-// Notebook IDs that should stay visible when focused on a given Endeavour: notebooks whose
-// effective Endeavour matches, plus their ancestors (so the tree stays navigable to reach them).
+// Notebook IDs that should stay visible when focused on an Endeavour: notebooks whose effective
+// Endeavour is in its scope (it and everything part of it: hooks/useEndeavourScope.ts), plus their
+// ancestors (so the tree stays navigable to reach them).
 export function getVisibleNoteTagIds(
   noteTags: Record<string, NoteTag>,
-  activeCollectionId: CollectionId,
+  scope: ReadonlySet<string>,
 ): Set<string> {
   const areaTags = Object.values(noteTags).filter((t) => t.kind === 'area');
   const visible = new Set<string>();
   for (const tag of areaTags) {
-    if (getEffectiveCollectionId(tag, noteTags) !== activeCollectionId) continue;
+    if (!inEndeavourScope(scope, getEffectiveCollectionId(tag, noteTags))) continue;
     visible.add(tag.id);
     let current = tag;
     while (current.parentTagId) {

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { DateInput } from '@/components/DateInput/DateInput';
 import { useTaskStore } from '@/store/taskStore';
 import { useScheduleStore } from '@/store/scheduleStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
@@ -88,7 +88,8 @@ export function AddScheduleModal() {
   const [color,        setColor]        = useState<string | null>(() => editingSchedule?.color ?? null);
   const [startDate,    setStartDate]    = useState(() => editingSchedule?.startDate ?? '');
   const [endDate,      setEndDate]      = useState(() => editingSchedule?.endDate ?? '');
-  const [collectionId, setCollectionId] = useState<CollectionId | null>(() => editingSchedule?.collectionId ?? null);
+  // A new timetable starts filed under the Endeavour chosen where it's made (an Endeavour's home, a filter).
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(() => (editingSchedule ? editingSchedule.collectionId ?? null : selectActiveCollectionId(useUIStore.getState()) as CollectionId | null));
   const [blocks,       setBlocks]       = useState<BlockRow[]>(() => editingSchedule ? editingSchedule.blocks.map(blockToRow) : []);
   const [addingBlock,  setAddingBlock]  = useState(false);
   // Scrolls a block's row into view right after it expands — both the ⚙ button and clicking

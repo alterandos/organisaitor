@@ -15,7 +15,11 @@ import { log } from '@/utils/log';// Dedicated IndexedDB database for automatic 
 const DB_NAME = 'organisaitor-backups';
 const STORE   = 'snapshots';
 
-interface SnapshotRow { id: number; createdAt: string; data: string }
+// `kind`: 'auto' (taken once enough has changed, thinned by the rotation) or 'upgrade' (taken just
+// before stored data was upgraded to a new version: services/upgradeSnapshot.ts, kept apart).
+// Rows from before 2026-10-28 have no kind and count as 'auto'.
+export type SnapshotKind = 'auto' | 'upgrade';
+interface SnapshotRow { id: number; createdAt: string; data: string; kind?: SnapshotKind }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -38,17 +42,18 @@ function openDb(): Promise<IDBDatabase> {
 export interface BackupSnapshotMeta {
   id:        number;
   createdAt: string; // ISO 8601
+  kind:      SnapshotKind;
 }
 
 // Stores a full backup snapshot (the same `{ exportedAt, version, ...oneKeyPerStore }` JSON
 // shape a manual Export produces — see utils/backupExport.ts's buildBackupSnapshot). Returns
 // the new snapshot's id, or null if it couldn't be saved (IndexedDB unavailable, quota, …).
-export async function saveBackupSnapshot(data: string): Promise<number | null> {
+export async function saveBackupSnapshot(data: string, kind: SnapshotKind = 'auto'): Promise<number | null> {
   try {
     const db = await openDb();
     return await new Promise<number>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite');
-      const req = tx.objectStore(STORE).add({ createdAt: new Date().toISOString(), data } satisfies Omit<SnapshotRow, 'id'>);
+      const req = tx.objectStore(STORE).add({ createdAt: new Date().toISOString(), data, kind } satisfies Omit<SnapshotRow, 'id'>);
       tx.oncomplete = () => resolve(req.result as number);
       tx.onerror    = () => reject(tx.error);
     });
@@ -69,7 +74,7 @@ export async function listBackupSnapshots(): Promise<BackupSnapshotMeta[]> {
       req.onerror   = () => reject(req.error);
     });
     return rows
-      .map(({ id, createdAt }) => ({ id, createdAt }))
+      .map(({ id, createdAt, kind }) => ({ id, createdAt, kind: kind ?? 'auto' }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   } catch (e) {
     log.error('autoBackup', 'failed to list snapshots', e);

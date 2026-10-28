@@ -8,6 +8,7 @@ export type CalendarReminderId = string & { readonly _brand: 'CalendarReminderId
 export type CalendarDeadlineId = string & { readonly _brand: 'CalendarDeadlineId' };
 export type TrackerEntryId     = string & { readonly _brand: 'TrackerEntryId'     };
 export type ScheduleId         = string & { readonly _brand: 'ScheduleId'         };
+export type ItemTypeId         = string & { readonly _brand: 'ItemTypeId'         };
 
 // ── Enum-like string unions ─────────────────────────────────────────────────────
 export type Priority       = 'none' | 'low' | 'medium' | 'high';
@@ -147,8 +148,62 @@ export interface Collection {
   collectionId: CollectionId | null;  // Endeavour this belongs to — meaningful for kind='tracker'|'routine' (trackers/routines can be filed under a project/list Endeavour, same as Task.collectionId)
   archivedAt:   string | null;  // sunset, not deleted — hidden from pickers/filters, restorable
   encryptContents?: boolean;    // project/list kinds: everything filed under it that can be encrypted is kept encrypted (utils/encryptionScopes.ts); absent = never set, off
+  // Links to other Endeavours (2026-10-28, docs/features/endeavours.md): "part of" (rolls up; several
+  // parents allowed) and "related". What each kind means is config/endeavourLinkKinds.ts; the rules
+  // (loops, roll-up) are utils/endeavourGraph.ts. A link to a deleted Endeavour is ignored, not removed.
+  // Absent until the first link is made: no store migration, and the column is sent only then, so an
+  // Endeavour without links syncs before migration 059 has run.
+  links?:       EndeavourLink[];
   createdAt:    string;
   updatedAt:    string;
+}
+
+// ── Types (docs/features/endeavours.md phase 3) ─────────────────────────────────
+// What kind of thing an item is (an Exam, an Essay, a Reading): fields to fill in, defaults, and
+// parts made with it. Called "Type" in the UI; ItemType here, since `Type` reads as TypeScript's.
+// One extends another (Exam extends Assessment): it adds to its fields and parts. The rules are
+// utils/itemTypes.ts; applying one is services/itemTypes.ts.
+export type TypeableKind = 'task' | 'event' | 'deadline';
+
+export interface TypePart {
+  id:         string;              // nanoid(8)
+  kind:       'task' | 'followUp'; // a task to do before the item, or a follow-up after it
+  title:      string;
+  offsetDays: number;              // days before (task) or after (followUp) the item's date
+}
+
+export interface ItemTypeDefaults {
+  makeAs?:    TypeableKind;        // what one is usually made as (an Exam: an event)
+  important?: boolean;
+  tagIds?:    TagId[];             // tasks only (a Type made from a tag keeps adding it)
+}
+
+export interface ItemType {
+  id:         ItemTypeId;
+  name:       string;
+  icon:       string | null;       // components/IconPicker's value
+  extendsId:  ItemTypeId | null;
+  fields:     FieldSchema[];
+  defaults:   ItemTypeDefaults;
+  parts:      TypePart[];
+  archivedAt: string | null;
+  createdAt:  string;
+  updatedAt:  string;
+}
+
+// On a typed item (tasks, events, deadlines): which Type, and its field values by field id. Both
+// absent on an untyped item, so typing needed no store migration (synced once set: migration 060).
+export interface TypedItem {
+  typeId?:     ItemTypeId | null;
+  typeFields?: Record<string, unknown>;
+}
+
+export type EndeavourLinkKind = 'partOf' | 'related';
+
+export interface EndeavourLink {
+  kind:      EndeavourLinkKind;
+  targetId:  CollectionId;
+  createdAt: string;
 }
 
 // ── Milestone ──────────────────────────────────────────────────────────────────
@@ -165,7 +220,7 @@ export interface Milestone {
 }
 
 // ── Task ───────────────────────────────────────────────────────────────────────
-export interface Task {
+export interface Task extends TypedItem {
   id:           TaskId;
   createdAt:    string;
   updatedAt:    string;
@@ -308,7 +363,7 @@ export interface RepeatConfig {
 }
 
 // A time-bounded appointment (e.g. "Doctor at 2pm–3pm").
-export interface CalendarEvent {
+export interface CalendarEvent extends TypedItem {
   id:                 CalendarEventId;
   title:              string;
   date:               string;               // YYYY-MM-DD
@@ -479,7 +534,7 @@ export interface CreateCalendarReminderInput {
 // notifying "at" the time itself once `time` is set. `time` here is purely informational (e.g.
 // "due at 5pm"), never a notification trigger — preserving the whole reason a Deadline is a
 // distinct kind from a Reminder ("notify before, never at the moment").
-export interface CalendarDeadline {
+export interface CalendarDeadline extends TypedItem {
   id:           CalendarDeadlineId;
   title:        string;
   date:         string;               // YYYY-MM-DD

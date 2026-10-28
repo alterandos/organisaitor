@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useEndeavourScope } from '@/hooks/useEndeavourScope';
+import { inEndeavourScope } from '@/utils/endeavourGraph';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { pageKeyBlocked } from '@/utils/pageKeys';
 import type { TaskId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, CollectionId, CalendarEvent, ScheduleId, EventStatus } from '@/types';
@@ -214,6 +216,7 @@ export function CalendarView() {
   const openSchedules            = useUIStore((s) => s.openSchedules);
   const toggleSchedules          = useUIStore((s) => s.toggleSchedules);
   const activeCollectionId       = useUIStore(selectActiveCollectionId) as CollectionId | null;
+  const endeavourScope           = useEndeavourScope(activeCollectionId);
 
   const shadePastDays         = useSettingsStore((s) => s.shadePastDays);
   const shadeWeekends         = useSettingsStore((s) => s.shadeWeekends);
@@ -255,7 +258,7 @@ export function CalendarView() {
       if (task.archived) return;
       if (task.deadline) {
         if (!layerVisibility.taskDeadlines) return;
-        if (activeCollectionId && task.collectionId !== activeCollectionId) return;
+        if (!inEndeavourScope(endeavourScope, task.collectionId)) return;
         push(task.deadline, {
           kind: 'task',
           id: task.id,
@@ -287,7 +290,7 @@ export function CalendarView() {
       // Tentative is a filter on top of the 'events' layer, not a separate one — a task-linked
       // shadow event is never user-marked tentative, so this only ever applies to plain events.
       if (!isTaskEvent && (ev.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
-      if (activeCollectionId && ev.collectionId !== activeCollectionId) return;
+      if (!inEndeavourScope(endeavourScope, ev.collectionId)) return;
       const item: CalDisplayItem = {
         kind: 'event',
         id: ev.id,
@@ -337,7 +340,7 @@ export function CalendarView() {
       // Tentative is a filter on top of the 'reminders' layer, not a separate one — same
       // convention as events (see above).
       if ((rem.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
-      if (activeCollectionId && rem.collectionId !== activeCollectionId) return;
+      if (!inEndeavourScope(endeavourScope, rem.collectionId)) return;
       const item: CalDisplayItem = {
         kind: 'reminder',
         id: rem.id,
@@ -366,7 +369,7 @@ export function CalendarView() {
       if (dl.deadlineType === 'task') return;
       if (!layerVisibility.deadlines) return;
       if ((dl.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
-      if (activeCollectionId && dl.collectionId !== activeCollectionId) return;
+      if (!inEndeavourScope(endeavourScope, dl.collectionId)) return;
       const item: CalDisplayItem = {
         kind: 'deadline',
         id: dl.id,
@@ -389,7 +392,7 @@ export function CalendarView() {
 
     Object.values(schedules).forEach((schedule) => {
       if (!schedule.active) return;
-      if (activeCollectionId && schedule.collectionId !== activeCollectionId) return;
+      if (!inEndeavourScope(endeavourScope, schedule.collectionId)) return;
       for (const block of schedule.blocks) {
         // Commitment mode (see ScheduleBlock.requiresCommitment, CLAUDE.md "Schedule
         // commitment mode"): a block that doesn't require commitment renders exactly as
@@ -422,7 +425,7 @@ export function CalendarView() {
 
     map.forEach((list, date) => map.set(date, sortItems(list)));
     return map;
-  }, [tasks, events, reminders, deadlines, schedules, activeCollectionId, days, layerVisibility]);
+  }, [tasks, events, reminders, deadlines, schedules, endeavourScope, days, layerVisibility]);
 
   // ── Mobile week strip & desktop week view ─────────────────────────────────
   const weekDays = useMemo(() => {

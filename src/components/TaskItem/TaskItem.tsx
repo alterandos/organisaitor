@@ -20,6 +20,9 @@ import { repeatSummary } from '@/services/recurringTasks';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { ArchiveIcon, CheckCircleIcon, RestoreIcon, TrashIcon } from '@/components/Icons';
 import styles from './TaskItem.module.css';
+import { useItemTypeStore } from '@/store/itemTypeStore';
+import { fieldValuesText, resolveItemType } from '@/utils/itemTypes';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 
 // Two 80px actions (Archive, Delete) behind the row on a left swipe.
 const SWIPE_LEFT_REVEAL = 160;
@@ -118,6 +121,9 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
 
   // Waiting on another task (task links): shaded grey (itemBlocked), with a count naming what it waits on.
   const blockers       = task.completed || task.archived ? [] : openBlockers(task, tasksRecord);
+  // Its Type (docs/features/endeavours.md phase 3), with the values filled in as the tooltip.
+  const itemTypes      = useItemTypeStore((s) => s.types);
+  const itemType       = resolveItemType(itemTypes, task.typeId);
   const checklist      = checklistProgress(linkedListIds(task.crossAppRefs), listsRecord, listItemsRecord);
   const subtaskIds     = task.subtaskIds ?? [];
   const hasSubtasks    = subtaskIds.length > 0;
@@ -186,6 +192,12 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
 
         {task.kind === 'waiting' && !task.completed && (
           <span className={styles.indicator} style={showDueDate ? { opacity: 1 } : undefined} title="Waiting task">⏳</span>
+        )}
+
+        {itemType && (
+          <span className={styles.typePill} title={fieldValuesText(itemType.fields, task.typeFields) || itemType.type.name}>
+            <ItemIcon icon={itemType.type.icon} /> {itemType.type.name}
+          </span>
         )}
 
         {blockers.length > 0 && (

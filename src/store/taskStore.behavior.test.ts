@@ -91,3 +91,27 @@ describe('updateTask — link extraction from notes', () => {
     expect(useTaskStore.getState().tasks[id].links).toEqual([]);
   });
 });
+
+describe('links between Endeavours (docs/features/endeavours.md)', () => {
+  it('adds a "part of" link, refuses a loop, and takes it off again', () => {
+    const s = useTaskStore.getState();
+    const semester = s.addCollection({ kind: 'list', name: 'Semester 2' });
+    const subject = s.addCollection({ kind: 'project', name: 'GEOS215' });
+    expect(useTaskStore.getState().collections[subject].links).toBeUndefined();   // none until the first link
+    expect(s.addEndeavourLink(subject, 'partOf', semester)).toBeNull();
+    expect(useTaskStore.getState().collections[subject].links).toMatchObject([{ kind: 'partOf', targetId: semester }]);
+    expect(s.addEndeavourLink(semester, 'partOf', subject)).toBe('loop');
+    s.removeEndeavourLink(subject, 'partOf', semester);
+    expect(useTaskStore.getState().collections[subject].links).toEqual([]);
+  });
+
+  it('a related link is taken off from either end', () => {
+    const s = useTaskStore.getState();
+    const a = s.addCollection({ kind: 'list', name: 'A' });
+    const b = s.addCollection({ kind: 'list', name: 'B' });
+    s.addEndeavourLink(a, 'related', b);
+    expect(s.addEndeavourLink(b, 'related', a)).toBe('duplicate');
+    s.removeEndeavourLink(b, 'related', a);
+    expect(useTaskStore.getState().collections[a].links).toEqual([]);
+  });
+});

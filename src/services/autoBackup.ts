@@ -22,6 +22,7 @@ import { usePortfolioStore } from '@/store/portfolioStore';
 import { buildBackupSnapshot } from '@/utils/backupExport';
 import { saveBackupSnapshot, listBackupSnapshots, deleteBackupSnapshot } from '@/services/autoBackupStorage';
 import { selectSnapshotsToKeep } from '@/utils/backupRetention';
+import { takeUpgradeSnapshot } from '@/services/upgradeSnapshot';
 
 // Per-device bookkeeping, not user data — same category as syncService.ts's
 // 'todo-sync-pending', deliberately NOT in PERSISTED_STORAGE_KEYS (config/backup.ts): it's the
@@ -82,7 +83,8 @@ async function takeSnapshotAndRotate(): Promise<void> {
   saveScore(0);
 
   const targetAgesDays = useSettingsStore.getState().autoBackupTargetAgesDays;
-  const all = await listBackupSnapshots();
+  // Only automatic snapshots are thinned; "before upgrade" ones keep their own count.
+  const all = (await listBackupSnapshots()).filter((s) => s.kind === 'auto');
   const keep = selectSnapshotsToKeep(all, targetAgesDays);
   for (const snap of all) if (!keep.has(snap.id)) await deleteBackupSnapshot(snap.id);
 }
@@ -142,6 +144,8 @@ function subscribeAll(): Array<() => void> {
 export function initAutoBackup(): void {
   if (started) return;
   started = true;
+  // Whether or not automatic backups are on: a store that was just upgraded gets its old data kept.
+  void takeUpgradeSnapshot();
   score = loadScore();
 
   const apply = (enabled: boolean) => {

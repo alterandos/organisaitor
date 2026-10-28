@@ -12,7 +12,8 @@ import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import type { Collection, Tag, Purpose } from '@/types';
-import { DisclosureIcon, EditIcon, TrashIcon } from '@/components/Icons';
+import { DisclosureIcon, EditIcon, TrashIcon, TypeIcon } from '@/components/Icons';
+import { makeTagAType } from '@/services/itemTypes';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
@@ -59,6 +60,7 @@ function SidebarTagRow({ tag, isActive, onToggle, onEdit, onDelete }: { tag: Tag
     >
       <RowOptionsMenu rowRef={rowRef} title={tag.name} icon={<span className={styles.dot} style={{ background: tag.color ?? 'var(--color-border)' }} />}>
         <RowAction className={styles.iconBtn} icon={<EditIcon />} label={LABELS.rowActions.edit} onClick={onEdit} />
+        <RowAction className={styles.iconBtn} icon={<TypeIcon width="1em" height="1em" />} label={LABELS.itemTypes.fromTag} onClick={() => makeTagAType(tag.id as TagId)} />
         <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon={<TrashIcon width="1em" height="1em" />} label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowOptionsMenu>
       <button className={styles.rowMain} onClick={onToggle}>

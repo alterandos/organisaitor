@@ -10,10 +10,11 @@ import { useFitnessStore } from '@/store/fitnessStore';
 import { useTrashStore } from '@/store/trashStore';
 import { useOverviewStore } from '@/store/overviewStore';
 import { useConverterStore } from '@/store/converterStore';
+import { useItemTypeStore } from '@/store/itemTypeStore';
 import type { CustomConverter } from '@/types/converters';
 import type { Overview } from '@/types/overview';
 import type { TrashEntryId, TrashableKind } from '@/types/trash';
-import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, ScheduleTemplate, TrackerEntry } from '@/types';
+import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, ScheduleTemplate, TrackerEntry, ItemType } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
@@ -115,6 +116,10 @@ const RESTORE_TARGETS: { [K in TrashableKind]: RestoreTarget } = {
   converter: {
     has: (id) => id in useConverterStore.getState().converters,
     put: (c) => useConverterStore.setState((s) => ({ converters: { ...s.converters, [(c as CustomConverter).id]: c as CustomConverter } })),
+  },
+  itemType: {
+    has: (id) => id in useItemTypeStore.getState().types,
+    put: (t) => useItemTypeStore.setState((s) => ({ types: { ...s.types, [(t as ItemType).id]: t as ItemType } })),
   },
 };
 

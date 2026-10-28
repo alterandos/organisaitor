@@ -22,6 +22,8 @@ import { useOverviewStore } from '@/store/overviewStore';
 import { useConverterStore } from '@/store/converterStore';
 import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { linkTaskToEvent } from '@/services/eventTaskLinks';
+import { addStarterSet, applyItemType, setItemType } from '@/services/itemTypes';
+import { useItemTypeStore } from '@/store/itemTypeStore';
 import { editNoteContent } from '@/services/noteContentEdit';
 import { pictureRef } from '@/services/pictures';
 import { MAIN_TAB_ID } from '@/utils/noteTabs';
@@ -84,6 +86,10 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   const fieldReport = tasks.addCollection({ kind: 'project', name: 'Field trip report', description: 'GEOS201: a 2,000-word report on the Kiama coast field trip.', color: colour('teal'), deadline: day(18), purposeIds: [honours], tagIds: [uniTag] });
   const essay = tasks.addCollection({ kind: 'project', name: 'Climate essay', description: 'GEOS215: Is solar geoengineering a responsible response to climate change? 2,500 words.', color: colour('indigo'), deadline: day(25), purposeIds: [honours], tagIds: [uniTag] });
   const admin = tasks.addCollection({ kind: 'list', name: 'Uni admin', description: 'Fees, forms and the library.', color: colour('grey') });
+  // The semester the two assignments and the admin are part of (Endeavour links, 2026-10-28): choose
+  // it in the Endeavour filter and everything in all three shows.
+  const semester = tasks.addCollection({ kind: 'list', name: 'Semester 2', description: 'Second-year Earth Sciences: GEOS201 and GEOS215.', color: colour('blue'), purposeIds: [honours], tagIds: [uniTag] });
+  for (const part of [fieldReport, essay, admin]) tasks.addEndeavourLink(part, 'partOf', semester);
 
   // ── Notebooks ──
   const uni = notes.addNoteTag({ name: 'University', kind: 'area', icon: '🎓', color: colour('blue') });
@@ -199,6 +205,16 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   cal.addReminder({ title: 'Charge the camera and GPS', date: day(3), time: '20:00', collectionId: fieldReport });
   const essayDue = cal.addDeadline({ title: 'Climate essay due', date: day(25), time: '23:59', collectionId: essay, important: true, notifyDaysBefore: 3, crossAppRefs: [noteRef(essayNote)] });
   const labDue = cal.addDeadline({ title: 'Lab 3 worksheet due', date: day(2), time: '17:00', crossAppRefs: [noteRef(lab)] });
+
+  // ── Types (docs/features/endeavours.md phase 3): the University starter set, and the semester's
+  // assessments given their Type and values. Their parts already exist above, so none are made,
+  // except the essay's proofread.
+  addStarterSet('university');
+  const typeNamed = (name: string) => Object.values(useItemTypeStore.getState().types).find((x) => x.name === name)!.id;
+  applyItemType({ kind: 'event', id: midsem }, typeNamed('Exam'), { weight: 30, room: 'Exam Hall B', materials: 'One A4 page of notes, both sides', status: 'Not started' }, []);
+  applyItemType({ kind: 'deadline', id: essayDue }, typeNamed('Essay'), { weight: 40, words: 2000, question: 'Should we research solar geoengineering?', status: 'In progress' }, ['proofread']);
+  applyItemType({ kind: 'deadline', id: labDue }, typeNamed('Assessment'), { weight: 5, status: 'In progress' }, []);
+  setItemType({ kind: 'task', id: readIpcc }, typeNamed('Reading'), { source: 'IPCC AR6 Synthesis Report, Summary for Policymakers', pages: '1–36' });
 
   const block = (id: string, title: string, daysOfWeek: number[], startTime: string, endTime: string, location: string) =>
     ({ id, title, daysOfWeek, startTime, endTime, location, interval: 1, intervalAnchor: day(0), exceptions: [], notes: null, requiresCommitment: false, committedDates: [] });
@@ -541,4 +557,5 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
 export const DEMO_BACKUP_KEYS = [
   'todo-app-storage', 'todo-calendar', 'todo-schedules', 'todo-tracker', 'todo-routines', 'notes-storage',
   'lists-storage', 'fitness-storage', 'todo-portfolio', 'overviews-storage', 'trash-storage', 'pictures-storage',
+  'item-types-storage',
 ] as const;

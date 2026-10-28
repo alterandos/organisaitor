@@ -1,6 +1,7 @@
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { isAppEnabled } from '@/config/apps';
+import { SECTIONS } from '@/config/sections';
 import styles from './MobileMoreSheet.module.css';
 import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
 
@@ -23,22 +24,12 @@ export function MobileMoreSheet() {
 
   return (
     <BottomSheet onClose={close} ariaLabel="More">
-      <button className={styles.item} onClick={() => go(() => setActiveView('overview'))}>
-        {LABELS.views.overview}
-      </button>
-      <button className={styles.item} onClick={() => go(() => setActiveView('notes'))}>
-        {LABELS.views.notes}
-      </button>
-      {isAppEnabled('portfolio') && (
-        <button className={styles.item} onClick={() => go(() => setActiveView('portfolio'))}>
-          {LABELS.views.portfolio}
+      {/* Every section not in the tab bar (config/sections.ts), in nav order. */}
+      {SECTIONS.filter((sec) => !sec.tab && isAppEnabled(sec.view)).map((sec) => (
+        <button key={sec.view} className={styles.item} onClick={() => go(() => setActiveView(sec.view))}>
+          {sec.label}
         </button>
-      )}
-      {isAppEnabled('fitness') && (
-        <button className={styles.item} onClick={() => go(() => setActiveView('fitness'))}>
-          {LABELS.views.fitness}
-        </button>
-      )}
+      ))}
 
       <div className={styles.divider} />
 

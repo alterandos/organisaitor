@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { IconField } from '@/components/IconPicker/IconField';
 import { useNoteStore } from '@/store/noteStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { useTaskStore } from '@/store/taskStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { LABELS } from '@/config/labels';
@@ -68,10 +68,12 @@ export function AddNoteTagModal() {
   const depth     = getDepth(parentId, noteTags);
   const levelLabel = isTag ? 'Tag' : LEVEL_LABELS[Math.min(depth, LEVEL_LABELS.length - 1)];
 
-  // undefined = follow the parent notebook's Endeavour (also after the parent changes); anything
-  // else is the user's own pick.
+  // undefined = follow the parent notebook's Endeavour (also after the parent changes), or, for a
+  // top-level notebook, the Endeavour chosen where it's being made (an Endeavour's home, a filter);
+  // anything else is the user's own pick.
   const [pickedCollectionId, setCollectionId] = useState<CollectionId | null | undefined>(undefined);
-  const collectionId = pickedCollectionId !== undefined ? pickedCollectionId : (parentTag?.collectionId ?? null);
+  const [activeAtOpen] = useState(() => selectActiveCollectionId(useUIStore.getState()) as CollectionId | null);
+  const collectionId = pickedCollectionId !== undefined ? pickedCollectionId : parentTag ? (parentTag.collectionId ?? null) : activeAtOpen;
 
   // Pre-fill icon/color when type is chosen
   const handleTypeChange = (key: string) => {

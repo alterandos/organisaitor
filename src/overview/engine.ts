@@ -2,6 +2,7 @@ import { LABELS } from '@/config/labels';
 import { addDaysToIso } from '@/utils/date';
 import { OVERVIEW_SOURCES, SOURCE_BY_KEY, type OverviewSnapshot } from './sources';
 import type { CollectionId } from '@/types';
+import { endeavourSubtree, inEndeavourScope } from '@/utils/endeavourGraph';
 import type { OverviewQuery, OverviewRow } from '@/types/overview';
 
 // Runs an Overview's question against every source: which rows, in what order, in which groups.
@@ -24,8 +25,10 @@ export const DEFAULT_QUERY: OverviewQuery = {
   sources: [], collectionId: null, status: 'open', when: 'upcoming', windowDays: 14, search: '', sort: 'when-asc', groupBy: 'none',
 };
 
-function matches(r: OverviewRow, q: OverviewQuery, today: string): boolean {
-  if (q.collectionId && r.endeavourId !== q.collectionId) return false;
+// `scope`: the chosen Endeavour and everything part of it (utils/endeavourGraph.ts), so an Endeavour's
+// Overview includes its parts' items.
+function matches(r: OverviewRow, q: OverviewQuery, today: string, scope: ReadonlySet<string> | null): boolean {
+  if (!inEndeavourScope(scope, r.endeavourId)) return false;
   if (r.status === 'archived') return false;
   if (q.status === 'open' && r.status !== 'open') return false;
   if (q.when === 'dated' && !r.when) return false;
@@ -93,10 +96,11 @@ export function runOverview(q: OverviewQuery, snap: OverviewSnapshot, today: str
   const wanted = q.sources.length ? OVERVIEW_SOURCES.filter((s) => q.sources.includes(s.key)) : OVERVIEW_SOURCES;
   let hiddenLocked = 0;
   const rows: OverviewRow[] = [];
+  const scope = q.collectionId ? endeavourSubtree(q.collectionId, snap.collections) : null;
   for (const s of wanted) {
     const res = s.rows(snap, today);
-    hiddenLocked += res.locked.filter((e) => !q.collectionId || e === q.collectionId).length;
-    for (const r of res.rows) if (matches(r, q, today)) rows.push(r);
+    hiddenLocked += res.locked.filter((e) => inEndeavourScope(scope, e)).length;
+    for (const r of res.rows) if (matches(r, q, today, scope)) rows.push(r);
   }
   rows.sort(sorter(q));
   return { groups: group(rows, q, snap), total: rows.length, hiddenLocked };

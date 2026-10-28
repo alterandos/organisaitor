@@ -62,6 +62,13 @@ src/
     hydrating.ts             — isHydrating / setHydrating: true while sync writes the cloud's rows into the stores (read by store watchers)
   services/quickAccessPins.ts — togglePin (toast with Undo), isPinned, pinMenuItem, the note-row pin provider, adoptLegacyNotePins: THE way to pin to Quick Access
   hooks/usePinAction.ts     — a pin button's icon/label/action, for a RowAction or a button (PinButton)
+  config/typeStarters.ts — STARTER_SETS: ready-made Types added only on request (the University set); none are built in
+  config/fieldTypes.ts — FIELD_TYPE_OPTIONS: the FieldSchema field kinds offered (tracker columns, a Type's fields)
+  store/itemTypeStore.ts — the person's Types (synced as item_types); rules in utils/itemTypes.ts, applying one in services/itemTypes.ts
+  utils/itemTypes.ts — Types' rules, pure: typeChain, resolveItemType (fields, parts, defaults through extends), canExtend, partDue, fieldValuesText
+  services/itemTypes.ts — giving an item a Type and making its parts (applyItemType, setItemType), addStarterSet, makeTagAType, itemsOfType
+  config/endeavourLinkKinds.ts — what each kind of link between Endeavours means (partOf rolls up; related doesn't); a new kind is one entry
+  hooks/useEndeavourScope.ts — the Endeavour filter's scope: the chosen Endeavour and everything part of it (test items with inEndeavourScope)
   services/newItem.ts       — openNewItem(view): THE N/Space/Ctrl+N routing, section by section (Notes: by focused column) — see "New-item hotkey"
   services/signOut.ts       — requestSignOut(): THE way to sign out — confirms (and says what stays on the device), encrypts what an encrypted notebook or Endeavour covers (or warns), locks the vault, force-uploads and only wipes if that succeeded (else warns, user can cancel), then authStore.signOut(). Never call authStore.signOut() directly from UI
   services/encryption/      — encryption by scope: kinds.ts (ENCRYPTABLE_KINDS, heldFromSync, waitingForEncryption), enforcer.ts (initEncryptionScopes, encryptAllWaiting); the rules are utils/encryptionScopes.ts
@@ -79,6 +86,7 @@ src/
   services/noteContentEdit.ts — editNoteContent(noteId, tabId, { inEditor, inJson }): THE way to change a note's content from outside the editor (through the open editor if that text is open, else the stored JSON); editNoteText(…, schema, edit) when the editor's schema is at hand
   services/stickyNotes.ts   — sticky notes: notes in the Stickies notebook (presetKey 'stickies'); addSticky, setStickyContent (paragraphs with bold/italic/underline/strike, through editNoteContent), stickyDocOf/stickyDocFrom/stickyText, removeSticky (to the Recycling Bin, Undo)
   services/scratchpad.ts    — the scratchpad (Alt+P): one note in its own notebook (presetKey 'scratchpad', pinned after Stickies); ensureScratchpad, scratchpadText, cutScratchpad (with Undo)
+  services/upgradeSnapshot.ts — a "Before an app update" backup snapshot when a store's stored version changed at startup; last 3 kept
   services/glossaryDelete.ts — deleting a Glossary record: asks (saying how many links go too), then removes every link to it in every note
   services/noteLinkTargets.ts — what a note link or embed points at: noteDocFor, linkTarget (the passage as it reads now), ensureBlockId, openNoteLink
   services/liveNoteEditor.ts — THE registry of open note editors (one per pane side by side): registerOpenNoteEditor, the one in front via registerLiveNoteEditor/liveNote(); liveNoteEditorFor(noteId, tabId), liveNoteFor(noteId), liveNotes(), liveNoteOf(view), flushOpenNoteEditors(). A change to a note's content from outside the editor goes through that view when it's open
@@ -96,6 +104,7 @@ src/
   services/taskCompletion.ts — toggleTaskCompletion(taskId): THE way the UI completes or reopens a task. Asks before completing one that's waiting on other tasks (complete anyway / complete the whole chain upstream, via choiceDialog), then toggles through taskListLinks and shows the Completed toast (what it unlocked, + Follow-up, Undo). Agents toggle directly (agent/access.ts) — no dialog, no toast. Enforced by a pattern test
   services/notifications/   — THE notification rules and their delivery (docs/android/05-notifications.md): plan.ts (planNotifications — pure, every platform; WHEN anything notifies is decided only here), actions.ts (snooze / Done / complete the task / open the item — shared by the bell and Android buttons), androidScheduler.ts (Android: books the next 14 days with the OS via @capacitor/local-notifications, reconciles on launch/resume/store change, channels, buttons, permission ask). The desktop/web poller is hooks/useNotificationChecker.ts, built on plan.ts
   config/itemIcons.ts       — ITEM_TYPE_ICON / ITEM_FLAG_ICON / INBOX_ICON: THE icon for each item kind (deadline 🏁) and flag (❗ ✏️ 🔁) — see "Inline objects in notes"
+  config/sections.ts        — SECTIONS: THE list of sections (label, header title, nav group, phone tab or More sheet, Endeavour filter, tier) — see "Sections & navigation"
   config/swatches.ts        — SWATCHES: THE colour palette every picker offers (hex for stored colours, pale for fills; tokens --color-swatch-* for drawn ones) — see "Colours a person picks"
   utils/floatingPlacement.ts — placeFloating / useFloatingPlacement / placeElement: THE way to place a dropdown, menu or popover so all of it is reachable
   utils/marginLayout.ts     — the margin column's layout: rows per line, three icons then +N, brackets (layoutMarginRows, spansLines)
@@ -181,6 +190,9 @@ src/
     numberNotation.ts        — one number in four notations, exact (parseNumber, formatNumber, numberForms, cycleNotation, numberAt)
     textToTask.ts            — inferTaskFromSelection(text): non-AI date/time/priority/link inference for the Notes "Create ▸ Task" feature, and inferCalendarItemFromSelection(text) for "Create ▸ Calendar item" (kind event/reminder/deadline from phrase cues, plus travel/birthday, tentative, important, repeat — see "Notes Create ▸ Calendar item: phrase cues" in Implemented features) — regex-based, no external dependency; locale-aware (Intl) for ambiguous numeric dates. A new cue goes in with a test in textToTask.test.ts
     stableId.ts              — stableId(prefix, userId, key): the same id on every device for one imported thing (calendar import's importedEventId, Strava's stravaActivityId); each use is an approved exception to "never a fixed id"
+    endeavourGraph.ts        — the rules of links between Endeavours: parentsOf, childrenOf, endeavourSubtree, endeavourAncestors, canAddEndeavourLink (no self, repeat or loop), inEndeavourScope (every Endeavour filter)
+    endeavourSummary.ts      — where an Endeavour stands, from Overview's rows: isBehind, summarizeRows (behind / this week / coming up / next), rowsOfEndeavour
+    persistFirstRead.ts      — what each persisted store held when the app opened (read by services/upgradeSnapshot.ts)
     fitnessIds.ts            — stravaActivityId(userId, stravaId) and withStableStravaIds (older random-id Strava activities take their stable id on load)
     timelineWhen.ts          — readTimelineWhen (a timeline entry's When as a sortable point: dates in many formats, years, BC/AD, decades, ranges, times, "Day 3" steps) and readTimeline (the order, inherited years). Pure; a new format goes in with a test
     definitionInference.ts   — inferDefinitionFromSelection: term + meaning from "X is Y" / "X: Y" / a term and its sentence, for the Definition and Concept popover
@@ -210,11 +222,16 @@ src/
     useTimeGridDrag.ts       — shared drag-to-move / drag-to-resize for any hourly time grid built on utils/timeGrid.ts: one hook instance can drive every draggable block on a page (geometry supplied per-gesture, not fixed at hook-creation time). Used by CalendarView's week/day grids (Events move+resize, Reminders move only) and ScheduleWeekGridPreview's block editor (AddScheduleModal) — see "Calendar drag-to-move / drag-to-resize" in Implemented features
     useMarkdownHotkeys.ts    — "light rich text" for plain-<textarea> notes fields (Task/Calendar): Ctrl+B/Ctrl+I wrap the selection in Markdown bold/italic syntax (utils/markdownTextEdit.ts's pure toggleWrap), Ctrl+L opens components/MarkdownLinkPrompt to insert a `[text](url)` link. Attached directly to the textarea element, not `document`. See "Light rich text" in Implemented features
   components/
-    NavSidebar/              — left nav: section switcher, settings, account icons (desktop/web only — hidden on Android in favour of MobileNav); navItems.tsx holds CORE_NAV_ITEMS and SECTION_ICONS (THE icon per section)
+    NavSidebar/              — left nav: section switcher, settings, account icons (desktop/web only — hidden on Android in favour of MobileNav); navItems.tsx holds SECTION_ICONS (THE icon per section; everything else about a section is config/sections.ts)
     NavFlash/                — what a keyboard back/forward (Alt+←/→, Backspace) shows: the compact history carousel (HistoryCarousel) centred on where you went, a small arrow at its side; stays while Alt is held, fades after (uiStore.navFlash, set by App.tsx).
     StickyNotes/             — the sticky notes over Notes (desktop): paper that stays where it's dragged, four designs, its text written in place; right-click: open, design, remove; mounted by NotesSection
       useSimpleNoteEditor.ts — the small editor over a simple-text note (a sticky, the scratchpad): debounced save, takes up outside changes; simpleNoteExtensions(placeholder)
     ScratchpadPanel/         — the scratchpad panel (Alt+P, over any section): Copy all / Cut all, Open in Notes, Scratchpad paper or Simple design; mounted by App.tsx
+    ItemTypeField/           — an item's Type and its fields: ItemTypeField in a creation form (also the parts to make), ItemTypePaneField in a task/event/Deadline pane
+    ItemTypeModal/           — making or editing a Type (Manage → Types)
+    FieldInput/              — THE input for one FieldSchema field (tracker entries, a Type's fields)
+    EndeavourLinksField/     — "Part of" / "Related to" in the Endeavour editor (AddCollectionModal)
+    EndeavoursSection/       — the Endeavours section: EndeavoursPage (every Endeavour, tree or by Purpose), EndeavourHome (where one stands, its parts, its things, the add row), useEndeavourRows
     WelcomePage/             — what a signed-out visitor sees instead of the app: suite name, tagline (LABELS.welcome), logo (public/brand/logo.png → /brand/logo.png), Sign in / Create an account / Continue without an account; App.tsx decides when
     HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores; PlaceCard.tsx is THE card for a place, shared with the phone's recent notes (MobileNotes)
       HistoryCarousel.tsx    — THE history carousel (cards fanned either side of the centred one), drawn full size by the history browser and compact by NavFlash.
@@ -274,7 +291,7 @@ src/
     TruncatedText/           — wraps a CSS-ellipsis-truncated name/title; on hover, only when actually truncated, reveals the full text: `reveal="tooltip"` (default) in a floating box below the row, `reveal="extend"` drawn in place over the row and running out to the right (Notes: NoteList's note titles and ChronicleView's notebook names, 2026-09-28). Tooltip users: (2026-09-24) Sidebar/ManagePane/ListsSection/RecordsView's row names
     RowHoverActions/         — suite-wide nav-column row actions: RowOptionsMenu (the row's leading icon slot, which becomes a "⋯" on row hover; hovering it drops the actions down as a narrow column; long-press the row on Android) + RowAction (one labelled action), built on useRowHoverActions() (open/close state machine, shared with HoverOptions) + RowHoverActionsMenu (portaled floating panel; a BottomSheet on Android) — see "Row options menu" in Component patterns. Used by ChronicleView, Sidebar, ManagePane, ListsSection, RecordsView, OverviewSection
     SettingsPane/            — settings slide-in; reads HOTKEYS[] dynamically; NotificationsSection.tsx = Android-only Notifications block; SettingControls.tsx = the shared Toggle/SettingRow; StorageSection.tsx = the Storage block (per-store usage + Shrink images in notes); TypingShortcutsSection.tsx = the person's own typing shortcuts (add, edit, delete)
-    ManagePane/              — library admin (Endeavours/Purposes/Tags): left-nav tabs + content, opened by clicking (not hovering) the header hamburger; archive/restore/delete rows. MANAGE_SECTIONS array in the file is the extension point for future tabs
+    ManagePane/              — library admin (Endeavours/Purposes/Tags/Types; Types has "Add a starter set"): left-nav tabs + content, opened by clicking (not hovering) the header hamburger; archive/restore/delete rows. MANAGE_SECTIONS array in the file is the extension point for future tabs
     AccountPane/             — Supabase auth + account info; renders AutoBackupSection (both signed-in and guest branches)
     AutoBackupSection/       — automatic local backup UI (enable toggle, threshold, snapshot list with per-row Restore) — see services/autoBackup.ts and "Automatic local backup rotation" in Implemented features
     IntegrationsPane/        — (stub) future integrations

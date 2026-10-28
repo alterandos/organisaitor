@@ -23,12 +23,12 @@ import {
   watchlistItemToRow, rowToWatchlistItem,
   portfolioTagToRow, rowToPortfolioTag,
   investmentPurposeToRow, rowToInvestmentPurpose,
-  trashEntryToRow, overviewToRow, rowToOverview, converterToRow, rowToConverter, rowToTrashEntry, pinToRow, rowToPin,
+  trashEntryToRow, overviewToRow, rowToOverview, converterToRow, rowToConverter, rowToTrashEntry, itemTypeToRow, rowToItemType, pinToRow, rowToPin,
   pictureToRow, rowToPicture,
 } from '@/services/sync/mappers';
 import type {
   Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, ScheduleTemplate,
-  TaskId, CollectionId, TagId, PurposeId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, TrackerEntryId, ScheduleId,
+  TaskId, CollectionId, TagId, PurposeId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, TrackerEntryId, ScheduleId, ItemType, ItemTypeId,
 } from '@/types';
 import type { List, ListItem, ListType, ListId, ListItemId, ListTypeId } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry, NoteId, NoteTagId, StructuredTagEntryId } from '@/types/notes';
@@ -57,6 +57,23 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       repeat: { freq: 'weekly', interval: 2, endKind: 'count', count: 5, until: null },
     };
     expect(rowToTask(taskToRow(t, USER))).toEqual(t);
+    // Untyped: no type columns sent (so it syncs before migration 060), none read back.
+    expect(taskToRow(t, USER)).not.toHaveProperty('type_id');
+    const typed: Task = { ...t, typeId: 'ty1' as ItemTypeId, typeFields: { weight: 40, status: 'Submitted' } };
+    expect(rowToTask(taskToRow(typed, USER))).toEqual(typed);
+    // A cleared Type is sent as null, so the clearing reaches the cloud.
+    expect(taskToRow({ ...t, typeId: null, typeFields: {} }, USER)).toMatchObject({ type_id: null, type_fields: {} });
+  });
+
+  it('Type (fields, defaults and parts folded into one definition blob)', () => {
+    const x: ItemType = {
+      id: 'ty1' as ItemTypeId, name: 'Exam', icon: '🎓', extendsId: 'ty0' as ItemTypeId,
+      fields: [{ id: 'room', name: 'Room', type: 'text' }], defaults: { makeAs: 'event', important: true },
+      parts: [{ id: 'revise', kind: 'task', title: 'Revise', offsetDays: 7 }], archivedAt: null,
+      createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-02T00:00:00.000Z',
+    };
+    expect(rowToItemType(itemTypeToRow(x, USER))).toEqual(x);
+    expect(itemTypeToRow(x, USER).deleted_at).toBeNull();
   });
 
   it('Collection', () => {
@@ -69,6 +86,11 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     expect(rowToCollection(collectionToRow(c, USER))).toEqual(c);
     expect('encrypt_contents' in collectionToRow(c, USER)).toBe(false);
     expect(rowToCollection(collectionToRow({ ...c, encryptContents: true }, USER))).toEqual({ ...c, encryptContents: true });
+    // links: sent only once there are some (migration 059), so an Endeavour without links syncs before it runs
+    expect('links' in collectionToRow(c, USER)).toBe(false);
+    const linked = { ...c, links: [{ kind: 'partOf' as const, targetId: 'c0' as CollectionId, createdAt: '2030-01-01T00:00:00.000Z' }] };
+    expect(rowToCollection(collectionToRow(linked, USER))).toEqual(linked);
+    expect(collectionToRow({ ...c, links: [] }, USER).links).toEqual([]);   // a removed last link still clears the cloud's
   });
 
   it('Tag', () => {
@@ -97,6 +119,8 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       sourceUid: 'uid1', sourceRaw: { raw: true },
     };
     expect(rowToEvent(eventToRow(e, USER))).toEqual(e);
+    const typed: CalendarEvent = { ...e, typeId: 'ty1' as ItemTypeId, typeFields: { room: 'B12' } };
+    expect(rowToEvent(eventToRow(typed, USER))).toEqual(typed);
   });
 
   it('CalendarReminder', () => {

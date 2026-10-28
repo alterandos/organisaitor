@@ -22,7 +22,11 @@ import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
 import { datedPatch, defaultRule, eventPatch, fitRule, type NotifyRule } from '@/utils/notifyRule';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput, BIRTHDAY_REPEAT } from '@/utils/calendarItemInput';
-import type { CollectionId } from '@/types';
+import type { CollectionId, ItemTypeId, CalendarEventId, CalendarDeadlineId } from '@/types';
+import { ItemTypeField } from '@/components/ItemTypeField/ItemTypeField';
+import { useItemTypeStore } from '@/store/itemTypeStore';
+import { resolveItemType } from '@/utils/itemTypes';
+import { applyItemType } from '@/services/itemTypes';
 import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
 import styles from './AddCalendarItemModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -77,7 +81,7 @@ export function AddCalendarItemModal() {
   const [collectionId,      setCollectionId]      = useState<CollectionId | null>(
     (prefillExtra?.collectionId ?? activeCollectionId) as CollectionId | null
   );
-  const [important,         setImportant]         = useState(prefillExtra?.important ?? false);
+  const [important,         setImportant]         = useState(prefillExtra?.important ?? !!resolveItemType(useItemTypeStore.getState().types, useUIStore.getState().pendingItemTypeId)?.defaults.important);
   const [background,        setBackground]        = useState(false);
   const [travelMode,        setTravelMode]        = useState<TravelMode | null>(null);
   const [color,             setColor]             = useState<string | null>(null);
@@ -90,6 +94,12 @@ export function AddCalendarItemModal() {
   const [repeat,            setRepeat]            = useState<RepeatConfig | null>(prefillExtra?.repeat ?? null);
   // Opened when something inferred lives in the extra options (repeat, tentative), so the guess is
   // visible rather than silently applied. Closed otherwise, for every kind.
+  // A Type (events and Deadlines; a reminder has none): chosen from the speed dial or here. Its
+  // Important default sets Important; its parts are made with the item.
+  const [typeId,            setTypeId]            = useState<ItemTypeId | null>(() => useUIStore.getState().pendingItemTypeId);
+  const [typeValues,        setTypeValues]        = useState<Record<string, unknown>>({});
+  const [typeParts,         setTypeParts]         = useState<string[]>(() => resolveItemType(useItemTypeStore.getState().types, typeId)?.parts.map((p) => p.id) ?? []);
+  const typeName = useItemTypeStore((st) => (typeId ? st.types[typeId]?.name : undefined));
   const [formExpanded,      setFormExpanded]      = useState(!!(prefillExtra?.repeat || prefillExtra?.tentative));
   const [wandOpen,          setWandOpen]          = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -218,6 +228,8 @@ export function AddCalendarItemModal() {
       : kind === 'reminder'
         ? addReminder(buildCalendarReminderInput(dated))
         : addDeadline(buildCalendarDeadlineInput(dated));
+    if (typeId && kind === 'event') applyItemType({ kind, id: id as CalendarEventId }, typeId, typeValues, typeParts);
+    if (typeId && kind === 'deadline') applyItemType({ kind, id: id as CalendarDeadlineId }, typeId, typeValues, typeParts);
     if (pending) useUIStore.getState().resolveArtifactLink(id, kind);
     closeModal();
   };
@@ -230,7 +242,7 @@ export function AddCalendarItemModal() {
         <div className={styles.header}>
           <span className={styles.title}>
             <span className={styles.titleIcon} aria-hidden>{ITEM_TYPE_ICON[kind]}</span>
-            {L.newItem(kindLabel)}
+            {typeName && kind !== 'reminder' ? LABELS.itemTypes.newOf(typeName) : L.newItem(kindLabel)}
           </span>
           <button className={styles.closeBtn} onClick={handleClose} aria-label="Close"><CloseIcon /></button>
         </div>
@@ -338,6 +350,21 @@ export function AddCalendarItemModal() {
                 <Check checked={background} onChange={setBackground}>{L.background}</Check>
                 {background && <ColorPicker palette="standard" value={color} onChange={setColor} />}
               </div>
+            )}
+
+            {kind !== 'reminder' && (
+              <ItemTypeField
+                typeId={typeId}
+                values={typeValues}
+                onTypeChange={(tid) => {
+                  setTypeId(tid);
+                  const r = resolveItemType(useItemTypeStore.getState().types, tid);
+                  setTypeParts(r?.parts.map((p) => p.id) ?? []);
+                  if (r?.defaults.important) setImportant(true);
+                }}
+                onValueChange={(fieldId, v) => setTypeValues((prev) => ({ ...prev, [fieldId]: v }))}
+                parts={{ chosen: typeParts, onChange: setTypeParts, date: date || null }}
+              />
             )}
 
             <div className={styles.field}>

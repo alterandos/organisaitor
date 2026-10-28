@@ -1321,3 +1321,35 @@ describe('pattern: encryption by scope (CLAUDE.md "Encryption by scope")', () =>
     expect(enforcer).not.toMatch(/encryptSecrets|encryptField/);
   });
 });
+
+// docs/features/endeavours.md, phase 1 (2026-10-28): an Endeavour filter includes everything part of
+// the chosen Endeavour. Every filter tests an item with inEndeavourScope over the scope
+// (useEndeavourScope / endeavourSubtree), never by comparing an item's Endeavour with the chosen one.
+describe('pattern: Endeavour filters include what is part of the Endeavour', () => {
+  it('no filter compares an item\'s Endeavour with the chosen one directly', () => {
+    const files = walk(SRC, ['.ts', '.tsx']).filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.test.tsx'));
+    const hits = findMatches(files, /(collectionId|endeavourId)\s*[!=]==\s*(activeCollectionId|activeCollection\b|q\.collectionId|query\.collectionId)|(activeCollectionId|q\.collectionId)\s*[!=]==\s*\w+\.(collectionId|endeavourId)/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+// ── Sections come from one registry (config/sections.ts) ─────────────────────────────
+// The header title, the nav rail, the phone's tab bar and More sheet, the Endeavour filter and the
+// add-on tiers each kept their own list of sections; adding Endeavours meant editing six places
+// (2026-10-29). They now read SECTIONS, so a section is added, moved or merged in one file.
+describe('Sections come from one registry', () => {
+  const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+  it('the nav rail, tab bar and More sheet draw their sections from SECTIONS', () => {
+    for (const f of ['components/NavSidebar/NavSidebar.tsx', 'components/MobileNav/MobileNav.tsx', 'components/MobileMoreSheet/MobileMoreSheet.tsx']) {
+      const src = read(f);
+      expect(src, f).toMatch(/SECTIONS\b/);
+      expect(src.match(/setActiveView\('(overview|tasks|calendar|records|lists|notes|portfolio|fitness|endeavours)'\)/g), f).toBeNull();
+    }
+  });
+  it('no list of sections decides the header title or the Endeavour filter in App.tsx', () => {
+    const app = read('App.tsx');
+    expect(app).not.toMatch(/activeView === '\w+'\s*\?\s*['"A-Z]/);
+    expect(app).not.toMatch(/activeView !== '\w+'\s*&&\s*activeView !== '\w+'/);
+    expect(app).not.toMatch(/=== 'portfolio' && \w+ !== 'fitness'/);
+  });
+});

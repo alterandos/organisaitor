@@ -82,6 +82,18 @@ export function BlockGuideIcon(props: SVGProps<SVGSVGElement>) { return <Glyph g
 export function ConverterIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="converter" {...EM} {...props} />; }
 export function PresetIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="preset" {...EM} {...props} />; }
 
+// A Type (what kind of thing an item is): a few kinds of shape.
+export function TypeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="7" cy="7" r="4" />
+      <rect x="13" y="3" width="8" height="8" rx="1" />
+      <path d="M7 13l4.5 8h-9z" />
+      <path d="M14 17h7M17.5 13.5v7" />
+    </Icon>
+  );
+}
+
 export function ArchiveIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

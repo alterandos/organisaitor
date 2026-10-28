@@ -39,6 +39,8 @@ import { CalendarView } from '@/components/CalendarView/CalendarView';
 import { RecordsView } from '@/components/RecordsView/RecordsView';
 import { NotesSection } from '@/components/NotesSection/NotesSection';
 import { ListsSection } from '@/components/ListsSection/ListsSection';
+import { SECTION_BY_VIEW, showsEndeavourFilter } from '@/config/sections';
+import { EndeavoursSection } from '@/components/EndeavoursSection/EndeavoursSection';
 import { OverviewSection } from '@/components/OverviewSection/OverviewSection';
 import { AddOverviewModal } from '@/components/AddOverviewModal/AddOverviewModal';
 import { NotesViewSwitcher } from '@/components/NotesSection/NotesViewSwitcher';
@@ -68,6 +70,7 @@ import { AddTaskModal } from '@/components/AddTaskModal/AddTaskModal';
 import { AddCollectionModal } from '@/components/AddCollectionModal/AddCollectionModal';
 import { AddPurposeModal } from '@/components/AddPurposeModal/AddPurposeModal';
 import { AddTagModal } from '@/components/AddTagModal/AddTagModal';
+import { ItemTypeModal } from '@/components/ItemTypeModal/ItemTypeModal';
 import { AddCalendarItemModal } from '@/components/AddCalendarItemModal/AddCalendarItemModal';
 import { AddTrackerModal } from '@/components/AddTrackerModal/AddTrackerModal';
 import { AddEntryModal } from '@/components/AddEntryModal/AddEntryModal';
@@ -167,6 +170,7 @@ export default function App() {
   const editingCollection            = useUIStore((s) => s.editingCollection);
   const editingPurpose               = useUIStore((s) => s.editingPurpose);
   const editingTag                   = useUIStore((s) => s.editingTag);
+  const editingItemTypeId            = useUIStore((s) => s.editingItemTypeId);
   const editingEntryId               = useUIStore((s) => s.editingEntryId);
   const pendingTrackerId             = useUIStore((s) => s.pendingTrackerId);
   const editingListId                = useUIStore((s) => s.editingListId);
@@ -469,7 +473,7 @@ export default function App() {
       if (altSection) {
         e.preventDefault();
         if (overOverlay) return;
-        if ((altSection !== 'portfolio' && altSection !== 'fitness') || isAppEnabled(altSection)) setActiveView(altSection);
+        if (isAppEnabled(altSection)) setActiveView(altSection);
         return;
       }
 
@@ -570,7 +574,7 @@ export default function App() {
 
 
       if (matchesHotkeyId(e, 'action-endeavour')) {
-        if (activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness' && activeView !== 'overview') { e.preventDefault(); toggleEndeavourPicker(); }
+        if (showsEndeavourFilter(activeView)) { e.preventDefault(); toggleEndeavourPicker(); }
         return;
       }
 
@@ -672,20 +676,13 @@ export default function App() {
               )
             )}
             <h1 className={styles.heading}>
-              {activeView === 'overview'  ? LABELS.views.overview
-               : activeView === 'calendar'  ? 'Calendar'
-               : activeView === 'records'   ? 'Records'
-               : activeView === 'lists'     ? 'Lists'
-               : activeView === 'portfolio' ? 'Portfolio'
-               : activeView === 'notes'     ? 'Notes'
-               : activeView === 'fitness'   ? 'Fitness'
-               : 'My To Do'}
+              {SECTION_BY_VIEW[activeView].title}
             </h1>
             {activeView === 'notes' && !isAndroid && <NotesViewSwitcher />}
           </div>
           <div className={styles.headerRight}>
             {activeView === 'tasks' && <PurposeFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />}
-            {activeView !== 'portfolio' && activeView !== 'lists' && activeView !== 'fitness' && activeView !== 'overview' && (
+            {showsEndeavourFilter(activeView) && (
               <CollectionFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />
             )}
             <button
@@ -745,6 +742,7 @@ export default function App() {
           </>
         )}
 
+        {activeView === 'endeavours' && <EndeavoursSection />}
         {activeView === 'overview'  && <OverviewSection />}
         {activeView === 'calendar'  && <CalendarView />}
         {activeView === 'records'   && <RecordsView />}
@@ -783,6 +781,7 @@ export default function App() {
         {openModal === 'add-collection'      && <AddCollectionModal key={editingCollection?.id ?? 'new'} />}
         {openModal === 'add-purpose'         && <AddPurposeModal key={editingPurpose?.id ?? 'new'} />}
         {openModal === 'add-tag'             && <AddTagModal key={editingTag?.id ?? 'new'} />}
+        {openModal === 'add-item-type'       && <ItemTypeModal key={editingItemTypeId ?? 'new'} />}
         {openModal === 'add-calendar-item'   && <AddCalendarItemModal />}
         {openModal === 'add-tracker'            && <AddTrackerModal />}
         {openModal === 'add-entry'             && <AddEntryModal key={editingEntryId ?? pendingTrackerId ?? 'new'} />}

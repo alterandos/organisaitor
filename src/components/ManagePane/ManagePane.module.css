@@ -127,6 +127,26 @@
 }
 .newBtn:hover { background: var(--color-primary); color: var(--color-on-primary); }
 
+.toolbar { gap: var(--space-2); }
+.secondaryBtn {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.secondaryBtn:hover { color: var(--color-text); border-color: var(--color-primary); }
+
+.detail {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
 .emptyHint {
   color: var(--color-muted);
   font-size: 0.88rem;

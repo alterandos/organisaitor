@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { ItemTypePaneField } from '@/components/ItemTypeField/ItemTypeField';
 import { EventTasksField } from '@/components/TaskLinks/EventTasksField';
 import { DateInput } from '@/components/DateInput/DateInput';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
@@ -219,6 +220,9 @@ export function CalendarDeadlinePane() {
               Tentative — not confirmed yet, just a placeholder
             </label>
           </div>
+
+          {/* A task's deadline takes no Type of its own: the task has it. */}
+          {deadline.deadlineType !== 'task' && <ItemTypePaneField target={{ kind: 'deadline', id }} />}
 
           {/* ── Repeat ── */}
           <div className={styles.field}>

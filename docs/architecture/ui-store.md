@@ -32,7 +32,11 @@ historyBrowserOpen, openHistoryBrowser(), closeHistoryBrowser()
 // (picker isn't shown there). Default per section is null ("All Endeavours").
 activeCollectionIdByView: Partial<Record<AppView, string | null>>
 setActiveCollection(id)           // writes to activeCollectionIdByView[current activeView]
-selectActiveCollectionId(state)   // plain selector fn (not a hook) — reads the current section's value; use as useUIStore(selectActiveCollectionId)
+selectActiveCollectionId(state)   // plain selector fn (not a hook) — reads the current section's value; use as useUIStore(selectActiveCollectionId). In the Endeavours section it's the open home (endeavourHomeId)
+
+// The Endeavours section (docs/features/endeavours.md phase 2, 2026-10-28)
+endeavourHomeId: string | null    // the home open; null = the page of every Endeavour — persisted (v11)
+openEndeavourHome(id | null, { mode? })  // goes there; each home is a history stop (NavPlace.endeavourId)
 endeavourPickerOpen: boolean      // CollectionFilterPicker dropdown open state (E / Ctrl+E)
 openEndeavourPicker(), closeEndeavourPicker(), toggleEndeavourPicker()
 
@@ -118,6 +122,11 @@ notesFocusedColumn: 'tree' | 'list' | 'editor', setNotesFocusedColumn(col)
 // Text carried from one creation pane to the next when CreateKindSwitcher switches kind.
 // Cleared by closeModal.
 createDraft: string | null, setCreateDraft(draft)
+
+// Types (docs/features/endeavours.md phase 3): the Type editor (modal 'add-item-type'), and a
+// creation form opened for a Type (the speed dial's Types). Both cleared by closeModal.
+editingItemTypeId: ItemTypeId | null, showAddItemType(), openEditItemType(id)
+pendingItemTypeId: ItemTypeId | null, showAddTyped(typeId, kind)   // sets it, then opens the task or calendar form
 
 // Notes: a passage to select once a note is open (services/notePassage.ts sets it with openNote;
 // NoteEditor consumes it).

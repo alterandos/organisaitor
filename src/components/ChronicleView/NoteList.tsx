@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { useEndeavourScope } from '@/hooks/useEndeavourScope';
+import { inEndeavourScope } from '@/utils/endeavourGraph';
 import { noteIsEmpty } from '@/utils/emptyContent';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -161,10 +163,11 @@ export function NoteList({ tagId, onAddNote, hideHeader }: NoteListProps) {
   const getNotesByTag = useNoteStore((s) => s.getNotesByTag);
   const noteTags      = useNoteStore((s) => s.noteTags);
   const activeCollectionId = useUIStore(selectActiveCollectionId) as CollectionId | null;
+  const endeavourScope = useEndeavourScope(activeCollectionId);
 
   const tag = noteTags[tagId];
   const allTagNotes = getNotesByTag(tagId)
-    .filter((n) => !activeCollectionId || getNoteEffectiveCollectionId(n, noteTags) === activeCollectionId);
+    .filter((n) => inEndeavourScope(endeavourScope, getNoteEffectiveCollectionId(n, noteTags)));
 
   // Top-level notes for this tag (no parent, or parent not in this tag's notes)
   const tagNoteIds = new Set(allTagNotes.map((n) => n.id));

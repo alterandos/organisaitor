@@ -85,6 +85,19 @@ describe('sources — every app maps onto the common row', () => {
     expect(titles(s, q({ status: 'all', collectionId: 'c1' as never, sort: 'title' }))).toEqual(['Plan', 'Weight']);
   });
 
+  it('an Endeavour includes everything part of it, at any depth (2026-10-28)', () => {
+    const s = snap({
+      collections: byId(
+        endeavour('sem', 'Semester'),
+        endeavour('sub', 'GEOS215', { links: [{ kind: 'partOf', targetId: 'sem' as never, createdAt: T }] }),
+        endeavour('other', 'Career'),
+      ),
+      tasks: byId(task('Essay', { id: 't1' as never, collectionId: 'sub' as never }), task('CV', { id: 't2' as never, collectionId: 'other' as never }), task('Enrol', { id: 't3' as never, collectionId: 'sem' as never })),
+    });
+    expect(titles(s, q({ status: 'all', collectionId: 'sem' as never, sources: ['task'], sort: 'title' }))).toEqual(['Enrol', 'Essay']);
+    expect(titles(s, q({ status: 'all', collectionId: 'sub' as never, sources: ['task'] }))).toEqual(['Essay']);
+  });
+
   it('locked notes/lists are never shown, only counted — and only under a matching Endeavour filter', () => {
     const s = snap({
       notes: byId(note('n1', '', { collectionId: 'c1' as never }), note('n2', '', { collectionId: 'c2' as never })),

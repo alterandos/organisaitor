@@ -10,7 +10,11 @@ import { eventTarget, linkedTaskDates } from '@/services/eventTaskLinks';
 import { now, todayIso } from '@/utils/date';
 import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { LABELS } from '@/config/labels';
-import type { Priority, TagId, PurposeId, CollectionId, TaskKind, TaskId, CrossAppRef, RepeatConfig } from '@/types';
+import type { Priority, TagId, PurposeId, CollectionId, TaskKind, TaskId, CrossAppRef, RepeatConfig, ItemTypeId } from '@/types';
+import { ItemTypeField } from '@/components/ItemTypeField/ItemTypeField';
+import { useItemTypeStore } from '@/store/itemTypeStore';
+import { resolveItemType } from '@/utils/itemTypes';
+import { applyItemType } from '@/services/itemTypes';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
@@ -76,8 +80,15 @@ export function AddTaskModal() {
   const followUpOrigin = pendingFollowUpOf ? useTaskStore.getState().tasks[pendingFollowUpOf as TaskId] : undefined;
   const seedTask = parentTaskInitial ?? followUpOrigin;
 
+  // A Type (chosen from the speed dial, or here): its fields, the parts to make with it, and its
+  // defaults (Important → high priority, its tags), which the person's own picks override.
+  const [typeId, setTypeId] = useState<ItemTypeId | null>(() => useUIStore.getState().pendingItemTypeId);
+  const [typeValues, setTypeValues] = useState<Record<string, unknown>>({});
+  const initialType = resolveItemType(useItemTypeStore.getState().types, typeId);
+  const [typeParts, setTypeParts] = useState<string[]>(() => initialType?.parts.map((p) => p.id) ?? []);
+
   const [priority,      setPriority]      = useState<Priority>(
-    quickAddPrefill?.priority ?? parentTaskInitial?.priority ?? 'none'
+    quickAddPrefill?.priority ?? parentTaskInitial?.priority ?? (initialType?.defaults.important ? 'high' : 'none')
   );
   const priorityTouched = useRef(quickAddPrefill?.priority !== undefined);
 
@@ -93,7 +104,9 @@ export function AddTaskModal() {
   const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>(seedTask?.purposeIds ?? []);
   const purposesTouched = useRef(false);
   const [pendingTags,        setPendingTags]         = useState<PendingTag[]>(
-    (seedTask?.tagIds ?? []).map((id) => ({ id, name: useTaskStore.getState().tags[id]?.name ?? '', isNew: false }))
+    [...new Set([...(seedTask?.tagIds ?? []), ...(initialType?.defaults.tagIds ?? [])])]
+      .filter((id) => useTaskStore.getState().tags[id])
+      .map((id) => ({ id, name: useTaskStore.getState().tags[id]?.name ?? '', isNew: false }))
   );
   const tagsTouched = useRef(false);
   const [tagInput,           setTagInput]            = useState('');
@@ -193,6 +206,18 @@ export function AddTaskModal() {
     );
   };
 
+  const typeName = useItemTypeStore((st) => (typeId ? st.types[typeId]?.name : undefined));
+
+  const pickType = (id: ItemTypeId | null) => {
+    setTypeId(id);
+    const r = resolveItemType(useItemTypeStore.getState().types, id);
+    setTypeParts(r?.parts.map((p) => p.id) ?? []);
+    if (!r) return;
+    if (r.defaults.important && !priorityTouched.current) setPriority('high');
+    const add = (r.defaults.tagIds ?? []).filter((t) => tags[t] && !pendingTags.some((p) => p.id === t));
+    if (add.length) setPendingTags((prev) => [...prev, ...add.map((t) => ({ id: t, name: tags[t].name, isNew: false }))]);
+  };
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -239,6 +264,7 @@ export function AddTaskModal() {
       repeat:       parentId ? null : repeat,
     });
 
+    if (typeId) applyItemType({ kind: 'task', id: taskId }, typeId, typeValues, typeParts);
     if (pendingArtifactLink) useUIStore.getState().resolveArtifactLink(taskId);
     closeModal();
   };
@@ -247,7 +273,7 @@ export function AddTaskModal() {
     <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
       <div className={styles.modal}>
         <div className={styles.header}>
-          <span className={styles.title}>New Task</span>
+          <span className={styles.title}>{typeName ? LABELS.itemTypes.newOf(typeName) : 'New Task'}</span>
           <button className={styles.closeBtn} onClick={handleClose} aria-label="Close"><CloseIcon /></button>
         </div>
         {followUpOrigin && <div className={styles.followUpBanner}>{ITEM_LINK_KINDS.followUpOf.icon} {LABELS.taskLinks.followUpBanner(followUpOrigin.title)}</div>}
@@ -313,6 +339,14 @@ export function AddTaskModal() {
               </div>
             </div>
           </div>
+
+          <ItemTypeField
+            typeId={typeId}
+            values={typeValues}
+            onTypeChange={pickType}
+            onValueChange={(fieldId, v) => setTypeValues((prev) => ({ ...prev, [fieldId]: v }))}
+            parts={{ chosen: typeParts, onChange: setTypeParts, date: deadline || scheduledAt || null }}
+          />
 
           <div className={styles.row}>
             <div className={styles.field}>

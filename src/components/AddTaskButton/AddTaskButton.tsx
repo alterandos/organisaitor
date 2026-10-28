@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { openNewItem } from '@/services/newItem';
 import { useUIStore } from '@/store/uiStore';
 import { usePlatform } from '@/hooks/usePlatform';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -7,6 +8,11 @@ import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
 import { addSticky } from '@/services/stickyNotes';
 import styles from './AddTaskButton.module.css';
+import { useItemTypeStore } from '@/store/itemTypeStore';
+import { pickableTypes } from '@/utils/itemTypes';
+import { makeAsOf } from '@/services/itemTypes';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
+import type { ItemTypeId } from '@/types';
 import type { ComponentType, SVGProps } from 'react';
 import { EndeavourIcon, ListIcon, NotebookIcon, PlusIcon, PresetIcon, PurposeIcon, ReminderIcon, RoutineIcon, StickyIcon, TagIcon, TrackerIcon, UploadIcon } from '@/components/Icons';
 
@@ -62,6 +68,34 @@ type FitnessDialType = 'activity';
 const FITNESS_OPTIONS: { type: FitnessDialType; label: string; color: string; Icon: IconType }[] = [
   { type: 'activity', label: LABELS.activity, color: 'var(--color-swatch-indigo)', Icon: PlusIcon },
 ];
+
+// The person's Types, above a section's own options (docs/features/endeavours.md screen D):
+// choosing one opens the form for what it's usually made as, with the Type chosen. Capped, so the
+// dial stays short; the rest are in the form's Type field.
+const MAX_TYPES = 6;
+
+function TypeOptions({ onPick }: { onPick: () => void }) {
+  const types = useItemTypeStore((s) => s.types);
+  const shown = pickableTypes(types).slice(0, MAX_TYPES);
+  if (shown.length === 0) return null;
+  return (
+    <>
+      {shown.map((t) => (
+        <div key={t.id} className={styles.optionRow}>
+          <span className={styles.optionLabel}>{t.name}</span>
+          <button
+            className={`${styles.optionBtn} ${styles.typeBtn}`}
+            onClick={() => { onPick(); useUIStore.getState().showAddTyped(t.id as ItemTypeId, makeAsOf(t.id)); }}
+            aria-label={LABELS.itemTypes.newOf(t.name)}
+          >
+            <ItemIcon icon={t.icon} fallback="🏷️" className={styles.typeIcon} />
+          </button>
+        </div>
+      ))}
+      <div className={`${styles.optionRow} ${styles.typeDivider}`} aria-hidden />
+    </>
+  );
+}
 
 export function AddTaskButton() {
   const activeView           = useUIStore((s) => s.activeView);
@@ -161,6 +195,16 @@ export function AddTaskButton() {
 
   const dialClass = `${styles.speedDial} ${open ? styles.speedDialOpen : ''}`;
 
+  if (activeView === 'endeavours') {
+    return (
+      <div className={dialClass} ref={ref}>
+        <button className={styles.fab} onClick={() => openNewItem('endeavours')} aria-label={useUIStore.getState().endeavourHomeId ? LABELS.endeavourHome.add.task : LABELS.endeavourHome.create}>
+          <span className={styles.fabIcon}><PlusIcon /></span>
+        </button>
+      </div>
+    );
+  }
+
   if (activeView === 'overview') {
     return (
       <div className={dialClass} ref={ref}>
@@ -206,6 +250,7 @@ export function AddTaskButton() {
     return (
       <div className={dialClass} ref={ref}>
         <div className={styles.options} role="group" aria-label="Create options">
+          <TypeOptions onPick={() => setOpen(false)} />
           {CAL_OPTIONS.map((opt) => (
             <div key={opt.type} className={styles.optionRow}>
               <span className={styles.optionLabel}>{opt.label}</span>
@@ -360,6 +405,7 @@ export function AddTaskButton() {
   return (
     <div className={dialClass} ref={ref}>
       <div className={styles.options} role="group" aria-label="Create options">
+        <TypeOptions onPick={() => setOpen(false)} />
         {TASK_OPTIONS.map((opt) => (
           <div key={opt.type} className={styles.optionRow}>
             <span className={styles.optionLabel}>{opt.label}</span>

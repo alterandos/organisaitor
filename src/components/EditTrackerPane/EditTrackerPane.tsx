@@ -14,17 +14,7 @@ import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { CloseIcon, TrashIcon } from '@/components/Icons';
-
-const FIELD_TYPES: { value: FieldType; label: string }[] = [
-  { value: 'text',     label: 'Text' },
-  { value: 'number',   label: 'Number' },
-  { value: 'duration', label: 'Duration (h/m/s)' },
-  { value: 'boolean',  label: 'Checkbox' },
-  { value: 'rating',   label: 'Rating' },
-  { value: 'select',   label: 'Select' },
-  { value: 'date',     label: 'Date' },
-  { value: 'url',      label: 'URL' },
-];
+import { FIELD_TYPE_OPTIONS } from '@/config/fieldTypes';
 
 const TYPE_ICON: Record<FieldType, string> = {
   text: 'T', number: '#', duration: '⏱', boolean: '✓', rating: '★',
@@ -284,7 +274,7 @@ export function EditTrackerPane() {
                         value={row.schema.type}
                         onChange={(e) => updateField(idx, { type: e.target.value as FieldType })}
                       >
-                        {FIELD_TYPES.map((t) => (
+                        {FIELD_TYPE_OPTIONS.map((t) => (
                           <option key={t.value} value={t.value}>{t.label}</option>
                         ))}
                       </select>
@@ -360,7 +350,7 @@ export function EditTrackerPane() {
                     value={newFieldType}
                     onChange={(e) => setNewFieldType(e.target.value as FieldType)}
                   >
-                    {FIELD_TYPES.map((t) => (
+                    {FIELD_TYPE_OPTIONS.map((t) => (
                       <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
                   </select>

@@ -9,6 +9,12 @@ Format: brief description + context/motivation.
 
 ---
 
+## Endeavours, Types, Rhythms and Goals (design agreed 2026-10-28; phases 1–2 built 2026-10-28, phase 3 2026-10-29)
+
+Nested Endeavours (typed links, several parents, roll-up), an Endeavour home and an Endeavours page (its own nav place, above Overview), Types (fields, defaults, parts; a tag that starts doing work becomes a Type), Rhythms (Routines generalised: streams with their own rules and visibility, synced weekly ticks) and Goals (on Endeavours). Built in six phases, each add-only and reversible; **phases 1 (links, inclusive filters, the safety snapshot), 2 (the Endeavours section, page and homes) and 3 (Types) are built**; phase 4 (Rhythms) is next. Left over from phase 3 ("Not built in phase 3" in the design file): note parts, Types on reminders, notes and list items, filtering and grouping by Type, the Type on calendar entries and Overview rows, agent commands. **The design, decisions, data model, phases and open points are `docs/features/endeavours.md`; build from that.** It supersedes "Records — Routines UX improvements" where they overlap (routines become Rhythms).
+
+---
+
 ## ~~Fitness Supabase sync~~ — built 2026-10-22 ("Fitness syncs" in implemented-features.md; migration 055)
 
 ---
@@ -270,13 +276,13 @@ The user asked how hard it would be to drop small icons or pictures into blocks,
 - The same slot in other blocks: the timeline's dots, and the quote card's avatar instead of initials. The slot is now shared (`extensions/blockIcons.ts`, 2026-10-15; the types block uses it), so each is a few lines.
 - ~~**Free resizing and cropping of a picture**~~ — built 2026-10-07 for pictures in the note text ("Note pictures: resize like a word processor, and crop" in `docs/features/implemented-features.md`). Not for the cycle's icon slots, which stay block-wide shape and size. Follow-ons: the crop isn't carried into copied HTML (another app gets the whole picture, at its width and height); rotate and flip; a crop to a fixed shape (square, circle); wrapping text around a picture.
 - An icon library (searchable line icons, not only emoji), and pasting a picture into a slot.
+- **Pictures in blocks need a design upgrade** (the user, 2026-10-27: "I will address it later"). Waiting on the user's brief; don't start without it.
 
 ### Glossary auto-linking — follow-ups (logged 2026-10-07)
 
 Built: "Linking to the Glossary as you type" (see `docs/features/implemented-features.md`).
 - **Definitions linking to definitions.** The user's suggestion: Foraminifera's definition mentions eukaryote, so link it back. Partly automatic already: typing a term inside another term's definition gets the same offer, which links the passage to the term. Still to do: offer it when a definition is created from text that already mentions a term (the new card could list "Mentions: Eukaryote — link?"), and show a term's "related terms" in its card and in the Glossary.
 - **A hierarchy of linked concepts** (the user, 2026-10-07): eventually concepts linked into a hierarchy ("Eukaryote" under "Cell", "Foraminifera" under "Eukaryote"), from which a breakdown or hierarchy block could be built in one go ("Insert as a hierarchy"). The parent link is built: a Concept's "Part of" field (`parentId`, type `parent`, in `config/structuredTagTypes.ts`), with sub-concepts derived. Still to do: "Insert as a hierarchy", and re-parenting by dragging in the Glossary view.
-- **Pictures in blocks need a design upgrade** (the user, 2026-10-27: "I will address it later"). Waiting on the user's brief; don't start without it.
 - **A setting to turn auto-link offers off**, or to only offer terms from the same notebook.
 - **Smarter matching:** stemming beyond -s / -es ("eukaryotic"), and a term's alternative names (an "Also called" field).
 - **Touch:** the offer chip is tappable; the hover card isn't reachable on a phone (gap F16).
@@ -820,6 +826,7 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 
 | Pattern | Check to re-run | Known non-conforming / remaining |
 |---------|-----------------|----------------------------------|
+| **Sections come from one registry** (2026-10-29, CLAUDE.md "Sections & navigation", `config/sections.ts`) | `src/test/patterns.test.ts` "Sections come from one registry"; grep `activeView === '` in App.tsx for a per-section list the registry could hold | **Applied 2026-10-29**: header title, Endeavour filter (display and E), nav rail, phone tab bar, More sheet, `APP_TIERS`, the Alt+digit add-on gate. Left as they are, each says something the registry doesn't: the section renders in App.tsx, the per-section toolbar buttons, `newItem.ts` routing, history places. |
 | **Encryption by scope** (2026-10-26, CLAUDE.md "Encryption by scope") | `src/test/patterns.test.ts` "encryption by scope" | **Applied 2026-10-26** (new code; nothing existed before to retrofit). |
 | **Icon picker** (2026-10-26, CLAUDE.md "Icon picker", `components/IconPicker`) | `src/test/patterns.test.ts` "an icon a person picks comes from the icon field"; review: `{x.icon}` rendered as text for a person-picked icon | **Applied 2026-10-26**: notebooks and tags, lists, Overviews, activity types, converters (editors and about 25 display sites). Not person-pickable yet, so not converted: custom list types' icons, built-in tag types. |
 | **One list of note editor extensions** (2026-10-26, CLAUDE.md "Single entry points", `noteEditorExtensions.ts`) | `src/test/patterns.test.ts` (SpecialCharInput / EscapePassThrough checks read the list); `guideData.test.ts` | **Fully applied 2026-10-26**: NoteEditor, the block guide, the demo test. |
@@ -901,6 +908,7 @@ ef`). |
 | **Android: phone sheets use `BottomSheet` / `ActionSheet`** (adopted 2026-10-04, W2 — CLAUDE.md "Bottom sheets") | pattern test: no `.sheetOverlay`/`.sheetPanel` class outside `components/BottomSheet/`; manually, `grep -rln "align-items: flex-end" src --include=*.css` and check each phone sheet | **Partly applied.** Migrated: `CollectionFilterPicker`/`PurposeFilterPicker` `'sheet'` variants, `MobileMoreSheet`. Still hand-rolled: `MobileCalendarQuickAdd` (its own overlay/grabber; move it with gap C1 in W3) and `CalendarSidePane`'s Android full-screen sheet. Not in scope: `AccountPane`/`RecyclingBinPane` (the general modal's narrow-screen bottom-sheet layout, not a phone sheet). |
 | **Android: row gestures use `useLongPress` / `useSwipeRow`** (adopted 2026-10-04, W2 — patterns doc §5, §7) | `grep -rn "addEventListener('touch" src/components` — each hit should be one of the shared hooks, or a canvas gesture with a reason | **Partly applied.** `TaskItem` moved to `useSwipeRow`; `RowHoverActions`/`HoverOptions` use `useLongPress`. Own gesture code left: `CalendarView`'s period swipe (a canvas swipe, not a row: could share `startsAtEdge`/`lockAxis` from `useSwipeRow.ts`), `MobileCalendarQuickAdd`'s grabber drag. `AddTaskButton`'s document `touchstart` is an outside-tap close, not a gesture. |
 | **Android: swipe-left reveals Archive + Delete; gesture deletes are immediate with an Undo toast** (D2, decided 2026-10-04 — patterns doc §9) | `grep -n "swipeDelete" src/components` | **Applied to `TaskItem`** (Archive + Delete behind a left swipe, each with an Undo toast; checked 2026-10-14). Not yet: tracker entries and list items, when Records (on hold) and Lists are built for the phone. |
+| **Endeavour filters include what is part of the Endeavour** (2026-10-28, CLAUDE.md "Links between Endeavours") | `src/test/patterns.test.ts` "Endeavour filters include what is part of the Endeavour" (no comparing an item's Endeavour with the chosen one) | **Fully applied 2026-10-28**: Tasks, Calendar, Records, Notes (tree, list, phone), Overview. |
 
 ### Local storage headroom (logged 2026-09-21; notes moved to IndexedDB 2026-09-22)
 

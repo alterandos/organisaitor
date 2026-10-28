@@ -5,7 +5,7 @@ import { nanoid } from 'nanoid';
 import { useListStore } from '@/store/listStore';
 import { useListViews } from '@/store/listViews';
 import { onVaultStatus } from '@/services/vault';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { useTaskStore } from '@/store/taskStore';
@@ -60,7 +60,8 @@ export function AddListModal() {
   const [expandedTabs, setExpandedTabs] = useState<Set<number>>(new Set());
   const [encryptOnCreate, setEncryptOnCreate] = useState(false);
   const [reusable, setReusable] = useState(() => existing?.resetOnTaskComplete ?? false);
-  const [collectionId, setCollectionId] = useState<CollectionId | null>(() => existing?.collectionId ?? null);
+  // A new list starts filed under the Endeavour chosen where it's made (an Endeavour's home, a filter).
+  const [collectionId, setCollectionId] = useState<CollectionId | null>(() => (existing ? existing.collectionId ?? null : selectActiveCollectionId(useUIStore.getState()) as CollectionId | null));
   const collections = useTaskStore((s) => s.collections);
   const endeavourOptions = Object.values(collections).filter((c) => c.kind === 'project' || c.kind === 'list');
   const [vaultUnlocked, setVaultUnlocked] = useState(false);

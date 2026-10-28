@@ -1,4 +1,5 @@
 import type { AppView } from '@/store/uiStore';
+import { SECTIONS } from '@/config/sections';
 
 // Suite-readiness registry: which nav sections are bundled with the core Organizer
 // (always present, always eagerly loaded) vs. optional "add-on" apps (Portfolio,
@@ -6,16 +7,8 @@ import type { AppView } from '@/store/uiStore';
 // as separately installable, and possibly paid.
 export type AppTier = 'core' | 'addon';
 
-export const APP_TIERS: Record<AppView, AppTier> = {
-  overview:  'core',
-  tasks:     'core',
-  calendar:  'core',
-  records:   'core',
-  lists:     'core',
-  notes:     'core',
-  portfolio: 'addon',
-  fitness:   'addon',
-};
+// Each section's tier is in the section registry (config/sections.ts).
+export const APP_TIERS = Object.fromEntries(SECTIONS.map((s) => [s.view, s.tier])) as Record<AppView, AppTier>;
 
 // Single choke point for "is this app available to the current user." Today there is
 // no purchase/entitlement backend, so every addon is enabled for everyone — but every

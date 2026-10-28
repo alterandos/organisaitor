@@ -48,4 +48,13 @@ describe('openNewItem (N / Space / Ctrl+N)', () => {
     openNewItem('calendar');
     expect(useUIStore.getState().openModal).toBe('add-calendar-item');
   });
+  it('Endeavours: the page makes an Endeavour; a home makes a task', () => {
+    openNewItem('endeavours');
+    expect(useUIStore.getState().openModal).toBe('add-collection');
+    useUIStore.getState().closeModal();
+    useUIStore.setState({ endeavourHomeId: 'e1' });
+    openNewItem('endeavours');
+    expect(useUIStore.getState().openModal).toBe('add-task');
+  });
+
 });

@@ -164,10 +164,8 @@ const endeavourProvider: QuickAccessProvider = {
     if (!c || (c.kind !== 'project' && c.kind !== 'list') || c.archivedAt) return null;
     return { key: `endeavour:${c.id}`, type: 'endeavour', entityId: c.id, title: c.name, subtitle: `${LABELS.collection} · ${LABELS.collectionKind[c.kind]}`, icon: '🎯' };
   },
-  navigate: (id) => {
-    useUIStore.getState().setActiveView('tasks');
-    useUIStore.getState().setActiveCollection(id);
-  },
+  // Its home (the Endeavours section, 2026-10-28); it used to show Tasks filtered to it.
+  navigate: (id) => useUIStore.getState().openEndeavourHome(id),
 };
 
 const trackerProvider: QuickAccessProvider = {

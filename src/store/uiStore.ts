@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType, RepeatConfig } from '@/types';
+import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType, RepeatConfig, ItemTypeId, TypeableKind } from '@/types';
 import type { Activity } from '@/types/fitness';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { useNoteStore } from '@/store/noteStore';
@@ -14,7 +14,7 @@ import { type NavPlace, pushPlace, travel } from '@/store/navHistory';
 import { DEFAULT_NOTES_VIEW, NOTE_VIEWS, type NotesViewId } from '@/config/noteViews';
 import { EMPTY_NOTES_FILTER, groupId, type NoteGroupingId, type NotesFilter } from '@/utils/notesBrowse';
 
-export type AppView = 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
+export type AppView = 'endeavours' | 'overview' | 'tasks' | 'calendar' | 'records' | 'lists' | 'portfolio' | 'notes' | 'fitness';
 // Notes' three columns (ChronicleView). Which one has keyboard focus decides what N/Space creates.
 export type NotesColumn = 'tree' | 'list' | 'editor';
 export type MobileNotesHome = 'notebooks' | 'recent';
@@ -95,7 +95,7 @@ function expandNotebookAncestors(
 }
 
 // Manage view (library administration) — left-nav tabs, extensible for future sections.
-export type ManageSection = 'endeavours' | 'purposes' | 'tags';
+export type ManageSection = 'endeavours' | 'purposes' | 'tags' | 'types';
 
 export type ModalType =
   | 'add-task'
@@ -119,6 +119,7 @@ export type ModalType =
   | 'edit-note-meta'
   | 'add-activity'
   | 'add-schedule'
+  | 'add-item-type'
   | null;
 
 export type SortField = 'createdAt' | 'deadline' | 'collection' | 'priority';
@@ -198,6 +199,13 @@ interface UIState {
   pendingParentId:   string | null;
   showAddPurpose:    () => void;
   showAddTag:        () => void;
+  // Types (docs/features/endeavours.md phase 3): the Type editor, and a creation form opened for a
+  // Type (the speed dial's Types): the form starts with that Type chosen.
+  editingItemTypeId: ItemTypeId | null;
+  pendingItemTypeId: ItemTypeId | null;
+  showAddItemType:   () => void;
+  openEditItemType:  (id: ItemTypeId) => void;
+  showAddTyped:      (typeId: ItemTypeId, kind: TypeableKind) => void;
   showAddActivity:   () => void;
   openEditActivity:  (activity: Activity) => void;
   closeEditActivity: () => void;
@@ -294,6 +302,13 @@ interface UIState {
   activeView:    AppView;
   // mode 'silent': switch without recording a history stop (history's own moves).
   setActiveView: (view: AppView, opts?: { mode?: 'push' | 'silent' }) => void;
+
+  // The Endeavours section (docs/features/endeavours.md phase 2): the page of every Endeavour (null)
+  // or one Endeavour's home. Remembered across reloads. openEndeavourHome goes there (a history stop);
+  // in this section the open home is also the active Endeavour (selectActiveCollectionId), so anything
+  // created from it is filed under it.
+  endeavourHomeId:   string | null;
+  openEndeavourHome: (id: string | null, opts?: { mode?: 'push' | 'silent' }) => void;
 
   // The one back/forward history (store/navHistory.ts): stops most-recent-first. Alt+Left /
   // Backspace / the Android back button go back, Alt+Right forward, and the Alt+N history browser
@@ -651,6 +666,16 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   showAddCollection: () => set({ openModal: 'add-collection' }),
   showAddPurpose:    () => set({ openModal: 'add-purpose'    }),
   showAddTag:        () => set({ openModal: 'add-tag'        }),
+  editingItemTypeId: null,
+  pendingItemTypeId: null,
+  showAddItemType:   () => set({ openModal: 'add-item-type', editingItemTypeId: null }),
+  openEditItemType:  (id) => set({ openModal: 'add-item-type', editingItemTypeId: id }),
+  // Set first, so the form reads it when it mounts (the openers leave it alone).
+  showAddTyped:      (typeId, kind) => {
+    set({ pendingItemTypeId: typeId });
+    if (kind === 'task') get().showAddTask();
+    else get().showAddCalendarItem(undefined, kind);
+  },
   showAddActivity:   () => set({ openModal: 'add-activity', editingActivity: null }),
   openEditActivity:  (activity) => set({ openModal: 'add-activity', editingActivity: activity }),
   closeEditActivity: ()         => set({ openModal: null,           editingActivity: null      }),
@@ -674,6 +699,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeModal:        () => set({
     openModal: null,
     createDraft: null,
+    editingItemTypeId: null,
+    pendingItemTypeId: null,
     taskModalAdvanced: false,
     pendingParentId: null,
     pendingFollowUpOf: null,
@@ -951,6 +978,16 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   setListsLastActive:    (listId, tabId) => set({ listsLastActiveListId: listId, listsLastActiveTabId: tabId }),
   overviewSelection:     null,
   setOverviewSelection:  (sel) => set({ overviewSelection: sel }),
+  endeavourHomeId:       null,
+  openEndeavourHome:     (id, opts) => {
+    const s = get();
+    if (s.activeView === 'endeavours' && s.endeavourHomeId === id) return;
+    if (id) useRecentItemsStore.getState().recordVisit('endeavour', id);
+    // Within the section each home is a stop; arriving from another section, setActiveView records it.
+    const history = s.activeView === 'endeavours' && (opts?.mode ?? 'push') === 'push' ? recordPlace(s) : {};
+    set({ ...history, endeavourHomeId: id });
+    get().setActiveView('endeavours', opts);
+  },
   overviewLayouts:       {},
   setOverviewLayout:     (key, layout) => set((s) => ({ overviewLayouts: { ...s.overviewLayouts, [key]: layout } })),
   openEndeavourOverview: (collectionId) => {
@@ -1174,7 +1211,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 }), {
   name:    'todo-ui-session',
   storage: persistStorage(),
-  version: 10,
+  version: 11,
   // v1 → v2: overviewSelection (Overview section, 2026-10-01).
   // v2 → v3: one history of places (navHistory/navForward) replaces sectionHistory and
   // notesHistory (2026-10-07); the old section stops carry over, the note stops are dropped.
@@ -1185,6 +1222,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   // v7 → v8: the Notes views' shared filter, grouping and focus (2026-10-17).
   // v8 → v9: notesBrowseView, the Notes view to open on (2026-10-17).
   // v9 → v10: overviewLayouts, how each Overview is shown (2026-10-22).
+  // v10 → v11: endeavourHomeId, the Endeavour home last open (2026-10-28).
   migrate: (persisted, fromVersion) => {
     let state = (persisted ?? {}) as Record<string, unknown>;
     if (fromVersion < 2 && state.overviewSelection === undefined) state = { ...state, overviewSelection: null };
@@ -1202,6 +1240,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     if (fromVersion < 8) state = { notesFilter: EMPTY_NOTES_FILTER, notesGrouping: 'notebook', notesFocusGroupId: null, ...state };
     if (fromVersion < 9) state = { notesBrowseView: DEFAULT_NOTES_VIEW, ...state };
     if (fromVersion < 10) state = { overviewLayouts: {}, ...state };
+    if (fromVersion < 11) state = { endeavourHomeId: null, ...state };
     return state as never;
   },
   partialize: (s) => ({
@@ -1232,6 +1271,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     listsLastActiveTabId:     s.listsLastActiveTabId,
     overviewSelection:        s.overviewSelection,
     overviewLayouts:          s.overviewLayouts,
+    endeavourHomeId:          s.endeavourHomeId,
     activeTrackerId:          s.activeTrackerId,
     activeRoutineId:          s.activeRoutineId,
     calendarViewMode:         s.calendarViewMode,
@@ -1245,7 +1285,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
 // The focused Endeavour for whichever section is currently active. Sections that don't
 // show the Endeavour picker (Lists, Portfolio) simply never populate their entry.
 export const selectActiveCollectionId = (s: UIState): string | null =>
-  s.activeCollectionIdByView[s.activeView] ?? null;
+  s.activeView === 'endeavours' ? s.endeavourHomeId : s.activeCollectionIdByView[s.activeView] ?? null;
 
 // The group the Notes views are in (utils/notesBrowse.ts groupId): in the notebook grouping, the
 // selected notebook; otherwise the group chosen in that grouping.
@@ -1271,6 +1311,7 @@ export function capturePlace(s: UIState): NavPlace {
     case 'calendar': return { view: 'calendar', at, calendar: { mode: s.calendarViewMode, year: s.calendarYear, month: s.calendarMonth, date: s.calendarSelectedDate } };
     case 'records':  return { view: 'records', at, trackerId: s.activeTrackerId, routineId: s.activeRoutineId };
     case 'overview': return { view: 'overview', at, overview: s.overviewSelection };
+    case 'endeavours': return { view: 'endeavours', at, endeavourId: s.endeavourHomeId };
     default:         return { view: s.activeView, at };
   }
 }
@@ -1313,6 +1354,9 @@ function goToPlace(p: NavPlace): void {
       break;
     case 'overview':
       if (p.overview !== undefined) set({ overviewSelection: p.overview });
+      break;
+    case 'endeavours':
+      if (p.endeavourId !== undefined) set({ endeavourHomeId: p.endeavourId });
       break;
   }
   useUIStore.getState().setActiveView(p.view, { mode: 'silent' });

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useEndeavourScope } from '@/hooks/useEndeavourScope';
+import { inEndeavourScope } from '@/utils/endeavourGraph';
 import type { PurposeId, TagId, Task, TaskId, Collection } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -54,6 +56,7 @@ export function TaskList() {
   const collectionsRecord   = useTaskStore((s) => s.collections);
 
   const activeCollectionId = useUIStore(selectActiveCollectionId);
+  const endeavourScope = useEndeavourScope(activeCollectionId);
   const activePurposeIds   = useUIStore((s) => s.activePurposeIds);
   const activeTagIds       = useUIStore((s) => s.activeTagIds);
   const sortField          = useUIStore((s) => s.sortField);
@@ -87,8 +90,8 @@ export function TaskList() {
     !t.parentId || (t.archived && !tasksRecord[t.parentId]?.archived && !!tasksRecord[t.parentId])
   );
 
-  const byCollection = activeCollectionId
-    ? topLevel.filter((t) => t.collectionId === activeCollectionId)
+  const byCollection = endeavourScope
+    ? topLevel.filter((t) => inEndeavourScope(endeavourScope, t.collectionId))
     : topLevel;
 
   const byPurpose = activePurposeIds.length > 0
