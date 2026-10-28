@@ -20,9 +20,13 @@ import { useFitnessStore } from '@/store/fitnessStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useOverviewStore } from '@/store/overviewStore';
 import { useConverterStore } from '@/store/converterStore';
+import { useGoalStore } from '@/store/goalStore';
 import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { linkTaskToEvent } from '@/services/eventTaskLinks';
 import { addStarterSet, applyItemType, setItemType } from '@/services/itemTypes';
+import { saveStreams, setTick } from '@/services/rhythms';
+import { rhythmOccurrences, tickIndex } from '@/utils/rhythms';
+import { STREAM_KINDS } from '@/config/streamKinds';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { editNoteContent } from '@/services/noteContentEdit';
 import { pictureRef } from '@/services/pictures';
@@ -33,7 +37,7 @@ import { LABELS } from '@/config/labels';
 import { node, kids, bold, italic, sub, sup, weblink, p, pId, h, bullets, numbered, table, section, columns, doc, important, tagged, itemLink, noteLink, termLink, hubPassage, unsure, chip, mathInline, card, embed, mathBlock } from './noteContent';
 import { EX } from './blockExamples';
 import type { ActivityTypeId } from '@/types/fitness';
-import type { CollectionId, CrossAppRef, NoteId, NoteTagId, PictureId, TagId, TaskId } from '@/types';
+import type { CollectionId, CrossAppRef, NoteId, NoteTagId, PictureId, RhythmStream, StreamKind, StreamRule, TagId, TaskId } from '@/types';
 import type { ListId, ListTypeId } from '@/types/lists';
 
 // ── Dates ────────────────────────────────────────────────────────────────────
@@ -218,7 +222,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
 
   const block = (id: string, title: string, daysOfWeek: number[], startTime: string, endTime: string, location: string) =>
     ({ id, title, daysOfWeek, startTime, endTime, location, interval: 1, intervalAnchor: day(0), exceptions: [], notes: null, requiresCommitment: false, committedDates: [] });
-  useScheduleStore.getState().addSchedule({
+  const timetable = useScheduleStore.getState().addSchedule({
     name: 'Semester 2 timetable', color: colour('blue'), startDate: day(-56), endDate: day(42),
     blocks: [
       block('geos201l', 'GEOS201 lecture', [1, 3], '10:00', '11:00', 'Earth Sciences LT1'),
@@ -227,6 +231,29 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
       block('geos215t', 'GEOS215 tutorial', [5], '09:00', '10:00', 'Madsen 4.12'),
     ],
   });
+
+  // ── A rhythm (docs/features/endeavours.md phase 4): GEOS215 week by week, part of Semester 2.
+  // The lectures follow the timetable, the reading is due the day before each, the quiz each
+  // Friday. Ticks for the last fortnight, with one reading missed (it shows as behind).
+  const readingStream = nanoid(8);
+  const weekly = useTaskStore.getState().addCollection({ kind: 'routine', name: 'GEOS215 each week', color: colour('cyan') });
+  useTaskStore.getState().updateCollection(weekly, { collectionId: semester });
+  const stream = (id: string, label: string, kind: StreamKind, rule: StreamRule, extra: Partial<RhythmStream> = {}): RhythmStream =>
+    ({ id, label, kind, rule, typeId: null, start: day(-21), time: null, show: { ...STREAM_KINDS[kind].show }, notebookId: geos215, ...extra });
+  saveStreams(weekly, [
+    stream(nanoid(8), 'Lecture', 'attend', { kind: 'relative', scheduleId: timetable, blockId: 'geos215l', offsetDays: 0 }),
+    stream(readingStream, 'Reading', 'doBy', { kind: 'relative', scheduleId: timetable, blockId: 'geos215l', offsetDays: -1 }, { typeId: typeNamed('Reading') }),
+    stream(nanoid(8), 'Tutorial quiz', 'submit', { kind: 'repeat', repeat: { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null, daysOfWeek: [5] } }, { time: '17:00' }),
+  ]);
+  {
+    const rhythm = useTaskStore.getState().collections[weekly];
+    const ticks = tickIndex(useTrackerStore.getState().entries, useTaskStore.getState().collections);
+    const missed = rhythmOccurrences(rhythm, useScheduleStore.getState().schedules, ticks, day(-14), day(-1), day(0))
+      .filter((o) => o.stream.label === 'Reading').at(-1)?.key;
+    for (const o of rhythmOccurrences(rhythm, useScheduleStore.getState().schedules, ticks, day(-14), day(-1), day(0))) {
+      if (o.key !== missed) setTick(weekly, o.stream.id, o.date, 'done');
+    }
+  }
 
   // ── Lists ──
   const packing = lists.addList({ name: 'Field trip packing list', kind: 'checklist', icon: '🎒', color: colour('teal'), collectionId: fieldReport, resetOnTaskComplete: true });
@@ -298,6 +325,15 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     const done = useTrackerStore.getState().addEntry({ trackerId: routine, date, data: {}, notes: null });
     useRoutineStore.getState().completeRoutine(routine, date, done.id);
   }
+
+  // ── Goals (docs/features/endeavours.md phase 5): one of each measure.
+  const goal = useGoalStore.getState();
+  const distinction = goal.addGoal({ title: 'Average a distinction this semester', target: { type: 'endeavour', id: semester }, by: day(42), measure: { kind: 'manual', unit: '%', target: 75, direction: 'atLeast' } });
+  goal.addCheckIn(distinction, { date: day(-30), value: 78, note: 'Lab 1 and the first quiz' });
+  goal.addCheckIn(distinction, { date: day(-9), value: 71, note: 'Mineral ID practical pulled it down' });
+  goal.addGoal({ title: 'Keep up with the GEOS215 readings', target: { type: 'endeavour', id: semester }, by: null, measure: { kind: 'consistency', rhythmId: weekly, streamId: readingStream, count: 5, outOf: 6 } });
+  goal.addGoal({ title: '10 hours of study a week', target: { type: 'endeavour', id: semester }, by: null, measure: { kind: 'tracker', trackerId: study, fieldId: 'time', target: 10 * 3600, direction: 'atLeast', aggregate: 'sum', period: 'week' } });
+  goal.addGoal({ title: 'Get every essay task done', target: { type: 'endeavour', id: essay }, by: day(25), measure: { kind: 'completion', milestonesOnly: false } });
 
   // ── Fitness ──
   const fit = useFitnessStore.getState();
@@ -557,5 +593,5 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
 export const DEMO_BACKUP_KEYS = [
   'todo-app-storage', 'todo-calendar', 'todo-schedules', 'todo-tracker', 'todo-routines', 'notes-storage',
   'lists-storage', 'fitness-storage', 'todo-portfolio', 'overviews-storage', 'trash-storage', 'pictures-storage',
-  'item-types-storage',
+  'item-types-storage', 'goals-storage',
 ] as const;

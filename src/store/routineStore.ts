@@ -11,6 +11,8 @@ interface RoutineState {
   getOrCreateInstance: (routineId: CollectionId, date: string) => RoutineInstance;
   toggleRoutineTask:   (routineId: CollectionId, date: string, taskId: string) => void;
   completeRoutine:     (routineId: CollectionId, date: string, entryId: TrackerEntryId | null) => void;
+  // Undone from its rhythm (services/rhythms.ts): the day's checklist opens again, ticks kept.
+  reopenRoutine:       (routineId: CollectionId, date: string) => void;
   deleteInstancesForRoutine: (routineId: CollectionId) => void;
 }
 
@@ -47,6 +49,11 @@ export const useRoutineStore = create<RoutineState>()(
           const inst = s.instances[k] ?? { routineId, date, checked: [], completed: false, entryId: null };
           return { instances: { ...s.instances, [k]: { ...inst, completed: true, entryId } } };
         });
+      },
+
+      reopenRoutine: (routineId, date) => {
+        const k = key(routineId, date);
+        set((s) => (s.instances[k] ? { instances: { ...s.instances, [k]: { ...s.instances[k], completed: false, entryId: null } } } : {}));
       },
 
       deleteInstancesForRoutine: (routineId) => {

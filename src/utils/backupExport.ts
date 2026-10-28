@@ -12,6 +12,7 @@ import { usePictureStore } from '@/store/pictureStore';
 import { useOverviewStore } from '@/store/overviewStore';
 import { useConverterStore } from '@/store/converterStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
+import { useGoalStore } from '@/store/goalStore';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { forceUpload, markRestored } from '@/services/sync/syncService';
 import { getBackupSnapshot } from '@/services/autoBackupStorage';
@@ -85,6 +86,7 @@ export async function restoreBackupData(backup: Record<string, unknown>, userId:
     useOverviewStore.persist.rehydrate(),
     useConverterStore.persist.rehydrate(),
     useItemTypeStore.persist.rehydrate(),
+    useGoalStore.persist.rehydrate(),
     usePictureStore.persist.rehydrate(),
     useFitnessStore.persist.rehydrate(),
   ]);

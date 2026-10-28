@@ -23,12 +23,12 @@ import {
   watchlistItemToRow, rowToWatchlistItem,
   portfolioTagToRow, rowToPortfolioTag,
   investmentPurposeToRow, rowToInvestmentPurpose,
-  trashEntryToRow, overviewToRow, rowToOverview, converterToRow, rowToConverter, rowToTrashEntry, itemTypeToRow, rowToItemType, pinToRow, rowToPin,
+  trashEntryToRow, overviewToRow, rowToOverview, converterToRow, rowToConverter, rowToTrashEntry, itemTypeToRow, rowToItemType, goalToRow, rowToGoal, pinToRow, rowToPin,
   pictureToRow, rowToPicture,
 } from '@/services/sync/mappers';
 import type {
   Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, ScheduleTemplate,
-  TaskId, CollectionId, TagId, PurposeId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, TrackerEntryId, ScheduleId, ItemType, ItemTypeId,
+  TaskId, CollectionId, TagId, PurposeId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, TrackerEntryId, ScheduleId, ItemType, ItemTypeId, Goal, GoalId,
 } from '@/types';
 import type { List, ListItem, ListType, ListId, ListItemId, ListTypeId } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry, NoteId, NoteTagId, StructuredTagEntryId } from '@/types/notes';
@@ -65,6 +65,16 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     expect(taskToRow({ ...t, typeId: null, typeFields: {} }, USER)).toMatchObject({ type_id: null, type_fields: {} });
   });
 
+  it('Goal (target, measure and check-ins as jsonb)', () => {
+    const g: Goal = {
+      id: 'g1' as GoalId, title: 'Distinction', target: { type: 'endeavour', id: 'c1' as CollectionId }, by: '2030-06-01',
+      measure: { kind: 'manual', unit: '%', target: 75, direction: 'atLeast' }, checkIns: [{ date: '2030-01-02', value: 72, note: 'Quiz' }],
+      status: 'active', statusAt: null, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-02T00:00:00.000Z',
+    };
+    expect(rowToGoal(goalToRow(g, USER))).toEqual(g);
+    expect(goalToRow(g, USER).deleted_at).toBeNull();
+  });
+
   it('Type (fields, defaults and parts folded into one definition blob)', () => {
     const x: ItemType = {
       id: 'ty1' as ItemTypeId, name: 'Exam', icon: '🎓', extendsId: 'ty0' as ItemTypeId,
@@ -84,7 +94,8 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       collectionId: null, archivedAt: null, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
     };
     expect(rowToCollection(collectionToRow(c, USER))).toEqual(c);
-    expect('encrypt_contents' in collectionToRow(c, USER)).toBe(false);
+    // Always sent (never set = false): it's not null, and a batch upsert fills a column some rows lack with null.
+    expect(collectionToRow(c, USER).encrypt_contents).toBe(false);
     expect(rowToCollection(collectionToRow({ ...c, encryptContents: true }, USER))).toEqual({ ...c, encryptContents: true });
     // links: sent only once there are some (migration 059), so an Endeavour without links syncs before it runs
     expect('links' in collectionToRow(c, USER)).toBe(false);
@@ -239,11 +250,11 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       collectionId: null, backdrop: { kind: 'preset', id: 'ocean' }, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z', userId: USER,
     };
     expect(rowToNoteTag(noteTagToRow(t, USER))).toEqual(t);
-    // Encryption by scope (migration 058): the setting round-trips once set, and isn't sent before.
-    expect('encrypt_contents' in noteTagToRow(t, USER)).toBe(false);
-    for (const encryptContents of [true, false]) {
-      expect(rowToNoteTag(noteTagToRow({ ...t, encryptContents }, USER))).toEqual({ ...t, encryptContents });
-    }
+    // Encryption by scope (migration 058): always sent as a boolean (it's not null, and a batch upsert
+    // fills a column some rows lack with null); on reads as on, off as never set.
+    expect(noteTagToRow(t, USER).encrypt_contents).toBe(false);
+    expect(rowToNoteTag(noteTagToRow({ ...t, encryptContents: true }, USER))).toEqual({ ...t, encryptContents: true });
+    expect(rowToNoteTag(noteTagToRow({ ...t, encryptContents: false }, USER))).toEqual(t);
   });
 
   it('Picture (an encrypted copy: src blank, the data URL in the payload)', () => {

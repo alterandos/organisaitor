@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { useTrackerStore } from '@/store/trackerStore';
 import { LocalNotifications, type ActionPerformed, type LocalNotificationSchema } from '@capacitor/local-notifications';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
@@ -89,6 +90,8 @@ function currentSnapshot(): NotificationSnapshot {
     tasks: useTaskStore.getState().tasks,
     events: cal.events, reminders: cal.reminders, deadlines: cal.deadlines,
     schedules: useScheduleStore.getState().schedules,
+    collections: useTaskStore.getState().collections,
+    entries: useTrackerStore.getState().entries,
   };
 }
 
@@ -222,7 +225,8 @@ export function scheduleReconcile(): void {
 // Re-plans whenever anything it reads changes (a sync pull lands here too). Returns an unsubscribe.
 export function watchForChanges(): () => void {
   const unsubs = [
-    useTaskStore.subscribe((s, p) => { if (s.tasks !== p.tasks) scheduleReconcile(); }),
+    useTaskStore.subscribe((s, p) => { if (s.tasks !== p.tasks || s.collections !== p.collections) scheduleReconcile(); }),
+    useTrackerStore.subscribe((s, p) => { if (s.entries !== p.entries) scheduleReconcile(); }),
     useCalendarStore.subscribe((s, p) => { if (s.events !== p.events || s.reminders !== p.reminders || s.deadlines !== p.deadlines) scheduleReconcile(); }),
     useScheduleStore.subscribe((s, p) => { if (s.schedules !== p.schedules) scheduleReconcile(); }),
     useSettingsStore.subscribe((s, p) => {

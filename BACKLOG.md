@@ -9,9 +9,9 @@ Format: brief description + context/motivation.
 
 ---
 
-## Endeavours, Types, Rhythms and Goals (design agreed 2026-10-28; phases 1–2 built 2026-10-28, phase 3 2026-10-29)
+## Endeavours, Types, Rhythms and Goals (design agreed 2026-10-28; phases 1–2 built 2026-10-28, phases 3–5 2026-10-29)
 
-Nested Endeavours (typed links, several parents, roll-up), an Endeavour home and an Endeavours page (its own nav place, above Overview), Types (fields, defaults, parts; a tag that starts doing work becomes a Type), Rhythms (Routines generalised: streams with their own rules and visibility, synced weekly ticks) and Goals (on Endeavours). Built in six phases, each add-only and reversible; **phases 1 (links, inclusive filters, the safety snapshot), 2 (the Endeavours section, page and homes) and 3 (Types) are built**; phase 4 (Rhythms) is next. Left over from phase 3 ("Not built in phase 3" in the design file): note parts, Types on reminders, notes and list items, filtering and grouping by Type, the Type on calendar entries and Overview rows, agent commands. **The design, decisions, data model, phases and open points are `docs/features/endeavours.md`; build from that.** It supersedes "Records — Routines UX improvements" where they overlap (routines become Rhythms).
+Nested Endeavours (typed links, several parents, roll-up), an Endeavour home and an Endeavours page (its own nav place, above Overview), Types (fields, defaults, parts; a tag that starts doing work becomes a Type), Rhythms (Routines generalised: streams with their own rules and visibility, synced weekly ticks) and Goals (on Endeavours). Built in six phases, each add-only and reversible; **phases 1 (links, inclusive filters, the safety snapshot), 2 (the Endeavours section, page and homes) 3 (Types), 4 (Rhythms) and 5 (Goals) are built**; phase 6 (templates and restructuring) is next. Left over from phase 3 ("Not built in phase 3" in the design file): note parts, Types on reminders, notes and list items, filtering and grouping by Type, the Type on calendar entries and Overview rows, agent commands. From phase 4 ("Not built in phase 4"): renaming Routine to Rhythm in the UI, a rhythm's own creation flow, moving an occurrence, the flatten-back button, agent commands, Android's Done button on a rhythm notification. From phase 5 ("Not built in phase 5"): goals on Purposes, goals in Overview and Behind, a chart of check-ins, a measure from a Type's field across items, notifications as a goal's date nears, agent commands. **The design, decisions, data model, phases and open points are `docs/features/endeavours.md`; build from that.** It supersedes "Records — Routines UX improvements" where they overlap (routines become Rhythms).
 
 ---
 
@@ -650,6 +650,9 @@ first; add agent generation later.
 ## Records — Routines UX improvements
 
 **Records is on hold** (2026-10-04): ask before starting these.
+
+**Routines need a complete overhaul** (the user, 2026-10-29, after seeing phase 4): known to be an unfinished part of the suite. Phase 4 of `docs/features/endeavours.md` gave routines streams, ticks and a board, but left the routine itself as it was: its own Records card and checklist (`RoutineChecklist`), its creation form (`AddRoutineModal`: days only, no streams), its edit pane (steps and days above the Streams), the name "Routine" (vs "Rhythm"), and how a routine with streams reads in Records (its ticks show as plain tracker entries). To design with the user before building: what a routine/rhythm is to the person, where it lives (Records, Endeavour homes, its own place), one creation flow, and how the checklist and the streams relate. The "Tasks section: surfacing routines again" question below is now answered by a stream's Tasks setting.
+
 
 ### Tasks section: surfacing routines again (deliberately, not by accident)
 

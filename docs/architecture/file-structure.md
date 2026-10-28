@@ -67,6 +67,11 @@ src/
   store/itemTypeStore.ts — the person's Types (synced as item_types); rules in utils/itemTypes.ts, applying one in services/itemTypes.ts
   utils/itemTypes.ts — Types' rules, pure: typeChain, resolveItemType (fields, parts, defaults through extends), canExtend, partDue, fieldValuesText
   services/itemTypes.ts — giving an item a Type and making its parts (applyItemType, setItemType), addStarterSet, makeTagAType, itemsOfType
+  config/streamKinds.ts — the kinds of rhythm stream (attend, do by, submit) and where each shows by default
+  utils/rhythms.ts — rhythms' rules, pure: a routine's streams (legacyStream for one never given any), streamDates, ticks read from tracker entries (tickIndex), occurrenceState, rhythmOccurrences, showsInTasks, boardWeeks
+  services/rhythms.ts — ticking a rhythm's occurrence (setTick, toggleDone), its fields, its note, saving streams
+  store/goalStore.ts — the person's goals (synced as goals); progress in utils/goals.ts
+  utils/goals.ts — goals' rules, pure: goalProgress (the four measures), goalSuggestion, daysLeft, goalsOf
   config/endeavourLinkKinds.ts — what each kind of link between Endeavours means (partOf rolls up; related doesn't); a new kind is one entry
   hooks/useEndeavourScope.ts — the Endeavour filter's scope: the chosen Endeavour and everything part of it (test items with inEndeavourScope)
   services/newItem.ts       — openNewItem(view): THE N/Space/Ctrl+N routing, section by section (Notes: by focused column) — see "New-item hotkey"
@@ -229,6 +234,9 @@ src/
     ScratchpadPanel/         — the scratchpad panel (Alt+P, over any section): Copy all / Cut all, Open in Notes, Scratchpad paper or Simple design; mounted by App.tsx
     ItemTypeField/           — an item's Type and its fields: ItemTypeField in a creation form (also the parts to make), ItemTypePaneField in a task/event/Deadline pane
     ItemTypeModal/           — making or editing a Type (Manage → Types)
+    RhythmStreamsField/      — a rhythm's streams in the routine's edit pane
+    RhythmBoard/             — a rhythm's board on an Endeavour's home (weeks by streams), and RhythmDueList (its occurrences in Tasks)
+    GoalModal/               — making, editing and settling a goal (opened from an Endeavour's home); its goals panel is EndeavoursSection/GoalsPanel.tsx
     FieldInput/              — THE input for one FieldSchema field (tracker entries, a Type's fields)
     EndeavourLinksField/     — "Part of" / "Related to" in the Endeavour editor (AddCollectionModal)
     EndeavoursSection/       — the Endeavours section: EndeavoursPage (every Endeavour, tree or by Purpose), EndeavourHome (where one stands, its parts, its things, the add row), useEndeavourRows

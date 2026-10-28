@@ -1,12 +1,13 @@
 import { LABELS } from '@/config/labels';
-import { INBOX_ICON, QUESTION_ICON, REVIEW_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
+import { INBOX_ICON, QUESTION_ICON, REVIEW_ICON, RHYTHM_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
+import { BEHIND_DAYS, rhythmOccurrences, tickIndex, isRhythm, isDealtWith } from '@/utils/rhythms';
 import { addDaysToIso } from '@/utils/date';
 import { expandRepeat } from '@/utils/recurrence';
 import { getNoteEffectiveCollectionId, getNoteNotebookPath } from '@/utils/notes';
 import { collectQuestions } from '@/utils/noteQuestions';
 import { collectInboxes, localDay } from '@/utils/noteInboxes';
 import type {
-  CalendarDeadline, CalendarEvent, CalendarReminder, Collection, RepeatConfig, Task, TrackerEntry,
+  CalendarDeadline, CalendarEvent, CalendarReminder, Collection, RepeatConfig, ScheduleTemplate, Task, TrackerEntry,
 } from '@/types';
 import type { List, ListItem } from '@/types/lists';
 import type { Note, NoteTag } from '@/types/notes';
@@ -34,6 +35,7 @@ export interface OverviewSnapshot {
   lists:       Record<string, List>;          // views
   listItems:   Record<string, ListItem>;      // views
   entries:     Record<string, TrackerEntry>;
+  schedules?:  Record<string, ScheduleTemplate>;  // timetables: rhythm streams that follow a class
   lockedNoteIds: ReadonlySet<string>;         // encrypted and locked — never shown, only counted
   lockedListIds: ReadonlySet<string>;
 }
@@ -212,7 +214,8 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     key: 'trackerEntry', icon: ITEM_TYPE_ICON.trackerEntry, label: LABELS.overview.sources.trackerEntry,
     rows: (snap) => ({
       locked: [],
-      rows: Object.values(snap.entries).filter((e) => snap.collections[e.trackerId]).map((e) => {
+      // A rhythm's ticks are its own rows (the rhythm source), so they aren't listed twice.
+      rows: Object.values(snap.entries).filter((e) => snap.collections[e.trackerId] && !snap.collections[e.trackerId].streams?.length).map((e) => {
         const tracker = snap.collections[e.trackerId];
         return row('trackerEntry', e.id, {
           title: tracker.name, when: e.date, time: null, status: 'done',
@@ -287,6 +290,29 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
             plan: plan('point', { important: p.level >= 2 }),
           })));
         }),
+      };
+    },
+  },
+  {
+    // A rhythm's occurrences (docs/features/endeavours.md phase 4): two weeks back (what's behind)
+    // and the week ahead. Only rhythms given streams: a routine never given any shows nowhere new.
+    // Filed under the rhythm, which is part of its Endeavour, so an Endeavour's home rolls them up.
+    key: 'rhythm', icon: RHYTHM_ICON, label: LABELS.overview.sources.rhythm,
+    rows: (snap, today) => {
+      const ticks = tickIndex(snap.entries, snap.collections);
+      const from = addDaysToIso(today, -BEHIND_DAYS);
+      const to = addDaysToIso(today, 7);
+      return {
+        locked: [],
+        rows: Object.values(snap.collections)
+          .filter((c) => isRhythm(c) && !c.archivedAt && !!c.streams?.length)
+          .flatMap((c) => rhythmOccurrences(c, snap.schedules ?? {}, ticks, from, to, today))
+          .map((o) => row('rhythm', o.key, {
+            title: o.stream.label, when: o.date, time: o.time,
+            status: isDealtWith(o.state) ? 'done' : 'open',
+            endeavourId: o.rhythm.id, context: o.rhythm.name,
+            plan: plan('point', {}),
+          })),
       };
     },
   },

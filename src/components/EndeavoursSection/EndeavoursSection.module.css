@@ -193,6 +193,10 @@
   gap: var(--space-1);
 }
 .panelBad { border-color: color-mix(in srgb, var(--color-danger) 40%, var(--color-border)); }
+/* Behind, This week and Coming up sit as one row: the same height (the tallest's, up to a limit),
+   each scrolling inside past it, so a long week doesn't tower over the others. */
+.summaryPanels { align-items: stretch; }
+.summaryPanels > .panel { max-height: 22rem; overflow-y: auto; }
 .panelTitle {
   margin: 0 0 var(--space-2);
   font-size: var(--text-2xs);
@@ -285,3 +289,37 @@
 .thing:hover { color: var(--color-primary); }
 
 .addRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+
+/* ── Goals (phase 5) ── */
+.goals { display: flex; flex-direction: column; }
+.goalCards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: var(--space-3); }
+.goalCard {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  min-width: 0;
+}
+.goalSettled { opacity: 0.7; }
+.goalHead { display: flex; align-items: center; gap: var(--space-2); }
+.goalTitle { flex: 1; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.goalMeta { margin: 0; font-size: var(--text-sm); color: var(--color-muted); }
+.goalSuggest { margin: 0; font-size: var(--text-sm); }
+.pillMuted {
+  display: inline-flex; border-radius: var(--radius-pill); padding: 0.05rem var(--space-2);
+  font-size: var(--text-xs); font-weight: 600; background: var(--color-surface-alt); color: var(--color-muted);
+}
+.bar { height: 0.45rem; border-radius: var(--radius-pill); background: var(--color-surface-alt); border: 1px solid var(--color-border); overflow: hidden; }
+.barFill { height: 100%; background: var(--color-primary); border-radius: inherit; }
+.barDone { background: var(--color-success); }
+.checkIn { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.checkValue, .checkNote {
+  min-width: 0; padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  font: inherit; font-size: var(--text-sm); background: var(--color-surface); color: var(--color-text);
+}
+.checkValue { width: 6rem; }
+.checkNote { flex: 1; }
+.checkValue:focus-visible, .checkNote:focus-visible { outline: none; border-color: var(--color-primary); }
+.goalBadge { flex: none; font-size: var(--text-2xs); font-weight: 600; color: var(--color-muted); border: 1px solid var(--color-border); border-radius: var(--radius-pill); padding: 0 var(--space-2); }

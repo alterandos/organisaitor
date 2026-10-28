@@ -6,7 +6,10 @@ import { useListViews } from '@/store/listViews';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { formatDate } from '@/utils/date';
-import { childrenOf, parentsOf } from '@/utils/endeavourGraph';
+import { childrenOf, endeavourSubtree, parentsOf } from '@/utils/endeavourGraph';
+import { isRhythm } from '@/utils/rhythms';
+import { RhythmBoard } from '@/components/RhythmBoard/RhythmBoard';
+import { GoalsPanel } from './GoalsPanel';
 import { rowsOfEndeavour, summarizeRows } from '@/utils/endeavourSummary';
 import { SOURCE_BY_KEY } from '@/overview/sources';
 import { openOverviewRow } from '@/overview/open';
@@ -36,6 +39,11 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
   const { rows, today } = useEndeavourRows();
   const c = collections[id];
 
+  // Its rhythms (routines part of it, or of its parts): each one's board (screen B).
+  const rhythms = useMemo(() => {
+    const scope = endeavourSubtree(id, collections);
+    return Object.values(collections).filter((x) => isRhythm(x) && !x.archivedAt && x.id !== id && scope.has(x.id));
+  }, [id, collections]);
   const summary = useMemo(() => summarizeRows(rowsOfEndeavour(rows, id, collections), today), [rows, id, collections, today]);
 
   if (!c) {
@@ -72,7 +80,8 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
     ui().setActiveView('records');
   };
 
-  const adds: { key: keyof typeof L.add; run: () => void }[] = [
+  type Add = { key: keyof typeof L.add; run: () => void };
+  const adds = ([
     { key: 'task',      run: () => ui().showAddTask() },
     { key: 'event',     run: () => ui().showAddCalendarItem() },
     { key: 'notebook',  run: () => ui().showAddNoteTag(null, 'area') },
@@ -81,7 +90,8 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
     { key: 'tracker',   run: () => ui().showAddTracker() },
     { key: 'routine',   run: () => ui().showAddRoutine() },
     { key: 'endeavour', run: () => ui().showAddCollection() },
-  ];
+    { key: 'goal',      run: () => ui().showAddGoal(id) },
+  ] as Add[]).sort((a, b) => L.add[a.key].localeCompare(L.add[b.key]));   // A to Z by what it says
 
   return (
     <div className={styles.page}>
@@ -114,7 +124,9 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
         </div>
       </header>
 
-      <div className={styles.panels}>
+      <GoalsPanel endeavourId={id} today={today} />
+
+      <div className={`${styles.panels} ${styles.summaryPanels}`}>
         {summary.behind.length > 0 && (
           <Panel title={L.panels.behind} tone="bad">
             {summary.behind.map((r) => <Row key={r.key} row={r} homeId={id} collections={collections} />)}
@@ -131,6 +143,8 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
           </Panel>
         )}
       </div>
+
+      {rhythms.map((r) => <RhythmBoard key={r.id} rhythm={r} today={today} />)}
 
       {parts.length > 0 && (
         <section className={styles.partsSection} aria-label={L.panels.parts}>

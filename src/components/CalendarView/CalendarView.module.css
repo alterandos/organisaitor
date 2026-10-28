@@ -532,6 +532,26 @@
   color: #7e22ce;
 }
 
+/* A rhythm's occurrence (docs/features/endeavours.md phase 4): a click ticks it. As a mark it's
+   small and quiet; behind, it says so even past (it was never done, not just over). */
+.calItem_rhythm {
+  background: var(--color-primary-subtle);
+  color: var(--color-text);
+  border-left: 3px dotted var(--color-primary);
+}
+.calItemMarker {
+  font-size: var(--text-2xs);
+  opacity: 0.8;
+  background: transparent;
+  padding-block: 0;
+}
+.calItemBehind.calItem_rhythm {
+  text-decoration: none;
+  opacity: 1;
+  border-left-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
 .calItemCompleted { text-decoration: line-through; opacity: 0.5; }
 .calItemPast      { text-decoration: line-through; opacity: 0.55; }
 

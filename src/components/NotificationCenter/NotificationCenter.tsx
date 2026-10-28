@@ -96,7 +96,7 @@ function NotificationCard({ n }: { n: PendingNotification }) {
 
   const kindClass =
     n.kind === 'event'    ? styles.kindEvent :
-    n.kind === 'reminder' || n.kind === 'deadline' ? styles.kindReminder :
+    n.kind === 'reminder' || n.kind === 'deadline' || n.kind === 'rhythm' ? styles.kindReminder :
     n.kind === 'schedule' ? styles.kindSchedule : styles.kindTask;
   const tomorrow = occurrence ? postponeDate('tomorrow', occurrence, today) : null;
   const nextWeek = occurrence ? postponeDate('next-week', occurrence, today) : null;
@@ -125,6 +125,12 @@ function NotificationCard({ n }: { n: PendingNotification }) {
               {calendarKind && <button className={styles.actionBtn} onClick={() => setMode('postpone')}>{C.postpone}</button>}
               {calendarKind && <button className={styles.actionBtn} onClick={open}>{C.open}</button>}
               <button className={`${styles.actionBtn} ${styles.archiveBtn}`} onClick={() => (repeats ? setMode('archive') : archive(false))}>{C.archive}</button>
+            </>
+          ) : n.kind === 'rhythm' ? (
+            <>
+              <button className={`${styles.actionBtn} ${styles.doneBtn}`} title={C.doneHint} onClick={done}>{C.done}</button>
+              <button className={styles.actionBtn} onClick={open}>{C.open}</button>
+              <button className={styles.actionBtn} onClick={close}>{C.ok}</button>
             </>
           ) : (
             <button className={`${styles.actionBtn} ${styles.doneBtn}`} onClick={close}>{C.ok}</button>

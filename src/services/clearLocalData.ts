@@ -6,6 +6,7 @@ import { useScheduleStore } from '@/store/scheduleStore';
 import { useOverviewStore } from '@/store/overviewStore';
 import { useConverterStore } from '@/store/converterStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
+import { useGoalStore } from '@/store/goalStore';
 import { useNoteStore } from '@/store/noteStore';
 import { usePictureStore } from '@/store/pictureStore';
 import { useTrashStore } from '@/store/trashStore';
@@ -46,6 +47,7 @@ export function clearSyncedLocalData(): void {
   useOverviewStore.setState({ overviews: useOverviewStore.getInitialState().overviews });
   useConverterStore.setState({ converters: useConverterStore.getInitialState().converters, recent: [] });
   useItemTypeStore.setState({ types: useItemTypeStore.getInitialState().types });
+  useGoalStore.setState({ goals: useGoalStore.getInitialState().goals });
   usePinnedItemsStore.setState({ pins: usePinnedItemsStore.getInitialState().pins });
   // Synced since 2026-10-22 (before that it stayed on the device, and showed under the next account).
   const fitness = useFitnessStore.getInitialState();

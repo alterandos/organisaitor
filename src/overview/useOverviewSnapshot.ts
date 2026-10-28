@@ -4,6 +4,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
 import { useTrackerStore } from '@/store/trackerStore';
+import { useScheduleStore } from '@/store/scheduleStore';
 import { useNoteViews } from '@/store/noteViews';
 import { useListViews, useListItemViews } from '@/store/listViews';
 import { isNoteLocked } from '@/services/noteSecrets';
@@ -23,13 +24,14 @@ export function useOverviewSnapshot(): OverviewSnapshot {
   const noteTags    = useNoteStore((s) => s.noteTags);
   const rawLists    = useListStore((s) => s.lists);
   const entries     = useTrackerStore((s) => s.entries);
+  const schedules   = useScheduleStore((s) => s.schedules);
   const notes       = useNoteViews();
   const lists       = useListViews();
   const listItems   = useListItemViews();
 
   return useMemo(() => ({
-    tasks, collections, events, reminders, deadlines, notes, noteTags, lists, listItems, entries,
+    tasks, collections, events, reminders, deadlines, notes, noteTags, lists, listItems, entries, schedules,
     lockedNoteIds: new Set(Object.values(rawNotes).filter(isNoteLocked).map((n) => n.id)),
     lockedListIds: new Set(Object.values(rawLists).filter(isListLocked).map((l) => l.id)),
-  }), [tasks, collections, events, reminders, deadlines, notes, noteTags, lists, listItems, entries, rawNotes, rawLists]);
+  }), [tasks, collections, events, reminders, deadlines, notes, noteTags, lists, listItems, entries, schedules, rawNotes, rawLists]);
 }

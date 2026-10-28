@@ -5,7 +5,7 @@ import { persistStorage } from '@/utils/persistStorage';
 
 // 'task-timed' / 'task-untimed' are no longer produced (task deadlines notify through their shadow
 // CalendarDeadline) but can still be sitting in a persisted bell from before.
-export type NotificationKind = 'task-timed' | 'task-untimed' | 'event' | 'reminder' | 'deadline' | 'schedule';
+export type NotificationKind = 'task-timed' | 'task-untimed' | 'event' | 'reminder' | 'deadline' | 'schedule' | 'rhythm';
 
 export interface PendingNotification {
   id: string;

@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { tickIndex } from '@/utils/rhythms';
+import { useTrackerStore } from '@/store/trackerStore';
 import type { CalendarDeadlineId, CalendarEventId, CalendarReminderId, ScheduleId, TaskId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
@@ -38,6 +40,12 @@ function isStale(n: PendingNotification, snap: NotificationSnapshot): boolean {
     const d = snap.deadlines[n.itemId as CalendarDeadlineId];
     return !d || !!d.archivedAt || taskDone(n.taskId) || [...(d.doneDates ?? []), ...(d.seenDates ?? [])].includes(n.occurrence ?? d.date);
   }
+  if (n.kind === 'rhythm') {
+    const [rhythmId] = n.itemId.split('|');
+    const rhythm = snap.collections?.[rhythmId];
+    const tick = rhythm && snap.entries ? tickIndex(snap.entries, { [rhythmId]: rhythm }).get(n.itemId) : undefined;
+    return !rhythm || !!rhythm.archivedAt || !!tick?.status;
+  }
   // schedule: `${scheduleId}::${blockId}::${date}`
   const [scheduleId, blockId, date] = n.itemId.split('::');
   const schedule = snap.schedules[scheduleId as ScheduleId];
@@ -51,13 +59,15 @@ export function useNotificationChecker() {
   const reminders   = useCalendarStore((s) => s.reminders);
   const deadlines   = useCalendarStore((s) => s.deadlines);
   const schedules   = useScheduleStore((s) => s.schedules);
+  const collections = useTaskStore((s) => s.collections);
+  const entries     = useTrackerStore((s) => s.entries);
   const clockFormat = useSettingsStore((s) => s.clockFormat);
   const timezone    = useSettingsStore((s) => s.timezone);
   const { isAndroid } = usePlatform();
 
   useEffect(() => {
     const zone = resolveTimezone(timezone);
-    const snap: NotificationSnapshot = { tasks, events, reminders, deadlines, schedules };
+    const snap: NotificationSnapshot = { tasks, events, reminders, deadlines, schedules, collections, entries };
     const check = () => {
       const now = new Date();
       const store = useNotificationStore.getState();
@@ -80,5 +90,5 @@ export function useNotificationChecker() {
     check();
     const id = setInterval(check, 60_000);
     return () => clearInterval(id);
-  }, [tasks, events, reminders, deadlines, schedules, clockFormat, timezone, isAndroid]);
+  }, [tasks, events, reminders, deadlines, schedules, collections, entries, clockFormat, timezone, isAndroid]);
 }

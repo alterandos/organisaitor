@@ -623,13 +623,18 @@ describe('encryption by scope — a covered record is held on the device until i
     expect((fake.upserts.lists ?? []).some((r) => r.name === 'Shopping')).toBe(true);
   });
 
-  it('an Endeavour or notebook never given the setting sends no encrypt_contents column (works before migration 058)', async () => {
-    await initSync(USER);
+  // Regression 2026-10-29: "null value in column encrypt_contents violates not-null constraint". A
+  // batch upsert fills a column some rows lack with null, so once one Endeavour had the setting, a
+  // batch holding it and one never given it was refused. Every row carries the not-null column.
+  it('every Endeavour and notebook in an upload carries encrypt_contents as a boolean', async () => {
     useTaskStore.getState().addCollection({ kind: 'project', name: 'Plain' } as never);
+    const secret = useTaskStore.getState().addCollection({ kind: 'project', name: 'Secret' } as never);
+    useTaskStore.setState((s) => ({ collections: { ...s.collections, [secret]: { ...s.collections[secret], encryptContents: true } } }));
     useNoteStore.getState().addNoteTag({ name: 'Plain', kind: 'area', parentTagId: null } as never);
-    await tick();
-    const rows = [...(fake.upserts.collections ?? []), ...(fake.upserts.note_tags ?? [])].filter((r) => r.name === 'Plain');
-    expect(rows.length).toBe(2);
-    expect(rows.every((r) => !('encrypt_contents' in r))).toBe(true);
+    await forceUpload(USER);
+    const rows = [...(fake.upserts.collections ?? []), ...(fake.upserts.note_tags ?? [])];
+    expect(rows.filter((r) => r.name === 'Plain' || r.name === 'Secret')).toHaveLength(3);
+    expect(rows.every((r) => typeof r.encrypt_contents === 'boolean')).toBe(true);
+    expect(rows.find((r) => r.name === 'Secret')?.encrypt_contents).toBe(true);
   });
 });

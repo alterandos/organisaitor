@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType, RepeatConfig, ItemTypeId, TypeableKind } from '@/types';
+import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType, RepeatConfig, ItemTypeId, TypeableKind, GoalId, CollectionId } from '@/types';
 import type { Activity } from '@/types/fitness';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { useNoteStore } from '@/store/noteStore';
@@ -120,6 +120,7 @@ export type ModalType =
   | 'add-activity'
   | 'add-schedule'
   | 'add-item-type'
+  | 'add-goal'
   | null;
 
 export type SortField = 'createdAt' | 'deadline' | 'collection' | 'priority';
@@ -206,6 +207,12 @@ interface UIState {
   showAddItemType:   () => void;
   openEditItemType:  (id: ItemTypeId) => void;
   showAddTyped:      (typeId: ItemTypeId, kind: TypeableKind) => void;
+  // Goals (docs/features/endeavours.md phase 5): the goal editor, for a new goal on an Endeavour
+  // (pendingGoalEndeavourId) or an existing one (editingGoalId).
+  editingGoalId:          GoalId | null;
+  pendingGoalEndeavourId: CollectionId | null;
+  showAddGoal:            (endeavourId?: CollectionId | null) => void;
+  openEditGoal:           (id: GoalId) => void;
   showAddActivity:   () => void;
   openEditActivity:  (activity: Activity) => void;
   closeEditActivity: () => void;
@@ -668,6 +675,10 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   showAddTag:        () => set({ openModal: 'add-tag'        }),
   editingItemTypeId: null,
   pendingItemTypeId: null,
+  editingGoalId:          null,
+  pendingGoalEndeavourId: null,
+  showAddGoal:            (endeavourId) => set({ openModal: 'add-goal', editingGoalId: null, pendingGoalEndeavourId: endeavourId ?? null }),
+  openEditGoal:           (id) => set({ openModal: 'add-goal', editingGoalId: id, pendingGoalEndeavourId: null }),
   showAddItemType:   () => set({ openModal: 'add-item-type', editingItemTypeId: null }),
   openEditItemType:  (id) => set({ openModal: 'add-item-type', editingItemTypeId: id }),
   // Set first, so the form reads it when it mounts (the openers leave it alone).
@@ -701,6 +712,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     createDraft: null,
     editingItemTypeId: null,
     pendingItemTypeId: null,
+    editingGoalId: null,
+    pendingGoalEndeavourId: null,
     taskModalAdvanced: false,
     pendingParentId: null,
     pendingFollowUpOf: null,

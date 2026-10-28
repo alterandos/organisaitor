@@ -128,6 +128,9 @@ createDraft: string | null, setCreateDraft(draft)
 editingItemTypeId: ItemTypeId | null, showAddItemType(), openEditItemType(id)
 pendingItemTypeId: ItemTypeId | null, showAddTyped(typeId, kind)   // sets it, then opens the task or calendar form
 
+// Goals (phase 5): the goal editor (modal 'add-goal'), for a new goal on an Endeavour or an existing one. Cleared by closeModal.
+editingGoalId: GoalId | null, pendingGoalEndeavourId: CollectionId | null, showAddGoal(endeavourId?), openEditGoal(id)
+
 // Notes: a passage to select once a note is open (services/notePassage.ts sets it with openNote;
 // NoteEditor consumes it).
 requestedNotePassage: { noteId, mark, attr, value } | null, setRequestedNotePassage(p)

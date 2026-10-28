@@ -8,7 +8,7 @@ import { endeavourSubtree, inEndeavourScope } from '@/utils/endeavourGraph';
 // an Overview can never disagree. Pure, over the rows and the collections.
 
 // What can fall behind: something due, not something that just happened (an event in the past).
-const DUE: ReadonlySet<OverviewSourceKey> = new Set(['task', 'deadline', 'reminder']);
+const DUE: ReadonlySet<OverviewSourceKey> = new Set(['task', 'deadline', 'reminder', 'rhythm']);
 // What's worth listing as coming up beyond this week.
 const COMING: ReadonlySet<OverviewSourceKey> = new Set(['task', 'deadline', 'reminder', 'event']);
 

@@ -139,3 +139,30 @@ describe('one notify setting for every calendar item (utils/notifyRule.ts)', () 
       .toEqual(['2030-03-09T17:00:00.000Z']);
   });
 });
+
+// Rhythms (docs/features/endeavours.md phase 4): a stream set to notify, once per occurrence not dealt with.
+describe('planNotifications: rhythm streams', () => {
+  const stream = (o: Record<string, unknown>) => ({
+    id: 'quiz', label: 'Weekly quiz', kind: 'submit', typeId: null, start: '2030-03-01', time: null, notebookId: null,
+    rule: { kind: 'repeat', repeat: { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null, daysOfWeek: [5] } },
+    show: { calendar: 'item', tasks: 'always', notify: true }, ...o,
+  });
+  const rhythm = (streams: unknown[]) => ({ id: 'rh', kind: 'routine', name: 'GEOS215', archivedAt: null, createdAt: '2030-03-01T00:00:00Z', repeatConfig: null, streams }) as never;
+
+  it('notifies each occurrence in the morning, or at its time; not one already done', () => {
+    const entries = { e1: { id: 'e1', trackerId: 'rh', date: '2030-03-08', data: { _stream: 'quiz', _status: 'done' }, notes: null } } as never;
+    const snap = { ...empty(), collections: { rh: rhythm([stream({})]) }, entries };
+    const plan = planNotifications(snap, opts('2030-03-01T00:00:00Z', '2030-03-16T00:00:00Z'));
+    expect(plan.map((n) => [n.kind, n.itemId, n.at.toISOString(), n.important])).toEqual([
+      ['rhythm', 'rh|quiz|2030-03-01', '2030-03-01T09:00:00.000Z', true],
+      ['rhythm', 'rh|quiz|2030-03-15', '2030-03-15T09:00:00.000Z', true],
+    ]);
+    const timed = { ...empty(), collections: { rh: rhythm([stream({ time: '16:00' })]) }, entries: {} };
+    expect(planNotifications(timed, opts('2030-03-08T00:00:00Z', '2030-03-09T00:00:00Z'))[0].at.toISOString()).toBe('2030-03-08T16:00:00.000Z');
+  });
+
+  it('a stream not set to notify, and a routine never given streams, never notify', () => {
+    const snap = { ...empty(), collections: { rh: rhythm([stream({ show: { calendar: 'item', tasks: 'always', notify: false } })]), r2: { ...(rhythm(undefined as never) as object), id: 'r2' } as never }, entries: {} };
+    expect(planNotifications(snap, opts('2030-03-01T00:00:00Z', '2030-03-31T00:00:00Z'))).toEqual([]);
+  });
+});

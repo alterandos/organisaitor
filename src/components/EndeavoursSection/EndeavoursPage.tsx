@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
+import { useGoalStore } from '@/store/goalStore';
+import { useTrackerStore } from '@/store/trackerStore';
+import { useScheduleStore } from '@/store/scheduleStore';
+import { goalProgress, goalsOf } from '@/utils/goals';
 import { LABELS } from '@/config/labels';
 import { formatDate } from '@/utils/date';
 import { childrenOf, parentsOf } from '@/utils/endeavourGraph';
@@ -38,6 +42,27 @@ export function EndeavoursPage() {
     return out;
   }, [endeavours, rows, collections, today]);
 
+  // Each Endeavour's active goals: how far along they are together (the mean of those with a
+  // measure to go on), and each one's line for the tooltip.
+  const goals     = useGoalStore((s) => s.goals);
+  const tasks     = useTaskStore((s) => s.tasks);
+  const entries   = useTrackerStore((s) => s.entries);
+  const schedules = useScheduleStore((s) => s.schedules);
+  const goalLines = useMemo(() => {
+    const out = new Map<string, { pct: number | null; lines: string[] }>();
+    for (const c of endeavours) {
+      const active = goalsOf(goals, c.id).filter((g) => g.status === 'active');
+      if (active.length === 0) continue;
+      const progress = active.map((g) => ({ g, p: goalProgress(g, { tasks, collections, entries, schedules }, today) }));
+      const known = progress.map((x) => x.p.fraction).filter((f): f is number => f !== null);
+      out.set(c.id, {
+        pct: known.length ? Math.round((known.reduce((a, b) => a + b, 0) / known.length) * 100) : null,
+        lines: progress.map(({ g, p }) => `${g.title}: ${p.text}`),
+      });
+    }
+    return out;
+  }, [endeavours, goals, tasks, collections, entries, schedules, today]);
+
   const toggle = (key: string) => setCollapsed((prev) => {
     const next = new Set(prev);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -66,6 +91,11 @@ export function EndeavoursPage() {
             <span className={styles.dot} style={c.color ? { background: c.color } : undefined} aria-hidden />
             <span className={styles.nameText}>{c.name}</span>
             {others.length > 0 && <span className={styles.also}>{L.alsoIn(others.join(', '))}</span>}
+            {goalLines.get(id) && (
+              <span className={styles.goalBadge} title={goalLines.get(id)!.lines.join('\n')}>
+                🎯 {goalLines.get(id)!.pct !== null ? `${goalLines.get(id)!.pct}%` : LABELS.goals.summary(goalLines.get(id)!.lines.length)}
+              </span>
+            )}
           </button>
           <span className={styles.treeBehind}>
             {s && s.behind.length > 0 ? <span className={styles.pillBad}>{L.behind(s.behind.length)}</span> : <span className={styles.pillOk}>{L.onTrack}</span>}

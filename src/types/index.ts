@@ -9,6 +9,7 @@ export type CalendarDeadlineId = string & { readonly _brand: 'CalendarDeadlineId
 export type TrackerEntryId     = string & { readonly _brand: 'TrackerEntryId'     };
 export type ScheduleId         = string & { readonly _brand: 'ScheduleId'         };
 export type ItemTypeId         = string & { readonly _brand: 'ItemTypeId'         };
+export type GoalId             = string & { readonly _brand: 'GoalId'             };
 
 // ── Enum-like string unions ─────────────────────────────────────────────────────
 export type Priority       = 'none' | 'low' | 'medium' | 'high';
@@ -154,6 +155,10 @@ export interface Collection {
   // Absent until the first link is made: no store migration, and the column is sent only then, so an
   // Endeavour without links syncs before migration 059 has run.
   links?:       EndeavourLink[];
+  // A rhythm's streams (kind 'routine'; docs/features/endeavours.md phase 4). Absent on a routine
+  // never given any: it's read as one stream (utils/rhythms.ts rhythmStreams), so nothing stored
+  // changes until it's edited, and the column is sent only once set (migration 061).
+  streams?:     RhythmStream[];
   createdAt:    string;
   updatedAt:    string;
 }
@@ -196,6 +201,75 @@ export interface ItemType {
 export interface TypedItem {
   typeId?:     ItemTypeId | null;
   typeFields?: Record<string, unknown>;
+}
+
+// ── Rhythms (docs/features/endeavours.md phase 4) ───────────────────────────────
+// A rhythm is a routine (Collection kind 'routine') with one or more streams: things done again
+// and again on their own rule (a lecture each Tuesday, a reading the day before it, a quiz every
+// Friday). Its occurrences are computed (utils/rhythms.ts); only a touched one is stored, as a
+// tracker entry of the rhythm (services/rhythms.ts), so ticks sync and show in Records.
+export type StreamKind = 'attend' | 'doBy' | 'submit';
+
+export type StreamRule =
+  | { kind: 'repeat'; repeat: RepeatConfig }                                          // its own repeat, counted from the stream's start
+  | { kind: 'relative'; scheduleId: ScheduleId; blockId: string; offsetDays: number }; // N days from each timetable block (−1: the day before)
+
+// Where a stream's occurrences show, besides its rhythm and Endeavour (defaults by kind:
+// config/streamKinds.ts).
+export interface StreamVisibility {
+  calendar: 'none' | 'marker' | 'item';
+  tasks:    'never' | 'near' | 'always';  // near: overdue, or due within a couple of days
+  notify:   boolean;
+}
+
+export interface RhythmStream {
+  id:         string;              // nanoid(8); a routine read as one stream uses the routine's own id
+  label:      string;
+  kind:       StreamKind;
+  typeId:     ItemTypeId | null;   // what each occurrence is (its fields, filled in per occurrence)
+  rule:       StreamRule;
+  start:      string;              // YYYY-MM-DD: from when it counts (its repeat's first date; nothing before is behind)
+  time:       string | null;       // HH:MM, for its own repeat (a timetable block brings its own)
+  show:       StreamVisibility;
+  notebookId: string | null;       // where an occurrence's note goes (a NoteTagId)
+}
+
+// What happened to one occurrence (an untouched one is open, or behind once past).
+export type TickStatus = 'done' | 'skipped' | 'notNeeded';
+
+// ── Goals (docs/features/endeavours.md phase 5) ─────────────────────────────────
+// A result wanted from an Endeavour ("Distinction in GEOS215", "10 km under 50 min by June"),
+// measured one of four ways. Its target is a typed reference, so a goal on a Purpose can be added
+// later without a migration. How far along it is is computed (utils/goals.ts), never stored; the
+// status is the person's call (the app suggests achieved or missed, never sets it).
+export type GoalTarget = { type: 'endeavour'; id: CollectionId };
+
+export type GoalMeasure =
+  // By hand: check-ins with a value (a mark, a weight), against a target if there is one.
+  | { kind: 'manual'; unit: string | null; target: number | null; direction: 'atLeast' | 'atMost' }
+  // Consistency: at least `count` of the last `outOf` occurrences of a rhythm (one stream, or any) done.
+  | { kind: 'consistency'; rhythmId: CollectionId; streamId: string | null; count: number; outOf: number }
+  // A tracker field: its latest, best, or total (this week, this month or all time) against a target.
+  | { kind: 'tracker'; trackerId: CollectionId; fieldId: string; target: number; direction: 'atLeast' | 'atMost';
+      aggregate: 'latest' | 'best' | 'sum'; period: 'week' | 'month' | 'all' }
+  // Completion: the share of the Endeavour's tasks done (its parts' too), or only its milestones.
+  | { kind: 'completion'; milestonesOnly: boolean };
+
+export interface GoalCheckIn { date: string; value: number | null; note: string | null }
+
+export type GoalStatus = 'active' | 'achieved' | 'missed' | 'dropped';
+
+export interface Goal {
+  id:        GoalId;
+  title:     string;
+  target:    GoalTarget;
+  by:        string | null;      // YYYY-MM-DD
+  measure:   GoalMeasure;
+  checkIns:  GoalCheckIn[];      // by hand: its values over time (also a note on any goal)
+  status:    GoalStatus;
+  statusAt:  string | null;      // when it was achieved, missed or dropped
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type EndeavourLinkKind = 'partOf' | 'related';

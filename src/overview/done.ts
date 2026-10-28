@@ -1,5 +1,6 @@
 import { useCalendarStore } from '@/store/calendarStore';
 import { toggleTaskCompletion } from '@/services/taskCompletion';
+import { toggleDone } from '@/services/rhythms';
 import type { CalendarDeadlineId, CalendarReminderId, TaskId } from '@/types';
 import type { OverviewRow } from '@/types/overview';
 
@@ -10,13 +11,14 @@ import type { OverviewRow } from '@/types/overview';
 
 export function canTickDone(row: OverviewRow): boolean {
   if (row.status === 'archived') return false;
-  if (row.source === 'task') return true;
+  if (row.source === 'task' || row.source === 'rhythm') return true;
   return (row.source === 'reminder' || row.source === 'deadline') && !!row.when;
 }
 
 export function tickOverviewRow(row: OverviewRow): void {
   if (!canTickDone(row)) return;
   if (row.source === 'task') { void toggleTaskCompletion(row.id as TaskId); return; }
+  if (row.source === 'rhythm') { const [rhythm, stream, date] = row.id.split('|'); toggleDone(rhythm, stream, date); return; }
   // The row stands for one date: a one-off item's own, a repeating one's next not yet done.
   useCalendarStore.getState().setOccurrenceDone(
     row.source as 'reminder' | 'deadline',

@@ -1,7 +1,7 @@
 import type {
   Task, Collection, Tag, Purpose,
   CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry,
-  ScheduleTemplate, ItemType, TypedItem,
+  ScheduleTemplate, ItemType, TypedItem, Goal,
 } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
@@ -105,12 +105,15 @@ export function rowToTask(r: Record<string, any>): Task {
 
 // ── Collection ──────────────────────────────────────────────────
 
-// `encrypt_contents` (migration 058) is sent only once the flag has been set on this record, so
-// notebooks and Endeavours keep syncing on a database where 058 hasn't been run yet. Once set (on
-// or off) it is always sent, so turning it off reaches the other devices too.
-const encryptContentsColumn = (v: boolean | undefined) => (v === undefined ? {} : { encrypt_contents: v });
-// Sent only once an Endeavour has had a link (migration 059), like encrypt_contents above.
+// `encrypt_contents` (migration 058) is always sent, never set = false. It is `not null`, and a
+// batch upsert fills a column that only some rows carry with null for the rest (found 2026-10-29:
+// once one Endeavour had the setting, every batch of collections was refused). So only a nullable
+// column may be sent "only once set", as the three below are: a null there reads as none.
+const encryptContentsColumn = (v: boolean | undefined) => ({ encrypt_contents: v ?? false });
+// Sent only once an Endeavour has had a link (migration 059): nullable, so a batch's null is "none".
 const linksColumn = (v: Collection['links']) => (v === undefined ? {} : { links: v });
+// A rhythm's streams (migration 061), likewise sent only once a routine has been given some.
+const streamsColumn = (v: Collection['streams']) => (v === undefined ? {} : { streams: v });
 
 export function collectionToRow(c: Collection, userId: string) {
   return {
@@ -130,6 +133,7 @@ export function collectionToRow(c: Collection, userId: string) {
     archived_at:   c.archivedAt    ?? null,
     ...encryptContentsColumn(c.encryptContents),
     ...linksColumn(c.links),
+    ...streamsColumn(c.streams),
     created_at:    c.createdAt,
     updated_at:    c.updatedAt,
     deleted_at:    null,
@@ -152,8 +156,9 @@ export function rowToCollection(r: Record<string, any>): Collection {
     repeatConfig: r.repeat_config ?? null,
     collectionId: r.collection_id ?? null,
     archivedAt:   r.archived_at   ?? null,
-    ...(r.encrypt_contents != null ? { encryptContents: !!r.encrypt_contents } : {}),
+    ...(r.encrypt_contents ? { encryptContents: true } : {}),
     ...(Array.isArray(r.links) && r.links.length ? { links: r.links } : {}),
+    ...(Array.isArray(r.streams) && r.streams.length ? { streams: r.streams } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
   };
@@ -788,7 +793,7 @@ export function rowToNoteTag(r: Record<string, any>): NoteTag {
     presetKey:    r.preset_key ?? undefined,
     collectionId: r.collection_id ?? null,
     backdrop:     r.backdrop ?? null,
-    ...(r.encrypt_contents != null ? { encryptContents: !!r.encrypt_contents } : {}),
+    ...(r.encrypt_contents ? { encryptContents: true } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
     userId:       r.user_id,
@@ -1116,5 +1121,40 @@ export function rowToItemType(r: Record<string, any>): ItemType {
     archivedAt: r.archived_at ?? null,
     createdAt:  r.created_at,
     updatedAt:  r.updated_at,
+  };
+}
+
+// ── Goal (goals, migration 062) ─────────────────────────────────
+
+export function goalToRow(g: Goal, userId: string) {
+  return {
+    id:         g.id,
+    user_id:    userId,
+    title:      g.title,
+    target:     g.target,
+    by_date:    g.by ?? null,
+    measure:    g.measure,
+    check_ins:  g.checkIns ?? [],
+    status:     g.status,
+    status_at:  g.statusAt ?? null,
+    created_at: g.createdAt,
+    updated_at: g.updatedAt,
+    deleted_at: null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToGoal(r: Record<string, any>): Goal {
+  return {
+    id:        r.id,
+    title:     r.title,
+    target:    r.target,
+    by:        r.by_date ?? null,
+    measure:   r.measure,
+    checkIns:  r.check_ins ?? [],
+    status:    r.status ?? 'active',
+    statusAt:  r.status_at ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }

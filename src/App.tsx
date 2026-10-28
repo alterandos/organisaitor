@@ -71,6 +71,7 @@ import { AddCollectionModal } from '@/components/AddCollectionModal/AddCollectio
 import { AddPurposeModal } from '@/components/AddPurposeModal/AddPurposeModal';
 import { AddTagModal } from '@/components/AddTagModal/AddTagModal';
 import { ItemTypeModal } from '@/components/ItemTypeModal/ItemTypeModal';
+import { GoalModal } from '@/components/GoalModal/GoalModal';
 import { AddCalendarItemModal } from '@/components/AddCalendarItemModal/AddCalendarItemModal';
 import { AddTrackerModal } from '@/components/AddTrackerModal/AddTrackerModal';
 import { AddEntryModal } from '@/components/AddEntryModal/AddEntryModal';
@@ -171,6 +172,7 @@ export default function App() {
   const editingPurpose               = useUIStore((s) => s.editingPurpose);
   const editingTag                   = useUIStore((s) => s.editingTag);
   const editingItemTypeId            = useUIStore((s) => s.editingItemTypeId);
+  const editingGoalId                = useUIStore((s) => s.editingGoalId);
   const editingEntryId               = useUIStore((s) => s.editingEntryId);
   const pendingTrackerId             = useUIStore((s) => s.pendingTrackerId);
   const editingListId                = useUIStore((s) => s.editingListId);
@@ -782,6 +784,7 @@ export default function App() {
         {openModal === 'add-purpose'         && <AddPurposeModal key={editingPurpose?.id ?? 'new'} />}
         {openModal === 'add-tag'             && <AddTagModal key={editingTag?.id ?? 'new'} />}
         {openModal === 'add-item-type'       && <ItemTypeModal key={editingItemTypeId ?? 'new'} />}
+        {openModal === 'add-goal'            && <GoalModal key={editingGoalId ?? 'new'} />}
         {openModal === 'add-calendar-item'   && <AddCalendarItemModal />}
         {openModal === 'add-tracker'            && <AddTrackerModal />}
         {openModal === 'add-entry'             && <AddEntryModal key={editingEntryId ?? pendingTrackerId ?? 'new'} />}

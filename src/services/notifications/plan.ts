@@ -1,6 +1,7 @@
 import type {
-  CalendarDeadline, CalendarEvent, CalendarReminder, ScheduleTemplate, Task,
+  CalendarDeadline, CalendarEvent, CalendarReminder, Collection, ScheduleTemplate, Task, TrackerEntry,
 } from '@/types';
+import { isDealtWith, isRhythm, rhythmOccurrences, tickIndex } from '@/utils/rhythms';
 import { formatTime, addDaysToIso } from '@/utils/date';
 import { zonedTimeToUtc, utcToZonedTime } from '@/utils/timezone';
 import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
@@ -13,7 +14,7 @@ import type { ClockFormat } from '@/utils/date';
 // (services/notifications/androidScheduler.ts) books the next two weeks with the OS. A change to
 // when or how something notifies goes here, and both platforms follow.
 
-export type PlannedKind = 'event' | 'reminder' | 'deadline' | 'schedule';
+export type PlannedKind = 'event' | 'reminder' | 'deadline' | 'schedule' | 'rhythm';
 
 export interface PlannedNotification {
   key:        string;        // stable per occurrence (or snooze): `${kind}:${itemId}:${occurrence}`
@@ -33,6 +34,9 @@ export interface NotificationSnapshot {
   reminders: Record<string, CalendarReminder>;
   deadlines: Record<string, CalendarDeadline>;
   schedules: Record<string, ScheduleTemplate>;
+  // Rhythms (routines with streams) and their ticks: a stream set to notify (docs/features/endeavours.md phase 4).
+  collections?: Record<string, Collection>;
+  entries?:     Record<string, TrackerEntry>;
 }
 
 export interface PlanOptions {
@@ -45,6 +49,8 @@ export interface PlanOptions {
 // A committed Schedule occurrence gets a fixed 30-minute-before nudge (deliberately not
 // configurable per block — see CLAUDE.md "Schedule commitment mode").
 const SCHEDULE_NOTIFY_BEFORE_MIN = 30;
+// A rhythm occurrence with no time of its own notifies in the morning of its day.
+const RHYTHM_UNTIMED_AT = '09:00';
 
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
@@ -165,6 +171,23 @@ export function planNotifications(snap: NotificationSnapshot, opts: PlanOptions)
         if (!inWindow(at)) continue;
         const itemId = `${schedule.id}::${block.id}::${date}`;
         out.push({ key: `schedule:${itemId}`, kind: 'schedule', itemId, occurrence: date, at, title: block.title, body: `Committed — starting at ${formatTime(block.startTime, clockFormat)}`, important: false, taskId: null });
+      }
+    }
+  }
+
+  // ── Rhythm occurrences whose stream is set to notify, not already dealt with ──
+  if (snap.collections && snap.entries) {
+    const ticks = tickIndex(snap.entries, snap.collections);
+    const first = utcToZonedTime(new Date(opts.from.getTime() - DAY), zone).date;
+    const last = utcToZonedTime(new Date(opts.to.getTime() + DAY), zone).date;
+    for (const rhythm of Object.values(snap.collections)) {
+      if (!isRhythm(rhythm) || rhythm.archivedAt || !rhythm.streams?.some((s) => s.show.notify)) continue;
+      for (const o of rhythmOccurrences(rhythm, snap.schedules, ticks, first, last, first)) {
+        if (!o.stream.show.notify || isDealtWith(o.state)) continue;
+        const at = zonedTimeToUtc(o.date, o.time ?? RHYTHM_UNTIMED_AT, zone);
+        if (!inWindow(at)) continue;
+        const body = `${rhythm.name} · ${whenFrom(at, o.date, zone)}${o.time ? ` at ${formatTime(o.time, clockFormat)}` : ''}`;
+        out.push({ key: `rhythm:${o.key}`, kind: 'rhythm', itemId: o.key, occurrence: o.date, at, title: o.stream.label, body, important: o.stream.kind === 'submit', taskId: null });
       }
     }
   }

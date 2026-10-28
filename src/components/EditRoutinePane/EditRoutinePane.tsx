@@ -6,7 +6,7 @@ import { useUIStore } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { LABELS } from '@/config/labels';
-import type { RoutineTask, RepeatConfig, CollectionId, PurposeId, TagId } from '@/types';
+import type { RoutineTask, RepeatConfig, CollectionId, PurposeId, TagId, RhythmStream } from '@/types';
 import styles from './EditRoutinePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
@@ -14,6 +14,9 @@ import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { CloseIcon, TrashIcon } from '@/components/Icons';
+import { RhythmStreamsField } from '@/components/RhythmStreamsField/RhythmStreamsField';
+import { legacyStream, rhythmStreams } from '@/utils/rhythms';
+import { saveStreams } from '@/services/rhythms';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEKDAYS   = [1, 2, 3, 4, 5];
@@ -51,6 +54,7 @@ export function EditRoutinePane() {
   const [tasks,      setTasks]      = useState<RoutineTask[]>(() => routine?.routineTasks ?? []);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(() => routine?.repeatConfig?.daysOfWeek ?? []);
   const [newTitle,   setNewTitle]   = useState('');
+  const [streams,    setStreams]    = useState<RhythmStream[]>(() => (routine ? rhythmStreams(routine) : []));
 
   useEscapeClose(closeEditRoutine, editRoutineOpen);
   useCtrlEnterSubmit(() => handleSave(), editRoutineOpen && !!routine);
@@ -99,6 +103,11 @@ export function EditRoutinePane() {
       routineTasks: tasks,
       repeatConfig: buildRepeatConfig(daysOfWeek),
     });
+    // The routine's own stream takes its name and days from above (docs/features/endeavours.md
+    // phase 4); the rest are as edited. Unchanged, nothing new is stored.
+    const saved = useTaskStore.getState().collections[routine.id];
+    const own = legacyStream(saved);
+    saveStreams(routine.id, streams.map((s) => (s.id === routine.id ? { ...s, label: own.label, rule: own.rule } : s)));
     closeEditRoutine();
   }
 
@@ -282,6 +291,15 @@ export function EditRoutinePane() {
               ))}
             </div>
             {everyDay && <p className={styles.repeatHint}>Will appear every day.</p>}
+          </div>
+
+          {/* Streams (a rhythm: docs/features/endeavours.md screen E) */}
+          <div className={styles.schemaSection}>
+            <div className={styles.schemaHeader}>
+              <span className={styles.label}>{LABELS.rhythms.streams}</span>
+              <span className={styles.schemaMeta}>{streams.length}</span>
+            </div>
+            <RhythmStreamsField streams={streams} ownId={routine.id} onChange={setStreams} />
           </div>
         </div>
 

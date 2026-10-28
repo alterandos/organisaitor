@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { RhythmDueList } from '@/components/RhythmBoard/RhythmDueList';
 import { useEndeavourScope } from '@/hooks/useEndeavourScope';
 import { inEndeavourScope } from '@/utils/endeavourGraph';
 import type { PurposeId, TagId, Task, TaskId, Collection } from '@/types';
@@ -164,15 +165,19 @@ export function TaskList() {
     );
   }
 
+  // Rhythm occurrences whose stream shows in Tasks (docs/features/endeavours.md phase 4), above the tasks.
+  const due = <RhythmDueList scope={endeavourScope} />;
+
   if (allTasks.length === 0) {
-    return <p className={styles.empty}>No tasks yet — use the input above or tap + to add one.</p>;
+    return <>{due}<p className={styles.empty}>No tasks yet — use the input above or tap + to add one.</p></>;
   }
   if (tasks.length === 0) {
-    return <p className={styles.empty}>No tasks match the current filter.</p>;
+    return <>{due}<p className={styles.empty}>No tasks match the current filter.</p></>;
   }
 
   return (
     <div className={styles.list}>
+      {due}
       {active.map((task) => renderTaskGroup(task))}
       {blocked.length > 0 && (
         <>

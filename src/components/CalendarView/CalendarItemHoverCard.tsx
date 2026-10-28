@@ -11,7 +11,7 @@ import styles from './CalendarView.module.css';
 // What the card needs from a calendar entry; the event's end, end date and place are read from
 // the store, since the entry drawn on the grid doesn't carry them.
 export interface HoverCardItem {
-  kind:         'task' | 'event' | 'reminder' | 'deadline' | 'schedule';
+  kind:         'task' | 'event' | 'reminder' | 'deadline' | 'schedule' | 'rhythm';
   id:           string;
   title:        string;
   typeIcon:     string;

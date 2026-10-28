@@ -41,6 +41,12 @@ export function openOverviewRow(row: OverviewRow): void {
       openNotePassage(noteId, { mark: 'noteTag', attr: 'passageId', value: passageId });
       return;
     }
+    case 'rhythm': {
+      // id is the occurrence's tickKey: rhythm|stream|date. Its rhythm, in Records.
+      ui.setActiveView('records');
+      ui.setActiveRoutine(row.id.split('|')[0]);
+      return;
+    }
     case 'trackerEntry': {
       const entry = useTrackerStore.getState().entries[row.id as never];
       if (!entry) return;

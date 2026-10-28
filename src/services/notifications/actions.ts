@@ -1,4 +1,5 @@
 import type { CalendarDeadlineId, CalendarEvent, CalendarEventId, CalendarReminderId, TaskId } from '@/types';
+import { setTick } from '@/services/rhythms';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -91,6 +92,7 @@ export function acknowledgeOccurrence(kind: NotificationKind, itemId: string, oc
 
 // "Done" on a Reminder or Deadline occurrence: struck through on the calendar, no more notifications.
 export function markOccurrenceDone(kind: NotificationKind, itemId: string, occurrence: string | undefined): void {
+  if (kind === 'rhythm') { const [rhythm, stream, date] = itemId.split('|'); setTick(rhythm, stream, date, 'done'); return; }
   if (kind !== 'reminder' && kind !== 'deadline') return;
   const item = itemOf(kind, itemId);
   if (!item) return;
@@ -187,6 +189,12 @@ export function openNotificationTarget(kind: NotificationKind, itemId: string, o
     return;
   }
   if (kind === 'task-timed' || kind === 'task-untimed') { openArtifactTarget('task', itemId); return; }
+  if (kind === 'rhythm') {
+    const ui = useUIStore.getState();
+    ui.setActiveView('records');
+    ui.setActiveRoutine(itemId.split('|')[0]);
+    return;
+  }
   const item = itemOf(kind, itemId);
   openArtifactTarget(kind, itemId, item?.repeat ? occurrence : undefined);
 }

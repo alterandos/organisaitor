@@ -1,4 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useTrackerStore } from '@/store/trackerStore';
+import { isDealtWith, isRhythm, rhythmOccurrences, tickIndex } from '@/utils/rhythms';
+import { toggleDone } from '@/services/rhythms';
+import { STREAM_KINDS } from '@/config/streamKinds';
 import { useEndeavourScope } from '@/hooks/useEndeavourScope';
 import { inEndeavourScope } from '@/utils/endeavourGraph';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -42,7 +46,10 @@ type CalDisplayItem =
   | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean; travelIcon: string; color: string | null }
   | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
   | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
-  | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean };
+  | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean }
+  // A rhythm stream's occurrence whose stream shows on the calendar (docs/features/endeavours.md
+  // phase 4): `marker` draws it small; a click ticks it done. id is its tickKey.
+  | { kind: 'rhythm';   id: string; rhythmId: string; streamId: string; occurrenceDate: string; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; done: boolean; marker: boolean; behind: boolean };
 
 interface SpanSlot {
   eventId:      CalendarEventId;
@@ -65,7 +72,7 @@ interface SpanSlot {
 // Struck through: a completed task, or a Reminder/Deadline occurrence marked done (doneDates).
 function isCompletedItem(item: CalDisplayItem): boolean {
   if (item.kind === 'task') return item.completed;
-  if (item.kind === 'reminder' || item.kind === 'deadline') return item.done;
+  if (item.kind === 'reminder' || item.kind === 'deadline' || item.kind === 'rhythm') return item.done;
   return false;
 }
 
@@ -93,7 +100,7 @@ function buildCalendarDays(year: number, month: number): { date: Date; isCurrent
 }
 
 function sortItems(items: CalDisplayItem[]): CalDisplayItem[] {
-  const kindOrder = { event: 0, schedule: 1, task: 2, deadline: 3, reminder: 4 } as const;
+  const kindOrder = { event: 0, schedule: 1, task: 2, deadline: 3, reminder: 4, rhythm: 5 } as const;
   return [...items].sort((a, b) => {
     if (a.kind !== b.kind) return kindOrder[a.kind] - kindOrder[b.kind];
     if (!a.time && b.time) return 1;
@@ -204,6 +211,7 @@ export function CalendarView() {
   const updateEvent       = useCalendarStore((s) => s.updateEvent);
   const updateReminder    = useCalendarStore((s) => s.updateReminder);
   const schedules         = useScheduleStore((s) => s.schedules);
+  const trackerEntries    = useTrackerStore((s) => s.entries);
   const [occurrencePopover, setOccurrencePopover] = useState<{ item: Extract<CalDisplayItem, { kind: 'schedule' }>; x: number; y: number } | null>(null);
 
   const { isAndroid }            = usePlatform();
@@ -423,9 +431,24 @@ export function CalendarView() {
       }
     });
 
+    // Rhythm occurrences whose stream shows on the calendar (a mark or an item).
+    const ticks = tickIndex(trackerEntries, collectionsRecord);
+    for (const rhythm of Object.values(collectionsRecord)) {
+      if (!isRhythm(rhythm) || rhythm.archivedAt || !inEndeavourScope(endeavourScope, rhythm.id)) continue;
+      for (const o of rhythmOccurrences(rhythm, schedules, ticks, rangeStart, rangeEnd, todayIsoStr)) {
+        if (o.stream.show.calendar === 'none') continue;
+        push(o.date, {
+          kind: 'rhythm', id: o.key, rhythmId: rhythm.id, streamId: o.stream.id, occurrenceDate: o.date,
+          title: o.stream.label, time: o.time, collectionId: rhythm.collectionId, notes: rhythm.name,
+          typeIcon: STREAM_KINDS[o.stream.kind].icon, done: isDealtWith(o.state),
+          marker: o.stream.show.calendar === 'marker', behind: o.state === 'behind',
+        });
+      }
+    }
+
     map.forEach((list, date) => map.set(date, sortItems(list)));
     return map;
-  }, [tasks, events, reminders, deadlines, schedules, endeavourScope, days, layerVisibility]);
+  }, [tasks, events, reminders, deadlines, schedules, endeavourScope, days, layerVisibility, trackerEntries, collectionsRecord, todayIsoStr]);
 
   // ── Mobile week strip & desktop week view ─────────────────────────────────
   const weekDays = useMemo(() => {
@@ -479,7 +502,7 @@ export function CalendarView() {
   // synthetic end time (DEFAULT_POINT_DURATION_MIN, above) so the time-grid layout has *some*
   // height to stack them with, never a real duration. Showing that as a "10:00–10:30"-style
   // range reads as a real time block, which it isn't; a single time is accurate.
-  const isPointInTimeKind = (kind: CalDisplayItem['kind']): boolean => kind === 'task' || kind === 'reminder' || kind === 'deadline';
+  const isPointInTimeKind = (kind: CalDisplayItem['kind']): boolean => kind === 'task' || kind === 'reminder' || kind === 'deadline' || kind === 'rhythm';
   const formatItemTimeLabel = (item: CalDisplayItem, endMin: number): string =>
     isPointInTimeKind(item.kind)
       ? formatTime(item.time!, clockFormat)
@@ -859,6 +882,7 @@ export function CalendarView() {
       const rect = e.currentTarget.getBoundingClientRect();
       setOccurrencePopover({ item, x: rect.left, y: rect.bottom + 4 });
     }
+    if (item.kind === 'rhythm') toggleDone(item.rhythmId, item.streamId, item.occurrenceDate);
   };
 
   // Android: tapping empty calendar space opens the fast MobileCalendarQuickAdd sheet instead
@@ -927,6 +951,10 @@ export function CalendarView() {
     ((item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline') && item.status === 'tentative') || (item.kind === 'schedule' && !item.committed);
 
   const isTravelItem = (item: CalDisplayItem): boolean => item.kind === 'event' && item.travel;
+
+  // A rhythm's occurrence: small when its stream shows as a mark; flagged once it's behind.
+  const rhythmClass = (item: CalDisplayItem): string =>
+    item.kind !== 'rhythm' ? '' : `${item.marker ? styles.calItemMarker : ''} ${item.behind ? styles.calItemBehind : ''}`;
 
   const isImportantItem = (item: CalDisplayItem): boolean =>
     (item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline') && item.important;
@@ -1023,7 +1051,7 @@ export function CalendarView() {
               return (
                 <button
                   key={`${item.kind}-${item.id}`}
-                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
                   style={getPillStyle(item)}
                   onClick={(e) => handleItemClick(e, item)}
                 >
@@ -1185,7 +1213,7 @@ export function CalendarView() {
                               return (
                                 <button
                                   key={`${item.kind}-${item.id}`}
-                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
                                   style={getPillStyle(item)}
                                   onClick={(e) => handleItemClick(e, item)}
                                   onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1285,7 +1313,7 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
                               style={getPillStyle(item)}
                               onClick={(e) => handleItemClick(e, item)}
                               onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1364,7 +1392,7 @@ export function CalendarView() {
                             return (
                               <button
                                 key={`${item.kind}-${item.id}`}
-                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
+                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
                                 style={{
                                   top: liveTop,
                                   height: isReminder ? 'auto' : liveHeight,
@@ -1455,7 +1483,7 @@ export function CalendarView() {
                         return (
                           <button
                             key={`${item.kind}-${item.id}`}
-                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
                             style={getPillStyle(item)}
                             onClick={(e) => handleItemClick(e, item)}
                             onMouseEnter={(e) => handleItemMouseEnter(e, item)}
@@ -1525,7 +1553,7 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
+                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
                               style={{
                                 top: liveTop,
                                 height: isReminder ? 'auto' : liveHeight,
@@ -1603,7 +1631,7 @@ export function CalendarView() {
                   return (
                     <button
                       key={`${item.kind}-${item.id}`}
-                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''}`}
+                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
                       style={getPillStyle(item)}
                       onClick={(e) => { handleItemClick(e, item); setDayPaneDate(null); }}
                     >

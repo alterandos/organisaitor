@@ -22,6 +22,8 @@ create index if not exists item_types_user_id_idx on item_types (user_id);
 
 alter table item_types enable row level security;
 
+-- Dropped first so the file can be run again safely (2026-10-29).
+drop policy if exists "users_own_item_types" on item_types;
 create policy "users_own_item_types" on item_types
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -33,3 +35,6 @@ alter table calendar_events    add column if not exists type_id text;
 alter table calendar_events    add column if not exists type_fields jsonb;
 alter table calendar_deadlines add column if not exists type_id text;
 alter table calendar_deadlines add column if not exists type_fields jsonb;
+
+-- Tell the API about the new table straight away.
+notify pgrst, 'reload schema';

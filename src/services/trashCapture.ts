@@ -13,7 +13,7 @@ import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/por
 import type { Activity, ActivityType } from '@/types/fitness';
 import type { Overview } from '@/types/overview';
 import type { CustomConverter } from '@/types/converters';
-import type { ItemType } from '@/types';
+import type { Goal, ItemType } from '@/types';
 
 // The write half of the suite-wide Recycling Bin — called from inside each store's own
 // delete action (taskStore.deleteTask, noteStore.deleteNote, …), never from a component.
@@ -33,6 +33,7 @@ interface EntityMap {
   overview: Overview;
   converter: CustomConverter;
   itemType: ItemType;
+  goal: Goal;
 }
 
 interface ResolvedContext {
@@ -105,6 +106,7 @@ const RESOLVERS: { [K in TrashableKind]: (e: EntityMap[K]) => ResolvedContext } 
   overview: (o) => ({ title: o.name, contextLine: 'Saved overview', sourceApp: 'suite', sourceSection: LABELS.views.overview }),
   converter: (c) => ({ title: c.name, contextLine: LABELS.converters.noun, sourceApp: 'suite', sourceSection: LABELS.converters.title }),
   itemType: (t) => ({ title: t.name, contextLine: LABELS.itemTypes.noun, sourceApp: 'organizer', sourceSection: LABELS.itemTypes.title }),
+  goal: (g) => ({ title: g.title, contextLine: LABELS.goals.noun, sourceApp: 'suite', sourceSection: LABELS.views.endeavours }),
 };
 
 export function moveToTrash<K extends TrashableKind>(

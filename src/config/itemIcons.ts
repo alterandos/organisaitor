@@ -19,6 +19,8 @@ export const ITEM_TYPE_ICON: Record<CrossAppRefType, string> = {
 // An inbox and what's in it (the `\inbox` note block, Send to inbox, the Overview source).
 export const INBOX_ICON = '📥';
 export const QUESTION_ICON = '❓';
+// A rhythm's occurrence (a stream of a routine), in Overview and an Endeavour's home.
+export const RHYTHM_ICON = '🔄';
 // A passage due for review (Review later), in Overview.
 export const REVIEW_ICON = '🔁';
 // A question's status, where it shows as an icon (its Compact design).
