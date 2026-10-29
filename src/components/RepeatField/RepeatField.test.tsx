@@ -85,3 +85,25 @@ describe('RepeatField', () => {
     expect(moved).toBe('2026-11-15');   // October's third Sunday (the 18th) is before the 19th
   });
 });
+
+describe('RepeatField: on a list of dates (2026-10-30)', () => {
+  it('starts from the item\u2019s date; dates are added and taken off; there is no "every" or end', () => {
+    render(<Host initial={weekly} date="2026-09-18" />);
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'dates' } });
+    expect(last).toMatchObject({ freq: 'dates', dates: ['2026-09-18'] });
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+    const add = screen.getByRole('group', { name: 'Add a date' });
+    const [day, month, year] = Array.from(add.querySelectorAll('input'));
+    for (const [el, keys] of [[day, '25'], [month, '09'], [year, '2026']] as const) for (const key of keys) fireEvent.keyDown(el, { key });
+    expect(last?.dates).toEqual(['2026-09-18', '2026-09-25']);
+    fireEvent.click(screen.getByRole('button', { name: /Remove .*18/ }));
+    expect(last?.dates).toEqual(['2026-09-25']);
+  });
+
+  it('following other events, it says so, and stopping keeps the dates', () => {
+    render(<Host initial={{ freq: 'dates', interval: 1, endKind: 'forever', count: null, until: null, dates: ['2026-09-15'], follows: { ids: ['x'], offsetDays: -1 } }} />);
+    expect(screen.getByText(/1 day before each/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Stop following/ }));
+    expect(last).toEqual({ freq: 'dates', interval: 1, endKind: 'forever', count: null, until: null, dates: ['2026-09-15'] });
+  });
+});

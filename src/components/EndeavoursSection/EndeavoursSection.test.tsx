@@ -7,6 +7,7 @@ import { EndeavoursSection } from './EndeavoursSection';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { openNewItem } from '@/services/newItem';
+import { AddTaskButton } from '@/components/AddTaskButton/AddTaskButton';
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -67,5 +68,27 @@ describe('an Endeavour\'s home', () => {
     expect(selectActiveCollectionId(useUIStore.getState())).toBe(geos);
     openNewItem('endeavours');
     expect(useUIStore.getState().openModal).toBe('add-task');
+  });
+});
+
+describe('adding to an Endeavour', () => {
+  it("the + offers the five things made most often there; a goal is for this Endeavour", () => {
+    const { geos } = semester();
+    act(() => { useUIStore.getState().openEndeavourHome(geos); });
+    render(<AddTaskButton />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add here' }));
+    expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label')).filter(Boolean)).toEqual([
+      'Endeavour inside', 'Notebook', 'Goal', 'Calendar item', 'Task', 'Add here',
+    ].map((l) => expect.stringContaining(l.split(' ')[0])));
+    fireEvent.click(screen.getByRole('button', { name: 'Goal' }));
+    expect(useUIStore.getState()).toMatchObject({ openModal: 'add-goal', pendingGoalEndeavourId: geos });
+  });
+
+  it('the add row is in labelled groups', () => {
+    const { geos } = semester();
+    act(() => { useUIStore.getState().openEndeavourHome(geos); });
+    render(<EndeavoursSection />);
+    expect(screen.getByRole('group', { name: 'Plan' })).toHaveTextContent('+ Calendar item+ Goal+ Task');
+    expect(screen.getByRole('group', { name: 'Shape' })).toHaveTextContent('From a template');
   });
 });

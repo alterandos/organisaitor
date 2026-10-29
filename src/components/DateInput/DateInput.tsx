@@ -46,7 +46,7 @@ const parse = (v: string) => {
 
 // THE date field for the whole suite (every date the person enters; the pattern test allows no
 // native type="date": it follows the browser's locale picker, not the app, and can't be stepped).
-// Built like TimeInput, with the same rules (agreed with the user 2026-10-22):
+// Built like TimeInput, with the same rules (agreed with the user 2026-10-22; the year fills in, 2026-10-30):
 //   • day, month and year typed on their own, in the computer's order, in any order; an
 //     incomplete date is reported as '' upward, but what's typed stays;
 //   • too big a day or month becomes the largest allowed, selected (32 → 31 or the month's last
@@ -72,7 +72,11 @@ export function DateInput({ value, onChange, className, min, required, id, 'aria
   const skipBlur = useRef(false);
 
   const emit = (v: string) => { setEmitted(v); onChange(v); };
-  const commit = (next: typeof seg) => {
+  // Once the day and month are in and the year isn't, it's this year (2026-10-30, the user: typing
+  // "2026" every time is four keys for nothing). It's selected when the year is reached, so typing
+  // replaces it and Tab goes past it. Never while the year itself is being edited, so it can be cleared.
+  const commit = (input: typeof seg, fillYear = true) => {
+    const next = fillYear && !input.year && input.day.length === 2 && input.month.length === 2 ? { ...input, year: todayIso().slice(0, 4) } : input;
     setSeg(next);
     const y = Number(next.year); const m = Number(next.month); const d = Number(next.day);
     if (next.year.length === 4 && next.month.length === 2 && next.day.length === 2 && m >= 1 && m <= 12 && d >= 1) {
@@ -116,7 +120,7 @@ export function DateInput({ value, onChange, className, min, required, id, 'aria
     fresh.current = null;
     if (e.key === 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'Delete' || (e.key === 'Backspace' && wasFresh && seg[p] !== '')) { e.preventDefault(); clear(); return; }
-    if (e.key === 'Backspace') { e.preventDefault(); commit({ ...seg, [p]: seg[p].slice(0, -1) }); return; }
+    if (e.key === 'Backspace') { e.preventDefault(); commit({ ...seg, [p]: seg[p].slice(0, -1) }, p !== 'year'); return; }
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); step(p, e.key === 'ArrowUp' ? 1 : -1); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); const n = nextOf(p); if (n) focusPart(n); return; }
     if (e.key === 'ArrowLeft') { e.preventDefault(); const n = prevOf(p); if (n) focusPart(n); return; }
@@ -130,7 +134,7 @@ export function DateInput({ value, onChange, className, min, required, id, 'aria
     }
     const buffer = (wasFresh || seg[p].length >= (p === 'year' ? 4 : 2) ? '' : seg[p]) + e.key;
     if (p === 'year') {
-      commit({ ...seg, year: buffer });
+      commit({ ...seg, year: buffer }, false);
       if (buffer.length === 4) moveOn(p);
       return;
     }
@@ -151,7 +155,7 @@ export function DateInput({ value, onChange, className, min, required, id, 'aria
 
   const onBlur = (p: Part) => () => {
     if (skipBlur.current || seg[p] === '') return;
-    if (p === 'year' && seg.year.length === 2) commit({ ...seg, year: `20${seg.year}` });
+    if (p === 'year' && seg.year.length === 2) commit({ ...seg, year: `20${seg.year}` }, false);
     else if (p !== 'year' && seg[p].length === 1 && seg[p] !== '0') commit({ ...seg, [p]: pad2(Number(seg[p])) });
   };
 

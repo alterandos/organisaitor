@@ -47,7 +47,7 @@ export interface TaskActions {
 
   // Collections (projects, lists, trackers …)
   addCollection:    (input: CreateCollectionInput) => CollectionId;
-  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt' | 'encryptContents' | 'streams'>>) => void;
+  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt' | 'encryptContents' | 'streams' | 'period'>>) => void;
   deleteCollection: (id: CollectionId) => void;
   // Links between Endeavours (utils/endeavourGraph.ts has the rules). Returns why a link was refused,
   // or null once it's made.

@@ -1,7 +1,11 @@
+import { useState } from 'react';
 import { LABELS } from '@/config/labels';
 import { DateInput } from '@/components/DateInput/DateInput';
 import type { RepeatConfig, RepeatFreq } from '@/types';
 import { firstNthWeekdayFrom, weekOfMonth } from '@/utils/recurrence';
+import { formatDate } from '@/utils/date';
+import { useCalendarStore } from '@/store/calendarStore';
+import { CloseIcon } from '@/components/Icons';
 import styles from './RepeatField.module.css';
 
 interface Props {
@@ -16,7 +20,7 @@ interface Props {
   onDateChange?: (date: string) => void;
 }
 
-const FREQS: RepeatFreq[] = ['daily', 'weekly', 'monthly', 'yearly'];
+const FREQS: RepeatFreq[] = ['daily', 'weekly', 'monthly', 'yearly', 'dates'];
 const DEFAULT: RepeatConfig = { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null };
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const NTH_ORDER = [1, 2, 3, 4, -1];
@@ -24,11 +28,12 @@ const NTH_ORDER = [1, 2, 3, 4, -1];
 // Drops the parts of a rule that don't apply to its frequency (weekdays only on weekly, the nth
 // weekday only on monthly/yearly), so switching frequency never leaves a hidden setting behind.
 function tidy(r: RepeatConfig): RepeatConfig {
-  const { daysOfWeek, monthWeekday, ...rest } = r;
+  const { daysOfWeek, monthWeekday, dates, follows, ...rest } = r;
   return {
     ...rest,
     ...(r.freq === 'weekly' && daysOfWeek?.length ? { daysOfWeek } : {}),
     ...((r.freq === 'monthly' || r.freq === 'yearly') && monthWeekday ? { monthWeekday } : {}),
+    ...(r.freq === 'dates' ? { dates: dates ?? [], ...(follows ? { follows } : {}) } : {}),
   };
 }
 
@@ -66,17 +71,27 @@ export function RepeatField({ value, onChange, hint, labelClassName, date, onDat
         <div className={styles.config}>
           <div className={styles.row}>
             <span className={styles.small}>{L.every}</span>
-            <input
-              type="number"
-              className={styles.num}
-              min={1}
-              value={value.interval}
-              onChange={(e) => set({ interval: Math.max(1, Number(e.target.value) || 1) })}
-            />
-            <select className={styles.select} value={value.freq} onChange={(e) => set({ freq: e.target.value as RepeatFreq })}>
-              {FREQS.map((f) => <option key={f} value={f}>{L.units[f][value.interval === 1 ? 0 : 1]}</option>)}
+            {value.freq !== 'dates' && (
+              <input
+                type="number"
+                className={styles.num}
+                min={1}
+                value={value.interval}
+                onChange={(e) => set({ interval: Math.max(1, Number(e.target.value) || 1) })}
+              />
+            )}
+            <select
+              className={styles.select}
+              value={value.freq}
+              onChange={(e) => {
+                const freq = e.target.value as RepeatFreq;
+                set(freq === 'dates' ? { freq, interval: 1, endKind: 'forever', count: null, until: null, dates: value.dates?.length ? value.dates : date ? [date] : [] } : { freq });
+              }}
+            >
+              {FREQS.map((f) => <option key={f} value={f}>{f === 'dates' ? L.onDates : L.units[f][value.interval === 1 ? 0 : 1]}</option>)}
             </select>
           </div>
+          {value.freq === 'dates' && <DatesList value={value} onChange={(r) => { set(r); if (r.dates?.[0] && r.dates[0] !== date) onDateChange?.(r.dates[0]); }} />}
           {value.freq === 'weekly' && (
             <div className={styles.row} role="group" aria-label={L.onDays}>
               <span className={styles.small}>{L.onDays}</span>
@@ -128,7 +143,7 @@ export function RepeatField({ value, onChange, hint, labelClassName, date, onDat
               )}
             </div>
           )}
-          <div className={styles.row}>
+          {value.freq !== 'dates' && <div className={styles.row}>
             <span className={styles.small}>{L.ends}</span>
             <select
               className={styles.select}
@@ -154,8 +169,55 @@ export function RepeatField({ value, onChange, hint, labelClassName, date, onDat
             {value.endKind === 'until' && (
               <DateInput className={styles.date} value={value.until ?? ''} onChange={(v) => set({ until: v || null })} />
             )}
-          </div>
+          </div>}
           {hint && <p className={styles.hint}>{hint}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A repeat on a list of dates: each date with a way to take it off, and a field to add one. When
+// the dates follow other events ("1 day before each lecture"), it says so and offers to stop; the
+// dates then stay as they are and can be changed by hand (services/repeatFollow.ts keeps them in step).
+function DatesList({ value, onChange }: { value: RepeatConfig; onChange: (r: Partial<RepeatConfig>) => void }) {
+  const L = LABELS.recurring;
+  const events = useCalendarStore((s) => s.events);
+  const [adding, setAdding] = useState('');
+  const dates = value.dates ?? [];
+  const followed = value.follows ? [...new Set(value.follows.ids.map((id) => events[id as never]?.title).filter(Boolean))].join(', ') : '';
+  return (
+    <div className={styles.dates}>
+      {value.follows && (
+        <div className={styles.row}>
+          <span className={styles.small}>{L.follows(value.follows.offsetDays, followed || '…')}</span>
+          <button type="button" className={styles.linkBtn} onClick={() => onChange({ follows: undefined })}>{L.stopFollowing}</button>
+        </div>
+      )}
+      <ul className={styles.dateList}>
+        {dates.map((d) => (
+          <li key={d} className={styles.dateChip}>
+            {formatDate(d + 'T00:00:00')}
+            {!value.follows && (
+              <button type="button" className={styles.chipX} aria-label={L.removeDate(formatDate(d + 'T00:00:00'))} onClick={() => onChange({ dates: dates.filter((x) => x !== d) })}>
+                <CloseIcon />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {!value.follows && (
+        <div className={styles.row}>
+          <span className={styles.small}>{L.addDate}</span>
+          <DateInput
+            className={styles.date}
+            value={adding}
+            aria-label={L.addDate}
+            onChange={(v) => {
+              setAdding(v);
+              if (v) { onChange({ dates: [...new Set([...dates, v])].sort() }); setAdding(''); }
+            }}
+          />
         </div>
       )}
     </div>

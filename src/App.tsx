@@ -72,6 +72,8 @@ import { AddPurposeModal } from '@/components/AddPurposeModal/AddPurposeModal';
 import { AddTagModal } from '@/components/AddTagModal/AddTagModal';
 import { ItemTypeModal } from '@/components/ItemTypeModal/ItemTypeModal';
 import { GoalModal } from '@/components/GoalModal/GoalModal';
+import { EndeavourTemplateModal } from '@/components/EndeavourTemplateModal/EndeavourTemplateModal';
+import { RestructureModal } from '@/components/RestructureModal/RestructureModal';
 import { AddCalendarItemModal } from '@/components/AddCalendarItemModal/AddCalendarItemModal';
 import { AddTrackerModal } from '@/components/AddTrackerModal/AddTrackerModal';
 import { AddEntryModal } from '@/components/AddEntryModal/AddEntryModal';
@@ -91,6 +93,7 @@ import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
 import { HistoryBrowser } from '@/components/HistoryBrowser/HistoryBrowser';
 import { initPictures } from '@/services/pictures';
 import { initEventTaskFollow } from '@/services/eventTaskLinks';
+import { initRepeatFollow } from '@/services/repeatFollow';
 import { adoptLegacyNotePins } from '@/services/quickAccessPins';
 import { installSpecialCharInput } from '@/specialChars/fieldInput';
 import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
@@ -173,6 +176,7 @@ export default function App() {
   const editingTag                   = useUIStore((s) => s.editingTag);
   const editingItemTypeId            = useUIStore((s) => s.editingItemTypeId);
   const editingGoalId                = useUIStore((s) => s.editingGoalId);
+  const restructureId                = useUIStore((s) => s.restructureId);
   const editingEntryId               = useUIStore((s) => s.editingEntryId);
   const pendingTrackerId             = useUIStore((s) => s.pendingTrackerId);
   const editingListId                = useUIStore((s) => s.editingListId);
@@ -279,6 +283,7 @@ export default function App() {
   // `//name` → a character (Greek, arrows, maths, super/subscripts) in every text field (src/specialChars/).
   useEffect(() => installSpecialCharInput(), []);
   useEffect(() => initEventTaskFollow(), []);
+  useEffect(() => initRepeatFollow(), []);
   useEffect(() => initEncryptionScopes(), []);
 
   const setSession = useAuthStore((s) => s.setSession);
@@ -785,6 +790,8 @@ export default function App() {
         {openModal === 'add-tag'             && <AddTagModal key={editingTag?.id ?? 'new'} />}
         {openModal === 'add-item-type'       && <ItemTypeModal key={editingItemTypeId ?? 'new'} />}
         {openModal === 'add-goal'            && <GoalModal key={editingGoalId ?? 'new'} />}
+        {openModal === 'endeavour-template'  && <EndeavourTemplateModal />}
+        {openModal === 'restructure'         && <RestructureModal key={restructureId ?? 'none'} />}
         {openModal === 'add-calendar-item'   && <AddCalendarItemModal />}
         {openModal === 'add-tracker'            && <AddTrackerModal />}
         {openModal === 'add-entry'             && <AddEntryModal key={editingEntryId ?? pendingTrackerId ?? 'new'} />}

@@ -80,18 +80,21 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
     ui().setActiveView('records');
   };
 
-  type Add = { key: keyof typeof L.add; run: () => void };
+  // The add row, in small labelled groups, A to Z within each (2026-10-30: ten equal pills in one
+  // row were hard to scan). The + button holds the five made most often.
+  type Add = { key: keyof typeof L.add; group: keyof typeof L.groups; run: () => void };
   const adds = ([
-    { key: 'task',      run: () => ui().showAddTask() },
-    { key: 'event',     run: () => ui().showAddCalendarItem() },
-    { key: 'notebook',  run: () => ui().showAddNoteTag(null, 'area') },
-    { key: 'list',      run: () => ui().showAddList() },
-    { key: 'timetable', run: () => ui().showAddSchedule() },
-    { key: 'tracker',   run: () => ui().showAddTracker() },
-    { key: 'routine',   run: () => ui().showAddRoutine() },
-    { key: 'endeavour', run: () => ui().showAddCollection() },
-    { key: 'goal',      run: () => ui().showAddGoal(id) },
-  ] as Add[]).sort((a, b) => L.add[a.key].localeCompare(L.add[b.key]));   // A to Z by what it says
+    { key: 'task',      group: 'plan',  run: () => ui().showAddTask() },
+    { key: 'event',     group: 'plan',  run: () => ui().showAddCalendarItem() },
+    { key: 'goal',      group: 'plan',  run: () => ui().showAddGoal(id) },
+    { key: 'notebook',  group: 'keep',  run: () => ui().showAddNoteTag(null, 'area') },
+    { key: 'list',      group: 'keep',  run: () => ui().showAddList() },
+    { key: 'timetable', group: 'track', run: () => ui().showAddSchedule() },
+    { key: 'tracker',   group: 'track', run: () => ui().showAddTracker() },
+    { key: 'routine',   group: 'track', run: () => ui().showAddRoutine() },
+    { key: 'endeavour', group: 'shape', run: () => ui().showAddCollection() },
+  ] as Add[]).sort((a, b) => L.add[a.key].localeCompare(L.add[b.key]));
+  const groups = (Object.keys(L.groups) as (keyof typeof L.groups)[]).map((g) => ({ g, items: adds.filter((a) => a.group === g) }));
 
   return (
     <div className={styles.page}>
@@ -121,6 +124,7 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
           <button type="button" className={styles.btn} onClick={() => ui().openEditCollection(c)}><EditIcon /> {L.edit}</button>
           <button type="button" className={styles.btn} onClick={openInCalendar}>{L.openCalendar}</button>
           <button type="button" className={styles.btn} onClick={() => ui().openEndeavourOverview(id)}>{L.openOverview}</button>
+          <button type="button" className={styles.btn} onClick={() => ui().showRestructure(id)}>{LABELS.restructure.menu}…</button>
         </div>
       </header>
 
@@ -197,8 +201,14 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
       )}
 
       <div className={styles.addRow} role="group" aria-label={L.addTo(c.name)}>
-        <span className={styles.muted}>{L.addTo(c.name)}:</span>
-        {adds.map((a) => <button key={a.key} type="button" className={styles.ghost} onClick={a.run}>+ {L.add[a.key]}</button>)}
+        <span className={styles.addTitle}>{L.addTo(c.name)}</span>
+        {groups.map(({ g, items }) => (
+          <div key={g} className={styles.addGroup} role="group" aria-label={L.groups[g]}>
+            <span className={styles.addGroupLabel}>{L.groups[g]}</span>
+            {items.map((a) => <button key={a.key} type="button" className={styles.ghost} onClick={a.run}>+ {L.add[a.key]}</button>)}
+            {g === 'shape' && <button type="button" className={styles.ghost} onClick={() => ui().showTemplates(id)}>{LABELS.restructure.fromTemplate}</button>}
+          </div>
+        ))}
       </div>
     </div>
   );

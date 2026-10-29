@@ -82,6 +82,27 @@ export function BlockGuideIcon(props: SVGProps<SVGSVGElement>) { return <Glyph g
 export function ConverterIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="converter" {...EM} {...props} />; }
 export function PresetIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="preset" {...EM} {...props} />; }
 
+// A calendar item (an event, reminder or Deadline): a page of a calendar.
+export function CalendarIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+    </Icon>
+  );
+}
+
+// A goal: a target.
+export function GoalIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1" />
+    </Icon>
+  );
+}
+
 // A Type (what kind of thing an item is): a few kinds of shape.
 export function TypeIcon(props: SVGProps<SVGSVGElement>) {
   return (

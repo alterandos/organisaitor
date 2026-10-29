@@ -131,6 +131,10 @@ pendingItemTypeId: ItemTypeId | null, showAddTyped(typeId, kind)   // sets it, t
 // Goals (phase 5): the goal editor (modal 'add-goal'), for a new goal on an Endeavour or an existing one. Cleared by closeModal.
 editingGoalId: GoalId | null, pendingGoalEndeavourId: CollectionId | null, showAddGoal(endeavourId?), openEditGoal(id)
 
+// Templates and restructuring (phase 6): modals 'endeavour-template' (part of templatePartOf) and 'restructure'.
+templatePartOf: CollectionId | null, showTemplates(partOf?)
+restructureId: CollectionId | null, restructureMode: 'copy' | 'split' | 'merge', showRestructure(id, mode?)
+
 // Notes: a passage to select once a note is open (services/notePassage.ts sets it with openNote;
 // NoteEditor consumes it).
 requestedNotePassage: { noteId, mark, attr, value } | null, setRequestedNotePassage(p)

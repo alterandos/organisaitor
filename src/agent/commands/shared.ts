@@ -105,7 +105,7 @@ const named = (c: { id: string; name: string } | undefined) => (c ? { id: c.id, 
 export function repeatText(r: RepeatConfig | null) {
   if (!r) return null;
   return compact({
-    every: `${r.interval} ${r.freq === 'daily' ? 'day' : r.freq === 'weekly' ? 'week' : r.freq === 'monthly' ? 'month' : 'year'}${r.interval === 1 ? '' : 's'}`,
+    every: r.freq === 'dates' ? `on ${(r.dates ?? []).join(', ')}` : `${r.interval} ${r.freq === 'daily' ? 'day' : r.freq === 'weekly' ? 'week' : r.freq === 'monthly' ? 'month' : 'year'}${r.interval === 1 ? '' : 's'}`,
     on: repeatPattern(r) ?? undefined,
     ends: r.endKind === 'forever' ? 'never' : r.endKind === 'count' ? `after ${r.count} times` : `on ${r.until}`,
     skippedDates: r.exceptions,

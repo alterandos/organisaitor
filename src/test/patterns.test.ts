@@ -1353,3 +1353,32 @@ describe('Sections come from one registry', () => {
     expect(app).not.toMatch(/=== 'portfolio' && \w+ !== 'fitness'/);
   });
 });
+
+// ── Everything filed under an Endeavour is in one registry (services/endeavourFiling.ts) ──────
+// Merging, splitting and copying an Endeavour move what's filed under it through FILED_KINDS
+// (2026-10-29). A type that gains a `collectionId` (an Endeavour it's filed under) must be in the
+// registry, or it's left behind by every restructure. Listed here: each such type, and its kind
+// in the registry, or why it isn't one.
+describe('Everything filed under an Endeavour is in one registry', () => {
+  const FILED: Record<string, string> = {
+    Task: 'task', CalendarEvent: 'event', CalendarReminder: 'reminder', CalendarDeadline: 'deadline',
+    Note: 'note', NoteTag: 'notebook', StructuredTagEntry: 'glossary', List: 'list', ScheduleTemplate: 'timetable',
+    Collection: 'record',   // trackers and routines; Endeavours themselves are moved by their links
+  };
+  const NOT_FILED: Record<string, string> = {
+    OverviewQuery: 'a filter, not filing',
+  };
+  it('every type with a collectionId has its kind in FILED_KINDS', () => {
+    const registry = fs.readFileSync(path.join(SRC, 'services', 'endeavourFiling.ts'), 'utf8');
+    const missing: string[] = [];
+    for (const file of walk(path.join(SRC, 'types'), ['.ts'])) {
+      const src = fs.readFileSync(file, 'utf8');
+      for (const m of src.matchAll(/export interface (\w+)[^{]*\{([\s\S]*?)\n\}/g)) {
+        const [, name, body] = m;
+        if (name.startsWith('Create') || !/\n\s+collectionId\??:/.test(body) || NOT_FILED[name]) continue;
+        if (!FILED[name] || !registry.includes(`kind: '${FILED[name]}'`)) missing.push(name);
+      }
+    }
+    expect(missing, `filed under an Endeavour but not in FILED_KINDS: ${missing.join(', ')}`).toEqual([]);
+  });
+});

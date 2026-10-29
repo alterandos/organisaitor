@@ -99,6 +99,10 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     expect(rowToCollection(collectionToRow({ ...c, encryptContents: true }, USER))).toEqual({ ...c, encryptContents: true });
     // links: sent only once there are some (migration 059), so an Endeavour without links syncs before it runs
     expect('links' in collectionToRow(c, USER)).toBe(false);
+    // period: sent once set (migration 063), nullable
+    expect('period' in collectionToRow(c, USER)).toBe(false);
+    const withPeriod: Collection = { ...c, period: { start: '2026-09-14', end: '2026-12-18', breaks: [{ id: 'b', label: 'Break', from: '2026-10-26', to: '2026-10-30' }] } };
+    expect(rowToCollection(collectionToRow(withPeriod, USER))).toEqual(withPeriod);
     const linked = { ...c, links: [{ kind: 'partOf' as const, targetId: 'c0' as CollectionId, createdAt: '2030-01-01T00:00:00.000Z' }] };
     expect(rowToCollection(collectionToRow(linked, USER))).toEqual(linked);
     expect(collectionToRow({ ...c, links: [] }, USER).links).toEqual([]);   // a removed last link still clears the cloud's

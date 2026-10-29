@@ -61,13 +61,18 @@ export function streamDates(stream: RhythmStream, schedules: Record<string, Sche
     dates.push(...expandRepeat(stream.start, repeat, lo, to));
     return dates;
   }
-  const { scheduleId, blockId, offsetDays } = stream.rule;
+  const { scheduleId, blockId, offsetDays, blockIds = [] } = stream.rule;
   const schedule = schedules[scheduleId];
-  const block = schedule?.blocks.find((b) => b.id === blockId);
-  if (!schedule || !block || !schedule.active) return [];
-  return expandScheduleBlock(block, schedule, addDaysToIso(lo, -offsetDays), addDaysToIso(to, -offsetDays))
-    .map((d) => addDaysToIso(d, offsetDays))
-    .filter((d) => d >= lo && d <= to);
+  if (!schedule || !schedule.active) return [];
+  // Every class it follows (one, or every lecture of a subject), each date once.
+  const dates = new Set<string>();
+  for (const block of schedule.blocks.filter((b) => b.id === blockId || blockIds.includes(b.id))) {
+    for (const d of expandScheduleBlock(block, schedule, addDaysToIso(lo, -offsetDays), addDaysToIso(to, -offsetDays))) {
+      const shifted = addDaysToIso(d, offsetDays);
+      if (shifted >= lo && shifted <= to) dates.add(shifted);
+    }
+  }
+  return [...dates].sort();
 }
 
 // An occurrence's time: a timetable block's start on the day itself, else the stream's own.

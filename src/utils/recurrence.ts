@@ -57,6 +57,11 @@ export function weekOfMonth(date: string): { week: number; isLast: boolean } {
 // several or skip some per step, so they're generated per period.
 function* candidates(baseDate: string, repeat: RepeatConfig): Generator<Date> {
   const base = new Date(baseDate + 'T00:00:00');
+  // On a list of dates: just those (2026-10-30).
+  if (repeat.freq === 'dates') {
+    for (const d of [...new Set(repeat.dates ?? [])].sort()) yield new Date(d + 'T00:00:00');
+    return;
+  }
   const n = Math.max(1, repeat.interval);
   const days = repeat.freq === 'weekly' && repeat.daysOfWeek?.length ? [...new Set(repeat.daysOfWeek)] : null;
   const mw = (repeat.freq === 'monthly' || repeat.freq === 'yearly') ? repeat.monthWeekday : undefined;

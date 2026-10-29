@@ -159,6 +159,10 @@ export interface Collection {
   // never given any: it's read as one stream (utils/rhythms.ts rhythmStreams), so nothing stored
   // changes until it's edited, and the column is sent only once set (migration 061).
   streams?:     RhythmStream[];
+  // Its period and breaks (a semester's teaching weeks and mid-semester break; docs/features/
+  // endeavours.md phase 7). Absent: it takes the nearest Endeavour's above it, live
+  // (utils/endeavourPeriod.ts). Sent once set (migration 063).
+  period?:      EndeavourPeriod;
   createdAt:    string;
   updatedAt:    string;
 }
@@ -212,7 +216,7 @@ export type StreamKind = 'attend' | 'doBy' | 'submit';
 
 export type StreamRule =
   | { kind: 'repeat'; repeat: RepeatConfig }                                          // its own repeat, counted from the stream's start
-  | { kind: 'relative'; scheduleId: ScheduleId; blockId: string; offsetDays: number }; // N days from each timetable block (−1: the day before)
+  | { kind: 'relative'; scheduleId: ScheduleId; blockId: string; offsetDays: number; blockIds?: string[] }; // N days from each timetable block (−1: the day before); `blockIds`: more classes it follows too (every lecture of a subject)
 
 // Where a stream's occurrences show, besides its rhythm and Endeavour (defaults by kind:
 // config/streamKinds.ts).
@@ -232,6 +236,7 @@ export interface RhythmStream {
   time:       string | null;       // HH:MM, for its own repeat (a timetable block brings its own)
   show:       StreamVisibility;
   notebookId: string | null;       // where an occurrence's note goes (a NoteTagId)
+  worth?:     number | null;       // what it's worth in all, as a percentage (a weekly quiz: 10)
 }
 
 // What happened to one occurrence (an untouched one is open, or behind once past).
@@ -271,6 +276,9 @@ export interface Goal {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface PeriodBreak { id: string; label: string; from: string; to: string }   // YYYY-MM-DD, both days included
+export interface EndeavourPeriod { start: string | null; end: string | null; breaks: PeriodBreak[] }
 
 export type EndeavourLinkKind = 'partOf' | 'related';
 
@@ -414,7 +422,8 @@ export type CalendarDeadlineType = 'default' | 'task';
 // since 2026-09-27 a task's deadline shadow is a CalendarDeadline, not a CalendarReminder (see
 // "Deadline calendar kind" in Implemented features); existing task-deadline shadow Reminders
 // were migrated to Deadlines by services/taskDeadlineMigration.ts, run once.
-export type RepeatFreq        = 'daily' | 'weekly' | 'monthly' | 'yearly';
+// 'dates': on the listed dates only (an "almost weekly" quiz, an outline's dated list), 2026-10-30.
+export type RepeatFreq        = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'dates';
 
 export interface RepeatConfig {
   freq:        RepeatFreq;
@@ -434,6 +443,12 @@ export interface RepeatConfig {
   // "delete just this one". Lives inside RepeatConfig (already a jsonb column) so it needs no
   // schema change. See src/utils/recurrence.ts.
   exceptions?: string[];
+  // freq 'dates' only: every occurrence date (YYYY-MM-DD, sorted), the item's own date the first.
+  dates?: string[];
+  // freq 'dates', kept in step with other calendar events ("1 day before each GEOS215 lecture"):
+  // its dates are each followed event's dates moved by `offsetDays`, worked out again whenever one
+  // of them changes (services/repeatFollow.ts). Taking it off keeps the dates as they are.
+  follows?: { ids: string[]; offsetDays: number };
 }
 
 // A time-bounded appointment (e.g. "Doctor at 2pm–3pm").

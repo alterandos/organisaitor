@@ -128,6 +128,7 @@ export function EndeavoursPage() {
           ))}
         </div>
         <span className={styles.spacer} />
+        <button type="button" className={styles.btn} onClick={() => useUIStore.getState().showTemplates(null)}>{LABELS.restructure.fromTemplate}</button>
         <button type="button" className={styles.primaryBtn} onClick={showAdd}><EndeavourIcon /> {L.create}</button>
       </div>
 

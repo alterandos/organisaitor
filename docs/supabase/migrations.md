@@ -45,7 +45,8 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `059` | **Applied** | `059_endeavour_links.sql` (`links jsonb` on `collections`: links between Endeavours, 2026-10-28). Sent only once an Endeavour has a link, so until it runs only Endeavours with links fail to upload (they stay queued and go up once it's applied); everything else syncs. |
 | `060` | **Applied** | `060_item_types.sql` (new table `item_types`: the person's Types, 2026-10-29; `type_id text` + `type_fields jsonb` on `tasks`, `calendar_events`, `calendar_deadlines`). Until it runs, Types sync nowhere (that table's failure is isolated; changes stay queued), and a typed task, event or Deadline fails to upload with its table (the columns are sent only once an item has a Type, so untyped items sync as before). |
 | `061` | **Applied** | `061_rhythm_streams.sql` (`streams jsonb` on `collections`: a rhythm's streams, 2026-10-29). Sent only once a routine has been given streams, so until it runs only those routines fail to upload (they stay queued and go up once it's applied); everything else syncs. Ticks need nothing: they're tracker entries. |
-| `062` | Pending — not yet run | `062_goals.sql` (new table `goals`: goals on Endeavours, 2026-10-29). Until it runs, goals sync nowhere (that table's failure is isolated; changes stay queued). Safe to run again. |
+| `062` | **Applied** | `062_goals.sql` (new table `goals`: goals on Endeavours, 2026-10-29). Until it runs, goals sync nowhere (that table's failure is isolated; changes stay queued). Safe to run again. |
+| `063` | **Applied** | `063_endeavour_period.sql` (`period jsonb` on `collections`: an Endeavour's period and breaks, 2026-10-30). Sent only once an Endeavour has its own period, and nullable, so until it runs only those Endeavours fail to upload (queued until it's applied). Safe to run again. |
 
 ## Migration history
 
@@ -113,13 +114,14 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `060_item_types.sql` | New table `item_types` (`id`, `user_id`, `name`, `icon`, `extends_id`, `definition` jsonb: fields, defaults, parts; `archived_at`, timestamps, `deleted_at`), RLS on `user_id`, and its grant; `type_id text` and `type_fields jsonb` (nullable) on `tasks`, `calendar_events`, `calendar_deadlines`. Add-only. Read by `itemTypeToRow` / `rowToItemType` and `typeColumns` / `typeFromRow` in `mappers.ts`. |
 | `061_rhythm_streams.sql` | `streams jsonb` (nullable) on `collections`: a rhythm's streams (`RhythmStream[]`). Add-only; no new table, so no grant. Ticks are `tracker_entries` rows of the rhythm (`_stream`, `_status`, `_note` in `data`), so no table for them. |
 | `062_goals.sql` | New table `goals` (`id`, `user_id`, `title`, `target` jsonb: `{ type: 'endeavour', id }`, `by_date`, `measure` jsonb, `check_ins` jsonb, `status`, `status_at`, timestamps, `deleted_at`), RLS on `user_id`, its grant, and a schema reload. Read by `goalToRow` / `rowToGoal`. |
+| `063_endeavour_period.sql` | `period jsonb` (nullable) on `collections`: `{ start, end, breaks: [{ id, label, from, to }] }` (`EndeavourPeriod`), and a schema reload. Add-only; no new table, so no grant. |
 
 ## Supabase tables (summary)
 
 - **tasks** — mirrors Task interface; `type_id text`, `type_fields jsonb` since `060` (its Type, also on `calendar_events` and `calendar_deadlines`)
 - **item_types** (since `060`) — ItemType: a Type's name, icon, `extends_id`, and `definition` (fields, defaults, parts)
 - **goals** (since `062`) — Goal: what's wanted, its target (an Endeavour, as a typed reference), by when, its measure, check-ins and status
-- **collections** — mirrors Collection; includes `field_schema jsonb`, `routine_tasks jsonb`, `repeat_config jsonb`, `collection_id text`, `archived_at timestamptz`; `links jsonb` since `059` (links between Endeavours); `streams jsonb` since `061` (a rhythm's streams)
+- **collections** — mirrors Collection; includes `field_schema jsonb`, `routine_tasks jsonb`, `repeat_config jsonb`, `collection_id text`, `archived_at timestamptz`; `links jsonb` since `059` (links between Endeavours); `streams jsonb` since `061` (a rhythm's streams); `period jsonb` since `063` (its period and breaks)
 - **tags** — mirrors Tag; includes `notes text`
 - **purposes** — mirrors Purpose; includes `archived_at timestamptz`
 - **calendar_events** / **calendar_reminders** — CalendarEvent / CalendarReminder; `calendar_reminders` includes `reminder_type text` (`'default' | 'task'` — see "Task Calendar Items — layers") and, since `035`, `status text` (`'confirmed' | 'tentative'`, same column and meaning as events — see "Tentative events"); `calendar_events` includes `status text`, `background boolean` + `color text` (since `036` — "Background / banner calendar events"), and `source`/`source_connection_id`/`source_calendar_id`/`source_event_id`/`source_raw` (external calendar sync provenance — see "External calendar sync"), plus `travel_mode`, `source_account`, `source_uid` (since `051`)

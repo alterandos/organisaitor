@@ -52,7 +52,7 @@ The suite is extended to Android via **Capacitor**, wrapping this same codebase 
 | `CLAUDE.md` (this file) | Overview and terminology, type system, stores, Supabase sync and live migration status, file structure, component patterns, hotkey rules, coding conventions, **pattern governance** |
 | `docs/features/implemented-features.md` | Running log of built features: what, why, files, integration points, bugs found and how |
 | `docs/features/fitness.md`, `schedules.md`, `external-calendar-sync.md`, `overview.md` | The big self-contained features |
-| `docs/features/endeavours.md` | The agreed design for nested Endeavours, Types, Rhythms and Goals (phases 1–2 built 2026-10-28: links, inclusive filters, the Endeavours section and homes; phases 3–5, Types, Rhythms and Goals, 2026-10-29; templates not yet): read before touching Endeavours, Routines or Purposes |
+| `docs/features/endeavours.md` | The agreed design for nested Endeavours, Types, Rhythms and Goals (phases 1–2 built 2026-10-28: links, inclusive filters, the Endeavours section and homes; phases 3–6, Types, Rhythms, Goals, templates and restructuring, 2026-10-29: all six built): read before touching Endeavours, Routines or Purposes |
 | `docs/supabase/migrations.md` | The migration record: live status, history, table summary. **Read only when a task writes or depends on a migration** |
 | `docs/architecture/file-structure.md` | The map of every folder and notable file |
 | `docs/architecture/ui-store.md` | The full uiStore state and action listing |
@@ -226,6 +226,8 @@ All collections also carry `collectionId: CollectionId | null` — meaningful fo
 
 **Links between Endeavours** (2026-10-28, `docs/features/endeavours.md`): `Collection.links?: EndeavourLink[]` (`{ kind: 'partOf' | 'related', targetId, createdAt }`, absent until the first link). An Endeavour can be **part of several** others. What a kind means is `config/endeavourLinkKinds.ts` (a new kind is one entry, never a migration); the rules are `utils/endeavourGraph.ts` and nowhere else: `parentsOf` (links that roll up, plus the old `collectionId`, read as "part of"), `endeavourSubtree` / `endeavourAncestors`, `canAddEndeavourLink` (no self, repeat or loop), `inEndeavourScope`. Make or remove one only through `taskStore.addEndeavourLink` / `removeEndeavourLink`. "Serves" a Purpose is the existing `purposeIds`.
 
+**An Endeavour's period and breaks** (`Collection.period?`, 2026-10-30): read with `utils/endeavourPeriod.ts` `effectivePeriod`, which takes the nearest Endeavour's above when it has none of its own (a subject its semester's, live). Never read `collection.period` directly where the inherited one is meant.
+
 **An Endeavour filter includes everything part of the chosen Endeavour** (adopted 2026-10-28): a filter gets the scope from `hooks/useEndeavourScope.ts` (or `endeavourSubtree`) and tests each item with `inEndeavourScope(scope, item.collectionId)`, never by comparing ids. A new section or view that filters by Endeavour does the same. Pattern test: "Endeavour filters include what is part of the Endeavour".
 
 **Archiving:** `Collection.archivedAt: string | null` and `Purpose.archivedAt: string | null` — sunsetting, not deleting. Set via the Archive/Restore button in `AddCollectionModal`/`AddPurposeModal`'s edit mode, or directly from the `ManagePane` row actions. Archived items are excluded from every *selection* surface (`CollectionPicker`, `CollectionFilterPicker`/`getOrderedEndeavours`, `Sidebar`'s active lists, the purpose chip pickers in `AddTaskModal`/`AddCollectionModal`/`AddTrackerModal`/`EditTrackerPane`/`AddRoutineModal`/`EditRoutinePane`) but never deleted — existing references (a task's `collectionId`, a note's inherited Endeavour, etc.) keep working. `CollectionPicker` specifically keeps showing an already-selected archived value (`!c.archivedAt || c.id === value`) rather than hiding it outright. Hard delete (`deleteCollection`/`deletePurpose`) still exists as a separate, more destructive action, available from `Sidebar` and `ManagePane`.
@@ -333,15 +335,19 @@ interface Tag { id: TagId; name: string; color: string | null; notes: string | n
 
 ```typescript
 interface RepeatConfig {
-  freq:        'daily' | 'weekly' | 'monthly' | 'yearly';
+  freq:        'daily' | 'weekly' | 'monthly' | 'yearly' | 'dates';
   interval:    number;
   endKind:     'forever' | 'count' | 'until';
   count:       number | null;
   until:       string | null;   // YYYY-MM-DD
   daysOfWeek?: number[];        // weekly only: the weekdays (0=Sun…6=Sat); weeks run Mon–Sun
   monthWeekday?: { week: number; day: number };  // monthly/yearly: the nth (1–5, -1 = last) weekday
+  dates?:      string[];      // freq 'dates': every occurrence (2026-10-30)
+  follows?:    { ids: string[]; offsetDays: number };  // freq 'dates' kept in step with other events
 }
 ```
+
+**A repeat can be a list of dates** (`freq: 'dates'`) **or follow other events** ("1 day before each lecture", `follows`), both read by `utils/recurrence.ts` like any rule. A following repeat's dates are kept in step by ONE watcher (`services/repeatFollow.ts`): never update them by hand where an event changes.
 
 ---
 
@@ -517,12 +523,13 @@ Each of these is THE one way to do its job. Most have a pattern section below an
 | Enter a time of day (any form, any app) | `components/TimeInput` (its segment rules are in the component's header comment) | a native `type="time"` (pattern test) |
 | Ask how long before a calendar item notifies, read or write it | `utils/notifyRule.ts` (`eventRule` / `datedRule`, `eventPatch` / `datedPatch`, `notifyMoment`); the field `NotifyRuleField` / `NotifyRuleEditor` (`components/AllDayNotifyField/NotifyLead.tsx`) | reading `notifyBeforeValue` / `notifyDaysBefore` by hand, or a number box and unit select built in a pane |
 | Decide whether something must be kept encrypted because of where it is (a notebook, an Endeavour, any future scope) | `utils/encryptionScopes.ts` (the rules) and `services/encryption/kinds.ts` (`heldFromSync`, `waitingForEncryption`); the switch is `components/EncryptContentsField` (see "Encryption by scope") | reading `encryptContents` by hand, or encrypting outside the store's own action |
-| Enter a date (any form, any app) | `components/DateInput` (same segment rules as TimeInput); the go-to-date calendar is `components/MiniDatePicker` | a native `type="date"` (pattern test; one exception: the phone quick-add bar's hidden field that opens the phone's own picker) |
+| Enter a date (any form, any app) | `components/DateInput` (same segment rules as TimeInput; the year fills in as this year once the day and month are typed); the go-to-date calendar is `components/MiniDatePicker` | a native `type="date"` (pattern test; one exception: the phone quick-add bar's hidden field that opens the phone's own picker) |
 | Build an editor that shows note content as a note does (the note editor, the block guide's examples, a schema check) | `components/NoteEditor/noteEditorExtensions.ts` `noteEditorExtensions()`: THE list, in order | a copied list of extensions (it drifts: the demo test's copy needed every new block added by hand) |
 | Let a person give something an icon, or show one they gave (notebooks and tags, lists, Overviews, activity types, converters, and any new one) | `components/IconPicker`: `IconField` to pick, `ItemIcon` to show, `iconText` where only text can go (see "Icon picker") | a free-text emoji box, a local emoji list, or `{x.icon}` rendered as text |
 | Work out a formula a person wrote (converters, and any later use) | `utils/formula.ts` `compileFormula` / `formulaError` (mathjs syntax, so mathjs can replace it in that one file) | `eval` or `new Function` anywhere (pattern test) |
 | Add a word to the Dictionary, read it | `services/dictionary.ts` (`addToDictionary`, `dictionaryWords`, `fetchDefinition`) | a list item made by hand, or a definition fetched anywhere else |
 | Tick a rhythm's occurrence (done, skipped, not needed), fill in its fields, open its note | `services/rhythms.ts` (`setTick`, `toggleDone`, `setTickField`, `openOccurrenceNote`) | a tracker entry written by hand for a rhythm |
+| List what's filed under an Endeavour, or move things to another (merge, split, any future restructure) | `services/endeavourFiling.ts` (`FILED_KINDS`, `filedUnder`, `moveFiled`); a new kind of thing with a `collectionId` adds its entry there (pattern test) | changing `collectionId` store by store |
 | Give an item a Type, or make a Type's parts | `services/itemTypes.ts` (`applyItemType`, `setItemType`, `setItemTypeField`); `ItemTypeField` / `ItemTypePaneField` in a form or pane | setting `typeId` / `typeFields` through a store from a component |
 | Fill in one `FieldSchema` field (a tracker entry, a Type's field) | `components/FieldInput` | an input switch on `field.type` written again |
 
@@ -1074,7 +1081,7 @@ Calendar items (events, reminders, deadlines) follow the iCalendar model: a chan
 
 ### Speed-dial FAB (`AddTaskButton`)
 
-Section-aware. In the Records section it shows options: Tracker, Entry (only when a tracker is selected), Routine. Clicking each calls the corresponding `showAdd*()` uiStore action.
+Section-aware. In the Records section it shows options: Tracker, Entry (only when a tracker is selected), Routine. On an Endeavour's home, the five things made there most often (filed under it); on the Endeavours page, a new Endeavour or one from a template. Clicking each calls the corresponding uiStore action. A speed dial holds a handful of options (3–6); a section with more keeps the rest in its own add row.
 
 ### RoutineChecklist
 

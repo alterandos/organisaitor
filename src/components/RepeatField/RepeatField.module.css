@@ -85,3 +85,18 @@
   font-size: 0.75rem;
   line-height: 1.4;
 }
+
+/* A repeat on a list of dates. */
+.dates { display: flex; flex-direction: column; gap: var(--space-2); }
+.dateList { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.dateChip {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 0.1rem var(--space-1) 0.1rem var(--space-2);
+  border: 1px solid var(--color-border); border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+}
+.chipX { display: inline-flex; border: none; background: none; padding: 2px; color: var(--color-muted); cursor: pointer; border-radius: var(--radius-sm); }
+.chipX:hover { color: var(--color-text); }
+.linkBtn { border: none; background: none; padding: 0; font: inherit; font-size: var(--text-sm); color: var(--color-primary); cursor: pointer; }
+.linkBtn:hover { text-decoration: underline; }
+.chipX:focus-visible, .linkBtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }

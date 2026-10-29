@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { openNewItem } from '@/services/newItem';
 import { useUIStore } from '@/store/uiStore';
 import { usePlatform } from '@/hooks/usePlatform';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -12,9 +11,9 @@ import { useItemTypeStore } from '@/store/itemTypeStore';
 import { pickableTypes } from '@/utils/itemTypes';
 import { makeAsOf } from '@/services/itemTypes';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
-import type { ItemTypeId } from '@/types';
+import type { CollectionId, ItemTypeId } from '@/types';
 import type { ComponentType, SVGProps } from 'react';
-import { EndeavourIcon, ListIcon, NotebookIcon, PlusIcon, PresetIcon, PurposeIcon, ReminderIcon, RoutineIcon, StickyIcon, TagIcon, TrackerIcon, UploadIcon } from '@/components/Icons';
+import { CalendarIcon, EndeavourIcon, GoalIcon, ListIcon, NotebookIcon, PlusIcon, PresetIcon, PurposeIcon, ReminderIcon, RoutineIcon, StickyIcon, TagIcon, TrackerIcon, UploadIcon } from '@/components/Icons';
 
 // Each option's icon: a line icon from components/Icons, drawn on its coloured circle.
 type IconType = ComponentType<SVGProps<SVGSVGElement>>;
@@ -195,10 +194,45 @@ export function AddTaskButton() {
 
   const dialClass = `${styles.speedDial} ${open ? styles.speedDialOpen : ''}`;
 
+  // The Endeavours section (docs/features/endeavours.md, 2026-10-30): on a home, the things made
+  // there most often, filed under it (the rest are in the home's own add row); on the page, a new
+  // Endeavour or one from a template. N still makes a task on a home straight away.
   if (activeView === 'endeavours') {
+    const ui = useUIStore.getState();
+    const home = useUIStore.getState().endeavourHomeId as CollectionId | null;
+    const opts: { key: string; label: string; color: string; Icon: IconType; run: () => void }[] = home ? [
+      { key: 'inside',   label: LABELS.endeavourHome.add.endeavour, color: 'var(--color-swatch-green)', Icon: EndeavourIcon, run: () => ui.showAddCollection() },
+      { key: 'notebook', label: LABELS.endeavourHome.add.notebook,  color: 'var(--color-swatch-purple)', Icon: NotebookIcon, run: () => ui.showAddNoteTag(null, 'area') },
+      { key: 'goal',     label: LABELS.endeavourHome.add.goal,      color: 'var(--color-swatch-orange)', Icon: GoalIcon, run: () => ui.showAddGoal(home) },
+      { key: 'event',    label: LABELS.endeavourHome.add.event,     color: 'var(--color-swatch-teal)', Icon: CalendarIcon, run: () => ui.showAddCalendarItem() },
+      { key: 'task',     label: LABELS.endeavourHome.add.task,      color: 'var(--color-swatch-indigo)', Icon: PlusIcon, run: () => ui.showAddTask() },
+    ] : [
+      { key: 'template', label: LABELS.restructure.fromTemplate,    color: 'var(--color-swatch-purple)', Icon: PresetIcon, run: () => ui.showTemplates(null) },
+      { key: 'new',      label: LABELS.endeavourHome.create,        color: 'var(--color-swatch-indigo)', Icon: PlusIcon, run: () => ui.showAddCollection() },
+    ];
     return (
       <div className={dialClass} ref={ref}>
-        <button className={styles.fab} onClick={() => openNewItem('endeavours')} aria-label={useUIStore.getState().endeavourHomeId ? LABELS.endeavourHome.add.task : LABELS.endeavourHome.create}>
+        <div className={styles.options} role="group" aria-label="Create options">
+          {opts.map((opt) => (
+            <div key={opt.key} className={styles.optionRow}>
+              <span className={styles.optionLabel}>{opt.label}</span>
+              <button
+                className={styles.optionBtn}
+                style={{ background: opt.color }}
+                onClick={() => { setOpen(false); opt.run(); }}
+                aria-label={opt.label}
+              >
+                <opt.Icon className={styles.optionIcon} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          className={styles.fab}
+          onClick={() => setOpen((o) => !o)}
+          aria-label={home ? LABELS.endeavourHome.addHere : LABELS.endeavourHome.create}
+          aria-expanded={open}
+        >
           <span className={styles.fabIcon}><PlusIcon /></span>
         </button>
       </div>

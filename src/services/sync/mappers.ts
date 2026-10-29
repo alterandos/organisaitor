@@ -114,6 +114,8 @@ const encryptContentsColumn = (v: boolean | undefined) => ({ encrypt_contents: v
 const linksColumn = (v: Collection['links']) => (v === undefined ? {} : { links: v });
 // A rhythm's streams (migration 061), likewise sent only once a routine has been given some.
 const streamsColumn = (v: Collection['streams']) => (v === undefined ? {} : { streams: v });
+// Its period and breaks (migration 063), likewise: nullable, sent once set.
+const periodColumn = (v: Collection['period']) => (v === undefined ? {} : { period: v });
 
 export function collectionToRow(c: Collection, userId: string) {
   return {
@@ -134,6 +136,7 @@ export function collectionToRow(c: Collection, userId: string) {
     ...encryptContentsColumn(c.encryptContents),
     ...linksColumn(c.links),
     ...streamsColumn(c.streams),
+    ...periodColumn(c.period),
     created_at:    c.createdAt,
     updated_at:    c.updatedAt,
     deleted_at:    null,
@@ -159,6 +162,7 @@ export function rowToCollection(r: Record<string, any>): Collection {
     ...(r.encrypt_contents ? { encryptContents: true } : {}),
     ...(Array.isArray(r.links) && r.links.length ? { links: r.links } : {}),
     ...(Array.isArray(r.streams) && r.streams.length ? { streams: r.streams } : {}),
+    ...(r.period ? { period: r.period } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
   };

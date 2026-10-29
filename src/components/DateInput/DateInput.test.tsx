@@ -22,6 +22,26 @@ describe('DateInput — the suite’s date field', () => {
     expect(onChange).toHaveBeenLastCalledWith('2026-10-22');
   });
 
+  it('the year fills in as this year once the day and month are typed; typing over it still works, and it can be cleared', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 30));
+    const onChange = vi.fn();
+    render(<DateInput value="" onChange={onChange} />);
+    act(() => seg('Day').focus());
+    type(seg('Day'), '14');
+    act(() => seg('Month').focus());
+    type(seg('Month'), '11');
+    expect(seg('Year').value).toBe('2026');
+    expect(onChange).toHaveBeenLastCalledWith('2026-11-14');
+    act(() => seg('Year').focus());
+    type(seg('Year'), '2027');
+    expect(onChange).toHaveBeenLastCalledWith('2027-11-14');
+    act(() => seg('Year').focus());
+    for (let i = 0; i < 4; i++) fireEvent.keyDown(seg('Year'), { key: 'Backspace' });
+    expect(seg('Year').value).toBe('');
+    vi.useRealTimers();
+  });
+
   it('a digit nothing can follow is complete at once ("4" as a day, "3" as a month)', () => {
     render(<DateInput value="" onChange={vi.fn()} />);
     act(() => seg('Day').focus());

@@ -35,6 +35,7 @@ const UNIT: Record<string, string> = { daily: 'day', weekly: 'week', monthly: 'm
 
 // "Every week", "Every 2 weeks, until Fri 30 Oct", "Every day, 5 times".
 export function formatRepeatRule(repeat: RepeatConfig): string {
+  if (repeat.freq === 'dates') return LABELS.recurring.datesSummary((repeat.dates ?? []).length);
   const pattern = repeatPattern(repeat);
   const base = (repeat.interval === 1
     ? LABELS.noteObjects.card.repeatFreq[repeat.freq]

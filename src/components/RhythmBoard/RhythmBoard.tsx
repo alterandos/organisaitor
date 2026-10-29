@@ -72,7 +72,7 @@ export function RhythmBoard({ rhythm, today }: { rhythm: Collection; today: stri
               <th scope="col" className={styles.weekCol}>{L.week}</th>
               {streams.map((s) => (
                 <th key={s.id} scope="col">
-                  <span className={styles.streamName}><span aria-hidden>{STREAM_KINDS[s.kind].icon}</span> {s.label}</span>
+                  <span className={styles.streamName}><span aria-hidden>{STREAM_KINDS[s.kind].icon}</span> {s.label}{s.worth ? ` · ${s.worth}%` : ''}</span>
                   <span className={styles.where}>
                     {s.show.calendar !== 'none' && <span title={`${L.calendar}: ${L.calendarModes[s.show.calendar]}`}>{ITEM_TYPE_ICON.event}</span>}
                     {s.show.tasks !== 'never' && <span title={`${L.tasks}: ${L.tasksModes[s.show.tasks]}`}>{ITEM_TYPE_ICON.task}</span>}

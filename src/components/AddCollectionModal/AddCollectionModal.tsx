@@ -13,6 +13,7 @@ import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CloseIcon } from '@/components/Icons';
 import { EncryptContentsField } from '@/components/EncryptContentsField/EncryptContentsField';
 import { EndeavourLinksField } from '@/components/EndeavourLinksField/EndeavourLinksField';
+import { PeriodField } from '@/components/PeriodField/PeriodField';
 
 export function AddCollectionModal() {
   const addCollection    = useTaskStore((s) => s.addCollection);
@@ -238,6 +239,9 @@ export function AddCollectionModal() {
           {/* Links to other Endeavours: editing, they apply at once; creating, they're made with it */}
           <EndeavourLinksField kind="partOf" selfId={isEditMode ? editingCollection.id : null} value={partOf} onChange={setPartOf} />
           <EndeavourLinksField kind="related" selfId={isEditMode ? editingCollection.id : null} value={related} onChange={setRelated} />
+
+          {/* Its period and breaks — edit mode; applies at once; inherited from above unless set */}
+          {liveCollection && (liveCollection.kind === 'project' || liveCollection.kind === 'list') && <PeriodField id={liveCollection.id} />}
 
           {/* Encrypt the notes and lists in it — edit mode, project/list kinds; applies at once */}
           {liveCollection && (liveCollection.kind === 'project' || liveCollection.kind === 'list') && (

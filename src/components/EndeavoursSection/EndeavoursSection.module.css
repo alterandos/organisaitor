@@ -288,7 +288,17 @@
 }
 .thing:hover { color: var(--color-primary); }
 
-.addRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.addRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+.addTitle { grid-column: 1 / -1; font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-muted); }
+.addGroup { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.addGroupLabel { flex-basis: 100%; font-size: var(--text-xs); color: var(--color-muted); }
 
 /* ── Goals (phase 5) ── */
 .goals { display: flex; flex-direction: column; }

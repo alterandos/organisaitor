@@ -1,0 +1,225 @@
+/* Opens from the Endeavours page or a home: the everyday modal tier. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-backdrop);
+  z-index: var(--z-pane);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 520px) {
+  .overlay { align-items: center; padding: var(--space-4); }
+}
+
+.modal {
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 680px;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-lg);
+}
+
+@media (min-width: 520px) {
+  .modal { border-radius: var(--radius-lg); max-height: calc(100dvh - 2rem); }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5) var(--space-2);
+}
+
+.title { font-size: var(--text-base); font-weight: 600; display: flex; align-items: center; gap: var(--space-2); }
+
+.badge {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem var(--space-2);
+}
+
+.closeBtn,
+.iconBtn,
+.chipX {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-muted);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+}
+.closeBtn:hover, .iconBtn:hover, .chipX:hover { color: var(--color-text); }
+.iconBtn:hover { color: var(--color-danger); }
+
+.form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+.body {
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--space-2) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.nameRow { display: flex; align-items: center; gap: var(--space-2); }
+
+.twoCol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--space-3);
+}
+
+.field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+
+.label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hint, .inherited {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+.inherited { font-style: italic; }
+
+.input, .inputSmall, .select, .selectSmall {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-family: inherit;
+  outline: none;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.input { flex: 1; width: 100%; }
+.inputSmall { width: 5rem; flex: none; }
+.select { width: 100%; cursor: pointer; }
+.selectSmall { flex: none; max-width: 12rem; cursor: pointer; }
+.input:focus-visible, .inputSmall:focus-visible, .select:focus-visible, .selectSmall:focus-visible { border-color: var(--color-primary); }
+
+.check { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-md); cursor: pointer; }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.1rem var(--space-1) 0.1rem var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+}
+
+.section { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.wide { flex-basis: 100%; }
+
+.addBtn {
+  align-self: flex-start;
+  border: 1px dashed var(--color-border-strong);
+  background: transparent;
+  color: var(--color-muted);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.addBtn:hover { color: var(--color-text); border-color: var(--color-primary); }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+.spacer { flex: 1; }
+
+.secondaryBtn, .dangerBtn, .submitBtn {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+.secondaryBtn { border: 1px solid var(--color-border); background: transparent; color: var(--color-muted); }
+.secondaryBtn:hover { background: var(--color-bg); color: var(--color-text); }
+.dangerBtn { border: 1px solid var(--color-border); background: transparent; color: var(--color-danger); }
+.dangerBtn:hover { border-color: var(--color-danger); background: var(--color-danger-muted); }
+.submitBtn { border: none; background: var(--color-primary); color: var(--color-on-primary); font-weight: 600; }
+.submitBtn:hover:not(:disabled) { background: var(--color-primary-hover); }
+.submitBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.closeBtn:focus-visible, .iconBtn:focus-visible, .chipX:focus-visible, .addBtn:focus-visible,
+.secondaryBtn:focus-visible, .dangerBtn:focus-visible, .submitBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-3); }
+.choice {
+  display: flex; flex-direction: column; gap: var(--space-1); text-align: left;
+  padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-surface); color: var(--color-text); font: inherit; cursor: pointer;
+}
+.choice:hover { border-color: var(--color-primary); }
+.choice:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.choiceTitle { font-weight: 700; }
+.wandRow { display: flex; align-items: center; gap: var(--space-2); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-3); }
+.wide { grid-column: 1 / -1; }
+.days { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.day {
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); cursor: pointer;
+}
+.dayOn { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+.day:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.preview { border-top: 1px solid var(--color-border); padding-top: var(--space-3); }
+.previewList { margin: var(--space-1) 0 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); }
+.assessments { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-1); }
+.assessment { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.assessment > :nth-child(2) { flex: 1; }
+
+fieldset.section { margin: 0; padding: 0; border: none; }
+
+/* A "rows" input: each row its fields side by side, wrapping on a narrow screen. */
+.rowsField { display: flex; flex-direction: column; gap: var(--space-2); }
+/* The row's remove button keeps its own corner, so no field (a date with its picker) can cover it. */
+.row {
+  position: relative;
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2);
+  padding: var(--space-2) calc(var(--space-2) + 2rem) var(--space-2) var(--space-2);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+}
+.row > .iconBtn { position: absolute; top: var(--space-1); right: var(--space-1); }
+.cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 7rem; }
+.cellLabel { font-size: var(--text-2xs); color: var(--color-muted); }
+.cellNumber { max-width: 6rem; }

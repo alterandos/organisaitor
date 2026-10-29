@@ -141,7 +141,7 @@ function StreamRow({ stream, own, open, onToggle, onChange, onRemove }: {
                     className={styles.select}
                     aria-label={L.block}
                     value={`${rule.scheduleId}::${rule.blockId}`}
-                    onChange={(e) => { const [sid, bid] = e.target.value.split('::'); onChange({ rule: { ...rule, scheduleId: sid as ScheduleId, blockId: bid } }); }}
+                    onChange={(e) => { const [sid, bid] = e.target.value.split('::'); onChange({ rule: { kind: 'relative', offsetDays: rule.offsetDays, scheduleId: sid as ScheduleId, blockId: bid } }); }}
                   >
                     {classes.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
@@ -153,6 +153,7 @@ function StreamRow({ stream, own, open, onToggle, onChange, onRemove }: {
                     onChange={(e) => onChange({ rule: { ...rule, offsetDays: Math.round(Number(e.target.value) || 0) } })}
                   />
                   <span className={styles.hint}>{L.offsetWords(rule.offsetDays)}</span>
+                  {rule.blockIds?.length ? <span className={styles.hint}>{L.moreClasses(rule.blockIds.length)}</span> : null}
                 </div>
               )}
             </fieldset>

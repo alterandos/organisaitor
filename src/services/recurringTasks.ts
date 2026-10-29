@@ -22,7 +22,7 @@ import type { RepeatConfig, Task, TaskId } from '@/types';
 
 // How far ahead to look for the next date, by frequency (at least one whole step).
 // An nth-weekday rule can skip a month (no 5th Friday), hence two months' or years' worth.
-const STEP_DAYS: Record<RepeatConfig['freq'], number> = { daily: 1, weekly: 7, monthly: 62, yearly: 732 };
+const STEP_DAYS: Record<RepeatConfig['freq'], number> = { daily: 1, weekly: 7, monthly: 62, yearly: 732, dates: 3660 };
 
 // The next occurrence's date after `basis`: the first the rule gives after it that's today or
 // later. null when the rule has ended (its until date has passed, or its count is used up).
@@ -154,6 +154,7 @@ export function discardOccurrence(id: TaskId): void {
 // What a repeat rule reads as, for the task row and pane ("Every 2 weeks · 3 more").
 export function repeatSummary(repeat: RepeatConfig): string {
   const L = LABELS.recurring;
+  if (repeat.freq === 'dates') return L.datesSummary((repeat.dates ?? []).length);
   const [one, many] = L.units[repeat.freq];
   const pattern = repeatPattern(repeat);
   const every = L.summaryEvery(repeat.interval, repeat.interval === 1 ? one : many) + (pattern ? ` ${L.onPattern(pattern)}` : '');

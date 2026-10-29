@@ -121,6 +121,8 @@ export type ModalType =
   | 'add-schedule'
   | 'add-item-type'
   | 'add-goal'
+  | 'endeavour-template'
+  | 'restructure'
   | null;
 
 export type SortField = 'createdAt' | 'deadline' | 'collection' | 'priority';
@@ -213,6 +215,13 @@ interface UIState {
   pendingGoalEndeavourId: CollectionId | null;
   showAddGoal:            (endeavourId?: CollectionId | null) => void;
   openEditGoal:           (id: GoalId) => void;
+  // Templates and restructuring (docs/features/endeavours.md phase 6): a new Endeavour from a
+  // template (part of `templatePartOf` if set), and copying, splitting or merging one.
+  templatePartOf:   CollectionId | null;
+  restructureId:    CollectionId | null;
+  restructureMode:  'copy' | 'split' | 'merge';
+  showTemplates:    (partOf?: CollectionId | null) => void;
+  showRestructure:  (id: CollectionId, mode?: 'copy' | 'split' | 'merge') => void;
   showAddActivity:   () => void;
   openEditActivity:  (activity: Activity) => void;
   closeEditActivity: () => void;
@@ -679,6 +688,11 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   pendingGoalEndeavourId: null,
   showAddGoal:            (endeavourId) => set({ openModal: 'add-goal', editingGoalId: null, pendingGoalEndeavourId: endeavourId ?? null }),
   openEditGoal:           (id) => set({ openModal: 'add-goal', editingGoalId: id, pendingGoalEndeavourId: null }),
+  templatePartOf:   null,
+  restructureId:    null,
+  restructureMode:  'copy',
+  showTemplates:    (partOf) => set({ openModal: 'endeavour-template', templatePartOf: partOf ?? null }),
+  showRestructure:  (id, mode = 'copy') => set({ openModal: 'restructure', restructureId: id, restructureMode: mode }),
   showAddItemType:   () => set({ openModal: 'add-item-type', editingItemTypeId: null }),
   openEditItemType:  (id) => set({ openModal: 'add-item-type', editingItemTypeId: id }),
   // Set first, so the form reads it when it mounts (the openers leave it alone).
@@ -714,6 +728,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     pendingItemTypeId: null,
     editingGoalId: null,
     pendingGoalEndeavourId: null,
+    templatePartOf: null,
+    restructureId: null,
     taskModalAdvanced: false,
     pendingParentId: null,
     pendingFollowUpOf: null,
