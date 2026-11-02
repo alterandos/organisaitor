@@ -18,7 +18,8 @@ import { FIELD_TYPE_OPTIONS } from '@/config/fieldTypes';
 
 const TYPE_ICON: Record<FieldType, string> = {
   text: 'T', number: '#', duration: '⏱', boolean: '✓', rating: '★',
-  select: '▾', date: '📅', url: '🔗',
+  // period is an Endeavour's field only, never a tracker column.
+  select: '▾', date: '📅', url: '🔗', period: '🗓',
 };
 
 interface FieldRow {

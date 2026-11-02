@@ -3,7 +3,7 @@ import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { createPortal } from 'react-dom';
 import { useUIStore, type QuickAccessTab } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { useRecentItemsStore, type RecentItemEntry } from '@/store/recentItemsStore';
+import { frecency, useRecentItemsStore, type RecentItemEntry } from '@/store/recentItemsStore';
 import { usePinnedItemsStore, pinKey, type PinnableType } from '@/store/pinnedItemsStore';
 import { searchQuickAccessItems, resolveRecentItems, resolvePinnedItems, pruneStaleRecentEntries, navigateToQuickAccessItem, placesAlphabetical, type QuickAccessItem } from '@/utils/quickAccess';
 import { isPinnable, togglePin, pinMenuItem } from '@/services/quickAccessPins';
@@ -16,13 +16,17 @@ import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { ActionSheet, type ActionSheetItem } from '@/components/ActionSheet/ActionSheet';
 import { PinIcon, QuickAccessIcon, SearchIcon, UnpinIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
+import { openBeside, opensBeside } from '@/components/NoteSplitView/openBeside';
 
 type Mode = 'recent' | 'frequent';
 const L = LABELS.quickAccess;
 
 function sortEntries(entries: RecentItemEntry[], mode: Mode): RecentItemEntry[] {
-  return [...entries].sort((a, b) => {
-    if (mode === 'frequent' && a.visitCount !== b.visitCount) return b.visitCount - a.visitCount;
+  const now = Date.now();
+  const score = new Map(mode === 'frequent' ? entries.map((e) => [e, frecency(e, now)]) : []);
+  const visited = mode === 'frequent' ? entries.filter((e) => score.get(e)! > 0) : entries;
+  return [...visited].sort((a, b) => {
+    if (mode === 'frequent' && score.get(a) !== score.get(b)) return score.get(b)! - score.get(a)!;
     return new Date(b.lastVisitedAt).getTime() - new Date(a.lastVisitedAt).getTime();
   });
 }
@@ -95,8 +99,10 @@ export function QuickAccessPane() {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
-  const select = (item: QuickAccessItem) => {
-    navigateToQuickAccessItem(item);
+  // A note Ctrl+clicked or middle-clicked opens beside the one open (openBeside).
+  const select = (item: QuickAccessItem, beside = false) => {
+    if (beside && item.type === 'note') openBeside(item.entityId);
+    else navigateToQuickAccessItem(item);
     closeQuickAccess();
   };
 
@@ -228,7 +234,7 @@ export function QuickAccessPane() {
               last={i === items.length - 1}
               dragging={dragging === item.key}
               onHover={() => setHighlightIndex(i)}
-              onSelect={() => select(item)}
+              onSelect={(beside) => select(item, beside)}
               onMove={(delta) => movePin(item, delta)}
               onDragStart={() => setDragging(item.key)}
               onDragEnd={() => setDragging(null)}
@@ -256,7 +262,7 @@ export function QuickAccessPane() {
 // (Android); a pinned row on the Quick Access tab can also be dragged or moved up and down.
 function ItemRow({ item, active, reorderable, first, last, dragging, onHover, onSelect, onMove, onDragStart, onDragEnd, onDrop }: {
   item: QuickAccessItem; active: boolean; reorderable: boolean; first: boolean; last: boolean; dragging: boolean;
-  onHover: () => void; onSelect: () => void; onMove: (delta: -1 | 1) => void;
+  onHover: () => void; onSelect: (beside?: boolean) => void; onMove: (delta: -1 | 1) => void;
   onDragStart: () => void; onDragEnd: () => void; onDrop: () => void;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
@@ -295,7 +301,8 @@ function ItemRow({ item, active, reorderable, first, last, dragging, onHover, on
       onDragOver={(e) => { if (reorderable) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
     >
-      <button type="button" className={styles.item} onClick={onSelect}>
+      <button type="button" className={styles.item} onClick={(e) => onSelect(opensBeside(e))}
+        onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onSelect(true); } }} onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>
         <ItemIcon className={styles.itemIcon} icon={item.icon} />
         <span className={styles.itemText}>
           <span className={styles.itemTitle}>{item.title}</span>

@@ -30,20 +30,48 @@
   outline-offset: 2px;
 }
 
-.completedBtn {
-  border-color: var(--color-success);
-  color: var(--color-success-text);
-  background: var(--color-success-muted);
-}
-
-.completedBtn:hover { background: var(--color-success-muted); }
-
 .deleteBtn {
   border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
   color: var(--color-danger);
 }
 
 .deleteBtn:hover { background: var(--color-danger-muted); }
+
+/* ── Done: banner and outline (DoneBanner) ────────────── */
+
+.donePane {
+  outline: 2px solid var(--color-success);
+  outline-offset: -2px;
+}
+
+.doneBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--color-success-muted);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+  color: var(--color-success-text);
+  font-size: var(--text-sm);
+}
+
+.doneBannerText { flex: 1; font-weight: 600; }
+
+.reopenBtn {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.reopenBtn:hover { background: var(--color-surface-alt); }
+.reopenBtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 
 /* ── Archived banner ──────────────────────────────────── */
 

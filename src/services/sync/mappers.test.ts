@@ -84,6 +84,9 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     };
     expect(rowToItemType(itemTypeToRow(x, USER))).toEqual(x);
     expect(itemTypeToRow(x, USER).deleted_at).toBeNull();
+    // What it's used for and the default it was copied from (in the blob: no migration)
+    const forEndeavours: ItemType = { ...x, usedFor: ['endeavour'], builtIn: 'semester' };
+    expect(rowToItemType(itemTypeToRow(forEndeavours, USER))).toEqual(forEndeavours);
   });
 
   it('Collection', () => {
@@ -103,6 +106,13 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     expect('period' in collectionToRow(c, USER)).toBe(false);
     const withPeriod: Collection = { ...c, period: { start: '2026-09-14', end: '2026-12-18', breaks: [{ id: 'b', label: 'Break', from: '2026-10-26', to: '2026-10-30' }] } };
     expect(rowToCollection(collectionToRow(withPeriod, USER))).toEqual(withPeriod);
+    expect(collectionToRow({ ...c, period: null }, USER).period).toBeNull();   // its own taken off clears the cloud's
+    // templateId: sent once set (migration 065), nullable
+    expect('template_id' in collectionToRow(c, USER)).toBe(false);
+    expect(rowToCollection(collectionToRow({ ...c, templateId: 'subject' }, USER))).toEqual({ ...c, templateId: 'subject' });
+    // attributes: sent once set (migration 068)
+    const withAttrs: Collection = { ...c, attributes: { typeId: 'ty' as ItemTypeId, fields: [{ id: 'f', name: 'Code', type: 'text' }], values: { f: 'GEOS215' } } };
+    expect(rowToCollection(collectionToRow(withAttrs, USER))).toEqual(withAttrs);
     const linked = { ...c, links: [{ kind: 'partOf' as const, targetId: 'c0' as CollectionId, createdAt: '2030-01-01T00:00:00.000Z' }] };
     expect(rowToCollection(collectionToRow(linked, USER))).toEqual(linked);
     expect(collectionToRow({ ...c, links: [] }, USER).links).toEqual([]);   // a removed last link still clears the cloud's
@@ -136,6 +146,18 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     expect(rowToEvent(eventToRow(e, USER))).toEqual(e);
     const typed: CalendarEvent = { ...e, typeId: 'ty1' as ItemTypeId, typeFields: { room: 'B12' } };
     expect(rowToEvent(eventToRow(typed, USER))).toEqual(typed);
+    // scheduleId: sent once set (migration 064), nullable
+    expect('schedule_id' in eventToRow(e, USER)).toBe(false);
+    const item: CalendarEvent = { ...e, scheduleId: 'sch1' as ScheduleId };
+    expect(rowToEvent(eventToRow(item, USER))).toEqual(item);
+    // attendedDates: sent once set (migration 066), nullable
+    expect('attended_dates' in eventToRow(e, USER)).toBe(false);
+    const attended: CalendarEvent = { ...e, attendedDates: ['2030-01-07'] };
+    expect(rowToEvent(eventToRow(attended, USER))).toEqual(attended);
+    // onClass: sent once set (migration 067), nullable; null clears the cloud's
+    const inClass: CalendarEvent = { ...e, onClass: { eventId: 'lec', date: '2030-01-07', mode: 'during' } };
+    expect(rowToEvent(eventToRow(inClass, USER))).toEqual(inClass);
+    expect(eventToRow({ ...e, onClass: null }, USER).on_class).toBeNull();
   });
 
   it('CalendarReminder', () => {
@@ -178,6 +200,10 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
       createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z',
     };
     expect(rowToSchedule(scheduleToRow(s, USER))).toEqual(s);
+    // breaks: sent once set (migration 064), nullable
+    expect('breaks' in scheduleToRow(s, USER)).toBe(false);
+    const withBreaks: ScheduleTemplate = { ...s, breaks: [{ id: 'b', label: 'Break', from: '2030-03-18', to: '2030-03-22' }] };
+    expect(rowToSchedule(scheduleToRow(withBreaks, USER))).toEqual(withBreaks);
   });
 
   it('Overview (query folded into one definition blob)', () => {

@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useScheduleStore } from '@/store/scheduleStore';
+import { useCalendarStore } from '@/store/calendarStore';
+import { scheduleItems } from '@/utils/scheduleItems';
 import { useListViews } from '@/store/listViews';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
@@ -9,6 +11,7 @@ import { formatDate } from '@/utils/date';
 import { childrenOf, endeavourSubtree, parentsOf } from '@/utils/endeavourGraph';
 import { isRhythm } from '@/utils/rhythms';
 import { RhythmBoard } from '@/components/RhythmBoard/RhythmBoard';
+import { ItemBoard } from '@/components/RhythmBoard/ItemBoard';
 import { GoalsPanel } from './GoalsPanel';
 import { rowsOfEndeavour, summarizeRows } from '@/utils/endeavourSummary';
 import { SOURCE_BY_KEY } from '@/overview/sources';
@@ -33,6 +36,7 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
   const collections = useTaskStore((s) => s.collections);
   const noteTags    = useNoteStore((s) => s.noteTags);
   const schedules   = useScheduleStore((s) => s.schedules);
+  const events      = useCalendarStore((s) => s.events);
   const lists       = useListViews();
   const ui          = useUIStore.getState;
   const openHome    = useUIStore((s) => s.openEndeavourHome);
@@ -43,6 +47,14 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
   const rhythms = useMemo(() => {
     const scope = endeavourSubtree(id, collections);
     return Object.values(collections).filter((x) => isRhythm(x) && !x.archivedAt && x.id !== id && scope.has(x.id));
+  }, [id, collections]);
+  // Its repeating classes and Work, week by week (phase 7 (e)): its own board, then each part's
+  // (a semester's subjects). A board with nothing repeating draws nothing.
+  const boardOwners = useMemo(() => {
+    const scope = endeavourSubtree(id, collections);
+    return [id, ...[...scope].filter((x) => x !== id)]
+      .map((x) => collections[x as CollectionId])
+      .filter((x): x is Collection => !!x && (x.kind === 'project' || x.kind === 'list') && !x.archivedAt);
   }, [id, collections]);
   const summary = useMemo(() => summarizeRows(rowsOfEndeavour(rows, id, collections), today), [rows, id, collections, today]);
 
@@ -124,6 +136,7 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
           <button type="button" className={styles.btn} onClick={() => ui().openEditCollection(c)}><EditIcon /> {L.edit}</button>
           <button type="button" className={styles.btn} onClick={openInCalendar}>{L.openCalendar}</button>
           <button type="button" className={styles.btn} onClick={() => ui().openEndeavourOverview(id)}>{L.openOverview}</button>
+          <button type="button" className={styles.btn} onClick={() => ui().showEndeavourContents(id)}>{LABELS.endeavourContents.manage}</button>
           <button type="button" className={styles.btn} onClick={() => ui().showRestructure(id)}>{LABELS.restructure.menu}…</button>
         </div>
       </header>
@@ -148,6 +161,7 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
         )}
       </div>
 
+      {boardOwners.map((x) => <ItemBoard key={x.id} endeavour={x} today={today} />)}
       {rhythms.map((r) => <RhythmBoard key={r.id} rhythm={r} today={today} />)}
 
       {parts.length > 0 && (
@@ -183,7 +197,7 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
             <Panel title={L.panels.timetables}>
               {timetables.map((s) => (
                 <button key={s.id} type="button" className={styles.thing} onClick={() => ui().openEditSchedule(s)}>
-                  🗓 {s.name} <span className={styles.muted}>· {s.blocks.length}</span>
+                  🗓 {s.name} <span className={styles.muted}>· {scheduleItems(s.id, events).length}</span>
                 </button>
               ))}
             </Panel>

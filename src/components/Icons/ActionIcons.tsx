@@ -76,6 +76,7 @@ export function UploadIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph
 export function ListIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="list" {...EM} {...props} />; }
 export function NotebookIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="notebook" {...EM} {...props} />; }
 export function StickyIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="sticky" {...EM} {...props} />; }
+export function LookUpIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="lookUp" {...EM} {...props} />; }
 export function ScratchpadIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="scratchpad" {...EM} {...props} />; }
 export function DateCalcIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="dateCalc" {...EM} {...props} />; }
 export function BlockGuideIcon(props: SVGProps<SVGSVGElement>) { return <Glyph glyph="blockGuide" {...EM} {...props} />; }

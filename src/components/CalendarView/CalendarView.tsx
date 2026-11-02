@@ -16,7 +16,8 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { usePlatform } from '@/hooks/usePlatform';
 import { formatTime, timeAddMinutes } from '@/utils/date';
 import { resolveTimezone, todayIsoInZone, utcToZonedTime } from '@/utils/timezone';
-import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
+import { hiddenBySchedule } from '@/utils/scheduleItems';
+import { duringIndex, isDrawnOnClass } from '@/utils/classClashes';
 import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
 import {
   buildHourLayout, minutesToY, layoutDayTimeGrid, timeToMinutes,
@@ -26,7 +27,6 @@ import {
   type HourLayout,
 } from '@/utils/timeGrid';
 import { eventTypeIcon } from '@/config/calendarEventTypes';
-import { ScheduleOccurrencePopover } from '@/components/ScheduleOccurrencePopover/ScheduleOccurrencePopover';
 import { LABELS } from '@/config/labels';
 import { MiniDatePickerPopover } from '@/components/MiniDatePicker/MiniDatePicker';
 import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane';
@@ -43,10 +43,9 @@ import type { AnchorBox } from '@/utils/floatingPlacement';
 
 type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
-  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean; travelIcon: string; color: string | null }
+  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean; travelIcon: string; color: string | null; scheduleId: ScheduleId | null }
   | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
   | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
-  | { kind: 'schedule'; id: string; scheduleId: ScheduleId; blockId: string; date: string; title: string; time: string | null; endTime: string; location: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; committed: boolean }
   // A rhythm stream's occurrence whose stream shows on the calendar (docs/features/endeavours.md
   // phase 4): `marker` draws it small; a click ticks it done. id is its tickKey.
   | { kind: 'rhythm';   id: string; rhythmId: string; streamId: string; occurrenceDate: string; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; done: boolean; marker: boolean; behind: boolean };
@@ -100,7 +99,7 @@ function buildCalendarDays(year: number, month: number): { date: Date; isCurrent
 }
 
 function sortItems(items: CalDisplayItem[]): CalDisplayItem[] {
-  const kindOrder = { event: 0, schedule: 1, task: 2, deadline: 3, reminder: 4, rhythm: 5 } as const;
+  const kindOrder = { event: 0, task: 2, deadline: 3, reminder: 4, rhythm: 5 } as const;
   return [...items].sort((a, b) => {
     if (a.kind !== b.kind) return kindOrder[a.kind] - kindOrder[b.kind];
     if (!a.time && b.time) return 1;
@@ -212,7 +211,6 @@ export function CalendarView() {
   const updateReminder    = useCalendarStore((s) => s.updateReminder);
   const schedules         = useScheduleStore((s) => s.schedules);
   const trackerEntries    = useTrackerStore((s) => s.entries);
-  const [occurrencePopover, setOccurrencePopover] = useState<{ item: Extract<CalDisplayItem, { kind: 'schedule' }>; x: number; y: number } | null>(null);
 
   const { isAndroid }            = usePlatform();
   const openTaskPane             = useUIStore((s) => s.openTaskPane);
@@ -299,6 +297,11 @@ export function CalendarView() {
       // shadow event is never user-marked tentative, so this only ever applies to plain events.
       if (!isTaskEvent && (ev.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
       if (!inEndeavourScope(endeavourScope, ev.collectionId)) return;
+      // One of a Schedule's items: hidden while the Schedule is off; 🗓, or ✅ for a date taken out
+      // of a commitment-mode item and confirmed (services/schedules.ts).
+      if (hiddenBySchedule(ev, schedules)) return;
+      const series = ev.seriesId ? events[ev.seriesId as CalendarEventId] : undefined;
+      const scheduleIcon = !ev.scheduleId ? '' : !ev.repeat && ev.status === 'confirmed' && series?.status === 'tentative' ? '✅' : '🗓';
       const item: CalDisplayItem = {
         kind: 'event',
         id: ev.id,
@@ -310,13 +313,14 @@ export function CalendarView() {
         // A birthday/travel icon takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
         // event auto-created from a task's scheduledAt (see Task.calendarEventId) so the calendar
         // reads as task-linked without changing the event's click/edit behaviour.
-        typeIcon: `${ev.important ? '❗' : ''}${eventTypeIcon(ev) || (taskLinkedEventIds.has(ev.id) ? '🕐' : '')}`,
+        typeIcon: `${ev.important ? '❗' : ''}${eventTypeIcon(ev) || scheduleIcon || (taskLinkedEventIds.has(ev.id) ? '🕐' : '')}`,
         status: ev.status ?? 'confirmed',
         important: ev.important ?? false,
         occurrenceDate: ev.date,
         travel: ev.eventType === 'travel',
         travelIcon: eventTypeIcon(ev),
         color: ev.color ?? null,
+        scheduleId: ev.scheduleId ?? null,
       };
 
       if (ev.endDate && ev.endDate > ev.date) {
@@ -398,44 +402,11 @@ export function CalendarView() {
       }
     });
 
-    Object.values(schedules).forEach((schedule) => {
-      if (!schedule.active) return;
-      if (!inEndeavourScope(endeavourScope, schedule.collectionId)) return;
-      for (const block of schedule.blocks) {
-        // Commitment mode (see ScheduleBlock.requiresCommitment, CLAUDE.md "Schedule
-        // commitment mode"): a block that doesn't require commitment renders exactly as
-        // before (always "committed"); one that does only counts as committed on dates the
-        // user has explicitly committed to — everything else renders muted (isTentativeItem-
-        // style hatch, applied at each render site below) as a heads-up to help decide.
-        const requiresCommitment = block.requiresCommitment ?? false;
-        const committedSet = new Set(block.committedDates ?? []);
-        for (const date of expandScheduleBlock(block, schedule, rangeStart, rangeEnd)) {
-          push(date, {
-            kind: 'schedule',
-            id: `${schedule.id}::${block.id}::${date}`,
-            scheduleId: schedule.id,
-            blockId: block.id,
-            date,
-            title: block.title,
-            time: block.startTime,
-            endTime: block.endTime,
-            location: block.location,
-            collectionId: schedule.collectionId,
-            notes: block.notes,
-            // A committed occurrence in commitment mode gets a distinct ✅ icon — not just the
-            // hatch removal — so the state reads clearly even without relying on color/pattern.
-            typeIcon: requiresCommitment && committedSet.has(date) ? '✅' : '🗓',
-            committed: !requiresCommitment || committedSet.has(date),
-          });
-        }
-      }
-    });
-
     // Rhythm occurrences whose stream shows on the calendar (a mark or an item).
     const ticks = tickIndex(trackerEntries, collectionsRecord);
     for (const rhythm of Object.values(collectionsRecord)) {
       if (!isRhythm(rhythm) || rhythm.archivedAt || !inEndeavourScope(endeavourScope, rhythm.id)) continue;
-      for (const o of rhythmOccurrences(rhythm, schedules, ticks, rangeStart, rangeEnd, todayIsoStr)) {
+      for (const o of rhythmOccurrences(rhythm, schedules, ticks, rangeStart, rangeEnd, todayIsoStr, events)) {
         if (o.stream.show.calendar === 'none') continue;
         push(o.date, {
           kind: 'rhythm', id: o.key, rhythmId: rhythm.id, streamId: o.stream.id, occurrenceDate: o.date,
@@ -444,6 +415,20 @@ export function CalendarView() {
           marker: o.stream.show.calendar === 'marker', behind: o.state === 'behind',
         });
       }
+    }
+
+    // Items during a class (an in-class quiz: utils/classClashes.ts) are drawn on the class that
+    // day, not on their own: the class's title says what's in it, and 📌 marks it.
+    const during = duringIndex(events, deadlines);
+    if (during.size) {
+      map.forEach((list, date) => map.set(date, list.flatMap((i): CalDisplayItem[] => {
+        if (i.kind === 'deadline' && deadlines[i.id] && isDrawnOnClass(deadlines[i.id])) return [];
+        if (i.kind !== 'event') return [i];
+        const ev = events[i.id];
+        if (ev && isDrawnOnClass(ev)) return [];
+        const on = during.get(`${i.id}|${i.occurrenceDate}`) ?? (ev?.seriesId ? during.get(`${ev.seriesId}|${ev.seriesDate}`) : undefined);
+        return on ? [{ ...i, title: `${i.title} · ${on.map((x) => x.title).join(', ')}`, typeIcon: `📌${i.typeIcon}` }] : [i];
+      })));
     }
 
     map.forEach((list, date) => map.set(date, sortItems(list)));
@@ -471,20 +456,12 @@ export function CalendarView() {
 
   // Shared by both the week and day time grids (and their block renderers below) so a real
   // end time is computed exactly once per item kind — this is the single source of truth for
-  // "how long does this block visually span." Previously week and day view each duplicated
-  // this logic, and the day-view copy was missing the 'schedule' branch entirely, so every
-  // Schedule occurrence (a recurring class/timetable block) silently fell back to the generic
-  // 30-minute default in day view regardless of its real length, while week view sized it
-  // correctly — a real bug, not a display-only quirk, since both views read from this value.
+  // "how long does this block visually span."
   const getItemEndMinutes = (item: CalDisplayItem, startMin: number): number => {
     if (item.kind === 'event') {
       const full = events[item.id];
       const explicitEnd = full?.endTime ? timeToMinutes(full.endTime) : null;
       return explicitEnd !== null && explicitEnd > startMin ? explicitEnd : startMin + DEFAULT_EVENT_DURATION_MIN;
-    }
-    if (item.kind === 'schedule') {
-      const explicitEnd = timeToMinutes(item.endTime);
-      return explicitEnd > startMin ? explicitEnd : startMin + DEFAULT_EVENT_DURATION_MIN;
     }
     // Reminders reserve a full REMINDER_MAX_HEIGHT_MIN slot for column-overlap purposes even
     // though their rendered box only takes as much of it as their title actually needs (capped
@@ -538,7 +515,6 @@ export function CalendarView() {
 
   const getItemLocation = (item: CalDisplayItem): string | null => {
     if (item.kind === 'event') return events[item.id]?.location || null;
-    if (item.kind === 'schedule') return item.location;
     return null;
   };
 
@@ -878,10 +854,6 @@ export function CalendarView() {
     if (item.kind === 'event')    openCalendarEventPane(item.id, item.occurrenceDate);
     if (item.kind === 'reminder') openCalendarReminderPane(item.id, item.occurrenceDate);
     if (item.kind === 'deadline') openCalendarDeadlinePane(item.id, item.occurrenceDate);
-    if (item.kind === 'schedule') {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setOccurrencePopover({ item, x: rect.left, y: rect.bottom + 4 });
-    }
     if (item.kind === 'rhythm') toggleDone(item.rhythmId, item.streamId, item.occurrenceDate);
   };
 
@@ -912,10 +884,10 @@ export function CalendarView() {
     const clipped = [el, ...Array.from(el.children)].some((c) => c.scrollWidth > c.clientWidth + 1 || c.scrollHeight > c.clientHeight + 1);
     const links = item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline' ? item.links : [];
     const event = item.kind === 'event' ? events[item.id] : undefined;
-    const location = item.kind === 'schedule' ? item.location : event?.location ?? null;
-    const endTime = item.kind === 'schedule' ? item.endTime : event?.endTime ?? null;
+    const location = event?.location ?? null;
+    const endTime = event?.endTime ?? null;
     if (!clipped && !item.notes && !links.length && !item.collectionId && !location && !endTime) { setTooltip(null); return; }
-    const date = item.kind === 'schedule' ? item.date : item.kind === 'task' ? null : item.occurrenceDate;
+    const date = item.kind === 'task' ? null : item.occurrenceDate;
     const rect = el.getBoundingClientRect();
     setTooltip({
       item: { kind: item.kind, id: item.id, title: item.title, typeIcon: item.typeIcon, time: item.time, endTime, location, date, notes: item.notes, links, collectionId: item.collectionId },
@@ -948,7 +920,7 @@ export function CalendarView() {
   // see CLAUDE.md "Schedule commitment mode"). Both reuse the same visual language on
   // purpose — both mean "this is a possibility on your calendar, not yet a sure thing."
   const isTentativeItem = (item: CalDisplayItem): boolean =>
-    ((item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline') && item.status === 'tentative') || (item.kind === 'schedule' && !item.committed);
+    ((item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline') && item.status === 'tentative');
 
   const isTravelItem = (item: CalDisplayItem): boolean => item.kind === 'event' && item.travel;
 
@@ -962,7 +934,7 @@ export function CalendarView() {
   const getPillStyle = (item: CalDisplayItem): React.CSSProperties => {
     // A Schedule's own colour takes priority — it's the whole point of the "layer" model that
     // its blocks read as belonging to that schedule, regardless of any Endeavour filing.
-    if (item.kind === 'schedule') {
+    if (item.kind === 'event' && item.scheduleId) {
       const scheduleColor = schedules[item.scheduleId]?.color;
       if (scheduleColor) return { borderLeft: `3px solid ${scheduleColor}` };
     }
@@ -1653,20 +1625,6 @@ export function CalendarView() {
       {/* ── Hover card: an entry shown whole (not while dragging one) ── */}
       {tooltip && !dragPreview && !isAndroid && <CalendarItemHoverCard item={tooltip.item} anchor={tooltip.anchor} />}
 
-      {occurrencePopover && (
-        <ScheduleOccurrencePopover
-          scheduleId={occurrencePopover.item.scheduleId}
-          blockId={occurrencePopover.item.blockId}
-          date={occurrencePopover.item.date}
-          title={occurrencePopover.item.title}
-          startTime={occurrencePopover.item.time ?? occurrencePopover.item.endTime}
-          endTime={occurrencePopover.item.endTime}
-          location={occurrencePopover.item.location}
-          x={occurrencePopover.x}
-          y={occurrencePopover.y}
-          onClose={() => setOccurrencePopover(null)}
-        />
-      )}
     </div>
   );
 }

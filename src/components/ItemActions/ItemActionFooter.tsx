@@ -10,15 +10,16 @@ interface Props {
   onArchive:    () => void;
   onRestore:    () => void;
   onDelete:     () => void;
-  // Only for items that can be completed (a task, or the calendar entry of one): shows a
-  // Complete / Mark incomplete toggle first in the row. Omit `onToggleComplete` for the rest.
+  // Only for items that can be completed (a task, or the calendar entry of one): Complete, first in
+  // the row, while not done. Once done it isn't here: the pane shows DoneBanner, which reopens it.
+  // Omit `onToggleComplete` for the rest.
   completed?:        boolean;
   onToggleComplete?: () => void;
   // Alternatives offered on hovering Complete (a task's: services/taskCompletion.ts
   // taskCompletionOptions). Omit, or pass [], for none.
   completeOptions?:  HoverOption[];
-  // Wording for the toggle when it isn't "complete a task" — a Reminder/Deadline occurrence's
-  // Mark done / Not done (doneDates). Defaults to Complete / Mark incomplete.
+  // Wording when it isn't "complete a task" — a Reminder/Deadline occurrence's Mark done
+  // (doneDates); `off` is DoneBanner's way back. Defaults to Complete / Reopen.
   completeLabels?:   { on: string; off: string };
 }
 
@@ -29,15 +30,14 @@ export function ItemActionFooter({ archived, canArchive = true, deleteLabel, onA
   const L = LABELS.itemActions;
   return (
     <footer className={styles.footer}>
-      {onToggleComplete && (
+      {onToggleComplete && !completed && (
         <HoverOptions options={completeOptions}>
           <button
             type="button"
-            className={`${styles.actionBtn} ${completed ? styles.completedBtn : ''}`}
+            className={styles.actionBtn}
             onClick={onToggleComplete}
-            aria-pressed={completed}
           >
-            <CheckCircleIcon /> {completed ? (completeLabels?.off ?? L.reopen) : (completeLabels?.on ?? L.complete)}
+            <CheckCircleIcon /> {completeLabels?.on ?? L.complete}
           </button>
         </HoverOptions>
       )}

@@ -4,6 +4,7 @@ import { SPECIAL_CHARS, exactChar, findCharTrigger, findShortcut, findUserShortc
 import { installSpecialCharInput } from './fieldInput';
 
 Element.prototype.scrollIntoView = () => {};   // jsdom has none
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();   // nor this (the list placed at a contenteditable's caret)
 
 describe('reading //name', () => {
   it('starts at the start of a word only (never inside a URL)', () => {

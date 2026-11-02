@@ -41,7 +41,8 @@ describe('search', () => {
   });
 
   it('finds a schedule by one of its block titles', () => {
-    expect(ok('search', { query: 'spin' }).results[0]).toMatchObject({ type: 'schedule', name: 'Gym timetable' });
+    // Its classes are calendar events too (phase 7 (c)), so they're found as well.
+    expect(ok('search', { query: 'spin' }).results).toContainEqual(expect.objectContaining({ type: 'schedule', name: 'Gym timetable' }));
   });
 
   it('can be limited to a kind, and ranks title matches first', () => {

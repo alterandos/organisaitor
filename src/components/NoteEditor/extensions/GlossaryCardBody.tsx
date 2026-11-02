@@ -5,7 +5,7 @@ import { DEFAULT_IMAGE_LAYOUT, IMAGE_PLACES, type ImageLayout } from './cardImag
 import { useNoteStore } from '@/store/noteStore';
 import { entryView, isEntryLocked, useSecretsVersion } from '@/services/noteSecrets';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
-import { GLOSSARY_TYPES, TERM_RICH, factsFromText, factsToText, fieldFacts, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, NAMED_FIELD_ID, takeNamedLines, type Fact, type GlossaryLink, type StructuredTagFieldDef, glossaryKinds, glossaryNames } from '@/config/structuredTagTypes';
+import { GLOSSARY_TYPES, TERM_RICH, fieldFacts, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, NAMED_FIELD_ID, namedFieldLine, takeNamedLines, type Fact, type GlossaryLink, type StructuredTagFieldDef, glossaryKinds, glossaryNames } from '@/config/structuredTagTypes';
 import { GLOSSARY_RELATIONS, glossaryRelation } from '@/config/glossaryRelations';
 import { LABELS } from '@/config/labels';
 import { entryImportance, glossaryKindLine } from '@/services/glossary';
@@ -319,46 +319,70 @@ function UrlList({ items, onCommit, placeholder, editable, label, autoFocus }: {
   );
 }
 
-// Facts (a profile's Habitat, Family, Born…, and any card's own fields): typed one per line as
-// "Label: value", shown as two columns of label and value. `newLine` (a count) opens it on a new
-// line at its end: Enter in a card's last field.
-function FactsField({ facts, onCommit, placeholder, editable, label, autoFocus, newLine }: {
-  facts: Fact[]; onCommit: (v: Fact[]) => void; placeholder?: string; editable: boolean; label: string; autoFocus: boolean;
-  newLine?: number;
+// A card's own fields (a profile's Habitat, Born…, and any card's): each its own field, its name as
+// the label, both edited in place; a field emptied of both goes. There's no box of them: a field is
+// made by typing "Name: value" on a line of the card's text (takeOwnFields), or on the new line that
+// Enter in the card's last field opens (`newLine`, a count; also shown while there are none yet).
+function OwnFields({ facts, onCommit, onTake, placeholder, editable, label, autoFocus, newLine }: {
+  facts: Fact[]; onCommit: (v: Fact[]) => void; onTake: (fact: Fact) => void; placeholder?: string; editable: boolean;
+  label: string; autoFocus: boolean; newLine: number;
 }) {
-  const [editing, setEditing] = useState(autoFocus || !!newLine);
-  const [opened, setOpened] = useState(newLine ?? 0);
-  const area = useRef<HTMLTextAreaElement>(null);
-  const d = useDraft(factsToText(facts), (text) => onCommit(factsFromText(text)));
-  if (newLine && newLine !== opened) {
-    setOpened(newLine);
-    setEditing(true);
-    if (d.value.trim()) d.change(`${d.value.replace(/\n+$/, '')}\n`);
-  }
-  useEffect(() => {
-    const t = area.current;
-    if (!newLine || !t) return;
-    t.focus();
-    t.setSelectionRange(t.value.length, t.value.length);
-  }, [newLine]);
-  if (editable && (editing || facts.length === 0)) {
+  const [adding, setAdding] = useState(autoFocus || newLine > 0);
+  const [opened, setOpened] = useState(newLine);
+  if (newLine !== opened) { setOpened(newLine); setAdding(true); }
+  const change = (i: number, patch: Partial<Fact>) =>
+    onCommit(facts.map((f, j) => (j === i ? { ...f, ...patch } : f)).filter((f) => f.label.trim() || f.value.trim()));
+  return (
+    <>
+      {facts.map((f, i) => <OwnFieldRow key={i} fact={f} editable={editable} onChange={(patch) => change(i, patch)} />)}
+      {editable && (adding || facts.length === 0) && (
+        <NewOwnField key={newLine} placeholder={placeholder} label={label} onTake={onTake} onDone={() => setAdding(false)} />
+      )}
+    </>
+  );
+}
+
+function OwnFieldRow({ fact, editable, onChange }: { fact: Fact; editable: boolean; onChange: (patch: Partial<Fact>) => void }) {
+  const name = useDraft(fact.label, (label) => onChange({ label: label.trim() }));
+  const value = useDraft(fact.value, (v) => onChange({ value: v }));
+  if (!editable) {
     return (
-      <textarea ref={area} className={`${styles.input} ${styles.listInput}`} value={d.value} placeholder={placeholder} aria-label={label} rows={3} autoFocus={editing && !newLine}
-        data-card-input="" onChange={(e) => d.change(e.target.value)} onBlur={() => { d.blur(); setEditing(false); }}
-        // Enter is a new line here, as in any of the card's text (Ctrl+ and Shift+Enter leave it).
-        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation(); }} />
+      <div className={styles.field}>
+        {fact.label && <div className={styles.label}>{fact.label}</div>}
+        <div>{fact.value}</div>
+      </div>
     );
   }
   return (
-    <dl className={styles.facts} tabIndex={editable ? 0 : undefined} data-card-input={editable ? '' : undefined}
-      onFocus={() => editable && setEditing(true)} onClick={() => editable && setEditing(true)}>
-      {facts.map((f, i) => (
-        <Fragment key={i}>
-          <dt>{f.label}</dt>
-          <dd>{f.value}</dd>
-        </Fragment>
-      ))}
-    </dl>
+    <div className={styles.field} data-field={NAMED_FIELD_ID}>
+      <input className={`${styles.label} ${styles.ownLabel}`} value={name.value} aria-label={LABELS.glossary.ownFieldName}
+        onChange={(e) => name.change(e.target.value)} onBlur={name.blur} />
+      <input className={styles.input} value={value.value} aria-label={fact.label || LABELS.glossary.ownFieldName} data-card-input=""
+        onChange={(e) => value.change(e.target.value)} onBlur={value.blur} />
+    </div>
+  );
+}
+
+// The line a new field is typed on, as "Name: value". Enter makes it and opens the next.
+function NewOwnField({ placeholder, label, onTake, onDone }: { placeholder?: string; label: string; onTake: (fact: Fact) => void; onDone: () => void }) {
+  const [text, setText] = useState('');
+  const take = () => {
+    const fact = namedFieldLine(text);
+    if (fact) { onTake(fact); setText(''); }
+    return !!fact;
+  };
+  return (
+    <div className={styles.field}>
+      <input className={styles.input} value={text} placeholder={placeholder} aria-label={label} data-card-input="" autoFocus
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => { take(); onDone(); }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+          e.preventDefault();
+          e.stopPropagation();
+          take();
+        }} />
+    </div>
   );
 }
 
@@ -630,6 +654,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
           target.innerHTML = rest;
           target.dispatchEvent(new Event('input', { bubbles: true }));
           focusField(target, 'end');
+          if (!rest) return;
         }
         document.execCommand?.('insertLineBreak');
         return;
@@ -656,14 +681,26 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
     if (!own || def?.type !== 'textarea') return html;
     const { html: rest, facts } = takeNamedLines(html);
     if (!facts.length) return html;
-    const add: Fact[] = [];
-    for (const fact of facts) {
-      const builtIn = typeDef!.fields.find((f) => f.id !== fieldId && (f.type === 'text' || f.type === 'textarea') && f.name.toLowerCase() === fact.label.toLowerCase());
-      if (builtIn && !hasValue(builtIn) && fact.value) { setField(builtIn.id, fact.value); onShow(builtIn.id); }
-      else add.push(fact);
-    }
-    if (add.length) { setField(own.id, [...fieldFacts(entry.fields, own.id), ...add]); onShow(own.id); }
+    takeFacts(facts, fieldId);
     return rest;
+  }
+  // Each into a built-in field of that name while that's empty, else one of the card's own; one of
+  // its own of that name already there takes the new value.
+  function takeFacts(facts: Fact[], fromField?: string): void {
+    const own = typeDef!.fields.find((f) => f.id === NAMED_FIELD_ID);
+    if (!own) return;
+    const mine = [...fieldFacts(entry.fields, own.id)];
+    let changed = false;
+    for (const fact of facts) {
+      const same = (name: string) => name.trim().toLowerCase() === fact.label.toLowerCase();
+      const builtIn = typeDef!.fields.find((f) => f.id !== fromField && (f.type === 'text' || f.type === 'textarea') && same(f.name));
+      if (builtIn && !hasValue(builtIn) && fact.value) { setField(builtIn.id, fact.value); onShow(builtIn.id); continue; }
+      const at = mine.findIndex((m) => same(m.label));
+      if (at >= 0) mine[at] = { ...mine[at], value: fact.value };
+      else mine.push(fact);
+      changed = true;
+    }
+    if (changed) { setField(own.id, mine); onShow(own.id); }
   }
   const isAcronym = entry.typeKey === 'acronym';
   // How important the record is (Key concept, Critical acronym…) and what else it counts as
@@ -746,7 +783,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
       case 'urls':
         return <UrlList items={fieldList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} />;
       case 'facts':
-        return <FactsField facts={fieldFacts(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus && !factsLine} newLine={factsLine} />;
+        return <OwnFields facts={fieldFacts(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} onTake={(fact) => takeFacts([fact])} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} newLine={factsLine} />;
     }
   }
 
@@ -771,12 +808,13 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   // A sub-concept's parts show on its parent too, so the parent field shows when it has parts.
   const hasParts = all.some((e) => e.id !== entry.id && fieldText(e.fields, 'parentId') === id);
   const visible = typeDef.fields.filter((f) => f.id === primaryId || hasValue(f) || shown.includes(f.id) || (f.type === 'parent' && hasParts) || (f.type === 'links' && all.some((e) => fieldLinks(e.fields, 'related').some((l) => l.entryId === id))));
-  const waiting = editable ? typeDef.fields.filter((f) => !visible.includes(f)) : [];
+  const waiting = editable ? typeDef.fields.filter((f) => !visible.includes(f) && f.offered !== false) : [];
 
   // The picture out of the fields' order when it's placed to their right or after them.
   const imageDef = typeDef.fields.find((f) => f.type === 'image');
   const placed = imageDef && visible.includes(imageDef) && hasValue(imageDef) && imageLayout.place !== 'flow' ? imageDef : null;
-  const fieldBox = (f: StructuredTagFieldDef) => (
+  // A card's own fields are each a field of their own, with no box around them.
+  const fieldBox = (f: StructuredTagFieldDef) => f.type === 'facts' ? <Fragment key={f.id}>{renderField(f, shown.includes(f.id) && !hasValue(f))}</Fragment> : (
     <div key={f.id} className={styles.field} data-field={f.id}>
       {f.id !== primaryId && <div className={styles.label}>{f.name}</div>}
       {renderField(f, shown.includes(f.id) && !hasValue(f))}

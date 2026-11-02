@@ -10,7 +10,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useEndeavourScope } from '@/hooks/useEndeavourScope';
 import { endeavourSubtree, inEndeavourScope } from '@/utils/endeavourGraph';
 import { useUIStore, selectActiveCollectionId, type NotesColumn } from '@/store/uiStore';
-import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon, byNotebookOrder, isPinnedNotebook } from '@/utils/notes';
+import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon, byNotebookOrder, isPinnedNotebook, takesNotes } from '@/utils/notes';
 import type { NoteTagId, CollectionId } from '@/types';
 import type { NoteTag } from '@/types/notes';
 import { NoteList } from './NoteList';
@@ -25,6 +25,7 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { DisclosureIcon, EditIcon, IndentIcon, OutdentIcon, TrashIcon } from '@/components/Icons';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
+import { addNoteHere } from '@/services/newItem';
 
 // ── Column order — extend here to add new panels in future ────────────────
 
@@ -119,6 +120,7 @@ function canAcceptZone(
   const newParent = newParentForZone(target, zone);
   if (newParent === draggedId) return false;
   if (newParent && isDescendantOf(noteTags, newParent, draggedId)) return false;
+  if (newParent && noteTags[newParent] && !takesNotes(noteTags[newParent])) return false;
   return true;
 }
 
@@ -312,7 +314,7 @@ function NoteTagTreeNode({
           {canOutdent && (
             <RowAction className={styles.nodeActionBtn} icon={<OutdentIcon />} label={LABELS.rowActions.outdent} onClick={() => outdentNoteTag(tag.id as NoteTagId)} />
           )}
-          <RowAction className={styles.nodeActionBtn} icon="+" label={LABELS.rowActions.addSection} onClick={() => showAddNoteTag(tag.id as NoteTagId)} />
+          {takesNotes(tag) && <RowAction className={styles.nodeActionBtn} icon="+" label={LABELS.rowActions.addSection} onClick={() => showAddNoteTag(tag.id as NoteTagId)} />}
           <RowAction className={styles.nodeActionBtn} icon={<EditIcon />} label={LABELS.rowActions.edit} onClick={() => openEditNoteTag(tag.id)} />
           <RowAction className={styles.nodeActionBtn} {...pin} />
           <RowAction className={`${styles.nodeActionBtn} ${styles.nodeActionDelete}`} icon={<TrashIcon width="1em" height="1em" />} label={LABELS.rowActions.delete} onClick={handleDelete} destructive />
@@ -414,7 +416,6 @@ export function ChronicleView() {
   const editingNoteId     = useUIStore((s) => s.editingNoteId);
   const noteLayout        = useUIStore((s) => s.noteLayout);
   const showAddNoteTag   = useUIStore((s) => s.showAddNoteTag);
-  const showAddNote       = useUIStore((s) => s.showAddNote);
   const activeCollectionId = useUIStore(selectActiveCollectionId) as CollectionId | null;
 
   // Clicking a note (NoteList) moves the cursor into the editor, same as arrow-key navigation
@@ -647,13 +648,13 @@ export function ChronicleView() {
             <div className={styles.panelHeader}>
               <span className={styles.panelLabel}>Notes</span>
               <div className={styles.panelActions}>
-                <button className={styles.panelIconBtn} onClick={showAddNote} title="New note" disabled={!selectedNoteTagId}>+</button>
+                <button className={styles.panelIconBtn} onClick={addNoteHere} title="New note" disabled={!selectedNoteTagId}>+</button>
                 <button className={styles.panelIconBtn} onClick={() => setListCollapsed(true)} title="Collapse">◀</button>
               </div>
             </div>
             <div className={styles.panelBody}>
               {selectedNoteTagId ? (
-                <NoteList tagId={selectedNoteTagId} onAddNote={showAddNote} hideHeader />
+                <NoteList tagId={selectedNoteTagId} onAddNote={addNoteHere} hideHeader />
               ) : (
                 <div className={styles.panelEmpty}><p>Select a notebook</p></div>
               )}

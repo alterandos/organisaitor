@@ -9,8 +9,9 @@ import { makeItemLink } from '@/utils/taskLinks';
 import { now } from '@/utils/date';
 import { partDue, resolveItemType } from '@/utils/itemTypes';
 import { STARTER_SETS, type StarterSet } from '@/config/typeStarters';
+import { BUILT_IN_BY_KEY, type BuiltInType } from '@/config/builtInTypes';
 import { LABELS } from '@/config/labels';
-import type { CollectionId, CalendarDeadlineId, CalendarEventId, ItemTypeId, TagId, TaskId, TypeableKind, TypedItem } from '@/types';
+import type { CollectionId, CalendarDeadlineId, CalendarEventId, ItemType, ItemTypeId, TagId, TaskId, TypeableKind, TypedItem } from '@/types';
 
 // Giving items a Type, making a Type's parts, the starter sets, and turning a tag into a Type
 // (docs/features/endeavours.md phase 3). The rules are utils/itemTypes.ts; every form and pane
@@ -98,7 +99,7 @@ export function addStarterSet(set: StarterSet): number {
     const existing = byName.get(s.name.toLowerCase());
     if (existing) { ids.set(s.key, existing); continue; }
     const id = store.addItemType({
-      name: s.name, icon: s.icon,
+      name: s.name, icon: s.icon, builtIn: s.key,
       extendsId: s.extends ? ids.get(s.extends) ?? null : null,
       fields: s.fields.map((f) => ({ ...f })), defaults: { ...s.defaults }, parts: s.parts.map((p) => ({ ...p })),
     });
@@ -107,6 +108,27 @@ export function addStarterSet(set: StarterSet): number {
   }
   return added;
 }
+
+// A default Type (config/builtInTypes.ts) as the person's own: their copy of it while it's still
+// as the default is reused; once they've changed it, choosing the default again gives a fresh copy
+// of the original (named "… (default)" beside theirs). The default itself never changes.
+export function addBuiltInType(key: string): ItemTypeId | null {
+  const b = BUILT_IN_BY_KEY[key];
+  if (!b) return null;
+  const store = useItemTypeStore.getState();
+  const parent = b.extends ? addBuiltInType(b.extends) : null;
+  const unchanged = Object.values(store.types).find((t) => t.builtIn === key && !t.archivedAt && sameAsDefault(t, b, parent));
+  if (unchanged) return unchanged.id;
+  const taken = Object.values(store.types).some((t) => t.name.toLowerCase() === b.name.toLowerCase() && !t.archivedAt);
+  return store.addItemType({
+    name: taken ? LABELS.itemTypes.defaultCopy(b.name) : b.name, icon: b.icon, builtIn: key, usedFor: [...b.usedFor],
+    extendsId: parent, fields: b.fields.map((f) => ({ ...f })), defaults: { ...b.defaults }, parts: b.parts.map((p) => ({ ...p })),
+  });
+}
+
+const sameAsDefault = (t: ItemType, b: BuiltInType, parent: ItemTypeId | null) =>
+  (t.extendsId ?? null) === parent
+  && JSON.stringify([t.fields, t.parts, t.defaults]) === JSON.stringify([b.fields, b.parts, b.defaults]);
 
 // "Make this tag a Type": a Type named after the tag that keeps adding it, given to every task
 // carrying the tag that has no Type yet. The tag stays. Undo in the toast takes it all back.

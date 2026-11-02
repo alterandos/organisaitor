@@ -29,6 +29,7 @@ export interface StructuredTagFieldDef {
   name:         string;
   type:         StructuredTagFieldType;
   placeholder?: string;
+  offered?:     false;    // not among the "+ field" buttons (a card's own fields: made by typing "Name: value")
 }
 
 export interface GlossaryLink { kind: string; entryId: string }
@@ -72,7 +73,7 @@ export const factsToText = (facts: Fact[]): string => facts.map((f) => (f.label 
 // A field of the person's own (asked for by the user 2026-10-27): a line written "Name: value" on a
 // new line of a card's text field becomes a field of that name, kept in the card's facts field.
 // The name is a word or a few (up to 30 characters) starting with a letter, so "10:30" or a web
-// address never is. A field's first line never is: it's the field's own text ("Note: …").
+// address never is. Any line may be one, the first too (the user, 2026-11-01).
 export const NAMED_FIELD_ID = 'facts';
 export function namedFieldLine(line: string): Fact | null {
   const m = /^\s*(\p{L}[\p{L}\p{N} '’&/()-]{0,29}):\s*(.*)$/u.exec(line);
@@ -80,21 +81,19 @@ export function namedFieldLine(line: string): Fact | null {
   return { label: m[1], value: m[2].trim() };
 }
 
-// The "Name: value" lines of a field's formatted text (every line but its first), taken out.
+// The "Name: value" lines of a field's formatted text, taken out.
 export function takeNamedLines(html: string): { html: string; facts: Fact[] } {
   const lines = html.replace(/<\/?(div|p)\b[^<>]*>/gi, '<br>').split(/<br\s*\/?>/i);
-  const first = lines.findIndex((l) => richToPlain(l).trim() !== '');
   const facts: Fact[] = [];
-  const kept = lines.filter((l, i) => {
-    if (first < 0 || i <= first) return true;
+  const kept = lines.filter((l) => {
     const fact = namedFieldLine(richToPlain(l));
     if (fact) facts.push(fact);
     return !fact;
   });
-  return facts.length ? { html: kept.join('<br>').replace(/(<br>)+$/, ''), facts } : { html, facts };
+  return facts.length ? { html: kept.join('<br>').replace(/^(<br>)+|(<br>)+$/g, ''), facts } : { html, facts };
 }
 
-const OWN_FIELDS_PLACEHOLDER = 'One per line, e.g. Origin: Latin';
+const OWN_FIELDS_PLACEHOLDER = 'Name: value, e.g. Origin: Latin';
 
 // The fields the quick create/edit popover shows; the card shows and edits every field.
 export const isQuickField = (f: StructuredTagFieldDef) => f.type === 'text' || f.type === 'textarea';
@@ -123,7 +122,7 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       { id: 'explanation', name: 'Explanation', type: 'textarea', placeholder: 'Optional notes for yourself' },
       { id: 'image',       name: 'Picture',     type: 'image' },
       { id: 'weblinks',    name: 'Links',       type: 'urls',     placeholder: 'A web address, one per line' },
-      { id: 'facts',       name: 'Your fields', type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER },
+      { id: 'facts',       name: 'Fields', type: 'facts', placeholder: OWN_FIELDS_PLACEHOLDER, offered: false },
     ],
     infer: (selectedText, contextText) => {
       const { term, expansion } = inferAcronymFromSelection(selectedText, contextText);
@@ -142,7 +141,7 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       { id: 'image',   name: 'Picture', type: 'image' },
       { id: 'source',  name: 'Source',  type: 'text',     placeholder: 'Where it comes from: a book, a link…' },
       { id: 'weblinks', name: 'Links',  type: 'urls',     placeholder: 'A web address, one per line' },
-      { id: 'facts',   name: 'Your fields', type: 'facts', placeholder: OWN_FIELDS_PLACEHOLDER },
+      { id: 'facts',   name: 'Fields', type: 'facts', placeholder: OWN_FIELDS_PLACEHOLDER, offered: false },
     ],
     infer: (selectedText, contextText) => {
       const { term, meaning } = inferDefinitionFromSelection(selectedText, contextText);
@@ -164,7 +163,7 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       { id: 'related',     name: 'Related',           type: 'links' },
       { id: 'sources',     name: 'Sources',           type: 'list',     placeholder: 'A book, a link…' },
       { id: 'weblinks',    name: 'Links',             type: 'urls',     placeholder: 'A web address, one per line' },
-      { id: 'facts',       name: 'Your fields',       type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER },
+      { id: 'facts',       name: 'Fields',            type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER, offered: false },
     ],
     infer: (selectedText, contextText) => {
       const { term, meaning } = inferDefinitionFromSelection(selectedText, contextText);

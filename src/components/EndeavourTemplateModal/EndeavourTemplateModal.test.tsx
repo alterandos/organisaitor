@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
-// Templates and restructuring (docs/features/endeavours.md phase 6): a subject set up from a
-// pasted course outline, and a part split off an Endeavour, each with Undo in the toast.
+// Templates and restructuring (docs/features/endeavours.md phases 6 and 7 (d)): a subject set up
+// and opened in its own editor, Edit routing by template, and a part split off an Endeavour.
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -27,25 +27,34 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('starting from a template', () => {
-  it('a subject from a pasted outline: shown before it is made, set up, and undone from the toast', () => {
+  it('a subject: made, its own editor opened, and undone from the toast', () => {
     useUIStore.getState().showTemplates(null);
     render(<EndeavourTemplateModal />);
-    fireEvent.click(screen.getByText(/University subject/));
-    fireEvent.click(screen.getByRole('button', { name: LABELS.magicWand.label }));
-    const box = screen.getByRole('textbox', { name: LABELS.magicWand.label });
-    fireEvent.change(box, { target: { value: 'GEOS215 Climate Systems\nLectures: Tuesday 12–1pm\nEssay, 40%, due 23 October' } });
-    fireEvent.keyDown(box, { key: 'Enter' });
-    const preview = screen.getByRole('region', { name: 'This will make' });
-    expect(preview).toHaveTextContent('GEOS215 Climate Systems');
-    expect(preview).toHaveTextContent('🏁 Essay · 2026-10-23 (Essay)');
+    fireEvent.click(screen.getByText(/^🎓 Subject/));
+    fireEvent.change(screen.getByPlaceholderText('GEOS215'), { target: { value: 'GEOS215' } });
+    fireEvent.change(screen.getByPlaceholderText('Climate Systems'), { target: { value: 'Climate Systems' } });
+    expect(screen.getByRole('region', { name: 'This will make' })).toHaveTextContent('GEOS215 Climate Systems');
     fireEvent.click(screen.getByRole('button', { name: 'Set it up' }));
 
     const made = Object.values(useTaskStore.getState().collections).find((c) => c.name === 'GEOS215 Climate Systems')!;
+    expect(made.templateId).toBe('subject');
     expect(useUIStore.getState().endeavourHomeId).toBe(made.id);
-    expect(Object.values(useCalendarStore.getState().deadlines).some((d) => d.title === 'Essay' && d.collectionId === made.id)).toBe(true);
+    expect(useUIStore.getState()).toMatchObject({ openModal: 'subject-editor', editingCollection: { id: made.id } });
     useToastStore.getState().current!.actions![0].onClick();
     expect(useTaskStore.getState().collections[made.id]).toBeUndefined();
-  }, 15_000);   // renders the whole form and sets up a subject: over 1 s alone, slower under a full run
+  }, 15_000);
+
+  it('Edit opens the editor of the template an Endeavour came from, else the ordinary one', () => {
+    const a = useTaskStore.getState().addCollection({ kind: 'project', name: 'Semester 2' });
+    useTaskStore.getState().updateCollection(a, { templateId: 'semester' });
+    useUIStore.getState().openEditCollection(useTaskStore.getState().collections[a]);
+    expect(useUIStore.getState().openModal).toBe('semester-editor');
+    useUIStore.getState().openEndeavourSettings(useTaskStore.getState().collections[a]);
+    expect(useUIStore.getState().openModal).toBe('add-collection');
+    const b = useTaskStore.getState().addCollection({ kind: 'project', name: 'By hand' });
+    useUIStore.getState().openEditCollection(useTaskStore.getState().collections[b]);
+    expect(useUIStore.getState().openModal).toBe('add-collection');
+  });
 });
 
 describe('restructuring', () => {

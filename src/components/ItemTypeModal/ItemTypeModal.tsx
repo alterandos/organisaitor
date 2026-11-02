@@ -9,12 +9,12 @@ import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { IconField } from '@/components/IconPicker/IconField';
 import { iconText } from '@/components/IconPicker/iconValue';
 import { CloseIcon, TrashIcon } from '@/components/Icons';
-import { canExtend, pickableTypes, resolveItemType, typeDescendants } from '@/utils/itemTypes';
+import { canExtend, pickableTypes, resolveItemType, typeDescendants, typeUses } from '@/utils/itemTypes';
 import { itemsOfType, newFieldId } from '@/services/itemTypes';
 import { FIELD_TYPE_OPTIONS } from '@/config/fieldTypes';
 import { LABELS } from '@/config/labels';
 import { now } from '@/utils/date';
-import type { FieldSchema, FieldType, ItemTypeId, TagId, TypeableKind, TypePart } from '@/types';
+import type { FieldSchema, FieldType, ItemTypeId, TagId, TypeableKind, TypePart, TypeUse } from '@/types';
 import styles from './ItemTypeModal.module.css';
 
 // Making or editing a Type (docs/features/endeavours.md phase 3): its name and icon, what it's a
@@ -30,6 +30,7 @@ export function ItemTypeModal() {
   const types      = useItemTypeStore((s) => s.types);
   const tags       = useTaskStore((s) => s.tags);
   const editing    = editingId ? types[editingId] : undefined;
+  const pendingUse = useUIStore((s) => s.pendingItemTypeUse);
 
   const [name,      setName]      = useState(() => editing?.name ?? '');
   const [icon,      setIcon]      = useState<string | null>(() => editing?.icon ?? null);
@@ -39,20 +40,25 @@ export function ItemTypeModal() {
   const [tagIds,    setTagIds]    = useState<TagId[]>(() => editing?.defaults.tagIds ?? []);
   const [fields,    setFields]    = useState<FieldSchema[]>(() => editing?.fields ?? []);
   const [parts,     setParts]     = useState<TypePart[]>(() => editing?.parts ?? []);
+  const [usedFor,   setUsedFor]   = useState<TypeUse[]>(() => (editing ? typeUses(editing) : pendingUse ? [pendingUse] : ['item']));
   const formRef = useRef<HTMLFormElement>(null);
 
   useEscapeClose(closeModal);
   useCtrlEnterSubmit(() => formRef.current?.requestSubmit());
 
   const parent = extendsId ? resolveItemType(types, extendsId) : null;
-  const parentOptions = pickableTypes(types, extendsId).filter((t) => canExtend(types, editingId, t.id) === null);
+  const forEndeavours = usedFor.includes('endeavour');
+  const kinds = forEndeavours ? [...FIELD_TYPE_OPTIONS, { value: 'period' as FieldType, label: LABELS.attributes.periodKind }] : FIELD_TYPE_OPTIONS;
+  const toggleUse = (u: TypeUse) => setUsedFor((now) => (now.includes(u) ? (now.length > 1 ? now.filter((x) => x !== u) : now) : [...now, u]));
+  const parentOptions = pickableTypes(types, extendsId, usedFor.includes('item') ? 'item' : 'endeavour').filter((t) => canExtend(types, editingId, t.id) === null);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     const data = {
-      name: name.trim(), icon, extendsId,
-      fields: fields.filter((f) => f.name.trim()).map((f) => ({ ...f, name: f.name.trim() })),
+      name: name.trim(), icon, extendsId, usedFor,
+      // A period field is an Endeavour's only, and one at most (docs/features/endeavours.md "Attributes").
+      fields: fields.filter((f) => f.name.trim() && (f.type !== 'period' || forEndeavours)).filter((f, i, all) => f.type !== 'period' || all.findIndex((x) => x.type === 'period') === i).map((f) => ({ ...f, name: f.name.trim() })),
       parts:  parts.filter((p) => p.title.trim()).map((p) => ({ ...p, title: p.title.trim() })),
       defaults: {
         ...(makeAs ? { makeAs } : {}),
@@ -129,6 +135,18 @@ export function ItemTypeModal() {
               </label>
             </div>
 
+            <div className={styles.field} role="group" aria-label={L.usedFor}>
+              <span className={styles.label}>{L.usedFor}</span>
+              <div className={styles.row}>
+                {(['item', 'endeavour'] as TypeUse[]).map((u) => (
+                  <label key={u} className={styles.check}>
+                    <input type="checkbox" checked={usedFor.includes(u)} onChange={() => toggleUse(u)} />
+                    {L.uses[u]}
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <label className={styles.check}>
               <input type="checkbox" checked={important} onChange={(e) => setImportant(e.target.checked)} />
               {L.important}
@@ -158,8 +176,14 @@ export function ItemTypeModal() {
                 <div key={f.id} className={styles.row}>
                   <input className={styles.input} aria-label={L.fieldName} placeholder={L.fieldName} value={f.name} onChange={(e) => patchField(i, { name: e.target.value })} />
                   <select className={styles.selectSmall} aria-label={L.fieldType} value={f.type} onChange={(e) => patchField(i, { type: e.target.value as FieldType })}>
-                    {FIELD_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    {kinds.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
+                  {forEndeavours && f.type !== 'period' && (
+                    <label className={styles.check} title={L.inheritHint}>
+                      <input type="checkbox" checked={!!f.inherit} onChange={(e) => patchField(i, { inherit: e.target.checked || undefined })} />
+                      {LABELS.attributes.inherit}
+                    </label>
+                  )}
                   {f.type === 'select' && (
                     <input
                       className={`${styles.input} ${styles.wide}`}

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { editorFor, type TemplateEditorModal } from '@/config/templateEditors';
 import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType, RepeatConfig, ItemTypeId, TypeableKind, GoalId, CollectionId } from '@/types';
 import type { Activity } from '@/types/fitness';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
@@ -123,6 +124,8 @@ export type ModalType =
   | 'add-goal'
   | 'endeavour-template'
   | 'restructure'
+  | TemplateEditorModal
+  | 'endeavour-contents'
   | null;
 
 export type SortField = 'createdAt' | 'deadline' | 'collection' | 'priority';
@@ -205,8 +208,10 @@ interface UIState {
   // Types (docs/features/endeavours.md phase 3): the Type editor, and a creation form opened for a
   // Type (the speed dial's Types): the form starts with that Type chosen.
   editingItemTypeId: ItemTypeId | null;
+  // A new Type started from an Endeavour's attributes is for Endeavours.
+  pendingItemTypeUse: 'item' | 'endeavour' | null;
   pendingItemTypeId: ItemTypeId | null;
-  showAddItemType:   () => void;
+  showAddItemType:   (use?: 'item' | 'endeavour' | null) => void;
   openEditItemType:  (id: ItemTypeId) => void;
   showAddTyped:      (typeId: ItemTypeId, kind: TypeableKind) => void;
   // Goals (docs/features/endeavours.md phase 5): the goal editor, for a new goal on an Endeavour
@@ -219,6 +224,13 @@ interface UIState {
   // template (part of `templatePartOf` if set), and copying, splitting or merging one.
   templatePartOf:   CollectionId | null;
   restructureId:    CollectionId | null;
+  // An Endeavour's "Everything in it" view (EndeavourContentsModal), on one kind of thing or all.
+  contentsFor:      { id: CollectionId; kind: string | null } | null;
+  // An Endeavour's attributes pane (EndeavourAttributesPane): stacks over the editor that opened it.
+  attributesFor:    CollectionId | null;
+  showEndeavourAttributes:  (id: CollectionId) => void;
+  closeEndeavourAttributes: () => void;
+  showEndeavourContents: (id: CollectionId, kind?: string | null) => void;
   restructureMode:  'copy' | 'split' | 'merge';
   showTemplates:    (partOf?: CollectionId | null) => void;
   showRestructure:  (id: CollectionId, mode?: 'copy' | 'split' | 'merge') => void;
@@ -269,7 +281,10 @@ interface UIState {
   closeEditTag:         () => void;
   openEditPurpose:      (purpose: Purpose) => void;
   closeEditPurpose:     () => void;
+  // Opens the editor of the template it was made from (config/templateEditors.ts), else the ordinary one.
   openEditCollection:   (collection: Collection) => void;
+  // Always the ordinary Endeavour editor (a template editor's "All settings").
+  openEndeavourSettings: (collection: Collection) => void;
   closeEditCollection:  () => void;
 
   settingsOpen:  boolean;
@@ -306,6 +321,9 @@ interface UIState {
   closeDateCalculator: () => void;
   closeRecyclingBin: () => void;
   // The scratchpad panel (Alt+P, services/scratchpad.ts), over any section.
+  lookUpOpen:        boolean;   // Look up (Alt+L): components/LookUpPane
+  openLookUp:        () => void;
+  closeLookUp:       () => void;
   scratchpadOpen:    boolean;
   openScratchpad:    () => void;
   closeScratchpad:   () => void;
@@ -466,6 +484,10 @@ interface UIState {
   // How each Overview is shown (list, Runway, Board), by its selection key ('saved:<id>',
   // 'endeavour:<id>', 'builtIn:inboxes'); remembered on this device. Missing = the list.
   overviewLayouts:       Record<string, OverviewLayout>;
+  // How the Glossary is shown (tiles or a list), remembered on this device. Absent in an older
+  // stored session, which reads as the default: no migration.
+  glossaryLayout:        'tiles' | 'list';
+  setGlossaryLayout:     (layout: 'tiles' | 'list') => void;
   setOverviewLayout:     (key: string, layout: OverviewLayout) => void;
   // Jump to an Endeavour's automatic Overview from anywhere (e.g. the Endeavour's row menu).
   openEndeavourOverview: (collectionId: string) => void;
@@ -683,6 +705,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   showAddPurpose:    () => set({ openModal: 'add-purpose'    }),
   showAddTag:        () => set({ openModal: 'add-tag'        }),
   editingItemTypeId: null,
+  pendingItemTypeUse: null,
   pendingItemTypeId: null,
   editingGoalId:          null,
   pendingGoalEndeavourId: null,
@@ -690,10 +713,15 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   openEditGoal:           (id) => set({ openModal: 'add-goal', editingGoalId: id, pendingGoalEndeavourId: null }),
   templatePartOf:   null,
   restructureId:    null,
+  contentsFor:      null,
+  attributesFor:    null,
+  showEndeavourAttributes:  (id) => set({ attributesFor: id }),
+  closeEndeavourAttributes: () => set({ attributesFor: null }),
+  showEndeavourContents: (id, kind = null) => set({ openModal: 'endeavour-contents', contentsFor: { id, kind } }),
   restructureMode:  'copy',
   showTemplates:    (partOf) => set({ openModal: 'endeavour-template', templatePartOf: partOf ?? null }),
   showRestructure:  (id, mode = 'copy') => set({ openModal: 'restructure', restructureId: id, restructureMode: mode }),
-  showAddItemType:   () => set({ openModal: 'add-item-type', editingItemTypeId: null }),
+  showAddItemType:   (use = null) => set({ openModal: 'add-item-type', editingItemTypeId: null, pendingItemTypeUse: use }),
   openEditItemType:  (id) => set({ openModal: 'add-item-type', editingItemTypeId: id }),
   // Set first, so the form reads it when it mounts (the openers leave it alone).
   showAddTyped:      (typeId, kind) => {
@@ -789,7 +817,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeEditTag:        ()           => set({ editingTag:        null,       openModal: null              }),
   openEditPurpose:     (purpose)    => set({ editingPurpose:    purpose,    openModal: 'add-purpose'    }),
   closeEditPurpose:    ()           => set({ editingPurpose:    null,       openModal: null              }),
-  openEditCollection:  (collection) => set({ editingCollection: collection, openModal: 'add-collection' }),
+  openEditCollection:  (collection) => set({ editingCollection: collection, openModal: editorFor(collection.templateId) ?? 'add-collection' }),
+  openEndeavourSettings: (collection) => set({ editingCollection: collection, openModal: 'add-collection' }),
   closeEditCollection: ()           => set({ editingCollection: null,       openModal: null              }),
 
   settingsOpen:  false,
@@ -819,6 +848,9 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeDateCalculator: () => set({ dateCalcOpen: false }),
   openRecyclingBin:  () => { useRecentItemsStore.getState().recordVisit('place', 'recycling-bin'); set({ recyclingBinOpen: true }); },
   closeRecyclingBin: () => set({ recyclingBinOpen: false }),
+  lookUpOpen:        false,
+  openLookUp:        () => { useRecentItemsStore.getState().recordVisit('place', 'look-up'); set({ lookUpOpen: true }); },
+  closeLookUp:       () => set({ lookUpOpen: false }),
   scratchpadOpen:    false,
   openScratchpad:    () => { useRecentItemsStore.getState().recordVisit('place', 'scratchpad'); set({ scratchpadOpen: true }); },
   closeScratchpad:   () => set({ scratchpadOpen: false }),
@@ -1018,6 +1050,8 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     get().setActiveView('endeavours', opts);
   },
   overviewLayouts:       {},
+  glossaryLayout:        'tiles',
+  setGlossaryLayout:     (layout) => set({ glossaryLayout: layout }),
   setOverviewLayout:     (key, layout) => set((s) => ({ overviewLayouts: { ...s.overviewLayouts, [key]: layout } })),
   openEndeavourOverview: (collectionId) => {
     set({ overviewSelection: { kind: 'endeavour', id: collectionId } });
@@ -1300,6 +1334,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     listsLastActiveTabId:     s.listsLastActiveTabId,
     overviewSelection:        s.overviewSelection,
     overviewLayouts:          s.overviewLayouts,
+    glossaryLayout:           s.glossaryLayout,
     endeavourHomeId:          s.endeavourHomeId,
     activeTrackerId:          s.activeTrackerId,
     activeRoutineId:          s.activeRoutineId,

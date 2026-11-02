@@ -92,3 +92,16 @@
 .popTitle { margin: 0; font-weight: 600; font-size: var(--text-md); }
 .popField { display: flex; flex-direction: column; gap: var(--space-1); }
 .popLabel { font-size: var(--text-xs); font-weight: 600; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ItemBoard (an Endeavour's classes and Work): its own states, beside the rhythm board's. */
+.attended { background: color-mix(in srgb, var(--color-success) 14%, transparent); border-color: var(--color-success); }
+.attended .mark { color: var(--color-success); }
+.notMarked { color: var(--color-muted); border-style: dashed; }
+.notMarkedPill {
+  border-radius: var(--radius-pill);
+  padding: 0.05rem var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--color-surface-alt);
+  color: var(--color-muted);
+}

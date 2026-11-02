@@ -23,6 +23,8 @@ import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
 import { afterSeriesDeleted } from '@/services/calendarSeries';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
+import { DoneBanner } from '@/components/ItemActions/DoneBanner';
+import itemStyles from '@/components/ItemActions/ItemActions.module.css';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
 import styles from './CalendarReminderPane.module.css';
@@ -70,6 +72,7 @@ export function CalendarReminderPane() {
   // Mark done applies to the occurrence this pane was opened on (the item's own date if not repeating).
   const doneDate = occurrenceDate ?? reminder.date;
   const occurrenceDone = (reminder.doneDates ?? []).includes(doneDate);
+  const isDone = linkedTask ? linkedTask.completed : occurrenceDone;
 
   const openLinkedTask = () => {
     if (!linkedTask) return;
@@ -114,7 +117,7 @@ export function CalendarReminderPane() {
   return (
     <>
       <div className={styles.overlay} onClick={closePane} />
-      <aside style={paneResize.style} className={styles.pane}>
+      <aside style={paneResize.style} className={`${styles.pane} ${isDone ? itemStyles.donePane : ''}`}>
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>{LABELS.calendarItemKind.reminder}</span>
@@ -123,6 +126,9 @@ export function CalendarReminderPane() {
 
         <div className={styles.body}>
           {reminder.archivedAt && <ArchivedBanner archivedAt={reminder.archivedAt} reason={reminder.archiveReason} />}
+          {isDone && (linkedTask
+            ? <DoneBanner doneAt={linkedTask.completedAt} reopenLabel={LABELS.itemActions.reopenTask} onReopen={() => void toggleTaskCompletion(linkedTask.id)} />
+            : <DoneBanner reopenLabel={LABELS.itemActions.notDone} onReopen={() => setOccurrenceDone('reminder', id, doneDate, false)} />)}
 
           {reminder.seriesId && (
             <SeriesLinkBar kind="reminder" id={id} seriesId={reminder.seriesId} seriesDate={reminder.seriesDate} repeats={!!reminder.repeat} />
@@ -249,7 +255,7 @@ export function CalendarReminderPane() {
 
         <ItemActionFooter
           archived={!!reminder.archivedAt}
-          completed={linkedTask ? linkedTask.completed : occurrenceDone}
+          completed={isDone}
           onToggleComplete={linkedTask ? () => void toggleTaskCompletion(linkedTask.id) : () => setOccurrenceDone('reminder', id, doneDate, !occurrenceDone)}
           completeOptions={linkedTask ? taskCompletionOptions(linkedTask.id) : []}
           completeLabels={linkedTask ? undefined : { on: LABELS.itemActions.markDone, off: LABELS.itemActions.notDone }}

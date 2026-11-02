@@ -15,7 +15,8 @@ import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import { ArchiveIcon, CloseIcon, DisclosureIcon, EditIcon, EndeavourIcon, PurposeIcon, RestoreIcon, TagIcon, TrashIcon, TypeIcon } from '@/components/Icons';
 import { useItemTypeStore } from '@/store/itemTypeStore';
-import { addStarterSet, itemsOfType, makeTagAType } from '@/services/itemTypes';
+import { addBuiltInType, addStarterSet, itemsOfType, makeTagAType } from '@/services/itemTypes';
+import { BUILT_IN_TYPES } from '@/config/builtInTypes';
 import { typeDescendants } from '@/utils/itemTypes';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { showToast } from '@/components/Toast/showToast';
@@ -304,6 +305,22 @@ function TypesSection() {
           onArchive={() => useItemTypeStore.getState().updateItemType(t.id, { archivedAt: t.archivedAt ? null : now() })}
           onDelete={() => handleDelete(t)}
         />
+      ))}
+      {/* The defaults (config/builtInTypes.ts): read-only originals; using one makes the person's own
+          copy and opens it (docs/features/endeavours.md "Attributes and Types for Endeavours"). */}
+      <span className={styles.groupLabel}>{LABELS.itemTypes.defaultsTitle}</span>
+      <EmptyHint>{LABELS.itemTypes.defaultsHint}</EmptyHint>
+      {BUILT_IN_TYPES.map((b) => (
+        <div key={b.key} className={styles.row}>
+          <span className={styles.rowMain}>
+            <span aria-hidden>{b.icon}</span>
+            <span className={styles.name}>{b.name}</span>
+            <span className={styles.detail}>{b.usedFor.map((u) => LABELS.itemTypes.uses[u]).join(', ')}</span>
+          </span>
+          <button type="button" className={styles.secondaryBtn} onClick={() => { const id = addBuiltInType(b.key); if (id) openEditItemType(id); }}>
+            {LABELS.itemTypes.useDefault}
+          </button>
+        </div>
       ))}
     </div>
   );

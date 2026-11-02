@@ -4,8 +4,10 @@ import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useGoalStore } from '@/store/goalStore';
+import { useUIStore } from '@/store/uiStore';
 import { noteView } from '@/services/noteSecrets';
 import { listView } from '@/services/listSecrets';
+import { moveSchedule } from '@/services/schedules';
 import { LABELS } from '@/config/labels';
 import { ITEM_TYPE_ICON } from '@/config/itemIcons';
 import type { CalendarDeadlineId, CalendarEventId, CalendarReminderId, CollectionId, GoalId, ScheduleId, TaskId } from '@/types';
@@ -55,9 +57,9 @@ export const FILED_KINDS: FiledKindDef[] = [
     },
   },
   {
-    // A task's own scheduled event and Deadline are left to the task.
+    // A task's own scheduled event and Deadline are left to the task, a Schedule's items to it.
     kind: 'event', icon: ITEM_TYPE_ICON.event,
-    items: () => Object.values(useCalendarStore.getState().events).filter((e) => e.eventType !== 'task' && !e.archivedAt).flatMap((e) => item('event', e.id, e.title, e.collectionId)),
+    items: () => Object.values(useCalendarStore.getState().events).filter((e) => e.eventType !== 'task' && !e.scheduleId && !e.archivedAt).flatMap((e) => item('event', e.id, e.title, e.collectionId)),
     move: (id, to) => useCalendarStore.getState().updateEvent(id as CalendarEventId, { collectionId: to }),
   },
   {
@@ -94,7 +96,7 @@ export const FILED_KINDS: FiledKindDef[] = [
   {
     kind: 'timetable', icon: '🗓',
     items: () => Object.values(useScheduleStore.getState().schedules).flatMap((s) => item('timetable', s.id, s.name, s.collectionId)),
-    move: (id, to) => useScheduleStore.getState().updateSchedule(id as ScheduleId, { collectionId: to }),
+    move: (id, to) => moveSchedule(id as ScheduleId, to),
   },
   {
     // Trackers and routines (rhythms) filed under it.
@@ -116,6 +118,29 @@ export const filedIcon = (kind: FiledKind) => BY_KIND[kind].icon;
 // What's filed directly under an Endeavour (not under its parts), by kind in registry order.
 export function filedUnder(endeavourId: string): FiledItem[] {
   return FILED_KINDS.flatMap((k) => k.items().filter((i) => i.endeavourId === endeavourId));
+}
+
+// Opens one where it's edited (an Endeavour's "Everything in it" view): its pane, or its place.
+export function openFiled(i: FiledItem): void {
+  const ui = useUIStore.getState();
+  switch (i.kind) {
+    case 'task':      ui.openTaskPane(i.id); return;
+    case 'event':     ui.openCalendarEventPane(i.id); return;
+    case 'reminder':  ui.openCalendarReminderPane(i.id); return;
+    case 'deadline':  ui.openCalendarDeadlinePane(i.id); return;
+    case 'note':      ui.setActiveView('notes'); ui.openNote(i.id); return;
+    case 'notebook':  ui.setActiveView('notes'); ui.setSelectedNoteTag(i.id as NoteTagId); return;
+    case 'glossary':  ui.setActiveView('notes'); ui.setNotesView('glossary'); return;
+    case 'list':      ui.requestListSelection(i.id); ui.setActiveView('lists'); return;
+    case 'timetable': { const s = useScheduleStore.getState().schedules[i.id as ScheduleId]; if (s) ui.openEditSchedule(s); return; }
+    case 'record': {
+      const c = useTaskStore.getState().collections[i.id as CollectionId];
+      if (c?.kind === 'tracker') ui.setActiveTracker(i.id); else ui.setActiveRoutine(i.id);
+      ui.setActiveView('records');
+      return;
+    }
+    case 'goal':      ui.openEditGoal(i.id as GoalId); return;
+  }
 }
 
 // Files the given items under another Endeavour; returns how to put each back where it was.

@@ -1,7 +1,9 @@
 import { LABELS } from '@/config/labels';
+import { CURRENCIES } from '@/config/currencies';
 
 // The built-in unit converters (components/ConverterPane): each category's units as a factor to
-// its base unit, or (temperature) a way there and back. A new unit is one entry here; a new
+// its base unit, or (temperature) a way there and back, or (currency) a code converted by the day's
+// rates. A new unit is one entry here; a new
 // category is one entry, plus its name in LABELS.converters.categories.
 
 export interface Unit {
@@ -11,6 +13,7 @@ export interface Unit {
   factor?: number;                      // base units in one of this
   toBase?:   (v: number) => number;     // when it isn't a plain factor (temperature)
   fromBase?: (v: number) => number;
+  currency?: string;                    // a currency's code: converted by the day's rates, not a factor (convertUnit)
 }
 
 // `pair`: the units a new conversion starts with (metric to the common other one).
@@ -63,6 +66,9 @@ export const UNIT_CATEGORIES: UnitCategory[] = [
     u('pa', 'Pa', 'pascal', 1), u('kpa', 'kPa', 'kilopascal', 1000), u('bar', 'bar', 'bar', 1e5), u('atm', 'atm', 'atmosphere', 101325),
     u('psi', 'psi', 'pound per square inch', 6894.757293168), u('mmhg', 'mmHg', 'millimetre of mercury', 133.322387415),
   ] },
+  // Currency (2026-10-30): one more category to the person, but its rates change daily, so a unit
+  // carries its code and convertUnit takes the rates (services/currencyRates.ts, or a note's kept ones).
+  { id: 'currency', pair: ['usd', 'eur'], units: CURRENCIES.map(([code, name]) => ({ id: code.toLowerCase(), symbol: code, name, currency: code })) },
 ];
 
 export const unitCategory = (id: string): UnitCategory | undefined => UNIT_CATEGORIES.find((c) => c.id === id);

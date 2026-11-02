@@ -4,6 +4,7 @@ import { TASK_COMMANDS } from './tasks';
 import { CALENDAR_COMMANDS } from './calendar';
 import { SCHEDULE_COMMANDS } from './schedules';
 import { ORGANISATION_COMMANDS } from './organisation';
+import { SUBJECT_COMMANDS } from './subjects';
 
 export const ALL_COMMANDS: CommandDef[] = [
   ...READ_COMMANDS,
@@ -11,4 +12,5 @@ export const ALL_COMMANDS: CommandDef[] = [
   ...CALENDAR_COMMANDS,
   ...SCHEDULE_COMMANDS,
   ...ORGANISATION_COMMANDS,
+  ...SUBJECT_COMMANDS,
 ];

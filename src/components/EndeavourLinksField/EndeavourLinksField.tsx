@@ -34,13 +34,14 @@ export function EndeavourLinksField({ kind, selfId, value, onChange }: Props) {
   const def = ENDEAVOUR_LINK_KINDS[kind];
 
   const self = selfId ? collections[selfId] : undefined;
+  // Each Endeavour once: a link stored twice (another device, an older build) must not draw two chips.
   const linked: CollectionId[] = self
-    ? [
+    ? [...new Set([
       ...(self.links ?? []).filter((l) => l.kind === kind && collections[l.targetId]).map((l) => l.targetId),
       ...(def.symmetric
         ? Object.values(collections).filter((c) => c.id !== self.id && c.links?.some((l) => l.kind === kind && l.targetId === self.id)).map((c) => c.id)
         : []),
-    ]
+    ])]
     : value ?? [];
 
   const candidates = Object.values(collections)

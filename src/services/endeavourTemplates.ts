@@ -1,105 +1,132 @@
 import { useTaskStore } from '@/store/taskStore';
-import { useCalendarStore } from '@/store/calendarStore';
 import { useNoteStore } from '@/store/noteStore';
-import { useScheduleStore } from '@/store/scheduleStore';
+import { useListStore } from '@/store/listStore';
 import { useGoalStore } from '@/store/goalStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { trashedBy, deleteForever } from '@/services/trash';
 import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
-import { addStarterSet, applyItemType } from '@/services/itemTypes';
-import { saveStreams } from '@/services/rhythms';
+import { addBuiltInType, addStarterSet } from '@/services/itemTypes';
+import { useCalendarStore } from '@/store/calendarStore';
+import { repeatSummary } from '@/services/recurringTasks';
 import { ITEM_TYPE_ICON } from '@/config/itemIcons';
-import { STREAM_KINDS } from '@/config/streamKinds';
-import type { TemplatePlan } from '@/config/endeavourTemplates';
-import { nanoid } from 'nanoid';
-import { todayIso } from '@/utils/date';
-import type { CollectionId, GoalMeasure, ItemTypeId, NoteTagId, RhythmStream, ScheduleBlock, ScheduleId } from '@/types';
+import { TEMPLATE_BY_ID, initialValues, type TemplatePlan } from '@/config/endeavourTemplates';
+import { addDaysToIso, formatDate } from '@/utils/date';
+import type { CalendarDeadlineId, CalendarEventId, CollectionId, GoalMeasure, ItemTypeId, NoteTagId, RepeatConfig } from '@/types';
+import { endeavourAncestors } from '@/utils/endeavourGraph';
 
 // Makes what a template's plan says (config/endeavourTemplates.ts), all filed under one new
 // Endeavour (part of `partOf` if given), and returns its Undo, which deletes everything it made
-// for good (nothing left in the Recycling Bin), Types it added included.
+// for good (nothing left in the Recycling Bin), Types it added included. The Endeavour remembers
+// the template it came from (`templateId`), so Edit opens that template's editor.
 
-const typeIdOf = (name: string | null): ItemTypeId | null =>
-  name ? (Object.values(useItemTypeStore.getState().types).find((t) => t.name === name)?.id ?? null) : null;
+// A repeat's first date on or after `start` (a weekly one on one of its days).
+function firstDateOf(start: string, repeat: RepeatConfig): string {
+  const days = repeat.freq === 'weekly' ? repeat.daysOfWeek ?? [] : [];
+  if (!days.length) return start;
+  for (let d = start, i = 0; i < 7; i++, d = addDaysToIso(d, 1)) if (days.includes(new Date(d + 'T00:00:00').getDay())) return d;
+  return start;
+}
+
+const day = (iso: string | null) => (iso ? formatDate(iso + 'T00:00:00') : '…');
 
 // A short summary of a plan, one line a thing, for the template's preview.
 export function planLines(plan: TemplatePlan): string[] {
+  const p = plan.endeavour.period;
   return [
     `🎯 ${plan.endeavour.name}`,
+    ...(p && (p.start || p.end) ? [`📅 ${day(p.start)} – ${day(p.end)}${p.breaks.length ? ` · ${p.breaks.length} break${p.breaks.length === 1 ? '' : 's'}` : ''}${p.exams ? ` · exams ${day(p.exams.from)} – ${day(p.exams.to)}` : ''}`] : []),
     ...(plan.notebook ? [`📓 ${plan.notebook.name}`] : []),
-    ...(plan.timetable ? [`🗓 ${plan.timetable.name}: ${plan.timetable.blocks.map((b) => b.title).join(', ')}`] : []),
-    ...plan.events.map((e) => `${ITEM_TYPE_ICON.event} ${e.title} · ${e.date}${e.start ? ` ${e.start}` : ''}`),
-    ...(plan.rhythm ? [`🔄 ${plan.rhythm.name}: ${plan.rhythm.streams.map((s) => (s.worth ? `${s.label} (${s.worth}%)` : s.label)).join(', ')}`] : []),
-    ...plan.deadlines.map((d) => `${ITEM_TYPE_ICON.deadline} ${d.title} · ${d.date}${d.typeName ? ` (${d.typeName})` : ''}`),
+    ...plan.lists.map((l) => `📋 ${l.name}`),
+    ...plan.repeating.map((r) => `🔄 ${r.title} · ${repeatSummary(r.repeat)}`),
     ...plan.tasks.map((t) => `${t.kind === 'milestone' ? '◆' : ITEM_TYPE_ICON.task} ${t.title}`),
     ...plan.goals.map((g) => `🎯 ${g.title}`),
+    ...plan.parts.map((part) => `🎓 ${part.endeavour.name}`),
   ];
 }
 
+type Made = (() => void)[];
+
 export function applyTemplate(plan: TemplatePlan, partOf: CollectionId | null): { id: CollectionId; made: number; undo: () => void } {
-  const made: (() => void)[] = [];
+  const made: Made = [];
   const typesBefore = new Set(Object.keys(useItemTypeStore.getState().types));
-  if (plan.starterTypes) addStarterSet(plan.starterTypes);
+  for (const set of new Set([plan.starterTypes, ...plan.parts.map((p) => p.starterTypes)])) if (set) addStarterSet(set);
+  const id = makeEndeavour(plan, partOf, made);
+  // Types it added (a starter set, a default's copy) go last on Undo, after what uses them.
   for (const tid of Object.keys(useItemTypeStore.getState().types)) {
-    if (!typesBefore.has(tid)) made.push(() => useItemTypeStore.getState().deleteItemType(tid as ItemTypeId));
+    if (!typesBefore.has(tid)) made.unshift(() => useItemTypeStore.getState().deleteItemType(tid as ItemTypeId));
   }
+  return { id, made: made.length, undo: undoOf(made) };
+}
 
-  const id = useTaskStore.getState().addCollection({ kind: plan.endeavour.kind, name: plan.endeavour.name, deadline: plan.endeavour.deadline });
+// Adds a plan's parts (all but the Endeavour itself) to an Endeavour that already exists: a
+// semester's suggestions taken up later from its editor.
+export function addToEndeavour(id: CollectionId, plan: TemplatePlan): { made: number; undo: () => void } {
+  const made: Made = [];
+  fill(id, plan, made, null);
+  return { made: made.length, undo: undoOf(made) };
+}
+
+// A new subject part of a semester (its editor's "+ Subject"), taking its period live.
+export function addSubject(semesterId: CollectionId, name: string): { id: CollectionId; undo: () => void } {
+  const t = TEMPLATE_BY_ID.subject;
+  const [code, ...rest] = name.trim().split(/\s+/);
+  const values = /\d/.test(code ?? '') ? { ...initialValues(t), code, name: rest.join(' '), target: null } : { ...initialValues(t), name: name.trim(), target: null };
+  const { id, undo } = applyTemplate(t.plan(values), semesterId);
+  return { id, undo };
+}
+
+const undoOf = (made: Made) => () => { for (const run of [...made].reverse()) for (const entry of trashedBy(run)) deleteForever(entry); };
+
+function makeEndeavour(plan: TemplatePlan, partOf: CollectionId | null, made: Made): CollectionId {
+  const tasks = useTaskStore.getState();
+  const e = plan.endeavour;
+  const id = tasks.addCollection({ kind: e.kind, name: e.name, deadline: e.deadline });
   made.push(() => useTaskStore.getState().deleteCollection(id));
-  if (partOf) useTaskStore.getState().addEndeavourLink(id, 'partOf', partOf);
+  tasks.updateCollection(id, { templateId: e.templateId, ...(e.period ? { period: e.period } : {}) });
+  // Its Type: the person's own copy of a default (docs/features/endeavours.md "Attributes").
+  if (e.typeKey) {
+    const typeId = addBuiltInType(e.typeKey);
+    if (typeId) tasks.updateCollection(id, { attributes: { typeId, fields: [], values: { ...(e.values ?? {}) } } });
+  }
+  if (partOf) tasks.addEndeavourLink(id, 'partOf', partOf);
+  fill(id, plan, made, partOf);
+  return id;
+}
 
-  let notebook: NoteTagId | null = null;
+// The notebook a new Endeavour's notebook goes in: the one of the nearest Endeavour above it that
+// has one (a subject's inside its semester's; the user, 2026-10-30), else none (the top level).
+function parentNotebook(partOf: CollectionId | null): NoteTagId | null {
+  if (!partOf) return null;
+  const collections = useTaskStore.getState().collections;
+  const areas = Object.values(useNoteStore.getState().noteTags).filter((t) => t.kind === 'area');
+  for (const cid of [partOf, ...endeavourAncestors(partOf, collections)]) {
+    const nb = areas.filter((t) => t.collectionId === cid).sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+    if (nb) return nb.id;
+  }
+  return null;
+}
+
+function fill(id: CollectionId, plan: TemplatePlan, made: Made, partOf: CollectionId | null = null): void {
   if (plan.notebook) {
-    notebook = useNoteStore.getState().addNoteTag({ name: plan.notebook.name, kind: 'area', collectionId: id });
-    const nb = notebook;
+    const nb = useNoteStore.getState().addNoteTag({ name: plan.notebook.name, kind: 'area', collectionId: id, parentTagId: parentNotebook(partOf) });
     made.push(() => useNoteStore.getState().deleteNoteTag(nb));
   }
 
-  const blockIds = new Map<string, string>();
-  let scheduleId: ScheduleId | null = null;
-  if (plan.timetable) {
-    const blocks: ScheduleBlock[] = plan.timetable.blocks.map((b) => {
-      const bid = nanoid(8);
-      blockIds.set(b.key, bid);
-      return { id: bid, title: b.title, daysOfWeek: b.days, startTime: b.start, endTime: b.end, location: b.location, interval: 1, intervalAnchor: plan.timetable!.startDate ?? todayIso(), exceptions: [], notes: null, requiresCommitment: false, committedDates: [] };
-    });
-    const sid = useScheduleStore.getState().addSchedule({ name: plan.timetable.name, startDate: plan.timetable.startDate, endDate: plan.timetable.endDate, collectionId: id, blocks });
-    scheduleId = sid;
-    made.push(() => useScheduleStore.getState().deleteSchedule(sid));
+  for (const l of plan.lists) {
+    const lid = useListStore.getState().addList({ name: l.name, collectionId: id });
+    made.push(() => useListStore.getState().deleteList(lid));
   }
 
-  const streamIds = new Map<string, string>();
-  let rhythmId: CollectionId | null = null;
-  if (plan.rhythm) {
-    const rid = useTaskStore.getState().addCollection({ kind: 'routine', name: plan.rhythm.name });
-    rhythmId = rid;
-    useTaskStore.getState().updateCollection(rid, { collectionId: id });
-    made.push(() => useTaskStore.getState().deleteCollection(rid));
-    const streams: RhythmStream[] = plan.rhythm.streams.flatMap((s) => {
-      const followed = s.rule.kind === 'relative' ? s.rule.blockKeys.map((k) => blockIds.get(k)).filter((b): b is string => !!b) : [];
-      const rule = s.rule.kind === 'repeat' ? s.rule
-        : scheduleId && followed.length ? { kind: 'relative' as const, scheduleId, blockId: followed[0], offsetDays: s.rule.offsetDays, ...(followed.length > 1 ? { blockIds: followed.slice(1) } : {}) }
-        : null;
-      if (!rule) return [];
-      const sid = nanoid(8);
-      streamIds.set(s.label, sid);
-      return [{ id: sid, label: s.label, kind: s.kind, typeId: typeIdOf(s.typeName), rule, start: s.start, time: s.time, show: { ...STREAM_KINDS[s.kind].show }, notebookId: s.toNotebook ? notebook : null, ...(s.worth ? { worth: s.worth } : {}) }];
-    });
-    saveStreams(rid, streams);
-  }
-
-  for (const e of plan.events) {
-    const eid = useCalendarStore.getState().addEvent({ title: e.title, date: e.date, startTime: e.start, endTime: e.end, location: e.location, collectionId: id });
-    made.push(() => useCalendarStore.getState().deleteEvent(eid));
-  }
-
-  for (const d of plan.deadlines) {
-    const did = useCalendarStore.getState().addDeadline({ title: d.title, date: d.date, collectionId: id });
-    const typeId = typeIdOf(d.typeName);
-    const parts = typeId ? applyItemType({ kind: 'deadline', id: did }, typeId, d.fields) : [];
-    for (const t of parts) made.push(() => deleteTaskWithCleanup(t));
-    made.push(() => useCalendarStore.getState().deleteDeadline(did));
+  // Repeating classes and Work (phase 7 (e)): calendar items filed under it, from their first date.
+  const repeatingIds = new Map<string, string>();
+  for (const r of plan.repeating) {
+    const date = firstDateOf(r.start, r.repeat);
+    const rid = r.kind === 'class'
+      ? useCalendarStore.getState().addEvent({ title: r.title, date, startTime: r.time, collectionId: id, repeat: r.repeat })
+      : useCalendarStore.getState().addDeadline({ title: r.title, date, time: r.time, collectionId: id, repeat: r.repeat });
+    repeatingIds.set(r.title, rid);
+    made.push(() => (r.kind === 'class' ? useCalendarStore.getState().deleteEvent(rid as CalendarEventId) : useCalendarStore.getState().deleteDeadline(rid as CalendarDeadlineId)));
   }
 
   for (const t of plan.tasks) {
@@ -110,16 +137,14 @@ export function applyTemplate(plan: TemplatePlan, partOf: CollectionId | null): 
   for (const g of plan.goals) {
     const m = g.measure;
     let measure: GoalMeasure;
-    if (m.kind === 'consistency') {
-      if (!rhythmId || !streamIds.has(m.streamLabel)) continue;
-      measure = { kind: 'consistency', rhythmId, streamId: streamIds.get(m.streamLabel)!, count: m.count, outOf: m.outOf };
+    if (m.kind === 'keepUp') {
+      const rid = repeatingIds.get(m.title);
+      if (!rid) continue;
+      measure = { kind: 'keepUp', itemIds: [rid], count: m.count, outOf: m.outOf };
     } else measure = m;
     const gid = useGoalStore.getState().addGoal({ title: g.title, target: { type: 'endeavour', id }, by: g.by, measure });
     made.push(() => useGoalStore.getState().deleteGoal(gid));
   }
 
-  const undo = () => {
-    for (const run of [...made].reverse()) for (const entry of trashedBy(run)) deleteForever(entry);
-  };
-  return { id, made: made.length, undo };
+  for (const part of plan.parts) makeEndeavour(part, id, made);
 }

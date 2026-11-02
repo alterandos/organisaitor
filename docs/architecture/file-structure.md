@@ -75,10 +75,25 @@ src/
   utils/repeatFollow.ts — a repeat that follows other events: followedDates, inStep (pure)
   services/repeatFollow.ts — the one watcher keeping following repeats in step (initRepeatFollow)
   utils/endeavourPeriod.ts — an Endeavour's period and breaks, inherited (effectivePeriod), breakDates, teachingWeek
+  utils/scheduleItems.ts — a Schedule's items (calendar events): bounds, rows read back (itemToBlock, withItemRows), hiddenBySchedule (pure)
+  services/schedules.ts — making, changing, deleting a Schedule's items; bounds watcher, commitment, converting old Schedules (initSchedules)
   services/endeavourFiling.ts — FILED_KINDS: everything that can be filed under an Endeavour, in every app (filedUnder, moveFiled); restructures go through it
   services/endeavourRestructure.ts — mergeEndeavour, splitEndeavour, copyShape, each with its Undo
-  config/endeavourTemplates.ts — ENDEAVOUR_TEMPLATES: each template's inputs and pure plan
-  services/endeavourTemplates.ts — applyTemplate (makes a plan, with Undo), planLines (its preview)
+  config/endeavourTemplates.ts — ENDEAVOUR_TEMPLATES: each template's inputs and pure plan (Semester, Subject, Training plan, Project); semesterSuggestions
+  config/templateEditors.ts — which templates open in an editor of their own (TEMPLATE_EDITORS, editorFor), read by uiStore.openEditCollection
+  services/endeavourTemplates.ts — applyTemplate (makes a plan and its parts, with Undo), addToEndeavour, addSubject, planLines (its preview)
+  config/currencies.ts — the currencies the Currency converter offers (the ECB's list)
+  services/currencyRates.ts — the Currency converter's rates: ensureCurrencyRates, useCurrencyRates (cached on the device, refreshed after 12 h)
+  config/builtInTypes.ts — the default Types (Semester, Subject, the University item set): read-only, copied on use
+  utils/endeavourAttributes.ts — an Endeavour's attribute fields and values, the loose period, what it takes from above (pure)
+  services/endeavourAttributes.ts — its Type, own fields, values, saving its fields as a Type, periodImpact
+  utils/classClashes.ts — items in a class's time: clashingClasses, replacedIndex, duringIndex, withReplaced (pure)
+  services/classClashes.ts — keeps a class's dates in step with what's done instead of it (one watcher)
+  utils/itemOccurrences.ts — an Endeavour's repeating classes and Work, date by date: states, behindDates (pure)
+  services/itemOccurrences.ts — marking a date: toggleOccurrence, setAttended, skipOccurrence, openOccurrence
+  services/streamConversion.ts — rhythm streams converted to repeating calendar items (once, automatic)
+  utils/subjectItems.ts — a subject's Schedule and Work lists, item drafts, a course outline read as drafts, its Work's bounds (pure)
+  services/subjectItems.ts — saveSubjectItem, deleteSubjectItem, outlineDraftsFor, addOutline (the subject editor's items); initSubjectWork (Work bounded by the period)
   utils/courseOutline.ts — readCourseOutline: a pasted course outline's code, name, classes, readings and assessments
   config/endeavourLinkKinds.ts — what each kind of link between Endeavours means (partOf rolls up; related doesn't); a new kind is one entry
   hooks/useEndeavourScope.ts — the Endeavour filter's scope: the chosen Endeavour and everything part of it (test items with inEndeavourScope)
@@ -97,6 +112,11 @@ src/
   dictionary.ts / dictionaryActions.ts — the Dictionary: words kept in a built-in list, meanings fetched (Free Dictionary API, Wiktionary), use counts
   services/noteHubs.ts      — idea hubs: addPassageToHub (marks the passage, links it in the hub; Undo), addLinkToHub (a Glossary term or a note), setLinkRelation, removeLink (takes the passage's mark off), openHub / openHubLink / openHubFromMarker, listHubs
   services/noteContentEdit.ts — editNoteContent(noteId, tabId, { inEditor, inJson }): THE way to change a note's content from outside the editor (through the open editor if that text is open, else the stored JSON); editNoteText(…, schema, edit) when the editor's schema is at hand
+  services/lookUp.ts        — Look up: every readable passage (allPassages), and Embed / Link here, Copy, Open on one
+  utils/notePassages.ts     — Look up's passages: collectPassages, searchPassages, passageNodes (pure)
+  components/LookUpPane/    — Look up (Alt+L): search, results beside the passage, actions (lazy-loaded)
+  services/sendSelection.ts — selected note text copied on: sendToScratchpad (stamped), turnIntoSticky, sendSelectedText (the menus' one call)
+  services/readingList.ts   — the reading list (a Books list): addToReadingList, the Open Library lookup (fetchBook/readBook)
   services/stickyNotes.ts   — sticky notes: notes in the Stickies notebook (presetKey 'stickies'); addSticky, setStickyContent (paragraphs with bold/italic/underline/strike, through editNoteContent), stickyDocOf/stickyDocFrom/stickyText, removeSticky (to the Recycling Bin, Undo)
   services/scratchpad.ts    — the scratchpad (Alt+P): one note in its own notebook (presetKey 'scratchpad', pinned after Stickies); ensureScratchpad, scratchpadText, cutScratchpad (with Undo)
   services/upgradeSnapshot.ts — a "Before an app update" backup snapshot when a store's stored version changed at startup; last 3 kept
@@ -242,12 +262,15 @@ src/
     ScratchpadPanel/         — the scratchpad panel (Alt+P, over any section): Copy all / Cut all, Open in Notes, Scratchpad paper or Simple design; mounted by App.tsx
     ItemTypeField/           — an item's Type and its fields: ItemTypeField in a creation form (also the parts to make), ItemTypePaneField in a task/event/Deadline pane
     ItemTypeModal/           — making or editing a Type (Manage → Types)
-    RhythmStreamsField/      — a rhythm's streams in the routine's edit pane
     RhythmBoard/             — a rhythm's board on an Endeavour's home (weeks by streams), and RhythmDueList (its occurrences in Tasks)
     GoalModal/               — making, editing and settling a goal (opened from an Endeavour's home); its goals panel is EndeavoursSection/GoalsPanel.tsx
     EndeavourTemplateModal/  — setting up an Endeavour from a template (the University one with the course-outline wand)
     RestructureModal/        — copy an Endeavour's shape, split a part off, merge it into another
-    PeriodField/             — an Endeavour's period and breaks, in its editor (inherited until it sets its own)
+    PeriodField/             — an Endeavour's period and breaks (and a semester's exam period), in its editor (inherited until it sets its own)
+    EndeavourAttributes/     — an Endeavour's attributes pane (its Type, fields, values) and its summary in edit panes
+    ClassClashField/         — how an item in a class's time shows: instead of it, during it, or both
+    EndeavourContents/       — an Endeavour's "Everything in it" view, and its summary in edit panes
+    TemplateEditors/         — a template's own editor for an Endeavour: SubjectEditor (Schedule and Work lists, SubjectItemEditor, the outline wand), SemesterEditor (period, subjects, suggestions)
     FieldInput/              — THE input for one FieldSchema field (tracker entries, a Type's fields)
     EndeavourLinksField/     — "Part of" / "Related to" in the Endeavour editor (AddCollectionModal)
     EndeavoursSection/       — the Endeavours section: EndeavoursPage (every Endeavour, tree or by Purpose), EndeavourHome (where one stands, its parts, its things, the add row), useEndeavourRows
@@ -286,7 +309,6 @@ src/
     RecurrenceScopeBar/      — shown at the top of the event/reminder panes for a repeating item: edit/delete only this occurrence or this-and-following
     AddScheduleModal/        — create/edit a Schedule (recurring weekly timetable) and its blocks
     CalendarSidePane/        — left-sliding pane (Calendar section): Layers toggles + Schedule list/manager (active toggle, conflict hint, overlay-preview grid) in one place — supersedes the old CalendarLayersPicker (header dropdown) and ManageSchedulesPane (right-sliding pane), see "Calendar side pane" in Implemented features
-    ScheduleOccurrencePopover/ — click a Schedule occurrence on the calendar: skip this date, commit/uncommit (commitment mode), or jump to editing the Schedule
     AllDayNotifyField/       — NotifyLead.tsx: the Notify field for every calendar item (NotifyRuleField with its on/off box, NotifyRuleEditor, LeadAmountInput: a typed amount + ▾ presets); the rules are utils/notifyRule.ts
     EncryptContentsField/    — the "encrypt everything in it" switch on a notebook or Endeavour (encryption by scope)
     IconPicker/              — IconField (pick an icon: emoji, search, your icons, a picture made into a 96 px icon), ItemIcon (show one), iconValue.ts (an icon is an emoji or picture:<id>); the emoji are config/emojiSet.ts

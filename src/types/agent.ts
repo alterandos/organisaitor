@@ -3,7 +3,8 @@
 
 export type RiskTier = 'read' | 'create' | 'modify' | 'archive';
 
-export type EntityKind = 'task' | 'event' | 'reminder' | 'deadline' | 'schedule' | 'endeavour' | 'purpose' | 'tag';
+// notebook, list, goal, item_type: tracked so a semester or subject made by an agent undoes whole.
+export type EntityKind = 'task' | 'event' | 'reminder' | 'deadline' | 'schedule' | 'endeavour' | 'purpose' | 'tag' | 'notebook' | 'list' | 'goal' | 'item_type';
 
 export interface EntityRef { kind: EntityKind; id: string }
 

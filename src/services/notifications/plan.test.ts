@@ -104,13 +104,6 @@ describe('planNotifications', () => {
     const snap = { ...empty(), reminders: { r1: reminder({ time: '08:00', archivedAt: '2030-01-02T00:00:00Z' }), r2: reminder({ id: 'r2', time: '08:00', date: '2030-05-01' }) } };
     expect(planNotifications(snap, opts('2030-03-01T00:00:00Z', '2030-03-31T00:00:00Z'))).toEqual([]);
   });
-
-  it('a committed Schedule occurrence notifies 30 minutes before', () => {
-    const snap = { ...empty(), schedules: { s1: { id: 's1', active: true, blocks: [{ id: 'b1', title: 'Gym', startTime: '18:00', requiresCommitment: true, committedDates: ['2030-03-12'] }] } } as never };
-    const [n] = planNotifications(snap, opts('2030-03-01T00:00:00Z', '2030-03-31T00:00:00Z'));
-    expect(n.itemId).toBe('s1::b1::2030-03-12');
-    expect(n.at.toISOString()).toBe('2030-03-12T17:30:00.000Z');
-  });
 });
 
 describe('one notify setting for every calendar item (utils/notifyRule.ts)', () => {

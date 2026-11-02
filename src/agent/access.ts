@@ -9,7 +9,15 @@
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
+import { withItemRows } from '@/utils/scheduleItems';
+import { commitOccurrence, createScheduleWithItems, saveScheduleRows, skipItemDate, unskipItemDate, uncommitDate } from '@/services/schedules';
 import { useSettingsStore } from '@/store/settingsStore';
+import { applyTemplate } from '@/services/endeavourTemplates';
+import { saveSubjectItem } from '@/services/subjectItems';
+import { setAttended } from '@/services/itemOccurrences';
+import { TEMPLATE_BY_ID, type TemplateValues } from '@/config/endeavourTemplates';
+import { useItemTypeStore } from '@/store/itemTypeStore';
+import type { SubjectItemDraft } from '@/utils/subjectItems';
 import { addTaskWithCalendar, updateTaskLinked, updateCalendarEventLinked } from '@/services/taskCalendarLinks';
 import { spawnNextOccurrence } from '@/services/recurringTasks';
 import { AgentError } from '@/agent/errors';
@@ -18,7 +26,7 @@ import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import type {
   CalendarEvent, CalendarEventId, CalendarReminder, CalendarReminderId, CalendarDeadline, CalendarDeadlineId, Collection, CollectionId,
   CreateCalendarEventInput, CreateCalendarReminderInput, CreateCalendarDeadlineInput, CreateCollectionInput, CreatePurposeInput,
-  CreateScheduleInput, CreateTaskInput, Purpose, PurposeId, ScheduleId, ScheduleTemplate, Tag, TagId,
+  CreateScheduleInput, CreateTaskInput, ItemType, Purpose, PurposeId, ScheduleId, ScheduleTemplate, Tag, TagId,
   Task, TaskId,
 } from '@/types';
 
@@ -53,8 +61,9 @@ export const read = {
     return deadline ? { kind: 'deadline', item: deadline } : undefined;
   },
 
-  schedules: (): ScheduleTemplate[] => Object.values(sched().schedules),
-  schedule:  (id: string): ScheduleTemplate | undefined => sched().schedules[id as ScheduleId],
+  // A Schedule's rows are its items (calendar events, phase 7 (c)); a row's id is its event's.
+  schedules: (): ScheduleTemplate[] => Object.values(sched().schedules).map((s) => withItemRows(s, cal().events)),
+  schedule:  (id: string): ScheduleTemplate | undefined => { const s = sched().schedules[id as ScheduleId]; return s && withItemRows(s, cal().events); },
 
   // "Endeavour" means a project or list Endeavour. Trackers and routines are Collections too, but
   // they are Records, not something a task can be filed under.
@@ -67,6 +76,8 @@ export const read = {
   purpose:    (id: string): Purpose | undefined => tasksState().purposes[id as PurposeId],
   tags:       (): Tag[] => Object.values(tasksState().tags),
   tag:        (id: string): Tag | undefined => tasksState().tags[id as TagId],
+  // Types (what kind of thing an item is: Lecture, Assessment…), for a subject's items.
+  itemTypes:  (): ItemType[] => Object.values(useItemTypeStore.getState().types).filter((t) => !t.archivedAt),
 };
 
 type EventChanges = Partial<Omit<CalendarEvent, 'id' | 'createdAt'>>;
@@ -124,17 +135,36 @@ export const write = {
     return cal().splitDeadlineSeries(id as CalendarDeadlineId, date);
   },
 
-  createSchedule:  (input: CreateScheduleInput): ScheduleId => sched().addSchedule(input),
-  updateSchedule:  (id: string, changes: Partial<Omit<ScheduleTemplate, 'id' | 'createdAt'>>): void => sched().updateSchedule(id as ScheduleId, changes),
-  addException:    (scheduleId: string, blockId: string, date: string): void => sched().addException(scheduleId as ScheduleId, blockId, date),
-  removeException: (scheduleId: string, blockId: string, date: string): void => sched().removeException(scheduleId as ScheduleId, blockId, date),
-  commitOccurrences:  (scheduleId: string, blockId: string, dates: string[]): void => sched().commitOccurrences(scheduleId as ScheduleId, blockId, dates),
-  uncommitOccurrence: (scheduleId: string, blockId: string, date: string): void => sched().uncommitOccurrence(scheduleId as ScheduleId, blockId, date),
+  createSchedule:  (input: CreateScheduleInput): ScheduleId => createScheduleWithItems(input, input.blocks ?? []).id,
+  updateSchedule:  (id: string, changes: Partial<Omit<ScheduleTemplate, 'id' | 'createdAt'>>): void => {
+    const { blocks, ...rest } = changes;
+    if (Object.keys(rest).length) sched().updateSchedule(id as ScheduleId, rest);
+    if (blocks) saveScheduleRows(id as ScheduleId, blocks);
+  },
+  // A row's id is its item's (event) id.
+  addException:    (_scheduleId: string, itemId: string, date: string): void => skipItemDate(itemId as CalendarEventId, date),
+  removeException: (_scheduleId: string, itemId: string, date: string): void => unskipItemDate(itemId as CalendarEventId, date),
+  commitOccurrences:  (_scheduleId: string, itemId: string, dates: string[]): void => { for (const d of dates) commitOccurrence(itemId as CalendarEventId, d); },
+  uncommitOccurrence: (_scheduleId: string, itemId: string, date: string): void => uncommitDate(itemId as CalendarEventId, date),
 
   createEndeavour: (input: CreateCollectionInput): CollectionId => tasksState().addCollection(input),
   updateEndeavour: (id: string, changes: Parameters<ReturnType<typeof tasksState>['updateCollection']>[1]): void => tasksState().updateCollection(id as CollectionId, changes),
   createPurpose:   (input: CreatePurposeInput): PurposeId => tasksState().addPurpose(input),
   updatePurpose:   (id: string, changes: Parameters<ReturnType<typeof tasksState>['updatePurpose']>[1]): void => tasksState().updatePurpose(id as PurposeId, changes),
+  // An Endeavour set up from a template (config/endeavourTemplates.ts: 'semester', 'subject'…), the
+  // same way as from the template picker; it remembers its template.
+  applyTemplate: (templateId: string, values: TemplateValues, partOf: string | null): CollectionId => {
+    const t = TEMPLATE_BY_ID[templateId];
+    if (!t) throw new AgentError('invalid', `No template "${templateId}".`);
+    return applyTemplate(t.plan(values), partOf as CollectionId | null).id;
+  },
+  // A subject's Schedule or Work item, made or changed as from its editor (services/subjectItems.ts).
+  saveSubjectItem: (subjectId: string, draft: SubjectItemDraft, existing?: string): string | null => saveSubjectItem(subjectId as CollectionId, draft, existing),
+  // One date of repeating Work done (or not), or of a class attended (or not), as the board marks it.
+  markDate: (kind: 'work' | 'class', id: string, date: string, on: boolean): void => {
+    if (kind === 'work') cal().setOccurrenceDone('deadline', id as CalendarDeadlineId, date, on);
+    else setAttended(id as CalendarEventId, date, on);
+  },
   createTag: (input: { name: string; color?: string | null; notes?: string | null }): TagId => {
     const id = newTagId();
     tasksState().addTag({ id, name: input.name.trim(), color: input.color ?? null, notes: input.notes ?? null });

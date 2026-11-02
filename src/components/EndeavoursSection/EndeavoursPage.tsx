@@ -4,6 +4,7 @@ import { useUIStore } from '@/store/uiStore';
 import { useGoalStore } from '@/store/goalStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useScheduleStore } from '@/store/scheduleStore';
+import { useCalendarStore } from '@/store/calendarStore';
 import { goalProgress, goalsOf } from '@/utils/goals';
 import { LABELS } from '@/config/labels';
 import { formatDate } from '@/utils/date';
@@ -48,12 +49,14 @@ export function EndeavoursPage() {
   const tasks     = useTaskStore((s) => s.tasks);
   const entries   = useTrackerStore((s) => s.entries);
   const schedules = useScheduleStore((s) => s.schedules);
+  const events    = useCalendarStore((s) => s.events);
+  const deadlines = useCalendarStore((s) => s.deadlines);
   const goalLines = useMemo(() => {
     const out = new Map<string, { pct: number | null; lines: string[] }>();
     for (const c of endeavours) {
       const active = goalsOf(goals, c.id).filter((g) => g.status === 'active');
       if (active.length === 0) continue;
-      const progress = active.map((g) => ({ g, p: goalProgress(g, { tasks, collections, entries, schedules }, today) }));
+      const progress = active.map((g) => ({ g, p: goalProgress(g, { tasks, collections, entries, schedules, events, deadlines }, today) }));
       const known = progress.map((x) => x.p.fraction).filter((f): f is number => f !== null);
       out.set(c.id, {
         pct: known.length ? Math.round((known.reduce((a, b) => a + b, 0) / known.length) * 100) : null,
@@ -61,7 +64,7 @@ export function EndeavoursPage() {
       });
     }
     return out;
-  }, [endeavours, goals, tasks, collections, entries, schedules, today]);
+  }, [endeavours, goals, tasks, collections, entries, schedules, events, deadlines, today]);
 
   const toggle = (key: string) => setCollapsed((prev) => {
     const next = new Set(prev);

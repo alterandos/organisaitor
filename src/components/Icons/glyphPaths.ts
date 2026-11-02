@@ -101,6 +101,8 @@ export const GLYPHS = {
   list: [['path', { d: 'M3 12h.01' }], ['path', { d: 'M3 18h.01' }], ['path', { d: 'M3 6h.01' }], ['path', { d: 'M8 12h13' }], ['path', { d: 'M8 18h13' }], ['path', { d: 'M8 6h13' }]],
   notebook: [['path', { d: 'M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20' }]],
   sticky: [['path', { d: 'M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z' }], ['path', { d: 'M15 3v4a2 2 0 0 0 2 2h4' }]],
+  // Look up: a page of text with a magnifier over its corner.
+  lookUp: [['path', { d: 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5' }], ['path', { d: 'M8 8h6' }], ['path', { d: 'M8 12h3' }], ['circle', { cx: '16.5', cy: '15.5', r: '3.5' }], ['path', { d: 'M19 18l2.5 2.5' }]],
   // The scratchpad: a ruled pad with its binding rings.
   scratchpad: [['path', { d: 'M8 2v4' }], ['path', { d: 'M12 2v4' }], ['path', { d: 'M16 2v4' }], ['rect', { x: '4', y: '4', width: '16', height: '18', rx: '2' }], ['path', { d: 'M8 10h6' }], ['path', { d: 'M8 14h8' }], ['path', { d: 'M8 18h5' }]],
   // The date calculator: a calendar page holding + − × = (drawn for it 2026-10-23).

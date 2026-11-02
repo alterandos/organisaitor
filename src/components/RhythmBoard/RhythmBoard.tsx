@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTaskStore } from '@/store/taskStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useScheduleStore } from '@/store/scheduleStore';
+import { useCalendarStore } from '@/store/calendarStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { useUIStore } from '@/store/uiStore';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
@@ -43,13 +44,14 @@ export function RhythmBoard({ rhythm, today }: { rhythm: Collection; today: stri
   const collections = useTaskStore((s) => s.collections);
   const entries = useTrackerStore((s) => s.entries);
   const schedules = useScheduleStore((s) => s.schedules);
+  const events = useCalendarStore((s) => s.events);
   const ticks = useMemo(() => tickIndex(entries, collections), [entries, collections]);
   const weeks = boardWeeks(today);
   const streams = rhythmStreams(rhythm);
   const occurrences = useMemo(
-    () => rhythmOccurrences(rhythm, schedules, ticks, weeks[0], addDaysToIso(weeks[weeks.length - 1], 6), today),
+    () => rhythmOccurrences(rhythm, schedules, ticks, weeks[0], addDaysToIso(weeks[weeks.length - 1], 6), today, events),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- weeks follow today
-    [rhythm, schedules, ticks, today],
+    [rhythm, schedules, ticks, today, events],
   );
   const [fieldsFor, setFieldsFor] = useState<{ occurrence: Occurrence; anchor: AnchorBox } | null>(null);
   const thisWeek = weekStart(today);

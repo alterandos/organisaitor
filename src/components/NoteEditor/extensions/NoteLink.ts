@@ -8,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import { linkTarget, openNoteLink } from '@/services/noteLinkTargets';
 import { objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import styles from './NoteLink.module.css';
+import { openBeside } from '@/components/NoteSplitView/openBeside';
 
 // A link from text to another note, or to one passage of it (a paragraph, or a heading and its
 // section): the `noteLink` mark, made with `[[`, `\ref` or "Link to a note…" on a selection (not
@@ -195,6 +196,21 @@ export const NoteLinkBehaviour = Extension.create({
           const { noteId, tabId, blockId } = attrsOf(el);
           openNoteLink(noteId, tabId, blockId);
           return true;
+        },
+        // A middle-click opens the linked note beside this one (Ctrl+click here selects the words).
+        handleDOMEvents: {
+          mousedown(view, event) {
+            if (event.button !== 1 || !view.dom.contains((event.target as HTMLElement).closest('a[data-note-link]'))) return false;
+            event.preventDefault();
+            return true;
+          },
+          auxclick(view, event) {
+            const el = (event.target as HTMLElement).closest('a[data-note-link]') as HTMLElement | null;
+            if (event.button !== 1 || !el || !view.dom.contains(el)) return false;
+            event.preventDefault();
+            openBeside(attrsOf(el).noteId);
+            return true;
+          },
         },
         // `[[`: the second bracket opens the note picker; the first is taken back out.
         handleTextInput(view, from, to, text) {

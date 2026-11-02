@@ -1,4 +1,6 @@
-import type { Collection, RepeatConfig, RhythmStream, ScheduleTemplate, TickStatus, TrackerEntry } from '@/types';
+import type { CalendarEvent, Collection, RepeatConfig, RhythmStream, ScheduleTemplate, TickStatus, TrackerEntry } from '@/types';
+import { followedDates } from '@/utils/repeatFollow';
+import { hiddenBySchedule } from '@/utils/scheduleItems';
 import { expandRepeat } from '@/utils/recurrence';
 import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
 import { addDaysToIso } from '@/utils/date';
@@ -49,9 +51,15 @@ export function rhythmStreams(c: Collection): RhythmStream[] {
 const weekday = (date: string) => new Date(date + 'T00:00:00').getDay();
 
 // The dates of a stream's occurrences in [from, to], none before its start.
-export function streamDates(stream: RhythmStream, schedules: Record<string, ScheduleTemplate>, from: string, to: string): string[] {
+export function streamDates(stream: RhythmStream, schedules: Record<string, ScheduleTemplate>, from: string, to: string, events: Record<string, CalendarEvent> = {}): string[] {
   const lo = from > stream.start ? from : stream.start;
   if (lo > to) return [];
+  // Following calendar events (a Schedule's items, phase 7): their dates, moved, the way a
+  // following repeat's are (utils/repeatFollow.ts).
+  if (stream.rule.kind === 'follows') {
+    const ids = stream.rule.eventIds.filter((id) => events[id] && !hiddenBySchedule(events[id], schedules));
+    return followedDates({ ids, offsetDays: stream.rule.offsetDays }, events, lo).filter((d) => d >= lo && d <= to);
+  }
   if (stream.rule.kind === 'repeat') {
     const { repeat } = stream.rule;
     const dates: string[] = [];
@@ -76,7 +84,8 @@ export function streamDates(stream: RhythmStream, schedules: Record<string, Sche
 }
 
 // An occurrence's time: a timetable block's start on the day itself, else the stream's own.
-export function streamTime(stream: RhythmStream, schedules: Record<string, ScheduleTemplate>): string | null {
+export function streamTime(stream: RhythmStream, schedules: Record<string, ScheduleTemplate>, events: Record<string, CalendarEvent> = {}): string | null {
+  if (stream.rule.kind === 'follows' && stream.rule.offsetDays === 0) return events[stream.rule.eventIds[0]]?.startTime ?? stream.time;
   if (stream.rule.kind === 'relative' && stream.rule.offsetDays === 0) {
     const block = schedules[stream.rule.scheduleId]?.blocks.find((b) => b.id === (stream.rule as { blockId: string }).blockId);
     return block?.startTime ?? stream.time;
@@ -144,12 +153,12 @@ export interface Occurrence {
 
 export function rhythmOccurrences(
   rhythm: Collection, schedules: Record<string, ScheduleTemplate>, ticks: Map<string, Tick>,
-  from: string, to: string, today: string,
+  from: string, to: string, today: string, events: Record<string, CalendarEvent> = {},
 ): Occurrence[] {
   const out: Occurrence[] = [];
   for (const stream of rhythmStreams(rhythm)) {
-    const time = streamTime(stream, schedules);
-    for (const date of streamDates(stream, schedules, from, to)) {
+    const time = streamTime(stream, schedules, events);
+    for (const date of streamDates(stream, schedules, from, to, events)) {
       const key = tickKey(rhythm.id, stream.id, date);
       const tick = ticks.get(key);
       out.push({ key, rhythm, stream, date, time, state: occurrenceState(date, tick, today), tick });

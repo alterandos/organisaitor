@@ -3,6 +3,7 @@ import { INBOX_ICON, QUESTION_ICON, REVIEW_ICON, RHYTHM_ICON, ITEM_TYPE_ICON } f
 import { BEHIND_DAYS, rhythmOccurrences, tickIndex, isRhythm, isDealtWith } from '@/utils/rhythms';
 import { addDaysToIso } from '@/utils/date';
 import { expandRepeat } from '@/utils/recurrence';
+import { behindDates } from '@/utils/itemOccurrences';
 import { getNoteEffectiveCollectionId, getNoteNotebookPath } from '@/utils/notes';
 import { collectQuestions } from '@/utils/noteQuestions';
 import { collectInboxes, localDay } from '@/utils/noteInboxes';
@@ -85,7 +86,11 @@ const underEvent = (t: Task): string | undefined => {
 };
 
 const occurrenceRow = (source: OverviewSourceKey, id: string, date: string, r: Omit<OverviewRow, 'key' | 'source' | 'id'>): OverviewRow =>
-  ({ ...row(source, id, r), key: `${source}:${id}@${date}` });
+  ({ ...row(source, id, r), key: `${source}:${id}@${date}`, occurrence: date });
+
+// A repeating item's main row stands for its next date, so it opens there, not at the series' first.
+const nextOf = (repeat: RepeatConfig | null, w: { when: string; status: OverviewStatus }) =>
+  repeat && w.status === 'open' ? { occurrence: w.when } : {};
 
 export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   {
@@ -117,7 +122,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
         const w = calendarWhen(e.date, e.endDate, e.repeat, today);
         return row('event', e.id, {
           title: e.title, when: w.when, time: e.startTime,
-          status: e.archivedAt ? 'archived' : w.status,
+          status: e.archivedAt ? 'archived' : w.status, ...nextOf(e.repeat, w),
           endeavourId: e.collectionId, context: e.location,
           plan: plan('block', { endDate: e.repeat ? null : e.endDate, endTime: e.endTime, important: e.important, movable: !e.repeat && !e.archivedAt }),
         });
@@ -132,7 +137,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
         const w = calendarWhen(r.date, null, r.repeat, today, r.doneDates);
         const base = { title: r.title, time: r.time, endeavourId: r.collectionId, context: null, plan: plan('point', { important: r.important, movable: !r.repeat && !r.archivedAt }) };
         return [
-          row('reminder', r.id, { ...base, when: w.when, status: r.archivedAt ? 'archived' : w.status }),
+          row('reminder', r.id, { ...base, when: w.when, status: r.archivedAt ? 'archived' : w.status, ...nextOf(r.repeat, w) }),
           ...doneOccurrences(r.repeat, r.doneDates).map((date) => occurrenceRow('reminder', r.id, date, { ...base, when: date, status: r.archivedAt ? 'archived' : 'done' })),
         ];
       }),
@@ -146,8 +151,11 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
         const w = calendarWhen(d.date, null, d.repeat, today, d.doneDates);
         const base = { title: d.title, time: d.time, endeavourId: d.collectionId, context: null, plan: plan('due', { important: d.important, movable: !d.repeat && !d.archivedAt }) };
         return [
-          row('deadline', d.id, { ...base, when: w.when, status: d.archivedAt ? 'archived' : w.status }),
+          row('deadline', d.id, { ...base, when: w.when, status: d.archivedAt ? 'archived' : w.status, ...nextOf(d.repeat, w) }),
           ...doneOccurrences(d.repeat, d.doneDates).map((date) => occurrenceRow('deadline', d.id, date, { ...base, when: date, status: d.archivedAt ? 'archived' : 'done' })),
+          // Repeating work's missed dates (phase 7 (e)): each its own open row, so it's Behind (for
+          // BEHIND_DAYS) and can be ticked done from there.
+          ...behindDates(d, today).map((date) => occurrenceRow('deadline', d.id, date, { ...base, when: date, status: 'open' })),
         ];
       }),
     }),
@@ -306,7 +314,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
         locked: [],
         rows: Object.values(snap.collections)
           .filter((c) => isRhythm(c) && !c.archivedAt && !!c.streams?.length)
-          .flatMap((c) => rhythmOccurrences(c, snap.schedules ?? {}, ticks, from, to, today))
+          .flatMap((c) => rhythmOccurrences(c, snap.schedules ?? {}, ticks, from, to, today, snap.events))
           .map((o) => row('rhythm', o.key, {
             title: o.stream.label, when: o.date, time: o.time,
             status: isDealtWith(o.state) ? 'done' : 'open',

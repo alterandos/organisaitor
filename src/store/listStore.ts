@@ -56,6 +56,7 @@ const BUILTIN_LIST_TYPES: ListType[] = [
     name: 'Books', icon: '📚', color: '#10b981', kind: 'watchlist', isBuiltIn: true,
     defaultFields: [
       { id: 'lf-author',   name: 'Author',              type: 'text'   },
+      { id: 'lf-year',     name: 'Year',                type: 'number' },
       { id: 'lf-genre',    name: 'Genre',               type: 'text'   },
       { id: 'lf-rating',   name: 'My rating',           type: 'rating', max: 5 },
       { id: 'lf-source',   name: 'How I heard about it',type: 'text'   },

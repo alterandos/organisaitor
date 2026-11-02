@@ -33,6 +33,19 @@ describe('a repeating reminder or deadline in an Overview', () => {
     ]);
   });
 
+  it('each row of a repeating item opens at the date it stands for, not the series’ first (found 2026-11-01)', async () => {
+    const { SOURCE_BY_KEY } = await import('./sources');
+    const reminder = { id: 'r1', title: 'Hash run', date: '2026-10-06', time: null, repeat: weekly, doneDates: ['2026-10-06', '2026-10-13'], reminderType: 'default', archivedAt: null, collectionId: null };
+    const rows = SOURCE_BY_KEY.reminder.rows({ reminders: { r1: reminder } } as never, '2026-10-13').rows;
+    expect(rows.map((r) => [r.key, r.occurrence])).toEqual([
+      ['reminder:r1', '2026-10-20'],
+      ['reminder:r1@2026-10-06', '2026-10-06'],
+      ['reminder:r1@2026-10-13', '2026-10-13'],
+    ]);
+    const oneOff = SOURCE_BY_KEY.reminder.rows({ reminders: { r1: { ...reminder, repeat: null } } } as never, '2026-10-13').rows;
+    expect(oneOff[0].occurrence).toBeUndefined();
+  });
+
   it('a one-off item has no extra row: its own row is the done one', async () => {
     const { SOURCE_BY_KEY } = await import('./sources');
     const deadline = { id: 'd1', title: 'Essay', date: '2026-10-13', time: null, repeat: null, doneDates: ['2026-10-13'], deadlineType: 'default', archivedAt: null, collectionId: null };

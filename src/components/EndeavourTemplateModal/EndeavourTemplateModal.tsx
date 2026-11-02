@@ -13,6 +13,7 @@ import { showToast } from '@/components/Toast/showToast';
 import { ENDEAVOUR_TEMPLATES, blankRow, initialValues, type EndeavourTemplate, type TemplateColumn, type TemplateInput, type TemplateRow, type TemplateValues } from '@/config/endeavourTemplates';
 import { applyTemplate, planLines } from '@/services/endeavourTemplates';
 import { LABELS } from '@/config/labels';
+import { editorFor } from '@/config/templateEditors';
 import type { CollectionId } from '@/types';
 import styles from './EndeavourTemplateModal.module.css';
 
@@ -76,6 +77,9 @@ function TemplateForm({ template, startPartOf, onBack }: { template: EndeavourTe
     const { id, made, undo } = applyTemplate(plan, partOf);
     closeModal();
     useUIStore.getState().openEndeavourHome(id);
+    // A template with an editor of its own opens it: a subject's classes and work are added there.
+    const made_ = useTaskStore.getState().collections[id];
+    if (made_ && editorFor(made_.templateId)) useUIStore.getState().openEditCollection(made_);
     showToast({ message: L.made(plan.endeavour.name, made), actions: [{ label: L.undo, onClick: undo }] });
   }
 

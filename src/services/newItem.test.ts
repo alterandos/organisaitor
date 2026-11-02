@@ -3,6 +3,7 @@ import { useUIStore } from '@/store/uiStore';
 import { useNoteStore } from '@/store/noteStore';
 import { openNewItem } from './newItem';
 import type { NoteTagId } from '@/types/notes';
+import { SCRATCHPAD_PRESET, STICKIES_PRESET, takesNotes } from '@/utils/notes';
 
 beforeEach(() => {
   useUIStore.setState(useUIStore.getInitialState(), true);
@@ -33,6 +34,24 @@ describe('openNewItem (N / Space / Ctrl+N)', () => {
       openNewItem('notes');
       expect(useUIStore.getState().openModal).toBe('add-note');
     }
+  });
+
+  it('Stickies and the Scratchpad take no notes or notebooks (2026-11-01)', () => {
+    const stickies = useNoteStore.getState().addNoteTag({ name: 'Stickies', kind: 'area', presetKey: STICKIES_PRESET }) as NoteTagId;
+    const pad = useNoteStore.getState().addNoteTag({ name: 'Scratchpad', kind: 'area', presetKey: SCRATCHPAD_PRESET }) as NoteTagId;
+    useUIStore.setState({ activeView: 'notes', selectedNoteTagId: stickies, notesFocusedColumn: 'list' });
+    const before = Object.keys(useNoteStore.getState().notes).length;
+    openNewItem('notes');
+    expect(useUIStore.getState().openModal).toBeNull();
+    expect(Object.values(useNoteStore.getState().notes).filter((n) => n.tagIds.includes(stickies))).toHaveLength(before + 1);
+    useUIStore.setState({ selectedNoteTagId: pad });
+    openNewItem('notes');
+    expect(useUIStore.getState().scratchpadOpen).toBe(true);
+    expect(useUIStore.getState().openModal).toBeNull();
+    useUIStore.setState({ notesFocusedColumn: 'tree' });
+    openNewItem('notes');
+    expect(useUIStore.getState().pendingNoteTagParentId).toBeNull();
+    expect(takesNotes(useNoteStore.getState().noteTags[pad])).toBe(false);
   });
 
   it('entering Notes starts in the Chronicle column', () => {

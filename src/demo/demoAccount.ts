@@ -25,6 +25,10 @@ import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { linkTaskToEvent } from '@/services/eventTaskLinks';
 import { addStarterSet, applyItemType, setItemType } from '@/services/itemTypes';
 import { saveStreams, setTick } from '@/services/rhythms';
+import { createScheduleWithItems } from '@/services/schedules';
+import { saveSubjectItem } from '@/services/subjectItems';
+import { convertRhythmStreams } from '@/services/streamConversion';
+import { blankDraft, firstWeekdayOn } from '@/utils/subjectItems';
 import { rhythmOccurrences, tickIndex } from '@/utils/rhythms';
 import { STREAM_KINDS } from '@/config/streamKinds';
 import { useItemTypeStore } from '@/store/itemTypeStore';
@@ -221,15 +225,26 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   setItemType({ kind: 'task', id: readIpcc }, typeNamed('Reading'), { source: 'IPCC AR6 Synthesis Report, Summary for Policymakers', pages: '1–36' });
 
   const block = (id: string, title: string, daysOfWeek: number[], startTime: string, endTime: string, location: string) =>
-    ({ id, title, daysOfWeek, startTime, endTime, location, interval: 1, intervalAnchor: day(0), exceptions: [], notes: null, requiresCommitment: false, committedDates: [] });
-  const timetable = useScheduleStore.getState().addSchedule({
-    name: 'Semester 2 timetable', color: colour('blue'), startDate: day(-56), endDate: day(42),
-    blocks: [
-      block('geos201l', 'GEOS201 lecture', [1, 3], '10:00', '11:00', 'Earth Sciences LT1'),
-      block('geos201p', 'GEOS201 lab', [2], '14:00', '17:00', 'Petrology lab, room 210'),
-      block('geos215l', 'GEOS215 lecture', [2, 4], '12:00', '13:00', 'Carslaw 175'),
-      block('geos215t', 'GEOS215 tutorial', [5], '09:00', '10:00', 'Madsen 4.12'),
-    ],
+    ({ id, title, daysOfWeek, startTime, endTime, location, interval: 1, intervalAnchor: day(-56), exceptions: [], notes: null, requiresCommitment: false, committedDates: [] });
+  // A Schedule's classes are repeating calendar events (docs/features/endeavours.md phase 7 (c)).
+  const { itemIds: classes } = createScheduleWithItems({ name: 'Semester 2 timetable', color: colour('blue'), startDate: day(-56), endDate: day(42), collectionId: semester }, [
+    block('geos201l', 'GEOS201 lecture', [1, 3], '10:00', '11:00', 'Earth Sciences LT1'),
+    block('geos201p', 'GEOS201 lab', [2], '14:00', '17:00', 'Petrology lab, room 210'),
+    block('geos215l', 'GEOS215 lecture', [2, 4], '12:00', '13:00', 'Carslaw 175'),
+    block('geos215t', 'GEOS215 tutorial', [5], '09:00', '10:00', 'Madsen 4.12'),
+  ]);
+  const geos215Lecture = classes.get('geos215l')!;
+
+  // ── Semester 2 as a semester, with a subject (docs/features/endeavours.md phase 7 (d)): Edit on
+  // either opens its own editor, and the subject takes the semester's period and break, live.
+  tasks.updateCollection(semester, { templateId: 'semester', period: { start: day(-56), end: day(42), breaks: [{ id: 'midsem', label: 'Mid-semester break', from: day(14), to: day(18) }], exams: { from: day(49), to: day(63) } } });
+  const geosSubject = tasks.addCollection({ kind: 'project', name: 'GEOS215 Climate Systems', color: colour('cyan'), purposeIds: [honours], tagIds: [uniTag] });
+  tasks.updateCollection(geosSubject, { templateId: 'subject' });
+  tasks.addEndeavourLink(geosSubject, 'partOf', semester);
+  saveSubjectItem(geosSubject, { ...blankDraft('schedule', day(10)), title: 'GEOS215 field excursion', start: '08:00', end: '17:00', place: 'Royal National Park' });
+  saveSubjectItem(geosSubject, {
+    ...blankDraft('work', firstWeekdayOn(day(0), 5)), title: 'GEOS215 weekly quiz', typeId: typeNamed('Assessment'), start: '17:00', typeFields: { weight: 10 },
+    notes: 'Best 8 of 9 count.', repeat: { freq: 'weekly', interval: 1, endKind: 'until', count: null, until: day(42), daysOfWeek: [5] },
   });
 
   // ── A rhythm (docs/features/endeavours.md phase 4): GEOS215 week by week, part of Semester 2.
@@ -237,23 +252,26 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   // Friday. Ticks for the last fortnight, with one reading missed (it shows as behind).
   const readingStream = nanoid(8);
   const weekly = useTaskStore.getState().addCollection({ kind: 'routine', name: 'GEOS215 each week', color: colour('cyan') });
-  useTaskStore.getState().updateCollection(weekly, { collectionId: semester });
+  useTaskStore.getState().updateCollection(weekly, { collectionId: geosSubject });
   const stream = (id: string, label: string, kind: StreamKind, rule: StreamRule, extra: Partial<RhythmStream> = {}): RhythmStream =>
     ({ id, label, kind, rule, typeId: null, start: day(-21), time: null, show: { ...STREAM_KINDS[kind].show }, notebookId: geos215, ...extra });
   saveStreams(weekly, [
-    stream(nanoid(8), 'Lecture', 'attend', { kind: 'relative', scheduleId: timetable, blockId: 'geos215l', offsetDays: 0 }),
-    stream(readingStream, 'Reading', 'doBy', { kind: 'relative', scheduleId: timetable, blockId: 'geos215l', offsetDays: -1 }, { typeId: typeNamed('Reading') }),
+    stream(nanoid(8), 'Lecture', 'attend', { kind: 'follows', eventIds: [geos215Lecture], offsetDays: 0 }),
+    stream(readingStream, 'Reading', 'doBy', { kind: 'follows', eventIds: [geos215Lecture], offsetDays: -1 }, { typeId: typeNamed('Reading') }),
     stream(nanoid(8), 'Tutorial quiz', 'submit', { kind: 'repeat', repeat: { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null, daysOfWeek: [5] } }, { time: '17:00' }),
   ]);
   {
     const rhythm = useTaskStore.getState().collections[weekly];
     const ticks = tickIndex(useTrackerStore.getState().entries, useTaskStore.getState().collections);
-    const missed = rhythmOccurrences(rhythm, useScheduleStore.getState().schedules, ticks, day(-14), day(-1), day(0))
+    const missed = rhythmOccurrences(rhythm, useScheduleStore.getState().schedules, ticks, day(-14), day(-1), day(0), useCalendarStore.getState().events)
       .filter((o) => o.stream.label === 'Reading').at(-1)?.key;
-    for (const o of rhythmOccurrences(rhythm, useScheduleStore.getState().schedules, ticks, day(-14), day(-1), day(0))) {
+    for (const o of rhythmOccurrences(rhythm, useScheduleStore.getState().schedules, ticks, day(-14), day(-1), day(0), useCalendarStore.getState().events)) {
       if (o.key !== missed) setTick(weekly, o.stream.id, o.date, 'done');
     }
   }
+  // Since phase 7 (e) streams are repeating calendar items: converted as an account's own are on
+  // load, so the demo shows the lectures attended, and Reading and the quiz as the subject's Work.
+  convertRhythmStreams();
 
   // ── Lists ──
   const packing = lists.addList({ name: 'Field trip packing list', kind: 'checklist', icon: '🎒', color: colour('teal'), collectionId: fieldReport, resetOnTaskComplete: true });

@@ -14,6 +14,12 @@ export function isPinnedNotebook(t: Pick<NoteTag, 'kind' | 'presetKey' | 'parent
   return t.kind === 'area' && !t.parentTagId && PINNED_PRESETS.includes(t.presetKey ?? '');
 }
 
+// They take no notes or notebooks of their own (the user, 2026-11-01): each exists for what it does.
+// Not offered as a place to put a note, a notebook or a dragged notebook; "new note" there makes a
+// sticky or opens the scratchpad (services/newItem.ts addNoteHere). Their own services still file
+// their notes there.
+export const takesNotes = (t: Pick<NoteTag, 'kind' | 'presetKey' | 'parentTagId'>): boolean => !isPinnedNotebook(t);
+
 const pinRank = (t: NoteTag) => (isPinnedNotebook(t) ? PINNED_PRESETS.indexOf(t.presetKey!) : PINNED_PRESETS.length);
 
 export function byNotebookOrder(a: NoteTag, b: NoteTag): number {

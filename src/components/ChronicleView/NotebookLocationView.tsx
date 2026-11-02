@@ -5,6 +5,7 @@ import { getNotebookIcon } from '@/utils/notes';
 import type { NoteTagId } from '@/types';
 import type { NoteTag } from '@/types/notes';
 import styles from './NotebookLocationView.module.css';
+import { noteClickProps } from '@/components/NoteSplitView/openBeside';
 
 interface Props {
   tagId:         NoteTagId;
@@ -79,7 +80,7 @@ export function NotebookLocationView({ tagId, noteIds, visibleTagIds }: Props) {
               type="button"
               className={`${styles.row} ${styles.rowChild}`}
               style={indent(depthOfChildren)}
-              onClick={() => openNote(id)}
+              {...noteClickProps(id, () => openNote(id))}
             >
               <span className={styles.branch}>├</span>
               <span className={styles.icon}>📄</span>

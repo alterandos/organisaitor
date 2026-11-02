@@ -19,6 +19,7 @@ import '@/components/NoteEditor/noteColorMenu';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { useWaitingForEncryption } from '@/hooks/useWaitingForEncryption';
 import { EditIcon, IndentIcon, OutdentIcon, TrashIcon } from '@/components/Icons';
+import { noteClickProps } from '@/components/NoteSplitView/openBeside';
 
 interface NoteListProps {
   tagId: NoteTagId;
@@ -105,7 +106,7 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
         {waiting && (
           <span className={styles.noteWaiting} title={LABELS.encryptionScope.waitingHint} aria-label={LABELS.encryptionScope.waiting} role="img">🔓</span>
         )}
-        <button className={styles.noteMain} onClick={() => openNote(note.id)}>
+        <button className={styles.noteMain} {...noteClickProps(note.id, () => openNote(note.id))}>
           <TruncatedText
             text={note.title || '(Untitled)'}
             className={styles.noteTitle}

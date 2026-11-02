@@ -7,7 +7,12 @@ import type { CustomConverter } from '@/types/converters';
 // converter's formula (types/converters.ts) either way. The pane (components/ConverterPane) only
 // shows what these return.
 
-export function convertUnit(value: number, from: Unit, to: Unit): number {
+// `rates`: units per euro by currency code (EUR 1), for a currency; without them a currency has no answer.
+export function convertUnit(value: number, from: Unit, to: Unit, rates?: Record<string, number> | null): number {
+  if (from.currency || to.currency) {
+    const a = from.currency ? rates?.[from.currency] : undefined, b = to.currency ? rates?.[to.currency] : undefined;
+    return a && b ? (value / a) * b : NaN;
+  }
   const base = from.toBase ? from.toBase(value) : value * (from.factor ?? 1);
   return to.fromBase ? to.fromBase(base) : base / (to.factor ?? 1);
 }

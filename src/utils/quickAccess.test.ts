@@ -154,11 +154,11 @@ describe('Places', () => {
     expect(labels).toHaveLength(PLACES.length);
   });
 
-  it('opening the Glossary or Review from anywhere counts as a use', () => {
+  it('opening the Glossary or Review from anywhere is recorded as a visit', () => {
     useUIStore.getState().setNotesView('glossary');
     useUIStore.getState().setNotesView('review');
-    expect(useRecentItemsStore.getState().items['place:glossary']?.visitCount).toBe(1);
-    expect(useRecentItemsStore.getState().items['place:review']?.visitCount).toBe(1);
+    expect(useRecentItemsStore.getState().items['place:glossary']).toBeDefined();
+    expect(useRecentItemsStore.getState().items['place:review']).toBeDefined();
   });
 
   it('a place is found by name, ahead of items, and opens there', () => {

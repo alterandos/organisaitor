@@ -24,6 +24,7 @@ import type { CollectionId, NoteTagId } from '@/types';
 import type { Note, NoteTag } from '@/types/notes';
 import styles from './MobileNotes.module.css';
 import { DisclosureIcon, EditIcon, TrashIcon } from '@/components/Icons';
+import { addNoteHere } from '@/services/newItem';
 
 // Notes on a phone (docs/android/10-gap-analysis.md F24, the user's design 2026-10-08/09).
 // With no note open, Notes is a home screen: the notebook tree (notes listed inside their
@@ -146,7 +147,7 @@ function NotebookRow({ tag, depth }: { tag: NoteTag; depth: number }) {
 
   const L = LABELS.mobileNotes;
   const actions: ActionSheetItem[] = [
-    { label: L.newNote, icon: '📝', onSelect: () => { const ui = useUIStore.getState(); ui.setSelectedNoteTag(tag.id as NoteTagId); ui.showAddNote(); } },
+    { label: L.newNote, icon: '📝', onSelect: () => { const ui = useUIStore.getState(); ui.setSelectedNoteTag(tag.id as NoteTagId); addNoteHere(); } },
     { label: L.newSubNotebook, icon: '📁', onSelect: () => useUIStore.getState().showAddNoteTag(tag.id as NoteTagId) },
     { label: L.editNotebook, icon: <EditIcon />, onSelect: () => useUIStore.getState().openEditNoteTag(tag.id) },
     { label: pin.label, icon: pin.icon, onSelect: pin.onClick },

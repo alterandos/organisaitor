@@ -12,6 +12,9 @@
   box-shadow: var(--shadow-sm);
 }
 .card, .compact { width: fit-content; max-width: 100%; }
+/* In a note, a conversion given a width (the shared block width) fills it. */
+:global([data-type="convert"][data-block-width-shown]) .card,
+:global([data-type="convert"][data-block-width-shown]) .compact { width: 100%; box-sizing: border-box; }
 .head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .kind { color: var(--color-primary); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 
@@ -66,3 +69,16 @@
 .swap:hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-subtle); }
 .swap:disabled { cursor: default; }
 .gone { color: var(--color-muted); font-size: var(--text-sm); font-style: italic; }
+
+/* Under a currency conversion (RatesLine.tsx): whose rates, from when, and keeping them. */
+.rates { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); flex-basis: 100%; color: var(--color-muted); font-size: var(--text-2xs); }
+.ratesBtn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.ratesBtn:hover { text-decoration: underline; }
+.ratesBtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }

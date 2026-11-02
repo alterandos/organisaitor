@@ -143,3 +143,10 @@ export function glossaryReferences(): Map<string, { noteId: string; count: numbe
   }
   return out;
 }
+
+// The Glossary's kind filter: a kind's pill turned on or off. Every kind on is the same as All, so it becomes All.
+export function toggleGlossaryKind(picked: ReadonlySet<string>, kind: string, shown: ReadonlyMap<string, string>): Set<string> {
+  const next = new Set(picked);
+  if (next.has(kind)) next.delete(kind); else next.add(kind);
+  return [...shown.keys()].every((k) => next.has(k)) ? new Set() : next;
+}

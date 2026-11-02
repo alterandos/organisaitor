@@ -21,6 +21,8 @@ import { todayIso } from '@/utils/date';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
+import { DoneBanner } from '@/components/ItemActions/DoneBanner';
+import itemStyles from '@/components/ItemActions/ItemActions.module.css';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
 import type { CrossAppRef } from '@/types';
 import styles from './TaskPane.module.css';
@@ -187,7 +189,7 @@ export function TaskPane() {
   return (
     <>
       <div className={styles.overlay} onClick={closeTaskPane} />
-      <aside style={paneResize.style} className={styles.pane}>
+      <aside style={paneResize.style} className={`${styles.pane} ${task.completed ? itemStyles.donePane : ''}`}>
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>Task</span>
@@ -196,6 +198,7 @@ export function TaskPane() {
 
         <div className={styles.body}>
           {task.archived && <ArchivedBanner archivedAt={task.archivedAt} reason={task.archiveReason} />}
+          {task.completed && <DoneBanner doneAt={task.completedAt} reopenLabel={LABELS.itemActions.reopenTask} onReopen={() => void toggleTaskCompletion(taskId)} />}
 
           <input
             className={styles.titleInput}

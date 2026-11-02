@@ -6,10 +6,17 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { ConvertExtensions, setConvertAttrs } from './Convert';
+import { NoteBlockDelete } from './blockDesigns';
+import { useDialogStore } from '@/store/dialogStore';
+import { setBlockWidth } from './blockWidth';
+import { unitsInOrder, categoriesInOrder } from '@/components/ConverterPane/convertValue';
+import { unitCategory } from '@/config/units';
+import { LABELS } from '@/config/labels';
 import { DesignCycle } from './designCycle';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { noteClipboardText } from '../noteClipboardText';
 import { useConverterStore } from '@/store/converterStore';
+import { useCurrencyStore } from '@/store/currencyStore';
 
 // A conversion in a note (`\convert`, extensions/Convert.ts + ConverterPane/ConvertWidget): made
 // through `\`, worked out as you type, the converter changeable, its designs, its text when copied,
@@ -32,7 +39,7 @@ async function make(content = '<p></p>') {
   document.body.append(host);
   editor = new Editor({
     element: host,
-    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, ...ConvertExtensions, DesignCycle],
+    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, ...ConvertExtensions, DesignCycle, NoteBlockDelete],
     content,
   });
   objectTriggerStorage(editor).getContext = () => ({ noteId: 'n', collectionId: null, now: new Date() });
@@ -100,5 +107,54 @@ describe('the convert block', () => {
     await flush();
     expect(pos()).toBeGreaterThanOrEqual(0);
     expect(node().attrs.values).toEqual({ amount: '7' });
+  });
+
+  it('follows the card patterns: Alt+Delete in its amount deletes it; it takes a width, and fits what it shows until then', async () => {
+    await make('<p>a</p><div data-type="convert"></div><p>b</p>');
+    const dom = () => host.querySelector<HTMLElement>('[data-type="convert"]')!;
+    expect(dom().hasAttribute('data-block-width-shown')).toBe(false);
+    expect(dom().querySelector('[data-block-resize]')).not.toBeNull();
+    act(() => setBlockWidth(editor.view, pos(), 'half'));
+    expect(node().attrs.width).toBe('half');
+    expect(dom().getAttribute('data-block-width-shown')).toBe('half');
+    expect(editor.getHTML()).toContain('data-block-width="half"');
+    const amount = host.querySelector<HTMLInputElement>('input[aria-label="Amount"]')!;
+    await act(async () => { amount.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', altKey: true, bubbles: true, cancelable: true })); });
+    await flush();
+    expect(pos()).toBe(-1);   // as `\convert` made it: empty, so no question
+  });
+
+  it('one with an amount typed asks before Alt+Delete deletes it', async () => {
+    await make(`<p>a</p><div data-type="convert" data-values='{"amount":"5"}'></div><p>b</p>`);
+    const amount = host.querySelector<HTMLInputElement>('input[aria-label="Amount"]')!;
+    await act(async () => { amount.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', altKey: true, bubbles: true, cancelable: true })); });
+    expect(useDialogStore.getState().queue).toHaveLength(1);
+    expect(pos()).toBeGreaterThanOrEqual(0);
+  });
+
+  it('its lists are A to Z by what they show: units by symbol, converters by name', async () => {
+    const symbols = unitsInOrder(unitCategory('length')!.units).map((u) => u.symbol);
+    expect(symbols).toEqual([...symbols].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })));
+    const names = categoriesInOrder().map((c) => LABELS.converters.categories[c.id]);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+    await make('<div data-type="convert"></div>');
+    const shown = [...host.querySelectorAll('select[aria-label="From"] option')].map((o) => o.textContent);
+    expect(shown).toEqual(symbols);
+  });
+
+  it('currency: today’s rates, and "Keep this rate" holds the conversion when they change', async () => {
+    useCurrencyStore.setState({ rates: { date: '2026-10-30', rates: { EUR: 1, USD: 1.1 }, fetchedAt: Date.now() } });
+    await make(`<div data-type="convert" data-converter="currency" data-from="usd" data-to="eur" data-values='{"amount":"110"}'></div>`);
+    expect(result()).toBe('100');
+    expect(host.textContent).toContain('ECB rates of');
+    await act(async () => { fireEvent.click([...host.querySelectorAll('button')].find((b) => b.textContent === LABELS.converters.rates.keep)!); });
+    expect(node().attrs.fixed).toMatchObject({ date: '2026-10-30', rates: { USD: 1.1 } });
+    act(() => useCurrencyStore.setState({ rates: { date: '2026-10-31', rates: { EUR: 1, USD: 1.25 }, fetchedAt: Date.now() } }));
+    await flush();
+    expect(result()).toBe('100');
+    expect(text()).toBe('110 USD = 100 EUR');
+    await act(async () => { fireEvent.click([...host.querySelectorAll('button')].find((b) => b.textContent === LABELS.converters.rates.live)!); });
+    expect(node().attrs.fixed).toBeNull();
+    expect(result()).toBe('88');
   });
 });

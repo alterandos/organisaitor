@@ -1,4 +1,5 @@
 import type {
+  ClassLink,
   Task, Collection, Tag, Purpose,
   CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry,
   ScheduleTemplate, ItemType, TypedItem, Goal,
@@ -15,6 +16,12 @@ import type { Activity, ActivityType } from '@/types/fitness';
 
 // A typed item's Type and field values (migration 060), sent only once the item has had a Type,
 // like encrypt_contents below, so untyped items sync before the migration has run.
+// A Schedule's item (migration 064): nullable, sent once set.
+const scheduleIdColumn = (v: string | null | undefined) => (v === undefined ? {} : { schedule_id: v });
+// The dates attended (migration 066), likewise: nullable, sent once set.
+const attendedColumn = (v: string[] | undefined) => (v === undefined ? {} : { attended_dates: v });
+// Instead of a class or during it (migration 067, events and Deadlines), likewise.
+const onClassColumn = (v: ClassLink | null | undefined) => (v === undefined ? {} : { on_class: v });
 const typeColumns = (i: TypedItem) => (i.typeId === undefined ? {} : { type_id: i.typeId, type_fields: i.typeFields ?? {} });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const typeFromRow = (r: Record<string, any>): TypedItem => (r.type_id == null ? {} : { typeId: r.type_id, typeFields: r.type_fields ?? {} });
@@ -116,6 +123,10 @@ const linksColumn = (v: Collection['links']) => (v === undefined ? {} : { links:
 const streamsColumn = (v: Collection['streams']) => (v === undefined ? {} : { streams: v });
 // Its period and breaks (migration 063), likewise: nullable, sent once set.
 const periodColumn = (v: Collection['period']) => (v === undefined ? {} : { period: v });
+// Its attributes (migration 068), likewise.
+const attributesColumn = (v: Collection['attributes']) => (v === undefined ? {} : { attributes: v });
+// The template it was made from (migration 065), likewise.
+const templateColumn = (v: Collection['templateId']) => (v === undefined ? {} : { template_id: v });
 
 export function collectionToRow(c: Collection, userId: string) {
   return {
@@ -137,6 +148,8 @@ export function collectionToRow(c: Collection, userId: string) {
     ...linksColumn(c.links),
     ...streamsColumn(c.streams),
     ...periodColumn(c.period),
+    ...templateColumn(c.templateId),
+    ...attributesColumn(c.attributes),
     created_at:    c.createdAt,
     updated_at:    c.updatedAt,
     deleted_at:    null,
@@ -163,6 +176,8 @@ export function rowToCollection(r: Record<string, any>): Collection {
     ...(Array.isArray(r.links) && r.links.length ? { links: r.links } : {}),
     ...(Array.isArray(r.streams) && r.streams.length ? { streams: r.streams } : {}),
     ...(r.period ? { period: r.period } : {}),
+    ...(typeof r.template_id === 'string' && r.template_id ? { templateId: r.template_id } : {}),
+    ...(r.attributes ? { attributes: r.attributes } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
   };
@@ -281,6 +296,9 @@ export function eventToRow(e: CalendarEvent, userId: string) {
     created_at:          e.createdAt,
     updated_at:          e.updatedAt,
     ...typeColumns(e),
+    ...scheduleIdColumn(e.scheduleId),
+    ...attendedColumn(e.attendedDates),
+    ...onClassColumn(e.onClass),
     deleted_at:          null,
   };
 }
@@ -327,6 +345,9 @@ export function rowToEvent(r: Record<string, any>): CalendarEvent {
     createdAt:          r.created_at,
     updatedAt:          r.updated_at,
     ...typeFromRow(r),
+    ...(r.schedule_id ? { scheduleId: r.schedule_id } : {}),
+    ...(Array.isArray(r.attended_dates) && r.attended_dates.length ? { attendedDates: r.attended_dates } : {}),
+    ...(r.on_class ? { onClass: r.on_class } : {}),
   };
 }
 
@@ -428,6 +449,7 @@ export function deadlineToRow(d: CalendarDeadline, userId: string) {
     series_date:        d.seriesDate ?? null,
     remind_occurrence:  d.remindOccurrence ?? null,
     seen_dates:         d.seenDates ?? [],
+    ...onClassColumn(d.onClass),
     cross_app_refs: d.crossAppRefs ?? [],
     archived_at:    d.archivedAt ?? null,
     archive_reason: d.archiveReason ?? null,
@@ -465,6 +487,7 @@ export function rowToDeadline(r: Record<string, any>): CalendarDeadline {
     seriesDate:       r.series_date        ?? null,
     remindOccurrence: r.remind_occurrence  ?? null,
     seenDates:        r.seen_dates         ?? [],
+    ...(r.on_class ? { onClass: r.on_class } : {}),
     crossAppRefs: r.cross_app_refs ?? [],
     archivedAt:    r.archived_at    ?? null,
     archiveReason: r.archive_reason ?? null,
@@ -487,6 +510,7 @@ export function scheduleToRow(s: ScheduleTemplate, userId: string) {
     active:        s.active       ?? true,
     collection_id: s.collectionId ?? null,
     blocks:        s.blocks       ?? [],
+    ...(s.breaks === undefined ? {} : { breaks: s.breaks }),   // migration 064: nullable, sent once set
     created_at:    s.createdAt,
     updated_at:    s.updatedAt,
     deleted_at:    null,
@@ -504,6 +528,7 @@ export function rowToSchedule(r: Record<string, any>): ScheduleTemplate {
     active:       r.active        ?? true,
     collectionId: r.collection_id ?? null,
     blocks:       r.blocks        ?? [],
+    ...(Array.isArray(r.breaks) ? { breaks: r.breaks } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
   };
@@ -1103,7 +1128,7 @@ export function itemTypeToRow(t: ItemType, userId: string) {
     icon:        t.icon ?? null,
     extends_id:  t.extendsId ?? null,
     // Fields, defaults and parts as one blob, so a new kind of default or part never needs a migration.
-    definition:  { fields: t.fields, defaults: t.defaults, parts: t.parts },
+    definition:  { fields: t.fields, defaults: t.defaults, parts: t.parts, ...(t.usedFor ? { usedFor: t.usedFor } : {}), ...(t.builtIn ? { builtIn: t.builtIn } : {}) },
     archived_at: t.archivedAt ?? null,
     created_at:  t.createdAt,
     updated_at:  t.updatedAt,
@@ -1122,6 +1147,8 @@ export function rowToItemType(r: Record<string, any>): ItemType {
     fields:     d.fields ?? [],
     defaults:   d.defaults ?? {},
     parts:      d.parts ?? [],
+    ...(Array.isArray(d.usedFor) ? { usedFor: d.usedFor } : {}),
+    ...(typeof d.builtIn === 'string' ? { builtIn: d.builtIn } : {}),
     archivedAt: r.archived_at ?? null,
     createdAt:  r.created_at,
     updatedAt:  r.updated_at,

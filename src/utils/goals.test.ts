@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Collection, Goal, GoalId, GoalMeasure, RhythmStream, Task, TrackerEntry } from '@/types';
 import { daysLeft, goalProgress, goalSuggestion, goalsOf, type GoalSnapshot } from './goals';
+import { buildDeadline, buildEvent } from '@/store/calendarStore';
+import type { CalendarDeadlineId, CalendarEventId } from '@/types';
 
 const TODAY = '2026-10-28';   // a Wednesday
 
@@ -91,5 +93,20 @@ describe('what is suggested, and the rest', () => {
     expect(daysLeft(goal({ kind: 'completion', milestonesOnly: false }, { by: '2026-11-04' }), TODAY)).toBe(7);
     const goals = { a: goal({ kind: 'completion', milestonesOnly: false }, { id: 'a' as GoalId, status: 'achieved' }), b: goal({ kind: 'completion', milestonesOnly: false }, { id: 'b' as GoalId }) };
     expect(goalsOf(goals, 'geos').map((g) => g.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('a goal keeping up something repeating (phase 7 (e))', () => {
+  it('counts Work done and classes attended over the last few dates, skipped ones left out', () => {
+    const weekly = (day: number) => ({ freq: 'weekly' as const, interval: 1, endKind: 'forever' as const, count: null, until: null, daysOfWeek: [day] });
+    // Readings each Monday from 21 Sep: done on 5 of the 6 up to 26 Oct, the 12th skipped.
+    const readingDl = buildDeadline({ title: 'Reading', date: '2026-09-21', collectionId: 'geos' as never,
+      repeat: { ...weekly(1), exceptions: ['2026-10-12'] }, doneDates: ['2026-09-21', '2026-09-28', '2026-10-05', '2026-10-19'] }, 'rd' as CalendarDeadlineId, '');
+    const g = goal({ kind: 'keepUp', itemIds: ['rd'], count: 4, outOf: 5 });
+    expect(goalProgress(g, snap({ deadlines: { rd: readingDl } }), TODAY)).toMatchObject({ value: 4, reached: true, text: '4 of the last 5 Reading' });
+    // A lecture each Tuesday, attended twice of the last three.
+    const lec = { ...buildEvent({ title: 'Lecture', date: '2026-10-13', collectionId: 'geos' as never, repeat: weekly(2) }, 'lec' as CalendarEventId, ''), attendedDates: ['2026-10-13', '2026-10-27'] };
+    expect(goalProgress(goal({ kind: 'keepUp', itemIds: ['lec'], count: 3, outOf: 3 }), snap({ events: { lec } }), TODAY)).toMatchObject({ value: 2, reached: false });
+    expect(goalProgress(goal({ kind: 'keepUp', itemIds: ['gone'], count: 3, outOf: 3 }), snap(), TODAY).value).toBeNull();
   });
 });

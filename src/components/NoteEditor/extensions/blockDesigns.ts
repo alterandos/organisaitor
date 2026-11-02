@@ -533,6 +533,11 @@ const hasValue = (v: unknown) => v !== null && v !== undefined && v !== '' && !(
 // A block with nothing in it (just made, or emptied): deleting it doesn't ask.
 export function isEmptyBlock(node: PMNode): boolean {
   if (node.textContent.trim()) return false;
+  // A conversion keeps what was typed in `values`, not as text: empty only as `\convert` made it.
+  if (node.type.name === 'convertBlock') {
+    const a = node.attrs;
+    return a.converter === 'length' && !a.from && !a.to && Object.values((a.values ?? {}) as Record<string, string>).every((v) => !v || v === '1');
+  }
   let empty = !CONTENT_ATTRS.some((k) => hasValue(node.attrs[k]));
   node.descendants((n) => {
     if (!empty) return false;
@@ -585,14 +590,21 @@ function blockUnderCursor(state: EditorState): number | null {
   return null;
 }
 
-// The block a DOM element is in, as a document position.
+// The block a DOM element is in, as a document position. posAtDOM gives the inside of a block with
+// editable content but the place before an atom drawn by a node view (a conversion, a card), so
+// both are tried, matched by the block's own element (found 2026-10-30: Alt+Delete in a
+// conversion's input did nothing).
 export function blockPosAt(view: EditorView, el: Element): number | null {
   const dom = el.closest('[data-note-block]');
   if (!dom || !view.dom.contains(dom)) return null;
   try {
-    const pos = view.posAtDOM(dom, 0) - 1;
-    const node = view.state.doc.nodeAt(pos);
-    return node && NOTE_BLOCK_NODES.has(node.type.name) ? pos : null;
+    const at = view.posAtDOM(dom, 0);
+    for (const pos of [at - 1, at]) {
+      const node = pos >= 0 ? view.state.doc.nodeAt(pos) : null;
+      if (node && NOTE_BLOCK_NODES.has(node.type.name) && view.nodeDOM(pos) === dom) return pos;
+    }
+    const inside = view.state.doc.nodeAt(at - 1);
+    return inside && NOTE_BLOCK_NODES.has(inside.type.name) ? at - 1 : null;
   } catch { return null; }
 }
 

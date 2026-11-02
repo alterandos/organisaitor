@@ -6,12 +6,15 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { showToast } from '@/components/Toast/showToast';
 import { CloseIcon, ConverterIcon, EditIcon, TrashIcon } from '@/components/Icons';
-import { UNIT_CATEGORIES, unitCategory, type UnitCategory } from '@/config/units';
+import { unitCategory, type UnitCategory } from '@/config/units';
 import { convertUnit, readAmount, runConverter, runConverterBack, showAmount, worksBothWays } from '@/utils/convert';
 import { log } from '@/utils/log';
 import { LABELS } from '@/config/labels';
 import type { ConverterId, CustomConverter } from '@/types/converters';
 import { ConverterEditor } from './ConverterEditor';
+import { categoriesInOrder, unitsInOrder } from './convertValue';
+import { useCurrencyRates } from '@/services/currencyRates';
+import { RatesLine } from './RatesLine';
 import styles from './ConverterPane.module.css';
 
 const L = LABELS.converters;
@@ -40,7 +43,7 @@ export function ConverterPane() {
   useEscapeClose(close);
 
   const items = useMemo<Item[]>(() => [
-    ...UNIT_CATEGORIES.map((c): Item => ({ kind: 'units', id: c.id, name: L.categories[c.id], category: c })),
+    ...categoriesInOrder().map((c): Item => ({ kind: 'units', id: c.id, name: L.categories[c.id], category: c })),
     ...Object.values(converters).sort((a, b) => a.name.localeCompare(b.name)).map((c): Item => ({ kind: 'custom', id: c.id, name: c.name, converter: c })),
   ], [converters]);
 
@@ -114,14 +117,15 @@ export function ConverterPane() {
 }
 
 function UnitView({ category }: { category: UnitCategory }) {
-  const units = category.units;
+  const units = unitsInOrder(category.units);
   const [amount, setAmount] = useState('1');
   const [from, setFrom] = useState(category.pair[0]);
   const [to, setTo] = useState(category.pair[1]);
   const value = readAmount(amount);
+  const rates = useCurrencyRates(category.id === 'currency').rates?.rates ?? null;
   const fromUnit = unitCategory(category.id)!.units.find((u) => u.id === from)!;
   const toUnit = units.find((u) => u.id === to)!;
-  const result = Number.isFinite(value) ? convertUnit(value, fromUnit, toUnit) : NaN;
+  const result = Number.isFinite(value) ? convertUnit(value, fromUnit, toUnit, rates) : NaN;
 
   return (
     <div className={styles.view}>
@@ -139,10 +143,11 @@ function UnitView({ category }: { category: UnitCategory }) {
       <button type="button" className={styles.result} onClick={() => Number.isFinite(result) && void copy(`${showAmount(result)} ${toUnit.symbol}`)} title={LABELS.dateCalc.copy}>
         {showAmount(result)} <span className={styles.unit}>{toUnit.symbol}</span>
       </button>
+      {category.id === 'currency' && <RatesLine fixed={null} editable={false} />}
       <h4 className={styles.group}>{L.allUnits}</h4>
       <ul className={styles.all}>
         {units.filter((u) => u.id !== from).map((u) => {
-          const v = Number.isFinite(value) ? convertUnit(value, fromUnit, u) : NaN;
+          const v = Number.isFinite(value) ? convertUnit(value, fromUnit, u, rates) : NaN;
           return (
             <li key={u.id}>
               <button type="button" className={styles.allRow} onClick={() => Number.isFinite(v) && void copy(`${showAmount(v)} ${u.symbol}`)}>

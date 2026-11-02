@@ -8,7 +8,7 @@ import { NOTE_BLOCK_NODES } from '../blockNodes';
 // alone). A block takes part with `blockWidthAttributes()` in its attributes, a `blockResizeHandle`
 // on its right edge (in its node view, or a widget), its width drawn by `showBlockWidth` (a node
 // view) or `blockWidthDomAttrs` (renderHTML), and `widthMenuItem` in its right-click menu; and its
-// node name in WIDTH_BLOCK_NODES (pattern test). Today: Glossary cards and questions.
+// node name in WIDTH_BLOCK_NODES (pattern test). Today: Glossary cards, questions and conversions.
 //
 // Named widths (Width ▸): Fit the text (`auto`: Standard at least, growing with what's typed up to
 // the column), Standard (one width for every card, so cards in a row look alike), a third, half,
@@ -19,7 +19,7 @@ import { NOTE_BLOCK_NODES } from '../blockNodes';
 // data-block-width-shown). While a width is dragged, every block's menus step aside
 // (`:root[data-block-resizing]`), so the width shown above the handle can be read.
 
-export const WIDTH_BLOCK_NODES = new Set(['glossaryCard', 'questionBlock']);
+export const WIDTH_BLOCK_NODES = new Set(['glossaryCard', 'questionBlock', 'convertBlock']);
 
 export const BLOCK_WIDTHS = ['auto', 'standard', 'third', 'half', 'full'] as const;
 export type BlockNamedWidth = typeof BLOCK_WIDTHS[number];

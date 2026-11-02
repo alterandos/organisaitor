@@ -14,6 +14,7 @@ import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import type { CollectionId, ItemTypeId } from '@/types';
 import type { ComponentType, SVGProps } from 'react';
 import { CalendarIcon, EndeavourIcon, GoalIcon, ListIcon, NotebookIcon, PlusIcon, PresetIcon, PurposeIcon, ReminderIcon, RoutineIcon, StickyIcon, TagIcon, TrackerIcon, UploadIcon } from '@/components/Icons';
+import { addNoteHere } from '@/services/newItem';
 
 // Each option's icon: a line icon from components/Icons, drawn on its coloured circle.
 type IconType = ComponentType<SVGProps<SVGSVGElement>>;
@@ -117,7 +118,6 @@ export function AddTaskButton() {
   const showAddList                = useUIStore((s) => s.showAddList);
   const showAddListItem            = useUIStore((s) => s.showAddListItem);
   const activeListId               = useUIStore((s) => s.activeListId);
-  const showAddNote                = useUIStore((s) => s.showAddNote);
   const showAddNoteTag             = useUIStore((s) => s.showAddNoteTag);
   const showTagPresets             = useUIStore((s) => s.showTagPresets);
   const showAddActivity            = useUIStore((s) => s.showAddActivity);
@@ -178,14 +178,14 @@ export function AddTaskButton() {
 
   const handleNotesOption = (type: NotesDialType) => {
     setOpen(false);
-    if (type === 'note') showAddNote();
+    if (type === 'note') addNoteHere();
     else if (type === 'notebook') showAddNoteTag(null, 'area');
     else if (type === 'tag-preset') showTagPresets();
     else if (type === 'sticky') addSticky();
     else showAddNoteTag(null, 'tag');
   };
 
-  const handleFitnessOption = (_type: FitnessDialType) => {
+  const handleFitnessOption = () => {
     setOpen(false);
     showAddActivity();
   };
@@ -416,7 +416,7 @@ export function AddTaskButton() {
               <button
                 className={styles.optionBtn}
                 style={{ background: opt.color }}
-                onClick={() => handleFitnessOption(opt.type)}
+                onClick={handleFitnessOption}
                 aria-label={`Create ${opt.label}`}
               >
                 <opt.Icon className={styles.optionIcon} />

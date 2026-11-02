@@ -120,17 +120,21 @@ export const useScheduleStore = create<ScheduleState>()(
     {
       name: 'todo-schedules',
       storage: persistStorage(),
-      version: 1,
+      version: 2,
       // v0 → v1: blocks gained requiresCommitment/committedDates (commitment mode). The store had
       // no version before, so every existing schedule arrives here as v0.
-      migrate: (persisted) => {
+      // v1 → v2 (phase 7 (c)): nothing to change here; the bump makes the app keep a "Before an app
+      // update" copy before services/schedules.ts turns the blocks into calendar events.
+      migrate: (persisted, fromVersion) => {
         const state = persisted as ScheduleState;
-        for (const schedule of Object.values(state.schedules ?? {})) {
-          schedule.blocks = (schedule.blocks ?? []).map((b) => ({
-            ...b,
-            requiresCommitment: b.requiresCommitment ?? false,
-            committedDates:     b.committedDates ?? [],
-          }));
+        if (fromVersion < 1) {
+          for (const schedule of Object.values(state.schedules ?? {})) {
+            schedule.blocks = (schedule.blocks ?? []).map((b) => ({
+              ...b,
+              requiresCommitment: b.requiresCommitment ?? false,
+              committedDates:     b.committedDates ?? [],
+            }));
+          }
         }
         return state;
       },

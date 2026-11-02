@@ -287,6 +287,7 @@ export function endeavourSummary(c: Collection) {
     id: c.id,
     name: c.name,
     kind: c.kind,
+    template: c.templateId,           // 'semester', 'subject'…: see get_subject
     description: c.description,
     deadline: c.deadline,
     archived: c.archivedAt ? true : null,

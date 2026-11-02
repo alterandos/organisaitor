@@ -9,6 +9,7 @@ import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { ConvertWidget } from '@/components/ConverterPane/ConvertWidget';
 import type { ConvertDesign, ConvertValue } from '@/components/ConverterPane/convertValue';
 import type { NoteEditorMenuApi } from '../contextMenu';
+import { blockResizeHandle, blockWidth, blockWidthAttributes, showBlockWidth, widthMenuItem } from './blockWidth';
 import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, designMenuItem, frameButtons, frameMenuItem, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 
 // A conversion in a note (`\convert`, asked for by the user 2026-10-23): one converter, built-in
@@ -16,7 +17,9 @@ import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, design
 // answer on the right, worked out as you type. One atom node holding only the choice and what was
 // typed (`converter`, `from`, `to`, `values`, `reverse`), never the answer. The conversion itself
 // is the shared ConvertWidget; this file is the block around it: its node, `\convert`, the pill,
-// designs (Card, Compact), frames, selection. A card-like block (CARD_BLOCK_NODES): no Outline.
+// designs (Card, Compact), frames, selection, width. A card-like block (CARD_BLOCK_NODES): no
+// Outline. Unset, its width fits what it shows (Fit the text); a width set or dragged is the
+// shared block width (blockWidth.ts).
 
 const CONVERT_VARIANTS = ['card', 'compact'] as const;
 export const CONVERT_DESIGNS: BlockDesign<ConvertDesign>[] = [
@@ -36,12 +39,15 @@ export const ConvertBlock = Node.create({
   addAttributes() {
     return {
       ...blockFrameAttributes(),
+      ...blockWidthAttributes(),
       variant:   { default: 'card', parseHTML: (el) => (CONVERT_VARIANTS as readonly string[]).includes(el.getAttribute('data-variant') ?? '') ? el.getAttribute('data-variant') : 'card', renderHTML: (a) => ({ 'data-variant': a.variant }) },
       converter: { default: 'length', parseHTML: (el) => el.getAttribute('data-converter') || 'length', renderHTML: (a) => ({ 'data-converter': a.converter }) },
       from:      { default: null, parseHTML: (el) => el.getAttribute('data-from'), renderHTML: (a) => (a.from ? { 'data-from': a.from } : {}) },
       to:        { default: null, parseHTML: (el) => el.getAttribute('data-to'), renderHTML: (a) => (a.to ? { 'data-to': a.to } : {}) },
       values:    { default: { amount: '1' }, parseHTML: (el) => json(el.getAttribute('data-values'), { amount: '1' }), renderHTML: (a) => ({ 'data-values': JSON.stringify(a.values ?? {}) }) },
       reverse:   { default: false, parseHTML: (el) => el.getAttribute('data-reverse') === 'true', renderHTML: (a) => (a.reverse ? { 'data-reverse': 'true' } : {}) },
+      // Currency kept at the rates of a day ("Keep this rate").
+      fixed:     { default: null, parseHTML: (el) => json(el.getAttribute('data-fixed'), null), renderHTML: (a) => (a.fixed ? { 'data-fixed': JSON.stringify(a.fixed) } : {}) },
     };
   },
 
@@ -53,7 +59,7 @@ export const ConvertBlock = Node.create({
   },
 });
 
-const valueOf = (a: PMNode['attrs']): ConvertValue => ({ converter: a.converter, from: a.from, to: a.to, values: a.values ?? {}, reverse: !!a.reverse });
+const valueOf = (a: PMNode['attrs']): ConvertValue => ({ converter: a.converter, from: a.from, to: a.to, values: a.values ?? {}, reverse: !!a.reverse, fixed: a.fixed ?? null });
 
 // `\convert`: lengths, 1 of the default unit, the amount ready to type over.
 export function insertConvert(state: EditorState, from: number, to: number): Transaction | null {
@@ -91,6 +97,7 @@ class ConvertView {
   private getPos: () => number | undefined;
   private pill: HTMLElement;
   private body: HTMLElement;
+  private handle: HTMLElement;
   private root: Root;
   private focus = { n: 0, text: '' };
 
@@ -104,7 +111,8 @@ class ConvertView {
     this.dom.contentEditable = 'false';
     this.pill = document.createElement('div');
     this.body = document.createElement('div');
-    this.dom.append(this.pill, this.body);
+    this.handle = blockResizeHandle(() => this.editor.view, () => this.getPos(), () => 'auto', (w) => this.showWidth(w));
+    this.dom.append(this.pill, this.body, this.handle);
     this.root = createRoot(this.body);
     this.dom.addEventListener('convert-focus', (e) => { this.focus = { n: this.focus.n + 1, text: (e as CustomEvent<string>).detail ?? '' }; this.render(); });
     this.render();
@@ -123,9 +131,16 @@ class ConvertView {
     if (pos !== undefined && this.editor.isEditable) setConvertAttrs(this.editor.view, pos, v);
   };
 
+  // Unset (or Fit the text) draws no width, so it fits what it shows.
+  private showWidth(w: ReturnType<typeof blockWidth>) {
+    if (w === 'auto') { this.dom.removeAttribute('data-block-width-shown'); this.dom.style.removeProperty('--block-w'); }
+    else showBlockWidth(this.dom, w);
+  }
+
   private render() {
     const a = this.node.attrs;
     this.dom.setAttribute('data-variant', a.variant as string);
+    this.showWidth(blockWidth(a, 'auto'));
     applyFrameAttrs(this.dom, { ...a, outlined: false });   // a card has its own border: no Outline
     const view = this.editor.view;
     const getPos = () => { const p = this.getPos(); return p === undefined ? undefined : p + 1; };
@@ -152,7 +167,7 @@ class ConvertView {
 
   stopEvent(e: Event) {
     const t = e.target as globalThis.Node | null;
-    return !!t && (this.body.contains(t) || this.pill.contains(t));
+    return !!t && (this.body.contains(t) || this.pill.contains(t) || this.handle.contains(t));
   }
 
   ignoreMutation() { return true; }
@@ -181,7 +196,7 @@ export const ConvertBehaviour = Extension.create({
 
 export const ConvertExtensions = [ConvertBlock, ConvertBehaviour];
 
-// Right-click on a conversion: its design and frame.
+// Right-click on a conversion: its design, frame and width.
 registerContextMenuProvider({
   id: 'note-editor.convert',
   kind: 'note-editor',
@@ -195,6 +210,7 @@ registerContextMenuProvider({
     return [
       designMenuItem(CONVERT_DESIGNS, node.attrs.variant as ConvertDesign, (v) => setConvertAttrs(view, pos, { variant: v })),
       frameMenuItem(view, pos, node.attrs),
+      widthMenuItem(view, pos, node.attrs, 'auto'),
     ];
   },
 });

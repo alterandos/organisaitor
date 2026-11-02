@@ -25,6 +25,6 @@ describe('PeriodField', () => {
     fireEvent.click(screen.getByText('+ Add a break'));
     expect(useTaskStore.getState().collections[geos].period?.breaks).toHaveLength(1);
     fireEvent.click(screen.getByText('Take Autumn 2026’s instead'));
-    expect(useTaskStore.getState().collections[geos].period).toBeUndefined();
+    expect(useTaskStore.getState().collections[geos].period).toBeNull();   // null, so the cloud's copy is cleared too
   });
 });

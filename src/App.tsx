@@ -73,6 +73,10 @@ import { AddTagModal } from '@/components/AddTagModal/AddTagModal';
 import { ItemTypeModal } from '@/components/ItemTypeModal/ItemTypeModal';
 import { GoalModal } from '@/components/GoalModal/GoalModal';
 import { EndeavourTemplateModal } from '@/components/EndeavourTemplateModal/EndeavourTemplateModal';
+import { SubjectEditor } from '@/components/TemplateEditors/SubjectEditor';
+import { SemesterEditor } from '@/components/TemplateEditors/SemesterEditor';
+import { EndeavourContentsModal } from '@/components/EndeavourContents/EndeavourContentsModal';
+import { EndeavourAttributesPane } from '@/components/EndeavourAttributes/EndeavourAttributesPane';
 import { RestructureModal } from '@/components/RestructureModal/RestructureModal';
 import { AddCalendarItemModal } from '@/components/AddCalendarItemModal/AddCalendarItemModal';
 import { AddTrackerModal } from '@/components/AddTrackerModal/AddTrackerModal';
@@ -87,6 +91,7 @@ import { ConverterPane } from '@/components/ConverterPane/ConverterPane';
 // The block guide draws its examples with the whole note editor: its own chunk, loaded when opened.
 const BlockGuide = lazy(() => import('@/components/BlockGuide/BlockGuidePane'));
 import { ScratchpadPanel } from '@/components/ScratchpadPanel/ScratchpadPanel';
+const LookUpPane = lazy(() => import('@/components/LookUpPane/LookUpPane').then((m) => ({ default: m.LookUpPane })));
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
@@ -94,6 +99,10 @@ import { HistoryBrowser } from '@/components/HistoryBrowser/HistoryBrowser';
 import { initPictures } from '@/services/pictures';
 import { initEventTaskFollow } from '@/services/eventTaskLinks';
 import { initRepeatFollow } from '@/services/repeatFollow';
+import { initSchedules } from '@/services/schedules';
+import { initSubjectWork } from '@/services/subjectItems';
+import { initStreamConversion } from '@/services/streamConversion';
+import { initClassClashes } from '@/services/classClashes';
 import { adoptLegacyNotePins } from '@/services/quickAccessPins';
 import { installSpecialCharInput } from '@/specialChars/fieldInput';
 import { VoiceIndicator } from '@/components/VoiceIndicator/VoiceIndicator';
@@ -167,11 +176,14 @@ export default function App() {
   const convertersOpen             = useUIStore((s) => s.convertersOpen);
   const blockGuideOpen             = useUIStore((s) => s.blockGuideOpen);
   const scratchpadOpen             = useUIStore((s) => s.scratchpadOpen);
+  const lookUpOpen                 = useUIStore((s) => s.lookUpOpen);
   const openRecyclingBin           = useUIStore((s) => s.openRecyclingBin);
   const closeRecyclingBin          = useUIStore((s) => s.closeRecyclingBin);
   const editTrackerOpen            = useUIStore((s) => s.editTrackerOpen);
   const editRoutineOpen            = useUIStore((s) => s.editRoutineOpen);
   const editingCollection            = useUIStore((s) => s.editingCollection);
+  const contentsFor                  = useUIStore((s) => s.contentsFor);
+  const attributesFor                = useUIStore((s) => s.attributesFor);
   const editingPurpose               = useUIStore((s) => s.editingPurpose);
   const editingTag                   = useUIStore((s) => s.editingTag);
   const editingItemTypeId            = useUIStore((s) => s.editingItemTypeId);
@@ -284,6 +296,10 @@ export default function App() {
   useEffect(() => installSpecialCharInput(), []);
   useEffect(() => initEventTaskFollow(), []);
   useEffect(() => initRepeatFollow(), []);
+  useEffect(() => initSchedules(), []);
+  useEffect(() => initStreamConversion(), []);
+  useEffect(() => initSubjectWork(), []);
+  useEffect(() => initClassClashes(), []);
   useEffect(() => initEncryptionScopes(), []);
 
   const setSession = useAuthStore((s) => s.setSession);
@@ -499,6 +515,14 @@ export default function App() {
         if (ui.convertersOpen) ui.closeConverters(); else ui.openConverters();
         return;
       }
+      // Look up: from anywhere, a text field too.
+      if (matchesHotkeyId(e, 'action-look-up')) {
+        e.preventDefault();
+        const ui = useUIStore.getState();
+        if (ui.lookUpOpen) ui.closeLookUp(); else ui.openLookUp();
+        return;
+      }
+
       // The scratchpad: from anywhere, a text field too (Alt+P types nothing there).
       if (matchesHotkeyId(e, 'action-scratchpad')) {
         e.preventDefault();
@@ -780,6 +804,7 @@ export default function App() {
         {convertersOpen            && <ConverterPane />}
         {blockGuideOpen            && <Suspense fallback={null}><BlockGuide /></Suspense>}
         {scratchpadOpen            && <ScratchpadPanel />}
+        {lookUpOpen                && <Suspense fallback={null}><LookUpPane /></Suspense>}
         {editingCalendarEventId    && <CalendarEventPane key={editingCalendarEventId} />}
         {editingCalendarReminderId && <CalendarReminderPane key={editingCalendarReminderId} />}
         {editingCalendarDeadlineId && <CalendarDeadlinePane key={editingCalendarDeadlineId} />}
@@ -791,6 +816,10 @@ export default function App() {
         {openModal === 'add-item-type'       && <ItemTypeModal key={editingItemTypeId ?? 'new'} />}
         {openModal === 'add-goal'            && <GoalModal key={editingGoalId ?? 'new'} />}
         {openModal === 'endeavour-template'  && <EndeavourTemplateModal />}
+        {openModal === 'subject-editor'      && editingCollection && <SubjectEditor key={editingCollection.id} id={editingCollection.id} />}
+        {openModal === 'semester-editor'     && editingCollection && <SemesterEditor key={editingCollection.id} id={editingCollection.id} />}
+        {attributesFor && <EndeavourAttributesPane key={attributesFor} />}
+        {openModal === 'endeavour-contents'  && <EndeavourContentsModal key={contentsFor ? `${contentsFor.id}:${contentsFor.kind ?? ''}` : 'none'} />}
         {openModal === 'restructure'         && <RestructureModal key={restructureId ?? 'none'} />}
         {openModal === 'add-calendar-item'   && <AddCalendarItemModal />}
         {openModal === 'add-tracker'            && <AddTrackerModal />}

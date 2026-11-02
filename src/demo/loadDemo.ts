@@ -101,6 +101,8 @@ function livedIn(demo: DemoAccount, base: Date) {
   recent.recordVisit('task', demo.tasks.draft);
   recent.recordVisit('place', 'glossary');
   recent.recordVisit('note', demo.notes.welcome);
+  // Each counted at once, as if dwelt on (a visit counts only after DWELL_MS).
+  for (const key of Object.keys(useRecentItemsStore.getState().items)) recent.countVisit(key);
 
   const ui = useUIStore.getState();
   ui.setActiveView('notes');

@@ -4,6 +4,10 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useAgentLogStore } from '@/store/agentLogStore';
 import { useAgentBatchStore } from '@/store/agentBatchStore';
+import { useNoteStore } from '@/store/noteStore';
+import { useListStore } from '@/store/listStore';
+import { useGoalStore } from '@/store/goalStore';
+import { useItemTypeStore } from '@/store/itemTypeStore';
 import { runCommand } from '@/agent';
 import type { CommandResult, RunOptions } from '@/agent';
 
@@ -13,6 +17,7 @@ export function resetStores() {
   useScheduleStore.setState(useScheduleStore.getInitialState(), true);
   useAgentLogStore.setState(useAgentLogStore.getInitialState(), true);
   useAgentBatchStore.setState(useAgentBatchStore.getInitialState(), true);
+  for (const s of [useNoteStore, useListStore, useGoalStore, useItemTypeStore]) (s as { setState: (x: unknown, r: boolean) => void; getInitialState: () => unknown }).setState(s.getInitialState(), true);
 }
 
 type Done = Extract<CommandResult, { status: 'done' }>;

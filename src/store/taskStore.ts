@@ -47,7 +47,7 @@ export interface TaskActions {
 
   // Collections (projects, lists, trackers …)
   addCollection:    (input: CreateCollectionInput) => CollectionId;
-  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt' | 'encryptContents' | 'streams' | 'period'>>) => void;
+  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt' | 'encryptContents' | 'streams' | 'period' | 'templateId' | 'attributes'>>) => void;
   deleteCollection: (id: CollectionId) => void;
   // Links between Endeavours (utils/endeavourGraph.ts has the rules). Returns why a link was refused,
   // or null once it's made.
@@ -370,7 +370,7 @@ export const useTaskStore = create<TaskStore>()(
     {
       name:    'todo-app-storage',
       storage: persistStorage(),
-      version: 14,
+      version: 15,
       // Cumulative: every step below whose version threshold the persisted store is behind
       // on gets applied, in order, to the same `state` — none of them return early. (A v9 ->
       // v11 upgrade, say, must also carry forward whatever a v2 -> v11 upgrade needs from the
@@ -491,6 +491,9 @@ export const useTaskStore = create<TaskStore>()(
           }
           state = { ...state, tasks: patched };
         }
+        // v15 (2026-10-30): no shape change. The bump makes the "Before an app update" copy
+        // (services/upgradeSnapshot.ts) keep every routine's rhythm streams from before they are
+        // converted to repeating calendar items (services/streamConversion.ts).
         return state;
       },
     }

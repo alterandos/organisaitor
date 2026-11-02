@@ -6,7 +6,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { NOTE_TEMPLATES } from '@/config/noteTemplates';
 import { LABELS } from '@/config/labels';
-import { resolveNoteInheritedCollectionId } from '@/utils/notes';
+import { resolveNoteInheritedCollectionId, takesNotes } from '@/utils/notes';
 import type { NoteTagId, CollectionId } from '@/types';
 import styles from './AddNoteModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -27,7 +27,10 @@ export function AddNoteModal() {
   const allCollections = Object.values(collectionsRecord);
 
   const [title, setTitle]             = useState(() => useUIStore.getState().createDraft ?? '');
-  const [selectedTagIds, setSelectedTagIds] = useState<NoteTagId[]>(() => selectedNoteTagId ? [selectedNoteTagId] : []);
+  const [selectedTagIds, setSelectedTagIds] = useState<NoteTagId[]>(() => {
+    const tag = selectedNoteTagId ? useNoteStore.getState().noteTags[selectedNoteTagId] : undefined;
+    return tag && takesNotes(tag) ? [selectedNoteTagId!] : [];
+  });
   const [showTagPicker, setShowTagPicker]   = useState(false);
   const [tagPickerPath, setTagPickerPath]   = useState<NoteTagId[]>([]);
   const [templateId, setTemplateId]         = useState(NOTE_TEMPLATES[0].id);
@@ -87,9 +90,9 @@ export function AddNoteModal() {
     ? tagPickerPath[tagPickerPath.length - 1]
     : null;
 
-  const tagsToShow = currentTagLevel
+  const tagsToShow = (currentTagLevel
     ? getChildTags(currentTagLevel)
-    : getRootTags();
+    : getRootTags()).filter(takesNotes);
 
   return (
     <div className={styles.overlay} onClick={closeModal}>

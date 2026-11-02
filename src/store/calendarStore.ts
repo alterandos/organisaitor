@@ -30,6 +30,10 @@ interface CalendarState {
   addEvent:    (input: CreateCalendarEventInput, id?: CalendarEventId) => CalendarEventId;
   updateEvent: (id: CalendarEventId, changes: Partial<Omit<CalendarEvent,    'id' | 'createdAt'>>) => void;
   deleteEvent: (id: CalendarEventId)                => void;
+  // Whole events put in as they are, timestamps included (services/schedules.ts converting a
+  // Schedule kept before phase 7: every device makes the same records, which never beat a real edit).
+  putEvents:   (events: CalendarEvent[])            => void;
+  putDeadlines: (deadlines: CalendarDeadline[])     => void;   // records made elsewhere (a conversion), as they are
   archiveEvent: (id: CalendarEventId, reason?: string | null) => void;
   restoreEvent: (id: CalendarEventId) => void;
 
@@ -79,6 +83,87 @@ interface CalendarState {
   markImported: (keys: string[]) => void;
 }
 
+// A whole event from its input: the one place an event's defaults live (addEvent, and
+// services/schedules.ts converting a Schedule kept before phase 7).
+export function buildEvent(input: CreateCalendarEventInput, id: CalendarEventId, ts: string): CalendarEvent {
+  return {
+    id,
+    title:             input.title.trim(),
+    date:              input.date,
+    endDate:           input.endDate            ?? null,
+    startTime:         input.startTime          ?? null,
+    endTime:           input.endTime            ?? null,
+    notes:             input.notes              ?? null,
+    links:             input.links ?? mergeNewLinks([], input.notes),
+    location:          input.location           ?? null,
+    eventType:         input.eventType          ?? 'default',
+    collectionId:      input.collectionId       ?? null,
+    createdAt:         ts,
+    updatedAt:         ts,
+    notifyBeforeValue: input.notifyBeforeValue  ?? null,
+    notifyBeforeUnit:  input.notifyBeforeUnit   ?? 'hours',
+    notifyMode:        input.notifyMode         ?? 'before',
+    remindAt:          null,
+    notifyAtTime:      input.notifyAtTime       ?? null,
+    repeat:            input.repeat             ?? null,
+    status:            input.status             ?? 'confirmed',
+    important:         input.important         ?? false,
+    background:        input.background        ?? false,
+    color:             input.color              ?? null,
+    crossAppRefs:      input.crossAppRefs      ?? [],
+    archivedAt:        null,
+    archiveReason:     null,
+    seriesId:          input.seriesId           ?? null,
+    seriesDate:        input.seriesDate         ?? null,
+    remindOccurrence:  null,
+    seenDates:         input.seenDates          ?? [],
+    travelMode:          input.travelMode          ?? null,
+    source:              input.source              ?? null,
+    sourceAccount:       input.sourceAccount       ?? null,
+    sourceConnectionId:  input.sourceConnectionId   ?? null,
+    sourceCalendarId:    input.sourceCalendarId     ?? null,
+    sourceEventId:       input.sourceEventId        ?? null,
+    sourceUid:           input.sourceUid           ?? null,
+    sourceRaw:           input.sourceRaw            ?? null,
+    ...(input.scheduleId ? { scheduleId: input.scheduleId } : {}),
+  };
+}
+
+// A whole Deadline from its input, as buildEvent is for events (addDeadline, and the conversion of
+// rhythm streams in services/streamConversion.ts).
+export function buildDeadline(input: CreateCalendarDeadlineInput, id: CalendarDeadlineId, ts: string): CalendarDeadline {
+  return {
+    id,
+    title:        input.title.trim(),
+    date:         input.date,
+    time:         input.time         ?? null,
+    notes:        input.notes        ?? null,
+    links:        input.links ?? mergeNewLinks([], input.notes),
+    collectionId: input.collectionId ?? null,
+    deadlineType: input.deadlineType ?? 'default',
+    createdAt:    ts,
+    updatedAt:    ts,
+    remindAt:     null,
+    repeat:       input.repeat ?? null,
+    important:    input.important ?? false,
+    status:       input.status ?? 'confirmed',
+    crossAppRefs: input.crossAppRefs ?? [],
+    archivedAt:    null,
+    archiveReason: null,
+    notifyDaysBefore: input.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE,
+    notifyAtTime:     input.notifyAtTime     ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
+    notify:           input.notify ?? true,
+    notifyMode:        input.notifyMode ?? 'daysAt',
+    notifyBeforeValue: input.notifyBeforeValue ?? null,
+    notifyBeforeUnit:  input.notifyBeforeUnit ?? 'hours',
+    doneDates:        input.doneDates ?? [],
+    seriesId:         input.seriesId   ?? null,
+    seriesDate:       input.seriesDate ?? null,
+    remindOccurrence: null,
+    seenDates:        input.seenDates ?? [],
+  };
+}
+
 export const useCalendarStore = create<CalendarState>()(
   persist(
     (set, get) => ({
@@ -88,50 +173,24 @@ export const useCalendarStore = create<CalendarState>()(
 
       addEvent: (input, givenId) => {
         const id  = givenId ?? newCalendarEventId();
-        const ts  = now();
-        const event: CalendarEvent = {
-          id,
-          title:             input.title.trim(),
-          date:              input.date,
-          endDate:           input.endDate            ?? null,
-          startTime:         input.startTime          ?? null,
-          endTime:           input.endTime            ?? null,
-          notes:             input.notes              ?? null,
-          links:             input.links ?? mergeNewLinks([], input.notes),
-          location:          input.location           ?? null,
-          eventType:         input.eventType          ?? 'default',
-          collectionId:      input.collectionId       ?? null,
-          createdAt:         ts,
-          updatedAt:         ts,
-          notifyBeforeValue: input.notifyBeforeValue  ?? null,
-          notifyBeforeUnit:  input.notifyBeforeUnit   ?? 'hours',
-          notifyMode:        input.notifyMode         ?? 'before',
-          remindAt:          null,
-          notifyAtTime:      input.notifyAtTime       ?? null,
-          repeat:            input.repeat             ?? null,
-          status:            input.status             ?? 'confirmed',
-          important:         input.important         ?? false,
-          background:        input.background        ?? false,
-          color:             input.color              ?? null,
-          crossAppRefs:      input.crossAppRefs      ?? [],
-          archivedAt:        null,
-          archiveReason:     null,
-          seriesId:          input.seriesId           ?? null,
-          seriesDate:        input.seriesDate         ?? null,
-          remindOccurrence:  null,
-          seenDates:         input.seenDates          ?? [],
-          travelMode:          input.travelMode          ?? null,
-          source:              input.source              ?? null,
-          sourceAccount:       input.sourceAccount       ?? null,
-          sourceConnectionId:  input.sourceConnectionId   ?? null,
-          sourceCalendarId:    input.sourceCalendarId     ?? null,
-          sourceEventId:       input.sourceEventId        ?? null,
-          sourceUid:           input.sourceUid           ?? null,
-          sourceRaw:           input.sourceRaw            ?? null,
-        };
+        const event = buildEvent(input, id, now());
         set((s) => ({ events: { ...s.events, [id]: event } }));
         return id;
       },
+
+      putDeadlines: (list) => set((s) => {
+        if (!list.length) return {};
+        const deadlines = { ...s.deadlines };
+        for (const d of list) deadlines[d.id] = d;
+        return { deadlines };
+      }),
+
+      putEvents: (list) => set((s) => {
+        if (!list.length) return {};
+        const events = { ...s.events };
+        for (const e of list) events[e.id] = e;
+        return { events };
+      }),
 
       updateEvent: (id, changes) => set((s) => {
         const event = s.events[id];
@@ -231,37 +290,7 @@ export const useCalendarStore = create<CalendarState>()(
 
       addDeadline: (input) => {
         const id = newCalendarDeadlineId();
-        const ts = now();
-        const deadline: CalendarDeadline = {
-          id,
-          title:        input.title.trim(),
-          date:         input.date,
-          time:         input.time         ?? null,
-          notes:        input.notes        ?? null,
-          links:        input.links ?? mergeNewLinks([], input.notes),
-          collectionId: input.collectionId ?? null,
-          deadlineType: input.deadlineType ?? 'default',
-          createdAt:    ts,
-          updatedAt:    ts,
-          remindAt:     null,
-          repeat:       input.repeat ?? null,
-          important:    input.important ?? false,
-          status:       input.status ?? 'confirmed',
-          crossAppRefs: input.crossAppRefs ?? [],
-          archivedAt:    null,
-          archiveReason: null,
-          notifyDaysBefore: input.notifyDaysBefore ?? DEFAULT_ALLDAY_NOTIFY_DAYS_BEFORE,
-          notifyAtTime:     input.notifyAtTime     ?? DEFAULT_ALLDAY_NOTIFY_AT_TIME,
-          notify:           input.notify ?? true,
-          notifyMode:        input.notifyMode ?? 'daysAt',
-          notifyBeforeValue: input.notifyBeforeValue ?? null,
-          notifyBeforeUnit:  input.notifyBeforeUnit ?? 'hours',
-          doneDates:        input.doneDates ?? [],
-          seriesId:         input.seriesId   ?? null,
-          seriesDate:       input.seriesDate ?? null,
-          remindOccurrence: null,
-          seenDates:        input.seenDates ?? [],
-        };
+        const deadline = buildDeadline(input, id, now());
         set((s) => ({ deadlines: { ...s.deadlines, [id]: deadline } }));
         return id;
       },

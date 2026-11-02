@@ -6,6 +6,7 @@ import { glossaryEntry } from '@/services/glossary';
 import { diagramToText, normalizeDiagram } from '@/diagrams/diagramSpec';
 import { convertText } from '@/components/ConverterPane/convertValue';
 import { useConverterStore } from '@/store/converterStore';
+import { useCurrencyStore } from '@/store/currencyStore';
 
 // The plain text a copy from a note puts on the clipboard (editorProps.clipboardTextSerializer).
 // Rich targets (Word, Docs, mail) take the HTML copy and keep everything; a plain-text target (a
@@ -176,7 +177,7 @@ function block(node: PMNode): string {
     }
     case 'convertBlock':
       // "5 m = 16.4 ft", worked out as it reads now.
-      return convertText({ converter: node.attrs.converter, from: node.attrs.from, to: node.attrs.to, values: node.attrs.values ?? {}, reverse: !!node.attrs.reverse }, useConverterStore.getState().converters);
+      return convertText({ converter: node.attrs.converter, from: node.attrs.from, to: node.attrs.to, values: node.attrs.values ?? {}, reverse: !!node.attrs.reverse, fixed: node.attrs.fixed ?? null }, useConverterStore.getState().converters, useCurrencyStore.getState().rates?.rates);
     case 'diagram':
       // Each arrow as "A → B", then any box on its own.
       return diagramToText(normalizeDiagram(node.attrs.spec));

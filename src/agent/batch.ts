@@ -2,6 +2,10 @@ import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useAgentBatchStore } from '@/store/agentBatchStore';
+import { useNoteStore } from '@/store/noteStore';
+import { useListStore } from '@/store/listStore';
+import { useGoalStore } from '@/store/goalStore';
+import { useItemTypeStore } from '@/store/itemTypeStore';
 import type { BatchChange, EntityKind } from '@/types/agent';
 
 // How an agent's changes are captured and undone. Zustand state is immutable — every write replaces
@@ -27,6 +31,11 @@ const TRACKED: Tracked[] = [
   { kind: 'reminder',  read: () => useCalendarStore.getState().reminders, write: (r) => useCalendarStore.setState({ reminders: r as never }) },
   { kind: 'deadline',  read: () => useCalendarStore.getState().deadlines, write: (r) => useCalendarStore.setState({ deadlines: r as never }) },
   { kind: 'schedule',  read: () => useScheduleStore.getState().schedules, write: (r) => useScheduleStore.setState({ schedules: r as never }) },
+  // What templates make besides (a subject's notebook, a semester's admin list and goal, the University Types).
+  { kind: 'notebook',  read: () => useNoteStore.getState().noteTags,      write: (r) => useNoteStore.setState({ noteTags: r as never }) },
+  { kind: 'list',      read: () => useListStore.getState().lists,         write: (r) => useListStore.setState({ lists: r as never }) },
+  { kind: 'goal',      read: () => useGoalStore.getState().goals,         write: (r) => useGoalStore.setState({ goals: r as never }) },
+  { kind: 'item_type', read: () => useItemTypeStore.getState().types,     write: (r) => useItemTypeStore.setState({ types: r as never }) },
 ];
 
 const updatedAtOf = (record: unknown): string | null =>

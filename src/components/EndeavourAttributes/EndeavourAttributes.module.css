@@ -1,0 +1,73 @@
+/* An Endeavour's attributes pane (EndeavourAttributesPane) and its summary in edit panes. Opened
+   from inside other modals' worlds, so it sits at the pane-modal tier above them. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-backdrop);
+  z-index: var(--z-pane-modal);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+@media (min-width: 520px) { .overlay { align-items: center; padding: var(--space-4); } }
+
+.modal {
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 640px;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-lg);
+}
+@media (min-width: 520px) { .modal { border-radius: var(--radius-lg); max-height: calc(100dvh - 2rem); } }
+
+.header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4) var(--space-5) var(--space-2); }
+.title { flex: 1; margin: 0; font-size: var(--text-base); font-weight: 600; }
+.closeBtn, .iconBtn { display: inline-flex; background: none; border: none; color: var(--color-muted); cursor: pointer; padding: var(--space-1); border-radius: var(--radius-sm); }
+.closeBtn:hover { color: var(--color-text); }
+.iconBtn:hover { color: var(--color-danger); }
+
+.body { overflow-y: auto; min-height: 0; padding: var(--space-2) var(--space-5) var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.label { font-size: var(--text-xs); font-weight: 600; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.hint { margin: 0; color: var(--color-muted); font-size: var(--text-sm); }
+.select, .input {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+.input { flex: 1; }
+.select:focus-visible, .input:focus-visible { border-color: var(--color-primary); outline: none; }
+
+.fields { display: flex; flex-direction: column; gap: var(--space-3); }
+.fieldRow { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.fieldHead { display: flex; align-items: center; gap: var(--space-2); }
+.fieldName { font-weight: 600; font-size: var(--text-sm); }
+.badge { font-size: var(--text-2xs); color: var(--color-muted); border: 1px solid var(--color-border); border-radius: var(--radius-pill); padding: 0 var(--space-2); }
+.inherit { display: inline-flex; align-items: center; gap: var(--space-1); margin-left: auto; font-size: var(--text-xs); color: var(--color-muted); cursor: pointer; }
+.inheritedRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); font-size: var(--text-sm); }
+
+.addRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.btn, .primary { padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); font: inherit; font-size: var(--text-md); cursor: pointer; }
+.btn { border: 1px solid var(--color-border); background: transparent; color: var(--color-text); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.primary { border: none; background: var(--color-primary); color: var(--color-on-primary); font-weight: 600; }
+.footer { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-5) var(--space-4); border-top: 1px solid var(--color-border); }
+.spacer { flex: 1; }
+.linkBtn { background: none; border: none; padding: 0; color: var(--color-primary); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.linkBtn:hover { text-decoration: underline; }
+
+.summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+.summaryText { font-size: var(--text-sm); color: var(--color-text); }
+
+.closeBtn:focus-visible, .iconBtn:focus-visible, .btn:focus-visible, .primary:focus-visible, .linkBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

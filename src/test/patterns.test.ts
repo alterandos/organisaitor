@@ -1216,6 +1216,43 @@ describe('pattern: each note block has its own colour (CLAUDE.md "Block colours"
   });
 });
 
+describe('pattern: Edit opens the template\'s editor (CLAUDE.md "Type system")', () => {
+  // Which editor an Endeavour opens in is decided once, by uiStore.openEditCollection through
+  // config/templateEditors.ts; an Edit button never checks the template itself (adopted 2026-10-30).
+  it('only the registry, uiStore and the places that open or mount an editor read it', () => {
+    const ALLOWED = new Set([
+      'src/config/templateEditors.ts', 'src/store/uiStore.ts', 'src/App.tsx',                 // the registry, the routing, the mounts
+      'src/components/AddCollectionModal/AddCollectionModal.tsx',                               // "Edit as" a subject / a semester
+      'src/components/EndeavourTemplateModal/EndeavourTemplateModal.tsx',                       // opens the editor once made
+    ]);
+    const hits = SOURCE_FILES
+      .filter((f) => /config\/templateEditors'|'(?:subject|semester)-editor'/.test(fs.readFileSync(f, 'utf8')))
+      .map((f) => path.relative(ROOT, f).replace(/\\/g, '/'))
+      .filter((f) => !ALLOWED.has(f));
+    expect(hits).toEqual([]);
+  });
+  it('no component picks an editor by comparing an Endeavour\'s template', () => {
+    const hits = SOURCE_FILES
+      .filter((f) => f.includes(`${path.sep}components${path.sep}`) && !f.includes(`${path.sep}TemplateEditors${path.sep}`))
+      .filter((f) => /templateId\s*===\s*'(?:subject|semester|training-plan|project)'/.test(fs.readFileSync(f, 'utf8')));
+    expect(hits.map((f) => path.relative(ROOT, f))).toEqual([]);
+  });
+});
+
+describe('pattern: every block\'s pill shows on hover (CLAUDE.md "Block designs")', () => {
+  // Each block places its own pill (blockPill('data-x-tools')) and must show it while hovered; the
+  // conversion and the embed had none, so their menus never appeared (found 2026-10-30).
+  it('every blockPill attribute has a :hover rule that shows it', () => {
+    const extDir = path.join(SRC, 'components', 'NoteEditor', 'extensions');
+    const css = fs.readFileSync(path.join(SRC, 'components', 'NoteEditor', 'NoteEditor.module.css'), 'utf8');
+    const attrs = new Set(walk(extDir, ['.ts']).filter((f) => !f.endsWith('.test.ts'))
+      .flatMap((f) => [...fs.readFileSync(f, 'utf8').matchAll(/blockPill\('(data-[a-z-]+)'\)/g)].map((m) => m[1])));
+    expect(attrs.size).toBeGreaterThan(20);
+    const missing = [...attrs].filter((a) => !new RegExp(`:hover[^{}]*\\[${a}\\]`).test(css));
+    expect(missing).toEqual([]);
+  });
+});
+
 describe('pattern: a block\'s width comes from blockWidth.ts (CLAUDE.md "Block designs")', () => {
   const extDir = path.join(SRC, 'components', 'NoteEditor', 'extensions');
   it('every block with a width takes the shared attribute, handle and menu item', () => {
@@ -1226,7 +1263,8 @@ describe('pattern: a block\'s width comes from blockWidth.ts (CLAUDE.md "Block d
       const file = files.find((f) => fs.readFileSync(f, 'utf8').includes(`name: '${node}'`));
       if (!file) return true;
       const src = fs.readFileSync(file, 'utf8');
-      const menu = files.filter((f) => f.endsWith('Menu.ts')).some((f) => { const m = fs.readFileSync(f, 'utf8'); return m.includes('widthMenuItem(') && m.includes(`from './${path.basename(file, '.ts')}'`); });
+      // Its right-click menu: in its own file (Convert.ts) or a *Menu.ts beside it.
+      const menu = src.includes('widthMenuItem(') || files.filter((f) => f.endsWith('Menu.ts')).some((f) => { const m = fs.readFileSync(f, 'utf8'); return m.includes('widthMenuItem(') && m.includes(`from './${path.basename(file, '.ts')}'`); });
       return !src.includes('...blockWidthAttributes()') || !src.includes('blockResizeHandle(') || !menu;
     });
     expect(bad).toEqual([]);
@@ -1380,5 +1418,16 @@ describe('Everything filed under an Endeavour is in one registry', () => {
       }
     }
     expect(missing, `filed under an Endeavour but not in FILED_KINDS: ${missing.join(', ')}`).toEqual([]);
+  });
+});
+
+// A done item's pane (2026-11-01): the footer leaves Complete out once done, so a pane that passes
+// `completed` must show DoneBanner (its way back) and its outline.
+describe('pattern: a done item says so at the top of its pane', () => {
+  it('every pane passing completed to ItemActionFooter renders DoneBanner and the done outline', () => {
+    const panes = walk(SRC, ['.tsx']).filter((f) => /<ItemActionFooter[\s\S]*?completed=/.test(fs.readFileSync(f, 'utf8')));
+    expect(panes.length).toBeGreaterThan(0);
+    const missing = panes.filter((f) => { const s = fs.readFileSync(f, 'utf8'); return !s.includes('<DoneBanner') || !s.includes('donePane'); }).map(rel);
+    expect(missing).toEqual([]);
   });
 });

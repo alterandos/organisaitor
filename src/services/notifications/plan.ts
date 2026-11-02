@@ -46,9 +46,6 @@ export interface PlanOptions {
   clockFormat: ClockFormat;
 }
 
-// A committed Schedule occurrence gets a fixed 30-minute-before nudge (deliberately not
-// configurable per block — see CLAUDE.md "Schedule commitment mode").
-const SCHEDULE_NOTIFY_BEFORE_MIN = 30;
 // A rhythm occurrence with no time of its own notifies in the morning of its day.
 const RHYTHM_UNTIMED_AT = '09:00';
 
@@ -161,20 +158,6 @@ export function planNotifications(snap: NotificationSnapshot, opts: PlanOptions)
     }
   }
 
-  // ── Committed Schedule occurrences (commitment mode only) ──
-  for (const schedule of Object.values(snap.schedules)) {
-    if (!schedule.active) continue;
-    for (const block of schedule.blocks) {
-      if (!block.requiresCommitment) continue;
-      for (const date of block.committedDates ?? []) {
-        const at = new Date(zonedTimeToUtc(date, block.startTime, zone).getTime() - SCHEDULE_NOTIFY_BEFORE_MIN * MIN);
-        if (!inWindow(at)) continue;
-        const itemId = `${schedule.id}::${block.id}::${date}`;
-        out.push({ key: `schedule:${itemId}`, kind: 'schedule', itemId, occurrence: date, at, title: block.title, body: `Committed — starting at ${formatTime(block.startTime, clockFormat)}`, important: false, taskId: null });
-      }
-    }
-  }
-
   // ── Rhythm occurrences whose stream is set to notify, not already dealt with ──
   if (snap.collections && snap.entries) {
     const ticks = tickIndex(snap.entries, snap.collections);
@@ -182,7 +165,7 @@ export function planNotifications(snap: NotificationSnapshot, opts: PlanOptions)
     const last = utcToZonedTime(new Date(opts.to.getTime() + DAY), zone).date;
     for (const rhythm of Object.values(snap.collections)) {
       if (!isRhythm(rhythm) || rhythm.archivedAt || !rhythm.streams?.some((s) => s.show.notify)) continue;
-      for (const o of rhythmOccurrences(rhythm, snap.schedules, ticks, first, last, first)) {
+      for (const o of rhythmOccurrences(rhythm, snap.schedules, ticks, first, last, first, snap.events)) {
         if (!o.stream.show.notify || isDealtWith(o.state)) continue;
         const at = zonedTimeToUtc(o.date, o.time ?? RHYTHM_UNTIMED_AT, zone);
         if (!inWindow(at)) continue;

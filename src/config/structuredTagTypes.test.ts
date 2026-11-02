@@ -47,9 +47,11 @@ describe('a field of your own: a "Name: value" line (2026-10-27)', () => {
     expect(namedFieldLine('This is a whole sentence that goes on and on: yes')).toBeNull();
   });
 
-  it('takes such lines out of a field\'s text, never its first line', () => {
-    expect(takeNamedLines('Note: water moves<br>Origin: Latin<br>more text<br>Used in: <b>biology</b>'))
-      .toEqual({ html: 'Note: water moves<br>more text', facts: [{ label: 'Origin', value: 'Latin' }, { label: 'Used in', value: 'biology' }] });
+  it('takes such lines out of a field\'s text, the first line too (2026-11-01)', () => {
+    expect(takeNamedLines('Water moves<br>Origin: Latin<br>more text<br>Used in: <b>biology</b>'))
+      .toEqual({ html: 'Water moves<br>more text', facts: [{ label: 'Origin', value: 'Latin' }, { label: 'Used in', value: 'biology' }] });
+    expect(takeNamedLines('AKA: Bob<br>the rest')).toEqual({ html: 'the rest', facts: [{ label: 'AKA', value: 'Bob' }] });
+    expect(takeNamedLines('AKA: Bob')).toEqual({ html: '', facts: [{ label: 'AKA', value: 'Bob' }] });
     expect(takeNamedLines('<div>Water</div><div>Origin: Latin</div>').facts).toEqual([{ label: 'Origin', value: 'Latin' }]);
     expect(takeNamedLines('Just text<br>no colon')).toEqual({ html: 'Just text<br>no colon', facts: [] });
   });

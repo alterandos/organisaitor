@@ -1,4 +1,5 @@
-import type { Collection, Goal, ScheduleTemplate, Task, TrackerEntry } from '@/types';
+import type { CalendarDeadline, CalendarEvent, Collection, Goal, ScheduleTemplate, Task, TrackerEntry } from '@/types';
+import { itemOccurrences, type RepeatingItem } from '@/utils/itemOccurrences';
 import { addDaysToIso } from '@/utils/date';
 import { endeavourSubtree } from '@/utils/endeavourGraph';
 import { formatFieldValue } from '@/utils/itemTypes';
@@ -17,6 +18,8 @@ export interface GoalSnapshot {
   collections: Record<string, Collection>;
   entries:     Record<string, TrackerEntry>;
   schedules:   Record<string, ScheduleTemplate>;
+  events?:     Record<string, CalendarEvent>;   // a Schedule's items, which rhythm streams can follow; repeating classes
+  deadlines?:  Record<string, CalendarDeadline>; // repeating work (keepUp)
 }
 
 export interface GoalProgress {
@@ -56,12 +59,27 @@ export function goalProgress(goal: Goal, snap: GoalSnapshot, today: string): Goa
     if (!isRhythm(rhythm)) return { value: null, target: m.count, fraction: null, reached: false, text: L.gone };
     const ticks = tickIndex(snap.entries, snap.collections);
     // The latest `outOf` occurrences up to today that counted (one marked not needed doesn't).
-    const past = rhythmOccurrences(rhythm, snap.schedules, ticks, addDaysToIso(today, -LOOKBACK_DAYS), today, today)
+    const past = rhythmOccurrences(rhythm, snap.schedules, ticks, addDaysToIso(today, -LOOKBACK_DAYS), today, today, snap.events)
       .filter((o) => (!m.streamId || o.stream.id === m.streamId) && o.state !== 'notNeeded' && o.state !== 'upcoming')
       .slice(-m.outOf);
     const done = past.filter((o) => o.state === 'done').length;
     const stream = m.streamId ? rhythmStreams(rhythm).find((s) => s.id === m.streamId)?.label ?? rhythm.name : rhythm.name;
     return { value: done, target: m.count, fraction: clamp(done / Math.max(1, m.count)), reached: done >= m.count, text: L.consistencyText(done, past.length, stream) };
+  }
+
+  if (m.kind === 'keepUp') {
+    const events = snap.events ?? {}, deadlines = snap.deadlines ?? {};
+    const items = m.itemIds.flatMap((id): RepeatingItem[] => {
+      const e = events[id], d = deadlines[id];
+      return e?.repeat && !e.archivedAt ? [{ kind: 'class', item: e }] : d?.repeat && !d.archivedAt ? [{ kind: 'work', item: d }] : [];
+    });
+    if (items.length === 0) return { value: null, target: m.count, fraction: null, reached: false, text: L.gone };
+    // The latest `outOf` dates up to today that counted (a skipped one doesn't; today only once marked).
+    const past = itemOccurrences(items, { events, deadlines }, addDaysToIso(today, -LOOKBACK_DAYS), today, today)
+      .filter((o) => o.state !== 'skipped' && o.state !== 'upcoming' && o.state !== 'today')
+      .slice(-m.outOf);
+    const done = past.filter((o) => o.state === 'done' || o.state === 'attended').length;
+    return { value: done, target: m.count, fraction: clamp(done / Math.max(1, m.count)), reached: done >= m.count, text: L.keepUpText(done, past.length, items[0].item.title) };
   }
 
   if (m.kind === 'tracker') {

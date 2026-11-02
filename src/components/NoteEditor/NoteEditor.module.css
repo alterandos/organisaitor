@@ -6222,6 +6222,14 @@
 .editorContent [data-type="case-study"] { --color-primary: var(--color-block-case); --color-primary-subtle: color-mix(in srgb, var(--color-block-case) 10%, transparent); }
 .editorContent [data-type="cause-effect"] { --color-primary: var(--color-block-cause); --color-primary-subtle: color-mix(in srgb, var(--color-block-cause) 10%, transparent); }
 .editorContent [data-type="venn"] { --color-primary: var(--color-block-venn); --color-primary-subtle: color-mix(in srgb, var(--color-block-venn) 10%, transparent); }
+/* A conversion (extensions/Convert.ts): fits what it shows until given a width ("Block widths");
+   its pill shows on hover, as a question's and a card's do. */
+.editorContent [data-type="convert"] { position: relative; }
+.editorContent [data-type="convert"]:not([data-block-width-shown]) { width: fit-content; max-width: 100%; }
+.editorContent [data-convert-tools] { top: -14px; right: 0; }
+.editorContent [data-type="convert"]:hover > [data-convert-tools] { opacity: 1; }
+/* An embedded passage's pill (extensions/NoteEmbed.ts), likewise. */
+.editorContent [data-type="note-embed"]:hover > [data-embed-tools] { opacity: 1; }
 .editorContent [data-type="convert"] { --color-primary: var(--color-block-convert); --color-primary-subtle: color-mix(in srgb, var(--color-block-convert) 10%, transparent); }
 .editorContent [data-type="hub"] { --color-primary: var(--color-block-hub); --color-primary-subtle: color-mix(in srgb, var(--color-block-hub) 10%, transparent); }
 .editorContent [data-type="proscons"] { --color-primary: var(--color-block-proscons); --color-primary-subtle: color-mix(in srgb, var(--color-block-proscons) 10%, transparent); }

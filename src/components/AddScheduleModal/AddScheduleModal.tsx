@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { nanoid } from 'nanoid';
 import { DateInput } from '@/components/DateInput/DateInput';
 import { useTaskStore } from '@/store/taskStore';
 import { useScheduleStore } from '@/store/scheduleStore';
+import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
@@ -10,7 +12,10 @@ import { ScheduleWeekGridPreview, type PreviewEntry } from '@/components/Schedul
 import { todayIso, formatDate, computeLinkedEndTime } from '@/utils/date';
 import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
 import { createScheduleBlock } from '@/utils/scheduleBlocks';
-import type { CollectionId, ScheduleBlock } from '@/types';
+import { scheduleItems, withItemRows } from '@/utils/scheduleItems';
+import { effectivePeriod } from '@/utils/endeavourPeriod';
+import { createScheduleWithItems, deleteScheduleWithItems, saveScheduleRows } from '@/services/schedules';
+import type { CollectionId, PeriodBreak, ScheduleBlock } from '@/types';
 import styles from './AddScheduleModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
@@ -80,9 +85,8 @@ export function AddScheduleModal() {
   const isEditMode = !!editingSchedule;
 
   const collectionsRecord = useTaskStore((s) => s.collections);
-  const addSchedule       = useScheduleStore((s) => s.addSchedule);
   const updateSchedule    = useScheduleStore((s) => s.updateSchedule);
-  const deleteSchedule    = useScheduleStore((s) => s.deleteSchedule);
+  const events            = useCalendarStore((s) => s.events);
 
   const [name,         setName]         = useState(() => editingSchedule?.name ?? '');
   const [color,        setColor]        = useState<string | null>(() => editingSchedule?.color ?? null);
@@ -90,7 +94,11 @@ export function AddScheduleModal() {
   const [endDate,      setEndDate]      = useState(() => editingSchedule?.endDate ?? '');
   // A new timetable starts filed under the Endeavour chosen where it's made (an Endeavour's home, a filter).
   const [collectionId, setCollectionId] = useState<CollectionId | null>(() => (editingSchedule ? editingSchedule.collectionId ?? null : selectActiveCollectionId(useUIStore.getState()) as CollectionId | null));
-  const [blocks,       setBlocks]       = useState<BlockRow[]>(() => editingSchedule ? editingSchedule.blocks.map(blockToRow) : []);
+  // Its rows are its items, calendar events (docs/features/endeavours.md phase 7 (c)): read in as
+  // rows when it opens, and written back on Save (services/schedules.ts).
+  const [itemIds]                       = useState(() => new Set(editingSchedule ? scheduleItems(editingSchedule.id, useCalendarStore.getState().events).map((e) => e.id as string) : []));
+  const [blocks,       setBlocks]       = useState<BlockRow[]>(() => editingSchedule ? withItemRows(editingSchedule, useCalendarStore.getState().events).blocks.map(blockToRow) : []);
+  const [breaks,       setBreaks]       = useState<PeriodBreak[] | undefined>(() => editingSchedule?.breaks);
   const [addingBlock,  setAddingBlock]  = useState(false);
   // Scrolls a block's row into view right after it expands — both the ⚙ button and clicking
   // a block in the grid preview go through this, so the edit panel is never left off-screen
@@ -204,30 +212,31 @@ export function AddScheduleModal() {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    const payload = {
-      name: trimmed,
-      color,
-      startDate: startDate || null,
-      endDate: endDate || null,
-      collectionId,
-      blocks: blocks.map(({ expanded, ...b }) => b),
-    };
+    const payload = { name: trimmed, color, startDate: startDate || null, endDate: endDate || null, collectionId };
+    const rows = blocks.map(({ expanded, ...b }) => b);
     if (editingSchedule) {
-      updateSchedule(editingSchedule.id, payload);
+      updateSchedule(editingSchedule.id, { ...payload, breaks });
+      saveScheduleRows(editingSchedule.id, rows);
     } else {
-      addSchedule(payload);
+      const { id } = createScheduleWithItems(payload, []);
+      if (breaks) updateSchedule(id, { breaks });
+      saveScheduleRows(id, rows);
     }
     closeEditSchedule();
   };
 
   const handleDelete = async () => {
     if (!editingSchedule) return;
-    if (!(await confirmDelete('schedule', editingSchedule.name, 'This removes all its blocks and any exceptions.', { empty: editingSchedule.blocks.length === 0 }))) return;
-    deleteSchedule(editingSchedule.id);
+    if (!(await confirmDelete('schedule', editingSchedule.name, 'Its items go from the calendar too (to the Recycling Bin).', { empty: itemIds.size === 0 }))) return;
+    deleteScheduleWithItems(editingSchedule.id);
     closeEditSchedule();
   };
 
   const allCollections = Object.values(collectionsRecord);
+  const inherited = collectionId ? effectivePeriod(collectionId, collectionsRecord) : null;
+  const inheritedFrom = inherited?.period.breaks.length ? collectionsRecord[inherited.from as CollectionId]?.name ?? null : null;
+  // Dates taken out of an item ("only this one") show as changed in its skip list, not as skips.
+  const changedDates = (itemId: string) => new Set(Object.values(events).filter((e) => e.seriesId === itemId && e.seriesDate).map((e) => e.seriesDate as string));
 
   return (
     <>
@@ -265,7 +274,36 @@ export function AddScheduleModal() {
                 <DateInput className={styles.dateInput} value={endDate} min={startDate || undefined} onChange={(v) => setEndDate(v)} />
               </div>
             </div>
-            <p className={styles.hint}>Blocks only appear on the calendar within this date range — e.g. a semester's start/end.</p>
+            <p className={styles.hint}>Blocks only appear on the calendar within this date range — e.g. a semester's start/end. {LABELS.period.scheduleDates}</p>
+
+            <div className={styles.field}>
+              <span className={styles.label}>{LABELS.period.breaks}</span>
+              {breaks ? (
+                <>
+                  {breaks.map((b) => (
+                    <div key={b.id} className={styles.dateRow} role="group" aria-label={b.label || LABELS.period.breakLabel}>
+                      <input className={styles.input} aria-label={LABELS.period.breakLabel} placeholder={LABELS.period.breakPlaceholder} value={b.label}
+                        onChange={(e) => setBreaks(breaks.map((x) => (x.id === b.id ? { ...x, label: e.target.value } : x)))} />
+                      <DateInput className={styles.dateInput} aria-label={LABELS.period.from} value={b.from}
+                        onChange={(v) => v && setBreaks(breaks.map((x) => (x.id === b.id ? { ...x, from: v, to: x.to < v ? v : x.to } : x)))} />
+                      <DateInput className={styles.dateInput} aria-label={LABELS.period.to} value={b.to} min={b.from}
+                        onChange={(v) => v && setBreaks(breaks.map((x) => (x.id === b.id ? { ...x, to: v } : x)))} />
+                      <button type="button" className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} aria-label={LABELS.period.removeBreak} title={LABELS.period.removeBreak}
+                        onClick={() => setBreaks(breaks.filter((x) => x.id !== b.id))}><TrashIcon width="1em" height="1em" /></button>
+                    </div>
+                  ))}
+                  <div className={styles.dateRow}>
+                    <button type="button" className={styles.addFieldBtn} onClick={() => { const from = startDate || todayIso(); setBreaks([...breaks, { id: nanoid(8), label: '', from, to: from }]); }}>{LABELS.period.addBreak}</button>
+                    {collectionId && <button type="button" className={styles.addFieldBtn} onClick={() => setBreaks(undefined)}>{LABELS.period.scheduleTakeBreaks}</button>}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {inheritedFrom && <p className={styles.hint}>{LABELS.period.scheduleInherited(inheritedFrom)}</p>}
+                  <button type="button" className={styles.addFieldBtn} onClick={() => setBreaks(collectionId ? structuredClone(effectivePeriod(collectionId, collectionsRecord)?.period.breaks ?? []) : [])}>{LABELS.period.scheduleOwnBreaks}</button>
+                </>
+              )}
+            </div>
 
             {allCollections.length > 0 && (
               <div className={styles.field}>
@@ -379,6 +417,7 @@ export function AddScheduleModal() {
                         {(() => {
                           const occurrenceDates = computeAllOccurrenceDates(row, startDate, endDate);
                           const exceptionSet = new Set(row.exceptions);
+                          const changed = changedDates(row.id);
                           if (occurrenceDates.length === 0) {
                             return <p className={styles.miniHint}>No occurrences in range yet — set days and a date range first.</p>;
                           }
@@ -391,14 +430,15 @@ export function AddScheduleModal() {
                                     <label key={date} className={styles.occurrenceRow}>
                                       <input
                                         type="checkbox"
-                                        checked={checked}
+                                        disabled={changed.has(date)}
+                                        checked={checked || changed.has(date)}
                                         onChange={() => updateBlockRow(idx, {
                                           exceptions: checked
                                             ? [...row.exceptions, date]
                                             : row.exceptions.filter((d) => d !== date),
                                         })}
                                       />
-                                      <span>{formatDate(date)}</span>
+                                      <span>{formatDate(date)}{changed.has(date) ? ` (${LABELS.period.changedDate})` : ''}</span>
                                     </label>
                                   );
                                 })}

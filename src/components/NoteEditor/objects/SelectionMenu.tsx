@@ -17,9 +17,10 @@ import { quoteFromSelection } from '../extensions/Quote';
 import { conclusionFromSelection } from '../extensions/Conclusion';
 import { mathsFromSelection } from '../extensions/Maths';
 import { addWordFromSelection } from '@/services/dictionaryActions';
+import { sendSelectedText } from '@/services/sendSelection';
 import { closeSelectionMenu, getSelectionMenu } from './selectionMenuState';
 import { objectTriggerStorage } from './NoteObjectTrigger';
-import { ReviewIcon, UnsureIcon } from '@/components/Icons';
+import { ReviewIcon, ScratchpadIcon, StickyIcon, UnsureIcon } from '@/components/Icons';
 import { flagRange } from '../extensions/UnsureFlag';
 import { useFloatingPlacement } from '@/utils/floatingPlacement';
 import styles from './NoteObjectMenu.module.css';
@@ -139,6 +140,9 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
       { key: 'conclusion', group: 'turn', icon: '∴', label: LABELS.noteBlocks.conclusion.turnInto, run: () => { closeSelectionMenu(view); conclusionFromSelection(view, range.from, range.to); } },
       { key: 'maths', group: 'turn', icon: '∑', label: LABELS.noteBlocks.maths.turnInto, run: () => { closeSelectionMenu(view); mathsFromSelection(view, range.from, range.to); } },
       { key: 'dictionary', group: 'turn', icon: '📕', label: LABELS.dictionary.add, run: () => { closeSelectionMenu(view); void addWordFromSelection(view.state.doc.textBetween(range.from, range.to, ' ')); } },
+      { key: 'scratchpad', group: 'turn', icon: <ScratchpadIcon />, label: LABELS.sendSelection.toScratchpad, run: () => { closeSelectionMenu(view); sendSelectedText('scratchpad', view.state.doc.textBetween(range.from, range.to, '\n'), objectTriggerStorage(editor).getContext()?.noteId ?? null); } },
+      { key: 'sticky', group: 'turn', icon: <StickyIcon />, label: LABELS.sendSelection.toSticky, run: () => { closeSelectionMenu(view); sendSelectedText('sticky', view.state.doc.textBetween(range.from, range.to, '\n'), objectTriggerStorage(editor).getContext()?.noteId ?? null); } },
+      { key: 'reading-list', group: 'turn', icon: '📚', label: LABELS.sendSelection.toReadingList, run: () => { closeSelectionMenu(view); sendSelectedText('readingList', view.state.doc.textBetween(range.from, range.to, ' '), objectTriggerStorage(editor).getContext()?.noteId ?? null); } },
       { key: 'send-to-inbox', group: 'turn', icon: INBOX_ICON, label: LABELS.sendToInbox.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openSendToInbox?.(); } },
       { key: 'link-to-note', group: 'turn', icon: NOTE_LINK_ICON, label: LABELS.noteLinks.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openNoteLinkPicker?.({ purpose: 'link', from: range.from, to: range.to }); } },
       { key: 'add-to-hub', group: 'turn', icon: HUB_ICON, label: LABELS.hubs.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openAddToHub?.(); } },

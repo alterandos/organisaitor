@@ -21,7 +21,8 @@ describe('create_schedule', () => {
     expect(s.blocks[0]).toMatchObject({
       title: 'Maths', daysOfWeek: [1, 3], interval: 1, intervalAnchor: MON, exceptions: [], requiresCommitment: false, committedDates: [],
     });
-    expect(s.blocks[0].id).toHaveLength(8);
+    // A row is one of its items, a repeating calendar event (phase 7 (c)).
+    expect(read.events().find((e) => e.id === s.blocks[0].id)).toMatchObject({ scheduleId: created.id, title: 'Maths', date: MON, repeat: { freq: 'weekly', daysOfWeek: [1, 3] } });
   });
 
   it('sorts and de-duplicates the days', () => {

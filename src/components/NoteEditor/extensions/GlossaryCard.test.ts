@@ -92,13 +92,22 @@ describe('Glossary cards', () => {
     expect(entries()).toHaveLength(1);
   });
 
-  it('a profile shows its facts as label / value rows', async () => {
+  it('a card’s own fields are each a field, named by their label, with no box around them (2026-11-01)', async () => {
     const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'profile', tagId: 'builtin-profile', term: 'Golden eagle', fields: { summary: 'A large bird of prey', facts: [{ label: 'Family', value: 'Accipitridae' }, { label: 'Wingspan', value: '1.8–2.3 m' }] }, noteId, collectionId: null });
     await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
     await flush();
-    const dl = editor.view.dom.querySelector('[data-type="glossary-card"] dl');
-    expect([...(dl?.querySelectorAll('dt') ?? [])].map((e) => e.textContent)).toEqual(['Family', 'Wingspan']);
-    expect([...(dl?.querySelectorAll('dd') ?? [])].map((e) => e.textContent)).toEqual(['Accipitridae', '1.8–2.3 m']);
+    const rows = [...editor.view.dom.querySelectorAll<HTMLElement>('[data-type="glossary-card"] [data-field="facts"]')];
+    expect(rows.map((r) => [...r.querySelectorAll('input')].map((i) => i.value))).toEqual([['Family', 'Accipitridae'], ['Wingspan', '1.8–2.3 m']]);
+    expect(editor.view.dom.textContent).not.toContain('Your fields');
+  });
+
+  it('no "+ Fields" button: a card’s own fields are made by typing', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'concept', tagId: 'builtin-concept', term: 'Entropy', fields: { summary: 'Disorder' }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
+    await flush();
+    const more = [...editor.view.dom.querySelectorAll('[data-card-more] button')].map((b) => b.textContent);
+    expect(more.length).toBeGreaterThan(0);
+    expect(more.some((t) => /Fields/.test(t ?? ''))).toBe(false);
   });
 
   it('Enter makes a new line in a card; a finished "Name: value" line becomes a field of that name, or fills an empty one the card has', async () => {

@@ -22,8 +22,9 @@ import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
 import { datedPatch, defaultRule, eventPatch, fitRule, type NotifyRule } from '@/utils/notifyRule';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput, BIRTHDAY_REPEAT } from '@/utils/calendarItemInput';
-import type { CollectionId, ItemTypeId, CalendarEventId, CalendarDeadlineId } from '@/types';
+import type { ClassLink, CollectionId, ItemTypeId, CalendarEventId, CalendarDeadlineId } from '@/types';
 import { ItemTypeField } from '@/components/ItemTypeField/ItemTypeField';
+import { ClassClashField } from '@/components/ClassClashField/ClassClashField';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { resolveItemType } from '@/utils/itemTypes';
 import { applyItemType } from '@/services/itemTypes';
@@ -92,6 +93,7 @@ export function AddCalendarItemModal() {
   // null until the person touches Notify: an event starts off (opt-in), a reminder or deadline on.
   const [notifyRule,        setNotifyRule]        = useState<NotifyRule | null>(null);
   const [repeat,            setRepeat]            = useState<RepeatConfig | null>(prefillExtra?.repeat ?? null);
+  const [onClass,           setOnClass]           = useState<ClassLink | null>(null);
   // Opened when something inferred lives in the extra options (repeat, tentative), so the guess is
   // visible rather than silently applied. Closed otherwise, for every kind.
   // A Type (events and Deadlines; a reminder has none): chosen from the speed dial or here. Its
@@ -228,6 +230,9 @@ export function AddCalendarItemModal() {
       : kind === 'reminder'
         ? addReminder(buildCalendarReminderInput(dated))
         : addDeadline(buildCalendarDeadlineInput(dated));
+    // In a class's time and shown instead of it or during it (ClassClashField).
+    if (onClass && !repeat && kind === 'event') useCalendarStore.getState().updateEvent(id as CalendarEventId, { onClass });
+    if (onClass && !repeat && kind === 'deadline') useCalendarStore.getState().updateDeadline(id as CalendarDeadlineId, { onClass });
     if (typeId && kind === 'event') applyItemType({ kind, id: id as CalendarEventId }, typeId, typeValues, typeParts);
     if (typeId && kind === 'deadline') applyItemType({ kind, id: id as CalendarDeadlineId }, typeId, typeValues, typeParts);
     if (pending) useUIStore.getState().resolveArtifactLink(id, kind);
@@ -350,6 +355,14 @@ export function AddCalendarItemModal() {
                 <Check checked={background} onChange={setBackground}>{L.background}</Check>
                 {background && <ColorPicker palette="standard" value={color} onChange={setColor} />}
               </div>
+            )}
+
+            {kind !== 'reminder' && !repeat && (
+              <ClassClashField
+                item={{ date, start: kind === 'event' ? startTime || null : time || null, end: kind === 'event' ? endTime || null : null, collectionId }}
+                value={onClass}
+                onChange={setOnClass}
+              />
             )}
 
             {kind !== 'reminder' && (

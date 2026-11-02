@@ -3,6 +3,7 @@ import { useGoalStore } from '@/store/goalStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useTrackerStore } from '@/store/trackerStore';
 import { useScheduleStore } from '@/store/scheduleStore';
+import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { formatDate } from '@/utils/date';
@@ -22,7 +23,9 @@ function useGoalSnapshot(): GoalSnapshot {
   const collections = useTaskStore((s) => s.collections);
   const entries = useTrackerStore((s) => s.entries);
   const schedules = useScheduleStore((s) => s.schedules);
-  return { tasks, collections, entries, schedules };
+  const events = useCalendarStore((s) => s.events);
+  const deadlines = useCalendarStore((s) => s.deadlines);
+  return { tasks, collections, entries, schedules, events, deadlines };
 }
 
 export function GoalsPanel({ endeavourId, today }: { endeavourId: string; today: string }) {

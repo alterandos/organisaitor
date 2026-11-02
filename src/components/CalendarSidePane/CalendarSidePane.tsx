@@ -8,6 +8,8 @@ import { useAuthStore } from '@/store/authStore';
 import { usePlatform } from '@/hooks/usePlatform';
 import { formatDate } from '@/utils/date';
 import { countTemplateConflicts } from '@/utils/scheduleOccurrences';
+import { withItemRows } from '@/utils/scheduleItems';
+import { deleteScheduleWithItems } from '@/services/schedules';
 import { ScheduleWeekGridPreview, type PreviewEntry } from '@/components/ScheduleWeekGridPreview/ScheduleWeekGridPreview';
 import {
   getGoogleCalendarConnectUrl,
@@ -109,7 +111,6 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
 
   const schedulesRecord = useScheduleStore((s) => s.schedules);
   const toggleActive    = useScheduleStore((s) => s.toggleScheduleActive);
-  const deleteSchedule  = useScheduleStore((s) => s.deleteSchedule);
   const clockFormat     = useSettingsStore((s) => s.clockFormat);
   const layerVisibility = useSettingsStore((s) => s.calendarLayerVisibility);
   const toggleLayer     = useSettingsStore((s) => s.toggleCalendarLayer);
@@ -212,8 +213,8 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
   useEscapeClose(close, open, { docked: true });
 
   const schedules = useMemo(
-    () => Object.values(schedulesRecord).sort((a, b) => a.name.localeCompare(b.name)),
-    [schedulesRecord]
+    () => Object.values(schedulesRecord).map((s) => withItemRows(s, eventsRecord)).sort((a, b) => a.name.localeCompare(b.name)),
+    [schedulesRecord, eventsRecord]
   );
 
   const togglePreview = (id: ScheduleId) =>
@@ -316,7 +317,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
                       <button
                         type="button"
                         className={`${styles.rowActionBtn} ${styles.rowActionBtnDelete}`}
-                        onClick={async () => { if (await confirmDelete('schedule', schedule.name, undefined, { empty: schedule.blocks.length === 0 })) deleteSchedule(schedule.id); }}
+                        onClick={async () => { if (await confirmDelete('schedule', schedule.name, undefined, { empty: schedule.blocks.length === 0 })) deleteScheduleWithItems(schedule.id); }}
                         title="Delete"
                       >
                         🗑

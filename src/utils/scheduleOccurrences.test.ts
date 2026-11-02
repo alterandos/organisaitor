@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   blocksMayConflict,
-  computeNextOccurrenceDates,
   countTemplateConflicts,
   expandScheduleBlock,
 } from '@/utils/scheduleOccurrences';
@@ -70,20 +69,6 @@ describe('expandScheduleBlock', () => {
   it('returns nothing when the range is inverted after clipping', () => {
     const dates = expandScheduleBlock(block({}), template({ endDate: '2026-01-01' }), '2026-01-05', '2026-01-10');
     expect(dates).toEqual([]);
-  });
-});
-
-describe('computeNextOccurrenceDates', () => {
-  it('returns N real upcoming occurrences, skipping off-weeks for a biweekly block', () => {
-    const b = block({ daysOfWeek: [1], interval: 2, intervalAnchor: '2026-01-05' });
-    const dates = computeNextOccurrenceDates(b, template(), '2026-01-05', 3);
-    expect(dates).toEqual(['2026-01-19', '2026-02-02', '2026-02-16']);
-  });
-
-  it('stops at the template endDate', () => {
-    const b = block({ daysOfWeek: [1] });
-    const dates = computeNextOccurrenceDates(b, template({ endDate: '2026-01-20' }), '2026-01-05', 10);
-    expect(dates).toEqual(['2026-01-12', '2026-01-19']);
   });
 });
 

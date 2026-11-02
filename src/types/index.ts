@@ -79,12 +79,16 @@ export interface RoutineInstance {
 export type TrackerTemplate = 'habit' | 'books' | 'movies' | 'custom';
 export type FieldType =
   | 'text' | 'number' | 'date' | 'rating'
-  | 'select' | 'boolean' | 'url' | 'duration';
+  | 'select' | 'boolean' | 'url' | 'duration'
+  // An Endeavour's period with its breaks and exam period (docs/features/endeavours.md "Attributes"):
+  // at most one per Endeavour, its value kept in Collection.period, where the app reads it.
+  | 'period';
 
 export interface FieldSchema {
   id:       string;
   name:     string;
   type:     FieldType;
+  inherit?: boolean;     // an Endeavour's attribute: the Endeavours part of it take it, live ("parts take this")
   required?: boolean;
   options?:  string[];  // for select
   unit?:     string;    // for number
@@ -161,8 +165,17 @@ export interface Collection {
   streams?:     RhythmStream[];
   // Its period and breaks (a semester's teaching weeks and mid-semester break; docs/features/
   // endeavours.md phase 7). Absent: it takes the nearest Endeavour's above it, live
-  // (utils/endeavourPeriod.ts). Sent once set (migration 063).
-  period?:      EndeavourPeriod;
+  // (utils/endeavourPeriod.ts). Sent once set (migration 063); null once its own is taken off, so
+  // the cloud's copy is cleared too (undefined is never sent).
+  period?:      EndeavourPeriod | null;
+  // The template it was made from (config/endeavourTemplates.ts: 'subject', 'semester'…), so Edit
+  // opens that template's editor (config/templateEditors.ts). Absent on one made by hand. Sent once
+  // set (migration 065).
+  templateId?:  string;
+  // Its attributes (docs/features/endeavours.md "Attributes and Types for Endeavours"): its Type
+  // (an ItemType used for Endeavours), fields of its own, and every field's value by field id (a
+  // period field's value is `period`). Absent until first given; sent once set (migration 068).
+  attributes?:  EndeavourAttributes | null;
   createdAt:    string;
   updatedAt:    string;
 }
@@ -187,9 +200,14 @@ export interface ItemTypeDefaults {
   tagIds?:    TagId[];             // tasks only (a Type made from a tag keeps adding it)
 }
 
+// What a Type is used for (absent: items, as every Type was before Endeavours had Types).
+export type TypeUse = 'item' | 'endeavour';
+
 export interface ItemType {
   id:         ItemTypeId;
   name:       string;
+  usedFor?:   TypeUse[];
+  builtIn?:   string;              // the default it was copied from (config/builtInTypes.ts)
   icon:       string | null;       // components/IconPicker's value
   extendsId:  ItemTypeId | null;
   fields:     FieldSchema[];
@@ -216,7 +234,8 @@ export type StreamKind = 'attend' | 'doBy' | 'submit';
 
 export type StreamRule =
   | { kind: 'repeat'; repeat: RepeatConfig }                                          // its own repeat, counted from the stream's start
-  | { kind: 'relative'; scheduleId: ScheduleId; blockId: string; offsetDays: number; blockIds?: string[] }; // N days from each timetable block (−1: the day before); `blockIds`: more classes it follows too (every lecture of a subject)
+  | { kind: 'relative'; scheduleId: ScheduleId; blockId: string; offsetDays: number; blockIds?: string[] } // N days from each timetable block (−1: the day before); `blockIds`: more classes it follows too (every lecture of a subject). Before phase 7: converted to 'follows'
+  | { kind: 'follows'; eventIds: string[]; offsetDays: number };                       // N days from each of these calendar events (a Schedule's items), phase 7
 
 // Where a stream's occurrences show, besides its rhythm and Endeavour (defaults by kind:
 // config/streamKinds.ts).
@@ -258,7 +277,10 @@ export type GoalMeasure =
   | { kind: 'tracker'; trackerId: CollectionId; fieldId: string; target: number; direction: 'atLeast' | 'atMost';
       aggregate: 'latest' | 'best' | 'sum'; period: 'week' | 'month' | 'all' }
   // Completion: the share of the Endeavour's tasks done (its parts' too), or only its milestones.
-  | { kind: 'completion'; milestonesOnly: boolean };
+  | { kind: 'completion'; milestonesOnly: boolean }
+  // Keeping up repeating items (phase 7 (e)): at least `count` of the last `outOf` dates of these
+  // repeating calendar items (Work done, classes attended), skipped dates not counted.
+  | { kind: 'keepUp'; itemIds: string[]; count: number; outOf: number };
 
 export interface GoalCheckIn { date: string; value: number | null; note: string | null }
 
@@ -278,7 +300,14 @@ export interface Goal {
 }
 
 export interface PeriodBreak { id: string; label: string; from: string; to: string }   // YYYY-MM-DD, both days included
-export interface EndeavourPeriod { start: string | null; end: string | null; breaks: PeriodBreak[] }
+// `exams`: a semester's exam period, after teaching (shown, not applied to items).
+export interface EndeavourPeriod { start: string | null; end: string | null; breaks: PeriodBreak[]; exams?: { from: string; to: string } | null }
+
+export interface EndeavourAttributes {
+  typeId: ItemTypeId | null;
+  fields: FieldSchema[];                 // its own, besides its Type's
+  values: Record<string, unknown>;
+}
 
 export type EndeavourLinkKind = 'partOf' | 'related';
 
@@ -449,6 +478,22 @@ export interface RepeatConfig {
   // its dates are each followed event's dates moved by `offsetDays`, worked out again whenever one
   // of them changes (services/repeatFollow.ts). Taking it off keeps the dates as they are.
   follows?: { ids: string[]; offsetDays: number };
+  // The dates skipped because they fall in a break of its Schedule's period (a subset of
+  // `exceptions`, kept apart so moving or removing a break gives them back; services/schedules.ts).
+  breakSkips?: string[];
+  // A class's dates taken by something done instead of it that day (an in-class essay: ClassLink
+  // 'replaces'), likewise a subset of `exceptions` kept apart (services/classClashes.ts).
+  replacedSkips?: string[];
+}
+
+// An item that falls in a date of a repeating class of its Endeavour, and how it shows (the user,
+// 2026-10-30): instead of the class that day (the class's date is skipped while the item is still
+// on it), or during it (drawn on the class, not on its own). Absent: both show, as a clash.
+export type ClassLinkMode = 'replaces' | 'during';
+export interface ClassLink {
+  eventId: string;          // the class (a repeating event)
+  date:    string;          // which of its dates
+  mode:    ClassLinkMode;
 }
 
 // A time-bounded appointment (e.g. "Doctor at 2pm–3pm").
@@ -502,6 +547,16 @@ export interface CalendarEvent extends TypedItem {
   // { event: the provider's payload as last seen, imported: the fields as last imported } — the
   // second is the base for "has this been edited here since?" (calendarImport/reconcile.ts).
   sourceRaw:          Record<string, unknown> | null;
+  // One of a Schedule's items (docs/features/endeavours.md phase 7): shown in the Schedule's colour,
+  // hidden while it's off, bounded by its period and breaks (services/schedules.ts). Absent on any
+  // other event; sent once set (migration 064).
+  scheduleId?:        ScheduleId | null;
+  // The dates of it the person went to (a class: docs/features/endeavours.md phase 7 (e)). A past
+  // date not in it is "not marked" on the board, never Behind. Absent until the first is marked:
+  // sent once set (migration 066).
+  attendedDates?:     string[];
+  // In a class's time, and shown instead of it or during it (ClassLink). Sent once set (migration 067).
+  onClass?:           ClassLink | null;
 }
 
 // A point-in-time reminder (not duration-based). Also the type used to
@@ -571,6 +626,7 @@ export interface CreateCalendarEventInput {
   sourceEventId?:      string | null;
   sourceUid?:          string | null;
   sourceRaw?:          Record<string, unknown> | null;
+  scheduleId?:         ScheduleId | null;   // see CalendarEvent.scheduleId
 }
 
 // One connected external calendar account (see CLAUDE.md "External calendar sync").
@@ -652,6 +708,7 @@ export interface CalendarDeadline extends TypedItem {
   seriesDate:       string | null;
   remindOccurrence: string | null;    // see CalendarEvent.remindOccurrence
   seenDates:        string[];         // notifications acknowledged ("Got it") — not done: a deadline still needs doing
+  onClass?:         ClassLink | null; // see CalendarEvent.onClass
 }
 
 export interface CreateCalendarDeadlineInput {
@@ -711,7 +768,8 @@ export interface ScheduleTemplate {
   endDate:      string | null;   // null = no upper bound
   active:       boolean;         // shown on the real calendar, or hidden (kept, not deleted)
   collectionId: CollectionId | null;
-  blocks:       ScheduleBlock[];
+  blocks:       ScheduleBlock[];   // before phase 7; converted to calendar events (its items) on load, then []
+  breaks?:      PeriodBreak[];     // its own breaks (phase 7); without them it takes its Endeavour's
   createdAt:    string;
   updatedAt:    string;
 }

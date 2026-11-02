@@ -18,7 +18,7 @@ describe('built-in units', () => {
   it('every unit has a factor or a way there and back, ids are unique in a category, and its starting pair exists', () => {
     for (const c of UNIT_CATEGORIES) {
       expect(new Set(c.units.map((u) => u.id)).size).toBe(c.units.length);
-      for (const u of c.units) expect(!!u.factor || (!!u.toBase && !!u.fromBase)).toBe(true);
+      for (const u of c.units) expect(!!u.factor || (!!u.toBase && !!u.fromBase) || !!u.currency).toBe(true);
       for (const id of c.pair) expect(c.units.some((u) => u.id === id)).toBe(true);
     }
   });
@@ -53,5 +53,17 @@ describe('reading and showing amounts', () => {
     expect(readAmount('abc')).toBeNaN();
     expect(showAmount(2.5e20)).toBe('2.5×10²⁰');
     expect(showAmount(NaN)).toBe('—');
+  });
+});
+
+describe('currency', () => {
+  const cur = UNIT_CATEGORIES.find((c) => c.id === 'currency')!;
+  const usd = cur.units.find((u) => u.id === 'usd')!, aud = cur.units.find((u) => u.id === 'aud')!, eur = cur.units.find((u) => u.id === 'eur')!;
+  it('converts through the rates (per euro), and has no answer without them', () => {
+    const rates = { EUR: 1, USD: 1.1, AUD: 1.65 };
+    expect(convertUnit(110, usd, eur, rates)).toBeCloseTo(100);
+    expect(convertUnit(1, usd, aud, rates)).toBeCloseTo(1.5);
+    expect(convertUnit(1, usd, aud)).toBeNaN();
+    expect(convertUnit(1, usd, aud, { EUR: 1, USD: 1.1 })).toBeNaN();   // a currency the day's rates leave out
   });
 });

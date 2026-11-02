@@ -16,6 +16,7 @@ import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 import { BackdropField } from '@/components/NoteEditor/NoteBackdrop';
 import { CloseIcon } from '@/components/Icons';
+import { takesNotes } from '@/utils/notes';
 
 // Render a flat list of tags in depth-first tree order with indentation
 function buildTagList(
@@ -76,7 +77,8 @@ function EditNoteMetaForm({ note }: { note: Note }) {
   };
 
   const areaItems = buildTagList(noteTags as Record<string, import('@/types/notes').NoteTag>, null, 0)
-    .filter((i) => i.tag.kind === 'area');
+    // Stickies and the Scratchpad take no notes: not offered (a sticky stays in its own, unticked or not).
+    .filter((i) => i.tag.kind === 'area' && takesNotes(i.tag));
   const tagItems  = Object.values(noteTags)
     .filter((t) => t.kind === 'tag')
     .sort((a, b) => a.name.localeCompare(b.name));

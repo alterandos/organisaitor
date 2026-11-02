@@ -68,6 +68,33 @@ describe('notes side by side', () => {
     expect(ui().notePanes).toEqual([a, b, c]);
   });
 
+  it('each "Open beside" adds a pane up to four, then the note looked at least recently gives up its pane (2026-11-01)', () => {
+    const d = useNoteStore.getState().addNote({ title: 'D' });
+    const e = useNoteStore.getState().addNote({ title: 'E' });
+    openBeside(b);
+    expect(ui().noteLayout).toBe('two');
+    openBeside(c);
+    expect(ui().noteLayout).toBe('three');
+    openBeside(d);
+    expect(ui().noteLayout).toBe('four');
+    expect(ui().notePanes).toEqual([a, b, c, d]);
+    ui().focusNotePane(0);
+    ui().focusNotePane(2);
+    ui().focusNotePane(3);
+    openBeside(e);
+    expect(ui().noteLayout).toBe('four');
+    expect(ui().notePanes).toEqual([a, e, c, d]);
+    expect(ui().editingNoteId).toBe(e);
+  });
+
+  it('"Open beside" on a note already showing just goes to it', () => {
+    openBeside(b);
+    ui().focusNotePane(0);
+    openBeside(b);
+    expect(ui().noteLayout).toBe('two');
+    expect(ui().focusedNotePane).toBe(1);
+  });
+
   it('in another section a note opens in the quick view, not in a pane', () => {
     ui().setNoteLayout('two');
     ui().setActiveView('tasks');

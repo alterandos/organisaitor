@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useConverterStore } from '@/store/converterStore';
 import { ConverterIcon } from '@/components/Icons';
-import { UNIT_CATEGORIES, unitCategory } from '@/config/units';
+import { unitCategory } from '@/config/units';
 import { convertUnit, readAmount, runConverter, runConverterBack, showAmount, worksBothWays } from '@/utils/convert';
-import { defaultUnits, type ConvertDesign, type ConvertValue } from './convertValue';
+import { useCurrencyRates } from '@/services/currencyRates';
+import { RatesLine } from './RatesLine';
+import { categoriesInOrder, defaultUnits, unitsInOrder, type ConvertDesign, type ConvertValue } from './convertValue';
 import { LABELS } from '@/config/labels';
 import type { ConverterId } from '@/types/converters';
 import styles from './ConvertWidget.module.css';
@@ -29,6 +31,9 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
   const cat = unitCategory(value.converter);
   const custom = cat ? null : customs[value.converter as ConverterId] ?? null;
   const set = (patch: Partial<ConvertValue>) => onChange({ ...value, ...patch });
+  const isCurrency = cat?.id === 'currency';
+  const live = useCurrencyRates(isCurrency);
+  const rates = value.fixed?.rates ?? live.rates?.rates ?? null;
 
   // The block was asked for the keyboard (typed on while selected, or Enter): the first field
   // takes it, with what was typed.
@@ -54,7 +59,7 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
         const units = unitCategory(id);
         onChange({ converter: id, ...(units ? defaultUnits(id) : { from: null, to: null }), values: units ? { amount: value.values.amount ?? '1' } : {}, reverse: false });
       }}>
-      <optgroup label={L.builtIn}>{UNIT_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{L.categories[c.id]}</option>)}</optgroup>
+      <optgroup label={L.builtIn}>{categoriesInOrder().map((c) => <option key={c.id} value={c.id}>{L.categories[c.id]}</option>)}</optgroup>
       {Object.keys(customs).length > 0 && (
         <optgroup label={L.custom}>{Object.values(customs).sort((a, b) => a.name.localeCompare(b.name)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>
       )}
@@ -71,7 +76,7 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
     const n = readAmount(value.values.amount ?? '');
     const unitSelect = (id: string, which: 'from' | 'to') => (
       <select className={styles.unit} value={id} disabled={!editable} aria-label={which === 'from' ? L.from : L.to} onChange={(e) => set({ [which]: e.target.value })}>
-        {cat.units.map((u) => <option key={u.id} value={u.id} title={u.name}>{u.symbol}</option>)}
+        {unitsInOrder(cat.units).map((u) => <option key={u.id} value={u.id} title={u.name}>{u.symbol}</option>)}
       </select>
     );
     body = (
@@ -84,7 +89,7 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
         </span>
         <button type="button" className={styles.swap} disabled={!editable} onClick={() => set({ from: to.id, to: from.id })} aria-label={L.swap} title={L.swap}><ConverterIcon /></button>
         <span className={styles.side}>
-          <output className={styles.result}>{showAmount(Number.isFinite(n) ? convertUnit(n, from, to) : NaN)}</output>
+          <output className={styles.result}>{showAmount(Number.isFinite(n) ? convertUnit(n, from, to, rates) : NaN)}</output>
           {unitSelect(to.id, 'to')}
         </span>
       </>
@@ -124,6 +129,12 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
     );
   }
 
+  const ratesLine = isCurrency && (
+    <RatesLine fixed={value.fixed ?? null} editable={editable}
+      onKeep={live.rates ? () => set({ fixed: { date: live.rates!.date, rates: live.rates!.rates } }) : undefined}
+      onLive={() => set({ fixed: null })} />
+  );
+
   return design === 'card' ? (
     <div className={styles.card}>
       <div className={styles.head}>
@@ -131,12 +142,14 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
         {picker}
       </div>
       <div className={styles.row}>{body}</div>
+      {ratesLine}
     </div>
   ) : (
     <div className={styles.compact}>
       {picker}
       <span className={styles.rule} aria-hidden="true" />
       <div className={styles.row}>{body}</div>
+      {ratesLine}
     </div>
   );
 }

@@ -14,8 +14,25 @@ export type QuickAccessTargetType = 'note' | 'notebook' | 'task' | 'list' | 'end
 export interface RecentItemEntry {
   type:          QuickAccessTargetType;
   entityId:      string;
-  lastVisitedAt: string;   // ISO 8601
-  visitCount:    number;
+  lastVisitedAt: string;   // ISO 8601: every visit, however short (Recent)
+  visitCount:    number;   // visits that counted (see "What counts as a visit" below)
+  visits?:       string[]; // when the last MAX_VISITS of those were, oldest first (Frequent)
+}
+
+// What counts as a visit (2026-11-01: Frequent followed every note arrowed past, every remount and
+// every back/forward, counted forever, so it jumped about and didn't follow where time went):
+//   - only once it's been in front for DWELL_MS: the next thing of the same type opened sooner
+//     (arrowing down a list, passing through on the way somewhere) means this one didn't count;
+//   - not again within REVISIT_MS of its last counted visit (back and forth between two notes);
+//   - Frequent ranks by `frecency`: each visit worth half as much every HALF_LIFE_DAYS.
+export const DWELL_MS = 5_000;
+export const REVISIT_MS = 30 * 60_000;
+const HALF_LIFE_DAYS = 14;
+const MAX_VISITS = 20;
+
+export function frecency(entry: RecentItemEntry, now = Date.now()): number {
+  const visits = entry.visits ?? [];
+  return visits.reduce((sum, at) => sum + 0.5 ** ((now - new Date(at).getTime()) / 86_400_000 / HALF_LIFE_DAYS), 0);
 }
 
 // Hygiene cap — this store persists indefinitely and nothing ever proactively removes an
@@ -30,38 +47,53 @@ function keyFor(type: QuickAccessTargetType, entityId: string): string {
   return `${type}:${entityId}`;
 }
 
+// The visit of each type still waiting out DWELL_MS: one per type, so opening a note (which also
+// selects its notebook) doesn't cancel the notebook's.
+const pending = new Map<QuickAccessTargetType, { key: string; timer: ReturnType<typeof setTimeout> }>();
+
 interface RecentItemsState {
   items: Record<string, RecentItemEntry>;
   recordVisit: (type: QuickAccessTargetType, entityId: string) => void;
+  countVisit: (key: string) => void;
   removeEntity: (type: QuickAccessTargetType, entityId: string) => void;
 }
 
 export const useRecentItemsStore = create<RecentItemsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       items: {},
 
-      recordVisit: (type, entityId) => set((s) => {
+      recordVisit: (type, entityId) => {
         const key = keyFor(type, entityId);
-        const existing = s.items[key];
-        let items: Record<string, RecentItemEntry> = {
-          ...s.items,
-          [key]: {
-            type,
-            entityId,
-            lastVisitedAt: new Date().toISOString(),
-            visitCount: (existing?.visitCount ?? 0) + 1,
-          },
-        };
-        const keys = Object.keys(items);
-        if (keys.length > MAX_ENTRIES) {
-          const ordered = keys
-            .map((k) => items[k])
-            .sort((a, b) => new Date(b.lastVisitedAt).getTime() - new Date(a.lastVisitedAt).getTime())
-            .slice(0, TRIM_TO);
-          items = Object.fromEntries(ordered.map((e) => [keyFor(e.type, e.entityId), e]));
-        }
-        return { items };
+        const was = pending.get(type);
+        if (was) clearTimeout(was.timer);
+        pending.set(type, { key, timer: setTimeout(() => { pending.delete(type); get().countVisit(key); }, DWELL_MS) });
+        set((s) => {
+          const existing = s.items[key];
+          let items: Record<string, RecentItemEntry> = {
+            ...s.items,
+            [key]: { ...existing, visitCount: existing?.visitCount ?? 0, type, entityId, lastVisitedAt: new Date().toISOString() },
+          };
+          const keys = Object.keys(items);
+          if (keys.length > MAX_ENTRIES) {
+            const ordered = keys
+              .map((k) => items[k])
+              .sort((a, b) => new Date(b.lastVisitedAt).getTime() - new Date(a.lastVisitedAt).getTime())
+              .slice(0, TRIM_TO);
+            items = Object.fromEntries(ordered.map((e) => [keyFor(e.type, e.entityId), e]));
+          }
+          return { items };
+        });
+      },
+
+      countVisit: (key) => set((s) => {
+        const entry = s.items[key];
+        if (!entry) return {};
+        const visits = entry.visits ?? [];
+        const last = visits[visits.length - 1];
+        const now = Date.now();
+        if (last && now - new Date(last).getTime() < REVISIT_MS) return {};
+        return { items: { ...s.items, [key]: { ...entry, visitCount: entry.visitCount + 1, visits: [...visits, new Date(now).toISOString()].slice(-MAX_VISITS) } } };
       }),
 
       removeEntity: (type, entityId) => set((s) => {
@@ -72,6 +104,21 @@ export const useRecentItemsStore = create<RecentItemsState>()(
         return { items };
       }),
     }),
-    { name: 'todo-recent-items', storage: persistStorage(), version: 1 }
+    {
+      name: 'todo-recent-items', storage: persistStorage(), version: 2,
+      // v2: `visits`. The old counts took in every pass through, so each keeps at most a few
+      // visits, dated at its last.
+      migrate: (persisted, fromVersion) => {
+        let state = persisted as { items?: Record<string, RecentItemEntry> };
+        if (fromVersion < 2) {
+          const items = Object.fromEntries(Object.entries(state.items ?? {}).map(([k, e]) => {
+            const n = Math.min(e.visitCount ?? 0, 3);
+            return [k, { ...e, visitCount: n, visits: Array.from({ length: n }, () => e.lastVisitedAt) }];
+          }));
+          state = { ...state, items };
+        }
+        return state as RecentItemsState;
+      },
+    }
   )
 );

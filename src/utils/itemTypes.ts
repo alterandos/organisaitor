@@ -1,4 +1,4 @@
-import type { FieldSchema, ItemType, ItemTypeDefaults, ItemTypeId, TypePart } from '@/types';
+import type { FieldSchema, ItemType, ItemTypeDefaults, ItemTypeId, TypePart, TypeUse } from '@/types';
 import { addDaysToIso } from '@/utils/date';
 
 // The rules for Types (docs/features/endeavours.md phase 3), pure. A Type can extend another; what
@@ -70,9 +70,13 @@ export function partDue(part: TypePart, itemDate: string): string {
 }
 
 // Types offered in a picker: not archived (except the one already chosen), by name.
-export function pickableTypes(types: Record<string, ItemType>, keep?: ItemTypeId | null): ItemType[] {
+// What a Type is used for: items when it doesn't say (every Type before Endeavours had Types).
+export const typeUses = (t: ItemType): TypeUse[] => t.usedFor?.length ? t.usedFor : ['item'];
+
+// The Types to choose from for items (or, with `use`, for Endeavours), the one in use kept.
+export function pickableTypes(types: Record<string, ItemType>, keep?: ItemTypeId | null, use: TypeUse = 'item'): ItemType[] {
   return Object.values(types)
-    .filter((t) => !t.archivedAt || t.id === keep)
+    .filter((t) => (!t.archivedAt && typeUses(t).includes(use)) || t.id === keep)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

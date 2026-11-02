@@ -3,6 +3,9 @@ import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useGoalStore } from '@/store/goalStore';
+import { useCalendarStore } from '@/store/calendarStore';
+import { createScheduleWithItems, deleteScheduleWithItems } from '@/services/schedules';
+import { withItemRows } from '@/utils/scheduleItems';
 import { trashedBy, deleteForever } from '@/services/trash';
 import { filedUnder, moveFiled, type FiledItem } from '@/services/endeavourFiling';
 import { listView, isListLocked } from '@/services/listSecrets';
@@ -132,9 +135,13 @@ export function copyShape(sourceId: CollectionId, name: string, opts: ShapeOptio
     }
     if (opts.timetables) {
       for (const s of Object.values(useScheduleStore.getState().schedules).filter((s) => s.collectionId === srcId)) {
-        const sid = useScheduleStore.getState().addSchedule({ name: s.name, color: s.color, startDate: s.startDate, endDate: s.endDate, collectionId: to, blocks: s.blocks.map((b) => ({ ...b, exceptions: [], committedDates: [] })) });
+        // Its items copied as rows: the same classes, without one-off skips or confirmed dates.
+        const rows = withItemRows(s, useCalendarStore.getState().events).blocks.map((b) => ({ ...b, exceptions: [], committedDates: [] }));
+        const { id: sid, itemIds } = createScheduleWithItems({ name: s.name, color: s.color, startDate: s.startDate, endDate: s.endDate, collectionId: to }, rows);
+        if (s.breaks) useScheduleStore.getState().updateSchedule(sid, { breaks: s.breaks });
         idMap.set(s.id, sid);
-        made.push(() => useScheduleStore.getState().deleteSchedule(sid));
+        for (const [from, copy] of itemIds) idMap.set(from, copy);
+        made.push(() => deleteScheduleWithItems(sid));
       }
     }
   }
@@ -153,7 +160,8 @@ export function copyShape(sourceId: CollectionId, name: string, opts: ShapeOptio
       const streams: RhythmStream[] = r.streams!.map((s) => ({
         ...s,
         id: s.id === r.id ? copyId : s.id,
-        rule: s.rule.kind === 'relative' ? { ...s.rule, scheduleId: (idMap.get(s.rule.scheduleId) ?? s.rule.scheduleId) as ScheduleId } : s.rule,
+        rule: s.rule.kind === 'follows' ? { ...s.rule, eventIds: s.rule.eventIds.map((e) => idMap.get(e) ?? e) }
+          : s.rule.kind === 'relative' ? { ...s.rule, scheduleId: (idMap.get(s.rule.scheduleId) ?? s.rule.scheduleId) as ScheduleId } : s.rule,
       }));
       useTaskStore.getState().updateCollection(copyId, { streams });
     }

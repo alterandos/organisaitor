@@ -6,6 +6,7 @@ import { addDaysToIso } from '@/utils/date';
 import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
 import { expandScheduleBlock, blocksMayConflict } from '@/utils/scheduleOccurrences';
 import { createScheduleBlock } from '@/utils/scheduleBlocks';
+import { hiddenBySchedule } from '@/utils/scheduleItems';
 import {
   assertBlockTimes, compact, dateStr, daysOfWeek, deadlineDetail, deadlineSummary, endeavourSummary, eventDetail, eventSummary, idStr,
   reminderDetail, reminderSummary, requireCalendarItem, requireEndeavour, requireSchedule, requireTask,
@@ -31,7 +32,7 @@ export const getContext = defineCommand({
     today: read.today(),
     weekday: weekday(read.today()),
     timezone: read.timezone(),
-    endeavours: read.endeavours().filter((c) => !c.archivedAt).map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
+    endeavours: read.endeavours().filter((c) => !c.archivedAt).map((c) => compact({ id: c.id, name: c.name, kind: c.kind, template: c.templateId })),
     purposes: read.purposes().filter((p) => !p.archivedAt).map((p) => ({ id: p.id, name: p.name })),
     tags: read.tags().map((t) => ({ id: t.id, name: t.name })),
     glossary: [
@@ -237,15 +238,21 @@ export const getCalendarRange = defineCommand({
     const inScope = (collectionId: string | null) => !input.endeavourId || collectionId === input.endeavourId;
     const rows: CalendarRow[] = [];
 
+    // A Schedule's items are events (phase 7 (c)); they're left out while their Schedule is off.
+    const schedules = Object.fromEntries(read.schedules().map((s) => [s.id, s]));
+    const eventsById = Object.fromEntries(read.events().map((e) => [e.id, e]));
+    // A Schedule item you don't always go to: not committed, unless it's a date taken out and confirmed.
+    const committed = (e: (typeof eventsById)[string]) =>
+      e.status === 'tentative' ? false : e.seriesId && eventsById[e.seriesId]?.status === 'tentative' ? true : null;
     for (const e of read.events()) {
-      if (e.archivedAt || !inScope(e.collectionId)) continue;
+      if (e.archivedAt || !inScope(e.collectionId) || hiddenBySchedule(e, schedules)) continue;
       const span = e.endDate && e.endDate > e.date ? daysBetween(e.date, e.endDate) : 0;
       const starts = [e.date, ...(e.repeat ? expandRepeat(e.date, e.repeat, addDaysToIso(input.from, -span), input.to) : [])]
         .filter((d) => !(d === e.date && isOccurrenceSkipped(e.repeat, d)));
       for (const start of starts) {
         if (start > input.to || addDaysToIso(start, span) < input.from) continue;
         ctx.seen('event', e.id);
-        rows.push({ date: start, sortTime: e.startTime ?? '', item: { ...eventSummary(e), date: start, endDate: span ? addDaysToIso(start, span) : null, occurrenceOf: e.repeat ? e.id : null, kind: e.eventType === 'task' ? 'task_scheduled' : 'event' } });
+        rows.push({ date: start, sortTime: e.startTime ?? '', item: { ...eventSummary(e), date: start, endDate: span ? addDaysToIso(start, span) : null, occurrenceOf: e.repeat ? e.id : null, kind: e.eventType === 'task' ? 'task_scheduled' : 'event', ...(e.scheduleId ? compact({ scheduleId: e.scheduleId, committed: committed(e) }) : {}) } });
       }
     }
 
@@ -275,20 +282,6 @@ export const getCalendarRange = defineCommand({
       if (t.archived || !t.deadline || t.deadline < input.from || t.deadline > input.to || !inScope(t.collectionId)) continue;
       ctx.seen('task', t.id);
       rows.push({ date: t.deadline, sortTime: t.deadlineTime ?? '', item: compact({ kind: 'task_deadline', taskId: t.id, title: t.title, date: t.deadline, time: t.deadlineTime, done: t.completed ? true : null }) });
-    }
-
-    for (const s of read.schedules()) {
-      if (!s.active || !inScope(s.collectionId)) continue;
-      for (const b of s.blocks) {
-        for (const d of expandScheduleBlock(b, s, input.from, input.to)) {
-          ctx.seen('schedule', s.id);
-          rows.push({ date: d, sortTime: b.startTime, item: compact({
-            kind: 'schedule_block', scheduleId: s.id, scheduleName: s.name, blockId: b.id, title: b.title, date: d,
-            startTime: b.startTime, endTime: b.endTime, location: b.location,
-            committed: b.requiresCommitment ? b.committedDates.includes(d) : null,
-          }) });
-        }
-      }
     }
 
     rows.sort((a, b) => a.date.localeCompare(b.date) || a.sortTime.localeCompare(b.sortTime));
@@ -368,10 +361,17 @@ export const previewSchedule = defineCommand({
           return createScheduleBlock({ title: b.title ?? 'proposed', daysOfWeek: uniqueSorted(b.daysOfWeek), startTime: b.startTime, endTime: b.endTime, interval: b.interval, intervalAnchor: b.intervalAnchor ?? bounds.startDate ?? today });
         });
 
+    // An existing Schedule's rows are its items: their own dates, skips and breaks.
+    const items = existing ? read.events().filter((e) => e.scheduleId === existing.id && !e.seriesId && !e.archivedAt) : [];
+    const itemDates = (id: string) => {
+      const e = items.find((x) => x.id === id);
+      if (!e) return [];
+      return [e.date, ...(e.repeat ? expandRepeat(e.date, e.repeat, from, to) : [])].filter((d) => d >= from && d <= to && !(d === e.date && isOccurrenceSkipped(e.repeat, d)));
+    };
     return {
       from, to,
       blocks: blocks.map((b) => {
-        const dates = expandScheduleBlock(b, bounds, from, to);
+        const dates = existing ? [...new Set(itemDates(b.id))].sort() : expandScheduleBlock(b, bounds, from, to);
         return { title: b.title, startTime: b.startTime, endTime: b.endTime, count: dates.length, dates: dates.slice(0, PREVIEW_DATES_PER_BLOCK), truncated: dates.length > PREVIEW_DATES_PER_BLOCK };
       }),
     };

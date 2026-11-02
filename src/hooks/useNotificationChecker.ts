@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { tickIndex } from '@/utils/rhythms';
 import { useTrackerStore } from '@/store/trackerStore';
-import type { CalendarDeadlineId, CalendarEventId, CalendarReminderId, ScheduleId, TaskId } from '@/types';
+import type { CalendarDeadlineId, CalendarEventId, CalendarReminderId, TaskId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
@@ -46,11 +46,8 @@ function isStale(n: PendingNotification, snap: NotificationSnapshot): boolean {
     const tick = rhythm && snap.entries ? tickIndex(snap.entries, { [rhythmId]: rhythm }).get(n.itemId) : undefined;
     return !rhythm || !!rhythm.archivedAt || !!tick?.status;
   }
-  // schedule: `${scheduleId}::${blockId}::${date}`
-  const [scheduleId, blockId, date] = n.itemId.split('::');
-  const schedule = snap.schedules[scheduleId as ScheduleId];
-  const block = schedule?.blocks.find((b) => b.id === blockId);
-  return !schedule?.active || !block?.requiresCommitment || !(block.committedDates ?? []).includes(date);
+  // schedule: a Schedule's committed date from before phase 7 (c); they notify as events now.
+  return true;
 }
 
 export function useNotificationChecker() {

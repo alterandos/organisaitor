@@ -49,13 +49,13 @@ Pass the same `batchId` to every command run for one user request and they merge
 
 To make a new store undoable, add it to `TRACKED` in `batch.ts` (and `EntityKind` in `types/agent.ts`).
 
-## The commands (22)
+## The commands (29)
 
 | Tier | Commands |
 |------|----------|
-| read | `get_context`, `search`, `list_tasks`, `list_schedules`, `get`, `get_calendar_range`, `find_schedule_conflicts`, `preview_schedule` |
-| create | `create_task`, `create_calendar_item`, `create_schedule` *(review)*, `create_endeavour`, `create_purpose`, `create_tag` |
-| modify | `update_task`, `set_task_status`, `update_calendar_item`, `edit_occurrence`, `update_schedule` *(review when it removes blocks or adds more than 3)*, `manage_schedule_occurrences` |
+| read | `get_context`, `search`, `list_tasks`, `list_schedules`, `get`, `get_calendar_range`, `find_schedule_conflicts`, `preview_schedule`, `get_subject` |
+| create | `create_task`, `create_calendar_item`, `create_schedule` *(review)*, `create_endeavour`, `create_purpose`, `create_tag`, `create_semester` *(review)*, `create_subject`, `add_subject_item` |
+| modify | `update_task`, `set_task_status`, `update_calendar_item`, `edit_occurrence`, `update_schedule` *(review when it removes blocks or adds more than 3)*, `manage_schedule_occurrences`, `update_subject_item`, `set_period`, `mark_subject_date` |
 | archive | `archive_item`, `restore_item` (task, calendar item, Endeavour, Purpose) |
 
 Behaviours worth knowing:
@@ -65,6 +65,7 @@ Behaviours worth knowing:
 - `create_*` for Endeavours/Purposes/Tags refuses a duplicate name and returns the existing id in the message.
 - `edit_occurrence` `end_series_before` a series' first date is refused (it would delete the series).
 - `get_calendar_range` (≤ 92 days) expands repeats and schedule occurrences and shows task deadlines from the tasks themselves (the shadow Deadline that carries a task's deadline is skipped, same as the shadow Event that carries its scheduled date). It does not apply the calendar's Layers visibility setting.
+- **Semesters and subjects** (`commands/subjects.ts`, phase 7 (d) of `docs/features/endeavours.md`) go through the same template (`write.applyTemplate`) and subject-item service (`write.saveSubjectItem`) as the template picker and the subject editor, so the period, breaks and "follows each class" rules are the UI's. `add_subject_item` / `update_subject_item` refuse an Endeavour that isn't a subject, a Type that doesn't exist, and a class to follow that isn't there. `get_context` and every Endeavour summary carry its `template`.
 - Read output is compact on purpose (nulls and empty lists dropped) because it is sent to a model.
 
 ## Adding a command
@@ -103,7 +104,7 @@ __agent.tools()   // the JSON Schemas a model would be given
 
 - **No model, chat UI, review screen or agent manual yet** (later phases in the inventory). No provider has seen the generated JSON Schemas.
 - **Notes, Lists, Records, Fitness, Portfolio** have no commands. Notes is Chunk B (headless content module, editor reload on external change, note commands, encrypted content excluded at `access.ts`); nothing encrypted exists in the current commands' reach, so the planted-secrets test arrives with Chunk B.
-- **Undo covers only the tracked stores** (tasks, Endeavours, Purposes, Tags, events, reminders, deadlines, schedules). Restoring/removing goes straight to the stores, without `crossAppLinkCleanup`; fine while agent-made items carry no cross-app links, but revisit when notes arrive.
+- **Undo covers only the tracked stores** (tasks, Endeavours, Purposes, Tags, events, reminders, deadlines, schedules, and since phase 7 (d) notebooks, lists, goals and Types, which a semester or subject also makes). Restoring/removing goes straight to the stores, without `crossAppLinkCleanup`; fine while agent-made items carry no cross-app links, but revisit when notes arrive.
 - **Snapshots live in localStorage** (`agent-batches`, capped at 50 batches of full "before" records). If storage gets tight, this store and `agent-log` are the ones to shrink or move to IndexedDB. Both are cleared on sign-out (`clearLocalData.ts`) since they hold copies of the account's records.
 - **Attribution is local only.** "Created by the agent" is answerable from the audit log on this device; showing it on other devices needs the small synced table agreed in the inventory (a Supabase migration, not written).
 - **`get_calendar_range` re-combines** events, reminders, deadlines and schedule blocks itself (using the shared `expandRepeat`/`expandScheduleBlock`) instead of reusing `CalendarView`'s inline builder, which is coupled to the UI. If the calendar's own rules change, check this too.

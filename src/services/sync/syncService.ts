@@ -1,5 +1,5 @@
 import { supabase } from '@/services/supabase';
-import { isHydrating, setHydrating } from './hydrating';
+import { isHydrating, notifyLoaded, setHydrating } from './hydrating';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTrackerStore } from '@/store/trackerStore';
@@ -485,6 +485,7 @@ async function runInitSync(userId: string): Promise<void> {
         restoreCutoff = null;
       }
       queueLocalOnlyAndNewer(remote);
+      notifyLoaded();
     }
     // Only once every table loaded: a table that failed hasn't taken the restore in yet, so the
     // next load must apply it again (harmless for the rest — edits since the restore are newer).

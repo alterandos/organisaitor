@@ -3,7 +3,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { useSecretsVersion } from '@/services/noteSecrets';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { glossaryEntries, glossaryKindLine, glossaryReferences, type GlossaryEntry } from '@/services/glossary';
+import { glossaryEntries, glossaryKindLine, glossaryReferences, toggleGlossaryKind, type GlossaryEntry } from '@/services/glossary';
 import { getStructuredTagType } from '@/config/structuredTagTypes';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
 import { noteView } from '@/services/noteSecrets';
@@ -13,8 +13,8 @@ import type { NoteId } from '@/types';
 import styles from './GlossaryView.module.css';
 import { CloseIcon, DisclosureIcon, GlossaryIcon } from '@/components/Icons';
 
-type Filter = 'all' | 'definition' | 'concept' | 'acronym';
-const FILTERS: Filter[] = ['all', 'definition', 'concept', 'acronym'];
+// The kinds to filter by, any combination (2026-11-01: none picked is All).
+const KINDS = ['definition', 'concept', 'acronym', 'profile'];
 // How important, at least (BlockImportance.ts; a record's level is entryImportance): to study the
 // key terms only.
 type Importance = 0 | 1 | 3;
@@ -36,7 +36,9 @@ export function GlossaryView() {
   const notes = useNoteStore((s) => s.notes);
   const secrets = useSecretsVersion((s) => s.version);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const layout = useUIStore((s) => s.glossaryLayout);
+  const setLayout = useUIStore((s) => s.setGlossaryLayout);
   const [minImportance, setMinImportance] = useState<Importance>(0);
   const [openRefs, setOpenRefs] = useState<string | null>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
@@ -56,16 +58,20 @@ export function GlossaryView() {
   }, [all]);
 
   const shown = useMemo(() => {
-    // Under Acronyms a record is listed by its acronym (ASX), whichever way it was made.
-    const byKind = (filter === 'all' ? all : all.filter((e) => e.kinds.includes(filter)))
+    // A record shown only because it's an acronym (ASX on a definition) is listed by its acronym,
+    // whichever way it was made.
+    const byKind = (picked.size === 0 ? all : all.filter((e) => e.kinds.some((k) => picked.has(k))))
       .filter((e) => e.importance >= minImportance)
-      .map((e) => (filter === 'acronym' && e.short && e.short !== e.term ? { ...e, term: e.short, meaning: e.long ? `${e.long}${e.meaning ? ` · ${e.meaning}` : ''}` : e.meaning } : e))
+      .map((e) => {
+        const asAcronym = picked.size > 0 && e.kinds.every((k) => k === 'acronym' || !picked.has(k));
+        return asAcronym && e.short && e.short !== e.term ? { ...e, term: e.short, meaning: e.long ? `${e.long}${e.meaning ? ` · ${e.meaning}` : ''}` : e.meaning } : e;
+      })
       .sort((a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: 'base' }));
     if (!query.trim()) return byKind;
     return rankSearch(byKind, (e: GlossaryEntry) => [
       { text: e.term, weight: 3 }, { text: e.meaning, weight: 1, counted: true }, { text: e.noteTitle, weight: 1 },
     ], () => 0, query);
-  }, [all, filter, query, minImportance]);
+  }, [all, picked, query, minImportance]);
 
   const sections = useMemo(() => {
     if (query.trim()) return [{ letter: '', entries: shown }];
@@ -88,6 +94,13 @@ export function GlossaryView() {
         <div className={styles.titleRow}>
           <span className={styles.title}><GlossaryIcon className={styles.titleIcon} />{L.title}</span>
           <span className={styles.count}>{all.length}</span>
+          <span className={styles.layouts} role="group" aria-label={L.layout}>
+            {(['tiles', 'list'] as const).map((l) => (
+              <button key={l} type="button" className={`${styles.layoutBtn} ${layout === l ? styles.layoutOn : ''}`} aria-pressed={layout === l} title={L.layouts[l]} aria-label={L.layouts[l]} onClick={() => setLayout(l)}>
+                <LayoutIcon layout={l} />
+              </button>
+            ))}
+          </span>
           <button type="button" className={styles.closeBtn} onClick={close} title={L.back} aria-label={L.back}><CloseIcon /></button>
         </div>
         <input
@@ -98,9 +111,12 @@ export function GlossaryView() {
           autoFocus
         />
         <div className={styles.chips}>
-          {FILTERS.filter((f) => f === 'all' || kinds.has(f)).map((f) => (
-            <button key={f} type="button" className={`${styles.chip} ${filter === f ? styles.chipOn : ''}`} onClick={() => setFilter(f)}>
-              {f === 'all' ? L.all : kinds.get(f)}
+          <button type="button" className={`${styles.chip} ${picked.size === 0 ? styles.chipOn : ''}`} aria-pressed={picked.size === 0} onClick={() => setPicked(new Set())}>
+            {L.all}
+          </button>
+          {KINDS.filter((k) => kinds.has(k)).map((k) => (
+            <button key={k} type="button" className={`${styles.chip} ${picked.has(k) ? styles.chipOn : ''}`} aria-pressed={picked.has(k)} onClick={() => setPicked(toggleGlossaryKind(picked, k, kinds))}>
+              {kinds.get(k)}
             </button>
           ))}
           {all.some((e) => e.importance) && (
@@ -132,18 +148,18 @@ export function GlossaryView() {
         ) : sections.map((section) => (
           <section key={section.letter || 'results'} ref={(el) => { if (el) sectionRefs.current.set(section.letter, el); }}>
             {section.letter && <h3 className={styles.sectionLetter}>{section.letter}</h3>}
-            <div className={styles.grid}>
+            <div className={layout === 'list' ? styles.list : styles.grid}>
               {section.entries.map((e) => {
                 const refs = references.get(e.id) ?? [];
                 const total = refs.reduce((n, r) => n + r.count, 0);
                 return (
-                  <article key={e.id} className={styles.card} style={{ ['--entry-color' as string]: e.color }}>
+                  <article key={e.id} className={layout === 'list' ? styles.row : styles.card} style={{ ['--entry-color' as string]: e.color }}>
                     <header className={styles.cardHead}>
                       <span className={styles.cardIcon} aria-hidden="true">{e.locked ? '🔒' : e.icon}</span>
                       <span className={styles.term}>{e.term || L.untitled}</span>
                       <span className={styles.kind}>{glossaryKindLine(e)}</span>
                     </header>
-                    <p className={styles.meaning}>{e.locked ? L.locked : e.meaning || <span className={styles.muted}>{L.noMeaning}</span>}</p>
+                    <p className={styles.meaning} title={layout === 'list' && !e.locked ? e.meaning : undefined}>{e.locked ? L.locked : e.meaning || <span className={styles.muted}>{L.noMeaning}</span>}</p>
                     <footer className={styles.cardFoot}>
                       <button
                         type="button"
@@ -181,5 +197,15 @@ export function GlossaryView() {
         ))}
       </div>
     </div>
+  );
+}
+
+function LayoutIcon({ layout }: { layout: 'tiles' | 'list' }) {
+  return (
+    <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      {layout === 'tiles'
+        ? <><rect x="2" y="2" width="5" height="5" rx="1" /><rect x="9" y="2" width="5" height="5" rx="1" /><rect x="2" y="9" width="5" height="5" rx="1" /><rect x="9" y="9" width="5" height="5" rx="1" /></>
+        : <><path d="M2 4h12" /><path d="M2 8h12" /><path d="M2 12h12" /></>}
+    </svg>
   );
 }

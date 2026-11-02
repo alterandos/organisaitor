@@ -10,6 +10,9 @@ import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker
 import { DateInput } from '@/components/DateInput/DateInput';
 import { CloseIcon } from '@/components/Icons';
 import { isRhythm, rhythmStreams } from '@/utils/rhythms';
+import { repeatingItemsOf } from '@/utils/itemOccurrences';
+import { endeavourSubtree } from '@/utils/endeavourGraph';
+import { useCalendarStore } from '@/store/calendarStore';
 import { LABELS } from '@/config/labels';
 import type { CollectionId, FieldSchema, GoalMeasure, GoalStatus } from '@/types';
 import styles from './GoalModal.module.css';
@@ -20,7 +23,7 @@ import styles from './GoalModal.module.css';
 
 const L = LABELS.goals;
 type Kind = GoalMeasure['kind'];
-const KINDS: Kind[] = ['manual', 'consistency', 'tracker', 'completion'];
+const KINDS: Kind[] = ['manual', 'keepUp', 'consistency', 'tracker', 'completion'];
 const NUMERIC = new Set<FieldSchema['type']>(['number', 'duration', 'rating']);
 // A duration is stored in seconds and entered in hours.
 const toInput = (f: FieldSchema | undefined, v: number) => (f?.type === 'duration' ? v / 3600 : v);
@@ -43,6 +46,9 @@ export function GoalModal() {
   const [manual, setManual] = useState(() => (m0?.kind === 'manual' ? m0 : { kind: 'manual' as const, unit: null as string | null, target: null as number | null, direction: 'atLeast' as const }));
   const [consistency, setConsistency] = useState(() => (m0?.kind === 'consistency' ? m0 : null));
   const [tracker, setTracker] = useState(() => (m0?.kind === 'tracker' ? m0 : null));
+  const [keepUp, setKeepUp] = useState(() => (m0?.kind === 'keepUp' ? m0 : null));
+  const events = useCalendarStore((s) => s.events);
+  const deadlines = useCalendarStore((s) => s.deadlines);
   const [milestonesOnly, setMilestonesOnly] = useState(() => (m0?.kind === 'completion' ? m0.milestonesOnly : false));
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -54,6 +60,13 @@ export function GoalModal() {
   const trackers = Object.values(collections)
     .filter((c) => c.kind === 'tracker' && !c.archivedAt && (c.fieldSchema ?? []).some((f) => NUMERIC.has(f.type)))
     .sort((a, b) => a.name.localeCompare(b.name));
+  // What keepUp can measure: the repeating classes and Work of the goal's Endeavour and its parts,
+  // grouped by title (two lecture times are one "GEOS215 lecture").
+  const repeating = target ? [...endeavourSubtree(target, collections)].flatMap((id) => repeatingItemsOf(id, events, deadlines)) : [];
+  const repeatingTitles = [...new Set(repeating.map((r) => r.item.title))];
+  const idsFor = (title: string) => repeating.filter((r) => r.item.title === title).map((r) => r.item.id);
+  const keep = keepUp ?? (repeatingTitles[0] ? { kind: 'keepUp' as const, itemIds: idsFor(repeatingTitles[0]), count: 4, outOf: 5 } : null);
+  const keepTitle = keep ? (repeating.find((r) => keep.itemIds.includes(r.item.id))?.item.title ?? '') : '';
   const cons = consistency ?? (rhythms[0] ? { kind: 'consistency' as const, rhythmId: rhythms[0].id, streamId: null, count: 4, outOf: 5 } : null);
   const firstField = (id: string) => collections[id as CollectionId]?.fieldSchema?.find((f: FieldSchema) => NUMERIC.has(f.type));
   const trk = tracker ?? (trackers[0] ? { kind: 'tracker' as const, trackerId: trackers[0].id, fieldId: firstField(trackers[0].id)!.id, target: 0, direction: 'atLeast' as const, aggregate: 'sum' as const, period: 'week' as const } : null);
@@ -62,6 +75,7 @@ export function GoalModal() {
   const measure: GoalMeasure | null =
     kind === 'manual' ? manual
     : kind === 'consistency' ? cons
+    : kind === 'keepUp' ? keep
     : kind === 'tracker' ? trk
     : { kind: 'completion', milestonesOnly };
 
@@ -142,6 +156,19 @@ export function GoalModal() {
                   <input className={styles.inputSmall} aria-label={L.unit} placeholder={L.unitPlaceholder} value={manual.unit ?? ''} onChange={(e) => setManual({ ...manual, unit: e.target.value || null })} />
                 </div>
               )}
+
+              {kind === 'keepUp' && (keep ? (
+                <div className={styles.row}>
+                  <select className={styles.select} aria-label={L.repeating} value={keepTitle} onChange={(e) => setKeepUp({ ...keep, itemIds: idsFor(e.target.value) })}>
+                    {!repeatingTitles.includes(keepTitle) && <option value={keepTitle}>{keepTitle || '—'}</option>}
+                    {repeatingTitles.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <span className={styles.hint}>{L.count}</span>
+                  <input className={styles.tiny} type="number" min={1} aria-label={L.count} value={keep.count} onChange={(e) => setKeepUp({ ...keep, count: Math.max(1, Number(e.target.value) || 1) })} />
+                  <span className={styles.hint}>{L.outOf}</span>
+                  <input className={styles.tiny} type="number" min={1} aria-label={L.outOf} value={keep.outOf} onChange={(e) => setKeepUp({ ...keep, outOf: Math.max(1, Number(e.target.value) || 1) })} />
+                </div>
+              ) : <p className={styles.hint}>{L.noRepeating}</p>)}
 
               {kind === 'consistency' && (cons ? (
                 <div className={styles.row}>

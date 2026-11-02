@@ -52,6 +52,7 @@ export interface OverviewRow {
   endeavourId: string | null;
   context:     string | null;        // where it lives, e.g. the list's or tracker's name
   plan?:       OverviewPlan;         // how it's drawn on a timeline (the Runway, the Board); absent = left off them
+  occurrence?: string;               // YYYY-MM-DD: the one date of a repeating calendar item this row stands for (opened at it)
 }
 
 // How a row is drawn on a timeline (components/OverviewRunway, agreed with the user 2026-10-22):

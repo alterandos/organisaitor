@@ -25,9 +25,12 @@ import { updateCalendarEventLinked as updateEvent } from '@/services/taskCalenda
 import type { CrossAppRef } from '@/types';
 import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
 import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
+import { ScheduleCommitBar } from '@/components/RecurrenceScopeBar/ScheduleCommitBar';
 import { afterSeriesDeleted } from '@/services/calendarSeries';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
+import { DoneBanner } from '@/components/ItemActions/DoneBanner';
+import itemStyles from '@/components/ItemActions/ItemActions.module.css';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
 import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
@@ -154,7 +157,7 @@ export function CalendarEventPane() {
   return (
     <>
       <div className={styles.overlay} onClick={closePane} />
-      <aside style={paneResize.style} className={styles.pane}>
+      <aside style={paneResize.style} className={`${styles.pane} ${linkedTask?.completed ? itemStyles.donePane : ''}`}>
         {paneResize.handle && <ResizeHandle {...paneResize.handle} />}
         <header className={styles.header}>
           <span className={styles.heading}>{LABELS.calendarItemKind.event}</span>
@@ -177,10 +180,13 @@ export function CalendarEventPane() {
 
         <div className={styles.body}>
           {event.archivedAt && <ArchivedBanner archivedAt={event.archivedAt} reason={event.archiveReason} />}
+          {linkedTask?.completed && <DoneBanner doneAt={linkedTask.completedAt} reopenLabel={LABELS.itemActions.reopenTask} onReopen={() => void toggleTaskCompletion(linkedTask.id)} />}
 
           {event.seriesId && (
             <SeriesLinkBar kind="event" id={id} seriesId={event.seriesId} seriesDate={event.seriesDate} repeats={!!event.repeat} />
           )}
+
+          <ScheduleCommitBar id={id} occurrenceDate={occurrenceDate} onSwitch={(newId) => openPane(newId)} onClose={closePane} />
 
           {event.repeat && (
             <RecurrenceScopeBar

@@ -12,7 +12,8 @@ export function openOverviewRow(row: OverviewRow): void {
   const ui = useUIStore.getState();
   switch (row.source) {
     case 'task': case 'event': case 'reminder': case 'deadline': case 'list':
-      openArtifactTarget(row.source, row.id);
+      // A repeating item's row stands for one of its dates: open that date, not the series' first.
+      openArtifactTarget(row.source, row.id, row.occurrence);
       return;
     case 'note':
       ui.setActiveView('notes');
