@@ -11,6 +11,7 @@ import { cycleBlock } from './cycleBlock';
 import { breakdownBlock } from './breakdownBlock';
 import { hierarchyBlock } from './hierarchyBlock';
 import { pyramidBlock } from './pyramidBlock';
+import { stepsBlock } from './stepsBlock';
 import { chartBlock } from './chartBlock';
 import { codeBlock } from './codeBlock';
 import { mathsBlock } from './mathsBlock';
@@ -34,4 +35,4 @@ import { unsureTrigger } from './unsureTrigger';
 // THE registry of note blocks `\` can insert (CLAUDE.md "Inline objects in notes" → note blocks).
 // A new block is its node in extensions/ (registered in NoteEditor), a `*Block.ts` here, and one
 // entry below — a pattern test checks the entry.
-export const NOTE_BLOCK_KINDS: NoteBlockKind[] = [timelineBlock, quoteBlock, conclusionBlock, cycleBlock, breakdownBlock, typesBlock, idKeyBlock, hierarchyBlock, pyramidBlock, chartBlock, codeBlock, mathsBlock, inboxBlock, definitionBlock, acronymBlock, conceptBlock, profileBlock, questionBlock, compareBlock, prosConsBlock, argumentBlock, optionsBlock, diagramBlock, convertBlock, caseStudyBlock, causeEffectBlock, vennBlock, hubBlock, embedBlock, noteRefTrigger, unsureTrigger];
+export const NOTE_BLOCK_KINDS: NoteBlockKind[] = [timelineBlock, quoteBlock, conclusionBlock, cycleBlock, breakdownBlock, typesBlock, idKeyBlock, hierarchyBlock, pyramidBlock, stepsBlock, chartBlock, codeBlock, mathsBlock, inboxBlock, definitionBlock, acronymBlock, conceptBlock, profileBlock, questionBlock, compareBlock, prosConsBlock, argumentBlock, optionsBlock, diagramBlock, convertBlock, caseStudyBlock, causeEffectBlock, vennBlock, hubBlock, embedBlock, noteRefTrigger, unsureTrigger];

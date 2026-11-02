@@ -382,6 +382,11 @@ class GlossaryCardView {
     this.render();
   };
 
+  private hideField = (id: string) => {
+    this.shown = this.shown.filter((f) => f !== id);
+    this.render();
+  };
+
   private setWaiting = (fields: { id: string; name: string }[]) => {
     if (fields.map((f) => f.id).join() === this.waiting.map((f) => f.id).join()) return;
     this.waiting = fields;
@@ -471,6 +476,7 @@ class GlossaryCardView {
       onDone:   this.leave,
       shown:    this.shown,
       onShow:   this.showField,
+      onHide:   this.hideField,
       onWaiting: this.setWaiting,
       fresh:    this.fresh,
       onTouched: this.touched,

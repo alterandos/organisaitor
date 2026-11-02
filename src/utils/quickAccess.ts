@@ -18,7 +18,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useUIStore } from '@/store/uiStore';
-import { useRecentItemsStore, type QuickAccessTargetType, type RecentItemEntry } from '@/store/recentItemsStore';
+import type { QuickAccessTargetType, RecentItemEntry } from '@/store/recentItemsStore';
 import type { PinnedItem } from '@/store/pinnedItemsStore';
 import { getNotebookIcon, getNoteBreadcrumb } from '@/utils/notes';
 import { LABELS } from '@/config/labels';
@@ -284,7 +284,9 @@ export function searchQuickAccessItems(query: string, limitPerType = 6): QuickAc
 // Resolves a list of recent-item entries (already sorted by the caller) into live
 // QuickAccessItems, dropping any whose underlying entity no longer exists or is archived.
 // Pure (no store writes) so it's safe to call during render — `stale` lists the entries that
-// failed to resolve, for the caller to prune via pruneStaleRecentEntries in a useEffect.
+// failed to resolve. They're hidden, never removed (2026-11-02), as pins are: an archived item or a
+// locked Glossary entry comes back, and visits now sync, so a removal here would reach every device.
+// The store's own cap bounds what's left of deleted items.
 export function resolveRecentItems(entries: RecentItemEntry[]): { items: QuickAccessItem[]; stale: RecentItemEntry[] } {
   const items: QuickAccessItem[] = [];
   const stale: RecentItemEntry[] = [];
@@ -297,9 +299,6 @@ export function resolveRecentItems(entries: RecentItemEntry[]): { items: QuickAc
   return { items, stale };
 }
 
-export function pruneStaleRecentEntries(stale: RecentItemEntry[]): void {
-  for (const entry of stale) useRecentItemsStore.getState().removeEntity(entry.type, entry.entityId);
-}
 
 // Visit tracking itself lives at each destination's own natural "open" point (noteStore's
 // touchNote, uiStore's openTaskPane/setSelectedNoteTag/setActiveTracker/setActiveRoutine/

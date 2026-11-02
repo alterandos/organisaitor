@@ -21,6 +21,7 @@ import { INBOX_DESIGNS } from './Inbox';
 import { MATH_DESIGNS } from './Maths';
 import { EMBED_DESIGNS } from './NoteEmbed';
 import { PYRAMID_DESIGNS } from './Pyramid';
+import { STEPS_DESIGNS } from './Steps';
 import { QUESTION_DESIGNS } from './Question';
 import { QUOTE_DESIGNS } from './Quote';
 import { TIMELINE_DESIGNS } from './Timeline';
@@ -49,6 +50,7 @@ export const BLOCK_DESIGN_LISTS: Record<string, readonly BlockDesign<string>[]> 
   breakdown:     BREAKDOWN_DESIGNS,
   hierarchy:     HIERARCHY_DESIGNS,
   pyramid:       PYRAMID_DESIGNS,
+  steps:         STEPS_DESIGNS,
   chart:         CHART_DESIGNS,
   codeBlock:     CODE_DESIGNS,
   mathBlock:     MATH_DESIGNS,

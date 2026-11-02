@@ -74,6 +74,18 @@ export function richToPlain(value: string): string {
 // Whether a value holds any formatting (otherwise it's stored as plain text).
 export const hasFormatting = (value: string) => /<(b|i|u|s|sup|sub|code)>|<a data-term=/.test(sanitizeInlineHtml(value));
 
+// A field's lines as <br>s, however the browser wrote them: a <div> or <p> per line, a <br>, or a
+// newline character (Chrome's Enter in a field that keeps white space). Cleaning unwraps <div>s, so
+// a field is put through this first, or two lines run together (found 2026-11-02: a card's
+// Examples, "Likert scale" and "fratley", saved as "Likert scalefratley").
+export function linesAsBreaks(html: string): string {
+  return html
+    .replace(/<(div|p)\b[^<>]*>/gi, '<br>')
+    .replace(/<\/(div|p)>/gi, '')
+    .replace(/\n/g, '<br>')
+    .replace(/^(<br\s*\/?>)+/i, '');
+}
+
 // The lines of an edited list (one item per line, as a contentEditable writes them: lines as
 // <div>s, or <br>s), each cleaned; empty lines dropped.
 export function richLines(html: string): string[] {

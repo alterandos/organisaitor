@@ -5,7 +5,7 @@ import { useUIStore, type QuickAccessTab } from '@/store/uiStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { frecency, useRecentItemsStore, type RecentItemEntry } from '@/store/recentItemsStore';
 import { usePinnedItemsStore, pinKey, type PinnableType } from '@/store/pinnedItemsStore';
-import { searchQuickAccessItems, resolveRecentItems, resolvePinnedItems, pruneStaleRecentEntries, navigateToQuickAccessItem, placesAlphabetical, type QuickAccessItem } from '@/utils/quickAccess';
+import { searchQuickAccessItems, resolveRecentItems, resolvePinnedItems, navigateToQuickAccessItem, placesAlphabetical, type QuickAccessItem } from '@/utils/quickAccess';
 import { isPinnable, togglePin, pinMenuItem } from '@/services/quickAccessPins';
 import type { Place } from '@/config/places';
 import styles from './QuickAccessPane.module.css';
@@ -58,20 +58,15 @@ export function QuickAccessPane() {
 
   const trimmed = query.trim();
   const showingPins = !trimmed && tab === 'pinned';
-  const { items, staleEntries } = useMemo(() => {
-    if (trimmed) return { items: searchQuickAccessItems(trimmed), staleEntries: [] as RecentItemEntry[] };
-    if (tab === 'pinned') return { items: resolvePinnedItems(pins), staleEntries: [] as RecentItemEntry[] };
+  const items = useMemo(() => {
+    if (trimmed) return searchQuickAccessItems(trimmed);
+    if (tab === 'pinned') return resolvePinnedItems(pins);
     // Resolve the whole sorted history (not just the top N raw entries) before slicing to
     // recentCount — a stale entry (its note/task/etc. since deleted) among the top N would
     // otherwise waste a display slot instead of letting the next-ranked valid entry fill it.
     const sorted = sortEntries(Object.values(recentEntries), mode);
-    const { items: resolved, stale } = resolveRecentItems(sorted);
-    return { items: resolved.slice(0, recentCount), staleEntries: stale };
+    return resolveRecentItems(sorted).items.slice(0, recentCount);
   }, [trimmed, tab, pins, mode, recentCount, recentEntries]);
-
-  useEffect(() => {
-    if (staleEntries.length > 0) pruneStaleRecentEntries(staleEntries);
-  }, [staleEntries]);
 
   const lastIndex = Math.max(0, items.length - 1);
   if (highlightIndex > lastIndex) setHighlightIndex(lastIndex);

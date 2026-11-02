@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { editorFor, type TemplateEditorModal } from '@/config/templateEditors';
 import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType, RepeatConfig, ItemTypeId, TypeableKind, GoalId, CollectionId } from '@/types';
 import type { Activity } from '@/types/fitness';
-import { useRecentItemsStore } from '@/store/recentItemsStore';
+import { setVisitFrontCheck, useRecentItemsStore } from '@/store/recentItemsStore';
 import { useNoteStore } from '@/store/noteStore';
 import { persistStorage } from '@/utils/persistStorage';
 import { todayIso } from '@/utils/date';
@@ -1425,3 +1425,19 @@ function goToPlace(p: NavPlace): void {
   }
   useUIStore.getState().setActiveView(p.view, { mode: 'silent' });
 }
+
+// What Go to's Frequent counts as still in front, for time spent (recentItemsStore STAY_MS).
+setVisitFrontCheck((type, id) => {
+  const s = useUIStore.getState();
+  switch (type) {
+    case 'note':      return s.activeView === 'notes' && s.editingNoteId === id;
+    case 'notebook':  return s.activeView === 'notes' && s.selectedNoteTagId === id;
+    case 'list':      return s.activeView === 'lists' && s.activeListId === id;
+    case 'endeavour': return s.activeView === 'endeavours' && s.endeavourHomeId === id;
+    case 'tracker':   return s.activeView === 'records' && s.activeTrackerId === id;
+    case 'routine':   return s.activeView === 'records' && s.activeRoutineId === id;
+    case 'task':      return s.editingTaskId === id;
+    case 'schedule':  return s.editingSchedule?.id === id;
+    default:          return false;
+  }
+});

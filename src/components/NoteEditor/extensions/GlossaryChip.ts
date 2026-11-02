@@ -293,6 +293,7 @@ function openCard(view: EditorView, chipPos: number, entryId: string, focus: { n
     onDone: () => close(true),
     shown,
     onShow: (id: string) => { if (!shown.includes(id)) { shown = [...shown, id]; render(); } },
+    onHide: (id: string) => { shown = shown.filter((f) => f !== id); render(); },
     onWaiting: () => {},
     fresh: false,
     onTouched: () => {},

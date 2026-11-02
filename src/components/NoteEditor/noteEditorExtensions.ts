@@ -30,6 +30,7 @@ import { CycleExtensions } from './extensions/Cycle';
 import { BreakdownExtensions } from './extensions/Breakdown';
 import { HierarchyExtensions } from './extensions/Hierarchy';
 import { PyramidExtensions } from './extensions/Pyramid';
+import { StepsExtensions } from './extensions/Steps';
 import { ChartExtensions } from './extensions/Chart';
 import { CodeBlockExtensions } from './extensions/CodeBlock';
 import { MathExtensions } from './extensions/Maths';
@@ -121,6 +122,7 @@ export function noteEditorExtensions({ noteEncrypted, linkClass }: { noteEncrypt
       ...BreakdownExtensions,
       ...HierarchyExtensions,
       ...PyramidExtensions,
+      ...StepsExtensions,
       ...ChartExtensions,
       ...CodeBlockExtensions,
       ...MathExtensions,

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { usePlatform } from '@/hooks/usePlatform';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useHoverOpen } from '@/hooks/useHoverOpen';
 import { todayIso } from '@/utils/date';
 import type { CalendarItemKind } from '@/types';
 import { LABELS } from '@/config/labels';
@@ -122,15 +123,25 @@ export function AddTaskButton() {
   const showTagPresets             = useUIStore((s) => s.showTagPresets);
   const showAddActivity            = useUIStore((s) => s.showAddActivity);
 
-  const [open, setOpen] = useState(false);
+  // Hovering the + previews the options (useHoverOpen's close delay lets the mouse cross the gap to
+  // them); a click pins them open, and is the only way on a touch screen.
+  const [pinned, setPinned] = useState(false);
+  const hover = useHoverOpen();
+  const open = pinned || hover.open;
+  const closeHover = hover.close;
+  const setOpen = (next: boolean | ((o: boolean) => boolean)) => {
+    const v = typeof next === 'function' ? next(pinned) : next;
+    setPinned(v);
+    if (!v) closeHover();
+  };
   const ref = useRef<HTMLDivElement>(null);
 
-  useEscapeClose(() => setOpen(false), open);
+  useEscapeClose(() => { setPinned(false); closeHover(); }, open);
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent | TouchEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) { setPinned(false); closeHover(); }
     };
     document.addEventListener('mousedown', handler);
     document.addEventListener('touchstart', handler);
@@ -138,7 +149,7 @@ export function AddTaskButton() {
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('touchstart', handler);
     };
-  }, [open]);
+  }, [open, closeHover]);
 
   const handleTaskOption = (type: TaskDialType) => {
     setOpen(false);
@@ -211,7 +222,7 @@ export function AddTaskButton() {
       { key: 'new',      label: LABELS.endeavourHome.create,        color: 'var(--color-swatch-indigo)', Icon: PlusIcon, run: () => ui.showAddCollection() },
     ];
     return (
-      <div className={dialClass} ref={ref}>
+      <div className={dialClass} ref={ref} {...hover.handlers}>
         <div className={styles.options} role="group" aria-label="Create options">
           {opts.map((opt) => (
             <div key={opt.key} className={styles.optionRow}>
@@ -241,7 +252,7 @@ export function AddTaskButton() {
 
   if (activeView === 'overview') {
     return (
-      <div className={dialClass} ref={ref}>
+      <div className={styles.speedDial}>
         <button className={styles.fab} onClick={() => useUIStore.getState().showAddOverview()} aria-label={LABELS.overview.newTitle}>
           <span className={styles.fabIcon}><PlusIcon /></span>
         </button>
@@ -252,7 +263,7 @@ export function AddTaskButton() {
   if (activeView === 'lists') {
     const listsOpts = activeListId ? LISTS_OPTIONS : LISTS_OPTIONS.filter((o) => o.type !== 'list-item');
     return (
-      <div className={dialClass} ref={ref}>
+      <div className={dialClass} ref={ref} {...hover.handlers}>
         <div className={styles.options} role="group" aria-label="Create options">
           {listsOpts.map((opt) => (
             <div key={opt.type} className={styles.optionRow}>
@@ -282,7 +293,7 @@ export function AddTaskButton() {
 
   if (activeView === 'calendar') {
     return (
-      <div className={dialClass} ref={ref}>
+      <div className={dialClass} ref={ref} {...hover.handlers}>
         <div className={styles.options} role="group" aria-label="Create options">
           <TypeOptions onPick={() => setOpen(false)} />
           {CAL_OPTIONS.map((opt) => (
@@ -313,7 +324,7 @@ export function AddTaskButton() {
 
   if (activeView === 'portfolio') {
     return (
-      <div className={dialClass} ref={ref}>
+      <div className={dialClass} ref={ref} {...hover.handlers}>
         <div className={styles.options} role="group" aria-label="Create options">
           {PORTFOLIO_OPTIONS.map((opt) => (
             <div key={opt.type} className={styles.optionRow}>
@@ -348,7 +359,7 @@ export function AddTaskButton() {
       : REC_OPTIONS.filter((o) => o.type !== 'entry');
 
     return (
-      <div className={dialClass} ref={ref}>
+      <div className={dialClass} ref={ref} {...hover.handlers}>
         <div className={styles.options} role="group" aria-label="Create options">
           {recOpts.map((opt) => (
             <div key={opt.type} className={styles.optionRow}>
@@ -378,7 +389,7 @@ export function AddTaskButton() {
 
   if (activeView === 'notes') {
     return (
-      <div className={dialClass} ref={ref}>
+      <div className={dialClass} ref={ref} {...hover.handlers}>
         <div className={styles.options} role="group" aria-label="Create options">
           {NOTES_OPTIONS.map((opt) => (
             <div key={opt.type} className={styles.optionRow}>
@@ -408,7 +419,7 @@ export function AddTaskButton() {
 
   if (activeView === 'fitness') {
     return (
-      <div className={dialClass} ref={ref}>
+      <div className={dialClass} ref={ref} {...hover.handlers}>
         <div className={styles.options} role="group" aria-label="Create options">
           {FITNESS_OPTIONS.map((opt) => (
             <div key={opt.type} className={styles.optionRow}>
@@ -437,7 +448,7 @@ export function AddTaskButton() {
   }
 
   return (
-    <div className={dialClass} ref={ref}>
+    <div className={dialClass} ref={ref} {...hover.handlers}>
       <div className={styles.options} role="group" aria-label="Create options">
         <TypeOptions onPick={() => setOpen(false)} />
         {TASK_OPTIONS.map((opt) => (

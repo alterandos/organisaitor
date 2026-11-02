@@ -15,6 +15,9 @@ import { ConverterEditor } from './ConverterEditor';
 import { categoriesInOrder, unitsInOrder } from './convertValue';
 import { useCurrencyRates } from '@/services/currencyRates';
 import { RatesLine } from './RatesLine';
+import { SizeLike } from './SizeLike';
+import { toBaseValue } from '@/utils/sizeComparison';
+import { useSettingsStore } from '@/store/settingsStore';
 import styles from './ConverterPane.module.css';
 
 const L = LABELS.converters;
@@ -126,9 +129,11 @@ function UnitView({ category }: { category: UnitCategory }) {
   const fromUnit = unitCategory(category.id)!.units.find((u) => u.id === from)!;
   const toUnit = units.find((u) => u.id === to)!;
   const result = Number.isFinite(value) ? convertUnit(value, fromUnit, toUnit, rates) : NaN;
+  const likeOpen = useSettingsStore((s) => s.converterLikeOpen);
+  const setLikeOpen = useSettingsStore((s) => s.setConverterLikeOpen);
 
   return (
-    <div className={styles.view}>
+    <div className={styles.view} data-like-host="">
       <h3 className={styles.viewTitle}>{L.categories[category.id]}</h3>
       <div className={styles.convertRow}>
         <input className={styles.amount} value={amount} inputMode="decimal" aria-label={L.amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
@@ -144,6 +149,7 @@ function UnitView({ category }: { category: UnitCategory }) {
         {showAmount(result)} <span className={styles.unit}>{toUnit.symbol}</span>
       </button>
       {category.id === 'currency' && <RatesLine fixed={null} editable={false} />}
+      <SizeLike categoryId={category.id} base={Number.isFinite(value) ? toBaseValue(fromUnit, value) : NaN} open={likeOpen} editable onOpen={setLikeOpen} />
       <h4 className={styles.group}>{L.allUnits}</h4>
       <ul className={styles.all}>
         {units.filter((u) => u.id !== from).map((u) => {

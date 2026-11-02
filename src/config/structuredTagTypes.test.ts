@@ -53,6 +53,9 @@ describe('a field of your own: a "Name: value" line (2026-10-27)', () => {
     expect(takeNamedLines('AKA: Bob<br>the rest')).toEqual({ html: 'the rest', facts: [{ label: 'AKA', value: 'Bob' }] });
     expect(takeNamedLines('AKA: Bob')).toEqual({ html: '', facts: [{ label: 'AKA', value: 'Bob' }] });
     expect(takeNamedLines('<div>Water</div><div>Origin: Latin</div>').facts).toEqual([{ label: 'Origin', value: 'Latin' }]);
+    // A newline character, as Chrome's Enter writes in a field that keeps white space (2026-11-02).
+    expect(takeNamedLines('Data that’s been categorised\nExample: Likert scale\nOther: x'))
+      .toEqual({ html: 'Data that’s been categorised', facts: [{ label: 'Example', value: 'Likert scale' }, { label: 'Other', value: 'x' }] });
     expect(takeNamedLines('Just text<br>no colon')).toEqual({ html: 'Just text<br>no colon', facts: [] });
   });
 

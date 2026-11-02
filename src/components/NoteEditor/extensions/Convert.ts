@@ -48,6 +48,8 @@ export const ConvertBlock = Node.create({
       reverse:   { default: false, parseHTML: (el) => el.getAttribute('data-reverse') === 'true', renderHTML: (a) => (a.reverse ? { 'data-reverse': 'true' } : {}) },
       // Currency kept at the rates of a day ("Keep this rate").
       fixed:     { default: null, parseHTML: (el) => json(el.getAttribute('data-fixed'), null), renderHTML: (a) => (a.fixed ? { 'data-fixed': JSON.stringify(a.fixed) } : {}) },
+      // Its "≈ like…" comparison kept shown.
+      like:      { default: false, parseHTML: (el) => el.getAttribute('data-like') === 'true', renderHTML: (a) => (a.like ? { 'data-like': 'true' } : {}) },
     };
   },
 
@@ -59,7 +61,7 @@ export const ConvertBlock = Node.create({
   },
 });
 
-const valueOf = (a: PMNode['attrs']): ConvertValue => ({ converter: a.converter, from: a.from, to: a.to, values: a.values ?? {}, reverse: !!a.reverse, fixed: a.fixed ?? null });
+const valueOf = (a: PMNode['attrs']): ConvertValue => ({ converter: a.converter, from: a.from, to: a.to, values: a.values ?? {}, reverse: !!a.reverse, fixed: a.fixed ?? null, like: !!a.like });
 
 // `\convert`: lengths, 1 of the default unit, the amount ready to type over.
 export function insertConvert(state: EditorState, from: number, to: number): Transaction | null {

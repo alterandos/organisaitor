@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useCardTermLinks } from './CardTermLinks';
-import { alertDialog } from '@/components/ConfirmDialog/dialogs';
+import { alertDialog, confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { DEFAULT_IMAGE_LAYOUT, IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { useNoteStore } from '@/store/noteStore';
 import { entryView, isEntryLocked, useSecretsVersion } from '@/services/noteSecrets';
@@ -14,12 +14,12 @@ import { addPicture, pictureRef, useFieldPictureSrc } from '@/services/pictures'
 import { acronymLetterPositions } from '@/utils/acronymInference';
 import { log, errorMessage } from '@/utils/log';
 import { normalizeLinkUrl, openExternalLink } from '@/utils/links';
-import { escapeHtml, hasFormatting, richLines, richToPlain, sanitizeInlineHtml } from '@/utils/richText';
+import { escapeHtml, hasFormatting, linesAsBreaks, richLines, richToPlain, sanitizeInlineHtml } from '@/utils/richText';
 import type { StructuredTagEntry, StructuredTagEntryId } from '@/types';
 import type { GlossaryCardVariant } from './GlossaryCard';
 import { BUILTIN_TAGS } from '../builtinTags';
 import styles from './GlossaryCard.module.css';
-import { UnlinkIcon } from '@/components/Icons';
+import { TrashIcon, UnlinkIcon } from '@/components/Icons';
 
 // The card a Glossary card block (GlossaryCard.ts) shows: the record's term, then each field of
 // its type's schema (config/structuredTagTypes.ts) drawn by the field's kind, so a new field is
@@ -42,6 +42,7 @@ interface Props {
   onDone:   () => void;     // Ctrl+Enter: what was typed is saved, and the cursor goes to the text after
   shown:    string[];       // optional fields opened on this card (kept by the block, so its "+ Add" can open one too)
   onShow:   (fieldId: string) => void;
+  onHide:   (fieldId: string) => void;   // a field taken off the card (emptied first)
   onWaiting: (fields: { id: string; name: string }[]) => void;   // the optional fields not shown yet
   fresh:    boolean;        // made by Shift+Enter and not written in yet
   onTouched: () => void;    // something was typed: no longer fresh
@@ -186,6 +187,10 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
   const ref = useRef<HTMLDivElement>(null);
   const links = useCardTermLinks(termLinksFor);
   const dirty = useRef(false);
+  // A field of several lines keeps its lines as <br>s whatever the browser wrote (linesAsBreaks).
+  const clean = (h: string) => sanitizeInlineHtml(multiline ? linesAsBreaks(h) : h);
+  const cleanRef = useRef(clean);
+  useEffect(() => { cleanRef.current = clean; });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commit = useRef(onCommit);
   useEffect(() => { commit.current = onCommit; });
@@ -193,15 +198,17 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
     if (timer.current) clearTimeout(timer.current);
     if (!dirty.current || !ref.current) return;
     dirty.current = false;
-    commit.current(sanitizeInlineHtml(ref.current.innerHTML));
+    commit.current(cleanRef.current(ref.current.innerHTML));
   });
-  // A change from elsewhere shows at once, unless something is being typed here; what was just
-  // saved from here reads the same, so the cursor isn't disturbed.
+  // A change from elsewhere shows at once, unless something is being typed here. What was just saved
+  // from here may read differently only by its spacing (a save trims lines and drops empty ones), so
+  // that is compared line by line: rewriting the field for it put the cursor back at its start
+  // (found 2026-11-02, typing on a line of a card's Examples).
   useEffect(() => {
     const el = ref.current;
     if (!el || dirty.current) return;
-    const shown = sanitizeInlineHtml(html);
-    if (sanitizeInlineHtml(el.innerHTML) !== shown) el.innerHTML = shown;
+    const same = (a: string, b: string) => richLines(cleanRef.current(a)).join('<br>') === richLines(cleanRef.current(b)).join('<br>');
+    if (!same(el.innerHTML, html)) el.innerHTML = cleanRef.current(html);
   }, [html]);
   useEffect(() => { if (autoFocus && ref.current) focusField(ref.current, 'end'); }, [autoFocus]);
   useEffect(() => { const s = save.current; return () => s(); }, []);
@@ -247,7 +254,7 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
         }
         save.current();
         // Left as saved: only the kept formatting (a pasted or browser-added span goes).
-        if (el && el.innerHTML !== sanitizeInlineHtml(el.innerHTML)) el.innerHTML = sanitizeInlineHtml(el.innerHTML);
+        if (el && el.innerHTML !== clean(el.innerHTML)) el.innerHTML = clean(el.innerHTML);
       }}
       onKeyDown={(e) => { if (!links.onKeyDown(e, e.currentTarget)) formatKey(e); }}
       onPaste={(e) => {
@@ -332,9 +339,14 @@ function OwnFields({ facts, onCommit, onTake, placeholder, editable, label, auto
   if (newLine !== opened) { setOpened(newLine); setAdding(true); }
   const change = (i: number, patch: Partial<Fact>) =>
     onCommit(facts.map((f, j) => (j === i ? { ...f, ...patch } : f)).filter((f) => f.label.trim() || f.value.trim()));
+  async function remove(i: number) {
+    const f = facts[i];
+    if (f.value.trim() && !(await confirmRemoveField(f.label || LABELS.glossary.ownFieldName))) return;
+    onCommit(facts.filter((_, j) => j !== i));
+  }
   return (
     <>
-      {facts.map((f, i) => <OwnFieldRow key={i} fact={f} editable={editable} onChange={(patch) => change(i, patch)} />)}
+      {facts.map((f, i) => <OwnFieldRow key={i} fact={f} editable={editable} onChange={(patch) => change(i, patch)} onRemove={() => void remove(i)} />)}
       {editable && (adding || facts.length === 0) && (
         <NewOwnField key={newLine} placeholder={placeholder} label={label} onTake={onTake} onDone={() => setAdding(false)} />
       )}
@@ -342,7 +354,7 @@ function OwnFields({ facts, onCommit, onTake, placeholder, editable, label, auto
   );
 }
 
-function OwnFieldRow({ fact, editable, onChange }: { fact: Fact; editable: boolean; onChange: (patch: Partial<Fact>) => void }) {
+function OwnFieldRow({ fact, editable, onChange, onRemove }: { fact: Fact; editable: boolean; onChange: (patch: Partial<Fact>) => void; onRemove: () => void }) {
   const name = useDraft(fact.label, (label) => onChange({ label: label.trim() }));
   const value = useDraft(fact.value, (v) => onChange({ value: v }));
   if (!editable) {
@@ -355,6 +367,7 @@ function OwnFieldRow({ fact, editable, onChange }: { fact: Fact; editable: boole
   }
   return (
     <div className={styles.field} data-field={NAMED_FIELD_ID}>
+      <RemoveFieldButton name={fact.label || LABELS.glossary.ownFieldName} onRemove={onRemove} />
       <input className={`${styles.label} ${styles.ownLabel}`} value={name.value} aria-label={LABELS.glossary.ownFieldName}
         onChange={(e) => name.change(e.target.value)} onBlur={name.blur} />
       <input className={styles.input} value={value.value} aria-label={fact.label || LABELS.glossary.ownFieldName} data-card-input=""
@@ -383,6 +396,20 @@ function NewOwnField({ placeholder, label, onTake, onDone }: { placeholder?: str
           take();
         }} />
     </div>
+  );
+}
+
+// Taking a field off a card (asked for by the user 2026-11-02: an emptied field stayed). A field
+// holding something asks first; an empty one just goes.
+const confirmRemoveField = (name: string) =>
+  confirmDialog({ title: L.removeFieldTitle(name), message: L.removeFieldMessage, confirmLabel: L.removeField, destructive: true });
+
+function RemoveFieldButton({ name, onRemove }: { name: string; onRemove: () => void }) {
+  return (
+    <button type="button" className={styles.removeField} aria-label={L.removeFieldNamed(name)} title={L.removeFieldNamed(name)}
+      onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.stopPropagation(); onRemove(); }}>
+      <TrashIcon />
+    </button>
   );
 }
 
@@ -562,7 +589,7 @@ function SpelledOut({ term, text }: { term: string; text: string }) {
   return <>{[...text].map((ch, i) => (at.has(i) ? <b key={i} className={styles.spelled}>{ch}</b> : <Fragment key={i}>{ch}</Fragment>))}</>;
 }
 
-export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onEscape, onDone, shown, onShow, onWaiting, fresh, onTouched, onAddAnother, onDiscard, onLeave, onUndo, imageLayout = DEFAULT_LAYOUT, onImageLayout, onSwitchTo }: Props) {
+export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onEscape, onDone, shown, onShow, onHide, onWaiting, fresh, onTouched, onAddAnother, onDiscard, onLeave, onUndo, imageLayout = DEFAULT_LAYOUT, onImageLayout, onSwitchTo }: Props) {
   const entries = useNoteStore((s) => s.structuredTagEntries);
   useSecretsVersion((s) => s.version);
   const [editingExpansion, setEditingExpansion] = useState(false);
@@ -598,6 +625,13 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
     const v = entry.fields[f.id];
     return Array.isArray(v) ? v.length > 0 : typeof v === 'string' && v.trim() !== '';
   };
+  async function removeField(f: StructuredTagFieldDef) {
+    if (hasValue(f)) {
+      if (!(await confirmRemoveField(f.name))) return;
+      setField(f.id, ['list', 'urls', 'links', 'facts'].includes(f.type) ? [] : '');
+    }
+    onHide(f.id);
+  }
 
   // Leaving a field (blur) saves it, so every key that leaves blurs first. Enter never leaves the
   // card (the user, 2026-10-27: a card is written in like a little page):
@@ -816,6 +850,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   // A card's own fields are each a field of their own, with no box around them.
   const fieldBox = (f: StructuredTagFieldDef) => f.type === 'facts' ? <Fragment key={f.id}>{renderField(f, shown.includes(f.id) && !hasValue(f))}</Fragment> : (
     <div key={f.id} className={styles.field} data-field={f.id}>
+      {editable && f.id !== primaryId && <RemoveFieldButton name={f.name} onRemove={() => void removeField(f)} />}
       {f.id !== primaryId && <div className={styles.label}>{f.name}</div>}
       {renderField(f, shown.includes(f.id) && !hasValue(f))}
     </div>

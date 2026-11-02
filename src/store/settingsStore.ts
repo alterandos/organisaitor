@@ -121,6 +121,9 @@ interface SettingsState {
   // separately on its headings (2026-10-16).
   noteColorBars: NoteColorBars;
   setNoteColorBars: (v: NoteColorBars) => void;
+  // The Converters pane keeps its "≈ like…" comparison shown (2026-11-02; absent reads as hidden).
+  converterLikeOpen: boolean;
+  setConverterLikeOpen: (open: boolean) => void;
   noteColorHeadings: boolean;
   toggleNoteColorHeadings: () => void;
   mathSlash: MathSlash;
@@ -221,6 +224,8 @@ export const useSettingsStore = create<SettingsState>()(
       toggleDictionaryHighlight: () => set((s) => ({ dictionaryHighlight: !s.dictionaryHighlight })),
       noteColorBars:       'underline',
       setNoteColorBars:    (noteColorBars) => set({ noteColorBars }),
+      converterLikeOpen:   false,
+      setConverterLikeOpen: (converterLikeOpen) => set({ converterLikeOpen }),
       noteColorHeadings:   true,
       toggleNoteColorHeadings: () => set((s) => ({ noteColorHeadings: !s.noteColorHeadings })),
       mathSlash:           'fraction',

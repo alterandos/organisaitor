@@ -46,7 +46,7 @@ src/
     settingsStore.ts         — user preferences
     authStore.ts             — Supabase session
     pinnedItemsStore.ts      — what's pinned to Quick Access (Q), in order (persisted `quick-access-pins`; synced `quick_access_pins`); pin only through services/quickAccessPins.ts — see "Pin to Quick Access"
-    recentItemsStore.ts      — Go to (Ctrl+G) recent/frequent visit history, keyed by `${QuickAccessTargetType}:${entityId}`
+    recentItemsStore.ts      — Go to (Ctrl+G) recent/frequent visit history, keyed by `${QuickAccessTargetType}:${entityId}`; synced (`quick_access_visits`), two devices joined by `joinVisits`
     stickyStore.ts           — where each sticky note sits on this device's screen (fractions of the window) and its design (sticky / pin / staple / tape)
     dialogStore.ts           — queue of pending confirm/alert requests (memory-only) behind `confirmDialog()` / `choiceDialog()` / `alertDialog()` in components/ConfirmDialog/dialogs.ts
     overviewStore.ts         — saved Overviews (persisted `overviews-storage`, synced `overviews`); deleteOverview goes to the Recycling Bin
@@ -313,7 +313,7 @@ src/
     EncryptContentsField/    — the "encrypt everything in it" switch on a notebook or Endeavour (encryption by scope)
     IconPicker/              — IconField (pick an icon: emoji, search, your icons, a picture made into a 96 px icon), ItemIcon (show one), iconValue.ts (an icon is an emoji or picture:<id>); the emoji are config/emojiSet.ts
     BlockGuide/              — the block guide (a Place): every note block by category, its designs, a live read-only example (guideData.ts: keyword → node, examples from demo/blockExamples.ts)
-    ConverterPane/           — the converters panel (Alt+=, a Place): built-in units and the person's own; ConverterEditor makes and edits one (Settings → Converters opens it too); ConvertWidget is one conversion as hosted by the `\convert` note block (extensions/Convert.ts), its pure parts in convertValue.ts
+    ConverterPane/           — the converters panel (Alt+=, a Place): built-in units and the person's own; ConverterEditor makes and edits one (Settings → Converters opens it too); ConvertWidget is one conversion as hosted by the `\convert` note block (extensions/Convert.ts), its pure parts in convertValue.ts; SizeLike is "≈ like…" (an amount pictured by something of a known size: utils/sizeComparison.ts over config/referenceSizes.ts)
     DateCalculator/          — the date calculator (a Place; the Calendar header's button): count from a date, or between two dates, with the magic wand; rules utils/dateCalc.ts
     MagicWand/               — MagicWandButton + MagicWandPanel: a form filled in from words, through the form's own reader
     DateInput/               — the suite's date field (day/month/year segments, the time field's rules, ▾ calendar)
@@ -381,6 +381,8 @@ src/
       extensions/Hierarchy.ts        — the `\hierarchy` note block (`\tree`, `\taxonomy`): items stored flat with a level, written as an outline (Enter, Tab / Shift+Tab move an item and its children a level); level names (`tiers`) beside the rows or over the columns; designs Tree / Columns / Outline. hierarchyLayout.ts reads the tree (spans, siblings) purely; hierarchyMenu.ts is its right-click provider
       extensions/Chart.ts            — the `\chart` note block: one atom node (`variant` = chart type, `spec` = a ChartSpec) whose view is the block's pill around the shared ChartWidget (src/charts/); chartMenu.ts is its right-click provider
       extensions/Pyramid.ts          — the `\pyramid` note block (`\funnel`, `\maslow`): at least two layers, top first, each a label drawn on its shape and a note beside it; designs Pyramid / Funnel / Stacked; pyramidMenu.ts is its right-click provider
+      extensions/Steps.ts            — the `\steps` note block: a name and at least two steps in order, each a label, a note and an optional icon; designs Stepper / Chevrons / Cards / Staircase; stepsMenu.ts is its right-click provider
+      RibbonDropdown.tsx             — every dropdown the note ribbon opens (text colour, table, columns, Note ▾): portaled and placed by utils/floatingPlacement.ts
       extensions/CodeBlock.ts        — the `\code` note block (and ```): the codeBlock node with a language picker, lowlight colouring (lazy-loaded), Copy, designs Plain / Line numbers / Terminal; codeMenu.ts is its right-click provider
       extensions/Maths.ts            — the `\maths` note block (mathBlock; designs Centred / Left / Numbered) and inline maths (mathInline): a MathLive field (lazy-loaded) storing LaTeX; mathsMenu.ts is its right-click provider
       extensions/Hub.ts              — the `\hub` note block (hub, hubTitle, hubTake, hubLink, and the hubRef mark on a linked passage, with its marker); designs List / Compact; hubMenu.ts is its right-click provider (and Add to hub… on selected text)

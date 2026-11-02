@@ -16,6 +16,7 @@ import type { Goal, ItemType } from '@/types';
 import type { CustomConverter } from '@/types/converters';
 import { usePictureStore } from '@/store/pictureStore';
 import { usePinnedItemsStore, type PinnedItem } from '@/store/pinnedItemsStore';
+import { joinVisits, useRecentItemsStore, type RecentItemEntry } from '@/store/recentItemsStore';
 import type { Overview } from '@/types/overview';
 import type { Picture } from '@/types/pictures';
 import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, ScheduleTemplate } from '@/types';
@@ -52,6 +53,7 @@ import {
   goalToRow,               rowToGoal,
   pictureToRow,            rowToPicture,
   pinToRow,                rowToPin,
+  visitToRow,              rowToVisit,
   activityToRow,           rowToActivity,
   activityTypeToRow,       rowToActivityType,
 } from './mappers';
@@ -112,6 +114,7 @@ const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
   goals:                  { get: () => useGoalStore.getState().goals,                   toRow: (i, u) => goalToRow(i as Goal, u) },
   pictures:               { get: () => usePictureStore.getState().pictures,             toRow: (i, u) => pictureToRow(i as Picture, u) },
   quick_access_pins:      { get: () => usePinnedItemsStore.getState().pins,             toRow: (i, u) => pinToRow(i as PinnedItem, u), onConflict: PER_ACCOUNT_KEY },
+  quick_access_visits:    { get: () => useRecentItemsStore.getState().items,            toRow: (i, u) => visitToRow(i as RecentItemEntry, u), onConflict: PER_ACCOUNT_KEY },
   fitness_activities:     { get: () => useFitnessStore.getState().activities,           toRow: (i, u) => activityToRow(i as Activity, u) },
   fitness_activity_types: { get: () => customActivityTypes(useFitnessStore.getState().activityTypes as Record<string, ActivityType>), toRow: (i, u) => activityTypeToRow(i as ActivityType, u) },
 };
@@ -397,6 +400,7 @@ const SYNC_TABLES = [
   'goals',
   'pictures',
   'quick_access_pins',
+  'quick_access_visits',
   'fitness_activities', 'fitness_activity_types',
 ] as const;
 
@@ -520,7 +524,7 @@ export type UploadCounts = {
   schedules: number; lists: number; listItems: number; listTypes: number;
   notes: number; noteTags: number; structuredTagEntries: number;
   watchlistItems: number; portfolioTags: number; investmentPurposes: number;
-  trashItems: number; overviews: number; converters: number; itemTypes: number; goals: number; pictures: number; pins: number;
+  trashItems: number; overviews: number; converters: number; itemTypes: number; goals: number; pictures: number; pins: number; visits: number;
   activities: number; activityTypes: number;
 };
 
@@ -691,6 +695,17 @@ function hydrateStores(remote: RemoteRows) {
     pins: mergeRecords(local.pins, remote.quick_access_pins, rowToPin, 'quick_access_pins'),
   }));
 
+  // Visits are joined, not newest-wins: each device's visits count toward Frequent.
+  useRecentItemsStore.setState((local) => {
+    const items = mergeRecords(local.items, remote.quick_access_visits, rowToVisit, 'quick_access_visits');
+    for (const row of remote.quick_access_visits ?? []) {
+      const id = row.id as string;
+      if (row.deleted_at || !local.items[id] || !items[id]) continue;
+      items[id] = joinVisits(local.items[id], rowToVisit(row));
+    }
+    return { items };
+  });
+
   // Strava activities imported before Fitness synced take their stable ids here (utils/fitnessIds.ts),
   // so the post-load upload sends one record per Strava activity whichever device made it.
   const userId = currentUserId;
@@ -722,6 +737,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const { goals } = useGoalStore.getState();
   const { pictures } = usePictureStore.getState();
   const { pins } = usePinnedItemsStore.getState();
+  const { items: visits } = useRecentItemsStore.getState();
   const { activities, activityTypes } = useFitnessStore.getState();
   // Encryption by scope: covered records not yet encrypted aren't uploaded (see pushIds).
   const ctx = scopeContext();
@@ -752,6 +768,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const allGoals              = unheld('goals', Object.values(goals));
   const allPictures           = unheld('pictures', Object.values(pictures));
   const allPins               = unheld('quick_access_pins', Object.values(pins));
+  const allVisits             = unheld('quick_access_visits', Object.values(visits));
   const allActivities         = unheld('fitness_activities', Object.values(activities));
   const allActivityTypes      = unheld('fitness_activity_types', Object.values(customActivityTypes(activityTypes as Record<string, ActivityType>)));
 
@@ -781,6 +798,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     allGoals.length              > 0 ? supabase.from('goals').upsert(allGoals.map((g) => goalToRow(g, userId))) : null,
     allPictures.length           > 0 ? supabase.from('pictures').upsert(allPictures.map((p) => pictureToRow(p, userId))) : null,
     allPins.length               > 0 ? supabase.from('quick_access_pins').upsert(allPins.map((p) => pinToRow(p, userId)), { onConflict: PER_ACCOUNT_KEY }) : null,
+    allVisits.length             > 0 ? supabase.from('quick_access_visits').upsert(allVisits.map((v) => visitToRow(v, userId)), { onConflict: PER_ACCOUNT_KEY }) : null,
     allActivities.length         > 0 ? supabase.from('fitness_activities').upsert(allActivities.map((a) => activityToRow(a, userId))) : null,
     allActivityTypes.length      > 0 ? supabase.from('fitness_activity_types').upsert(allActivityTypes.map((t) => activityTypeToRow(t, userId))) : null,
   ]);
@@ -796,7 +814,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     listItems: allListItems.length, listTypes: allListTypes.length,
     notes: allNotes.length, noteTags: allNoteTags.length, structuredTagEntries: allStructuredTagEntries.length,
     watchlistItems: allWatchlistItems.length, portfolioTags: allPortfolioTags.length, investmentPurposes: allInvestmentPurposes.length,
-    trashItems: allTrashItems.length, overviews: allOverviews.length, converters: allConverters.length, itemTypes: allItemTypes.length, goals: allGoals.length, pictures: allPictures.length, pins: allPins.length,
+    trashItems: allTrashItems.length, overviews: allOverviews.length, converters: allConverters.length, itemTypes: allItemTypes.length, goals: allGoals.length, pictures: allPictures.length, pins: allPins.length, visits: allVisits.length,
     activities: allActivities.length, activityTypes: allActivityTypes.length,
   };
 }
@@ -867,6 +885,7 @@ function setupSubscriptions(userId: string): void {
     watch(userId, useGoalStore, [{ prop: 'goals', table: 'goals' }]),
     watch(userId, usePictureStore, [{ prop: 'pictures', table: 'pictures' }]),
     watch(userId, usePinnedItemsStore, [{ prop: 'pins', table: 'quick_access_pins' }]),
+    watch(userId, useRecentItemsStore, [{ prop: 'items', table: 'quick_access_visits' }]),
     watch(userId, useFitnessStore, [
       { prop: 'activities', table: 'fitness_activities' },
       { prop: 'activityTypes', table: 'fitness_activity_types', only: customActivityTypes as (r: Records) => Records },

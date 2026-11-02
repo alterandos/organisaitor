@@ -16,7 +16,7 @@ import { kids, mathBlock, node, p, type J } from '@/demo/noteContent';
 // Each `\` block's node.
 export const BLOCK_NODE_OF: Record<string, string> = {
   timeline: 'timeline', quote: 'quoteBlock', conclusion: 'conclusion', cycle: 'cycle', breakdown: 'breakdown',
-  types: 'types', key: 'idKey', hierarchy: 'hierarchy', pyramid: 'pyramid', chart: 'chart', code: 'codeBlock',
+  types: 'types', key: 'idKey', hierarchy: 'hierarchy', pyramid: 'pyramid', steps: 'steps', chart: 'chart', code: 'codeBlock',
   maths: 'mathBlock', inbox: 'inbox', definition: 'glossaryCard', acronym: 'glossaryCard', concept: 'glossaryCard',
   profile: 'glossaryCard', question: 'questionBlock', compare: 'compareBlock', proscons: 'prosCons',
   argument: 'argument', options: 'options', diagram: 'diagram', convert: 'convertBlock', case: 'caseStudy',
@@ -29,7 +29,7 @@ export const BLOCK_EXAMPLES: Record<string, () => J> = {
   idKey: EX.idKey, compareBlock: EX.compareBlock, hierarchy: EX.hierarchy, breakdown: EX.breakdown,
   conclusion: EX.conclusion, timeline: EX.timeline, chart: EX.chart, diagram: EX.diagram,
   causeEffect: EX.causeEffect, vennBlock: EX.vennBlock, caseStudy: EX.caseStudy, codeBlock: EX.codeBlock,
-  argument: EX.argument, prosCons: EX.prosCons, options: EX.options, pyramid: EX.pyramid,
+  argument: EX.argument, prosCons: EX.prosCons, options: EX.options, pyramid: EX.pyramid, steps: EX.steps,
   mathBlock: () => mathBlock('N(t) = N_0 \\, e^{-\\lambda t} \\qquad t_{1/2} = \\frac{\\ln 2}{\\lambda}'),
   // The demo's conversion uses its own converter; here, one everyone has.
   convertBlock: () => node('convertBlock', { variant: 'card', converter: 'mass', from: 't', to: 'kg', values: { amount: '2.4' } }),

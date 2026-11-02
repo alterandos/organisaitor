@@ -5,6 +5,8 @@ import { unitCategory } from '@/config/units';
 import { convertUnit, readAmount, runConverter, runConverterBack, showAmount, worksBothWays } from '@/utils/convert';
 import { useCurrencyRates } from '@/services/currencyRates';
 import { RatesLine } from './RatesLine';
+import { SizeLike } from './SizeLike';
+import { toBaseValue } from '@/utils/sizeComparison';
 import { categoriesInOrder, defaultUnits, unitsInOrder, type ConvertDesign, type ConvertValue } from './convertValue';
 import { LABELS } from '@/config/labels';
 import type { ConverterId } from '@/types/converters';
@@ -68,12 +70,14 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
   );
 
   let body: React.ReactNode = <span className={styles.gone}>{L.gone}</span>;
+  let like: React.ReactNode = null;
   if (cat) {
     const d = defaultUnits(cat.id);
     const fromId = value.from ?? d.from, toId = value.to ?? d.to;
     const from = cat.units.find((u) => u.id === fromId) ?? cat.units[0];
     const to = cat.units.find((u) => u.id === toId) ?? cat.units[1];
     const n = readAmount(value.values.amount ?? '');
+    like = <SizeLike categoryId={cat.id} base={Number.isFinite(n) ? toBaseValue(from, n) : NaN} open={!!value.like} editable={editable} onOpen={(open) => set({ like: open })} />;
     const unitSelect = (id: string, which: 'from' | 'to') => (
       <select className={styles.unit} value={id} disabled={!editable} aria-label={which === 'from' ? L.from : L.to} onChange={(e) => set({ [which]: e.target.value })}>
         {unitsInOrder(cat.units).map((u) => <option key={u.id} value={u.id} title={u.name}>{u.symbol}</option>)}
@@ -136,20 +140,22 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
   );
 
   return design === 'card' ? (
-    <div className={styles.card}>
+    <div className={styles.card} data-like-host="">
       <div className={styles.head}>
         <span className={styles.kind}>{L.noteKind}</span>
         {picker}
       </div>
       <div className={styles.row}>{body}</div>
       {ratesLine}
+      {like}
     </div>
   ) : (
-    <div className={styles.compact}>
+    <div className={styles.compact} data-like-host="">
       {picker}
       <span className={styles.rule} aria-hidden="true" />
       <div className={styles.row}>{body}</div>
       {ratesLine}
+      {like}
     </div>
   );
 }

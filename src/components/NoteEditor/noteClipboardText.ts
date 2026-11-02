@@ -303,6 +303,17 @@ $$`;
       });
       return lines.join('\n');
     }
+    case 'steps': {
+      // "Data preprocessing, in 6 steps:" then "1. Data profiling — what's there".
+      const name = inlineText(node.child(0)).trim();
+      const lines = [LABELS.noteBlocks.steps.inSteps(name || LABELS.noteBlocks.steps.label, node.childCount - 1)];
+      node.forEach((step, _o, i) => {
+        if (i === 0) return;
+        const text = inlineText(step.child(1));
+        lines.push(`${i}. ${inlineText(step.child(0))}${text ? ` — ${text}` : ''}`);
+      });
+      return lines.join('\n');
+    }
     case 'hierarchy': {
       // An indented list, each item with its level's name: "  - Phylum: Chordata".
       const tiers = node.attrs.tiers as string[];

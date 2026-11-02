@@ -5,7 +5,7 @@ import { useListStore } from '@/store/listStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useUIStore } from '@/store/uiStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
-import { searchQuickAccessItems, resolveRecentItems, pruneStaleRecentEntries, navigateToQuickAccessItem, placesAlphabetical } from '@/utils/quickAccess';
+import { searchQuickAccessItems, resolveRecentItems, navigateToQuickAccessItem, placesAlphabetical } from '@/utils/quickAccess';
 import { PLACES } from '@/config/places';
 import type { TaskId } from '@/types';
 import type { NoteId } from '@/types/notes';
@@ -51,7 +51,7 @@ describe('searchQuickAccessItems', () => {
   });
 });
 
-describe('resolveRecentItems / pruneStaleRecentEntries', () => {
+describe('resolveRecentItems', () => {
   it('resolves a live entry and reports a deleted one as stale', () => {
     const id = useTaskStore.getState().addTask({ title: 'Still here' }) as TaskId;
     const now = new Date().toISOString();
@@ -73,13 +73,6 @@ describe('resolveRecentItems / pruneStaleRecentEntries', () => {
     expect(stale).toHaveLength(1);
   });
 
-  it('pruneStaleRecentEntries removes exactly the given entries from recentItemsStore', () => {
-    useRecentItemsStore.getState().recordVisit('task', 'keep');
-    useRecentItemsStore.getState().recordVisit('task', 'drop');
-    pruneStaleRecentEntries([{ type: 'task', entityId: 'drop', lastVisitedAt: new Date().toISOString(), visitCount: 1 }]);
-    const remaining = Object.values(useRecentItemsStore.getState().items).map((i) => i.entityId);
-    expect(remaining).toEqual(['keep']);
-  });
 });
 
 describe('encrypted notes/lists resolve through the locked view, not the raw store', () => {

@@ -12,6 +12,7 @@ import type { Overview } from '@/types/overview';
 import type { CustomConverter } from '@/types/converters';
 import type { Picture } from '@/types/pictures';
 import type { PinnedItem } from '@/store/pinnedItemsStore';
+import { keyFor, type RecentItemEntry } from '@/store/recentItemsStore';
 import type { Activity, ActivityType } from '@/types/fitness';
 
 // A typed item's Type and field values (migration 060), sent only once the item has had a Type,
@@ -1030,6 +1031,34 @@ export function rowToPin(r: Record<string, any>): PinnedItem {
     order:     r.sort_order ?? 0,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+// ── Quick Access visits (Go to's Recent and Frequent) ──────────
+
+export function visitToRow(e: RecentItemEntry, userId: string) {
+  return {
+    id:              keyFor(e.type, e.entityId),
+    user_id:         userId,
+    type:            e.type,
+    entity_id:       e.entityId,
+    last_visited_at: e.lastVisitedAt,
+    visit_count:     e.visitCount,
+    visits:          e.visits ?? [],
+    updated_at:      e.updatedAt ?? e.lastVisitedAt,
+    deleted_at:      null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToVisit(r: Record<string, any>): RecentItemEntry {
+  return {
+    type:          r.type,
+    entityId:      r.entity_id,
+    lastVisitedAt: r.last_visited_at,
+    visitCount:    r.visit_count ?? 0,
+    visits:        Array.isArray(r.visits) ? r.visits : [],
+    updatedAt:     r.updated_at,
   };
 }
 

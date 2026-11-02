@@ -31,24 +31,14 @@
   transform: translateY(0) scale(1);
 }
 
-/* Hover-to-open only where there is a real hover. On a touch screen :hover sticks to the last
-   tapped spot, which left the options open over the list, swallowing taps and swipes (found on
-   the Android emulator 2026-10-04); a tap on the + toggles them instead. */
-@media (hover: hover) {
-  .speedDial:hover .optionRow {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateY(0) scale(1);
-  }
-
-  /* stagger: row closest to FAB (first in DOM) appears last */
-  .speedDial:hover .optionRow:nth-child(1) { transition-delay:  90ms; }
-  .speedDial:hover .optionRow:nth-child(2) { transition-delay:  60ms; }
-  .speedDial:hover .optionRow:nth-child(3) { transition-delay:  30ms; }
-  .speedDial:hover .optionRow:nth-child(4) { transition-delay:   0ms; }
-
-  .speedDial:hover .fabIcon { transform: rotate(45deg); }
-}
+/* Staggered: the row closest to the + (last in the DOM) appears first. Opened on hover by
+   useHoverOpen (desktop), or by a tap on the +; never by CSS :hover, which can't cross the gap
+   between the + and its options (the column takes no pointer events). */
+.speedDialOpen .optionRow:nth-last-child(1) { transition-delay:   0ms; }
+.speedDialOpen .optionRow:nth-last-child(2) { transition-delay:  30ms; }
+.speedDialOpen .optionRow:nth-last-child(3) { transition-delay:  60ms; }
+.speedDialOpen .optionRow:nth-last-child(4) { transition-delay:  90ms; }
+.speedDialOpen .optionRow:nth-last-child(n+5) { transition-delay: 110ms; }
 
 .optionLabel {
   background: rgba(15, 15, 20, 0.72);
@@ -142,9 +132,4 @@
 @media (max-width: 600px) {
   .speedDial { bottom: 4.5rem; right: 1rem; }
   .fab { width: 3.25rem; height: 3.25rem; }
-  /* stagger delays for touch */
-  .speedDialOpen .optionRow:nth-child(1) { transition-delay:  90ms; }
-  .speedDialOpen .optionRow:nth-child(2) { transition-delay:  60ms; }
-  .speedDialOpen .optionRow:nth-child(3) { transition-delay:  30ms; }
-  .speedDialOpen .optionRow:nth-child(4) { transition-delay:   0ms; }
 }

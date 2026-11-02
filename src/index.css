@@ -51,6 +51,7 @@
   --color-block-idkey: #0e7490;
   --color-block-hierarchy: #1d4ed8;
   --color-block-pyramid: #be123c;
+  --color-block-steps: #db2777;
   --color-block-conclusion: #a21caf;
   --color-block-options: #6d28d9;
   --color-block-argument: #b45309;
@@ -221,6 +222,7 @@
   --color-block-idkey: #67e8f9;
   --color-block-hierarchy: #93c5fd;
   --color-block-pyramid: #fda4af;
+  --color-block-steps: #f9a8d4;
   --color-block-conclusion: #f0abfc;
   --color-block-options: #c4b5fd;
   --color-block-argument: #fcd34d;

@@ -155,4 +155,14 @@ export const EX = {
       ['Model projections', 'Useful, but only as good as their assumptions'],
       ['News and opinion', 'For quotes and context, not evidence'],
     ]).map(([label, text]) => kids('pyramidLayer', null, [node('pyramidLabel', null, label), node('pyramidText', null, text)]))),
+  steps: (): J => kids('steps', { variant: 'stepper', colours: 'accent' }, [
+    node('stepsName', null, 'Preparing a field sample for analysis'),
+    ...([
+      ['🧭', 'Record the site', 'GPS, date, depth and what the outcrop looked like'],
+      ['🧪', 'Clean and dry', 'Rinse off loose soil; dry at 40 °C overnight'],
+      ['🪨', 'Crush and split', 'Down to under 2 mm, then quarter for a representative split'],
+      ['⚖️', 'Weigh', 'To 0.1 mg, before and after ignition'],
+      ['📋', 'Log and label', 'Sample ID on the bag and in the lab book'],
+    ] as [string, string, string][]).map(([icon, label, text]) => kids('stepsStep', { icon }, [node('stepsLabel', null, label), node('stepsText', null, text)])),
+  ]),
 };

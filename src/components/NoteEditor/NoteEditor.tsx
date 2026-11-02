@@ -48,6 +48,8 @@ import { addPicture } from '@/services/pictures';
 import { FloatingToolbar, type FloatingToolbarActions } from './FloatingToolbar';
 import './contextMenu';
 import { NoteViewMenu } from '@/components/NoteSplitView/NoteViewMenu';
+import { RibbonDropdown } from './RibbonDropdown';
+import type { AnchorBox } from '@/utils/floatingPlacement';
 import { setNoteColor } from './noteColorMenu';
 import { canExportPdf, exportNoteAsPdf } from './notePdf';
 import type { NoteEditorMenuApi } from './contextMenu';
@@ -67,6 +69,7 @@ import './extensions/cycleMenu';
 import './extensions/breakdownMenu';
 import './extensions/hierarchyMenu';
 import './extensions/pyramidMenu';
+import './extensions/stepsMenu';
 import './extensions/conclusionMenu';
 import './extensions/typesMenu';
 import './extensions/idKeyMenu';
@@ -438,7 +441,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
   // only used on the very first render, so this stays in sync with the state above at mount.
   const activeTabIdRef   = useRef<string | null>(activeTabId);
   const onNavReturnRef  = useRef(onNavReturn);
-  onNavReturnRef.current = onNavReturn;
+  useEffect(() => { onNavReturnRef.current = onNavReturn; });
   const saveRef                     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abstractSaveRef             = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentNoteIdRef      = useRef<string | null>(null);
@@ -488,6 +491,9 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
 
   // ── Font color picker (ribbon) ─────────────────────────────────────────────
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  // Where the open ribbon dropdown's button was when it opened (one is open at a time).
+  const [ribbonAnchor, setRibbonAnchor] = useState<AnchorBox | null>(null);
+  const anchorFrom = (el: HTMLElement) => { const r = el.getBoundingClientRect(); setRibbonAnchor({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }); };
 
   // ── "New link" pane — Ctrl+L with no selection (nothing to anchor the
   // selection-based FloatingToolbar link popover to) ─────────────────────────
@@ -510,8 +516,6 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     cellEl:  HTMLElement | null;
   } | null>(null);
   const clearHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Keep a stable ref to the editor so runTableCmd doesn't need editor as a dep
-  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
 
   const cancelHoverClear = useCallback(() => {
     if (clearHoverRef.current) { clearTimeout(clearHoverRef.current); clearHoverRef.current = null; }
@@ -536,23 +540,6 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     clearSectionHoverRef.current = setTimeout(() => setSectionHover(null), 180);
   }, []);
 
-  const runTableCmd = useCallback((cellEl: HTMLElement | null, cmd: string) => {
-    const ed = editorRef.current;
-    if (!ed || !cellEl) return;
-    try {
-      const pos = ed.view.posAtDOM(cellEl, 0) + 1;
-      const $pos = ed.state.doc.resolve(pos);
-      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.near($pos)));
-      switch (cmd) {
-        case 'addRowAfter':    ed.commands.addRowAfter();    break;
-        case 'deleteRow':      ed.commands.deleteRow();      break;
-        case 'addColumnAfter': ed.commands.addColumnAfter(); break;
-        case 'deleteColumn':   ed.commands.deleteColumn();   break;
-        case 'deleteTable':    ed.commands.deleteTable();    break;
-      }
-    } catch { /* ignore stale positions */ }
-    setTableHover(null);
-  }, []);
 
   const handleEditorMouseOver = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -724,6 +711,9 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
   }
 
   const editor = useEditor({
+    // openNoteEncrypted reads the open note's id from a ref, but only when the editor calls it (a
+    // picture pasted), never while rendering; useEditor keeps the extensions it was first given.
+    // eslint-disable-next-line react-hooks/refs -- called later by the editor, not during render
     extensions: noteEditorExtensions({ noteEncrypted: openNoteEncrypted, linkClass: styles.link }),
     content: '',
     editorProps: {
@@ -1138,8 +1128,24 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     } satisfies NoteEditorMenuApi,
   }), !!editor && !noteLocked);
 
-  // Keep editorRef in sync so runTableCmd can access it without a dependency
-  editorRef.current = editor;
+  // A table command from the hover controls, on the cell they were shown for.
+  function runTableCmd(cellEl: HTMLElement | null, cmd: string) {
+    const ed = editor;
+    if (!ed || !cellEl) return;
+    try {
+      const pos = ed.view.posAtDOM(cellEl, 0) + 1;
+      const $pos = ed.state.doc.resolve(pos);
+      ed.view.dispatch(ed.state.tr.setSelection(TextSelection.near($pos)));
+      switch (cmd) {
+        case 'addRowAfter':    ed.commands.addRowAfter();    break;
+        case 'deleteRow':      ed.commands.deleteRow();      break;
+        case 'addColumnAfter': ed.commands.addColumnAfter(); break;
+        case 'deleteColumn':   ed.commands.deleteColumn();   break;
+        case 'deleteTable':    ed.commands.deleteTable();    break;
+      }
+    } catch { /* ignore stale positions */ }
+    setTableHover(null);
+  }
 
   // Runs after an edit that deleted or unmarked linked text (see onUpdate). If the note no longer
   // links to an item from ANY of its text — main content or any tab — but the item still links back
@@ -1956,13 +1962,13 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
               <button
                 className={`${styles.toolbarBtn} ${colorPickerOpen ? styles.toolbarBtnActive : ''}`}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => { e.stopPropagation(); setColorPickerOpen((o) => !o); }}
+                onClick={(e) => { e.stopPropagation(); anchorFrom(e.currentTarget); setColorPickerOpen((o) => !o); }}
                 title="Text color"
               >
                 <TextColorIcon current={editor?.getAttributes('textStyle').color as string | undefined} />
               </button>
               {colorPickerOpen && (
-                <div className={styles.colorPickerPopover} onClick={(e) => e.stopPropagation()}>
+                <RibbonDropdown anchor={ribbonAnchor} className={styles.colorPickerPopover}>
                   <button
                     type="button"
                     className={styles.colorDefaultBtn}
@@ -1987,7 +1993,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                       setColorPickerOpen(false);
                     }}
                   />
-                </div>
+                </RibbonDropdown>
               )}
             </div>
 
@@ -1998,13 +2004,13 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
               <button
                 className={`${styles.toolbarBtn} ${tablePickerOpen ? styles.toolbarBtnActive : ''}`}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => { e.stopPropagation(); setTablePickerOpen((o) => !o); }}
+                onClick={(e) => { e.stopPropagation(); anchorFrom(e.currentTarget); setTablePickerOpen((o) => !o); }}
                 title="Insert table"
               >
                 <TableIcon />
               </button>
               {tablePickerOpen && (
-                <div className={styles.tablePicker} onClick={(e) => e.stopPropagation()}>
+                <RibbonDropdown anchor={ribbonAnchor} className={styles.tablePicker}>
                   <div className={styles.tablePickerField}>
                     <span className={styles.tablePickerLabel}>Rows</span>
                     <input
@@ -2032,7 +2038,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                   >
                     Insert {tablePickerRows}×{tablePickerCols}
                   </button>
-                </div>
+                </RibbonDropdown>
               )}
             </div>
 
@@ -2043,13 +2049,13 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
               <button
                 className={`${styles.toolbarBtn} ${columnsPickerOpen ? styles.toolbarBtnActive : ''}`}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => { e.stopPropagation(); setColumnsPickerOpen((o) => !o); }}
+                onClick={(e) => { e.stopPropagation(); anchorFrom(e.currentTarget); setColumnsPickerOpen((o) => !o); }}
                 title="Columns"
               >
                 <ColumnsIcon />
               </button>
               {columnsPickerOpen && (
-                <div className={styles.columnsPicker} onClick={(e) => e.stopPropagation()}>
+                <RibbonDropdown anchor={ribbonAnchor} className={styles.columnsPicker}>
                   {Array.from({ length: MAX_SECTION_COLUMNS }, (_, i) => i + 1).map((n) => (
                     <button
                       key={n}
@@ -2059,7 +2065,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                       {n}
                     </button>
                   ))}
-                </div>
+                </RibbonDropdown>
               )}
             </div>
 
@@ -2095,11 +2101,11 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
               <button
                 className={`${styles.toolbarBtnText} ${noteMenuOpen ? styles.toolbarBtnActive : ''}`}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => { e.stopPropagation(); setNoteMenuOpen((o) => !o); }}
+                onClick={(e) => { e.stopPropagation(); anchorFrom(e.currentTarget); setNoteMenuOpen((o) => !o); }}
                 title={LABELS.noteMenu.title}
               >{LABELS.noteMenu.button} ▾</button>
               {noteMenuOpen && (
-                <div className={styles.noteMenu} onClick={(e) => e.stopPropagation()}>
+                <RibbonDropdown anchor={ribbonAnchor} align="end" className={styles.noteMenu}>
                   <button
                     className={styles.noteMenuItem}
                     onClick={() => {
@@ -2177,7 +2183,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                       ))}
                     </div>
                   </div>
-                </div>
+                </RibbonDropdown>
               )}
             </div>
           </div>
@@ -2532,7 +2538,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
               type="checkbox"
               checked={sectionHover.locked}
               onChange={() => {
-                const ed = editorRef.current;
+                const ed = editor;
                 if (!ed) return;
                 const pos = ed.view.posAtDOM(sectionHover.el, 0) + 1;
                 ed.commands.toggleSectionLocked(pos);
@@ -2571,16 +2577,11 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
         const anyCell  = tableEl.querySelector('td, th')         as HTMLElement | null;
         const rowCell  = rowEl?.querySelector('td, th')          as HTMLElement | null;
 
-        const ctrlProps = {
-          onMouseEnter: cancelHoverClear,
-          onMouseLeave: scheduleHoverClear,
-        };
-
         return (
           <>
             {/* Delete table — top-right corner */}
             <button
-              {...ctrlProps}
+              onMouseEnter={cancelHoverClear} onMouseLeave={scheduleHoverClear}
               className={styles.tableDeleteBtn}
               style={{ position: 'fixed', top: tr.top - 10, left: tr.right - 10, transform: 'translate(-50%,-50%)' }}
               onMouseDown={(e) => e.preventDefault()}
@@ -2591,7 +2592,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
             {/* Row controls — right side of hovered row */}
             {rr && rowCell && (
               <div
-                {...ctrlProps}
+                onMouseEnter={cancelHoverClear} onMouseLeave={scheduleHoverClear}
                 className={styles.tableCtrlGroup}
                 style={{ position: 'fixed', top: rr.top + rr.height / 2, left: tr.right + 6, transform: 'translateY(-50%)' }}
               >
@@ -2613,7 +2614,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
             {/* Column controls — below hovered column */}
             {cr && cellEl && (
               <div
-                {...ctrlProps}
+                onMouseEnter={cancelHoverClear} onMouseLeave={scheduleHoverClear}
                 className={styles.tableCtrlGroup}
                 style={{ position: 'fixed', top: tr.bottom + 6, left: cr.left + cr.width / 2, transform: 'translateX(-50%)' }}
               >

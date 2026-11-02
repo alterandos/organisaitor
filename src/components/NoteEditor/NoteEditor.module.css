@@ -538,10 +538,13 @@
 }
 .toolbarBtnText:hover { background: var(--color-bg); color: var(--color-text); }
 
+/* A ribbon dropdown (RibbonDropdown.tsx): portaled and placed by utils/floatingPlacement.ts. */
+.ribbonDropdown {
+  position: fixed;
+  overflow-y: auto;
+}
+
 .noteMenu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -549,7 +552,6 @@
   z-index: 200;
   min-width: 140px;
   padding: 0.3rem 0;
-  overflow: hidden;
 }
 
 .noteMenuItem {
@@ -3870,6 +3872,330 @@
 .editorContent [data-type="pyramid"]:hover > [data-pyramid-tools],
 .editorContent [data-type="pyramid"][data-py-current] > [data-pyramid-tools] { opacity: 1; }
 
+/* ── Steps (extensions/Steps.ts, `\steps`) ───────────────────────────────────────────────────────
+   The steps of something, in order, numbered by a CSS counter. Four designs of the same content:
+   Stepper (numbered circles down a line), Chevrons (arrow bands in a row), Cards (numbered cards
+   with arrows between) and Staircase (bars rising step by step). Each step's colour is
+   --step-color: the block's own, or one along the spectrum; --step-mix deepens it step by step. */
+
+.editorContent [data-type="steps"] {
+  --step-color: var(--color-primary);
+  position: relative;
+  margin: 1.5rem 0;
+  counter-reset: step;
+}
+
+.editorContent [data-type="steps-step"] {
+  position: relative;
+  counter-increment: step;
+}
+
+.editorContent [data-steps-name] {
+  position: relative;
+  margin-bottom: 0.9rem;
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.editorContent [data-st-label] {
+  position: relative;
+  color: var(--color-text);
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.editorContent [data-st-text] {
+  position: relative;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.editorContent [data-steps-name][data-st-hide],
+.editorContent [data-st-text][data-st-hide] { display: none; }
+
+/* Laid over the empty line (not after its <br>, which would put it on a line of its own). */
+.editorContent [data-st-empty]::after {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  content: attr(data-st-placeholder);
+  color: var(--color-muted);
+  opacity: 0.65;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* The icon slot: an emoji or a small picture. Empty slots ("+") show only while the block is
+   hovered or being edited; a picture can be dropped on one. */
+.editorContent [data-steps-icon] {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1.5px solid color-mix(in srgb, var(--step-color) 35%, transparent);
+  border-radius: 28%;
+  background: color-mix(in srgb, var(--step-color) 12%, var(--color-surface));
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.editorContent [data-steps-icon] img { width: 100%; height: 100%; object-fit: cover; }
+
+.editorContent [data-steps-icon="empty"] {
+  display: none;
+  border-style: dashed;
+  border-color: var(--color-border-strong);
+  background: none;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.editorContent [data-type="steps"]:hover [data-steps-icon="empty"],
+.editorContent [data-type="steps"][data-st-current] [data-steps-icon="empty"] { display: grid; }
+
+.editorContent [data-steps-icon][data-drop] {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary-subtle);
+  outline-offset: 1px;
+}
+
+.editorContent [data-st-delete] {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.editorContent [data-type="steps-step"]:hover > [data-st-delete],
+.editorContent [data-st-delete]:focus-visible { opacity: 1; }
+.editorContent [data-st-delete]:hover { color: var(--color-danger); border-color: var(--color-danger); }
+
+@media (hover: none) {
+  .editorContent [data-st-delete] { opacity: 1; }
+}
+
+.editorContent [data-steps-tools] { top: -14px; right: 0; }
+.editorContent [data-steps-tools] [data-st-tool] { padding: 0 8px; font-weight: 600; }
+
+.editorContent [data-steps-tools] [data-st-tool="colours"]::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.editorContent [data-steps-tools] [data-st-tool="colours"][aria-pressed="true"]::before {
+  background: linear-gradient(90deg, hsl(210 62% 52%), hsl(300 62% 52%), hsl(30 62% 52%), hsl(120 62% 52%));
+}
+
+.editorContent [data-type="steps"]:hover > [data-steps-tools],
+.editorContent [data-type="steps"][data-st-current] > [data-steps-tools] { opacity: 1; }
+
+/* Stepper: a numbered circle per step, joined by a line down to the next (the vertical stepper of
+   Material and most guides). */
+.editorContent [data-type="steps"][data-variant="stepper"] > [data-type="steps-step"] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.55rem;
+  row-gap: 0.15rem;
+  min-height: 2.1rem;
+  padding: 0 1.5rem 1.15rem 2.9rem;
+}
+
+.editorContent [data-variant="stepper"] > [data-type="steps-step"]::before {
+  content: counter(step);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--step-color) calc(70% + var(--step-mix, 14%) * 0.6), var(--color-surface));
+  color: var(--color-on-primary);
+  font-weight: 700;
+  font-size: var(--text-md);
+}
+
+.editorContent [data-colours="spectrum"][data-variant="stepper"] > [data-type="steps-step"]::before { background: var(--step-color); color: var(--color-text); }
+
+.editorContent [data-variant="stepper"] > [data-type="steps-step"]::after {
+  content: '';
+  position: absolute;
+  top: 2.35rem;
+  bottom: 0.25rem;
+  left: calc(1.05rem - 1px);
+  width: 2px;
+  background: color-mix(in srgb, var(--step-color) 35%, var(--color-border));
+}
+
+.editorContent [data-variant="stepper"] > [data-type="steps-step"]:last-child::after { display: none; }
+.editorContent [data-variant="stepper"] [data-steps-icon] { grid-column: 1; grid-row: 1; }
+.editorContent [data-variant="stepper"] [data-st-label] { grid-column: 2; grid-row: 1; padding-top: 0.25rem; }
+.editorContent [data-variant="stepper"] [data-st-text] { grid-column: 2; }
+
+/* Chevrons: arrow-shaped bands in a row, the first flat at its start, each step's note beneath it
+   (the "basic chevron process" of slide tools). Rows wrap when there isn't room. */
+.editorContent [data-type="steps"][data-variant="chevrons"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.9rem 3px;
+}
+
+.editorContent [data-variant="chevrons"] > [data-steps-name] { grid-column: 1 / -1; margin-bottom: 0.1rem; }
+
+.editorContent [data-variant="chevrons"] > [data-type="steps-step"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.editorContent [data-variant="chevrons"] [data-st-label] {
+  align-self: stretch;
+  min-height: 3.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.3rem 0.55rem 1.6rem;
+  background: color-mix(in srgb, var(--step-color) calc(16% + var(--step-mix, 14%)), var(--color-surface));
+  clip-path: polygon(0 0, calc(100% - 0.9rem) 0, 100% 50%, calc(100% - 0.9rem) 100%, 0 100%, 0.9rem 50%);
+  font-size: var(--text-md);
+  text-align: center;
+}
+
+.editorContent [data-variant="chevrons"] > [data-st-first] [data-st-label] {
+  clip-path: polygon(0 0, calc(100% - 0.9rem) 0, 100% 50%, calc(100% - 0.9rem) 100%, 0 100%);
+}
+
+.editorContent [data-colours="spectrum"][data-variant="chevrons"] [data-st-label] { background: color-mix(in srgb, var(--step-color) 55%, var(--color-surface)); }
+
+.editorContent [data-variant="chevrons"] [data-st-label]:not([data-st-empty])::after {
+  content: counter(step);
+  position: absolute;
+  top: 0.2rem;
+  left: 1.25rem;
+  color: var(--color-muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+
+.editorContent [data-variant="chevrons"] [data-st-text] { padding: 0 0.35rem; text-align: center; }
+.editorContent [data-variant="chevrons"] [data-st-empty][data-st-text]::after { text-align: center; }
+
+/* Cards: a numbered card per step, the number large and in the step's colour, an arrow to the next
+   (the "process" cards of infographics). Rows wrap. */
+.editorContent [data-type="steps"][data-variant="cards"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 1rem 1.6rem;
+}
+
+.editorContent [data-variant="cards"] > [data-steps-name] { grid-column: 1 / -1; margin-bottom: 0; }
+
+.editorContent [data-variant="cards"] > [data-type="steps-step"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.85rem 0.9rem 1rem;
+  border: 1px solid var(--color-border);
+  border-top: 3px solid color-mix(in srgb, var(--step-color) calc(70% + var(--step-mix, 14%) * 0.6), var(--color-surface));
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.editorContent [data-colours="spectrum"][data-variant="cards"] > [data-type="steps-step"] { border-top-color: var(--step-color); }
+
+.editorContent [data-variant="cards"] > [data-type="steps-step"]::before {
+  content: counter(step, decimal-leading-zero);
+  color: color-mix(in srgb, var(--step-color) 80%, var(--color-text));
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.editorContent [data-variant="cards"] > [data-type="steps-step"]:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  top: 50%;
+  right: -1.35rem;
+  color: var(--color-muted);
+  font-size: var(--text-lg);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.editorContent [data-variant="cards"] [data-steps-icon] { position: absolute; top: 0.7rem; right: 0.75rem; }
+.editorContent [data-variant="cards"] [data-st-delete] { top: -10px; right: -10px; }
+
+/* Staircase: a bar per step, each a step higher than the last, the label and note inside it. For
+   steps that build towards something. */
+.editorContent [data-type="steps"][data-variant="stairs"] {
+  display: grid;
+  grid-template-columns: repeat(var(--st-n), minmax(0, 1fr));
+  align-items: end;
+  gap: 0 4px;
+}
+
+.editorContent [data-variant="stairs"] > [data-steps-name] { grid-column: 1 / -1; }
+
+.editorContent [data-variant="stairs"] > [data-type="steps-step"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: calc(4.2rem + var(--i) * 1.9rem);
+  padding: 0.6rem 0.6rem 0.7rem;
+  border-top: 3px solid color-mix(in srgb, var(--step-color) calc(70% + var(--step-mix, 14%) * 0.6), var(--color-surface));
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: color-mix(in srgb, var(--step-color) calc(6% + var(--step-mix, 14%) / 2), var(--color-surface));
+}
+
+.editorContent [data-colours="spectrum"][data-variant="stairs"] > [data-type="steps-step"] {
+  border-top-color: var(--step-color);
+  background: color-mix(in srgb, var(--step-color) 22%, var(--color-surface));
+}
+
+.editorContent [data-variant="stairs"] > [data-type="steps-step"]::before {
+  content: counter(step);
+  color: color-mix(in srgb, var(--step-color) 80%, var(--color-text));
+  font-size: var(--text-xl);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.editorContent [data-variant="stairs"] [data-st-label] { font-size: var(--text-md); overflow-wrap: anywhere; }
+.editorContent [data-variant="stairs"] [data-st-text] { font-size: var(--text-sm); overflow-wrap: anywhere; }
+.editorContent [data-variant="stairs"] [data-steps-icon] { position: absolute; top: 0.45rem; right: 0.45rem; width: 1.6rem; height: 1.6rem; font-size: var(--text-md); }
+.editorContent [data-variant="stairs"] [data-st-delete] { top: -10px; right: -6px; }
+
 /* ── Chart (extensions/Chart.ts, `\chart`) ────────────────────────────────────────────────────────
    The block only: its spacing and its pill. The chart and its data table are the shared
    ChartWidget, styled in src/charts/ChartWidget.module.css. */
@@ -5044,10 +5370,6 @@
 /* ── Table insertion picker ──────────────────────────────────────────────── */
 
 .tablePicker {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 50%;
-  transform: translateX(-50%);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -5107,10 +5429,6 @@
 /* ── Columns picker ───────────────────────────────────────────────────────── */
 
 .columnsPicker {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 50%;
-  transform: translateX(-50%);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -5150,10 +5468,6 @@
 
 
 .colorPickerPopover {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 50%;
-  transform: translateX(-50%);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -6215,6 +6529,7 @@
 .editorContent [data-type="idkey"] { --color-primary: var(--color-block-idkey); --color-primary-subtle: color-mix(in srgb, var(--color-block-idkey) 10%, transparent); }
 .editorContent [data-type="hierarchy"] { --color-primary: var(--color-block-hierarchy); --color-primary-subtle: color-mix(in srgb, var(--color-block-hierarchy) 10%, transparent); }
 .editorContent [data-type="pyramid"] { --color-primary: var(--color-block-pyramid); --color-primary-subtle: color-mix(in srgb, var(--color-block-pyramid) 10%, transparent); }
+.editorContent [data-type="steps"] { --color-primary: var(--color-block-steps); --color-primary-subtle: color-mix(in srgb, var(--color-block-steps) 10%, transparent); }
 .editorContent [data-type="conclusion"] { --color-primary: var(--color-block-conclusion); --color-primary-subtle: color-mix(in srgb, var(--color-block-conclusion) 10%, transparent); }
 .editorContent [data-type="options"] { --color-primary: var(--color-block-options); --color-primary-subtle: color-mix(in srgb, var(--color-block-options) 10%, transparent); }
 .editorContent [data-type="argument"] { --color-primary: var(--color-block-argument); --color-primary-subtle: color-mix(in srgb, var(--color-block-argument) 10%, transparent); }

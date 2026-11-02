@@ -565,6 +565,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     EX.options(),
     h(1, 'Evidence I’ll lean on'),
     EX.pyramid(),
+    EX.steps(),
     p(unsure('I think the 2 °C target was first agreed at Copenhagen, not Paris.', 'demo-flag-2c', 'Check before quoting it'), ' Either way, Paris added the 1.5 °C aim.'),
     kids('inbox', { inboxId, variant: 'board', order: 'newest' }, [
       node('inboxTitle', null, 'Essay ideas'),

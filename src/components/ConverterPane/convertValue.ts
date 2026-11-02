@@ -15,6 +15,8 @@ export interface ConvertValue {
   // Currency: the rates it was kept at ("Keep this rate": units per euro, EUR 1, and their date);
   // absent or null, today's.
   fixed?:    { date: string; rates: Record<string, number> } | null;
+  // Its "≈ like…" comparison kept shown (2026-11-02); absent, shown only on hover.
+  like?:     boolean;
 }
 export type ConvertDesign = 'card' | 'compact';
 

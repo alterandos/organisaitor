@@ -52,6 +52,7 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `066` | **Applied** | `066_event_attended.sql` (`attended_dates jsonb` on `calendar_events`: the dates of a class marked attended, 2026-10-30). Sent only once a date is marked, and nullable, so until it runs only events with an attended mark fail to upload (queued until it's applied). Safe to run again. |
 | `067` | **Applied** | `067_on_class.sql` (`on_class jsonb` on `calendar_events` and `calendar_deadlines`: an item shown instead of a class that day or during it, 2026-10-30). Sent only once set, and nullable, so until it runs only those items fail to upload (queued until it's applied). Safe to run again. |
 | `068` | **Applied** | `068_endeavour_attributes.sql` (`attributes jsonb` on `collections`: an Endeavour's Type, its own fields and their values, 2026-10-30). Sent only once set, and nullable, so until it runs only Endeavours given attributes fail to upload (queued until it's applied). Safe to run again. |
+| `069` | **Applied** | `069_quick_access_visits.sql` (new table `quick_access_visits`, keyed `(user_id, id)`: Go to's Recent and Frequent history, 2026-11-02). Until it runs, visits stay on each device and their uploads are refused (queued until it's applied). |
 
 ## Migration history
 
@@ -125,6 +126,7 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `066_event_attended.sql` | `attended_dates jsonb` (nullable) on `calendar_events`: the dates of it the person went to (`CalendarEvent.attendedDates`), and a schema reload. Add-only; no new table, so no grant. |
 | `067_on_class.sql` | `on_class jsonb` (nullable) on `calendar_events` and `calendar_deadlines`: `{ eventId, date, mode: 'replaces' \| 'during' }` (`ClassLink`), and a schema reload. Add-only; no new table, so no grant. |
 | `068_endeavour_attributes.sql` | `attributes jsonb` (nullable) on `collections`: `{ typeId, fields, values }` (`EndeavourAttributes`), and a schema reload. Add-only; no new table, so no grant. A Type's `usedFor` and `builtIn` are in `item_types.definition` (no change). |
+| `069_quick_access_visits.sql` | New table `quick_access_visits` (`id`, `user_id`, `type`, `entity_id`, `last_visited_at`, `visit_count`, `visits jsonb`, `updated_at`, `deleted_at`), primary key `(user_id, id)`: id `${type}:${entity_id}`; a Place's is the same in every account. Two devices' copies are joined by the app (`joinVisits`), not newest-wins. RLS + its own grant. |
 
 ## Supabase tables (summary)
 
@@ -144,6 +146,7 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 - **pictures** — mirrors `Picture` (since `048`; `origin` since `049`): the picture library (backdrops, pictures in note text, Glossary card pictures); an encrypted picture's `src` is blank and its data URL is in `encrypted_payload`
 - **overviews** — mirrors `Overview` (since `040`); `definition jsonb` holds the whole query (sources, Endeavour, status, dates, search, sort, grouping)
 - **quick_access_pins** — mirrors `PinnedItem` (`store/pinnedItemsStore.ts`, since `053`); keyed `(user_id, id)`, id `${type}:${entity_id}`
+- **quick_access_visits** — mirrors `RecentItemEntry` (`store/recentItemsStore.ts`, since `069`); keyed `(user_id, id)`, id `${type}:${entity_id}`; `visits` joined across devices on load
 - **fitness_activities** / **fitness_activity_types** — mirror `Activity` / custom `ActivityType` (`types/fitness.ts`, since `055`); keyed by `id`
 - **sync_markers** — one row per user (since `042`): `restored_at`, read on every load and written by a restore; not a synced record table (not in `SYNC_TABLES`)
 - **list_items** — mirrors `ListItem`; `data jsonb`, `sort_order integer` (the domain field is named `order`, renamed at the DB boundary only — `order` is a SQL reserved word)

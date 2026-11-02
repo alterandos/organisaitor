@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasFormatting, richLines, richToPlain, sanitizeInlineHtml } from './richText';
+import { hasFormatting, linesAsBreaks, richLines, richToPlain, sanitizeInlineHtml } from './richText';
 
 describe('formatted text in block fields', () => {
   it('keeps the inline formatting, without attributes, in its plain names', () => {
@@ -45,5 +45,19 @@ describe('formatted text in block fields', () => {
   it('an edited list: a line per item, cleaned, empty lines dropped', () => {
     expect(richLines('<div>one</div><div><b>two</b></div><div><br></div>')).toEqual(['one', '<b>two</b>']);
     expect(richLines('first<div>second</div>')).toEqual(['first', 'second']);
+  });
+});
+
+// 2026-11-02: cleaning unwraps <div>s, so a field's lines were run together ("Likert scalefratley").
+describe('a field of several lines keeps its lines', () => {
+  it('reads every way a browser writes a line as a <br>', () => {
+    expect(linesAsBreaks('Likert scale<div>fratley</div>')).toBe('Likert scale<br>fratley');
+    expect(linesAsBreaks('<div>a</div><div>b</div>')).toBe('a<br>b');
+    expect(linesAsBreaks('first\nExample: x')).toBe('first<br>Example: x');
+    expect(linesAsBreaks('a<div><br></div>')).toBe('a<br><br>');
+  });
+  it('so cleaning keeps them apart', () => {
+    expect(sanitizeInlineHtml(linesAsBreaks('Likert scale<div>fratley</div>'))).toBe('Likert scale<br>fratley');
+    expect(richLines(sanitizeInlineHtml(linesAsBreaks('Likert scale<div>fratley</div>')))).toEqual(['Likert scale', 'fratley']);
   });
 });

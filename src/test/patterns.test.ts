@@ -192,6 +192,15 @@ describe('pattern: floating panels are placed by utils/floatingPlacement.ts', ()
     const done = [...NOT_YET].filter((f) => !/window\.innerHeight/.test(fs.readFileSync(path.join(SRC, '..', f), 'utf8')));
     expect(done, `${done.join(', ')}: remove from NOT_YET and from BACKLOG.md`).toEqual([]);
   });
+
+  // 2026-11-02: side by side, the note's ribbon scrolls sideways, and a dropdown drawn inside it was
+  // clipped (the Note menu). Every dropdown the ribbon opens is a RibbonDropdown (portaled, placed).
+  it('every note ribbon dropdown is a RibbonDropdown', () => {
+    const src = fs.readFileSync(path.join(SRC, 'components/NoteEditor/NoteEditor.tsx'), 'utf8');
+    const anchors = src.match(/className=\{styles\.popoverAnchor\}/g)?.length ?? 0;
+    const dropdowns = src.match(/<RibbonDropdown /g)?.length ?? 0;
+    expect(dropdowns).toBe(anchors);
+  });
 });
 
 describe('pattern: marks show in the margin through the margin column (extensions/MarginColumn.ts)', () => {
@@ -320,6 +329,19 @@ describe('pattern: hotkeys.ts ids', () => {
 // A hand-written fetch list destructured into positional variables drifted out of step with
 // hydrateStores on 2026-09-27 and merged every store from tracker_entries on with the next
 // table's rows. The fetch is now generated from SYNC_TABLES and handed around as a name-keyed map.
+describe('pattern: records gathered on each device are joined (CLAUDE.md "How sync works")', () => {
+  // Adopted 2026-11-02: a table whose records each device adds to (visits, marks) is joined on load,
+  // never newest-wins. Each entry: the table and the join its hydrateStores merge must use.
+  const JOINED_TABLES: Record<string, string> = { quick_access_visits: 'joinVisits' };
+  const syncSrc = fs.readFileSync(path.join(SRC, 'services', 'sync', 'syncService.ts'), 'utf8');
+  it.each(Object.entries(JOINED_TABLES))('%s is joined with %s after its merge', (table, join) => {
+    const body = syncSrc.match(/function hydrateStores\(remote: RemoteRows\) \{([\s\S]*?)\n\}/)![1];
+    const at = body.indexOf(`remote.${table},`);
+    expect(at).toBeGreaterThan(-1);
+    expect(body.slice(at, at + 600)).toContain(`${join}(`);
+  });
+});
+
 describe('pattern: sync load is keyed by table name', () => {
   const syncSrc = fs.readFileSync(path.join(SRC, 'services', 'sync', 'syncService.ts'), 'utf8');
   const syncTables = [...syncSrc.match(/const SYNC_TABLES = \[([\s\S]*?)\] as const/)![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);

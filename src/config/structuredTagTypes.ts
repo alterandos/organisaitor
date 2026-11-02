@@ -8,7 +8,7 @@
 // docs/features/implemented-features.md.
 
 import { inferAcronymFromSelection } from '@/utils/acronymInference';
-import { richToPlain } from '@/utils/richText';
+import { linesAsBreaks, richToPlain } from '@/utils/richText';
 import { inferDefinitionFromSelection } from '@/utils/definitionInference';
 
 // How a field's value is held in StructuredTagEntry.fields, and so how it's shown and edited.
@@ -83,7 +83,7 @@ export function namedFieldLine(line: string): Fact | null {
 
 // The "Name: value" lines of a field's formatted text, taken out.
 export function takeNamedLines(html: string): { html: string; facts: Fact[] } {
-  const lines = html.replace(/<\/?(div|p)\b[^<>]*>/gi, '<br>').split(/<br\s*\/?>/i);
+  const lines = linesAsBreaks(html).split(/<br\s*\/?>/i);
   const facts: Fact[] = [];
   const kept = lines.filter((l) => {
     const fact = namedFieldLine(richToPlain(l));
