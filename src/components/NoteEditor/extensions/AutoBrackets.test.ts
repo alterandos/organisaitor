@@ -84,6 +84,31 @@ describe('brackets close themselves', () => {
     expect(shown()).toBe('[[|');
   });
 
+  it('quotes close themselves, and typing the closing one steps over it', () => {
+    make();
+    type('say "');
+    expect(shown()).toBe('say "|"');
+    type('hi"');
+    expect(shown()).toBe('say "hi"|');
+    type(" '");
+    expect(shown()).toBe(`say "hi" '|'`);
+    press('Backspace');
+    expect(shown()).toBe('say "hi" |');
+  });
+
+  it('an apostrophe after a letter stays one mark', () => {
+    make();
+    type("don't students'");
+    expect(shown()).toBe("don't students'|");
+  });
+
+  it('a quote wraps selected text', () => {
+    make('<p>word</p>');
+    editor.commands.setTextSelection({ from: 1, to: 5 });
+    type('"');
+    expect(editor.state.doc.textContent).toBe('"word"');
+  });
+
   it('not in code', () => {
     make('<pre><code></code></pre>');
     type('(');

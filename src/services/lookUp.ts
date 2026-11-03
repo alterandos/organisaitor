@@ -6,7 +6,7 @@ import { liveNote } from '@/services/liveNoteEditor';
 import { ensureBlockId, noteDocFor, openNoteLink } from '@/services/noteLinkTargets';
 import { isNoteLocked, noteView } from '@/services/noteSecrets';
 import { glossaryEntries } from '@/services/glossary';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { openGlossaryEntry } from '@/services/notePassage';
 import { noteEditorExtensions } from '@/components/NoteEditor/noteEditorExtensions';
 import { applyNoteLink } from '@/components/NoteEditor/extensions/NoteLink';
 import { insertEmbedAt } from '@/components/NoteEditor/extensions/NoteEmbed';
@@ -50,7 +50,8 @@ export function allPassages(schema: Schema): Passage[] {
   for (const e of glossaryEntries()) {
     if (e.locked || !e.term.trim()) continue;
     out.push({
-      noteId: e.noteId, tabId: null, pos: 0, kind: 'term', text: e.term, pictureId: null,
+      // A term made in the Glossary has no note: '' (it's opened in the Glossary, openGlossaryEntry).
+      noteId: e.noteId ?? '', tabId: null, pos: 0, kind: 'term', text: e.term, pictureId: null,
       noteTitle: e.noteTitle || LABELS.mobileNotes.untitled, notebooks: e.notebookPath, tabName: null,
       term: { entryId: e.id, typeKey: e.typeKey, icon: e.icon, names: [e.short, e.long].filter((n): n is string => !!n && n !== e.term), meaning: e.meaning },
     });
@@ -121,7 +122,7 @@ export async function copyPassage(p: Passage, schema: Schema): Promise<void> {
 }
 
 export function openPassage(p: Passage, schema: Schema): void {
-  if (p.term) { openNotePassage(p.noteId, definitionPassage(p.term.entryId)); return; }
+  if (p.term) { openGlossaryEntry(p.term.entryId); return; }
   openNoteLink(p.noteId, p.tabId, blockIdOf(p, schema));
 }
 

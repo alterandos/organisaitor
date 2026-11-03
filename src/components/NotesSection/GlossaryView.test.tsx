@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
-import { SENT_TO_GLOSSARY, toggleGlossaryKind } from '@/services/glossary';
+import { toggleGlossaryKind } from '@/services/glossary';
 import { GlossaryView } from './GlossaryView';
 
 const add = (typeKey: string, term: string, fields: Record<string, unknown>, noteId: string) =>
-  useNoteStore.getState().addStructuredTagEntry({ typeKey, tagId: `builtin-${typeKey}`, term, fields: { ...fields, [SENT_TO_GLOSSARY]: true }, noteId: noteId as never, collectionId: null });
+  useNoteStore.getState().addStructuredTagEntry({ typeKey, tagId: `builtin-${typeKey}`, term, fields: { ...fields }, noteId: noteId as never, collectionId: null });
 
 beforeEach(() => {
   useNoteStore.setState(useNoteStore.getInitialState(), true);

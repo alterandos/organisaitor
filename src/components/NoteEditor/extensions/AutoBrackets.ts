@@ -1,5 +1,7 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
+import { CLOSES, PAIRS, QUOTES, opensPair } from '@/utils/autoPairs';
 
 // Brackets close themselves, as in a code editor (asked for by the user 2026-10-22). Typing `(`,
 // `[` or `{` puts in the pair with the cursor between; while the cursor is still inside a pair made
@@ -7,10 +9,8 @@ import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } 
 // after the opening one takes both away. With text selected, the bracket wraps the selection. The
 // pair is only put in before a space, the end of the line or closing punctuation (so "(" typed
 // in front of a word stays one bracket), never in code, and `[[` still opens the note link picker.
-
-const PAIRS: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
-const CLOSES = new Set(Object.values(PAIRS));
-const CLOSE_BEFORE = /^$|^[\s)\]}.,;:!?'"”’]/;
+// Quotes `"` and `'` close themselves the same way (2026-11-02). Which marks pair, and when, is
+// utils/autoPairs.ts, shared with a card's fields.
 
 interface Pair { open: number; close: number }
 interface PluginState { pairs: Pair[] }
@@ -29,6 +29,18 @@ function pairAround(state: EditorState): Pair | null {
   if (!empty) return null;
   const pairs = autoBracketsKey.getState(state)?.pairs ?? [];
   return pairs.filter((p) => from > p.open && from <= p.close).sort((a, b) => a.close - b.close)[0] ?? null;
+}
+
+// Typing the closing mark of a pair made here, with the cursor just before it, steps over it.
+function stepOver(view: EditorView, text: string): boolean {
+  const state = view.state;
+  const { from } = state.selection;
+  const pair = pairAround(state);
+  if (!pair || pair.close !== from || state.doc.textBetween(from, from + 1) !== text) return false;
+  // Typed over (a real replacement), so whatever reacts to a typed `)` or `"` still sees one.
+  const tr = state.tr.insertText(text, from, from + 1);
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from + 1)).setMeta(autoBracketsKey, { drop: pair } satisfies Meta));
+  return true;
 }
 
 export const AutoBrackets = Extension.create({
@@ -61,6 +73,8 @@ export const AutoBrackets = Extension.create({
         handleTextInput(view, from, to, text) {
           const state = view.state;
           if (inCode(state, from)) return false;
+          // A quote's opening and closing marks are the same, so stepping over one comes first.
+          if (QUOTES.has(text) && from === to && stepOver(view, text)) return true;
           const close = PAIRS[text];
           if (close) {
             const before = state.doc.textBetween(Math.max(0, from - 1), from);
@@ -75,20 +89,13 @@ export const AutoBrackets = Extension.create({
               view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from + 1, to + 1)));
               return true;
             }
-            if (!CLOSE_BEFORE.test(after)) return false;
+            if (!opensPair(text, before, after)) return false;
             const tr = state.tr.insertText(text + close, from, to);
             tr.setSelection(TextSelection.create(tr.doc, from + 1)).setMeta(autoBracketsKey, { add: { open: from, close: from + 1 } } satisfies Meta);
             view.dispatch(tr);
             return true;
           }
-          if (CLOSES.has(text) && from === to) {
-            const pair = pairAround(state);
-            if (!pair || pair.close !== from || state.doc.textBetween(from, from + 1) !== text) return false;
-            // Typed over (a real replacement), so whatever reacts to a typed `)` still sees one.
-            const tr = state.tr.insertText(text, from, from + 1);
-            view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from + 1)).setMeta(autoBracketsKey, { drop: pair } satisfies Meta));
-            return true;
-          }
+          if (CLOSES.has(text) && from === to) return stepOver(view, text);
           return false;
         },
       },

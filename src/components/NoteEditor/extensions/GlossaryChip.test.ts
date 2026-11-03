@@ -24,6 +24,7 @@ const asked = vi.hoisted(() => ({ count: 0 }));
 vi.mock('@/components/ConfirmDialog/dialogs', () => ({
   confirmDelete: async () => { asked.count++; return true; },
   confirmDialog: async () => true,
+  askWithCheckbox: async () => { asked.count++; return { result: 'confirm', checked: false }; },
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

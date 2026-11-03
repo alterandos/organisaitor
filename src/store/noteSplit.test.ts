@@ -48,15 +48,24 @@ describe('notes side by side', () => {
     expect(ui().notePanes).toEqual([a, b]);
   });
 
-  it('closing a pane empties it; back to one note shows the one in front', () => {
+  it('closing a note takes its pane away; the last one left is shown alone (2026-11-02)', () => {
+    const d = useNoteStore.getState().addNote({ title: 'D' });
     ui().setNoteLayout('four');
+    ui().openNoteInPane(1, b);
     ui().openNoteInPane(2, c);
+    ui().openNoteInPane(3, d);
     ui().closeNotePane(0);
-    expect(ui().notePanes).toEqual([null, null, c, null]);
-    ui().setNoteLayout('single');
+    expect(ui().noteLayout).toBe('three');
+    expect(ui().notePanes).toEqual([b, c, d]);
+    expect(ui().focusedNotePane).toBe(2);
+    expect(ui().editingNoteId).toBe(d);
+    ui().closeNote();
+    expect(ui().noteLayout).toBe('two');
+    expect(ui().notePanes).toEqual([b, c]);
     expect(ui().editingNoteId).toBe(c);
-    ui().setNoteLayout('two');
-    expect(ui().notePanes[0]).toBe(c);
+    ui().closeNotePane(1);
+    expect(ui().noteLayout).toBe('single');
+    expect(ui().editingNoteId).toBe(b);
   });
 
   it('"Open beside" splits one note in two, else fills an empty pane', () => {

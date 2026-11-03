@@ -10,6 +10,10 @@ import { ConceptRefMark, collectRefGroups } from '../extensions/ConceptRef';
 import { collectImportantPassages } from '../extensions/Importance';
 import { NoteObjectTrigger } from './NoteObjectTrigger';
 import { SelectionMenu } from './SelectionMenu';
+
+// Marking as a Glossary kind makes a card (extensions/GlossaryCard.ts); the card itself is tested there.
+const cardFromSelection = vi.hoisted(() => vi.fn());
+vi.mock('../extensions/GlossaryCard', () => ({ cardFromSelection }));
 import { getSelectionMenu } from './selectionMenuState';
 import { useNoteStore } from '@/store/noteStore';
 import type { NoteId } from '@/types';
@@ -37,15 +41,15 @@ function setup() {
     content: '<p>Plants use photosynthesis to make sugar.</p>',
   });
   editor.view.coordsAtPos = () => ({ left: 0, right: 0, top: 0, bottom: 0 });
-  const onMarkAs = vi.fn();
-  render(<SelectionMenu editor={editor as never} onMarkAs={onMarkAs} />);
+  cardFromSelection.mockClear();
+  render(<SelectionMenu editor={editor as never} />);
   // Select "photosynthesis" and type `\` over it.
   const text = editor.state.doc.textContent;
   const from = 1 + 1 + text.indexOf('photosynthesis');
   const to = from + 'photosynthesis'.length;
   act(() => { editor.commands.setTextSelection({ from, to }); });
   act(() => { editor.view.someProp('handleTextInput', (f) => f(editor.view, from, to, '\\', () => editor.view.state.tr)); });
-  return { entryId, onMarkAs, from, to };
+  return { entryId, from, to };
 }
 
 // A key arriving at the editor (before the menu's search box has focus).
@@ -67,12 +71,12 @@ describe('SelectionMenu', () => {
   });
 
   it('keys typed into the editor before the menu has focus go to the menu, not over the text', () => {
-    const { onMarkAs, from, to } = setup();
+    const { from, to } = setup();
     for (const ch of 'conc') keyToEditor(ch);
     expect(screen.getByPlaceholderText(/Link to a term/)).toHaveValue('conc');
     expect(editor.state.doc.textContent).toContain('photosynthesis');
     keyToEditor('Enter');
-    expect(onMarkAs).toHaveBeenCalledWith('concept', from, to);
+    expect(cardFromSelection).toHaveBeenCalledWith(expect.anything(), from, to, 'concept', null);
   });
 
   it('offers every Glossary kind to mark it as, Acronym and Profile included', () => {

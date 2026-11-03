@@ -21,6 +21,9 @@ import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
 import { ChecklistView } from './ChecklistView';
+import { GlossaryListView } from './GlossaryListView';
+import { ListItemSource } from './ListItemSource';
+import { glossaryKindOf } from '@/services/glossaryLists';
 import { LABELS } from '@/config/labels';
 
 import { log, errorMessage } from '@/utils/log';
@@ -246,6 +249,7 @@ function ItemCard({
         </div>
       )}
 
+      <ListItemSource item={item} />
       <div className={styles.itemCardBottom}>
         <div className={styles.statusPills}>
           {(Object.keys(LIST_ITEM_STATUS_META) as ListItemStatus[]).map((s) => (
@@ -813,7 +817,9 @@ export function ListsSection() {
             )}
 
             {/* Content */}
-            {isChecklist ? (
+            {glossaryKindOf(selectedList) ? (
+              <GlossaryListView list={selectedList} />
+            ) : isChecklist ? (
               <ChecklistView
                 list={selectedList}
                 items={displayedItems}
@@ -878,6 +884,7 @@ export function ListsSection() {
                           ) : (
                             <td className={styles.refCellClickable} onClick={() => setEditingCell({ itemId: item.id, field: 'title' })}>
                               <span className={styles.refCellTitle}>{item.title}</span>
+                              <ListItemSource item={item} />
                             </td>
                           )
                         )}

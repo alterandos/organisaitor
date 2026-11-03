@@ -3,7 +3,8 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useRef } from 'react';
-import { useCardTermLinks } from './CardTermLinks';
+import { typeAfterTermLink, useCardTermLinks } from './CardTermLinks';
+import { lineBreakAfterTermLink } from './cardFieldText';
 import { useNoteStore } from '@/store/noteStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { defineInItsNote } from '@/test/glossaryFixtures';
@@ -68,5 +69,51 @@ describe('linking Glossary terms inside a card field', () => {
     useSettingsStore.setState({ linkSuggestions: 'never' });
     act(() => typeText(field, ' ASX'));
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('typing at the end of a term link (2026-11-02)', () => {
+  const beforeInput = (data: string) => new InputEvent('beforeinput', { inputType: 'insertText', data, cancelable: true });
+  const caretAt = (node: Node, offset: number) => {
+    const r = document.createRange();
+    r.setStart(node, offset);
+    r.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(r);
+  };
+  const field = (html: string) => { const el = document.createElement('div'); el.innerHTML = html; document.body.appendChild(el); return el; };
+
+  it('goes after the link, whether the caret is at the end of its text or just after it', () => {
+    const el = field('See <a data-term="t">normalisation</a>');
+    caretAt(el.querySelector('a')!.firstChild!, 'normalisation'.length);
+    const e = beforeInput(' a');
+    expect(typeAfterTermLink(el, e)).toBe(true);
+    expect(e.defaultPrevented).toBe(true);
+    expect(el.innerHTML).toBe('See <a data-term="t">normalisation</a> a');
+    caretAt(el, 2);
+    typeAfterTermLink(el, beforeInput('!'));
+    expect(el.innerHTML).toBe('See <a data-term="t">normalisation</a>! a');
+    el.remove();
+  });
+
+  it('a new line at the end of a link goes after it (2026-11-03)', () => {
+    const el = field('See <a data-term="t">normalisation</a>');
+    caretAt(el.querySelector('a')!.firstChild!, 'normalisation'.length);
+    expect(lineBreakAfterTermLink(el)).toBe(true);
+    expect(el.innerHTML).toBe('See <a data-term="t">normalisation</a><br><br>');
+    const r = window.getSelection()!.getRangeAt(0);
+    expect([r.startContainer, r.startOffset]).toEqual([el, 3]);
+    caretAt(el.firstChild!, 2);
+    expect(lineBreakAfterTermLink(el)).toBe(false);
+    el.remove();
+  });
+
+  it('inside the link, or in plain text, the browser types as usual', () => {
+    const el = field('See <a data-term="t">normalisation</a>');
+    caretAt(el.querySelector('a')!.firstChild!, 3);
+    expect(typeAfterTermLink(el, beforeInput('x'))).toBe(false);
+    caretAt(el.firstChild!, 2);
+    expect(typeAfterTermLink(el, beforeInput('x'))).toBe(false);
+    el.remove();
   });
 });

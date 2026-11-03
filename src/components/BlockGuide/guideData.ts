@@ -18,7 +18,7 @@ export const BLOCK_NODE_OF: Record<string, string> = {
   timeline: 'timeline', quote: 'quoteBlock', conclusion: 'conclusion', cycle: 'cycle', breakdown: 'breakdown',
   types: 'types', key: 'idKey', hierarchy: 'hierarchy', pyramid: 'pyramid', steps: 'steps', chart: 'chart', code: 'codeBlock',
   maths: 'mathBlock', inbox: 'inbox', definition: 'glossaryCard', acronym: 'glossaryCard', concept: 'glossaryCard',
-  profile: 'glossaryCard', question: 'questionBlock', compare: 'compareBlock', proscons: 'prosCons',
+  profile: 'glossaryCard', fact: 'glossaryCard', question: 'questionBlock', compare: 'compareBlock', proscons: 'prosCons',
   argument: 'argument', options: 'options', diagram: 'diagram', convert: 'convertBlock', case: 'caseStudy',
   cause: 'causeEffect', venn: 'vennBlock', hub: 'hub', embed: 'noteEmbed',
 };

@@ -40,9 +40,12 @@ export const BUILTIN_TAGS: BuiltinTag[] = [
   // StructuredTagEntry alongside the mark. Kept last so Ctrl+1-7 (the existing built-ins)
   // stay on the same keys; this becomes Ctrl+8.
   { id: 'builtin-acronym', name: 'Acronym', icon: '🔤', color: '#4d7c0f', typeKey: 'acronym' },
+  // A Fact (2026-11-03): after Acronym, so no Ctrl+digit moves (it's tenth: no digit of its own).
+  { id: 'builtin-fact', name: 'Fact', icon: '✨', color: '#8a6500', typeKey: 'fact' },
+  { id: 'builtin-quote', name: 'Quote', icon: '❞', color: '#9a3412', typeKey: 'quote' },
 ];
 
-const KIND_TOKENS = ['definition', 'concept', 'acronym', 'profile'];
+const KIND_TOKENS = ['definition', 'concept', 'acronym', 'profile', 'fact', 'quote'];
 
 // The colour the app draws a Glossary kind in: its theme token (index.css --color-kind-*), so it
 // reads in both themes; any other built-in tag's own colour.

@@ -5,7 +5,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { useNoteStore } from '@/store/noteStore';
 import { useSecretsVersion } from '@/services/noteSecrets';
 import { glossaryEntry } from '@/services/glossary';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { openGlossaryEntry } from '@/services/notePassage';
 import { LABELS } from '@/config/labels';
 import { kindColor } from '../builtinTags';
 import { openBlockPopover, popoverClass } from './blockDesigns';
@@ -140,7 +140,7 @@ export function openEntryPopover(view: EditorView, entryId: string, typeKey: str
       b.addEventListener('click', () => { close(); run(); });
       actions.append(b);
     };
-    if (entry) button(L.goToDefinition, () => openNotePassage(entry.noteId, definitionPassage(entry.id)));
+    if (entry) button(L.goToDefinition, () => openGlossaryEntry(entry.id));
     if (unlink) button(L.removeLink, () => { unlink(); view.focus(); });
     box.append(actions);
     return box;
@@ -229,7 +229,7 @@ class ConceptHoverView {
       go.type = 'button';
       go.append(`${LABELS.glossary.goToDefinition} `, createGlyph('open'));
       go.addEventListener('mousedown', (ev) => ev.preventDefault());
-      go.addEventListener('click', (ev) => { ev.preventDefault(); this.hideCard(); openNotePassage(entry.noteId, definitionPassage(entry.id)); });
+      go.addEventListener('click', (ev) => { ev.preventDefault(); this.hideCard(); openGlossaryEntry(entry.id); });
       card.append(go);
     }
     card.addEventListener('mouseenter', () => clearTimeout(this.hideTimer));

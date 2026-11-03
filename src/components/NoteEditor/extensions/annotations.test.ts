@@ -100,6 +100,18 @@ describe('Important levels', () => {
     editor.commands.setContent(html);
     expect(collectImportantPassages(editor.state.doc)[0]).toMatchObject({ level: 2, reviewDue: '2026-10-08' });
   });
+
+  it('text typed at the end of an Important or Review later passage is not marked', () => {
+    make('<p>Plants use photosynthesis</p>');
+    const r = rangeOf('photosynthesis');
+    setImportance(editor.view, r.from, r.to, 1);
+    toggleReview(editor.view, r.from, r.to, '2026-10-07');
+    editor.commands.setTextSelection(r.to);
+    editor.view.dispatch(editor.state.tr.insertText(' daily'));
+    const marked = collectImportantPassages(editor.state.doc).map((p) => editor.state.doc.textBetween(p.from, p.to));
+    expect(marked).toEqual(['photosynthesis']);
+    expect(editor.getHTML()).toMatch(/photosynthesis<\/mark> daily/);
+  });
 });
 
 describe('`\\` on a selection', () => {

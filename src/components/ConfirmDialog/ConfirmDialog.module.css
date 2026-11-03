@@ -118,3 +118,22 @@
 @media (max-width: 519px) {
   .kbd { display: none; }
 }
+
+.list {
+  margin: -0.5rem 0 1rem;
+  padding-left: 1.25rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 1.25rem;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  cursor: pointer;
+}

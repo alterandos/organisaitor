@@ -8,7 +8,8 @@ import { designMenuItem, frameMenuItem } from './blockDesigns';
 import { unlinkNoteLinkAt } from './NoteLink';
 import { EMBED_DESIGNS, copyEmbedAsText, type EmbedVariant } from './NoteEmbed';
 
-// Right-click on a note link: Open, Unlink. On selected text: Link to a note…. On an embedded
+// Right-click on a note link: Open, Unlink (Link to a note… on selected text is in Link ▸,
+// objects/selectionActions.ts). On an embedded
 // passage: Open where it comes from, Copy as text here, Design ▸, Frame ▸.
 
 const linkAt = (target: Element | null) => target?.closest('a[data-note-link]') as HTMLElement | null;
@@ -28,18 +29,6 @@ registerContextMenuProvider({
       items.push({ id: 'note-link-unlink', label: LABELS.noteObjects.link.unlink, icon: '⛓', run: () => { try { unlinkNoteLinkAt(view, view.posAtDOM(el, 0)); } catch { /* the link left the page */ } } });
     }
     return items;
-  },
-});
-
-registerContextMenuProvider({
-  id: 'note-editor.link-to-note',
-  kind: 'note-editor',
-  order: 8,
-  items: (_ctx, scope) => {
-    const api = scope.data as NoteEditorMenuApi;
-    const { state } = api.editor;
-    if (state.selection.empty || !api.editor.isEditable) return [];
-    return [{ id: 'link-to-note', label: LABELS.noteLinks.menu, icon: NOTE_LINK_ICON, run: () => api.linkToNote() }];
   },
 });
 

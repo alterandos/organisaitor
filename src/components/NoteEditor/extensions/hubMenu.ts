@@ -2,8 +2,7 @@ import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { OpenIcon, TrashIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
-import { HUB_ICON } from '@/config/itemIcons';
-import { openHubLink, removeLink, selectionTouchesHub, setLinkRelation } from '@/services/noteHubs';
+import { openHubLink, removeLink, setLinkRelation } from '@/services/noteHubs';
 import { RELATIONS, type HubLinkKind } from '@/utils/noteHubs';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { HUB_DESIGNS, hubPosAt, linkPosAt, requestHubLinkPicker, setHubDesign, type HubVariant } from './Hub';
@@ -54,15 +53,3 @@ registerContextMenuProvider({
   },
 });
 
-// Right-click on selected text (outside a hub): Add to hub….
-registerContextMenuProvider({
-  id: 'note-editor.add-to-hub',
-  kind: 'note-editor',
-  order: 8,
-  items: (_ctx, scope) => {
-    const api = scope.data as NoteEditorMenuApi;
-    const { state } = api.editor;
-    if (state.selection.empty || !api.editor.isEditable || selectionTouchesHub(state)) return [];
-    return [{ id: 'add-to-hub', label: LABELS.hubs.menu, icon: HUB_ICON, run: () => api.addToHub() }];
-  },
-});

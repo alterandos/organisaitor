@@ -2,20 +2,24 @@ import { useNoteStore } from '@/store/noteStore';
 import { iconText } from '@/components/IconPicker/iconValue';
 import { LABELS } from '@/config/labels';
 import { importanceLevel } from '@/components/NoteEditor/extensions/importanceLevels';
-import { entryView, isEntryLocked, isNoteLocked, noteView } from '@/services/noteSecrets';
+import { entryView, isEntryLocked, noteView } from '@/services/noteSecrets';
 import { BUILTIN_TAGS } from '@/components/NoteEditor/builtinTags';
-import { GLOSSARY_TYPES, glossaryKinds, glossaryMeaning, glossaryNames } from '@/config/structuredTagTypes';
+import { GLOSSARY_TYPES, HEADLINED_KINDS, glossaryKinds, glossaryMeaning, glossaryNames } from '@/config/structuredTagTypes';
 import { countConceptRefs } from '@/utils/noteContent';
 import { getNoteNotebookPath } from '@/utils/notes';
-import { liveNotes } from '@/services/liveNoteEditor';
+import { useTrashStore } from '@/store/trashStore';
 import type { NoteTag } from '@/types/notes';
 import type { Note, StructuredTagEntry } from '@/types/notes';
 import type { NoteId, StructuredTagEntryId } from '@/types';
 
-// The Glossary: every Definition, Concept and Acronym record (StructuredTagEntry, config/
-// structuredTagTypes.ts GLOSSARY_TYPES), with where it's defined and how often other text refers
-// to it (conceptRef marks). Read through the views, so an encrypted note's entries show while the
-// vault is unlocked and as locked otherwise. Pure reads over the stores; nothing is cached.
+// The Glossary: every Definition, Concept, Acronym, Profile and Fact record (StructuredTagEntry,
+// config/structuredTagTypes.ts GLOSSARY_TYPES), with where it came from and how often other text
+// refers to it (conceptRef marks). Read through the views, so an encrypted note's entries show while
+// the vault is unlocked and as locked otherwise. Pure reads over the stores; nothing is cached.
+//
+// A record lives in the Glossary, not in a note (agreed with the user 2026-11-03): taking its card
+// out of a note, or deleting the note, asks whether to delete it too (services/glossaryOrphans.ts),
+// and keeping it leaves it here with the note it came from remembered (`origin`).
 
 export interface GlossaryEntry {
   id:        string;
@@ -25,8 +29,11 @@ export interface GlossaryEntry {
   icon:      string;
   color:     string;
   kindLabel: string;
-  noteId:    string;
+  noteId:    string | null;   // the note it came from; null when made in the Glossary
   noteTitle: string;
+  // Where it came from: a note there now, a note in the Recycling Bin (its title as it was then),
+  // a note deleted for good, or the Glossary itself.
+  origin:    'note' | 'trashed' | 'deleted' | 'glossary';
   notebookPath: string[];   // root notebook → the note's notebook; [] when it's in none
   locked:    boolean;
   importance: 0 | 1 | 2 | 3;
@@ -42,26 +49,35 @@ export function toGlossaryEntry(raw: StructuredTagEntry, notes: Record<NoteId, N
   if (!(raw.typeKey in GLOSSARY_TYPES)) return null;
   const e = entryView(raw);
   const tag = tagFor(e.typeKey);
-  const note = notes[e.noteId];
+  const note = e.noteId ? notes[e.noteId] : undefined;
+  const trashed = e.noteId && !note ? trashedNoteTitle(e.noteId) : null;
   return {
     id: e.id, typeKey: e.typeKey, term: e.term, meaning: glossaryMeaning(e),
     icon: iconText(tag?.icon, '📖'), color: tag?.color ?? '#10b981', kindLabel: tag?.name ?? e.typeKey,
-    noteId: e.noteId, noteTitle: note ? noteView(note).title : '',
+    noteId: e.noteId, noteTitle: note ? noteView(note).title : trashed ?? '',
+    origin: !e.noteId ? 'glossary' : note ? 'note' : trashed !== null ? 'trashed' : 'deleted',
     notebookPath: note ? getNoteNotebookPath(noteView(note), noteTags) : [],
     locked: isEntryLocked(raw), importance: entryImportance(e), ...glossaryNames(e), kinds: glossaryKinds(e), updatedAt: e.updatedAt,
   };
 }
 
-// Sent to the Glossary (asked for by the user 2026-10-26): a record whose card was taken out of
-// its note, leaving the term linked there. It lives in the Glossary alone, so it counts as defined
-// without a card, and removing its linked text never deletes it; it goes only when deleted from
-// the Glossary. Kept in the record's fields (so it syncs and encrypts with it; no migration).
-export const SENT_TO_GLOSSARY = 'inGlossary';
-export const isSentToGlossary = (e: Pick<StructuredTagEntry, 'fields'>) => e.fields?.[SENT_TO_GLOSSARY] === true;
+// The title of a note in the Recycling Bin (as it was when deleted), or null if it isn't there.
+function trashedNoteTitle(noteId: string): string | null {
+  for (const t of Object.values(useTrashStore.getState().entries)) {
+    if (t.kind === 'note' && (t.snapshot as { id?: string } | null)?.id === noteId) return t.title;
+  }
+  return null;
+}
+
+// The Recycling Bin entry of the note a record came from, to restore it from where it's named.
+export function trashedOriginOf(noteId: string) {
+  return Object.values(useTrashStore.getState().entries).find((t) => t.kind === 'note' && (t.snapshot as { id?: string } | null)?.id === noteId) ?? null;
+}
 
 // How important a record is (asked for by the user 2026-10-26): 0, or the Important levels 1–3
 // ("Key concept", "Very important concept", "Critical concept"). On the record, not its card, so
-// the Glossary, hover cards and every card of it agree; in its fields, like SENT_TO_GLOSSARY.
+// the Glossary, hover cards and every card of it agree; in its fields (so it syncs and encrypts
+// with it).
 export const IMPORTANCE_FIELD = 'importance';
 export const entryImportance = (e: Pick<StructuredTagEntry, 'fields'>): 0 | 1 | 2 | 3 => {
   const v = e.fields?.[IMPORTANCE_FIELD];
@@ -85,40 +101,19 @@ export function setEntryImportance(id: string, level: 0 | 1 | 2 | 3): void {
   store.updateStructuredTagEntry(raw.id, { fields });
 }
 
-// The records whose note still holds their card or marked text. One whose definition was deleted
-// before deleting it took the record along (2026-10-13) is left out of the Glossary, of linking as
-// you type and of Quick Access. The open note is read live (its latest typing may not be saved
-// yet); a locked note can't be read, so its records count as there.
-function stillDefined(entries: StructuredTagEntry[], notes: Record<NoteId, Note>): Set<string> {
-  const out = new Set<string>();
-  const live = liveNotes();
-  const inLive = new Set<string>();
-  for (const l of live) l.view.state.doc.descendants((n) => {
-    if ((n.type.name === 'glossaryCard' || n.type.name === 'glossaryChip') && n.attrs.entryId) inLive.add(n.attrs.entryId as string);
-    if (n.isText) for (const m of n.marks) if (m.type.name === 'noteTag' && m.attrs.structuredEntryId) inLive.add(m.attrs.structuredEntryId as string);
-    return true;
-  });
-  for (const e of entries) {
-    const raw = notes[e.noteId];
-    if (!raw) continue;
-    if (live.some((l) => l.noteId === e.noteId) && inLive.has(e.id)) { out.add(e.id); continue; }
-    if (isNoteLocked(raw)) { out.add(e.id); continue; }
-    if (!isEntryLocked(e) && isSentToGlossary(entryView(e))) { out.add(e.id); continue; }
-    const n = noteView(raw);
-    if ([n.content, ...n.tabs.map((t) => t.content)].some((c) => c?.includes(e.id))) out.add(e.id);
-  }
-  return out;
-}
-
 export function glossaryEntries(): GlossaryEntry[] {
   const { structuredTagEntries, notes, noteTags } = useNoteStore.getState();
-  const defined = stillDefined(Object.values(structuredTagEntries), notes);
   return Object.values(structuredTagEntries)
-    .filter((e) => defined.has(e.id))
     .map((e) => toGlossaryEntry(e, notes, noteTags))
     // A card's record has no term until one is typed (`\definition`); it isn't listed until then.
     .filter((e): e is GlossaryEntry => !!e && (e.locked || e.term.trim() !== ''))
     .sort((a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: 'base' }));
+}
+
+// The terms a Fact's or Quote's headline may be built from (utils/factHeadline.ts): every readable
+// record's term but the headlined kinds' own, and but `except` (the record being named).
+export function headlineTerms(except?: string): string[] {
+  return glossaryEntries().filter((e) => e.id !== except && !e.locked && !HEADLINED_KINDS.has(e.typeKey)).map((e) => e.term);
 }
 
 export function glossaryEntry(id: string): GlossaryEntry | null {

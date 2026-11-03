@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { glossaryEntry } from '@/services/glossary';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { openGlossaryEntry } from '@/services/notePassage';
 import { useFloatingPlacement, type AnchorBox } from '@/utils/floatingPlacement';
 import { LABELS } from '@/config/labels';
 import type { Offer } from './CardTermLinks';
@@ -31,7 +31,7 @@ export function TermCard({ entryId, anchor, onEnter, onLeave }: { entryId: strin
           <strong>{entry.icon} {entry.term || L.untitled}</strong>
           <em>{entry.kindLabel}</em>
           <span>{entry.locked ? L.locked : entry.meaning || L.noMeaning}</span>
-          <button type="button" onClick={() => { onLeave(); openNotePassage(entry.noteId, definitionPassage(entry.id)); }}>{L.goToDefinition}</button>
+          <button type="button" onClick={() => { onLeave(); openGlossaryEntry(entry.id); }}>{L.goToDefinition}</button>
         </>
       )}
     </div>,

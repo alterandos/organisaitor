@@ -116,7 +116,8 @@ export function TagView() {
       // than raw marked text — each entry carries its own fields (e.g. "stands for"),
       // which a plain text snippet can't show.
       if (structuredType) {
-        const entries = Object.values(structuredTagEntries).filter((e) => e.tagId === tagId);
+        // By the note each came from; one made in the Glossary has none to list it under.
+        const entries = Object.values(structuredTagEntries).filter((e): e is typeof e & { noteId: import('@/types').NoteId } => e.tagId === tagId && !!e.noteId);
         const noteMap = new Map<string, NoteEntry>();
         entries.forEach((entry) => {
           const note = notesRecord[entry.noteId as import('@/types').NoteId];

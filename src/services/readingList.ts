@@ -1,5 +1,6 @@
 import { useListStore } from '@/store/listStore';
-import { isListLocked, itemView, listView } from '@/services/listSecrets';
+import { itemView } from '@/services/listSecrets';
+import { builtInList, builtInListItem, ensureBuiltInList, type BuiltInListSpec } from '@/services/builtInLists';
 import { showToast } from '@/components/Toast/showToast';
 import { log, errorMessage } from '@/utils/log';
 import { LABELS } from '@/config/labels';
@@ -16,30 +17,14 @@ const L = LABELS.readingList;
 
 export interface BookInfo { title: string; author: string; year: number | null }
 
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+// A built-in list fed from elsewhere (services/builtInLists.ts). Books is a general type, so the
+// reading list is also known by its name.
+const READING_LIST: BuiltInListSpec = { typeId: BOOKS_TYPE_ID, name: L.listName, matchName: true };
 
-export function readingList(): List | null {
-  const lists = Object.values(useListStore.getState().lists)
-    .filter((l) => !isListLocked(l) && listView(l).typeId === BOOKS_TYPE_ID && sameName(listView(l).name, L.listName));
-  lists.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  return lists[0] ?? null;
-}
+export const readingList = (): List | null => builtInList(READING_LIST);
 
 // A reading list made before Year was added to the template gains it.
-function ensureReadingList(): ListId {
-  const type = useListStore.getState().listTypes[BOOKS_TYPE_ID];
-  const existing = readingList();
-  if (existing) {
-    const have = new Set(listView(existing).fieldSchema.map((f) => f.id));
-    const missing = (type?.defaultFields ?? []).filter((f) => !have.has(f.id));
-    if (missing.length) useListStore.getState().updateList(existing.id, { fieldSchema: [...listView(existing).fieldSchema, ...missing] });
-    return existing.id;
-  }
-  return useListStore.getState().addList({
-    name: L.listName, typeId: BOOKS_TYPE_ID, kind: 'watchlist',
-    icon: type?.icon ?? null, color: type?.color ?? null, fieldSchema: type?.defaultFields,
-  });
-}
+const ensureReadingList = (): ListId => ensureBuiltInList(READING_LIST);
 
 // The best match on Open Library for a title (and maybe its author) as typed, or null.
 export async function fetchBook(query: string): Promise<BookInfo | null> {
@@ -68,22 +53,29 @@ export async function addToReadingList(text: string, fromNoteTitle: string | nul
   const typed = cleanTitle(text);
   if (!typed) return;
   const listId = ensureReadingList();
-  const items = useListStore.getState().listItems;
-  const already = Object.values(items).find((i) => i.listId === listId && sameName(itemView(i).title, typed));
+  const already = builtInListItem(listId, typed);
   if (already) { showToast({ message: L.already(itemView(already).title) }); return; }
   const itemId: ListItemId = useListStore.getState().addListItem({
     listId, title: typed, data: fromNoteTitle ? { [BOOK_FIELDS.source]: L.fromNote(fromNoteTitle) } : {},
   });
-  const book = await fetchBook(typed);
-  const now = useListStore.getState().listItems[itemId];
-  if (!now) return;
+  const book = await fillBookDetails(itemId, typed);
+  if (!useListStore.getState().listItems[itemId]) return;
   const undo = { label: LABELS.swipeActions.undo, onClick: () => useListStore.getState().deleteListItem(itemId) };
   if (!book) { showToast({ message: L.added(typed), detail: L.notFound, actions: [undo] }); return; }
+  showToast({ message: L.added(itemView(useListStore.getState().listItems[itemId]).title), detail: L.found(book.author, book.year != null ? String(book.year) : '') || undefined, actions: [undo] });
+}
+
+// A book item's missing details (the title as published, the author, the year) looked up on Open
+// Library and filled in where still empty; any Books list's items, sent to it (services/sendToList.ts).
+export async function fillBookDetails(itemId: ListItemId, typed: string): Promise<BookInfo | null> {
+  const book = await fetchBook(typed);
+  const now = useListStore.getState().listItems[itemId];
+  if (!book || !now) return null;
   const item = itemView(now);
   const data = { ...item.data };
   if (!String(data[BOOK_FIELDS.author] ?? '').trim() && book.author) data[BOOK_FIELDS.author] = book.author;
   if (data[BOOK_FIELDS.year] == null && book.year != null) data[BOOK_FIELDS.year] = book.year;
   const title = item.title === typed ? book.title : item.title;
   useListStore.getState().updateListItem(itemId, { title, data });
-  showToast({ message: L.added(title), detail: L.found(book.author, book.year != null ? String(book.year) : '') || undefined, actions: [undo] });
+  return book;
 }

@@ -21,6 +21,15 @@ const ctxFor = (target: Element): ContextMenuContext => ({ section: 'notes', tar
 const ids = (ctx: ContextMenuContext) => resolveContextMenu(ctx).map((s) => s.map((i) => i.id));
 
 describe('context menu resolution', () => {
+  it('providers naming the same section share one, in their order, where the first of them sits (2026-11-02)', () => {
+    const t = tree(null, { kind: 'k' });
+    provide({ id: 'a', kind: 'k', order: 30, section: 'format', items: () => [{ id: 'style', label: 'Style' }] });
+    provide({ id: 'b', kind: 'k', order: 10, items: () => [{ id: 'cut', label: 'Cut' }] });
+    provide({ id: 'c', kind: 'k', order: 35, section: 'format', items: () => [{ id: 'headings', label: 'Headings' }] });
+    provide({ id: 'd', kind: 'k', order: 40, section: 'format', items: () => [] });
+    expect(ids(ctxFor(t))).toEqual([['cut'], ['style', 'headings']]);
+  });
+
   it('collects scopes innermost first, then the implicit section and app scopes', () => {
     const t = tree({ kind: 'outer' }, { kind: 'inner' });
     expect(scopesAt(t, 'notes').map((s) => s.kind)).toEqual(['inner', 'outer', 'section', 'app']);

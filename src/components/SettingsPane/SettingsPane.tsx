@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import type { AppView } from '@/store/uiStore';
 import { useUIStore } from '@/store/uiStore';
-import { useSettingsStore, NOTE_COLOR_BARS, LINK_SUGGESTIONS } from '@/store/settingsStore';
+import { useSettingsStore, NOTE_COLOR_BARS, LINK_SUGGESTIONS, GLOSSARY_ORPHANS } from '@/store/settingsStore';
 import { LABELS } from '@/config/labels';
 import { HOTKEYS, HOTKEY_GROUPS } from '@/config/hotkeys';
 import { useHotkeyOverridesStore, findConflicts, getEffectiveBinding } from '@/store/hotkeyOverridesStore';
@@ -14,6 +14,7 @@ import { NotificationsSection } from './NotificationsSection';
 import { TypingShortcutsSection } from './TypingShortcutsSection';
 import { ConvertersSection } from './ConvertersSection';
 import { SettingRow, Toggle } from './SettingControls';
+import { todayIso } from '@/utils/date';
 import { usePlatform } from '@/hooks/usePlatform';
 import styles from './SettingsPane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -185,6 +186,11 @@ export function SettingsPane({ variant, hoverHandlers, onClosePeek }: {
   const stickyHeadings          = useSettingsStore((s) => s.stickyHeadings);
   const dictionaryHighlight     = useSettingsStore((s) => s.dictionaryHighlight);
   const linkSuggestions         = useSettingsStore((s) => s.linkSuggestions);
+  const glossaryOrphans         = useSettingsStore((s) => s.glossaryOrphans);
+  const setGlossaryOrphans      = useSettingsStore((s) => s.setGlossaryOrphans);
+  const todayCard               = useSettingsStore((s) => s.todayCard);
+  const setTodayCard            = useSettingsStore((s) => s.setTodayCard);
+  const todayCardHiddenOn       = useSettingsStore((s) => s.todayCardHiddenOn);
   const setLinkSuggestions      = useSettingsStore((s) => s.setLinkSuggestions);
   const noteColorBars           = useSettingsStore((s) => s.noteColorBars);
   const setNoteColorBars        = useSettingsStore((s) => s.setNoteColorBars);
@@ -265,6 +271,23 @@ export function SettingsPane({ variant, hoverHandlers, onClosePeek }: {
                 ))}
               </select>
             </div>
+
+            <SettingRow name={LABELS.todayCard.settings} desc={LABELS.todayCard.settingsDesc}>
+              <Toggle on={todayCard.show} onToggle={() => setTodayCard({ show: !todayCard.show })} label={LABELS.todayCard.showCard} />
+            </SettingRow>
+            {todayCard.show && (['fact', 'history', 'notes'] as const).map((k) => {
+              const name = k === 'fact' ? LABELS.todayCard.kindFact : k === 'history' ? LABELS.todayCard.kindHistory : LABELS.todayCard.kindNotes;
+              return (
+                <SettingRow key={k} name={name}>
+                  <Toggle on={todayCard[k]} onToggle={() => setTodayCard({ [k]: !todayCard[k] })} label={name} />
+                </SettingRow>
+              );
+            })}
+            {todayCard.show && todayCardHiddenOn === todayIso() && (
+              <SettingRow name={LABELS.todayCard.hiddenToday}>
+                <button type="button" className={styles.themeBtn} onClick={() => useSettingsStore.getState().setTodayCardHiddenOn(null)}>{LABELS.todayCard.showAgain}</button>
+              </SettingRow>
+            )}
           </section>
   );
 
@@ -332,6 +355,20 @@ export function SettingsPane({ variant, hoverHandlers, onClosePeek }: {
 
               <SettingRow name={LABELS.noteHeadings.sticky} desc={LABELS.noteHeadings.stickyDesc}>
                 <Toggle on={stickyHeadings} onToggle={toggleStickyHeadings} label={LABELS.noteHeadings.sticky} />
+              </SettingRow>
+
+              <SettingRow name={LABELS.glossaryOrphans.setting} desc={LABELS.glossaryOrphans.settingDesc}>
+                <div className={styles.themeToggle} role="group" aria-label={LABELS.glossaryOrphans.setting}>
+                  {GLOSSARY_ORPHANS.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={`${styles.themeBtn} ${glossaryOrphans === v ? styles.themeBtnActive : ''}`}
+                      aria-pressed={glossaryOrphans === v}
+                      onClick={() => setGlossaryOrphans(v)}
+                    >{LABELS.glossaryOrphans.choices[v]}</button>
+                  ))}
+                </div>
               </SettingRow>
 
               <SettingRow name={LABELS.glossary.linkSuggestions} desc={LABELS.glossary.linkSuggestionsDesc}>

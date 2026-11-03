@@ -5,6 +5,9 @@ const num = (v: string | null) => (v === null || v === '' ? null : Number(v));
 
 export const NoteTagMark = Mark.create({
   name: 'noteTag',
+  // Text typed at the end of a marked passage (Important, Review later, a tag) isn't marked too
+  // (found 2026-11-03), as with every other mark on passages (ConceptRef, NoteLink, UnsureFlag).
+  inclusive: false,
 
   addAttributes() {
     return {

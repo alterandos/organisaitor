@@ -5,16 +5,18 @@ import { useSecretsVersion } from '@/services/noteSecrets';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { glossaryEntries, glossaryKindLine, glossaryReferences, toggleGlossaryKind, type GlossaryEntry } from '@/services/glossary';
 import { getStructuredTagType } from '@/config/structuredTagTypes';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { openNotePassage } from '@/services/notePassage';
 import { noteView } from '@/services/noteSecrets';
 import { rankSearch } from '@/utils/suggestRank';
 import { LABELS } from '@/config/labels';
 import type { NoteId } from '@/types';
 import styles from './GlossaryView.module.css';
 import { CloseIcon, DisclosureIcon, GlossaryIcon } from '@/components/Icons';
+import { BUILTIN_TAGS, kindColor } from '@/components/NoteEditor/builtinTags';
+import { GlossaryOrigin } from './GlossaryOrigin';
 
 // The kinds to filter by, any combination (2026-11-01: none picked is All).
-const KINDS = ['definition', 'concept', 'acronym', 'profile'];
+const KINDS = ['definition', 'concept', 'acronym', 'profile', 'fact', 'quote'];
 // How important, at least (BlockImportance.ts; a record's level is entryImportance): to study the
 // key terms only.
 type Importance = 0 | 1 | 3;
@@ -25,9 +27,10 @@ const letterOf = (term: string) => {
   return /[A-Z]/.test(c) ? c : '#';
 };
 
-// Every Definition, Concept and Acronym across Notes, A–Z (services/glossary.ts): what each
-// means, where it's defined (click to go there), and the notes whose text refers to it. Opened
-// from the # button; Esc goes back to the notes.
+// Every record in the Glossary, A–Z (services/glossary.ts): what each means, where it came from,
+// and the notes whose text refers to it. A record opens here, as its card (GlossaryRecordModal);
+// "+ New" makes one here, of any kind (2026-11-03: records live in the Glossary, so they can be
+// made there too). Opened from the # button; Esc goes back to the notes.
 export function GlossaryView() {
   const closeNotesView = useUIStore((s) => s.closeNotesView);
   const close = () => closeNotesView('glossary');
@@ -41,6 +44,17 @@ export function GlossaryView() {
   const setLayout = useUIStore((s) => s.setGlossaryLayout);
   const [minImportance, setMinImportance] = useState<Importance>(0);
   const [openRefs, setOpenRefs] = useState<string | null>(null);
+  const [choosingKind, setChoosingKind] = useState(false);
+  useEscapeClose(() => setChoosingKind(false), choosingKind);
+
+  // A new record of `kind`, made in the Glossary (no note), opened to write in.
+  function makeNew(kind: string) {
+    const tag = BUILTIN_TAGS.find((t) => t.typeKey === kind);
+    if (!tag) return;
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: kind, tagId: tag.id, term: '', fields: {}, noteId: null, collectionId: null });
+    setChoosingKind(false);
+    useUIStore.getState().openGlossaryRecord(id, { fresh: true });
+  }
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const L = LABELS.glossary;
 
@@ -94,6 +108,7 @@ export function GlossaryView() {
         <div className={styles.titleRow}>
           <span className={styles.title}><GlossaryIcon className={styles.titleIcon} />{L.title}</span>
           <span className={styles.count}>{all.length}</span>
+          <button type="button" className={styles.newBtn} aria-expanded={choosingKind} onClick={() => setChoosingKind((v) => !v)}>{L.newRecord}</button>
           <span className={styles.layouts} role="group" aria-label={L.layout}>
             {(['tiles', 'list'] as const).map((l) => (
               <button key={l} type="button" className={`${styles.layoutBtn} ${layout === l ? styles.layoutOn : ''}`} aria-pressed={layout === l} title={L.layouts[l]} aria-label={L.layouts[l]} onClick={() => setLayout(l)}>
@@ -103,6 +118,18 @@ export function GlossaryView() {
           </span>
           <button type="button" className={styles.closeBtn} onClick={close} title={L.back} aria-label={L.back}><CloseIcon /></button>
         </div>
+        {choosingKind && (
+          <div className={styles.newKinds} role="group" aria-label={L.newKind}>
+            {KINDS.map((k) => {
+              const tag = BUILTIN_TAGS.find((t) => t.typeKey === k)!;
+              return (
+                <button key={k} type="button" className={styles.newKind} style={{ ['--gc-accent' as string]: kindColor(k, tag.color) }} onClick={() => makeNew(k)}>
+                  <span aria-hidden="true">{tag.icon}</span> {tag.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <input
           className={styles.search}
           value={query}
@@ -156,19 +183,12 @@ export function GlossaryView() {
                   <article key={e.id} className={layout === 'list' ? styles.row : styles.card} style={{ ['--entry-color' as string]: e.color }}>
                     <header className={styles.cardHead}>
                       <span className={styles.cardIcon} aria-hidden="true">{e.locked ? '🔒' : e.icon}</span>
-                      <span className={styles.term}>{e.term || L.untitled}</span>
+                      <button type="button" className={styles.term} onClick={() => useUIStore.getState().openGlossaryRecord(e.id)}>{e.term || L.untitled}</button>
                       <span className={styles.kind}>{glossaryKindLine(e)}</span>
                     </header>
                     <p className={styles.meaning} title={layout === 'list' && !e.locked ? e.meaning : undefined}>{e.locked ? L.locked : e.meaning || <span className={styles.muted}>{L.noMeaning}</span>}</p>
                     <footer className={styles.cardFoot}>
-                      <button
-                        type="button"
-                        className={styles.link}
-                        title={L.definedAt([...e.notebookPath, e.noteTitle || L.untitledNote])}
-                        onClick={() => openNotePassage(e.noteId, definitionPassage(e.id))}
-                      >
-                        {L.definedIn(e.noteTitle || L.untitledNote, e.notebookPath.at(-1))}
-                      </button>
+                      <GlossaryOrigin entry={e} />
                       {total > 0 ? (
                         <button type="button" className={styles.refs} aria-expanded={openRefs === e.id} onClick={() => setOpenRefs(openRefs === e.id ? null : e.id)}>
                           {L.references(total)} <DisclosureIcon open={openRefs === e.id} />

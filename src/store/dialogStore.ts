@@ -20,6 +20,11 @@ export interface DialogRequest {
   confirmLabel:  string;
   cancelLabel:   string;
   alternateLabel?: string;
+  // What it's about, one per line (the Glossary records a deleted note leaves in no note).
+  list?:         string[];
+  // A checkbox under the message ("Don't ask again"); its state is passed to onChecked when answered.
+  checkboxLabel?: string;
+  onChecked?:    (checked: boolean) => void;
   // Non-zero: the dialog is shown at once but doesn't take keyboard focus (or answer Ctrl+Enter) for
   // this long, so a prompt caused by what the user is typing can't be answered by their next keystroke.
   focusDelayMs:  number;

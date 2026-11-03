@@ -14,18 +14,10 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// A few microtask ticks isn't enough here: takeSnapshotAndRotate() awaits buildBackupSnapshot()
-// (one `readPersistedValue` per PERSISTED_STORAGE_KEYS entry, sequential) then
-// saveBackupSnapshot() (a real IndexedDB transaction — fake-indexeddb resolves IDBRequest
-// success via its own internal task queue, not a plain microtask). Poll instead of guessing a
-// tick count.
-async function waitUntil(check: () => Promise<boolean>, timeoutMs = 2000): Promise<void> {
-  const start = Date.now();
-  while (!(await check())) {
-    if (Date.now() - start > timeoutMs) throw new Error('waitUntil: condition never became true');
-    await new Promise((r) => setTimeout(r, 5));
-  }
-}
+// Each test waits on the work itself (autoBackupSettled: the snapshot being written, and the
+// upgrade snapshot initAutoBackup starts), never on the clock. Fixed waits and a 2-second poll made
+// the first test fail now and then under full-suite load (fixed 2026-11-03). Only automatic
+// snapshots are counted, so an upgrade snapshot can't change the count.
 
 beforeEach(() => {
   vi.resetModules();
@@ -39,13 +31,21 @@ async function freshModules() {
   const { useSettingsStore } = await import('@/store/settingsStore');
   const { useTaskStore } = await import('@/store/taskStore');
   const { initAutoBackup } = await import('@/services/autoBackup');
-  const { listBackupSnapshots } = await import('@/services/autoBackupStorage');
+  const { autoBackupSettled } = await import('@/services/autoBackup');
+  const storage = await import('@/services/autoBackupStorage');
   useSettingsStore.setState(useSettingsStore.getInitialState(), true);
   useTaskStore.setState(useTaskStore.getInitialState(), true);
+  // The automatic snapshots once everything started has been written.
+  const listBackupSnapshots = async () => {
+    await autoBackupSettled();
+    return (await storage.listBackupSnapshots()).filter((snap) => snap.kind === 'auto');
+  };
   return { useSettingsStore, useTaskStore, initAutoBackup, listBackupSnapshots };
 }
 
-describe('autoBackup — change-volume trigger (no time-based trigger, per the 2026-09-25 request)', () => {
+// Each test builds and writes whole backups: on a loaded machine (the full suite) that can pass the
+// default 5 s, with nothing wrong (2026-11-03), so these get longer.
+describe('autoBackup — change-volume trigger (no time-based trigger, per the 2026-09-25 request)', { timeout: 20_000 }, () => {
   it('takes a snapshot once enough weighted changes accumulate, and resets the running score afterward', async () => {
     const { useSettingsStore, useTaskStore, initAutoBackup, listBackupSnapshots } = await freshModules();
     useSettingsStore.getState().setAutoBackupChangeThreshold(5); // the minimum the setter allows
@@ -57,12 +57,10 @@ describe('autoBackup — change-volume trigger (no time-based trigger, per the 2
     useTaskStore.getState().addTask({ title: 'Two' });
     useTaskStore.getState().addTask({ title: 'Three' });
     useTaskStore.getState().addTask({ title: 'Four' });
-    await new Promise((r) => setTimeout(r, 100));
     // Below threshold (4 of 5) — no snapshot yet.
     expect((await listBackupSnapshots()).length).toBe(before.length);
 
     useTaskStore.getState().addTask({ title: 'Five' });
-    await waitUntil(async () => (await listBackupSnapshots()).length > before.length);
 
     const after = await listBackupSnapshots();
     expect(after.length).toBe(before.length + 1);
@@ -70,7 +68,6 @@ describe('autoBackup — change-volume trigger (no time-based trigger, per the 2
     // A single further change shouldn't immediately trigger a second snapshot — the score was
     // reset to 0 after the first one fired.
     useTaskStore.getState().addTask({ title: 'Six' });
-    await new Promise((r) => setTimeout(r, 100));
     expect((await listBackupSnapshots()).length).toBe(after.length);
   });
 
@@ -82,7 +79,6 @@ describe('autoBackup — change-volume trigger (no time-based trigger, per the 2
 
     const before = await listBackupSnapshots();
     for (let i = 0; i < 8; i++) useTaskStore.getState().addTask({ title: `T${i}` });
-    await new Promise((r) => setTimeout(r, 100));
 
     expect((await listBackupSnapshots()).length).toBe(before.length);
   });
@@ -94,12 +90,10 @@ describe('autoBackup — change-volume trigger (no time-based trigger, per the 2
     initAutoBackup();
 
     useTaskStore.getState().addTask({ title: 'Ignored while disabled' });
-    await new Promise((r) => setTimeout(r, 100));
     const before = await listBackupSnapshots();
 
     useSettingsStore.getState().setAutoBackupEnabled(true);
     for (let i = 0; i < 5; i++) useTaskStore.getState().addTask({ title: `Counted ${i}` });
-    await waitUntil(async () => (await listBackupSnapshots()).length > before.length);
 
     expect((await listBackupSnapshots()).length).toBe(before.length + 1);
   });

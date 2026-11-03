@@ -25,6 +25,15 @@ const DEFAULT_THEME: 'light' | 'dark' | 'system' =
 // specifically be hidden while confirmed events keep showing). See CLAUDE.md "Tentative events".
 export const LINK_SUGGESTIONS = ['never', 'once', 'always'] as const;
 export type LinkSuggestions = typeof LINK_SUGGESTIONS[number];
+// What the Today card shows (components/TodayCard): Wikipedia's featured article, a moment from
+// this day in history, the person's notes from this day in other years.
+// When a Glossary record is left in no note (its last card or marked text taken out, or the note
+// holding it deleted): ask whether to delete it from the Glossary, or always keep it, or always
+// delete it (services/glossaryOrphans.ts; the last two set by "Don't ask again", 2026-11-03).
+export type GlossaryOrphans = 'ask' | 'keep' | 'delete';
+export const GLOSSARY_ORPHANS: readonly GlossaryOrphans[] = ['ask', 'keep', 'delete'];
+export interface TodayCardSettings { show: boolean; fact: boolean; history: boolean; notes: boolean }
+export const DEFAULT_TODAY_CARD: TodayCardSettings = { show: true, fact: true, history: true, notes: true };
 export type CalendarLayerKey = 'events' | 'reminders' | 'deadlines' | 'taskScheduled' | 'taskDeadlines' | 'tentative';
 export type CalendarLayerVisibility = Record<CalendarLayerKey, boolean>;
 // How a note's colour shows on its title bar and tab bar: nothing, a line under each, a frame
@@ -140,6 +149,14 @@ interface SettingsState {
   // time the term is typed (2026-10-22).
   linkSuggestions: LinkSuggestions;
   setLinkSuggestions: (v: LinkSuggestions) => void;
+  // The Today card at the top of Endeavours and Overview (components/TodayCard, 2026-11-02): shown
+  // or not, which kinds it shows, and the day it was hidden on (hidden until the next day).
+  todayCard: TodayCardSettings;
+  setTodayCard: (patch: Partial<TodayCardSettings>) => void;
+  todayCardHiddenOn: string | null;
+  setTodayCardHiddenOn: (date: string | null) => void;
+  glossaryOrphans: GlossaryOrphans;
+  setGlossaryOrphans: (v: GlossaryOrphans) => void;
   // Where the scratchpad was dragged to on this device (its top-left, px); null = its usual place.
   scratchpadPos: { x: number; y: number } | null;
   setScratchpadPos: (v: { x: number; y: number } | null) => void;
@@ -237,6 +254,12 @@ export const useSettingsStore = create<SettingsState>()(
       setLinkSuggestions:  (linkSuggestions) => set({ linkSuggestions }),
       scratchpadPos:       null,
       setScratchpadPos:    (scratchpadPos) => set({ scratchpadPos }),
+      todayCard:           DEFAULT_TODAY_CARD,
+      setTodayCard:        (patch) => set((s) => ({ todayCard: { ...s.todayCard, ...patch } })),
+      todayCardHiddenOn:   null,
+      setTodayCardHiddenOn: (todayCardHiddenOn) => set({ todayCardHiddenOn }),
+      glossaryOrphans:     'ask',
+      setGlossaryOrphans:  (glossaryOrphans) => set({ glossaryOrphans }),
       setScratchpadDesign: (scratchpadDesign) => set({ scratchpadDesign }),
 
       noteEditorZoom:      1.0,
@@ -299,7 +322,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'todo-settings',
       storage: persistStorage(),
-      version: 19,
+      version: 21,
       // v0 → v1: defensive backfill only — existing (web/desktop) users already have a
       // persisted theme (which always wins over the initial-state default on rehydration
       // regardless of this migration), this just guards against a missing/corrupted value
@@ -385,6 +408,11 @@ export const useSettingsStore = create<SettingsState>()(
         // v18 → v19 also: where the scratchpad was moved to (none yet).
         if (version < 19 && state.linkSuggestions === undefined) state.linkSuggestions = 'once';
         if (version < 19 && state.scratchpadPos === undefined) state.scratchpadPos = null;
+        // v19 → v20: the Today card (2026-11-02), on with every kind.
+        if (version < 20) state.todayCard = { ...DEFAULT_TODAY_CARD, ...(state.todayCard ?? {}) };
+        if (version < 20 && state.todayCardHiddenOn === undefined) state.todayCardHiddenOn = null;
+        // v20 → v21: what happens to a Glossary record left in no note (2026-11-03): asked.
+        if (version < 21 && state.glossaryOrphans === undefined) state.glossaryOrphans = 'ask';
         return state;
       },
     }

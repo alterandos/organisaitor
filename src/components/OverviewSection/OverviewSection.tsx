@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { TodayCard } from '@/components/TodayCard/TodayCard';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useTaskStore } from '@/store/taskStore';
 import { useOverviewStore } from '@/store/overviewStore';
@@ -200,6 +201,7 @@ export function OverviewSection() {
       </aside>
 
       <main className={styles.main}>
+        <TodayCard />
         {!query || !result ? (
           <p className={styles.hint}>{L.pickHint}</p>
         ) : (

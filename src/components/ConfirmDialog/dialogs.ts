@@ -41,6 +41,32 @@ export function choiceDialog(opts: ConfirmOptions & { alternateLabel?: string })
   });
 }
 
+// A choice with a list of what it's about and a checkbox ("Don't ask again"): resolves the answer and
+// whether the box was ticked.
+export function askWithCheckbox(opts: ConfirmOptions & { alternateLabel: string; list?: string[]; checkboxLabel: string }): Promise<{ result: DialogResult; checked: boolean }> {
+  return new Promise((resolve) => {
+    let checked = false;
+    useDialogStore.getState().enqueue({
+      id:           nextId++,
+      kind:         'confirm',
+      title:        opts.title,
+      itemName:     opts.itemName,
+      message:      opts.message,
+      irreversible: opts.irreversible ?? false,
+      destructive:  opts.destructive ?? false,
+      confirmLabel: opts.confirmLabel ?? LABELS.dialogs.confirm,
+      cancelLabel:  opts.cancelLabel ?? LABELS.dialogs.cancel,
+      alternateLabel: opts.alternateLabel,
+      list:         opts.list,
+      checkboxLabel: opts.checkboxLabel,
+      onChecked:    (c) => { checked = c; },
+      focusDelayMs: opts.focusDelayMs ?? 0,
+      isStale:      opts.isStale,
+      resolve:      (result) => resolve({ result, checked }),
+    });
+  });
+}
+
 // The one path for "delete this permanently": same wording, red button, Cancel focused,
 // "This cannot be undone." — see CLAUDE.md "Archive and delete look and behave the same".
 // `noun` is lower-case ("tracker"); `detail` says what else goes with it. `empty`: the thing has

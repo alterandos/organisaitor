@@ -1,6 +1,7 @@
 import { useListStore } from '@/store/listStore';
 import { useNoteStore } from '@/store/noteStore';
-import { isListLocked, itemView, listView } from '@/services/listSecrets';
+import { itemView } from '@/services/listSecrets';
+import { builtInList, ensureBuiltInList, refreshBuiltInListFields, type BuiltInListSpec } from '@/services/builtInLists';
 import { getNoteTabTexts } from '@/utils/noteSearchText';
 import { todayIso } from '@/utils/date';
 import { log, errorMessage } from '@/utils/log';
@@ -22,40 +23,18 @@ export interface DictionaryWord { itemId: ListItemId; word: string; meaning: str
 
 export interface Definition { meaning: string; partOfSpeech: string; example: string; source: string }
 
+// A built-in list fed from elsewhere (services/builtInLists.ts).
+const DICTIONARY: BuiltInListSpec = { typeId: DICTIONARY_TYPE_ID, name: LABELS.dictionary.listName };
+
 // The Dictionary list, if there is one (the first, when there are several); a locked one is
 // treated as absent (its words can't be read).
-export function dictionaryList(): List | null {
-  const lists = Object.values(useListStore.getState().lists).filter((l) => !isListLocked(l) && listView(l).typeId === DICTIONARY_TYPE_ID);
-  lists.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  return lists[0] ?? null;
-}
+export const dictionaryList = (): List | null => builtInList(DICTIONARY);
 
 // A Dictionary list made before a field was added to the type (part of speech, example) gains it:
 // when a word is added, and when the list is opened (ListsSection).
-export function refreshDictionaryFields(): void {
-  const existing = dictionaryList();
-  if (!existing) return;
-  const have = new Set(listView(existing).fieldSchema.map((f) => f.id));
-  const missing = (useListStore.getState().listTypes[DICTIONARY_TYPE_ID]?.defaultFields ?? []).filter((f) => !have.has(f.id));
-  if (missing.length) useListStore.getState().updateList(existing.id, { fieldSchema: [...listView(existing).fieldSchema, ...missing] });
-}
+export const refreshDictionaryFields = (): void => refreshBuiltInListFields(DICTIONARY);
 
-function ensureDictionaryList(): ListId {
-  const existing = dictionaryList();
-  const type = useListStore.getState().listTypes[DICTIONARY_TYPE_ID];
-  if (existing) {
-    refreshDictionaryFields();
-    return existing.id;
-  }
-  return useListStore.getState().addList({
-    name: LABELS.dictionary.listName,
-    typeId: DICTIONARY_TYPE_ID,
-    kind: 'reference',
-    icon: type?.icon ?? null,
-    color: type?.color ?? null,
-    fieldSchema: type?.defaultFields,
-  });
-}
+const ensureDictionaryList = (): ListId => ensureBuiltInList(DICTIONARY);
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 

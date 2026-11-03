@@ -1,0 +1,108 @@
+/* The Glossary's record editor: the record's real card, centred and full size, framed in its kind's
+   colour (--gc-accent, set from kindColor). */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-pane-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--color-backdrop);
+}
+
+.modal {
+  width: min(40rem, 100%);
+  max-height: calc(100dvh - 2rem);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border-top: 4px solid var(--gc-accent, var(--color-primary));
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.kind {
+  flex: 1;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gc-accent, var(--color-primary));
+}
+
+.iconBtn {
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+}
+
+.iconBtn:hover,
+.iconBtn:focus-visible { color: var(--color-text); background: var(--color-surface-alt); }
+
+.card {
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.morePill {
+  border: 1px dashed var(--color-border-strong);
+  background: transparent;
+  color: var(--color-muted);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.morePill:hover,
+.morePill:focus-visible { color: var(--color-text); border-color: var(--gc-accent, var(--color-primary)); }
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+
+.foot > :first-child { flex: 1; min-width: 0; }
+
+.done {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kbd {
+  font-size: var(--text-2xs);
+  opacity: 0.75;
+  margin-left: var(--space-1);
+}

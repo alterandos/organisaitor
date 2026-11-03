@@ -10,6 +10,7 @@
 import { inferAcronymFromSelection } from '@/utils/acronymInference';
 import { linesAsBreaks, richToPlain } from '@/utils/richText';
 import { inferDefinitionFromSelection } from '@/utils/definitionInference';
+import { factHeadline, quoteHeadline, splitQuote } from '@/utils/factHeadline';
 
 // How a field's value is held in StructuredTagEntry.fields, and so how it's shown and edited.
 //   text, textarea  a string
@@ -19,8 +20,10 @@ import { inferDefinitionFromSelection } from '@/utils/definitionInference';
 //   links           GlossaryLink[]     (typed links to other entries, config/glossaryRelations.ts)
 //   urls            string[]           (web addresses: supporting documents, further reading)
 //   facts           Fact[]             (label / value rows the user names: Family, Habitat, Born…)
+//   tags            string[]           (short words, shown as chips, suggested from the same field on
+//                                        every record: a fact's or quote's reasons, "funny", 2026-11-03)
 // A new kind of field is a member here, a reader below, and a renderer in GlossaryCardBody.
-export type StructuredTagFieldType = 'text' | 'textarea' | 'list' | 'image' | 'parent' | 'links' | 'urls' | 'facts';
+export type StructuredTagFieldType = 'text' | 'textarea' | 'list' | 'image' | 'parent' | 'links' | 'urls' | 'facts' | 'tags';
 
 export interface Fact { label: string; value: string }
 
@@ -187,10 +190,60 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       { id: 'weblinks', name: 'Links',    type: 'urls',     placeholder: 'A web address, one per line' },
     ],
   },
+  // A fact worth keeping (2026-11-03): standalone, and often what a concept or an idea hub is built
+  // from. Its term is a short headline, worked out from the fact (utils/factHeadline.ts) and
+  // editable; the fact itself is the main field.
+  {
+    key:   'fact',
+    label: 'Fact',
+    fields: [
+      { id: 'statement', name: 'The fact', type: 'textarea', placeholder: 'What’s true, in a sentence or two' },
+      { id: 'reasons',   name: 'Why I kept it', type: 'tags', placeholder: 'funny, mind-blowing…' },
+      { id: 'details',   name: 'More',     type: 'textarea', placeholder: 'Why it’s so, or what follows from it' },
+      { id: 'image',     name: 'Picture',  type: 'image' },
+      { id: 'source',    name: 'Source',   type: 'text',     placeholder: 'Where it comes from: a book, a site…' },
+      { id: 'weblinks',  name: 'Links',    type: 'urls',     placeholder: 'A web address, one per line' },
+      { id: 'related',   name: 'Related',  type: 'links' },
+      { id: 'facts',     name: 'Fields',   type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER, offered: false },
+    ],
+    infer: (selectedText) => {
+      const statement = selectedText.trim().replace(/\s+/g, ' ');
+      return { term: factHeadline(statement), fields: { statement } };
+    },
+  },
+  // A quote worth keeping (2026-11-03), in the Glossary like a fact and kept in the Quotes list.
+  // Its term is a headline (who said it and its opening words: utils/factHeadline.ts quoteHeadline).
+  // A `\quote` block in a note is a note block, not this; sending one to Quotes turns it into a card
+  // of a Quote record (extensions/Quote.ts quoteBlockToRecord).
+  {
+    key:   'quote',
+    label: 'Quote',
+    fields: [
+      { id: 'text',     name: 'The quote',     type: 'textarea', placeholder: 'What was said or written' },
+      { id: 'who',      name: 'Who',           type: 'text',     placeholder: 'Who said it' },
+      { id: 'reasons',  name: 'Why I kept it', type: 'tags',     placeholder: 'funny, wise…' },
+      { id: 'role',     name: 'Role',          type: 'text',     placeholder: 'Who they are, e.g. physicist' },
+      { id: 'source',   name: 'Source',        type: 'text',     placeholder: 'A book, a speech, an interview…' },
+      { id: 'when',     name: 'When',          type: 'text',     placeholder: 'e.g. 1931' },
+      { id: 'where',    name: 'Where',         type: 'text',     placeholder: 'e.g. Berlin' },
+      { id: 'weblinks', name: 'Links',         type: 'urls',     placeholder: 'A web address, one per line' },
+      { id: 'related',  name: 'Related',       type: 'links' },
+      { id: 'facts',    name: 'Fields',        type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER, offered: false },
+    ],
+    infer: (selectedText) => {
+      const { text, who } = splitQuote(selectedText);
+      const fields: Record<string, string> = who ? { text, who } : { text };
+      return { term: quoteHeadline(text, who), fields };
+    },
+  },
 ];
 
 // The types that make up the Glossary, and the field each one's meaning is in.
-export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', concept: 'summary', acronym: 'expansion', profile: 'summary' };
+export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', concept: 'summary', acronym: 'expansion', profile: 'summary', fact: 'statement', quote: 'text' };
+
+// Kinds whose term is a headline worked out from the record, not a name used in writing (a Fact's,
+// a Quote's): never offered as a link while typing, and not a term another headline is built from.
+export const HEADLINED_KINDS: ReadonlySet<string> = new Set(['fact', 'quote']);
 
 export const glossaryMeaning = (entry: { typeKey: string; fields: Record<string, unknown> }): string =>
   fieldText(entry.fields, GLOSSARY_TYPES[entry.typeKey] ?? '');

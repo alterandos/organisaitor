@@ -66,7 +66,8 @@ export function noteClickProps(noteId: string, open: () => void) {
 registerContextMenuProvider({
   id: 'note-row.open-beside',
   kind: 'note-row',
-  order: 40,
+  order: 2,
+  section: 'open',
   items: (_ctx, scope) => {
     const id = (scope.data as { noteId?: string } | undefined)?.noteId;
     return id ? [{ id: 'open-beside', label: LABELS.noteViews.openBeside, icon: createElement(NoteLayoutIcon, { layout: 'two' }), shortcut: 'Ctrl+click', run: () => openBeside(id) }] : [];

@@ -159,6 +159,23 @@ const BUILTIN_LIST_TYPES: ListType[] = [
       { id: 'lf-added',   name: 'Date added',     type: 'date' },
     ],
   },
+  // Interesting facts (services/interestingFacts.ts): a Glossary list, its rows Fact records kept
+  // from the Today card or sent from a note ("Add to interesting facts"). Made the first time a fact
+  // is added to it. Its fields are the records' (config/structuredTagTypes.ts), so it has none here.
+  {
+    id: 'lt-facts' as ListTypeId,
+    name: 'Interesting facts', icon: '✨', color: '#8a6500', kind: 'reference', isBuiltIn: true,
+    glossaryKind: 'fact',
+    defaultFields: [],
+  },
+  // Quotes (services/keptQuotes.ts): a Glossary list of Quote records, kept from selected text or a
+  // `\quote` block (2026-11-03).
+  {
+    id: 'lt-quotes' as ListTypeId,
+    name: 'Quotes', icon: '❞', color: '#9a3412', kind: 'reference', isBuiltIn: true,
+    glossaryKind: 'quote',
+    defaultFields: [],
+  },
   {
     id: 'lt-custom' as ListTypeId,
     name: 'Custom', icon: '📋', color: '#64748b', kind: 'reference', isBuiltIn: true,
@@ -402,6 +419,7 @@ export const useListStore = create<ListState>()(
             ...saved,
             defaultFields: [...saved.defaultFields, ...builtIn.defaultFields.filter((f) => !have.has(f.id))],
             titleColumn: builtIn.titleColumn,
+            glossaryKind: builtIn.glossaryKind,
           };
         }
         return { ...current, ...p, listTypes };

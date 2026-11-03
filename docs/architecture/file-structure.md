@@ -117,6 +117,21 @@ src/
   components/LookUpPane/    — Look up (Alt+L): search, results beside the passage, actions (lazy-loaded)
   services/sendSelection.ts — selected note text copied on: sendToScratchpad (stamped), turnIntoSticky, sendSelectedText (the menus' one call)
   services/readingList.ts   — the reading list (a Books list): addToReadingList, the Open Library lookup (fetchBook/readBook)
+  components/ChronicleView/noteRowMenu.ts — a note's right-click menu (notes list, Mosaic)
+  services/glossaryOrphans.ts — a Glossary record left in no note: the one question (keep / delete), for a card taken out or a note deleted
+  services/noteDelete.ts    — deleting a note from the UI (deleteNoteAsked)
+  services/glossaryLists.ts — Glossary lists: lists whose rows are Glossary records
+  services/keptQuotes.ts    — Quotes: Quote records kept in the Quotes list; a \quote block turned into one
+  services/sendToList.ts    — Send to ▸ A list…: selected note text into any list (drafts: utils/listDrafts.ts)
+  utils/factHeadline.ts     — a Fact's headline, worked out from the fact
+  components/NotesSection/GlossaryRecordModal.tsx + GlossaryOrigin.tsx — a record opened on its own; where a record came from
+  components/ListsSection/GlossaryListView.tsx + ListItemSource.tsx — a Glossary list's cards; an item's link back to its note
+  components/SendToList/    — Send to ▸ A list…: the picker, then the items to check
+  services/builtInLists.ts  — a built-in list fed from elsewhere: find it, make it, add the fields its type gained, find an item by title
+  services/interestingFacts.ts — Interesting facts (a built-in list): addInterestingFact, hasFact, addFactFromNote
+  services/todayFacts.ts    — the Today card's Wikipedia feed, fetched once a day and cached (loadWikiToday, useWikiToday); rules in utils/todayFacts.ts
+  utils/autoPairs.ts        — which brackets and quotes close themselves, and when (note text and card fields)
+  components/TodayCard/     — the Today card at the top of Endeavours and Overview
   services/stickyNotes.ts   — sticky notes: notes in the Stickies notebook (presetKey 'stickies'); addSticky, setStickyContent (paragraphs with bold/italic/underline/strike, through editNoteContent), stickyDocOf/stickyDocFrom/stickyText, removeSticky (to the Recycling Bin, Undo)
   services/scratchpad.ts    — the scratchpad (Alt+P): one note in its own notebook (presetKey 'scratchpad', pinned after Stickies); ensureScratchpad, scratchpadText, cutScratchpad (with Undo)
   services/upgradeSnapshot.ts — a "Before an app update" backup snapshot when a store's stored version changed at startup; last 3 kept
@@ -319,7 +334,7 @@ src/
     DateInput/               — the suite's date field (day/month/year segments, the time field's rules, ▾ calendar)
     MiniDatePicker/          — the go-to-date calendar (the Calendar side pane, the header's period picker as MiniDatePickerPopover, DateInput's ▾)
     (NoteEditor/extensions/partAdders.ts — "+" buttons beside a block's hovered part, and a part's trash button; blockWidth.ts — the shared block width: attribute, drag handle, snap, Width ▸; BlockImportance.ts — Important blocks and cards (★ / ▾ in every pill, margin icon, Importance ▸); TextAlign.ts — paragraph alignment; NumberNotation.module.css — the number pill's ▾ and menu; cardImageLayout.ts — a Glossary card's picture width and place; objects/TaskBody.tsx — a task's pane body in a note)
-    (NoteEditor/extensions/AutoBrackets.ts — brackets close themselves; EscapePassThrough.ts — lets an Escape no editor handler uses reach the Escape stack; CardTermLinks.tsx + CardTermLinkParts.tsx — Glossary term links in a card's fields; NoteSplitView/EmptyPane.tsx — a side-by-side pane with no note yet)
+    (NoteEditor/extensions/AutoBrackets.ts — brackets close themselves; EscapePassThrough.ts — lets an Escape no editor handler uses reach the Escape stack; CardTermLinks.tsx + CardTermLinkParts.tsx — Glossary term links in a card's fields; objects/selectionActions.ts — everything that can be done with selected text, for the `\` menu and right-click; cardFieldText.ts — text a card field puts in itself (never into a term link); cardFieldPairs.ts — brackets and quotes close themselves in card fields; NoteSplitView/EmptyPane.tsx — a side-by-side pane with no note yet)
     (TimeInput/SegmentStepper.tsx — the ▲▼ of a segmented field; hooks/useWheelSteps.ts — the wheel steps a segment; utils/focusNext.ts — the next control in Tab order; utils/notifyRule.ts — one notify setting for every calendar item)
     OverviewRunway/          — an Overview's Runway (time left on a time line, dragging) and Board (time buckets) layouts; the rules are overview/timeline.ts, edits overview/edit.ts
     TimeInput/               — segmented hour/minute/AM-PM combobox respecting settingsStore.clockFormat (not a native <input type="time">, see Clock format setting below and the Timepicker rebuild entry in Implemented features), plus a quick-pick dropdown of half-hour times

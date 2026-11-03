@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { TodayCard } from '@/components/TodayCard/TodayCard';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { useGoalStore } from '@/store/goalStore';
@@ -134,6 +135,7 @@ export function EndeavoursPage() {
         <button type="button" className={styles.btn} onClick={() => useUIStore.getState().showTemplates(null)}>{LABELS.restructure.fromTemplate}</button>
         <button type="button" className={styles.primaryBtn} onClick={showAdd}><EndeavourIcon /> {L.create}</button>
       </div>
+      <TodayCard />
 
       {endeavours.length === 0 ? (
         <p className={styles.empty}>{L.empty}</p>

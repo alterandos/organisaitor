@@ -32,7 +32,8 @@ export function noteColorMenuItem(noteId: string): ContextMenuItem {
 registerContextMenuProvider({
   id: 'note-row.colour',
   kind: 'note-row',
-  order: 50,
+  order: 25,
+  section: 'note',
   items: (_ctx, scope) => {
     const id = (scope.data as { noteId?: string } | undefined)?.noteId;
     return id ? [noteColorMenuItem(id)] : [];
@@ -43,6 +44,7 @@ registerContextMenuProvider({
   id: 'note-editor.colour',
   kind: 'note-editor',
   order: 200,
+  section: 'note',
   items: () => {
     const open = liveNote();
     return open ? [noteColorMenuItem(open.noteId)] : [];

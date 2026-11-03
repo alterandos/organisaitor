@@ -5,7 +5,6 @@ import { act } from '@testing-library/react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { noteEditorExtensions } from '@/components/NoteEditor/noteEditorExtensions';
-import { SENT_TO_GLOSSARY } from '@/services/glossary';
 import { allPassages, embedHere, linkHere, noteSchema, passageText } from './lookUp';
 import { searchPassages } from '@/utils/notePassages';
 
@@ -21,7 +20,7 @@ afterEach(async () => { await flush(); editor.destroy(); await flush(); });
 
 const termNamed = (name: string) => {
   const noteId = useNoteStore.getState().addNote({ title: 'Biology' });
-  useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: name, fields: { meaning: 'Water across a membrane', [SENT_TO_GLOSSARY]: true }, noteId, collectionId: null });
+  useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: name, fields: { meaning: 'Water across a membrane' }, noteId, collectionId: null });
   return searchPassages(allPassages(noteSchema()), name)[0];
 };
 

@@ -42,6 +42,19 @@ let unsubscribers: Array<() => void> = [];
 let started = false;
 let snapshotInFlight = false;
 let snapshotPending = false;
+// What's being written now (a snapshot, the upgrade snapshot), for autoBackupSettled.
+const working = new Set<Promise<unknown>>();
+const track = <T>(p: Promise<T>): Promise<T> => {
+  working.add(p);
+  void p.finally(() => working.delete(p));
+  return p;
+};
+
+// Resolves once nothing is being written, including a snapshot started as another finished (a
+// burst that crossed the threshold again). For tests, so they wait on the work, not the clock.
+export async function autoBackupSettled(): Promise<void> {
+  while (working.size > 0) await Promise.allSettled([...working]);
+}
 
 function loadScore(): number {
   try { return Number(localStorage.getItem(SCORE_KEY)) || 0; } catch { return 0; }
@@ -105,10 +118,10 @@ function maybeSnapshot(): void {
   if (score < useSettingsStore.getState().autoBackupChangeThreshold) return;
   if (snapshotInFlight) { snapshotPending = true; return; }
   snapshotInFlight = true;
-  void takeSnapshotAndRotate().finally(() => {
+  void track(takeSnapshotAndRotate().finally(() => {
     snapshotInFlight = false;
     if (snapshotPending) { snapshotPending = false; maybeSnapshot(); }
-  });
+  }));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,7 +158,7 @@ export function initAutoBackup(): void {
   if (started) return;
   started = true;
   // Whether or not automatic backups are on: a store that was just upgraded gets its old data kept.
-  void takeUpgradeSnapshot();
+  void track(takeUpgradeSnapshot());
   score = loadScore();
 
   const apply = (enabled: boolean) => {

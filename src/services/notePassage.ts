@@ -49,6 +49,19 @@ export const definitionPassage = (entryId: string): PassageFind[] => [
   { mark: 'conceptRef', attr: 'entryId', value: entryId },
 ];
 
+// Opens a Glossary record (a term link's "Go to definition", the Glossary, Quick Access, Look up…):
+// in the note it came from, at its card or marked text, while that note still shows it; otherwise
+// as its card, over whatever is showing (GlossaryRecordModal: 2026-11-03, a record outlives its card
+// and its note, and may have been made in the Glossary with no note at all).
+export function openGlossaryEntry(entryId: string): boolean {
+  const raw = useNoteStore.getState().structuredTagEntries[entryId as never] as { noteId: string | null } | undefined;
+  if (!raw) return false;
+  const inNote = raw.noteId && definitionPassage(entryId).slice(0, 3).some((f) => noteHasPassage(raw.noteId!, f));
+  if (inNote && openNotePassage(raw.noteId!, definitionPassage(entryId))) return true;
+  useUIStore.getState().openGlossaryRecord(entryId);
+  return true;
+}
+
 // Whether a document holds the passage (a node, or text with the mark).
 export function docHasPassage(doc: PMNode, find: PassageFind): boolean {
   let found = false;

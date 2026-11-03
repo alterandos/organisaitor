@@ -3,25 +3,12 @@ import { createPortal } from 'react-dom';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
 import { LABELS } from '@/config/labels';
-import { HUB_ICON, INBOX_ICON, NOTE_LINK_ICON } from '@/config/itemIcons';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useNoteStore } from '@/store/noteStore';
 import { useSecretsVersion } from '@/services/noteSecrets';
-import { glossaryEntries, type GlossaryEntry } from '@/services/glossary';
-import { rankSearch, rankSuggestions } from '@/utils/suggestRank';
-import { linkConceptRef } from '../extensions/ConceptRef';
-import { IMPORTANCE_LEVELS } from '../extensions/importanceLevels';
-import { setImportance, toggleReview } from '../extensions/Importance';
-import { BUILTIN_TAGS } from '../builtinTags';
-import { quoteFromSelection } from '../extensions/Quote';
-import { conclusionFromSelection } from '../extensions/Conclusion';
-import { mathsFromSelection } from '../extensions/Maths';
-import { addWordFromSelection } from '@/services/dictionaryActions';
-import { sendSelectedText } from '@/services/sendSelection';
 import { closeSelectionMenu, getSelectionMenu } from './selectionMenuState';
 import { objectTriggerStorage } from './NoteObjectTrigger';
-import { ReviewIcon, ScratchpadIcon, StickyIcon, UnsureIcon } from '@/components/Icons';
-import { flagRange } from '../extensions/UnsureFlag';
+import { linkToTerm, selectionActions, termsFor, type SelectionActionGroup } from './selectionActions';
 import { useFloatingPlacement } from '@/utils/floatingPlacement';
 import styles from './NoteObjectMenu.module.css';
 
@@ -29,13 +16,11 @@ const MAX_TERMS = 7;
 
 interface Props {
   editor: Editor;
-  // Definition… / Concept…: the structured-tag popover NoteEditor opens for a new term.
-  onMarkAs: (typeKey: string, from: number, to: number) => void;
 }
 
 interface Item {
   key:      string;
-  group:    'suggested' | 'link' | 'mark' | 'turn';
+  group:    'suggested' | 'terms' | SelectionActionGroup;
   icon:     ReactNode;
   label:    string;
   detail?:  string;
@@ -43,24 +28,18 @@ interface Item {
   run:      () => void;
 }
 
-const termFields = (e: GlossaryEntry) => [
-  { text: e.term, weight: 3 },
-  { text: e.meaning, weight: 1, counted: true },
-  { text: e.noteTitle, weight: 1 },
-];
-
 // The menu `\` opens on selected text (objects/selectionMenu.ts): link it to a Glossary term
 // (suggested from the selected words, the "link a …" picker pattern of utils/suggestRank.ts), or
 // mark it as a new Definition or Concept, Important at a level, or Review later. Typing filters
 // both; ↑/↓ and Enter choose; Esc goes back to the text with the selection as it was.
-export function SelectionMenu({ editor, onMarkAs }: Props) {
+export function SelectionMenu({ editor }: Props) {
   const range = useEditorState({ editor, selector: ({ editor: ed }) => (ed ? getSelectionMenu(ed.state) : null) });
   const open = !!range && !editor.view.isDestroyed;
   if (!open || !range) return null;
-  return <SelectionMenuPanel key={`${range.from}-${range.to}`} editor={editor} range={range} onMarkAs={onMarkAs} />;
+  return <SelectionMenuPanel key={`${range.from}-${range.to}`} editor={editor} range={range} />;
 }
 
-function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from: number; to: number } }) {
+function SelectionMenuPanel({ editor, range }: Props & { range: { from: number; to: number } }) {
   const view = editor.view;
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
@@ -91,67 +70,31 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
   });
 
   const selected = view.state.doc.textBetween(range.from, range.to, ' ');
-  const reviewing = useMemo(() => {
-    let on = false;
-    view.state.doc.nodesBetween(range.from, range.to, (n) => {
-      if (n.isText && n.marks.some((m) => m.type.name === 'noteTag' && m.attrs.typeKey === 'important' && m.attrs.reviewDue)) on = true;
-    });
-    return on;
-  }, [view, range]);
 
+  // The terms to link to, then everything else that can be done with the selection
+  // (objects/selectionActions.ts, the list right-click reads too).
   const items = useMemo(() => {
     void entriesVersion; void secretsVersion;
-    const L = LABELS.selectionMenu;
-    const entries = glossaryEntries().filter((e) => !e.locked && e.term);
-    const recency = (e: GlossaryEntry) => Date.parse(e.updatedAt) || 0;
-    let ranked: GlossaryEntry[];
-    let suggestedCount = 0;
-    if (query.trim()) {
-      ranked = rankSearch(entries, termFields, recency, query);
-    } else {
-      const r = rankSuggestions(entries, termFields, recency, selected);
-      ranked = r.items;
-      suggestedCount = r.suggested;
-    }
+    const { terms, suggested, any } = termsFor(selected, query);
     const after = (run: () => void) => () => { close(); run(); };
-    const linkItems: Item[] = ranked.slice(0, MAX_TERMS).map((e, i) => ({
-      key: `term-${e.id}`, group: i < suggestedCount ? 'suggested' : 'link', icon: e.icon, label: e.term,
+    const linkItems: Item[] = terms.slice(0, MAX_TERMS).map((e, i) => ({
+      key: `term-${e.id}`, group: i < suggested ? 'suggested' : 'terms', icon: e.icon, label: e.term,
       detail: e.meaning || e.noteTitle, color: e.color,
       run: after(() => {
-        linkConceptRef(view, range.from, range.to, { id: e.id, typeKey: e.typeKey });
+        linkToTerm(editor, range, e);
         view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, range.to)));
       }),
     }));
-    const tag = (typeKey: string) => BUILTIN_TAGS.find((t) => t.typeKey === typeKey)!;
-    const marks: Item[] = [
-      { key: 'definition', group: 'mark', icon: tag('definition').icon, label: L.definition, color: tag('definition').color, run: () => { closeSelectionMenu(view); onMarkAs('definition', range.from, range.to); } },
-      { key: 'concept', group: 'mark', icon: tag('concept').icon, label: L.concept, color: tag('concept').color, run: () => { closeSelectionMenu(view); onMarkAs('concept', range.from, range.to); } },
-      // An acronym from "RECs (Renewable Energy Certificate)", "ASX: Australian Stock Exchange"…:
-      // its fields filled by inferAcronymFromSelection.
-      { key: 'acronym', group: 'mark', icon: tag('acronym').icon, label: L.acronym, color: tag('acronym').color, run: () => { closeSelectionMenu(view); onMarkAs('acronym', range.from, range.to); } },
-      { key: 'profile', group: 'mark', icon: tag('profile').icon, label: L.profile, color: tag('profile').color, run: () => { closeSelectionMenu(view); onMarkAs('profile', range.from, range.to); } },
-      ...IMPORTANCE_LEVELS.map((lv): Item => ({
-        key: `important-${lv.level}`, group: 'mark', icon: lv.icon, label: lv.label, color: lv.color,
-        run: after(() => setImportance(view, range.from, range.to, lv.level)),
-      })),
-      { key: 'unsure', group: 'mark', icon: <UnsureIcon />, label: LABELS.unsureFlag.flag, run: after(() => { const tr = flagRange(view.state.tr, range.from, range.to); if (tr) view.dispatch(tr); }) },
-      { key: 'review', group: 'mark', icon: <ReviewIcon />, label: reviewing ? LABELS.importance.stopReviewing : LABELS.importance.reviewLater, run: after(() => toggleReview(view, range.from, range.to)) },
-      { key: 'quote', group: 'turn', icon: '❝', label: LABELS.noteBlocks.quote.turnInto, run: () => { closeSelectionMenu(view); quoteFromSelection(view, range.from, range.to); } },
-      { key: 'conclusion', group: 'turn', icon: '∴', label: LABELS.noteBlocks.conclusion.turnInto, run: () => { closeSelectionMenu(view); conclusionFromSelection(view, range.from, range.to); } },
-      { key: 'maths', group: 'turn', icon: '∑', label: LABELS.noteBlocks.maths.turnInto, run: () => { closeSelectionMenu(view); mathsFromSelection(view, range.from, range.to); } },
-      { key: 'dictionary', group: 'turn', icon: '📕', label: LABELS.dictionary.add, run: () => { closeSelectionMenu(view); void addWordFromSelection(view.state.doc.textBetween(range.from, range.to, ' ')); } },
-      { key: 'scratchpad', group: 'turn', icon: <ScratchpadIcon />, label: LABELS.sendSelection.toScratchpad, run: () => { closeSelectionMenu(view); sendSelectedText('scratchpad', view.state.doc.textBetween(range.from, range.to, '\n'), objectTriggerStorage(editor).getContext()?.noteId ?? null); } },
-      { key: 'sticky', group: 'turn', icon: <StickyIcon />, label: LABELS.sendSelection.toSticky, run: () => { closeSelectionMenu(view); sendSelectedText('sticky', view.state.doc.textBetween(range.from, range.to, '\n'), objectTriggerStorage(editor).getContext()?.noteId ?? null); } },
-      { key: 'reading-list', group: 'turn', icon: '📚', label: LABELS.sendSelection.toReadingList, run: () => { closeSelectionMenu(view); sendSelectedText('readingList', view.state.doc.textBetween(range.from, range.to, ' '), objectTriggerStorage(editor).getContext()?.noteId ?? null); } },
-      { key: 'send-to-inbox', group: 'turn', icon: INBOX_ICON, label: LABELS.sendToInbox.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openSendToInbox?.(); } },
-      { key: 'link-to-note', group: 'turn', icon: NOTE_LINK_ICON, label: LABELS.noteLinks.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openNoteLinkPicker?.({ purpose: 'link', from: range.from, to: range.to }); } },
-      { key: 'add-to-hub', group: 'turn', icon: HUB_ICON, label: LABELS.hubs.menu, run: () => { closeSelectionMenu(view); objectTriggerStorage(editor).openAddToHub?.(); } },
-    ];
+    // Marks are made with the cursor back in the text; the rest open something of their own.
+    const actions: Item[] = selectionActions(editor, range).map((a) => ({
+      ...a,
+      run: a.group === 'mark' && a.set !== 'glossary' ? after(a.run) : () => { closeSelectionMenu(view); a.run(); },
+    }));
     const q = query.trim().toLowerCase();
-    const markItems = q ? marks.filter((m) => m.label.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) || m.label.toLowerCase().includes(q)) : marks;
-    return { all: [...linkItems, ...markItems], hasTerms: entries.length > 0 };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- close/onMarkAs are per-render closures over stable things
-  }, [query, selected, reviewing, entriesVersion, secretsVersion]);
+    const shown = q ? actions.filter((m) => m.label.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) || m.label.toLowerCase().includes(q)) : actions;
+    return { all: [...linkItems, ...shown], hasTerms: any };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- close is a per-render closure over stable things
+  }, [query, selected, entriesVersion, secretsVersion]);
 
   const current = Math.min(highlight, Math.max(0, items.all.length - 1));
 
@@ -185,7 +128,7 @@ function SelectionMenuPanel({ editor, range, onMarkAs }: Props & { range: { from
   if (!anchorBox) return null;
 
   const L = LABELS.selectionMenu;
-  const groupLabel = { suggested: L.suggested, link: L.linkGroup, mark: L.markGroup, turn: L.turnGroup };
+  const groupLabel: Record<Item['group'], string> = { suggested: L.suggested, terms: L.linkGroup, mark: L.markGroup, turn: L.turnGroup, link: L.linkOther, send: L.sendGroup };
   return createPortal(
     <div ref={menuRef} className={styles.menu} style={position} onMouseDown={(e) => { if (e.target !== inputRef.current) e.preventDefault(); }}>
       <input

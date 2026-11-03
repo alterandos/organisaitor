@@ -7,7 +7,8 @@ import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { NoteTagMark } from './NoteTagMark';
 import { ConceptRefMark } from './ConceptRef';
 import { moveFromBlock } from './blockDesigns';
-import { GlossaryCardExtensions, cardFromSelection, cardWidth, insertCardAfter, morePillSide, sendCardToGlossary } from './GlossaryCard';
+import { GlossaryCardExtensions, cardFromSelection, cardWidth, insertCardAfter, morePillSide } from './GlossaryCard';
+import { useSettingsStore } from '@/store/settingsStore';
 import { setBlockWidth, snapBlockWidth } from './blockWidth';
 import { useTrashStore } from '@/store/trashStore';
 import { GapCursor } from '@tiptap/pm/gapcursor';
@@ -25,10 +26,13 @@ import { glossaryTerms } from './GlossaryAutolink';
 import { definitionPassage, openNotePassage } from '@/services/notePassage';
 import type { NoteId, StructuredTagEntryId } from '@/types';
 
-const asked = vi.hoisted(() => ({ answer: true, count: 0, detail: '' as string | undefined }));
+// The question a record left in no note asks (services/glossaryOrphans.ts): 'confirm' keeps it,
+// 'alternate' deletes it, 'cancel' cancels.
+const asked = vi.hoisted(() => ({ answer: true, count: 0, detail: '' as string | undefined, choice: 'confirm' as 'confirm' | 'alternate' | 'cancel', checked: false }));
 vi.mock('@/components/ConfirmDialog/dialogs', () => ({
   confirmDelete: async (_noun: string, _name: string, detail?: string) => { asked.count++; asked.detail = detail; return asked.answer; },
   confirmDialog: async () => true,
+  askWithCheckbox: async () => { asked.count++; return { result: asked.choice, checked: asked.checked }; },
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -45,6 +49,9 @@ beforeEach(() => {
   noteId = useNoteStore.getState().addNote({ title: 'Biology' }) as NoteId;
   asked.answer = true;
   asked.count = 0;
+  asked.choice = 'confirm';
+  asked.checked = false;
+  useSettingsStore.getState().setGlossaryOrphans('ask');
 });
 afterEach(() => { registerLiveNoteEditor(null); editor?.destroy(); });
 
@@ -572,7 +579,7 @@ describe('making and deleting definitions', () => {
     expect(linksIn(made[0].id)).toBe(1);
   });
 
-  it('deleting the card of a definition asks first; confirmed, the record and every link to it go (the text stays), in other notes too', async () => {
+  it('taking out a card linked from another note asks nothing: the card goes, the record stays (2026-11-03)', async () => {
     await make('<p>Plants use photosynthesis.</p>');
     const from = 2 + editor.state.doc.textContent.indexOf('photosynthesis');
     cardFromSelection(editor.view, from, from + 14, 'definition', { noteId, collectionId: null, now: new Date() });
@@ -580,39 +587,57 @@ describe('making and deleting definitions', () => {
     const id = entries()[0].id;
     const other = useNoteStore.getState().addNote({ title: 'Chemistry' }) as NoteId;
     useNoteStore.getState().updateNote(other, { content: JSON.stringify({ type: 'doc', content: [{ type: 'section', attrs: { columns: 1 }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'see photosynthesis', marks: [{ type: 'conceptRef', attrs: { entryId: id, typeKey: 'definition' } }] }] }] }] }) });
-    editor.view.dispatch(editor.state.tr.delete(cards()[0].pos, cards()[0].pos + 1));
-    expect(cards()).toHaveLength(1);   // held back until answered
+    // The card and this note's own linked words both go.
+    editor.view.dispatch(editor.state.tr.removeMark(0, editor.state.doc.content.size, editor.schema.marks.conceptRef).delete(cards()[0].pos, cards()[0].pos + 1));
     await flush();
-    expect(asked.count).toBe(1);
-    expect(asked.detail).toMatch(/2 places link to it/);
+    expect(asked.count).toBe(0);
     expect(cards()).toHaveLength(0);
-    expect(entries()).toEqual([]);
-    expect(linksIn(id)).toBe(0);
-    expect(editor.state.doc.textContent).toContain('Plants use photosynthesis.');
-    expect(useNoteStore.getState().notes[other].content).not.toContain(id);
-    expect(useNoteStore.getState().notes[other].content).toContain('see photosynthesis');
+    expect(entries().map((e) => e.id)).toEqual([id]);
   });
 
-  it('Send to Glossary: the card goes, the term stays linked, the record stays listed; removing the link never asks', async () => {
+  it('taking out a record\'s last card asks; kept, the record stays in the Glossary; deleted, it goes with every link', async () => {
     await make('<p>Plants use photosynthesis.</p>');
     const from = 2 + editor.state.doc.textContent.indexOf('photosynthesis');
     cardFromSelection(editor.view, from, from + 14, 'definition', { noteId, collectionId: null, now: new Date() });
     await flush();
     const id = entries()[0].id;
-    const before = linksIn(id);
-    expect(sendCardToGlossary(editor.view, cards()[0].pos)).toBe(true);
+    // Its words in this note link to it: take the card and the words out together.
+    editor.view.dispatch(editor.state.tr.removeMark(0, editor.state.doc.content.size, editor.schema.marks.conceptRef).delete(cards()[0].pos, cards()[0].pos + 1));
+    expect(cards()).toHaveLength(1);   // held back until answered
     await flush();
+    expect(asked.count).toBe(1);
     expect(cards()).toHaveLength(0);
-    expect(asked.count).toBe(0);
-    expect(linksIn(id)).toBe(before + 1);   // the term, linked where the card was
-    useNoteStore.getState().updateNote(noteId, { content: JSON.stringify(editor.getJSON()) });
     expect(glossaryEntries().map((e) => e.id)).toEqual([id]);
-    // Take every link out: the record stays in the Glossary, nothing asked.
-    editor.commands.setContent('<p>Nothing here.</p>');
-    useNoteStore.getState().updateNote(noteId, { content: JSON.stringify(editor.getJSON()) });
+    expect(glossaryEntries()[0]).toMatchObject({ noteId, origin: 'note' });
+
+    asked.choice = 'alternate';
+    editor.view.dispatch(insertCardAfter(editor.state, 2, id)!);
     await flush();
-    expect(asked.count).toBe(0);
-    expect(glossaryEntries().map((e) => e.id)).toEqual([id]);
+    editor.view.dispatch(editor.state.tr.delete(cards()[0].pos, cards()[0].pos + 1));
+    await flush();
+    expect(asked.count).toBe(2);
+    expect(entries()).toEqual([]);
+    asked.choice = 'confirm';
+  });
+
+  it('"Don\'t ask again" with Keep keeps from then on, unasked', async () => {
+    await make();
+    type('\\definition ');
+    await flush();
+    useNoteStore.getState().updateStructuredTagEntry(cards()[0].entryId as never, { term: 'Osmosis' });
+    asked.checked = true;
+    editor.view.dispatch(editor.state.tr.delete(cards()[0].pos, cards()[0].pos + 1));
+    await flush();
+    expect(useSettingsStore.getState().glossaryOrphans).toBe('keep');
+    asked.checked = false;
+    editor.view.dispatch(insertCardAfter(editor.state, 2, entries()[0].id)!);
+    await flush();
+    editor.view.dispatch(editor.state.tr.delete(cards()[0].pos, cards()[0].pos + 1));
+    await flush();
+    expect(asked.count).toBe(1);
+    expect(cards()).toHaveLength(0);
+    expect(entries()).toHaveLength(1);
+    useSettingsStore.getState().setGlossaryOrphans('ask');
   });
 
   it('cancelled, nothing changes; a cut card is not asked about (it is being moved)', async () => {
@@ -620,9 +645,10 @@ describe('making and deleting definitions', () => {
     type('\\definition ');
     await flush();
     useNoteStore.getState().updateStructuredTagEntry(cards()[0].entryId as never, { term: 'Osmosis' });
-    asked.answer = false;
+    asked.choice = 'cancel';
     editor.view.dispatch(editor.state.tr.delete(cards()[0].pos, cards()[0].pos + 1));
     await flush();
+    asked.choice = 'confirm';
     expect(asked.count).toBe(1);
     expect(cards()).toHaveLength(1);
     expect(entries()).toHaveLength(1);
@@ -633,11 +659,13 @@ describe('making and deleting definitions', () => {
     expect(entries()).toHaveLength(1);
   });
 
-  it('a record whose definition is no longer in its note is not offered, listed or linkable', async () => {
+  it('a record lives in the Glossary: listed whether or not a note shows it, with where it came from (2026-11-03)', async () => {
     await make();
     const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Osmosis', fields: { meaning: 'm' }, noteId, collectionId: null });
-    expect(glossaryEntries().map((e) => e.id)).not.toContain(id);
-    defineInItsNote(id);
-    expect(glossaryEntries().map((e) => e.id)).toContain(id);
+    expect(glossaryEntries().find((e) => e.id === id)).toMatchObject({ origin: 'note', noteId });
+    const made = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Diffusion', fields: {}, noteId: null, collectionId: null });
+    expect(glossaryEntries().find((e) => e.id === made)).toMatchObject({ origin: 'glossary', noteId: null });
+    const gone = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Turgor', fields: {}, noteId: 'n-deleted' as NoteId, collectionId: null });
+    expect(glossaryEntries().find((e) => e.id === gone)).toMatchObject({ origin: 'deleted' });
   });
 });

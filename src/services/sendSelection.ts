@@ -7,6 +7,8 @@ import { deleteForever, trashedBy } from '@/services/trash';
 import { isNoteLocked, noteView } from '@/services/noteSecrets';
 import { showToast } from '@/components/Toast/showToast';
 import { alertDialog, confirmDialog } from '@/components/ConfirmDialog/dialogs';
+import { addFactFromNote } from '@/services/interestingFacts';
+import { addQuoteFromNote } from '@/services/keptQuotes';
 import { LABELS } from '@/config/labels';
 import type { NoteId } from '@/types/notes';
 
@@ -74,13 +76,21 @@ function forget(id: NoteId): void {
   for (const entry of trashedBy(() => deleteNoteWithCleanup(id))) deleteForever(entry);
 }
 
-export type SendTarget = 'scratchpad' | 'sticky' | 'readingList';
+// Into Interesting facts or Quotes: each a Glossary record whose origin is the note, so one from an
+// encrypted note is encrypted with it (nothing to ask).
+function sendToFacts(text: string, fromNoteId: string | null): void {
+  if (text.trim()) addFactFromNote(text, fromNoteId);
+}
+
+export type SendTarget = 'scratchpad' | 'sticky' | 'readingList' | 'facts' | 'quotes';
 
 // One function for every menu that offers these (the `\` selection menu, the right-click menu): the
 // selected text, as lines, sent on.
 export function sendSelectedText(target: SendTarget, text: string, fromNoteId: string | null): void {
   if (target === 'scratchpad') { void sendToScratchpad(text, fromNoteId); return; }
   if (target === 'sticky') { void turnIntoSticky(text, fromNoteId); return; }
+  if (target === 'facts') { sendToFacts(text, fromNoteId); return; }
+  if (target === 'quotes') { if (text.trim()) addQuoteFromNote(text, fromNoteId); return; }
   const from = fromNoteId ? useNoteStore.getState().notes[fromNoteId as NoteId] : undefined;
   void import('@/services/readingList').then(({ addToReadingList }) => addToReadingList(text, from && !isNoteLocked(from) ? noteView(from).title || null : null));
 }

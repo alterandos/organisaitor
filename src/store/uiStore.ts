@@ -8,6 +8,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { persistStorage } from '@/utils/persistStorage';
 import { todayIso } from '@/utils/date';
 import { getNotePrimaryNotebookId } from '@/utils/notes';
+import { flushOpenNoteEditors } from '@/services/liveNoteEditor';
 import type { OverviewLayout } from '@/types/overview';
 import type { NoteId } from '@/types/notes';
 import type { PassageFind } from '@/utils/noteContent';
@@ -24,7 +25,20 @@ export type QuickAccessTab = 'pinned' | 'goto';
 // a column on the right) or four quadrants. Desktop only.
 export const NOTE_LAYOUTS = ['single', 'two', 'three', 'four'] as const;
 export type NoteLayout = typeof NOTE_LAYOUTS[number];
+export interface SendToListRequest { text: string; noteId: string | null; tabId: string | null; blockId: string | null }
 export const notePaneCount = (l: NoteLayout): number => ({ single: 1, two: 2, three: 3, four: 4 })[l];
+const LAYOUT_OF_COUNT: Record<number, NoteLayout> = { 1: 'single', 2: 'two', 3: 'three', 4: 'four' };
+
+// Closing a note side by side takes its pane away (asked for by the user 2026-11-02), rather than
+// leaving it empty: the layout drops to one pane fewer, the others keep their order, and with one
+// note left it's shown alone. Saves every editor first, since a layout change can remount them.
+function withoutNotePane(s: { notePanes: (string | null)[]; focusedNotePane: number }, index: number) {
+  flushOpenNoteEditors();
+  const notePanes = s.notePanes.filter((_, i) => i !== index);
+  if (notePanes.length <= 1) return { noteLayout: 'single' as const, notePanes, focusedNotePane: 0, editingNoteId: notePanes[0] ?? null };
+  const focusedNotePane = index < s.focusedNotePane ? s.focusedNotePane - 1 : Math.min(s.focusedNotePane, notePanes.length - 1);
+  return { noteLayout: LAYOUT_OF_COUNT[notePanes.length], notePanes, focusedNotePane, editingNoteId: notePanes[focusedNotePane] ?? null };
+}
 
 // What the Overview section is showing: an Endeavour's automatic Overview, or a saved one.
 // 'builtIn' is one of the Overviews every person has (id 'inboxes': All inboxes).
@@ -487,6 +501,15 @@ interface UIState {
   // How the Glossary is shown (tiles or a list), remembered on this device. Absent in an older
   // stored session, which reads as the default: no migration.
   glossaryLayout:        'tiles' | 'list';
+  // The Glossary record open in the record editor (GlossaryRecordModal, mounted in App.tsx, over
+  // whatever is showing), or null; `fresh`: just made with "+ New", so it goes if left empty.
+  // Selected note text being sent to a list (SendToListFlow, mounted in App.tsx): the text and the
+  // passage it came from (its note, tab and block, for the items' link back), or null.
+  sendToListRequest:     SendToListRequest | null;
+  requestSendToList:     (r: SendToListRequest | null) => void;
+  glossaryRecordId:      string | null;
+  glossaryRecordFresh:   boolean;
+  openGlossaryRecord:    (id: string | null, opts?: { fresh?: boolean }) => void;
   setGlossaryLayout:     (layout: 'tiles' | 'list') => void;
   setOverviewLayout:     (key: string, layout: OverviewLayout) => void;
   // Jump to an Endeavour's automatic Overview from anywhere (e.g. the Endeavour's row menu).
@@ -1051,6 +1074,11 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   },
   overviewLayouts:       {},
   glossaryLayout:        'tiles',
+  sendToListRequest:     null,
+  requestSendToList:     (sendToListRequest) => set({ sendToListRequest }),
+  glossaryRecordId:      null,
+  glossaryRecordFresh:   false,
+  openGlossaryRecord:    (glossaryRecordId, opts) => set({ glossaryRecordId, glossaryRecordFresh: !!opts?.fresh }),
   setGlossaryLayout:     (layout) => set({ glossaryLayout: layout }),
   setOverviewLayout:     (key, layout) => set((s) => ({ overviewLayouts: { ...s.overviewLayouts, [key]: layout } })),
   openEndeavourOverview: (collectionId) => {
@@ -1164,7 +1192,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeNote: () => set((s) => ({
     editingNoteId: null,
     ...(s.activeView === 'notes' && s.editingNoteId ? recordPlace(s) : {}),
-    ...(s.noteLayout !== 'single' ? { notePanes: s.notePanes.map((p, i) => (i === s.focusedNotePane ? null : p)) } : {}),
+    ...(s.noteLayout !== 'single' && s.activeView === 'notes' ? withoutNotePane(s, s.focusedNotePane) : {}),
   })),
   noteLayout:      'single',
   notePanes:       [],
@@ -1194,10 +1222,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     set({ focusedNotePane: index, editingNoteId: s.notePanes[index] ?? null });
     get().openNote(noteId, tabId);
   },
-  closeNotePane: (index) => set((s) => {
-    const notePanes = s.notePanes.map((p, i) => (i === index ? null : p));
-    return index === s.focusedNotePane ? { notePanes, editingNoteId: null } : { notePanes };
-  }),
+  closeNotePane: (index) => set((s) => (s.noteLayout === 'single' ? { editingNoteId: null } : withoutNotePane(s, index))),
   setNoteSplit: (split) => set((s) => ({ noteSplit: { ...s.noteSplit, ...split } })),
   notesLastEditingNoteId: null,
   notesLastActiveTabId:   null,

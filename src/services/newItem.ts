@@ -2,6 +2,9 @@ import { useUIStore, type AppView } from '@/store/uiStore';
 import { useNoteStore } from '@/store/noteStore';
 import { STICKIES_PRESET, takesNotes } from '@/utils/notes';
 import { addSticky } from '@/services/stickyNotes';
+import { useListStore } from '@/store/listStore';
+import { glossaryKindOf, newRecordInList } from '@/services/glossaryLists';
+import type { ListId } from '@/types/lists';
 
 // N / Space / Ctrl+N: open the "new …" pane for where you are. Most sections have one obvious
 // thing to create (Records and Lists pick by what's selected). In Notes it follows the focused
@@ -14,7 +17,12 @@ export function openNewItem(view: AppView): void {
   else if (view === 'overview') ui.showAddOverview();
   else if (view === 'calendar') ui.showAddCalendarItem();
   else if (view === 'portfolio') ui.showAddWatchlistItem();
-  else if (view === 'lists') { if (ui.activeListId) ui.showAddListItem(ui.activeListId); else ui.showAddList(); }
+  else if (view === 'lists') {
+    // A Glossary list's new row is a new record of its kind (services/glossaryLists.ts).
+    const list = ui.activeListId ? useListStore.getState().lists[ui.activeListId as ListId] : undefined;
+    if (list && glossaryKindOf(list)) newRecordInList(list.id);
+    else if (ui.activeListId) ui.showAddListItem(ui.activeListId); else ui.showAddList();
+  }
   else if (view === 'notes') {
     if (ui.notesFocusedColumn === 'tree') ui.showAddNoteTag(selectedTakingNotes(), 'area');
     else addNoteHere();

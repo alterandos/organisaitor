@@ -8,14 +8,16 @@ import { createRoot, type Root } from 'react-dom/client';
 import { LABELS } from '@/config/labels';
 import { useNoteStore } from '@/store/noteStore';
 import { getStructuredTagType } from '@/config/structuredTagTypes';
-import { confirmGlossaryDelete, deleteGlossaryEntryNow } from '@/services/glossaryDelete';
+import { deleteGlossaryEntryNow } from '@/services/glossaryDelete';
+import { askAboutOrphans, entriesInDoc, entryInOtherNotes } from '@/services/glossaryOrphans';
+import { useSettingsStore } from '@/store/settingsStore';
 import type { CollectionId, NoteId } from '@/types';
 import { BUILTIN_TAGS } from '../builtinTags';
 import type { NoteObjectContext } from '../objects/types';
 import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, moveFromBlock, openBlockPopover, pillButton, placeBlock, registerEnterableBlock, popoverClass as pop, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { deleteForever, trashedBy } from '@/services/trash';
 import { entryView, isEntryLocked } from '@/services/noteSecrets';
-import { SENT_TO_GLOSSARY, entryImportance, isSentToGlossary } from '@/services/glossary';
+import { entryImportance } from '@/services/glossary';
 import { GlossaryCardBody } from './GlossaryCardBody';
 import { IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { cardToChip, insertGlossaryChip, setChipDesigns } from './GlossaryChip';
@@ -517,43 +519,36 @@ class GlossaryCardView {
 }
 
 // ── Deleting the definition ─────────────────────────────────────────────────
-// Deleting the card a record is defined by (in its own note, with no other card or mark for it
-// left there) deletes the record and every link to it, asked first (services/glossaryDelete.ts,
-// agreed with the user 2026-10-13). The deletion is held back until the answer: cancelled, nothing
-// changes; confirmed, it's applied, then the record and its links go. Not asked: a cut (the card
-// is being moved), undo and redo, loading a note (its whole content replaced), and a card for a
-// record that lives in another note (only this view of it goes).
+// Taking out a record's last card, chip or marked text (agreed with the user 2026-11-03: a record
+// lives in the Glossary, not its note). If nothing in this note or any other still shows or links
+// to it, the deletion is held back while the person is asked (services/glossaryOrphans.ts): keep
+// it in the Glossary (the card goes, the record stays), delete it from the Glossary too, or cancel
+// (nothing changes). Not asked: a cut (the card is being moved), undo and redo, and loading a note
+// (its whole content replaced).
 
 const holdKey = new PluginKey('glossaryCardDelete');
 const CONFIRMED = 'glossaryCardDeleteConfirmed';
 
-function cardEntries(doc: PMNode): Map<string, number> {
-  const out = new Map<string, number>();
+// The records a document shows as a card, a chip or marked text (what taking out can leave behind).
+function cardEntries(doc: PMNode): Set<string> {
+  const out = new Set<string>();
   doc.descendants((n) => {
-    if ((n.type.name === 'glossaryCard' || n.type.name === 'glossaryChip') && n.attrs.entryId) out.set(n.attrs.entryId, (out.get(n.attrs.entryId) ?? 0) + 1);
-    else if (n.isText) for (const m of n.marks) if (m.type.name === 'noteTag' && m.attrs.structuredEntryId) out.set(m.attrs.structuredEntryId, (out.get(m.attrs.structuredEntryId) ?? 0) + 1);
+    if ((n.type.name === 'glossaryCard' || n.type.name === 'glossaryChip') && n.attrs.entryId) out.add(n.attrs.entryId);
+    else if (n.isText) for (const m of n.marks) if (m.type.name === 'noteTag' && m.attrs.structuredEntryId) out.add(m.attrs.structuredEntryId);
     return !n.isTextblock || n.childCount > 0;
   });
   return out;
 }
 
-function definitionsDeleted(tr: Transaction, noteId: string | null): string[] {
+function leftInNoNote(tr: Transaction, noteId: string | null): string[] {
   if (!tr.docChanged || tr.getMeta(CONFIRMED) || tr.getMeta('uiEvent') === 'cut' || tr.getMeta('history$')) return [];
   // Loading a note replaces the whole document, exactly (setContent); deleting a note's only block doesn't.
   const replacesAll = tr.steps.some((s) => s instanceof ReplaceStep && (s as unknown as { from: number }).from === 0 && (s as unknown as { to: number }).to === tr.before.content.size);
   if (replacesAll) return [];
   const before = cardEntries(tr.before);
   if (!before.size) return [];
-  const after = cardEntries(tr.doc);
-  const gone: string[] = [];
-  for (const id of before.keys()) {
-    if (after.has(id)) continue;
-    const raw = useNoteStore.getState().structuredTagEntries[id as never];
-    // A record sent to the Glossary lives there: a card of it taken out never deletes it.
-    const shown = raw && !isEntryLocked(raw) ? entryView(raw) : null;
-    if (raw && raw.noteId === noteId && !(shown && isSentToGlossary(shown))) gone.push(id);
-  }
-  return gone;
+  const after = entriesInDoc(tr.doc);
+  return [...before].filter((id) => !after.has(id) && useNoteStore.getState().structuredTagEntries[id as never] && !entryInOtherNotes(id, noteId));
 }
 
 export function glossaryDeletePlugin(noteId: () => string | null): Plugin {
@@ -562,49 +557,26 @@ export function glossaryDeletePlugin(noteId: () => string | null): Plugin {
     key: holdKey,
     view: (v) => { view = v; return {}; },
     filterTransaction: (tr) => {
-      const gone = definitionsDeleted(tr, noteId());
+      const gone = leftInNoNote(tr, noteId());
       if (!gone.length || !view) return true;
+      // Kept without asking ("Don't ask again" chose keep): nothing to hold the deletion for.
+      if (useSettingsStore.getState().glossaryOrphans === 'keep') return true;
       void askThenApply(view, tr, gone);
       return false;
     },
   });
 }
 
-// Asked for each record; if every one is confirmed (and the note hasn't changed meanwhile), the
-// deletion is applied, then the records and their links go.
+// Asked once for every record the deletion leaves in no note; unless cancelled (and the note
+// hasn't changed meanwhile), the deletion is applied, then, if so chosen, the records go.
 async function askThenApply(view: EditorView, tr: Transaction, gone: string[]): Promise<void> {
-  for (const id of gone) if (!(await confirmGlossaryDelete(id))) return;
-  if (!view.state.doc.eq(tr.before)) return;
+  const answer = await askAboutOrphans(gone, 'card');
+  if (answer === 'cancel' || view.isDestroyed || !view.state.doc.eq(tr.before)) return;
   const again = view.state.tr;
   for (const step of tr.steps) again.step(step);
   again.setSelection(Selection.fromJSON(again.doc, tr.selection.toJSON()));
   view.dispatch(again.setMeta(CONFIRMED, true).scrollIntoView());
-  for (const id of gone) deleteGlossaryEntryNow(id, view.state.schema);
-}
-
-// ── Send to Glossary ─────────────────────────────────────────────────────────
-// A card (or chip) taken out of the note, its record kept in the Glossary alone (asked for by the
-// user 2026-10-26: a card can clutter a note when a link would do). The term stays where the card
-// was, linked to the record, so the note still says where it was first defined (definitionPassage
-// finds it); the record is marked as sent (services/glossary.ts SENT_TO_GLOSSARY), so it stays
-// listed with no card and goes only when deleted from the Glossary. One undo step for the note;
-// the record's mark stays (harmless: a card brought back by undo shows it as before).
-export function sendCardToGlossary(view: EditorView, pos: number): boolean {
-  const node = view.state.doc.nodeAt(pos);
-  if (!node || (node.type.name !== 'glossaryCard' && node.type.name !== 'glossaryChip') || !node.attrs.entryId || !view.editable) return false;
-  const store = useNoteStore.getState();
-  const raw = store.structuredTagEntries[node.attrs.entryId as never];
-  if (!raw || isEntryLocked(raw)) return false;
-  const entry = entryView(raw);
-  const { conceptRef: link, paragraph } = { conceptRef: view.state.schema.marks.conceptRef, paragraph: view.state.schema.nodes.paragraph };
-  if (!entry.term.trim() || !link) return false;
-  store.updateStructuredTagEntry(raw.id, { fields: { ...entry.fields, [SENT_TO_GLOSSARY]: true } });
-  const text = view.state.schema.text(entry.term, [link.create({ entryId: raw.id, typeKey: entry.typeKey })]);
-  const replacement = node.isInline ? text : paragraph.create(null, text);
-  const tr = view.state.tr.replaceWith(pos, pos + node.nodeSize, replacement).setMeta(CONFIRMED, true);
-  view.dispatch(tr.scrollIntoView());
-  view.focus();
-  return true;
+  if (answer === 'delete') for (const id of gone) deleteGlossaryEntryNow(id, view.state.schema);
 }
 
 // Enter on a selected card puts the cursor in its term, and typing on a selected card types into

@@ -3,7 +3,7 @@ import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { CloseIcon, ReviewIcon, UnlinkIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
 import { glossaryEntry } from '@/services/glossary';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { openGlossaryEntry } from '@/services/notePassage';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { refGroupAt, unlinkConceptRef } from './ConceptRef';
 import { collectImportantPassages, setImportance, toggleReview } from './Importance';
@@ -30,7 +30,7 @@ registerContextMenuProvider({
     const entry = glossaryEntry(group.entryId);
     const L = LABELS.glossary;
     return [
-      { id: 'definition', label: L.goToDefinition, icon: entry?.icon ?? '📖', disabled: !entry, run: () => { if (entry) openNotePassage(entry.noteId, definitionPassage(entry.id)); } },
+      { id: 'definition', label: L.goToDefinition, icon: entry?.icon ?? '📖', disabled: !entry, run: () => { if (entry) openGlossaryEntry(entry.id); } },
       { id: 'unlink', label: L.removeLink, icon: createElement(UnlinkIcon), run: () => unlinkConceptRef(view, group) },
     ];
   },

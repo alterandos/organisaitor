@@ -35,6 +35,7 @@ registerContextMenuProvider({
   id: 'note-editor.headings',
   kind: 'note-editor',
   order: 35,
+  section: 'format',
   items: (_ctx, scope) => {
     const view = api(scope.data).editor.view;
     const summary = headingFoldSummary(view.state);

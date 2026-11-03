@@ -2,6 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { createPortal } from 'react-dom';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews } from '@/store/noteViews';
+import { usePinnedItemsStore } from '@/store/pinnedItemsStore';
+import { useRecentItemsStore } from '@/store/recentItemsStore';
+import { notesToOffer } from '@/utils/quickAccess';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { getNoteBreadcrumb } from '@/utils/notes';
 import { getNoteTabTexts } from '@/utils/noteSearchText';
@@ -26,6 +29,9 @@ interface Props {
   onClose:    () => void;
   // Its heading, when it picks a note for something other than a link (a pane of notes side by side).
   title?:     string;
+  // While the search box is empty, the notes pinned to Quick Access come first, above the recent
+  // ones (a pane of notes side by side, as its empty pane shows them).
+  pinnedFirst?: boolean;
 }
 
 interface TabCandidate {
@@ -56,6 +62,7 @@ interface Row {
 
 interface TermStat { title: boolean; path: boolean; tabs: number[] }
 
+const P = LABELS.notePicker;
 const MAX_RESULTS = 50;
 const MAX_SUGGESTIONS = 20;
 const SNIPPET_LENGTH = 140;
@@ -130,10 +137,12 @@ function combine(stats: TermStat[], weights: number[], tabCount: number): { scor
 // the hits, weighting a keyword by how rare it is across the user's notes (so "exchange" outranks
 // "meeting" when few notes mention it). Nothing is indexed up front: the per-tab plain text is
 // cached (utils/noteSearchText.ts) and the scoring is a substring scan of it.
-export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode = 'link', onPlace, title }: Props) {
+export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode = 'link', onPlace, title, pinnedFirst }: Props) {
   const placing = mode === 'place';
   const notes    = useNoteViews();
   const noteTags = useNoteStore((s) => s.noteTags);
+  const pins     = usePinnedItemsStore((s) => s.pins);
+  const visits   = useRecentItemsStore((s) => s.items);
 
   const L = LABELS.newNoteFromItem;
   const [query, setQuery]               = useState('');
@@ -162,7 +171,7 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
       ...Object.values(notes)
       .filter((n) => !n.archivedAt && (placing ? !(n.isEncrypted && !n.title) : !excludeIds.has(n.id)))
       .map((n): Candidate => {
-        const title = n.title || (n.isEncrypted ? 'Locked note' : 'Untitled');
+        const title = n.title || (n.isEncrypted ? P.lockedNote : P.untitled);
         const path  = getNoteBreadcrumb(n, noteTags);
         return {
           kind:      'note',
@@ -201,15 +210,29 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
     return scored.sort((a, b) => b.score - a.score || b.row.c.sortTime - a.row.c.sortTime).slice(0, MAX_SUGGESTIONS).map((s) => s.row);
   }, [candidates, keywordStems]);
 
-  const suggesting = terms.length === 0 && suggestions.length > 0;
+  // pinnedFirst: the notes utils/quickAccess.ts `notesToOffer` gives, pinned then visited lately,
+  // ahead of the rest (the rest by when last looked at).
+  const offered = useMemo(() => {
+    if (!pinnedFirst) return { pinned: [] as Row[], recent: [] as Row[] };
+    const byId = new Map(candidates.filter((c) => c.kind === 'note').map((c) => [c.id, c]));
+    const rows = (items: { entityId: string }[]) => items.map((i) => byId.get(i.entityId)).filter((c): c is Candidate => !!c).map((c) => ({ c, bestTab: 0 }));
+    const { pinned, recent } = notesToOffer(pins, visits, excludeIds);
+    return { pinned: rows(pinned), recent: rows(recent) };
+  }, [pinnedFirst, pins, visits, candidates, excludeIds]);
+  const pinnedRows = offered.pinned;
+
+  const suggested = useMemo(() => suggestions.filter((r) => !pinnedRows.some((p) => p.c.id === r.c.id)), [suggestions, pinnedRows]);
+  const suggesting = terms.length === 0 && suggested.length > 0;
   const activeTerms = terms.length ? terms : suggesting ? keywordStems : [];
+  const pinnedCount = terms.length === 0 ? pinnedRows.length : 0;
 
   const results = useMemo<Row[]>(() => {
     if (terms.length === 0) {
       const recent = [...candidates].sort((a, b) => b.sortTime - a.sortTime).map((c) => ({ c, bestTab: 0 }));
-      if (suggestions.length === 0) return recent.slice(0, MAX_RESULTS);
-      const taken = new Set(suggestions.map((r) => r.c.id));
-      return [...suggestions, ...recent.filter((r) => !taken.has(r.c.id))].slice(0, MAX_RESULTS);
+      const first = [...pinnedRows, ...suggested, ...offered.recent.filter((r) => !suggested.some((x) => x.c.id === r.c.id))];
+      if (first.length === 0) return recent.slice(0, MAX_RESULTS);
+      const taken = new Set(first.map((r) => r.c.id));
+      return [...first, ...recent.filter((r) => !taken.has(r.c.id))].slice(0, MAX_RESULTS);
     }
     const ones = terms.map(() => 1);
     const scored: { row: Row; score: number }[] = [];
@@ -220,7 +243,7 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
       scored.push({ row: { c, bestTab }, score });
     }
     return scored.sort((a, b) => b.score - a.score || b.row.c.sortTime - a.row.c.sortTime).slice(0, MAX_RESULTS).map((s) => s.row);
-  }, [candidates, terms, suggestions]);
+  }, [candidates, terms, suggested, pinnedRows, offered]);
 
   const tabIndexFor = (row: Row): number => {
     const chosen = tabOverride[row.c.id];
@@ -281,16 +304,16 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
       // Keeps App's global single-key hotkeys from firing behind the picker when a result has focus.
       onKeyDown={(e) => { if (e.key !== 'Escape' && !e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
     >
-      <div className={styles.modal} role="dialog" aria-label={placing ? L.placeTitle : title ?? 'Link a note'}>
+      <div className={styles.modal} role="dialog" aria-label={placing ? L.placeTitle : title ?? P.title}>
         <div className={styles.header}>
-          <span className={styles.title}>{placing ? `📝 ${L.placeTitle}` : `📝 ${title ?? 'Link a note'}`}</span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
+          <span className={styles.title}>{placing ? `📝 ${L.placeTitle}` : `📝 ${title ?? P.title}`}</span>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label={P.close}><CloseIcon /></button>
         </div>
 
         <input
           autoFocus
           className={styles.search}
-          placeholder={placing ? L.placeSearch : 'Search by title, notebook, tab or content…'}
+          placeholder={placing ? L.placeSearch : P.search}
           value={query}
           onChange={(e) => { setQuery(e.target.value); setHighlight(0); setTabOverride({}); }}
           onKeyDown={handleKeyDown}
@@ -298,23 +321,26 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
 
         <div className={styles.results} ref={listRef}>
           {results.length === 0 && (
-            <div className={styles.empty}>{terms.length ? 'No notes match' : placing ? L.placeEmpty : 'No notes to link yet'}</div>
+            <div className={styles.empty}>{terms.length ? P.noMatches : placing ? L.placeEmpty : P.noNotes}</div>
           )}
           {results.map((row, i) => {
             const { c } = row;
             const active = i === highlightIndex;
             const tabIndex = tabIndexFor(row);
             const tab = c.tabs[tabIndex];
-            const hasHits = activeTerms.length > 0 && (terms.length > 0 || i < suggestions.length);
+            const hasHits = activeTerms.length > 0 && (terms.length > 0 || (i >= pinnedCount && i < pinnedCount + suggested.length));
             const snippet = hasHits ? snippetFor(tab.text, activeTerms) : tab.text.slice(0, SNIPPET_LENGTH);
             const marks = hasHits ? activeTerms : [];
             return (
               <Fragment key={c.id}>
-                {suggesting && i === 0 && (
-                  <div className={styles.sectionLabel}>Suggested from “{keywords.join(', ')}”</div>
+                {pinnedCount > 0 && i === 0 && (
+                  <div className={styles.sectionLabel}>{LABELS.quickAccess.pinned}</div>
                 )}
-                {suggesting && i === suggestions.length && (
-                  <div className={styles.sectionLabel}>Recent</div>
+                {suggesting && i === pinnedCount && (
+                  <div className={styles.sectionLabel}>{P.suggestedFrom(keywords.join(', '))}</div>
+                )}
+                {(suggesting || pinnedCount > 0) && i === pinnedCount + (suggesting ? suggested.length : 0) && (
+                  <div className={styles.sectionLabel}>{LABELS.quickAccess.recent}</div>
                 )}
                 <div
                   data-active={active || undefined}
@@ -336,14 +362,14 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
                     {snippet && <span className={styles.resultSnippet}>{highlight(snippet, marks)}</span>}
                   </button>
                   {c.hasTabs && !placing && (
-                    <span className={styles.tabChips} role="group" aria-label="Tab to link">
+                    <span className={styles.tabChips} role="group" aria-label={P.tabGroup}>
                       {c.tabs.map((t, ti) => (
                         <button
                           key={t.id}
                           type="button"
                           className={`${styles.tabChip} ${ti === tabIndex ? styles.tabChipActive : ''}`}
                           onClick={() => pick(row, ti)}
-                          title={`Link to the “${t.name}” tab`}
+                          title={P.linkTab(t.name)}
                         >
                           {highlight(t.name, marks)}
                         </button>
@@ -361,7 +387,7 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
           )}
         </div>
 
-        <div className={styles.footer}>{placing ? L.placeFooter : "↑↓ navigate · Tab switches the note's tab · Enter or Ctrl+Enter link · Esc cancel"}</div>
+        <div className={styles.footer}>{placing ? L.placeFooter : P.footer}</div>
       </div>
     </div>,
     document.body,

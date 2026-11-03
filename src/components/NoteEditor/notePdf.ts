@@ -258,7 +258,8 @@ function pdfMenuItem(noteId: string): ContextMenuItem {
 registerContextMenuProvider({
   id: 'note-row.export-pdf',
   kind: 'note-row',
-  order: 60,
+  order: 27,
+  section: 'note',
   items: (_ctx, scope) => {
     const id = (scope.data as { noteId?: string } | undefined)?.noteId;
     return id && canExportPdf() ? [pdfMenuItem(id)] : [];
@@ -269,6 +270,7 @@ registerContextMenuProvider({
   id: 'note-editor.export-pdf',
   kind: 'note-editor',
   order: 210,
+  section: 'note',
   items: () => {
     const open = liveNote();
     return open && canExportPdf() ? [pdfMenuItem(open.noteId)] : [];

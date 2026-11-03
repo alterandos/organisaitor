@@ -8,6 +8,7 @@ import { toggleChecklistItemWithTasks } from '@/services/taskListLinks';
 import type { List, ListId, ListItem, ListItemId, ListFieldSchema } from '@/types/lists';
 import styles from './ListsSection.module.css';
 import { EditIcon, TrashIcon } from '@/components/Icons';
+import { ListItemSource } from './ListItemSource';
 
 function fieldSummary(item: ListItem, fieldSchema: ListFieldSchema[]): string {
   return fieldSchema
@@ -101,6 +102,7 @@ export function ChecklistView({
           ) : (
             <span className={styles.checkTitle} onClick={() => setEditingId(item.id)}>{item.title}</span>
           )}
+          <ListItemSource item={item} />
           {(summary || item.notes) && (
             <span className={styles.checkMeta}>
               {[summary, item.notes].filter(Boolean).join(' — ')}

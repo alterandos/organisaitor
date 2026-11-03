@@ -1,13 +1,10 @@
 import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
-import { ScratchpadIcon, StickyIcon, TrashIcon } from '@/components/Icons';
+import { TrashIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
-import { INBOX_ICON } from '@/config/itemIcons';
-import { makeItemTask, openItemSource, selectionTouchesInbox, taskExists } from '@/services/noteInbox';
+import { makeItemTask, openItemSource, taskExists } from '@/services/noteInbox';
 import { INBOX_ORDERS, INBOX_STATUSES, type InboxOrder, type InboxStatus } from '@/utils/noteInboxes';
 import type { NoteEditorMenuApi } from '../contextMenu';
-import { sendSelectedText, type SendTarget } from '@/services/sendSelection';
-import { objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import {
   INBOX_DESIGNS, deleteItem, inboxPosAt, itemPosAt, setInboxDesign, setInboxOrder, setItemStatus, type InboxVariant,
 } from './Inbox';
@@ -64,40 +61,3 @@ registerContextMenuProvider({
   },
 });
 
-// Right-click on selected text (outside an inbox): Send to inbox….
-registerContextMenuProvider({
-  id: 'note-editor.send-to-inbox',
-  kind: 'note-editor',
-  order: 8,
-  items: (_ctx, scope) => {
-    const api = scope.data as NoteEditorMenuApi;
-    const { state } = api.editor;
-    if (state.selection.empty || !api.editor.isEditable || selectionTouchesInbox(state)) return [];
-    return [{ id: 'send-to-inbox', label: LABELS.sendToInbox.menu, icon: INBOX_ICON, run: () => api.sendToInbox() }];
-  },
-});
-
-// Right-click on selected text: Send to ▸ the scratchpad, a sticky note or the reading list (copies:
-// services/sendSelection.ts; the same three as the `\` selection menu).
-registerContextMenuProvider({
-  id: 'note-editor.send-selection',
-  kind: 'note-editor',
-  order: 8,
-  items: (_ctx, scope) => {
-    const { editor } = scope.data as NoteEditorMenuApi;
-    const { state } = editor;
-    if (state.selection.empty) return [];
-    const { from, to } = state.selection;
-    const noteId = objectTriggerStorage(editor).getContext()?.noteId ?? null;
-    const send = (target: SendTarget, sep: string) => () => sendSelectedText(target, state.doc.textBetween(from, to, sep), noteId);
-    const S = LABELS.sendSelection;
-    return [{
-      id: 'send-selection', label: S.menu, icon: '➦',
-      submenu: [[
-        { id: 'send-scratchpad', label: S.toScratchpad, icon: createElement(ScratchpadIcon), run: send('scratchpad', '\n') },
-        { id: 'send-sticky', label: S.toSticky, icon: createElement(StickyIcon), run: send('sticky', '\n') },
-        { id: 'send-reading-list', label: S.toReadingList, icon: '📚', run: send('readingList', ' ') },
-      ]],
-    }];
-  },
-});

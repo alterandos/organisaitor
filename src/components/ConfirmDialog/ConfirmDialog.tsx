@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -6,9 +6,12 @@ import { useDialogStore, type DialogRequest } from '@/store/dialogStore';
 import styles from './ConfirmDialog.module.css';
 
 function Dialog({ request }: { request: DialogRequest }) {
-  const settle    = useDialogStore((s) => s.settle);
+  const store     = useDialogStore((s) => s.settle);
   const focusRef  = useRef<HTMLButtonElement>(null);
   const isAlert   = request.kind === 'alert';
+  const [checked, setChecked] = useState(false);
+  // An answer also reports the checkbox (Cancel too, so a caller can tell; it ignores it there).
+  const settle    = (id: number, result: Parameters<typeof store>[1]) => { request.onChecked?.(checked); store(id, result); };
   const cancel    = () => settle(request.id, 'cancel');
   const confirm   = () => settle(request.id, 'confirm');
   const confirmRef = useRef(confirm);
@@ -25,12 +28,12 @@ function Dialog({ request }: { request: DialogRequest }) {
   useEffect(() => {
     if (request.focusDelayMs === 0) { focusRef.current?.focus(); return; }
     const timer = setTimeout(() => {
-      if (request.isStale?.()) { settle(request.id, 'cancel'); return; }
+      if (request.isStale?.()) { store(request.id, 'cancel'); return; }
       armedRef.current = true;
       focusRef.current?.focus();
     }, request.focusDelayMs);
     return () => clearTimeout(timer);
-  }, [request, settle]);
+  }, [request, store]);
 
   // Capture phase + stopImmediatePropagation: the modal underneath may have its own Ctrl+Enter
   // (submit) listener, and this dialog must be the only one that answers.
@@ -67,6 +70,15 @@ function Dialog({ request }: { request: DialogRequest }) {
             {request.irreversible && <strong>{LABELS.itemActions.deleteWarning} </strong>}
             {request.message}
           </p>
+        )}
+        {request.list && request.list.length > 0 && (
+          <ul className={styles.list}>{request.list.map((item, i) => <li key={i}>{item}</li>)}</ul>
+        )}
+        {request.checkboxLabel && (
+          <label className={styles.check}>
+            <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+            {request.checkboxLabel}
+          </label>
         )}
         <div className={styles.actions}>
           {!isAlert && (

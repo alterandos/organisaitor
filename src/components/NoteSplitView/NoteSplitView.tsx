@@ -69,7 +69,8 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
           const noteId = panes[i] ?? null;
           return (
             <section
-              key={i}
+              // Keyed by its note, so closing a pane moves the others along without remounting them.
+              key={noteId ?? `empty-${i}`}
               className={`${styles.pane} ${i === focused ? styles.paneFocused : ''}`}
               style={{ gridArea: areas[i] }}
               onMouseDownCapture={() => focusPane(i)}
@@ -100,6 +101,7 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
           // 2026-10-27). Recent notes show instead.
           suggestFrom=""
           title={LABELS.noteViews.replaceTitle}
+          pinnedFirst
           onPick={(noteId, tabId) => { openInPane(picking, noteId, tabId); setPicking(null); }}
           onClose={() => setPicking(null)}
         />

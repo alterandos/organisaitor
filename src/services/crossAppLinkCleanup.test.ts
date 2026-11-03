@@ -97,7 +97,7 @@ describe('deleteReminderWithCleanup', () => {
 });
 
 describe('deleteNoteWithCleanup', () => {
-  it('strips the dangling reverse reference from every task/event/reminder that pointed at the note, and deletes its structured tag entries', () => {
+  it('strips the dangling reverse reference from every task/event/reminder that pointed at the note, and keeps its Glossary records unless told to delete them (2026-11-03)', () => {
     const noteId = useNoteStore.getState().addNote({ title: 'N' });
     const taskId = useTaskStore.getState().addTask({ title: 'Task', crossAppRefs: [{ type: 'note', id: noteId }] });
     const eventId = useCalendarStore.getState().addEvent({ title: 'E', date: '2030-01-01', crossAppRefs: [{ type: 'note', id: noteId }] });
@@ -106,13 +106,18 @@ describe('deleteNoteWithCleanup', () => {
       typeKey: 'acronym', tagId: 'tag-1', term: 'ASX', fields: {}, noteId, collectionId: null,
     });
 
-    deleteNoteWithCleanup(noteId);
+    const goes = useNoteStore.getState().addStructuredTagEntry({
+      typeKey: 'acronym', tagId: 'tag-1', term: 'RBA', fields: {}, noteId, collectionId: null,
+    });
+
+    deleteNoteWithCleanup(noteId, { deleteEntries: [goes] });
 
     expect(useNoteStore.getState().notes[noteId as NoteId]).toBeUndefined();
     expect(useTaskStore.getState().tasks[taskId].crossAppRefs).toEqual([]);
     expect(useCalendarStore.getState().events[eventId].crossAppRefs).toEqual([]);
     expect(useCalendarStore.getState().reminders[reminderId].crossAppRefs).toEqual([]);
-    expect(useNoteStore.getState().structuredTagEntries[entryId]).toBeUndefined();
+    expect(useNoteStore.getState().structuredTagEntries[entryId]).toMatchObject({ noteId });
+    expect(useNoteStore.getState().structuredTagEntries[goes]).toBeUndefined();
   });
 
   it('leaves an unrelated task\'s crossAppRefs alone', () => {

@@ -1,14 +1,17 @@
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { useCardTermLinks } from './CardTermLinks';
+import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { typeAfterTermLink, useCardTermLinks } from './CardTermLinks';
+import { factHeadline, quoteHeadline } from '@/utils/factHeadline';
+import { pairsBeforeInput, pairsKeyDown } from './cardFieldPairs';
+import { insertAtCaret, lineBreakAfterTermLink, termLinkEndingAtCaret } from './cardFieldText';
 import { alertDialog, confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { DEFAULT_IMAGE_LAYOUT, IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { useNoteStore } from '@/store/noteStore';
 import { entryView, isEntryLocked, useSecretsVersion } from '@/services/noteSecrets';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { openGlossaryEntry } from '@/services/notePassage';
 import { GLOSSARY_TYPES, TERM_RICH, fieldFacts, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, NAMED_FIELD_ID, namedFieldLine, takeNamedLines, type Fact, type GlossaryLink, type StructuredTagFieldDef, glossaryKinds, glossaryNames } from '@/config/structuredTagTypes';
 import { GLOSSARY_RELATIONS, glossaryRelation } from '@/config/glossaryRelations';
 import { LABELS } from '@/config/labels';
-import { entryImportance, glossaryKindLine } from '@/services/glossary';
+import { entryImportance, glossaryKindLine, headlineTerms } from '@/services/glossary';
 import { importanceLevel } from './importanceLevels';
 import { addPicture, pictureRef, useFieldPictureSrc } from '@/services/pictures';
 import { acronymLetterPositions } from '@/utils/acronymInference';
@@ -19,7 +22,7 @@ import type { StructuredTagEntry, StructuredTagEntryId } from '@/types';
 import type { GlossaryCardVariant } from './GlossaryCard';
 import { BUILTIN_TAGS } from '../builtinTags';
 import styles from './GlossaryCard.module.css';
-import { TrashIcon, UnlinkIcon } from '@/components/Icons';
+import { CloseIcon, TrashIcon, UnlinkIcon } from '@/components/Icons';
 
 // The card a Glossary card block (GlossaryCard.ts) shows: the record's term, then each field of
 // its type's schema (config/structuredTagTypes.ts) drawn by the field's kind, so a new field is
@@ -85,6 +88,13 @@ function saveEntry(entryId: string, change: { term?: string; fields?: Record<str
   const raw = store.structuredTagEntries[entryId as StructuredTagEntryId];
   if (!raw) return;
   const cur = entryView(raw);
+  // A Fact or Quote with no headline gets one worked out as it's written (utils/factHeadline.ts).
+  if (change.term === undefined && !cur.term.trim() && change.fields) {
+    const next = { ...cur.fields, ...change.fields };
+    const plain = (id: string) => (typeof next[id] === 'string' ? richToPlain(next[id] as string) : '');
+    if (cur.typeKey === 'fact' && plain('statement').trim()) change = { ...change, term: factHeadline(plain('statement'), { terms: headlineTerms(raw.id) }) };
+    if (cur.typeKey === 'quote' && plain('text').trim()) change = { ...change, term: quoteHeadline(plain('text'), plain('who')) };
+  }
   store.updateStructuredTagEntry(raw.id, {
     ...(change.term !== undefined ? { term: change.term } : {}),
     ...(change.fields ? { fields: { ...cur.fields, ...change.fields } } : {}),
@@ -212,6 +222,13 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
   }, [html]);
   useEffect(() => { if (autoFocus && ref.current) focusField(ref.current, 'end'); }, [autoFocus]);
   useEffect(() => { const s = save.current; return () => s(); }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !editable) return;
+    const before = (e: InputEvent) => { if (!pairsBeforeInput(el, e)) typeAfterTermLink(el, e); };
+    el.addEventListener('beforeinput', before);
+    return () => el.removeEventListener('beforeinput', before);
+  }, [editable]);
   if (!editable) {
     return html ? (
       <>
@@ -256,11 +273,14 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
         // Left as saved: only the kept formatting (a pasted or browser-added span goes).
         if (el && el.innerHTML !== clean(el.innerHTML)) el.innerHTML = clean(el.innerHTML);
       }}
-      onKeyDown={(e) => { if (!links.onKeyDown(e, e.currentTarget)) formatKey(e); }}
+      onKeyDown={(e) => { if (!links.onKeyDown(e, e.currentTarget) && !pairsKeyDown(e.currentTarget, e)) formatKey(e); }}
       onPaste={(e) => {
         e.preventDefault();
         const text = e.clipboardData.getData('text/plain');
-        document.execCommand?.('insertText', false, multiline ? text : text.replace(/\s*\n\s*/g, ' '));
+        const put = multiline ? text : text.replace(/\s*\n\s*/g, ' ');
+        // execCommand fires no beforeinput, so a paste at the end of a term link would join it.
+        if (termLinkEndingAtCaret(e.currentTarget)) insertAtCaret(e.currentTarget, put);
+        else document.execCommand?.('insertText', false, put);
       }}
       onDrop={(e) => e.preventDefault()}
     />
@@ -294,6 +314,40 @@ function RichList({ items, onCommit, placeholder, editable, label, autoFocus }: 
       e.stopPropagation();   // a new line: the next item
     }}>
       <RichField html={html} onCommit={(v) => onCommit(richLines(v))} multiline placeholder={placeholder} editable label={label} autoFocus={autoFocus} />
+    </div>
+  );
+}
+
+// Short words shown as chips (a fact's or quote's reasons, 2026-11-03): Enter or a comma adds what's
+// typed, Backspace in an empty box takes the last off, and the ones used on other records are
+// offered as you type (a datalist), so the same few reasons get reused.
+function TagChips({ items, onCommit, placeholder, editable, label, autoFocus, suggestions }: {
+  items: string[]; onCommit: (v: string[]) => void; placeholder?: string; editable: boolean; label: string; autoFocus: boolean; suggestions: string[];
+}) {
+  const [draft, setDraft] = useState('');
+  const listId = useId();
+  const add = (word: string) => {
+    const w = word.trim().replace(/,$/, '').trim();
+    if (w && !items.some((i) => i.toLowerCase() === w.toLowerCase())) onCommit([...items, w]);
+    setDraft('');
+  };
+  if (!editable) return items.length ? <div className={styles.chips}>{items.map((t) => <span key={t} className={styles.chip}>{t}</span>)}</div> : null;
+  return (
+    <div className={styles.chips}>
+      {items.map((t) => (
+        <span key={t} className={styles.chip}>
+          {t}
+          <button type="button" className={styles.chipRemove} aria-label={LABELS.glossaryCard.removeChip(t)} onClick={() => onCommit(items.filter((i) => i !== t))}><CloseIcon /></button>
+        </span>
+      ))}
+      <input className={styles.chipInput} value={draft} placeholder={items.length ? '' : placeholder} aria-label={label} list={listId} autoFocus={autoFocus}
+        data-card-input="" onChange={(e) => { if (e.target.value.endsWith(',')) add(e.target.value); else setDraft(e.target.value); }}
+        onBlur={() => { if (draft.trim()) add(draft); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && draft.trim()) { e.preventDefault(); e.stopPropagation(); add(draft); }
+          else if (e.key === 'Backspace' && !draft && items.length) onCommit(items.slice(0, -1));
+        }} />
+      <datalist id={listId}>{suggestions.filter((s) => !items.includes(s)).map((s) => <option key={s} value={s} />)}</datalist>
     </div>
   );
 }
@@ -517,7 +571,7 @@ function WebLink({ url }: { url: string }) {
 // An entry's term as a link to where it's defined.
 function EntryLink({ entry }: { entry: StructuredTagEntry }) {
   return (
-    <button type="button" className={styles.entryLink} onClick={() => openNotePassage(entry.noteId, definitionPassage(entry.id))}>
+    <button type="button" className={styles.entryLink} onClick={() => openGlossaryEntry(entry.id)}>
       {entry.term || '…'}
     </button>
   );
@@ -690,7 +744,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
           focusField(target, 'end');
           if (!rest) return;
         }
-        document.execCommand?.('insertLineBreak');
+        if (!lineBreakAfterTermLink(target)) document.execCommand?.('insertLineBreak');
         return;
       }
       if (inputs[at + 1]) { focusField(inputs[at + 1], 'start'); return; }
@@ -816,6 +870,9 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
         return <LinksField self={entry} all={all} editable={editable} onCommit={(v) => setField(f.id, v)} />;
       case 'urls':
         return <UrlList items={fieldList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} />;
+      case 'tags':
+        return <TagChips items={fieldList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus}
+          suggestions={[...new Set(all.flatMap((e) => fieldList(e.fields, f.id)))].sort((a, b) => a.localeCompare(b))} />;
       case 'facts':
         return <OwnFields facts={fieldFacts(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} onTake={(fact) => takeFacts([fact])} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} newLine={factsLine} />;
     }

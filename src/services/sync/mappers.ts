@@ -840,7 +840,9 @@ export function structuredTagEntryToRow(e: StructuredTagEntry, userId: string) {
     tag_id:        e.tagId,
     term:          e.term,
     fields:        e.fields ?? {},
-    note_id:       e.noteId,
+    // Made in the Glossary (no note): '' on the wire, since the column is `not null` (2026-11-03;
+    // no migration needed, and nothing to wait for before such a record syncs).
+    note_id:       e.noteId ?? '',
     collection_id: e.collectionId ?? null,
     is_encrypted:  e.isEncrypted ?? false,
     encrypted_payload: e.encryptedPayload ?? null,
@@ -858,7 +860,7 @@ export function rowToStructuredTagEntry(r: Record<string, any>): StructuredTagEn
     tagId:        r.tag_id,
     term:         r.term,
     fields:       r.fields ?? {},
-    noteId:       r.note_id,
+    noteId:       r.note_id || null,
     collectionId: r.collection_id ?? null,
     isEncrypted:      r.is_encrypted ?? false,
     encryptedPayload: r.encrypted_payload ?? null,

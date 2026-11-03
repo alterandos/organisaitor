@@ -92,6 +92,9 @@ import { ConverterPane } from '@/components/ConverterPane/ConverterPane';
 const BlockGuide = lazy(() => import('@/components/BlockGuide/BlockGuidePane'));
 import { ScratchpadPanel } from '@/components/ScratchpadPanel/ScratchpadPanel';
 const LookUpPane = lazy(() => import('@/components/LookUpPane/LookUpPane').then((m) => ({ default: m.LookUpPane })));
+// A Glossary record opened on its own (a link to it, the Glossary, a Glossary list): its card brings the editor's code, so loaded when first opened.
+const SendToListFlow = lazy(() => import('@/components/SendToList/SendToListFlow').then((m) => ({ default: m.SendToListFlow })));
+const GlossaryRecordModal = lazy(() => import('@/components/NotesSection/GlossaryRecordModal').then((m) => ({ default: m.GlossaryRecordModal })));
 import { NotificationCenter } from '@/components/NotificationCenter/NotificationCenter';
 import { LinkHoverPreview } from '@/components/LinkHoverPreview/LinkHoverPreview';
 import { QuickAccessPane } from '@/components/QuickAccessPane/QuickAccessPane';
@@ -177,6 +180,9 @@ export default function App() {
   const blockGuideOpen             = useUIStore((s) => s.blockGuideOpen);
   const scratchpadOpen             = useUIStore((s) => s.scratchpadOpen);
   const lookUpOpen                 = useUIStore((s) => s.lookUpOpen);
+  const glossaryRecordId           = useUIStore((s) => s.glossaryRecordId);
+  const sendToListRequest          = useUIStore((s) => s.sendToListRequest);
+  const glossaryRecordFresh        = useUIStore((s) => s.glossaryRecordFresh);
   const openRecyclingBin           = useUIStore((s) => s.openRecyclingBin);
   const closeRecyclingBin          = useUIStore((s) => s.closeRecyclingBin);
   const editTrackerOpen            = useUIStore((s) => s.editTrackerOpen);
@@ -805,6 +811,8 @@ export default function App() {
         {blockGuideOpen            && <Suspense fallback={null}><BlockGuide /></Suspense>}
         {scratchpadOpen            && <ScratchpadPanel />}
         {lookUpOpen                && <Suspense fallback={null}><LookUpPane /></Suspense>}
+        {sendToListRequest         && <Suspense fallback={null}><SendToListFlow request={sendToListRequest} /></Suspense>}
+        {glossaryRecordId          && <Suspense fallback={null}><GlossaryRecordModal key={glossaryRecordId} entryId={glossaryRecordId} fresh={glossaryRecordFresh} /></Suspense>}
         {editingCalendarEventId    && <CalendarEventPane key={editingCalendarEventId} />}
         {editingCalendarReminderId && <CalendarReminderPane key={editingCalendarReminderId} />}
         {editingCalendarDeadlineId && <CalendarDeadlinePane key={editingCalendarDeadlineId} />}

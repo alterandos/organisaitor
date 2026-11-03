@@ -4,12 +4,11 @@ import { getNoteTabTexts } from '@/utils/noteSearchText';
 import type { Note } from '@/types/notes';
 import type { NoteName } from '@/utils/notes';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
-import '@/services/quickAccessPins';
+import '@/components/ChronicleView/noteRowMenu';
 import styles from './Mosaic.module.css';
 
 // A note in the Mosaic: its title, the start of its text, when it changed, and its colour.
-// Click or Enter opens it (the deepest zoom). Right-click: a note row's menu (colour, open beside,
-// pin to Quick Access).
+// Click or Enter opens it (the deepest zoom). Right-click: a note's menu (ChronicleView/noteRowMenu.ts).
 
 const SNIPPET = 140;
 

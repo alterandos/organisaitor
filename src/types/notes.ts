@@ -130,7 +130,9 @@ export interface StructuredTagEntry {
   tagId:        string;                   // BuiltinTag.id actually applied
   term:         string;                   // the highlighted text itself, e.g. "ASX"
   fields:       Record<string, unknown>;  // keyed by that type's own field schema ids
-  noteId:       NoteId;                   // which note this instance was created in
+  // The note it was made in, kept as where it came from after that note is deleted (a record lives
+  // in the Glossary, not its note: 2026-11-03); null when it was made in the Glossary itself.
+  noteId:       NoteId | null;
   collectionId: CollectionId | null;      // Endeavour
   createdAt:    string;
   updatedAt:    string;

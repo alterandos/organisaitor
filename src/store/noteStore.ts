@@ -65,7 +65,7 @@ export interface NoteActions {
   // Structured tag entries (see src/config/structuredTagTypes.ts and types/notes.ts)
   addStructuredTagEntry: (input: {
     typeKey: string; tagId: string; term: string; fields: Record<string, unknown>;
-    noteId: NoteId; collectionId: CollectionId | null;
+    noteId: NoteId | null; collectionId: CollectionId | null;
   }) => StructuredTagEntryId;
   updateStructuredTagEntry: (id: StructuredTagEntryId, changes: Partial<Pick<StructuredTagEntry, 'term' | 'fields' | 'collectionId'>>) => void;
   deleteStructuredTagEntry: (id: StructuredTagEntryId) => void;
@@ -348,7 +348,7 @@ export const useNoteStore = create<NoteStore>()(
         };
         // An entry made from an encrypted note's text is born encrypted: its `term` is a
         // verbatim excerpt of that note, so a plaintext row would leak it.
-        const host = get().notes[input.noteId];
+        const host = input.noteId ? get().notes[input.noteId] : undefined;
         if (host?.isEncrypted && !isNoteLocked(host)) {
           const secrets = extractEntrySecrets(entry);
           putEntrySecrets(id, secrets, null, true);

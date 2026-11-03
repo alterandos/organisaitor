@@ -54,7 +54,8 @@ export function pinMenuItem(type: PinnableType, entityId: string): ContextMenuIt
 registerContextMenuProvider({
   id: 'note-row.quick-access-pin',
   kind: 'note-row',
-  order: 60,
+  order: 26,
+  section: 'note',
   items: (_ctx, scope) => {
     const id = (scope.data as { noteId?: string } | undefined)?.noteId;
     return id ? [pinMenuItem('note', id)] : [];

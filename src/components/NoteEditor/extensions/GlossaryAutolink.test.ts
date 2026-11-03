@@ -52,6 +52,14 @@ const chip = () => editor.view.dom.querySelector('[data-autolink-chip]');
 const links = () => collectRefGroups(editor.state.doc).map((g) => [g.entryId, editor.state.doc.textBetween(g.from, g.to)]);
 
 describe('linking to the Glossary as you type', () => {
+  it("a Fact's or Quote's headline is never offered: it isn't a name used in writing (2026-11-03)", () => {
+    const notes = useNoteStore.getState();
+    notes.addStructuredTagEntry({ typeKey: 'fact', tagId: 'builtin-fact', term: 'Honey', fields: { statement: 'Honey never spoils.' }, noteId: null, collectionId: null });
+    make();
+    type('I like honey');
+    expect(chip()).toBeNull();
+  });
+
   it('offers the term just typed; Enter links it, and typing carries on normally', () => {
     make();
     type('Every eukaryote');

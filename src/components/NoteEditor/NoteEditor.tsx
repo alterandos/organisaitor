@@ -1081,11 +1081,6 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     const text = request.from < request.to ? editor.state.doc.textBetween(request.from, request.to, ' ').slice(0, 500) : (note?.title ?? '');
     setNoteLinkRequest({ ...request, text });
   }
-  function linkSelectionToNote() {
-    if (!editor || editor.state.selection.empty) return;
-    const { from, to } = editor.state.selection;
-    openNoteLinkPicker({ purpose: 'link', from, to });
-  }
 
   // Add to hub (the selection menu, right-click), and a hub's + Link… (its button asks through a
   // 'hub-link-picker' event, since the hub is drawn outside React).
@@ -1122,9 +1117,6 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       },
       openCreate: () => toolbarActionsRef.current?.openCreateMenu(),
       insertTitle,
-      sendToInbox: openSendToInbox,
-      addToHub: openAddToHub,
-      linkToNote: linkSelectionToNote,
     } satisfies NoteEditorMenuApi,
   }), !!editor && !noteLocked);
 
@@ -2491,13 +2483,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
                 />
               )}
               {editor && (
-                <SelectionMenu
-                  editor={editor}
-                  onMarkAs={(typeKey, from, to) => {
-                    const tag = BUILTIN_TAGS.find((t) => t.typeKey === typeKey);
-                    if (tag) openStructuredTagCreate(tag, from, to);
-                  }}
-                />
+                <SelectionMenu editor={editor} />
               )}
               <EditorContent editor={editor} innerRef={editorContentRef} className={styles.editor} />
               {editor && note && !noteLocked && <NoteLinksFrom note={note} schema={editor.schema} />}

@@ -108,10 +108,11 @@ export function deleteDeadlineWithCleanup(deadlineId: CalendarDeadlineId) {
 
 // Deletes a note and strips any dangling reverse reference to it (e.g. a Task's
 // crossAppRefs entry pointing at this note). The note's own outgoing ArtifactLinkMarks
-// disappear along with its content — nothing to clean up on that side. Any StructuredTagEntry
-// (Acronym, etc. — see structuredTagTypes.ts) created from this note is deleted too, since
-// its anchoring mark is about to disappear along with the note's content.
-export function deleteNoteWithCleanup(noteId: NoteId) {
+// disappear along with its content — nothing to clean up on that side. The Glossary records made in
+// it stay (a record lives in the Glossary, 2026-11-03), remembering the note as where they came
+// from, except `deleteEntries`: the ones the person chose to delete with it (services/noteDelete.ts
+// asks about the records this note was the only one to hold).
+export function deleteNoteWithCleanup(noteId: NoteId, { deleteEntries = [] }: { deleteEntries?: string[] } = {}) {
   const tasks = useTaskStore.getState().tasks;
   for (const task of Object.values(tasks)) {
     if (task.crossAppRefs?.some((r) => r.type === 'note' && r.id === noteId)) {
@@ -136,9 +137,7 @@ export function deleteNoteWithCleanup(noteId: NoteId) {
     if (list.crossAppRefs?.some(isThisNote)) lists.updateListLinks(list.id, { crossAppRefs: list.crossAppRefs.filter((r) => !isThisNote(r)) });
   }
   const { structuredTagEntries, deleteStructuredTagEntry } = useNoteStore.getState();
-  for (const entry of Object.values(structuredTagEntries)) {
-    if (entry.noteId === noteId) deleteStructuredTagEntry(entry.id);
-  }
+  for (const id of deleteEntries) if (structuredTagEntries[id as never]) deleteStructuredTagEntry(id as never);
   useNoteStore.getState().deleteNote(noteId);
 }
 

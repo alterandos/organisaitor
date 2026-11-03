@@ -31,6 +31,8 @@ export function scopeContext(): ScopeContext {
 }
 
 const noteCovered = (n: Note | undefined, ctx: ScopeContext) => !!n && noteScopes(n, ctx).length > 0;
+// A Glossary record is covered by the note it came from (one made in the Glossary by none).
+const entryNote = (e: StructuredTagEntry): Note | undefined => (e.noteId ? useNoteStore.getState().notes[e.noteId] : undefined);
 const listCovered = (l: List | undefined, ctx: ScopeContext) => !!l && listScopes(l, ctx).length > 0;
 
 // A Recycling Bin snapshot of a covered item that was deleted before it was encrypted.
@@ -41,7 +43,7 @@ function trashHeld(e: TrashEntry, ctx: ScopeContext): boolean {
     case 'note': return noteCovered(s as unknown as Note, ctx);
     case 'list': return listCovered(s as unknown as List, ctx);
     case 'listItem': return listCovered(useListStore.getState().lists[(s as unknown as ListItem).listId], ctx);
-    case 'structuredTagEntry': return noteCovered(useNoteStore.getState().notes[(s as unknown as StructuredTagEntry).noteId], ctx);
+    case 'structuredTagEntry': return noteCovered(entryNote(s as unknown as StructuredTagEntry), ctx);
     default: return false;
   }
 }
@@ -57,7 +59,7 @@ export const ENCRYPTABLE_KINDS: EncryptableKind[] = [
     holds: {
       notes: (r, ctx) => !(r as Note).isEncrypted && noteCovered(r as Note, ctx),
       structured_tag_entries: (r, ctx) => !(r as StructuredTagEntry).isEncrypted
-        && noteCovered(useNoteStore.getState().notes[(r as StructuredTagEntry).noteId], ctx),
+        && noteCovered(entryNote(r as StructuredTagEntry), ctx),
       trash_items: (r, ctx) => trashHeld(r as TrashEntry, ctx),
     },
   },

@@ -10,7 +10,7 @@ import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon } from '@/utils/notes';
 import { formatRelativeTime } from '@/utils/date';
 import { isNoteLocked } from '@/services/noteSecrets';
-import { deleteNoteWithCleanup } from '@/services/crossAppLinkCleanup';
+import { deleteNoteAsked } from '@/services/noteDelete';
 import { useLongPress } from '@/hooks/useLongPress';
 import { usePinAction } from '@/hooks/usePinAction';
 import { ActionSheet } from '@/components/ActionSheet/ActionSheet';
@@ -212,8 +212,7 @@ function NoteRow({ note, raw, depth }: { note: Note; raw: Note; depth: number })
       label: LABELS.rowActions.delete, icon: <TrashIcon width="1em" height="1em" />, destructive: true,
       onSelect: async () => {
         const subNotes = Object.values(useNoteStore.getState().notes).some((n) => n.parentId === note.id);
-        if (!(await confirmDelete('note', title, undefined, { empty: !locked && noteIsEmpty(note, subNotes) }))) return;
-        deleteNoteWithCleanup(note.id);
+        await deleteNoteAsked(note.id, title, { empty: !locked && noteIsEmpty(note, subNotes) });
       },
     },
   ];

@@ -25,7 +25,7 @@ import { LABELS } from '@/config/labels';
 import { noteView } from '@/services/noteSecrets';
 import { listView } from '@/services/listSecrets';
 import { glossaryEntries, glossaryEntry, type GlossaryEntry } from '@/services/glossary';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { openGlossaryEntry } from '@/services/notePassage';
 import { PLACES, placeById, type Place } from '@/config/places';
 import type { List } from '@/types/lists';
 import type { Note, NoteId, NoteTagId } from '@/types/notes';
@@ -254,7 +254,7 @@ const glossaryProvider: QuickAccessProvider = {
   resolve: (id) => { const e = glossaryEntry(id); return e && !e.locked ? glossaryItem(e) : null; },
   navigate: (id) => {
     const e = glossaryEntry(id);
-    if (e) openNotePassage(e.noteId, definitionPassage(e.id));
+    if (e) openGlossaryEntry(e.id);
   },
 };
 
@@ -297,6 +297,23 @@ export function resolveRecentItems(entries: RecentItemEntry[]): { items: QuickAc
     else stale.push(entry);
   }
   return { items, stale };
+}
+
+// The notes to offer when the person is choosing one with nothing typed yet (adopted 2026-11-02,
+// CLAUDE.md "Choosing a note: pinned, then recent"): the notes pinned to Quick Access, in their
+// order, then the notes visited lately (Go to's Recent), newest first, leaving out pinned ones and
+// any in `exclude` (already open beside). The empty pane side by side and the note picker both
+// read it, so the two always offer the same notes in the same order.
+export function notesToOffer(
+  pins: Record<string, PinnedItem>, visits: Record<string, RecentItemEntry>, exclude: ReadonlySet<string> = new Set(),
+): { pinned: QuickAccessItem[]; recent: QuickAccessItem[] } {
+  const isFree = (i: QuickAccessItem) => i.type === 'note' && !exclude.has(i.entityId);
+  const pinned = resolvePinnedItems(pins).filter(isFree);
+  const taken = new Set(pinned.map((i) => i.key));
+  const sorted = Object.values(visits).filter((e) => e.type === 'note')
+    .sort((a, b) => new Date(b.lastVisitedAt).getTime() - new Date(a.lastVisitedAt).getTime());
+  const recent = resolveRecentItems(sorted).items.filter((i) => isFree(i) && !taken.has(i.key));
+  return { pinned, recent };
 }
 
 

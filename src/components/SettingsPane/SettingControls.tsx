@@ -19,12 +19,12 @@ export function Toggle({
 
 export function SettingRow({
   name, desc, children,
-}: { name: string; desc: string; children: React.ReactNode }) {
+}: { name: string; desc?: string; children: React.ReactNode }) {
   return (
     <div className={styles.setting}>
       <div className={styles.settingInfo}>
         <span className={styles.settingName}>{name}</span>
-        <span className={styles.settingDesc}>{desc}</span>
+        {desc && <span className={styles.settingDesc}>{desc}</span>}
       </div>
       {children}
     </div>

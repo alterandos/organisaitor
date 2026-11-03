@@ -6,6 +6,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useSecretsVersion } from '@/services/noteSecrets';
 import { glossaryEntries } from '@/services/glossary';
 import { LABELS } from '@/config/labels';
+import { HEADLINED_KINDS } from '@/config/structuredTagTypes';
 import { objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { getSession } from '../objects/session';
 import { forgetPassedOffers, typingOfferPlugin } from './typingOffer';
@@ -40,8 +41,9 @@ function terms(): Term[] {
   if (cache && cache.entries === entries && cache.version === version) return cache.terms;
   // Every name a record has (its term, and its acronym or what that stands for: glossaryNames), so
   // typing either offers the same record.
+  // A Fact's or Quote's headline isn't a name used in writing: never offered (HEADLINED_KINDS).
   const list = glossaryEntries()
-    .filter((e) => !e.locked)
+    .filter((e) => !e.locked && !HEADLINED_KINDS.has(e.typeKey))
     .flatMap((e) => [...new Set([e.term.trim(), e.short, e.long].filter((n): n is string => !!n && n.length >= MIN_TERM))]
       .map((name) => ({ entryId: e.id, typeKey: e.typeKey, term: name, lower: name.toLowerCase(), icon: e.icon, meaning: e.meaning })))
     .sort((a, b) => b.lower.length - a.lower.length);

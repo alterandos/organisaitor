@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { usePinnedItemsStore } from '@/store/pinnedItemsStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
-import { resolvePinnedItems, resolveRecentItems, searchQuickAccessItems, type QuickAccessItem } from '@/utils/quickAccess';
+import { notesToOffer, searchQuickAccessItems, type QuickAccessItem } from '@/utils/quickAccess';
 import { PinIcon, SearchIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
 import styles from './NoteSplitView.module.css';
@@ -20,12 +20,9 @@ export function EmptyPane({ openIds, onPick, onChoose }: { openIds: ReadonlySet<
   const recentEntries = useRecentItemsStore((s) => s.items);
   const [query, setQuery] = useState('');
 
-  const pinned = useMemo(() => freeNotes(resolvePinnedItems(pins), openIds), [pins, openIds]);
-  const recent = useMemo(() => {
-    const sorted = Object.values(recentEntries).filter((e) => e.type === 'note')
-      .sort((a, b) => new Date(b.lastVisitedAt).getTime() - new Date(a.lastVisitedAt).getTime());
-    return freeNotes(resolveRecentItems(sorted).items, openIds).filter((i) => !pinned.some((p) => p.key === i.key)).slice(0, RECENT_COUNT);
-  }, [recentEntries, openIds, pinned]);
+  const offered = useMemo(() => notesToOffer(pins, recentEntries, openIds), [pins, recentEntries, openIds]);
+  const pinned = offered.pinned;
+  const recent = offered.recent.slice(0, RECENT_COUNT);
   const found = useMemo(() => (query.trim() ? freeNotes(searchQuickAccessItems(query.trim(), 12), openIds) : []), [query, openIds]);
 
   const row = (item: QuickAccessItem) => (

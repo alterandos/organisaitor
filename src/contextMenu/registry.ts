@@ -42,14 +42,24 @@ export function scopesAt(target: Element, section: AppView): ContextMenuScope[] 
 export function resolveContextMenu(ctx: ContextMenuContext): ContextMenuSection[] {
   const out: ContextMenuSection[] = [];
   for (const scope of ctx.scopes) {
-    const sections: { order: number; items: ContextMenuSection }[] = [];
+    const sections: { order: number; section?: string; items: ContextMenuSection }[] = [];
     if (scope.items) sections.push({ order: 0, items: scope.items(ctx) });
     for (const p of providers.values()) {
       if (p.kind !== scope.kind || (p.when && !p.when(ctx, scope))) continue;
-      sections.push({ order: p.order ?? 100, items: p.items(ctx, scope) });
+      sections.push({ order: p.order ?? 100, section: p.section, items: p.items(ctx, scope) });
     }
     const nonEmpty = sections.filter((s) => s.items.length > 0).sort((a, b) => a.order - b.order);
-    out.push(...nonEmpty.map((s) => s.items));
+    // Providers naming the same section share one, where the first of them sits.
+    const merged: ContextMenuSection[] = [];
+    const named = new Map<string, ContextMenuSection>();
+    for (const s of nonEmpty) {
+      const shared = s.section ? named.get(s.section) : undefined;
+      if (shared) { shared.push(...s.items); continue; }
+      const items = [...s.items];
+      if (s.section) named.set(s.section, items);
+      merged.push(items);
+    }
+    out.push(...merged);
     if (nonEmpty.length > 0 && !scope.propagate) break;
   }
   return out;

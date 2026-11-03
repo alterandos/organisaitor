@@ -7,7 +7,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { isNoteLocked, noteView } from '@/services/noteSecrets';
 import { editNoteContent, editNoteText } from '@/services/noteContentEdit';
-import { noteHasPassage, openNotePassage, definitionPassage } from '@/services/notePassage';
+import { noteHasPassage, openNotePassage, openGlossaryEntry } from '@/services/notePassage';
 import { glossaryEntry } from '@/services/glossary';
 import { showToast } from '@/components/Toast/showToast';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
@@ -233,7 +233,7 @@ export function openHubLink(attrs: { kind: HubLinkKind; noteId: string | null; e
   if (attrs.kind === 'glossary') {
     const entry = attrs.entryId ? glossaryEntry(attrs.entryId) : null;
     if (!entry) { showToast({ message: L.termGone }); return; }
-    openNotePassage(entry.noteId, definitionPassage(entry.id));
+    openGlossaryEntry(entry.id);
     return;
   }
   if (attrs.kind === 'note') {

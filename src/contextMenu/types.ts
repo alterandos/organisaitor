@@ -50,12 +50,16 @@ export interface ContextMenuContext {
 }
 
 // Adds a section to every scope of one kind, from anywhere: a feature extends an existing place
-// without touching it. One provider = one section of the menu.
+// without touching it. One provider = one section of the menu, unless providers name the same
+// `section`: those share one (2026-11-02, so a family of small providers doesn't draw a divider
+// after every item).
 export interface ContextMenuProvider {
   id:     string;
   kind:   string;
-  // Lower first. A scope's own `items` are order 0; providers default to 100.
+  // Lower first. A scope's own `items` are order 0; providers default to 100. Within a shared
+  // section, items follow their providers' order; the section sits where its lowest order puts it.
   order?: number;
+  section?: string;
   when?:  (ctx: ContextMenuContext, scope: ContextMenuScope) => boolean;
   items:  (ctx: ContextMenuContext, scope: ContextMenuScope) => ContextMenuItem[];
 }

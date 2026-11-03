@@ -7,15 +7,15 @@ import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { formatDate } from '@/utils/date';
 import { NOTE_TEMPLATES } from '@/config/noteTemplates';
 import { getNoteEffectiveCollectionId } from '@/utils/notes';
-import { deleteNoteWithCleanup } from '@/services/crossAppLinkCleanup';
+import { deleteNoteAsked } from '@/services/noteDelete';
 import { noteView, isNoteLocked, useSecretsVersion } from '@/services/noteSecrets';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import type { NoteTagId, NoteId, CollectionId } from '@/types';
 import type { Note } from '@/types/notes';
 import styles from './NoteList.module.css';
 import { LABELS } from '@/config/labels';
-import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
-import '@/components/NoteEditor/noteColorMenu';
+import './noteRowMenu';
+import type { NoteRowMenuData } from './noteRowMenu';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { useWaitingForEncryption } from '@/hooks/useWaitingForEncryption';
 import { EditIcon, IndentIcon, OutdentIcon, TrashIcon } from '@/components/Icons';
@@ -68,24 +68,20 @@ function NoteRow({ note: rawNote, indent, siblings, allNotes }: NoteRowProps) {
     : undefined;
 
   const deleteNote = async () => {
-    if (!(await confirmDelete('note', `${note.title || 'Untitled'}${locked ? ' (encrypted)' : ''}`, undefined, { empty: !locked && noteIsEmpty(note, children.length > 0) }))) return;
-    if (useUIStore.getState().editingNoteId === note.id) useUIStore.getState().closeNote();
-    deleteNoteWithCleanup(note.id);
+    await deleteNoteAsked(note.id, `${note.title || 'Untitled'}${locked ? ' (encrypted)' : ''}`, { empty: !locked && noteIsEmpty(note, children.length > 0) });
   };
   const handleDelete = (e: React.MouseEvent) => { e.stopPropagation(); void deleteNote(); };
 
-  // Right-click: the same actions as the row's buttons, plus Open (a `note-row` scope, see
-  // CLAUDE.md "Right-click menus"; another feature can add to it with a `note-row` provider).
+  // Right-click: a note's menu (`noteRowMenu.ts`), with what only the list can do: indent to the
+  // note above, move up a level, delete (asking first).
   useContextMenuScope(rowRef, () => ({
     kind: 'note-row',
-    data: { noteId: note.id },
-    items: () => [
-      { id: 'open', label: LABELS.contextMenu.openNote, icon: '📝', run: () => openNote(note.id) },
-      { id: 'details', label: LABELS.contextMenu.noteDetails, icon: <EditIcon />, run: () => showEditNoteMeta(note.id) },
-      ...(canIndent ? [{ id: 'indent', label: LABELS.rowActions.indentNote, icon: <IndentIcon />, run: () => indentNote(note.id as NoteId, siblings[myPos - 1].id as NoteId) }] : []),
-      ...(canOutdent ? [{ id: 'outdent', label: LABELS.rowActions.outdent, icon: <OutdentIcon />, run: () => outdentNote(note.id as NoteId) }] : []),
-      { id: 'delete', label: LABELS.rowActions.delete, icon: <TrashIcon width="1em" height="1em" />, destructive: true, run: deleteNote },
-    ],
+    data: {
+      noteId: note.id,
+      indent: canIndent ? () => indentNote(note.id as NoteId, siblings[myPos - 1].id as NoteId) : undefined,
+      outdent: canOutdent ? () => outdentNote(note.id as NoteId) : undefined,
+      delete: () => void deleteNote(),
+    } satisfies NoteRowMenuData,
   }));
 
   return (

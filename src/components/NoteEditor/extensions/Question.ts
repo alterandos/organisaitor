@@ -13,7 +13,7 @@ import { formatDate } from '@/utils/date';
 import { GLOSSARY_TYPES } from '@/config/structuredTagTypes';
 import { useNoteStore } from '@/store/noteStore';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { openGlossaryEntry } from '@/services/notePassage';
 import type { StructuredTagEntryId } from '@/types';
 import { objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import type { NoteObjectContext } from '../objects/types';
@@ -453,7 +453,7 @@ function answeredByWidget(entryId: string): HTMLElement {
   link.type = 'button';
   link.textContent = raw?.term || '…';
   link.addEventListener('mousedown', (e) => e.preventDefault());
-  link.addEventListener('click', () => { if (raw) openNotePassage(raw.noteId, definitionPassage(entryId)); });
+  link.addEventListener('click', () => { if (raw) openGlossaryEntry(entryId); });
   el.append(label, link);
   return el;
 }

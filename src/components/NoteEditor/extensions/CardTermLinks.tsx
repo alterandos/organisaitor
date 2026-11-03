@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useSettingsStore } from '@/store/settingsStore';
 import { glossaryEntry } from '@/services/glossary';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { openGlossaryEntry } from '@/services/notePassage';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import type { AnchorBox } from '@/utils/floatingPlacement';
 import { termsEndingAt, type Term } from './GlossaryAutolink';
 import { OfferChip, TermCard } from './CardTermLinkParts';
+import { insertAtCaret, termLinkEndingAtCaret } from './cardFieldText';
 
 // Links to Glossary terms inside a Glossary card's fields (asked for by the user 2026-10-22: a
 // Concept that mentions an acronym defined elsewhere should link it, with its card on hover). A
@@ -61,6 +62,18 @@ function rangeBeforeCaret(field: HTMLElement, length: number): Range | null {
   range.setStart(node, offset - left);
   range.setEnd(end.node, end.offset);
   return range;
+}
+
+// Typing at the very end of a term link goes after it, not into it (found 2026-11-02: text typed on
+// after linking "normalisation" in a Concept card became part of the link). A browser puts the caret
+// at the end of the link's own text even when it's placed after the link, and a contenteditable
+// carries on whatever inline element the caret is at the end of, so the character is put in here.
+// Call from a native `beforeinput` listener; true when it put the text in itself.
+export function typeAfterTermLink(field: HTMLElement, e: InputEvent): boolean {
+  if (e.inputType !== 'insertText' || !e.data || !termLinkEndingAtCaret(field)) return false;
+  e.preventDefault();
+  insertAtCaret(field, e.data);
+  return true;
 }
 
 export function useCardTermLinks(selfId: string | undefined): {
@@ -149,7 +162,7 @@ export function useCardTermLinks(selfId: string | undefined): {
     if (!link || !(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
     const entry = glossaryEntry(link.getAttribute('data-term')!);
-    if (entry) openNotePassage(entry.noteId, definitionPassage(entry.id));
+    if (entry) openGlossaryEntry(entry.id);
   };
 
   const overlay = (

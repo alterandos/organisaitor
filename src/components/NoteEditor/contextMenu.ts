@@ -1,27 +1,29 @@
 import { createElement } from 'react';
 import type { Editor } from '@tiptap/react';
+import { TextSelection } from '@tiptap/pm/state';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
-import { quoteFromSelection } from './extensions/Quote';
-import { conclusionFromSelection } from './extensions/Conclusion';
-import { mathsFromSelection } from './extensions/Maths';
-import type { ContextMenuScope } from '@/contextMenu/types';
+import type { ContextMenuItem, ContextMenuScope, ContextMenuSection } from '@/contextMenu/types';
 import { LABELS } from '@/config/labels';
 import { setNormalText } from './extensions/normalText';
-import { LinkIcon } from '@/components/Icons';
+import { LinkIcon, TagIcon } from '@/components/Icons';
+import { linkToTerm, selectionActions, termsFor, type SelectionAction, type SelectionActionGroup } from './objects/selectionActions';
 
 // The Notes editor's right-click menu. NoteEditor declares a `note-editor` scope on the editing
 // surface whose data is this API (the actions only it can perform); the providers below turn it
 // into sections. Another feature adds to this menu by registering its own provider for
 // `note-editor` (say, "Save tab as template"), without touching these.
+//
+// Laid out by "clicked thing first, families fold" (CLAUDE.md "Right-click menus"; tidied
+// 2026-11-02, when it had grown to a dozen sections): whatever the click landed on (a heading, a
+// block, a link: their own providers, orders 4–7) first; then, on selected text, its four families
+// (Mark as, Turn into, Link, Send to: objects/selectionActions.ts, the list the `\` menu reads);
+// then the clipboard; then formatting (section 'format'); then the note itself (section 'note').
 export interface NoteEditorMenuApi {
   editor:      Editor;
   paste:       (plain: boolean) => Promise<void>;
   openLink:    () => void;   // Ctrl+L: the selection's link input, or the New link pane with none
   openCreate:  () => void;   // Ctrl+Q: the Create ▸ menu for the selection
   insertTitle: () => void;   // Ctrl+H, H
-  sendToInbox: () => void;   // Send to inbox… for the selection
-  addToHub:    () => void;   // Add to hub… for the selection
-  linkToNote:  () => void;   // Link to a note… for the selection (not Ctrl+L: that's a web link)
 }
 
 const api = (scope: ContextMenuScope) => scope.data as NoteEditorMenuApi;
@@ -42,32 +44,72 @@ registerContextMenuProvider({
       { id: 'copy', label: LABELS.contextMenu.copy, icon: '⧉', shortcut: 'Ctrl+C', disabled: empty, run: exec('copy') },
       { id: 'paste', label: LABELS.contextMenu.paste, icon: '📋', shortcut: 'Ctrl+V', run: () => paste(false) },
       { id: 'paste-plain', label: LABELS.contextMenu.pastePlain, shortcut: 'Ctrl+Shift+V', run: () => paste(true) },
+      { id: 'select-all', label: LABELS.contextMenu.selectAll, shortcut: 'Ctrl+A', run: () => { editor.chain().focus().selectAll().run(); } },
     ];
   },
 });
 
+// The actions in one family, drawn as the submenu's sections (by their set).
+function bySet(actions: SelectionAction[]): ContextMenuSection[] {
+  const sets = new Map<string, ContextMenuItem[]>();
+  for (const a of actions) {
+    const key = a.set ?? '';
+    if (!sets.has(key)) sets.set(key, []);
+    sets.get(key)!.push({ id: a.key, label: a.label, icon: a.icon, run: a.run });
+  }
+  return [...sets.values()];
+}
+
+const MENU_TERMS = 6;
+
+// On selected text: Mark as ▸, Turn into ▸, Link ▸, Send to ▸.
+registerContextMenuProvider({
+  id: 'note-editor.selection',
+  kind: 'note-editor',
+  order: 8,
+  items: (_ctx, scope) => {
+    const { editor, openLink, openCreate } = api(scope);
+    const { from, to, empty } = editor.state.selection;
+    if (empty) return [];
+    const range = { from, to };
+    const actions = selectionActions(editor, range);
+    const of = (g: SelectionActionGroup) => actions.filter((a) => a.group === g);
+    const C = LABELS.contextMenu;
+    const items: ContextMenuItem[] = [];
+    if (of('mark').length) items.push({ id: 'mark-as', label: C.markAs, icon: createElement(TagIcon), submenu: bySet(of('mark')) });
+    if (editor.isEditable) {
+      items.push({ id: 'turn-into', label: C.turnInto, icon: '⇢', submenu: [
+        bySet(of('turn')).flat(),
+        [{ id: 'create', label: C.createFrom, icon: '🧩', shortcut: 'Ctrl+Q', run: openCreate }],
+      ] });
+      const { terms } = termsFor(editor.state.doc.textBetween(from, to, ' '));
+      const termItems: ContextMenuItem[] = terms.slice(0, MENU_TERMS).map((e) => ({
+        id: `term-${e.id}`, label: e.term, icon: e.icon,
+        run: () => {
+          linkToTerm(editor, range, e);
+          editor.view.dispatch(editor.view.state.tr.setSelection(TextSelection.create(editor.view.state.doc, to)));
+        },
+      }));
+      items.push({ id: 'link', label: C.linkFamily, icon: createElement(LinkIcon), submenu: [
+        [{ id: 'web-link', label: C.webLink, shortcut: 'Ctrl+L', run: openLink }, ...bySet(of('link')).flat()],
+        ...(termItems.length ? [[{ id: 'glossary-term', label: C.glossaryTerm, icon: '📖', submenu: [termItems] }]] : []),
+      ] });
+    }
+    if (of('send').length) items.push({ id: 'send-selection', label: LABELS.sendSelection.menu, icon: '➦', submenu: bySet(of('send')) });
+    return items;
+  },
+});
+
+// With nothing selected: a new web link (the New link pane), beside the formatting.
 registerContextMenuProvider({
   id: 'note-editor.insert',
   kind: 'note-editor',
-  order: 20,
+  order: 29,
+  section: 'format',
   items: (_ctx, scope) => {
-    const { editor, openLink, openCreate } = api(scope);
-    const { view } = editor;
-    const { from, to, empty } = editor.state.selection;
-    const B = LABELS.noteBlocks;
-    return [
-      { id: 'link', label: LABELS.contextMenu.link, icon: createElement(LinkIcon), shortcut: 'Ctrl+L', run: openLink },
-      { id: 'create', label: LABELS.contextMenu.createFrom, icon: '🧩', shortcut: 'Ctrl+Q', disabled: empty, run: openCreate },
-      // The selection made into a block: the same choices as the `\` menu on a selection.
-      ...(empty ? [] : [{
-        id: 'turn-into', label: LABELS.contextMenu.turnInto, icon: '⇢',
-        submenu: [[
-          { id: 'turn-quote', label: B.quote.turnInto, icon: '❝', run: () => quoteFromSelection(view, from, to) },
-          { id: 'turn-conclusion', label: B.conclusion.turnInto, icon: '∴', run: () => conclusionFromSelection(view, from, to) },
-          { id: 'turn-maths', label: B.maths.turnInto, icon: '∑', run: () => mathsFromSelection(view, from, to) },
-        ]],
-      }]),
-    ];
+    const { editor, openLink } = api(scope);
+    if (!editor.state.selection.empty) return [];
+    return [{ id: 'link', label: LABELS.contextMenu.link, icon: createElement(LinkIcon), shortcut: 'Ctrl+L', run: openLink }];
   },
 });
 
@@ -75,6 +117,7 @@ registerContextMenuProvider({
   id: 'note-editor.style',
   kind: 'note-editor',
   order: 30,
+  section: 'format',
   items: (_ctx, scope) => {
     const { editor, insertTitle } = api(scope);
     const levels = [1, 2, 3, 4, 5] as const;
@@ -97,15 +140,5 @@ registerContextMenuProvider({
         [{ id: 'normal', label: LABELS.contextMenu.normalText, shortcut: 'Ctrl+H, 0', run: () => setNormalText(editor) }],
       ],
     }];
-  },
-});
-
-registerContextMenuProvider({
-  id: 'note-editor.select',
-  kind: 'note-editor',
-  order: 40,
-  items: (_ctx, scope) => {
-    const { editor } = api(scope);
-    return [{ id: 'select-all', label: LABELS.contextMenu.selectAll, shortcut: 'Ctrl+A', run: () => { editor.chain().focus().selectAll().run(); } }];
   },
 });

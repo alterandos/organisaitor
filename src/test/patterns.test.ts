@@ -1502,3 +1502,72 @@ describe('pattern: a done item says so at the top of its pane', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('pattern: choosing a note offers pinned, then recent (2026-11-02)', () => {
+  it('the empty pane and the note picker read notesToOffer; only Quick Access resolves pins and visits itself', () => {
+    const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+    expect(read('components/NoteSplitView/EmptyPane.tsx')).toContain('notesToOffer(');
+    expect(read('components/NotePickerModal/NotePickerModal.tsx')).toContain('notesToOffer(');
+    const allowed = new Set(['src/utils/quickAccess.ts', 'src/components/QuickAccessPane/QuickAccessPane.tsx']);
+    const hits = findMatches(SOURCE_FILES, /\b(resolvePinnedItems|resolveRecentItems)\(/, { skipComments: true }).filter((h) => !allowed.has(rel(h.file)));
+    expect(describeHits(hits)).toBe('');
+  });
+});
+
+describe('pattern: brackets and quotes close themselves by one set of rules (2026-11-02)', () => {
+  it('the pairs are listed only in utils/autoPairs.ts, and note text and card fields both use it', () => {
+    const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+    const hits = findMatches(SOURCE_FILES, /'\('\s*:\s*'\)'/, { skipComments: true }).filter((h) => rel(h.file) !== 'src/utils/autoPairs.ts');
+    expect(describeHits(hits)).toBe('');
+    expect(read('components/NoteEditor/extensions/AutoBrackets.ts')).toContain("from '@/utils/autoPairs'");
+    expect(read('components/NoteEditor/extensions/cardFieldPairs.ts')).toContain("from '@/utils/autoPairs'");
+    expect(read('components/NoteEditor/extensions/GlossaryCardBody.tsx')).toContain('pairsBeforeInput(');
+  });
+});
+
+describe('pattern: a built-in list fed from elsewhere (2026-11-02)', () => {
+  it('the Dictionary, the reading list and Interesting facts find and make their list through services/builtInLists.ts', () => {
+    const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+    for (const f of ['services/dictionary.ts', 'services/readingList.ts', 'services/interestingFacts.ts']) {
+      expect(read(f), f).toContain("from '@/services/builtInLists'");
+      expect(read(f), f).not.toMatch(/\.addList\(/);
+    }
+    const hits = findMatches(SOURCE_FILES, /listView\(\w+\)\.typeId\s*===/, { skipComments: true }).filter((h) => rel(h.file) !== 'src/services/builtInLists.ts');
+    expect(describeHits(hits)).toBe('');
+  });
+});
+
+describe('pattern: selected text has one list of actions (2026-11-02)', () => {
+  it('the backslash selection menu and right-click both read objects/selectionActions.ts; no menu builds its own', () => {
+    const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+    expect(read('components/NoteEditor/objects/SelectionMenu.tsx')).toContain('selectionActions(');
+    expect(read('components/NoteEditor/contextMenu.ts')).toContain('selectionActions(');
+    const editorFiles = SOURCE_FILES.filter((f) => rel(f).startsWith('src/components/NoteEditor/') && rel(f) !== 'src/components/NoteEditor/objects/selectionActions.ts');
+    const hits = findMatches(editorFiles, /\b(sendSelectedText|addWordFromSelection)\(/, { skipComments: true });
+    expect(describeHits(hits)).toBe('');
+  });
+});
+
+describe('pattern: a Glossary record lives in the Glossary (2026-11-03)', () => {
+  it('a record is opened through openGlossaryEntry (its note while that shows it, else on its own), not by finding its passage by hand', () => {
+    const allowed = new Set(['src/services/notePassage.ts', 'src/components/NotesSection/GlossaryOrigin.tsx']);
+    const hits = findMatches(SOURCE_FILES, /\bdefinitionPassage\(/, { skipComments: true }).filter((h) => !allowed.has(rel(h.file)));
+    expect(describeHits(hits)).toBe('');
+  });
+
+  it('the UI deletes a note through deleteNoteAsked, which asks about the records only it holds', () => {
+    const ui = SOURCE_FILES.filter((f) => rel(f).startsWith('src/components/'));
+    const hits = findMatches(ui, /\bdeleteNoteWithCleanup\b/, { skipComments: true });
+    expect(describeHits(hits)).toBe('');
+  });
+});
+
+describe('pattern: a Glossary list is built from records (2026-11-03)', () => {
+  it('its rows come from glossaryListRows, and things sent to a list go through sendDraftsToList', () => {
+    const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+    expect(read('components/ListsSection/GlossaryListView.tsx')).toContain('glossaryListRows(');
+    expect(read('components/SendToList/SendToListFlow.tsx')).toContain('sendDraftsToList(');
+    const hits = findMatches(SOURCE_FILES, /GLOSSARY_ENTRY_FIELD/, { skipComments: true }).filter((h) => rel(h.file) !== 'src/services/glossaryLists.ts');
+    expect(describeHits(hits)).toBe('');
+  });
+});
