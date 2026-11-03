@@ -5,7 +5,6 @@ import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, replaceTypedWithBlock, selectButton, type BlockDesign } from './blockDesigns';
 import { listDecorations, newLists, pointAt, pointsEnter, textFieldsIn } from './ProsCons';
-import { createGlyph } from '@/components/Icons';
 
 // Options (`\options`): the different ways to one end — policies for a goal, routes, approaches —
 // asked for 2026-10-15 as distinct from the breakdown (parts that make up a whole) and the types
@@ -326,22 +325,6 @@ function scoreWidget(view: EditorView, getPos: () => number | undefined, score: 
   return el;
 }
 
-function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.contentEditable = 'false';
-  b.setAttribute('data-op-delete', '');
-  b.title = LABELS.noteBlocks.options.deleteOption;
-  b.setAttribute('aria-label', LABELS.noteBlocks.options.deleteOption);
-  b.append(createGlyph('trash'));
-  b.addEventListener('mousedown', (e) => e.preventDefault());
-  b.addEventListener('click', (e) => {
-    e.preventDefault();
-    const p = getPos();
-    if (p !== undefined && view.editable) deleteOption(view, view.state.doc.resolve(p).before());
-  });
-  return b;
-}
 
 function toolsWidget(view: EditorView, getPos: () => number | undefined, attrs: Record<string, unknown>): HTMLElement {
   const L = LABELS.noteBlocks.options;
@@ -384,10 +367,6 @@ function optionsDecorations(state: EditorState): DecorationSet | null {
         const score = item.attrs.score as number;
         decos.push(Decoration.widget(ip + 1, (view, getPos) => scoreWidget(view, getPos, score),
           { side: -1, key: `op-score-${k}-${i}-${score}`, ignoreSelection: true, stopEvent: () => true }));
-      }
-      if (n > MIN_OPTIONS) {
-        decos.push(Decoration.widget(ip + item.nodeSize - 1, (view, getPos) => deleteWidget(view, getPos),
-          { side: 1, key: `op-delete-${k}-${i}`, ignoreSelection: true, stopEvent: () => true }));
       }
       const name = item.child(0);
       const note = item.child(1);

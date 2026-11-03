@@ -74,11 +74,9 @@ describe('breakdown block', () => {
     type('\\breakdown Whole');
     const dom = editor.view.dom;
     expect(dom.querySelectorAll('[data-bd-spokes] line')).toHaveLength(3);
-    expect(dom.querySelectorAll('[data-bd-delete]')).toHaveLength(3);
     expect(deletePart(editor.view, parts()[2])).toBe(true);
     expect(deletePart(editor.view, parts()[1])).toBe(false);
     expect(parts()).toHaveLength(2);
-    expect(dom.querySelectorAll('[data-bd-delete]')).toHaveLength(0);
     expect(hubPlacement(0, 4)).toEqual({ x: 50, y: 13 });
   });
 

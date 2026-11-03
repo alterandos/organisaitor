@@ -232,6 +232,19 @@ Tasks linked to events (built 2026-10-23), still to do: a follow-up of an event 
 ### Any block from selected text (confirmed 2026-10-22)
 Selected text can become a Quote, a Conclusion or Maths today (the `\` menu on a selection). The user wants every block makeable from a selection, with "sophisticated rules and eventually AI": e.g. a selected paragraph → a Concept card (term from the first noun phrase, meaning from the rest), a list → a Timeline (dates read by `utils/timelineWhen.ts`), a Cycle, a Breakdown or Pros and cons (lines starting "+"/"−"). Build: a `fromSelection?(view, from, to)` on `NoteBlockKind`, so the selection menu lists every block that has one; rules first (pure, tested in `utils/`), an AI command later through the agent layer (`docs/ai/`). The Turn into choices are in the right-click menu too (Turn into ▸, 2026-10-22); a new one goes in both.
 
+### Block parts: the part handle — built 2026-11-02 (CLAUDE.md "Block designs", `extensions/blockParts.ts`)
+
+Not built yet: a keyboard way to move a part to another group (Alt+←/→ are Back and Forward; today it's the menu's Move to ▸, which the Menu key opens, or a drag).
+
+### Study mode for blocks (agreed 2026-11-02, not built)
+
+From the block review (§1.6, question 3). Testing yourself on a block instead of reading it, **a different interaction for each block** (the user's choice, over one generic hide-and-reveal mode), sharing one Study button in the pill and one look so they feel like a family:
+- **Identification key:** Identify mode: answer one step at a time and land on the answer, with a breadcrumb of the answers taken. Start here.
+- **Question:** the answer hidden until flipped, like a flashcard. Start here too; the Glossary flashcards (above) would share it.
+- **Steps:** tick each step off while following it; progress in the title.
+- **Cycle:** "what comes next?" one stage at a time.
+- Others as they suit (a timeline's order, a hierarchy's levels). Results could use Review's intervals (`REVIEW_INTERVALS`), as the flashcards plan does.
+
 ### Block designs — how to develop them (the pattern, and ideas; logged 2026-10-07)
 
 The pattern is in CLAUDE.md "Block designs". The user asked for it to be named and kept here so every future block is built the same way.
@@ -840,6 +853,8 @@ The rule (see CLAUDE.md "Pattern governance"): when a pattern is agreed, record 
 | **Formulas only through utils/formula.ts** (2026-10-23, CLAUDE.md "Single entry points") | `src/test/patterns.test.ts` "a formula is worked out only by utils/formula.ts" | **Fully applied 2026-10-23** (new; nothing older evaluated formulas). |
 | **Magic wand** (2026-10-23, CLAUDE.md "Magic wand", `components/MagicWand`) | `src/test/patterns.test.ts` "the magic wand comes from components/MagicWand" | **Fully applied 2026-10-23**: the calendar item modal (moved onto it) and the date calculator. |
 | **One date field** (2026-10-22, CLAUDE.md "Single entry points", `components/DateInput`) | `src/test/patterns.test.ts` "type=\"date\" only appears in DateInput" | **Fully applied 2026-10-22** (25 fields). Deliberate exception: `MobileQuickAddBar`'s hidden field that opens the phone's own date picker. |
+| **The part handle** (2026-11-02, CLAUDE.md "Block designs", `extensions/blockParts.ts`) | `src/test/patterns.test.ts` "a block's parts are moved, duplicated and deleted through the part handle"; `blockParts.test.ts` "every part type Ctrl+click picks is also a part the handle moves and deletes" | **Applied 2026-11-02** to every block with parts. Removed: the own corner delete buttons of Breakdown, Cycle, Options, Pyramid, Steps and Types, and the per-block "Delete this …" menu items (seven menus). Kept on purpose: Hierarchy's "+" and corner delete (`partAdders.ts`), and the inbox item and hub link menus (their handle defers to them). |
+| **Text on a block's colour** (2026-11-02, CLAUDE.md "Block designs" → Block colours) | `src/test/patterns.test.ts` "text on a block's colour meets 4.5:1 in both themes"; review: `color: #fff` / `white` on a block-coloured fill in `NoteEditor.module.css` | **Applied 2026-11-02** to every block through its root (Steps' numbers, Options' Chosen badge, the block pills' pressed buttons were the visible failures). **Remaining, not block colours:** the cycle's stage numbers (white on the per-stage spectrum colour, `--stage-color`, about 3:1 on the yellow-greens). |
 | **Block colours** and **"+" beside a part** (2026-10-22, CLAUDE.md "Block designs") | `src/test/patterns.test.ts` "each note block has its own colour", "\"+\" buttons beside a block's parts" | **Applied 2026-10-22**: every block with an accent; the "+" on hierarchy nodes. Candidates for the "+" (a choice, not a breach): types, breakdown, cycle, pyramid, timeline. Blocks without a colour token were given one 2026-10-26 (inbox, pros and cons, compare, chart, diagram, code, maths; embed isn't a block root), and Glossary cards and questions set it on the block, so every selected block is outlined in its own colour; a pattern test now checks every block in `NOTE_BLOCK_NODES`. |
 | **The `hidden` attribute always hides** (2026-10-27, CLAUDE.md "Design tokens and theming") | `src/test/patterns.test.ts` "the hidden attribute always hides" | **Fully applied 2026-10-27** by one rule in `index.css`. `ChartWidget.module.css` still has its own older `[hidden]` rules (now redundant, harmless; remove when touched). |
 | **Block width** (2026-10-26, CLAUDE.md "Block designs") | `src/test/patterns.test.ts` "a block's width comes from blockWidth.ts" | **Applied 2026-10-26**: Glossary cards (moved onto it) and questions. Candidates (a choice, not a breach): quote, conclusion, case study, chart, code, maths — any block that reads well narrower than the column. |

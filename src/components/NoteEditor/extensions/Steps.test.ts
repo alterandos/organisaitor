@@ -98,12 +98,10 @@ describe('steps block (2026-11-02)', () => {
     type('\\steps Name');
     addStep(editor.view, stepsPos());
     expect(stepPositions()).toHaveLength(4);
-    expect(editor.view.dom.querySelectorAll('[data-st-delete]')).toHaveLength(4);
     expect(deleteStep(editor.view, stepPositions()[3])).toBe(true);
     expect(deleteStep(editor.view, stepPositions()[2])).toBe(true);
     expect(deleteStep(editor.view, stepPositions()[1])).toBe(false);
     expect(stepPositions()).toHaveLength(2);
-    expect(editor.view.dom.querySelectorAll('[data-st-delete]')).toHaveLength(0);
   });
 
   it('every design, the colours, a step icon and frames round-trip through JSON and HTML', () => {

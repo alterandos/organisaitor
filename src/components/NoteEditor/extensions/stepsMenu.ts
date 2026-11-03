@@ -2,11 +2,11 @@ import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
-import { STEPS_DESIGNS, addStep, canDeleteStep, deleteStep, setStepsSettings, stepsPosAt } from './Steps';
+import { STEPS_DESIGNS, addStep, setStepsSettings, stepsPosAt } from './Steps';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
-import { PaletteIcon, TrashIcon } from '@/components/Icons';
+import { PaletteIcon } from '@/components/Icons';
 
-// Right-click in a steps block: its design, colours, frame, adding a step, and (on a step) deleting it.
+// Right-click in a steps block: its design, colours, frame, adding a step (a step’s own actions: blockParts.ts).
 registerContextMenuProvider({
   id: 'note-editor.steps',
   kind: 'note-editor',
@@ -19,7 +19,7 @@ registerContextMenuProvider({
     if (pos === null || !node) return [];
     const L = LABELS.noteBlocks.steps;
     const C = LABELS.noteBlocks.cycle;
-    const items = [
+    return [
       designMenuItem(STEPS_DESIGNS, node.attrs.variant, (v) => setStepsSettings(view, pos, { variant: v })),
       frameMenuItem(view, pos, node.attrs),
       {
@@ -29,13 +29,5 @@ registerContextMenuProvider({
       { id: 'st-add', label: L.addStep, icon: '+', run: () => addStep(view, pos) },
       { id: 'st-add-start', label: L.addStepStart, icon: '+', run: () => addStep(view, pos, true) },
     ];
-    const stepEl = ctx.target.closest('[data-type="steps-step"]');
-    let sp: number | null = null;
-    try { if (stepEl) sp = view.posAtDOM(stepEl, 0) - 1; } catch { sp = null; }
-    if (sp !== null && view.state.doc.nodeAt(sp)?.type.name === 'stepsStep') {
-      const at = sp;
-      items.push({ id: 'st-delete', label: L.deleteStep, icon: createElement(TrashIcon, { width: '1em', height: '1em' }), disabled: !canDeleteStep(view.state, at), run: () => { deleteStep(view, at); } });
-    }
-    return items;
   },
 });

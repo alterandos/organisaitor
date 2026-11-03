@@ -50,6 +50,7 @@ import { NoteBlockDelete, NoteBlockSelect } from './extensions/blockDesigns';
 import { AutoBrackets } from './extensions/AutoBrackets';
 import { EscapePassThrough } from './extensions/EscapePassThrough';
 import { NoteBlockPicks } from './extensions/blockPicks';
+import { BlockParts } from './extensions/blockParts';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { AcronymOffer } from './extensions/AcronymOffer';
 import { UnsureFlagExtensions } from './extensions/UnsureFlag';
@@ -144,6 +145,7 @@ export function noteEditorExtensions({ noteEncrypted, linkClass }: { noteEncrypt
       NoteBlockSelect,
       NoteBlockDelete,
       NoteBlockPicks,
+      BlockParts,
       GlossaryAutolink,
       AcronymOffer,
       ...UnsureFlagExtensions,

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { usePlatform } from '@/hooks/usePlatform';
 import { useUIStore } from '@/store/uiStore';
 import { resolveContextMenu, scopesAt } from '@/contextMenu/registry';
+import { registerContextMenuOpener } from '@/contextMenu/open';
 import type { ContextMenuSection } from '@/contextMenu/types';
 import { ContextMenu } from './ContextMenu';
 
@@ -14,6 +15,15 @@ import { ContextMenu } from './ContextMenu';
 export function ContextMenuHost() {
   const { isAndroid } = usePlatform();
   const [menu, setMenu] = useState<{ id: number; x: number; y: number; sections: ContextMenuSection[] } | null>(null);
+
+  // Opened from code (contextMenu/open.ts), on every platform: a block part's handle.
+  useEffect(() => registerContextMenuOpener((target, x, y) => {
+    const section = useUIStore.getState().activeView;
+    const sections = resolveContextMenu({ section, target, x, y, scopes: scopesAt(target, section), selectionText: '' });
+    if (sections.length === 0) return false;
+    setMenu((m) => ({ id: (m?.id ?? 0) + 1, x, y, sections }));
+    return true;
+  }), []);
 
   useEffect(() => {
     if (isAndroid) return;

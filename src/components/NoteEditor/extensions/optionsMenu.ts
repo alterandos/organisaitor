@@ -3,12 +3,12 @@ import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import type { ContextMenuItem } from '@/contextMenu/types';
-import { OPTIONS_DESIGNS, OPTION_STATUSES, addOption, canDeleteOption, deleteOption, optionsPosAt, setOptionAttrs, setOptionsVariant } from './Options';
+import { OPTIONS_DESIGNS, OPTION_STATUSES, addOption, optionsPosAt, setOptionAttrs, setOptionsVariant } from './Options';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
-import { StatusIcon, TrashIcon } from '@/components/Icons';
+import { StatusIcon } from '@/components/Icons';
 
 // Right-click in an options block: its design, frame, adding an option, and (on an option) its
-// status and removing it.
+// status (moving, duplicating or deleting it: blockParts.ts).
 registerContextMenuProvider({
   id: 'note-editor.options',
   kind: 'note-editor',
@@ -35,7 +35,6 @@ registerContextMenuProvider({
         id: 'op-status', label: L.status, icon: createElement(StatusIcon),
         submenu: [OPTION_STATUSES.map((s) => ({ id: `op-status-${s}`, label: L.statuses[s], icon: item.attrs.status === s ? '✓' : undefined, run: () => setOptionAttrs(view, at, { status: s }) }))],
       });
-      items.push({ id: 'op-delete', label: L.deleteOption, icon: createElement(TrashIcon, { width: '1em', height: '1em' }), disabled: !canDeleteOption(view.state, at), run: () => { deleteOption(view, at); } });
     }
     return items;
   },

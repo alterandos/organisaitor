@@ -5,7 +5,6 @@ import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign, replaceTypedWithBlock } from './blockDesigns';
 import { iconSlot, type BlockIcon } from './blockIcons';
-import { createGlyph } from '@/components/Icons';
 
 // The types of something (`\types`): a category and its kinds — the types of bird, of rock, of
 // contract. An "is a kind of" relation, unlike the breakdown's "is part of" (asked for
@@ -270,22 +269,6 @@ export const typesDelete: Command = (state) => {
 
 // ── Drawing ──────────────────────────────────────────────────────────────────
 
-function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.contentEditable = 'false';
-  b.setAttribute('data-ty-delete', '');
-  b.title = LABELS.noteBlocks.types.deleteType;
-  b.setAttribute('aria-label', LABELS.noteBlocks.types.deleteType);
-  b.append(createGlyph('trash'));
-  b.addEventListener('mousedown', (e) => e.preventDefault());
-  b.addEventListener('click', (e) => {
-    e.preventDefault();
-    const p = getPos();
-    if (p !== undefined && view.editable) deleteType(view, view.state.doc.resolve(p).before());
-  });
-  return b;
-}
 
 const DESIGN_ICONS: Record<TypesVariant, string> = {
   guide:    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2.5h7"/><rect x="1.5" y="5" width="3.6" height="8.5" rx="1"/><rect x="6.2" y="5" width="3.6" height="8.5" rx="1"/><rect x="10.9" y="5" width="3.6" height="8.5" rx="1"/></svg>',
@@ -340,10 +323,6 @@ function typesDecorations(state: EditorState): DecorationSet | null {
         partPos: () => { const p = getPos(); return p === undefined || !view.editable ? null : p - 1; },
         set: (p, v) => setTypeIcon(view, p, v),
       }, () => view.focus()), { side: -1, key: `types-icon-${k}-${i}-${icon ?? ''}-${image ? image.length : 0}`, ignoreSelection: true, stopEvent: () => true }));
-      if (n > 1) {
-        decos.push(Decoration.widget(ip + item.nodeSize - 1, (view, getPos) => deleteWidget(view, getPos),
-          { side: 1, key: `types-delete-${k}-${i}`, ignoreSelection: true, stopEvent: () => true }));
-      }
       let fp = ip + 1;
       item.forEach((field, _o, f) => {
         if (field.content.size === 0) {

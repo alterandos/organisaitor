@@ -16,8 +16,8 @@ import { noteClipboardText } from '../noteClipboardText';
 //   them as text, Esc or a plain click clears them. The picks are positions in plugin state,
 //   mapped through every change; any edit to the document clears them.
 //   Ctrl+Alt+click anywhere in a block selects the whole block.
-// A part is a direct child of the block of the type below; a block without one (the chart) has
-// nothing to pick. Deleting can't leave a block with fewer parts than its schema allows (a cycle
+// A part is a node of the block's type below, at any depth in it (a pros-and-cons point sits in one
+// of its lists); a block without one (the chart) has nothing to pick. Deleting can't leave a block with fewer parts than its schema allows (a cycle
 // keeps two stages): picking every part deletes the whole block, anything in between is refused.
 
 export { BLOCK_PART_NODES } from '../blockNodes';
@@ -29,21 +29,36 @@ export const blockPicksKey = new PluginKey<Picks>('noteBlockPicks');
 
 export const picksOf = (state: EditorState): Picks => blockPicksKey.getState(state) ?? EMPTY;
 
-// The part (and its block) around a document position, or null.
+// The part (and its block) around a document position, or null. A part may sit at any depth in its
+// block (a pros-and-cons point is inside one of its two lists, a cause-and-effect item inside its
+// column); the innermost block around the position is the one that counts.
 export function partAt(doc: PMNode, pos: number): { block: number; part: number } | null {
   const $p = doc.resolve(pos);
   for (let d = $p.depth; d >= 1; d--) {
-    const parent = $p.node(d - 1);
-    if (NOTE_BLOCK_NODES.has(parent.type.name) && BLOCK_PART_NODES[parent.type.name] === $p.node(d).type.name) {
-      return { block: $p.before(d - 1), part: $p.before(d) };
+    if (!NOTE_BLOCK_NODES.has($p.node(d).type.name)) continue;
+    const partType = BLOCK_PART_NODES[$p.node(d).type.name];
+    if (!partType) return null;
+    for (let e = d + 1; e <= $p.depth; e++) {
+      if ($p.node(e).type.name === partType) return { block: $p.before(d), part: $p.before(e) };
     }
-  }
-  // Right on a part's start (a click on its edge): the node after the position.
-  const after = $p.nodeAfter;
-  if (after && NOTE_BLOCK_NODES.has($p.parent.type.name) && BLOCK_PART_NODES[$p.parent.type.name] === after.type.name && $p.depth >= 1) {
-    return { block: $p.before($p.depth), part: pos };
+    // Right on a part's start (a click on its edge): the node after the position.
+    return $p.nodeAfter?.type.name === partType ? { block: $p.before(d), part: pos } : null;
   }
   return null;
+}
+
+// Every part of the block at `block`, by position.
+function partsOf(doc: PMNode, block: number): number[] {
+  const node = doc.nodeAt(block);
+  const partType = node ? BLOCK_PART_NODES[node.type.name] : undefined;
+  const out: number[] = [];
+  if (!node || !partType) return out;
+  node.descendants((n, p) => {
+    if (n.type.name !== partType) return true;
+    out.push(block + 1 + p);
+    return false;
+  });
+  return out;
 }
 
 export function togglePick(view: EditorView, at: { block: number; part: number }): void {
@@ -74,21 +89,24 @@ export function pickedText(state: EditorState): string {
 export function deletePicked(view: EditorView): boolean {
   const { block, parts } = picksOf(view.state);
   if (block === null || !parts.length) return false;
-  const node = view.state.doc.nodeAt(block);
+  const { doc } = view.state;
+  const node = doc.nodeAt(block);
   if (!node) return false;
-  const partType = BLOCK_PART_NODES[node.type.name];
-  const picked = new Set(parts.map((p) => p - block - 1));   // offsets inside the block
-  const kept: PMNode[] = [];
-  let partsLeft = 0;
-  node.forEach((child, offset) => {
-    if (picked.has(offset)) return;
-    kept.push(child);
-    if (child.type.name === partType) partsLeft++;
+  // What each container of picked parts (the block, or a list or column in it) keeps.
+  const picked = new Set(parts);
+  const containers = new Set(parts.map((p) => doc.resolve(p).before()));
+  const valid = [...containers].every((c) => {
+    const parent = doc.nodeAt(c);
+    if (!parent) return false;
+    const kept: PMNode[] = [];
+    parent.forEach((child, offset) => { if (!picked.has(c + 1 + offset)) kept.push(child); });
+    return parent.type.validContent(Fragment.from(kept));
   });
+  const everyPart = partsOf(doc, block).every((p) => picked.has(p));
   let tr: Transaction;
-  if (partsLeft === 0 && !node.type.validContent(Fragment.from(kept))) {
+  if (!valid && everyPart) {
     tr = view.state.tr.delete(block, block + node.nodeSize);
-  } else if (!node.type.validContent(Fragment.from(kept))) {
+  } else if (!valid) {
     void alertDialog(LABELS.noteBlocks.picked.tooFew);
     return false;
   } else {
@@ -172,6 +190,7 @@ export const NoteBlockPicks = Extension.create({
             if (!at) return false;
             e.preventDefault();
             togglePick(view, at);
+            view.focus();    // so Esc, Delete and Ctrl+C reach the picks
             return true;
           },
           copy: (view, e) => copyPicked(view, e),

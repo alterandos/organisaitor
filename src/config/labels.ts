@@ -1448,6 +1448,25 @@ export const LABELS = {
       clear:   'Clear the selection',
       tooFew:  'This block needs more parts than that would leave. Keep at least one more, or delete the whole block.',
     },
+    // The part handle (extensions/blockParts.ts): what every block's parts can do, named for the part.
+    parts: {
+      nouns: {
+        timelineItem: 'entry', cycleStage: 'stage', breakdownPart: 'part', hierarchyItem: 'item', pyramidLayer: 'layer',
+        stepsStep: 'step', inboxItem: 'item', hubLink: 'link', conclusionReason: 'reason', typesItem: 'type',
+        idKeyStep: 'step', idKeyLead: 'choice', prosConsPoint: 'point', optionsItem: 'option', compareSide: 'side',
+        comparePoint: 'point', ceItem: 'item', vennItem: 'item',
+      } as Record<string, string>,
+      moveUp:    (noun: string) => `Move ${noun} up`,
+      moveDown:  (noun: string) => `Move ${noun} down`,
+      duplicate: (noun: string) => `Duplicate ${noun}`,
+      addBefore: (noun: string) => `Add ${noun} before`,
+      moveTo:    (noun: string) => `Move ${noun} to`,
+      untitled:  'Untitled',
+      addAfter:  (noun: string) => `Add ${noun} after`,
+      select:    (noun: string) => `Select ${noun} (to act on several)`,
+      delete:    (noun: string) => `Delete ${noun}`,
+      grip:      (noun: string) => `Drag to move this ${noun}; click for more`,
+    },
     frame:       'Frame',
     frames:      { outlined: 'Outline', shaded: 'Shade' },
     frameOptions: {

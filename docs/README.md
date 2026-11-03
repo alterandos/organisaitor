@@ -19,6 +19,7 @@ Rules, patterns and architecture live in [`../CLAUDE.md`](../CLAUDE.md); confirm
 | [`ai/`](ai/) | The AI agent integration: `01-capability-inventory.md` (what the app can do, invariants, decisions, what is left) and `02-command-layer.md` (the built command layer: design, how to add a command, tests) |
 | [`agent-tasks/`](agent-tasks/) | Self-contained briefs a fresh agent can pick up: `01-security-and-state-safety.md` (do first), `02-testing-and-engineering-hygiene.md` (after 01), `03-ai-assistant-next-steps.md` (the AI assistant: Chunk B notes and the phases after it), `04-voice-dictation-followups.md` (paused 2026-09-24 — resume only when the user says so), `05-android-w1-platform-services.md` and `06-android-w2-mobile-primitives.md` (Android workstreams W1/W2, run in parallel — see `android/10-gap-analysis.md` §K), `07-demo-account.md` (ongoing: adding each new feature to the demo account) |
 | [`demo/walkthrough.md`](demo/walkthrough.md) | The presenter's script for the demo account, in showing order |
+| [`reviews/`](reviews/) | Design and UX reviews awaiting the user's triage: `note-blocks-review-2026-11-02.md` (every note block and design: bugs, UX gaps, ideas) |
 
 ## Adding a file
 

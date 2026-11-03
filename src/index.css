@@ -20,6 +20,11 @@
   --color-primary-subtle: rgba(91, 110, 225, 0.08);
   --color-primary-border: rgba(91, 110, 225, 0.25);
   --color-on-primary: #fff;   /* text and icons on a --color-primary fill, both themes */
+  /* Text and icons on a note block's own colour (NoteEditor.module.css "Block colours" sets it as the
+     block's --color-on-primary): white on the light theme's deep colours, ink on the dark theme's
+     pastels. --color-on-bright is for the few light-theme block colours too bright for white. */
+  --color-on-block: #fff;
+  --color-on-bright: #18181b;
   --color-text: #1a1a2e;
   --color-muted: #6b7280;
   --color-border: #e5e7eb;
@@ -201,6 +206,7 @@
   --color-primary-hover: #6b7ef0;
   --color-primary-subtle: rgba(123, 142, 245, 0.12);
   --color-primary-border: rgba(123, 142, 245, 0.30);
+  --color-on-block: #18181b;
   --color-text: #e8e8f0;
   --color-muted: #8b8fa8;
   --color-border: #2c2c32;

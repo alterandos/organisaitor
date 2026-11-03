@@ -1236,6 +1236,55 @@ describe('pattern: each note block has its own colour (CLAUDE.md "Block colours"
     });
     expect(missing).toEqual([]);
   });
+  // Text on a block's colour (adopted 2026-11-02): every block's --color-on-primary is
+  // --color-on-block, or --color-on-bright for the blocks listed in the :is(...) rule, and each
+  // pair meets 4.5:1 (WCAG AA) in both themes.
+  it('text on a block\'s colour meets 4.5:1 in both themes', () => {
+    const darkAt = index.indexOf('[data-theme="dark"]');
+    const tokenIn = (part: string, name: string) => {
+      const hex = new RegExp(`${name}:\\s*#([0-9a-f]{6}|[0-9a-f]{3})\\b`, 'i').exec(part)?.[1];
+      return hex && `#${hex.length === 3 ? [...hex].map((c) => c + c).join('') : hex}`;
+    };
+    const lum = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    expect(editorCss).toContain('.editorContent [data-note-block] { --color-on-primary: var(--color-on-block); }');
+    const brightRule = /:is\(([^)]*)\)\s*\{\s*--color-on-primary:\s*var\(--color-on-bright\)/.exec(editorCss);
+    const bright = new Set([...(brightRule?.[1] ?? '').matchAll(/data-type="([a-z-]+)"/g)].map((m) => m[1]));
+    const pairs = [...editorCss.matchAll(/\[data-type="([a-z-]+)"\](?:\[data-glossary-kind="[a-z]+"\])?\s*\{\s*--color-primary:\s*var\((--color-(?:block|kind)-[a-z]+)\)/g)];
+    expect(pairs.length).toBeGreaterThan(20);
+    const failing: string[] = [];
+    for (const [, type, token] of pairs) {
+      for (const [theme, part] of [['light', index.slice(0, darkAt)], ['dark', index.slice(darkAt)]] as const) {
+        const fill = tokenIn(part, token);
+        const on = tokenIn(part, bright.has(type) ? '--color-on-bright' : '--color-on-block') ?? tokenIn(index.slice(0, darkAt), bright.has(type) ? '--color-on-bright' : '--color-on-block');
+        if (!fill || !on || ratio(fill, on) < 4.5) failing.push(`${token} (${theme}): ${fill} on ${on}`);
+      }
+    }
+    expect(failing).toEqual([]);
+  });
+});
+
+describe('pattern: a block\'s parts are moved, duplicated and deleted through the part handle (CLAUDE.md "Block designs")', () => {
+  // Adopted 2026-11-02: extensions/blockParts.ts gives every part the same keys, grip and menu, so
+  // no block draws its own per-part delete button (six did) or its own "Delete this part" item.
+  const extDir = path.join(SRC, 'components', 'NoteEditor', 'extensions');
+  const files = walk(extDir, ['.ts']).filter((f) => !f.endsWith('.test.ts'));
+  it('no block draws its own per-part delete button', () => {
+    const hits = files.filter((f) => /setAttribute\('data-[a-z]+-delete'/.test(fs.readFileSync(f, 'utf8')))
+      .map((f) => path.basename(f))
+      .filter((f) => f !== 'blockDesigns.ts');    // the pill's Delete for the whole block
+    expect(hits).toEqual([]);
+  });
+  it('no block menu offers its own Delete for a part', () => {
+    const hits = files.filter((f) => f.endsWith('Menu.ts'))
+      .filter((f) => /id: '[a-z]+-delete(?:-[a-z]+)?'/.test(fs.readFileSync(f, 'utf8')))
+      .map((f) => path.basename(f))
+      .filter((f) => f !== 'inboxMenu.ts');       // an inbox item's own menu (its handle defers to it: ownMenu)
+    expect(hits).toEqual([]);
+  });
 });
 
 describe('pattern: Edit opens the template\'s editor (CLAUDE.md "Type system")', () => {

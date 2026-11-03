@@ -4,7 +4,6 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
-import { createGlyph } from '@/components/Icons';
 
 // A breakdown in a note (`\breakdown`): a whole and the parts it's made of — the pillars of
 // democracy, the elements of a strategy, what makes a good habit. At least two parts.
@@ -282,23 +281,6 @@ function spokesWidget(n: number): SVGSVGElement {
   return svg;
 }
 
-function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.contentEditable = 'false';
-  b.setAttribute('data-bd-delete', '');
-  b.title = LABELS.noteBlocks.breakdown.deletePart;
-  b.setAttribute('aria-label', LABELS.noteBlocks.breakdown.deletePart);
-  b.append(createGlyph('trash'));
-  b.addEventListener('mousedown', (e) => e.preventDefault());
-  b.addEventListener('click', (e) => {
-    e.preventDefault();
-    const p = getPos();
-    if (p !== undefined && view.editable) deletePart(view, view.state.doc.resolve(p).before());
-  });
-  return b;
-}
-
 const DESIGN_ICONS: Record<BreakdownVariant, string> = {
   hub:     '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.4"/><path d="M8 5.6V2.8M10.2 9.2l2.5 1.5M5.8 9.2l-2.5 1.5"/><circle cx="8" cy="2" r="1.2"/><circle cx="13.4" cy="11.1" r="1.2"/><circle cx="2.6" cy="11.1" r="1.2"/></svg>',
   pillars: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5.5 8 2l6 3.5Z"/><path d="M3.5 7v5.5M8 7v5.5M12.5 7v5.5M2 14h12"/></svg>',
@@ -352,10 +334,6 @@ function breakdownDecorations(state: EditorState): DecorationSet | null {
       if (variant === 'hub') { const { x, y } = hubPlacement(i, n); style.push(`--x: ${x}%`, `--y: ${y}%`); }
       if (spectrum) style.push(`--part-color: ${spectrumColour(i / n)}`);
       decos.push(Decoration.node(pp, pp + part.nodeSize, { style: style.join('; ') }));
-      if (n > MIN_PARTS) {
-        decos.push(Decoration.widget(pp + part.nodeSize - 1, (view, getPos) => deleteWidget(view, getPos),
-          { side: 1, key: `breakdown-delete-${k}-${i}`, ignoreSelection: true, stopEvent: () => true }));
-      }
       const label = part.child(0);
       const text = part.child(1);
       const labelPos = pp + 1;

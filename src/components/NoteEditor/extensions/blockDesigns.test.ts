@@ -62,10 +62,8 @@ describe('cycle stages', () => {
   it('a stage can be deleted down to two, never below', () => {
     make(BLOCKS.cycle);
     const stages = () => { const out: number[] = []; editor.state.doc.descendants((n, p) => { if (n.type.name === 'cycleStage') out.push(p); }); return out; };
-    expect(editor.view.dom.querySelectorAll('[data-cycle-delete]')).toHaveLength(3);
     expect(deleteStage(editor.view, stages()[1])).toBe(true);
     expect(stages()).toHaveLength(2);
-    expect(editor.view.dom.querySelectorAll('[data-cycle-delete]')).toHaveLength(0);
     expect(canDeleteStage(editor.state, stages()[0])).toBe(false);
     expect(deleteStage(editor.view, stages()[0])).toBe(false);
     expect(stages()).toHaveLength(2);

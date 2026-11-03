@@ -4,7 +4,6 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
-import { createGlyph } from '@/components/Icons';
 
 // A pyramid in a note (`\pyramid`): layers that build on each other, the first at the top —
 // Maslow's needs, the food chain, a funnel from awareness to purchase. At least two layers.
@@ -254,22 +253,6 @@ export function layerWidths(variant: PyramidVariant, i: number, n: number): { to
   return { top: r(i / n), bottom: r((i + 1) / n) };
 }
 
-function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.contentEditable = 'false';
-  b.setAttribute('data-py-delete', '');
-  b.title = LABELS.noteBlocks.pyramid.deleteLayer;
-  b.setAttribute('aria-label', LABELS.noteBlocks.pyramid.deleteLayer);
-  b.append(createGlyph('trash'));
-  b.addEventListener('mousedown', (e) => e.preventDefault());
-  b.addEventListener('click', (e) => {
-    e.preventDefault();
-    const p = getPos();
-    if (p !== undefined && view.editable) deleteLayer(view, view.state.doc.resolve(p).before());
-  });
-  return b;
-}
 
 const DESIGN_ICONS: Record<PyramidVariant, string> = {
   pyramid: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 14.5 14H1.5Z"/><path d="M5.6 6.3h4.8M3.4 10.2h9.2"/></svg>',
@@ -327,10 +310,6 @@ function pyramidDecorations(state: EditorState): DecorationSet | null {
         ? `--layer-color: ${spectrumColour(i / Math.max(1, n - 1), 300)}`
         : `--layer-mix: ${Math.round(34 - (20 * i) / Math.max(1, n - 1))}%`);
       decos.push(Decoration.node(lp, lp + layer.nodeSize, { style: style.join('; ') }));
-      if (n > MIN_LAYERS) {
-        decos.push(Decoration.widget(lp + layer.nodeSize - 1, (view, getPos) => deleteWidget(view, getPos),
-          { side: 1, key: `pyramid-delete-${k}-${i}`, ignoreSelection: true, stopEvent: () => true }));
-      }
       const label = layer.child(0);
       const text = layer.child(1);
       const labelPos = lp + 1;

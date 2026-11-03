@@ -5,7 +5,6 @@ import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
 import { iconSlot } from './blockIcons';
-import { createGlyph } from '@/components/Icons';
 
 // The steps of something, in order (`\steps`, asked for by the user 2026-11-02): data preprocessing
 // in six steps, a recipe, a method. Not a cycle (it doesn't come back round) and not a timeline (no
@@ -270,22 +269,6 @@ export const stepsDelete: Command = (state) => {
 
 // ── Drawing ──────────────────────────────────────────────────────────────────
 
-function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.contentEditable = 'false';
-  b.setAttribute('data-st-delete', '');
-  b.title = LABELS.noteBlocks.steps.deleteStep;
-  b.setAttribute('aria-label', LABELS.noteBlocks.steps.deleteStep);
-  b.append(createGlyph('trash'));
-  b.addEventListener('mousedown', (e) => e.preventDefault());
-  b.addEventListener('click', (e) => {
-    e.preventDefault();
-    const p = getPos();
-    if (p !== undefined && view.editable) deleteStep(view, view.state.doc.resolve(p).before());
-  });
-  return b;
-}
 
 // The step's icon slot (blockIcons.ts). The widget sits at the start of the step's content.
 function iconWidget(view: EditorView, getPos: () => number | undefined, icon: string | null, image: string | null): HTMLElement {
@@ -348,10 +331,6 @@ function stepsDecorations(state: EditorState): DecorationSet | null {
       decos.push(Decoration.node(sp, sp + step.nodeSize, { style: `--i: ${i}; ${colour}`, ...(i === 0 ? { 'data-st-first': '' } : {}) }));
       decos.push(Decoration.widget(sp + 1, (view, getPos) => iconWidget(view, getPos, step.attrs.icon, step.attrs.image),
         { side: -1, key: `steps-icon-${k}-${i}-${step.attrs.icon ?? ''}-${(step.attrs.image ?? '').length}`, ignoreSelection: true, stopEvent: () => true }));
-      if (n > MIN_STEPS) {
-        decos.push(Decoration.widget(sp + step.nodeSize - 1, (view, getPos) => deleteWidget(view, getPos),
-          { side: 1, key: `steps-delete-${k}-${i}`, ignoreSelection: true, stopEvent: () => true }));
-      }
       const label = step.child(0);
       const text = step.child(1);
       const labelPos = sp + 1;

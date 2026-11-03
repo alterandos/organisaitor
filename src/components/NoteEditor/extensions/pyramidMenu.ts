@@ -2,11 +2,11 @@ import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
-import { PYRAMID_DESIGNS, addLayer, canDeleteLayer, deleteLayer, pyramidPosAt, setPyramidSettings } from './Pyramid';
+import { PYRAMID_DESIGNS, addLayer, pyramidPosAt, setPyramidSettings } from './Pyramid';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
-import { PaletteIcon, TrashIcon } from '@/components/Icons';
+import { PaletteIcon } from '@/components/Icons';
 
-// Right-click in a pyramid: its design, colours, frame, adding a layer, and (on a layer) deleting it.
+// Right-click in a pyramid: its design, colours, frame, adding a layer (a layer’s own actions: blockParts.ts).
 registerContextMenuProvider({
   id: 'note-editor.pyramid',
   kind: 'note-editor',
@@ -19,7 +19,7 @@ registerContextMenuProvider({
     if (pos === null || !node) return [];
     const L = LABELS.noteBlocks.pyramid;
     const C = LABELS.noteBlocks.cycle;
-    const items = [
+    return [
       designMenuItem(PYRAMID_DESIGNS, node.attrs.variant, (v) => setPyramidSettings(view, pos, { variant: v })),
       frameMenuItem(view, pos, node.attrs),
       {
@@ -29,13 +29,5 @@ registerContextMenuProvider({
       { id: 'py-add', label: L.addLayer, icon: '+', run: () => addLayer(view, pos) },
       { id: 'py-add-top', label: L.addLayerTop, icon: '+', run: () => addLayer(view, pos, true) },
     ];
-    const layerEl = ctx.target.closest('[data-type="pyramid-layer"]');
-    let lp: number | null = null;
-    try { if (layerEl) lp = view.posAtDOM(layerEl, 0) - 1; } catch { lp = null; }
-    if (lp !== null && view.state.doc.nodeAt(lp)?.type.name === 'pyramidLayer') {
-      const at = lp;
-      items.push({ id: 'py-delete', label: L.deleteLayer, icon: createElement(TrashIcon, { width: '1em', height: '1em' }), disabled: !canDeleteLayer(view.state, at), run: () => { deleteLayer(view, at); } });
-    }
-    return items;
   },
 });

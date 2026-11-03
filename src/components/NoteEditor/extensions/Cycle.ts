@@ -5,7 +5,6 @@ import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { choiceRow, iconSlot, popoverHeading } from './blockIcons';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, openBlockPopover, pillButton, popoverClass as pop, type BlockDesign, replaceTypedWithBlock, spectrumColour } from './blockDesigns';
-import { createGlyph } from '@/components/Icons';
 
 // A cycle in a note (`\cycle`): stages that lead one to the next and from the last back to the
 // first — the water cycle, a habit loop, a product lifecycle. At least two stages.
@@ -570,25 +569,6 @@ function iconWidget(view: EditorView, getPos: () => number | undefined, icon: st
   }, () => view.focus());
 }
 
-// The × in a stage's corner (only while the cycle has more than two stages).
-function deleteWidget(view: EditorView, getPos: () => number | undefined): HTMLElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.contentEditable = 'false';
-  b.setAttribute('data-cycle-delete', '');
-  b.title = LABELS.noteBlocks.cycle.deleteStage;
-  b.setAttribute('aria-label', LABELS.noteBlocks.cycle.deleteStage);
-  b.append(createGlyph('trash'));
-  b.addEventListener('mousedown', (e) => e.preventDefault());
-  b.addEventListener('click', (e) => {
-    e.preventDefault();
-    const p = getPos();
-    if (p === undefined || !view.editable) return;
-    deleteStage(view, view.state.doc.resolve(p).before());
-  });
-  return b;
-}
-
 const DESIGN_ICONS: Record<CycleVariant, string> = {
   ring:  '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2a5.8 5.8 0 0 1 5.6 4.3M13.4 9.8A5.8 5.8 0 0 1 3 11.6M2.3 7A5.8 5.8 0 0 1 5.6 2.7"/><circle cx="8" cy="2.2" r="1.4"/><circle cx="13.6" cy="8.4" r="1.4"/><circle cx="3" cy="11.6" r="1.4"/></svg>',
   flow:  '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="3.5" width="3.6" height="3.6" rx="1"/><rect x="6.2" y="3.5" width="3.6" height="3.6" rx="1"/><rect x="11.4" y="3.5" width="3.6" height="3.6" rx="1"/><path d="M13.2 8.5v2.8H2.8V8.5"/></svg>',
@@ -654,10 +634,6 @@ function cycleDecorations(state: EditorState): DecorationSet | null {
       decos.push(Decoration.node(sp, sp + stage.nodeSize, { style: style.join('; ') }));
       decos.push(Decoration.widget(sp + 1, (view, getPos) => iconWidget(view, getPos, stage.attrs.icon, stage.attrs.image),
         { side: -1, key: `cycle-icon-${k}-${i}-${stage.attrs.icon ?? ''}-${(stage.attrs.image ?? '').length}`, ignoreSelection: true, stopEvent: () => true }));
-      if (n > MIN_STAGES) {
-        decos.push(Decoration.widget(sp + stage.nodeSize - 1, (view, getPos) => deleteWidget(view, getPos),
-          { side: 1, key: `cycle-delete-${k}-${i}`, ignoreSelection: true, stopEvent: () => true }));
-      }
       const arrow: ArrowInfo = { index: i, n, variant, direction: stage.attrs.arrow, label: stage.attrs.arrowLabel, returns: i === n - 1 };
       decos.push(Decoration.widget(sp + stage.nodeSize, (view, getPos) => arrowWidget(view, getPos, arrow),
         { side: 1, key: `cycle-arrow-${k}-${i}-${n}-${variant}-${arrow.direction}-${arrow.label}`, ignoreSelection: true, stopEvent: () => true }));

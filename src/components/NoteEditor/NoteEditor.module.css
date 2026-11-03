@@ -1858,34 +1858,12 @@
 .editorContent [data-type="types-item"]:hover > [data-ty-icon="empty"] { display: grid; }
 .editorContent [data-ty-icon][data-drop] { outline: 2px solid var(--ty-color); }
 
-.editorContent [data-ty-delete] {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-}
-.editorContent [data-type="types-item"]:hover > [data-ty-delete] { opacity: 1; }
-.editorContent [data-ty-delete]:hover { background: var(--color-surface-alt); color: var(--color-danger); }
-
 .editorContent [data-types-tools] { top: -14px; right: 0; }
 .editorContent [data-type="types"]:hover > [data-types-tools],
 .editorContent [data-type="types"][data-ty-current] > [data-types-tools] { opacity: 1; }
 
 @media (hover: none) {
   .editorContent [data-ty-icon="empty"] { display: grid; }
-  .editorContent [data-ty-delete] { opacity: 1; }
 }
 
 /* ·· Field guide: a card per type, like a field guide's plate ································ */
@@ -2000,7 +1978,7 @@
   align-items: center;
   padding: 0.3rem 0.4rem 0.3rem 0;
 }
-.editorContent [data-variant="isa"] > [data-type="types-item"] > :not([data-ty-icon], [data-ty-delete]) { grid-column: 2; }
+.editorContent [data-variant="isa"] > [data-type="types-item"] > :not([data-ty-icon]) { grid-column: 2; }
 .editorContent [data-variant="isa"] [data-ty-icon] { grid-row: 1 / span 3; width: 1.9rem; height: 1.9rem; font-size: var(--text-lg); }
 .editorContent [data-variant="isa"] [data-ty-icon="empty"] { display: none; }
 .editorContent [data-type="types"][data-variant="isa"][data-ty-current] [data-ty-icon="empty"],
@@ -2057,8 +2035,6 @@
 .editorContent [data-variant="compact"] [data-ty-icon] { width: 1.2rem; height: 1.2rem; font-size: var(--text-sm); border-radius: var(--radius-pill); }
 .editorContent [data-variant="compact"]:not([data-ty-current]) [data-ty-trait],
 .editorContent [data-variant="compact"]:not([data-ty-current]) [data-ty-example] { display: none; }
-.editorContent [data-variant="compact"] [data-ty-delete] { position: static; opacity: 0; width: 14px; height: 14px; }
-.editorContent [data-variant="compact"] > [data-type="types-item"]:hover > [data-ty-delete] { opacity: 1; }
 
 /* ── Identification key (extensions/IdKey.ts, `\key`) ──────────────────────────────
    Numbered steps of choices; each choice leads to an answer or to another step. Two designs, each
@@ -2556,34 +2532,9 @@
 .editorContent [data-type="options-item"]:has(> [data-op-status="ruled"]) { opacity: 0.55; }
 .editorContent [data-type="options-item"]:has(> [data-op-status="ruled"]) > [data-op-name] { text-decoration: line-through; }
 
-.editorContent [data-op-delete] {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-}
-.editorContent [data-type="options-item"]:hover > [data-op-delete] { opacity: 1; }
-.editorContent [data-op-delete]:hover { background: var(--color-surface-alt); color: var(--color-danger); }
-
 .editorContent [data-options-tools] { top: -14px; right: 0; }
 .editorContent [data-type="options"]:hover > [data-options-tools],
 .editorContent [data-type="options"][data-op-current] > [data-options-tools] { opacity: 1; }
-
-@media (hover: none) {
-  .editorContent [data-op-delete] { opacity: 1; }
-}
 
 /* The cards the weighing designs share. */
 .editorContent [data-variant="fork"] > [data-type="options-item"],
@@ -2682,7 +2633,7 @@
   border-radius: var(--radius-md);
   background: var(--color-surface);
 }
-.editorContent [data-variant="ranked"] > [data-type="options-item"] > :not([data-op-status], [data-op-score], [data-op-delete]) { grid-column: 2; }
+.editorContent [data-variant="ranked"] > [data-type="options-item"] > :not([data-op-status], [data-op-score]) { grid-column: 2; }
 .editorContent [data-variant="ranked"] [data-op-status] { grid-column: 1; grid-row: 1 / span 4; margin: 0; }
 .editorContent [data-op-score] {
   grid-column: 3;
@@ -3096,41 +3047,6 @@
   background: var(--color-surface);
 }
 
-/* The × in a stage's corner: on hover, while editing the cycle, and always on touch. Only drawn
-   while there are more than two stages. */
-.editorContent [data-cycle-delete] {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  color: var(--color-muted);
-  font: inherit;
-  font-size: 0.85rem;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
-}
-
-.editorContent [data-type="cycle-stage"]:hover > [data-cycle-delete],
-.editorContent [data-cycle-current] [data-cycle-delete]:hover,
-.editorContent [data-cycle-delete]:focus-visible { opacity: 1; }
-.editorContent [data-cycle-current] [data-type="cycle-stage"] > [data-cycle-delete] { opacity: 0.55; }
-.editorContent [data-cycle-delete]:hover { opacity: 1; color: var(--color-danger); border-color: var(--color-danger); }
-
-@media (hover: none) {
-  .editorContent [data-cycle-delete] { opacity: 1; }
-}
-
 /* The pill (shared [data-block-tools] rules), with the cycle's options. */
 .editorContent [data-cycle-tools] { top: -14px; right: 0; z-index: 3; }
 .editorContent [data-variant="flow"] > [data-cycle-tools] { top: 0; }
@@ -3387,39 +3303,7 @@
 .editorContent [data-variant="tree"] > [data-type="breakdown-part"]:nth-child(1 of [data-type="breakdown-part"])::after { left: 50%; }
 .editorContent [data-variant="tree"] > [data-type="breakdown-part"]:nth-last-child(1 of [data-type="breakdown-part"])::after { right: 50%; }
 
-/* ·· Shared: the × and the pill ··································································· */
-
-.editorContent [data-bd-delete] {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  color: var(--color-muted);
-  font: inherit;
-  font-size: 0.85rem;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
-}
-
-.editorContent [data-type="breakdown-part"]:hover > [data-bd-delete],
-.editorContent [data-bd-delete]:focus-visible { opacity: 1; }
-.editorContent [data-bd-current] [data-type="breakdown-part"] > [data-bd-delete] { opacity: 0.55; }
-.editorContent [data-bd-delete]:hover { opacity: 1; color: var(--color-danger); border-color: var(--color-danger); }
-
-@media (hover: none) {
-  .editorContent [data-bd-delete] { opacity: 1; }
-}
+/* ·· Shared: the pill ··································································· */
 
 .editorContent [data-breakdown-tools] { top: -14px; right: 0; z-index: 4; }
 .editorContent [data-breakdown-tools] [data-bd-tool] { padding: 0 8px; font-weight: 600; }
@@ -3822,38 +3706,6 @@
   pointer-events: none;
 }
 
-.editorContent [data-py-delete] {
-  position: absolute;
-  top: 50%;
-  right: -10px;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  color: var(--color-muted);
-  font: inherit;
-  font-size: 0.85rem;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transform: translateY(-50%);
-  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
-}
-
-.editorContent [data-type="pyramid-layer"]:hover > [data-py-delete],
-.editorContent [data-py-delete]:focus-visible { opacity: 1; }
-.editorContent [data-py-delete]:hover { color: var(--color-danger); border-color: var(--color-danger); }
-
-@media (hover: none) {
-  .editorContent [data-py-delete] { opacity: 1; }
-}
-
 .editorContent [data-pyramid-tools] { top: -14px; right: 0; z-index: 4; }
 .editorContent [data-pyramid-tools] [data-py-tool] { padding: 0 8px; font-weight: 600; }
 
@@ -3966,36 +3818,6 @@
   border-color: var(--color-primary);
   outline: 2px solid var(--color-primary-subtle);
   outline-offset: 1px;
-}
-
-.editorContent [data-st-delete] {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  color: var(--color-muted);
-  font: inherit;
-  font-size: var(--text-sm);
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
-}
-
-.editorContent [data-type="steps-step"]:hover > [data-st-delete],
-.editorContent [data-st-delete]:focus-visible { opacity: 1; }
-.editorContent [data-st-delete]:hover { color: var(--color-danger); border-color: var(--color-danger); }
-
-@media (hover: none) {
-  .editorContent [data-st-delete] { opacity: 1; }
 }
 
 .editorContent [data-steps-tools] { top: -14px; right: 0; }
@@ -4154,7 +3976,6 @@
 }
 
 .editorContent [data-variant="cards"] [data-steps-icon] { position: absolute; top: 0.7rem; right: 0.75rem; }
-.editorContent [data-variant="cards"] [data-st-delete] { top: -10px; right: -10px; }
 
 /* Staircase: a bar per step, each a step higher than the last, the label and note inside it. For
    steps that build towards something. */
@@ -4194,7 +4015,6 @@
 .editorContent [data-variant="stairs"] [data-st-label] { font-size: var(--text-md); overflow-wrap: anywhere; }
 .editorContent [data-variant="stairs"] [data-st-text] { font-size: var(--text-sm); overflow-wrap: anywhere; }
 .editorContent [data-variant="stairs"] [data-steps-icon] { position: absolute; top: 0.45rem; right: 0.45rem; width: 1.6rem; height: 1.6rem; font-size: var(--text-md); }
-.editorContent [data-variant="stairs"] [data-st-delete] { top: -10px; right: -6px; }
 
 /* ── Chart (extensions/Chart.ts, `\chart`) ────────────────────────────────────────────────────────
    The block only: its spacing and its pill. The chart and its data table are the shared
@@ -4294,6 +4114,9 @@
 .editorContent [data-importance="3"] [data-block-star] { color: var(--color-important-3); }
 .editorContent [data-block-tools] [data-block-delete] { width: 26px; }
 .editorContent [data-block-tools] [data-block-delete]:hover { color: var(--color-danger); }
+
+/* A part being dragged by its handle (blockParts.ts): faded where it is until it's dropped. */
+.editorContent [data-part-dragged] { opacity: 0.4; }
 
 /* Parts picked with Ctrl+click (blockPicks.ts). */
 .editorContent [data-block-picked] {
@@ -5014,8 +4837,6 @@
   font-weight: 600;
 }
 
-
-
 /* ── Text linked to a Glossary term (extensions/ConceptRef.ts) ────────────────
    The text: a soft highlight in the term's colour, dotted underline. Its icon is in the margin
    column (below). */
@@ -5157,12 +4978,6 @@
   background: color-mix(in srgb, var(--color-primary) 18%, transparent);
   border-radius: 2px;
 }
-
-
-
-
-
-
 
 /* Linking to the Glossary as you type (extensions/GlossaryAutolink.ts): the word just typed is
    underlined, and a quiet chip after it offers the link — ↵ / Tab to take it, keep typing to
@@ -5464,8 +5279,6 @@
 }
 
 /* ── Font color picker ───────────────────────────────────────────────────── */
-
-
 
 .colorPickerPopover {
   background: var(--color-surface);
@@ -6108,7 +5921,6 @@
   cursor: help;
 }
 
-
 /* ── A note's colour (Note.color; settingsStore.noteColorBars / noteColorHeadings) ─────────────
    So notes are easy to tell apart. --note-color is set on the container only when the note has a
    colour. The bars: a line under the title bar (thicker) and the tab bar (thinner); or a frame
@@ -6521,7 +6333,12 @@
    inside the block, so every part a block draws "in the primary colour" takes the block's: no
    block keeps a copy, and a selected block is outlined in its own colour. Questions and Glossary
    cards use their kind's colour (--color-kind-*; a card's kind is data-glossary-kind on the card).
-   A new block adds its token in both themes and a line here (pattern test). */
+   A new block adds its token in both themes and a line here (pattern test).
+   Text on a block's colour reads --color-on-primary, which every block sets to --color-on-block
+   (ink in the dark theme, where the block colours are pastels); the light colours too bright for
+   white take --color-on-bright. A pattern test checks every pair for 4.5:1 in both themes. */
+.editorContent [data-note-block] { --color-on-primary: var(--color-on-block); }
+.editorContent :is([data-type="proscons"], [data-type="inbox"], [data-type="diagram"]) { --color-on-primary: var(--color-on-bright); }
 .editorContent [data-type="timeline"] { --color-primary: var(--color-block-timeline); --color-primary-subtle: color-mix(in srgb, var(--color-block-timeline) 10%, transparent); }
 .editorContent [data-type="cycle"] { --color-primary: var(--color-block-cycle); --color-primary-subtle: color-mix(in srgb, var(--color-block-cycle) 10%, transparent); }
 .editorContent [data-type="breakdown"] { --color-primary: var(--color-block-breakdown); --color-primary-subtle: color-mix(in srgb, var(--color-block-breakdown) 10%, transparent); }
