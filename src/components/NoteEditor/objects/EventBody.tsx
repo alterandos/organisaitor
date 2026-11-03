@@ -13,7 +13,7 @@ export function EventBody({ id, heading, onToggle }: ArtifactBodyProps) {
   const event = useCalendarStore((s) => s.events[id as CalendarEventId]);
   if (!event) return null;
   const update = (changes: Partial<CalendarEvent>) => useCalendarStore.getState().updateEvent(id as CalendarEventId, changes);
-  const timed = event.eventType !== 'birthday' && !!event.startTime;
+  const timed = !!event.startTime;
   const rule = eventRule(event);
   const notify = (r: NotifyRule) => update(eventPatch(r));
   return (

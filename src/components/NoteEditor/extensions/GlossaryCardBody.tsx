@@ -8,7 +8,7 @@ import { DEFAULT_IMAGE_LAYOUT, IMAGE_PLACES, type ImageLayout } from './cardImag
 import { useNoteStore } from '@/store/noteStore';
 import { entryView, isEntryLocked, useSecretsVersion } from '@/services/noteSecrets';
 import { openGlossaryEntry } from '@/services/notePassage';
-import { GLOSSARY_TYPES, TERM_RICH, fieldFacts, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, NAMED_FIELD_ID, namedFieldLine, takeNamedLines, type Fact, type GlossaryLink, type StructuredTagFieldDef, glossaryKinds, glossaryNames } from '@/config/structuredTagTypes';
+import { GLOSSARY_TYPES, TERM_RICH, fieldFacts, fieldSymbols, type FormulaSymbol, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, NAMED_FIELD_ID, namedFieldLine, takeNamedLines, type Fact, type GlossaryLink, type StructuredTagFieldDef, glossaryKinds, glossaryNames } from '@/config/structuredTagTypes';
 import { GLOSSARY_RELATIONS, glossaryRelation } from '@/config/glossaryRelations';
 import { LABELS } from '@/config/labels';
 import { entryImportance, glossaryKindLine, headlineTerms } from '@/services/glossary';
@@ -21,6 +21,7 @@ import { escapeHtml, hasFormatting, linesAsBreaks, richLines, richToPlain, sanit
 import type { StructuredTagEntry, StructuredTagEntryId } from '@/types';
 import type { GlossaryCardVariant } from './GlossaryCard';
 import { BUILTIN_TAGS } from '../builtinTags';
+import { MathsInput } from './MathsInput';
 import styles from './GlossaryCard.module.css';
 import { CloseIcon, TrashIcon, UnlinkIcon } from '@/components/Icons';
 
@@ -458,6 +459,47 @@ function NewOwnField({ placeholder, label, onTake, onDone }: { placeholder?: str
 const confirmRemoveField = (name: string) =>
   confirmDialog({ title: L.removeFieldTitle(name), message: L.removeFieldMessage, confirmLabel: L.removeField, destructive: true });
 
+// What each symbol of a formula stands for (a Formula's Where): a row per symbol, the symbol as
+// maths, then its meaning and unit.
+function SymbolsField({ items, onCommit, editable, autoFocus }: { items: FormulaSymbol[]; onCommit: (v: FormulaSymbol[]) => void; editable: boolean; autoFocus: boolean }) {
+  const [adding, setAdding] = useState(autoFocus);
+  const rows = adding || (editable && items.length === 0) ? [...items, { symbol: '', meaning: '', unit: '' }] : items;
+  const change = (i: number, patch: Partial<FormulaSymbol>) => {
+    const next = rows.map((r, j) => (j === i ? { ...r, ...patch } : r)).filter((r) => r.symbol.trim() || r.meaning.trim() || r.unit.trim());
+    if (i >= items.length) setAdding(false);
+    onCommit(next);
+  };
+  return (
+    <div className={styles.symbols}>
+      {rows.map((r, i) => <SymbolRow key={i} row={r} editable={editable} onChange={(patch) => change(i, patch)} onRemove={() => { if (i < items.length) onCommit(items.filter((_, j) => j !== i)); else setAdding(false); }} />)}
+      {editable && !adding && items.length > 0 && (
+        <button type="button" className={styles.smallBtn} onClick={() => setAdding(true)}>{L.addSymbol}</button>
+      )}
+    </div>
+  );
+}
+
+function SymbolRow({ row, editable, onChange, onRemove }: { row: FormulaSymbol; editable: boolean; onChange: (patch: Partial<FormulaSymbol>) => void; onRemove: () => void }) {
+  const meaning = useDraft(row.meaning, (v) => onChange({ meaning: v }));
+  const unit = useDraft(row.unit, (v) => onChange({ unit: v }));
+  return (
+    <div className={styles.symbolRow}>
+      <MathsInput className={styles.symbolMaths} value={row.symbol} onCommit={(v) => onChange({ symbol: v })} editable={editable} label={L.symbol} placeholder={editable ? 'x' : undefined} />
+      {editable ? (
+        <>
+          <input className={styles.input} value={meaning.value} placeholder={L.symbolMeaning} aria-label={L.symbolMeaning} data-card-input=""
+            onChange={(e) => meaning.change(e.target.value)} onBlur={meaning.blur} />
+          <input className={`${styles.input} ${styles.symbolUnit}`} value={unit.value} placeholder={L.symbolUnit} aria-label={L.symbolUnit}
+            onChange={(e) => unit.change(e.target.value)} onBlur={unit.blur} />
+          <RemoveFieldButton name={L.symbol} onRemove={onRemove} />
+        </>
+      ) : (
+        <span>{row.meaning}{row.unit && <span className={styles.symbolUnit}> ({row.unit})</span>}</span>
+      )}
+    </div>
+  );
+}
+
 function RemoveFieldButton({ name, onRemove }: { name: string; onRemove: () => void }) {
   return (
     <button type="button" className={styles.removeField} aria-label={L.removeFieldNamed(name)} title={L.removeFieldNamed(name)}
@@ -682,7 +724,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   async function removeField(f: StructuredTagFieldDef) {
     if (hasValue(f)) {
       if (!(await confirmRemoveField(f.name))) return;
-      setField(f.id, ['list', 'urls', 'links', 'facts'].includes(f.type) ? [] : '');
+      setField(f.id, ['list', 'urls', 'links', 'facts', 'symbols'].includes(f.type) ? [] : '');
     }
     onHide(f.id);
   }
@@ -873,6 +915,10 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
       case 'tags':
         return <TagChips items={fieldList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus}
           suggestions={[...new Set(all.flatMap((e) => fieldList(e.fields, f.id)))].sort((a, b) => a.localeCompare(b))} />;
+      case 'maths':
+        return <MathsInput className={styles.maths} value={fieldText(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} editable={editable} label={f.name} placeholder={editable ? f.name : undefined} />;
+      case 'symbols':
+        return <SymbolsField items={fieldSymbols(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} editable={editable} autoFocus={autoFocus} />;
       case 'facts':
         return <OwnFields facts={fieldFacts(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} onTake={(fact) => takeFacts([fact])} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} newLine={factsLine} />;
     }
@@ -898,7 +944,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
 
   // A sub-concept's parts show on its parent too, so the parent field shows when it has parts.
   const hasParts = all.some((e) => e.id !== entry.id && fieldText(e.fields, 'parentId') === id);
-  const visible = typeDef.fields.filter((f) => f.id === primaryId || hasValue(f) || shown.includes(f.id) || (f.type === 'parent' && hasParts) || (f.type === 'links' && all.some((e) => fieldLinks(e.fields, 'related').some((l) => l.entryId === id))));
+  const visible = typeDef.fields.filter((f) => f.id === primaryId || f.always || hasValue(f) || shown.includes(f.id) || (f.type === 'parent' && hasParts) || (f.type === 'links' && all.some((e) => fieldLinks(e.fields, 'related').some((l) => l.entryId === id))));
   const waiting = editable ? typeDef.fields.filter((f) => !visible.includes(f) && f.offered !== false) : [];
 
   // The picture out of the fields' order when it's placed to their right or after them.

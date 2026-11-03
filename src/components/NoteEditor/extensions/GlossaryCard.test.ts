@@ -89,7 +89,7 @@ const textOf = (el: HTMLElement) => (el instanceof HTMLTextAreaElement || el ins
 const typeInto = (el: HTMLElement, text: string) => act(async () => { el.textContent = text; el.dispatchEvent(new Event('input', { bubbles: true })); });
 
 describe('Glossary cards', () => {
-  it.each(['definition', 'acronym', 'concept', 'profile'])('`\\%s` makes a record in this note and a card that points at it', async (kind) => {
+  it.each(['definition', 'acronym', 'concept', 'profile', 'formula'])('`\\%s` makes a record in this note and a card that points at it', async (kind) => {
     await make();
     type(`\\${kind} `);
     await flush();
@@ -97,6 +97,15 @@ describe('Glossary cards', () => {
     const made = entry(cards()[0].entryId);
     expect(made).toMatchObject({ typeKey: kind, noteId, term: '' });
     expect(entries()).toHaveLength(1);
+  });
+
+  it('a Formula shows its formula from the start, and what each symbol stands for (2026-11-03)', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'formula', tagId: 'builtin-formula', term: 'Coefficient of determination', fields: { where: [{ symbol: 'n', meaning: 'Sample size', unit: '' }] }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
+    await flush();
+    const card = editor.view.dom.querySelector<HTMLElement>('[data-type="glossary-card"]')!;
+    expect(card.querySelector('[data-field="formula"]')).not.toBeNull();
+    expect([...card.querySelectorAll<HTMLInputElement>('[data-field="where"] input')].map((i) => i.value)).toEqual(['Sample size', '']);
   });
 
   it('a card’s own fields are each a field, named by their label, with no box around them (2026-11-01)', async () => {

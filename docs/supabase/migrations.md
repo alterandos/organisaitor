@@ -53,6 +53,7 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `067` | **Applied** | `067_on_class.sql` (`on_class jsonb` on `calendar_events` and `calendar_deadlines`: an item shown instead of a class that day or during it, 2026-10-30). Sent only once set, and nullable, so until it runs only those items fail to upload (queued until it's applied). Safe to run again. |
 | `068` | **Applied** | `068_endeavour_attributes.sql` (`attributes jsonb` on `collections`: an Endeavour's Type, its own fields and their values, 2026-10-30). Sent only once set, and nullable, so until it runs only Endeavours given attributes fail to upload (queued until it's applied). Safe to run again. |
 | `069` | **Applied** | `069_quick_access_visits.sql` (new table `quick_access_visits`, keyed `(user_id, id)`: Go to's Recent and Frequent history, 2026-11-02). Until it runs, visits stay on each device and their uploads are refused (queued until it's applied). |
+| `070` | **Applied** | `070_event_icon_quiet.sql` (`icon text`, `quiet boolean` on `calendar_events`, nullable, 2026-11-03). Run it before signing in on this build: until it runs, an upload batch holding an event with an icon or Show quieter (every converted birthday and journey) is refused, so calendar event changes wait in the pending queue (nothing is lost; they go up once it's run). |
 
 ## Migration history
 
@@ -127,6 +128,7 @@ Rules for writing a migration are in CLAUDE.md "Supabase sync → Migrations". T
 | `067_on_class.sql` | `on_class jsonb` (nullable) on `calendar_events` and `calendar_deadlines`: `{ eventId, date, mode: 'replaces' \| 'during' }` (`ClassLink`), and a schema reload. Add-only; no new table, so no grant. |
 | `068_endeavour_attributes.sql` | `attributes jsonb` (nullable) on `collections`: `{ typeId, fields, values }` (`EndeavourAttributes`), and a schema reload. Add-only; no new table, so no grant. A Type's `usedFor` and `builtIn` are in `item_types.definition` (no change). |
 | `069_quick_access_visits.sql` | New table `quick_access_visits` (`id`, `user_id`, `type`, `entity_id`, `last_visited_at`, `visit_count`, `visits jsonb`, `updated_at`, `deleted_at`), primary key `(user_id, id)`: id `${type}:${entity_id}`; a Place's is the same in every account. Two devices' copies are joined by the app (`joinVisits`), not newest-wins. RLS + its own grant. |
+| `070_event_icon_quiet.sql` | `icon text` and `quiet boolean` on `calendar_events`, both nullable (sent only once set): an event's icon before its title and Show quieter, which replaced the event's own birthday / travel type (Types preset them; services/eventTypeConversion.ts). Add-only, no grant. |
 
 ## Supabase tables (summary)
 

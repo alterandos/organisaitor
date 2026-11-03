@@ -105,6 +105,7 @@ import { initRepeatFollow } from '@/services/repeatFollow';
 import { initSchedules } from '@/services/schedules';
 import { initSubjectWork } from '@/services/subjectItems';
 import { initStreamConversion } from '@/services/streamConversion';
+import { initEventTypeConversion } from '@/services/eventTypeConversion';
 import { initClassClashes } from '@/services/classClashes';
 import { adoptLegacyNotePins } from '@/services/quickAccessPins';
 import { installSpecialCharInput } from '@/specialChars/fieldInput';
@@ -304,6 +305,7 @@ export default function App() {
   useEffect(() => initRepeatFollow(), []);
   useEffect(() => initSchedules(), []);
   useEffect(() => initStreamConversion(), []);
+  useEffect(() => initEventTypeConversion(), []);
   useEffect(() => initSubjectWork(), []);
   useEffect(() => initClassClashes(), []);
   useEffect(() => initEncryptionScopes(), []);

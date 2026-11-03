@@ -198,6 +198,10 @@ export interface ItemTypeDefaults {
   makeAs?:    TypeableKind;        // what one is usually made as (an Exam: an event)
   important?: boolean;
   tagIds?:    TagId[];             // tasks only (a Type made from a tag keeps adding it)
+  // Events (2026-11-03): preselected on an event made with the Type, then the person's to change.
+  quiet?:     boolean;             // drawn quieter (a journey)
+  allDay?:    boolean;             // no times (a birthday)
+  repeat?:    RepeatConfig;        // a birthday's every year
 }
 
 // What a Type is used for (absent: items, as every Type was before Endeavours had Types).
@@ -422,10 +426,11 @@ export interface CreatePurposeInput {
 // ── Calendar ───────────────────────────────────────────────────────────────────
 // CalendarItemKind is kept as a string union for easy label overrides in labels.ts.
 export type CalendarItemKind  = 'event' | 'reminder' | 'deadline';
-// 'travel' = time that's booked out but you're not "at" anything — a flight, a bus, a drive.
-// Rendered lighter than a normal event (dashed outline, 🧳) but still occupies its slot; distinct
-// from `background`, which is an ambient multi-day span ("in Vietnam this week"). Free-text
-// column (001_initial.sql), so a new value needs no migration.
+// 'task' marks a scheduled task's calendar copy (services/taskCalendarLinks.ts); otherwise 'default'.
+// 'birthday' and 'travel' were the event's own type until 2026-11-03, when Types took over (agreed
+// with the user): they're still accepted where an event is made (an import, the agent, words read
+// as a birthday or a flight) and turned straight into the Birthday or Journey Type, its icon and
+// Show quieter by services/eventTypeConversion.ts. Never read them to decide anything.
 export type CalendarEventType = 'default' | 'birthday' | 'task' | 'travel';
 // How a 'travel' event travels; its icon comes from config/calendarEventTypes.ts. null = not said.
 export type TravelMode = 'flight' | 'train' | 'bus' | 'car' | 'ferry';
@@ -534,7 +539,11 @@ export interface CalendarEvent extends TypedItem {
   // them again. An event isn't struck out by that: it still happens.
   remindOccurrence:   string | null;
   seenDates:          string[];
-  travelMode:         TravelMode | null;       // eventType 'travel' only: flight, train, … (its icon)
+  travelMode:         TravelMode | null;       // with eventType 'travel', only until converted (eventTypeConversion.ts)
+  // Shown before its title on the calendar (an emoji or picture icon, components/IconPicker), and
+  // drawn quieter (lighter, dashed: a journey), 2026-11-03. Preset by its Type; absent = none / off.
+  icon?:              string | null;
+  quiet?:             boolean;
   // Where an imported event came from (docs/features/external-calendar-sync.md). All null for an
   // event made in the app. A Google event keeps following Google for every field not edited here
   // (services/calendarImport/reconcile.ts); an .ics import is a one-off copy.
@@ -619,6 +628,8 @@ export interface CreateCalendarEventInput {
   doneDates?:         string[];
   seenDates?:         string[];
   travelMode?:         TravelMode | null;
+  icon?:               string | null;
+  quiet?:              boolean;
   source?:             string | null;
   sourceAccount?:      string | null;
   sourceConnectionId?: string | null;

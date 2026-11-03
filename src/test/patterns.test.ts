@@ -1537,6 +1537,30 @@ describe('pattern: a built-in list fed from elsewhere (2026-11-02)', () => {
   });
 });
 
+describe('pattern: an event’s look comes from itself, preset by its Type (2026-11-03)', () => {
+  it('nothing decides from a stored event saying birthday or travel, outside the converter', () => {
+    // The agent still checks its own input words; the icon helper reads them only until converted.
+    const allowed = new Set(['src/services/eventTypeConversion.ts', 'src/agent/commands/calendar.ts', 'src/config/calendarEventTypes.ts']);
+    const hits = findMatches(SOURCE_FILES, /\b(ev|event|e)\.eventType\s*[!=]==\s*'(birthday|travel)'/, { skipComments: true }).filter((h) => !allowed.has(rel(h.file)));
+    expect(describeHits(hits)).toBe('');
+  });
+});
+
+describe('pattern: tags on text come from one list, apart from making cards (2026-11-03)', () => {
+  it('the tag picker and Ctrl+1…9 read textTags.ts; neither offers a Glossary kind', () => {
+    const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+    for (const f of ['components/NoteEditor/FloatingToolbar.tsx', 'components/NoteEditor/NoteEditor.tsx']) {
+      expect(read(f), f).toContain("from './textTags'");
+      expect(read(f), f).not.toMatch(/BUILTIN_TAGS|cardFromSelection/);
+    }
+    // Read as text: this file's tsconfig has no path aliases, so it can't import the modules.
+    const kinds = /GLOSSARY_TYPES[^=]*=\s*\{([^}]*)\}/.exec(read('config/structuredTagTypes.ts'))![1].match(/(\w+):/g)!.map((k) => k.slice(0, -1));
+    const textTags = /TEXT_TAG_IDS\s*=\s*\[([^\]]*)\]/.exec(read('components/NoteEditor/builtinTags.ts'))![1];
+    expect(kinds.length).toBeGreaterThan(0);
+    expect(kinds.filter((k) => textTags.includes(`'builtin-${k}'`))).toEqual([]);
+  });
+});
+
 describe('pattern: selected text has one list of actions (2026-11-02)', () => {
   it('the backslash selection menu and right-click both read objects/selectionActions.ts; no menu builds its own', () => {
     const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');

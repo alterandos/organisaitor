@@ -1,3 +1,4 @@
+import { legacyKindOf } from '@/services/eventTypeConversion';
 import type { CalendarEvent, CalendarEventType, EventStatus, NotifyUnit, RepeatConfig, TravelMode } from '@/types';
 
 // The shared shape every calendar import (Google sync, an .ics file) is turned into before it
@@ -75,8 +76,7 @@ export function normalizeFields(f: ImportedFields): ImportedFields {
 export function pickFields(ev: CalendarEvent): ImportedFields {
   return {
     title: ev.title, notes: ev.notes, location: ev.location, date: ev.date, endDate: ev.endDate,
-    startTime: ev.startTime, endTime: ev.endTime, repeat: ev.repeat, eventType: ev.eventType,
-    travelMode: ev.travelMode ?? null, background: ev.background ?? false, color: ev.color ?? null,
+    startTime: ev.startTime, endTime: ev.endTime, repeat: ev.repeat, ...legacyKindOf(ev), background: ev.background ?? false, color: ev.color ?? null,
     status: ev.status ?? 'confirmed', notifyBeforeValue: ev.notifyBeforeValue, notifyBeforeUnit: ev.notifyBeforeUnit,
   };
 }

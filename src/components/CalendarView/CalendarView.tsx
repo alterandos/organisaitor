@@ -149,7 +149,7 @@ function getWeekSpanSlots(weekDateStrs: string[], spanEvents: CalendarEvent[]): 
       status:       ev.status ?? 'confirmed',
       important:    ev.important ?? false,
       background:   ev.background ?? false,
-      travel:       ev.eventType === 'travel',
+      travel:       !!ev.quiet,
       color:        ev.color ?? null,
     });
   }
@@ -310,14 +310,14 @@ export function CalendarView() {
         collectionId: ev.collectionId,
         notes: ev.notes,
         links: ev.links,
-        // A birthday/travel icon takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
+        // The event's own icon takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
         // event auto-created from a task's scheduledAt (see Task.calendarEventId) so the calendar
         // reads as task-linked without changing the event's click/edit behaviour.
         typeIcon: `${ev.important ? '❗' : ''}${eventTypeIcon(ev) || scheduleIcon || (taskLinkedEventIds.has(ev.id) ? '🕐' : '')}`,
         status: ev.status ?? 'confirmed',
         important: ev.important ?? false,
         occurrenceDate: ev.date,
-        travel: ev.eventType === 'travel',
+        travel: !!ev.quiet,
         travelIcon: eventTypeIcon(ev),
         color: ev.color ?? null,
         scheduleId: ev.scheduleId ?? null,

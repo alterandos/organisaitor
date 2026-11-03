@@ -21,6 +21,7 @@
 [data-glossary-type="profile"]    { --gc-accent: var(--color-kind-profile); }
 [data-glossary-type="fact"]       { --gc-accent: var(--color-kind-fact); }
 [data-glossary-type="quote"]      { --gc-accent: var(--color-kind-quote); }
+[data-glossary-type="formula"]    { --gc-accent: var(--color-kind-formula); }
 
 .head { display: flex; flex-direction: column; gap: var(--space-1); }
 
@@ -483,3 +484,12 @@
   padding: 2px 0;
   outline: none;
 }
+
+/* A formula (the Formula card's, a Definition's or Concept's Formula field) and what its symbols stand for. */
+.maths { display: block; font-size: var(--text-lg); }
+.maths math-field { width: 100%; background: transparent; color: inherit; border: none; }
+.symbols { display: flex; flex-direction: column; gap: var(--space-1); }
+.symbolRow { display: grid; grid-template-columns: minmax(3rem, auto) 1fr 6rem auto; align-items: center; gap: var(--space-2); }
+.symbolRow:not(:has(input)) { grid-template-columns: minmax(3rem, auto) 1fr; }
+.symbolMaths math-field { min-width: 3rem; background: transparent; color: inherit; border: none; }
+.symbolUnit { color: var(--color-muted); }

@@ -126,6 +126,8 @@ export function buildEvent(input: CreateCalendarEventInput, id: CalendarEventId,
     sourceUid:           input.sourceUid           ?? null,
     sourceRaw:           input.sourceRaw            ?? null,
     ...(input.scheduleId ? { scheduleId: input.scheduleId } : {}),
+    ...(input.icon ? { icon: input.icon } : {}),
+    ...(input.quiet ? { quiet: true } : {}),
   };
 }
 

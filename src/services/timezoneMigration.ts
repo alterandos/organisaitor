@@ -42,8 +42,8 @@ export function rezoneAllCalendarData(fromZone: string, toZone: string): void {
       changes.endDate  = r.date;
       changes.endTime  = r.time;
     }
-    if (event.eventType === 'birthday' && event.notifyAtTime) {
-      // Notify time-of-day only — the birthday's own date is all-day and must not shift.
+    if (!event.startTime && event.notifyAtTime) {
+      // Notify time-of-day only — an all-day event's (a birthday's) own date must not shift.
       changes.notifyAtTime = rezoneWallClock(event.date, event.notifyAtTime, fromZone, toZone).time;
     }
     if (Object.keys(changes).length > 0) updateEvent(event.id, changes);

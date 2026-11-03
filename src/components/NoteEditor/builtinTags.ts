@@ -1,20 +1,9 @@
-// Future cross-app actions a built-in tag can trigger (not yet wired).
-// When implementing: read tag.actions in FloatingToolbar/applyTagItem and
-// dispatch to the shared event bus (e.g. emit 'create-task' with the selected text).
-export type BuiltinTagActionType = 'create-task';
-
-export interface BuiltinTagAction {
-  type: BuiltinTagActionType;
-  // Additional action-specific config can be added here as the integration is built
-}
-
 export interface BuiltinTag {
   id: string;
   name: string;
   icon: string;
   color: string;
   typeKey: string;
-  actions?: BuiltinTagAction[];
 }
 
 // `color` is a hex, since a tag made from a built-in copies it as its own colour. Where the app draws
@@ -33,19 +22,21 @@ export const BUILTIN_TAGS: BuiltinTag[] = [
     icon:    '🔖',
     color:   '#7c3aed',
     typeKey: 'learn-later',
-    actions: [{ type: 'create-task' }],
   },
-  // Structured tag type (see src/config/structuredTagTypes.ts) — applying this one opens a
-  // small create/preview popover instead of tagging immediately, and creates a separate
-  // StructuredTagEntry alongside the mark. Kept last so Ctrl+1-7 (the existing built-ins)
-  // stay on the same keys; this becomes Ctrl+8.
   { id: 'builtin-acronym', name: 'Acronym', icon: '🔤', color: '#4d7c0f', typeKey: 'acronym' },
-  // A Fact (2026-11-03): after Acronym, so no Ctrl+digit moves (it's tenth: no digit of its own).
   { id: 'builtin-fact', name: 'Fact', icon: '✨', color: '#8a6500', typeKey: 'fact' },
   { id: 'builtin-quote', name: 'Quote', icon: '❞', color: '#9a3412', typeKey: 'quote' },
+  { id: 'builtin-formula', name: 'Formula', icon: 'ƒ', color: '#1e40af', typeKey: 'formula' },
 ];
 
-const KIND_TOKENS = ['definition', 'concept', 'acronym', 'profile', 'fact', 'quote'];
+// The tags Ctrl+Space and Ctrl+1…9 put on text (2026-11-03, the user's call: marking text is apart
+// from making cards, which is `\` and right-click's Turn into). The rest of BUILTIN_TAGS are the
+// Glossary kinds, plus Question, Quote and Learn Later, no longer offered as tags (a question and a
+// quote are blocks, Learn Later is Review later): passages marked with them before still show.
+const TEXT_TAG_IDS = ['builtin-important', 'builtin-example', 'builtin-reference'];
+export const TEXT_TAGS: BuiltinTag[] = TEXT_TAG_IDS.map((id) => BUILTIN_TAGS.find((t) => t.id === id)!);
+
+const KIND_TOKENS = ['definition', 'concept', 'acronym', 'profile', 'fact', 'quote', 'formula'];
 
 // The colour the app draws a Glossary kind in: its theme token (index.css --color-kind-*), so it
 // reads in both themes; any other built-in tag's own colour.

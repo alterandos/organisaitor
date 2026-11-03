@@ -1,4 +1,4 @@
-import type { FieldSchema, ItemType, ItemTypeDefaults, ItemTypeId, TypePart, TypeUse } from '@/types';
+import type { FieldSchema, ItemType, ItemTypeDefaults, ItemTypeId, RepeatConfig, TypePart, TypeUse } from '@/types';
 import { addDaysToIso } from '@/utils/date';
 
 // The rules for Types (docs/features/endeavours.md phase 3), pure. A Type can extend another; what
@@ -105,4 +105,20 @@ export function formatFieldValue(f: FieldSchema, v: unknown): string {
   }
   if (f.type === 'number' && f.unit) return `${v}${f.unit === '%' ? '' : ' '}${f.unit}`;
   return String(v);
+}
+
+// What an event made with this Type starts with (2026-11-03): the nearest icon up its chain, Show
+// quieter, and for a birthday no times and its yearly repeat. Preselected only; the event's own.
+export interface EventPresets { icon: string | null; quiet: boolean; allDay: boolean; repeat: RepeatConfig | null }
+export function eventPresets(types: Record<string, ItemType>, id: ItemTypeId | null | undefined): EventPresets | null {
+  const r = resolveItemType(types, id);
+  if (!r) return null;
+  const icon = [...r.chain].reverse().find((t) => t.icon)?.icon ?? null;
+  return { icon, quiet: !!r.defaults.quiet, allDay: !!r.defaults.allDay, repeat: r.defaults.repeat ?? null };
+}
+
+// The default Types (config/builtInTypes.ts) this Type is a copy of or a kind of: a Flight is a
+// Journey too.
+export function builtInKeys(types: Record<string, ItemType>, id: ItemTypeId | null | undefined): string[] {
+  return typeChain(types, id).map((t) => t.builtIn).filter((k): k is string => !!k);
 }

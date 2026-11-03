@@ -22,8 +22,13 @@ import { factHeadline, quoteHeadline, splitQuote } from '@/utils/factHeadline';
 //   facts           Fact[]             (label / value rows the user names: Family, Habitat, Born…)
 //   tags            string[]           (short words, shown as chips, suggested from the same field on
 //                                        every record: a fact's or quote's reasons, "funny", 2026-11-03)
+//   maths           a LaTeX string     (a formula, drawn and edited with MathLive, 2026-11-03)
+//   symbols         FormulaSymbol[]    (what each symbol in a formula stands for, and its unit)
 // A new kind of field is a member here, a reader below, and a renderer in GlossaryCardBody.
-export type StructuredTagFieldType = 'text' | 'textarea' | 'list' | 'image' | 'parent' | 'links' | 'urls' | 'facts' | 'tags';
+export type StructuredTagFieldType = 'text' | 'textarea' | 'list' | 'image' | 'parent' | 'links' | 'urls' | 'facts' | 'tags' | 'maths' | 'symbols';
+
+// One symbol of a formula: the symbol (LaTeX), what it stands for, its unit.
+export interface FormulaSymbol { symbol: string; meaning: string; unit: string }
 
 export interface Fact { label: string; value: string }
 
@@ -33,6 +38,7 @@ export interface StructuredTagFieldDef {
   type:         StructuredTagFieldType;
   placeholder?: string;
   offered?:     false;    // not among the "+ field" buttons (a card's own fields: made by typing "Name: value")
+  always?:      true;     // shown on every card, empty or not (a Formula's formula)
 }
 
 export interface GlossaryLink { kind: string; entryId: string }
@@ -62,6 +68,11 @@ export const fieldLinks = (fields: Record<string, unknown>, id: string): Glossar
 export const fieldFacts = (fields: Record<string, unknown>, id: string): Fact[] =>
   Array.isArray(fields[id])
     ? (fields[id] as unknown[]).filter((v): v is Fact => !!v && typeof (v as Fact).label === 'string' && typeof (v as Fact).value === 'string')
+    : [];
+
+export const fieldSymbols = (fields: Record<string, unknown>, id: string): FormulaSymbol[] =>
+  Array.isArray(fields[id])
+    ? (fields[id] as unknown[]).filter((v): v is FormulaSymbol => !!v && typeof (v as FormulaSymbol).symbol === 'string' && typeof (v as FormulaSymbol).meaning === 'string' && typeof (v as FormulaSymbol).unit === 'string')
     : [];
 
 // Facts as typed: one per line, "Label: value" (a line with no colon is a value with no label).
@@ -140,6 +151,7 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
     fields: [
       { id: 'meaning', name: 'Means',   type: 'textarea', placeholder: 'What the term means' },
       { id: 'acronym', name: 'Acronym', type: 'text',     placeholder: 'Its short form, e.g. ASX' },
+      { id: 'formula', name: 'Formula', type: 'maths' },
       { id: 'example', name: 'Example', type: 'textarea', placeholder: 'A sentence that uses it' },
       { id: 'image',   name: 'Picture', type: 'image' },
       { id: 'source',  name: 'Source',  type: 'text',     placeholder: 'Where it comes from: a book, a link…' },
@@ -158,6 +170,7 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       { id: 'summary',     name: 'In short',          type: 'textarea', placeholder: 'The idea in a sentence' },
       { id: 'acronym',     name: 'Acronym',           type: 'text',     placeholder: 'Its short form, if it has one' },
       { id: 'explanation', name: 'Explanation',       type: 'textarea', placeholder: 'The idea in full' },
+      { id: 'formula',     name: 'Formula',           type: 'maths' },
       { id: 'keyPoints',   name: 'Key points',        type: 'list',     placeholder: 'A key point' },
       { id: 'examples',    name: 'Examples',          type: 'list',     placeholder: 'An example' },
       { id: 'nonExamples', name: 'Not to be confused with', type: 'list', placeholder: 'Something that looks like it but isn’t' },
@@ -188,6 +201,30 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       { id: 'related',  name: 'Related',  type: 'links' },
       { id: 'sources',  name: 'Sources',  type: 'list',     placeholder: 'A book, a link…' },
       { id: 'weblinks', name: 'Links',    type: 'urls',     placeholder: 'A web address, one per line' },
+    ],
+  },
+  // A formula, or a measure worked out by one (2026-11-03, agreed with the user): the quadratic
+  // formula, the coefficient of determination, standard deviation. Named, so text can link to it;
+  // the formula itself, what each symbol stands for, where it holds, the values it gives and how to
+  // read them. A Definition or Concept can carry a formula too (their Formula field).
+  {
+    key:   'formula',
+    label: 'Formula',
+    fields: [
+      { id: 'summary',     name: 'In short',       type: 'textarea', placeholder: 'What it gives, in a sentence' },
+      { id: 'formula',     name: 'Formula',        type: 'maths',    always: true },
+      { id: 'symbol',      name: 'Symbol',         type: 'maths' },
+      { id: 'where',       name: 'Where',          type: 'symbols' },
+      { id: 'domain',      name: 'Holds for',      type: 'text',     placeholder: 'Where it applies, e.g. n ∈ ℕ, n > 1' },
+      { id: 'range',       name: 'Values',         type: 'text',     placeholder: 'The values it can give, e.g. 0 to 1' },
+      { id: 'reading',     name: 'How to read it', type: 'textarea', placeholder: 'What a high or low value means' },
+      { id: 'assumptions', name: 'Assumptions',    type: 'list',     placeholder: 'Something it takes for granted' },
+      { id: 'example',     name: 'Worked example', type: 'textarea', placeholder: 'The formula used once, step by step' },
+      { id: 'acronym',     name: 'Acronym',        type: 'text',     placeholder: 'Its short form, if it has one' },
+      { id: 'related',     name: 'Related',        type: 'links' },
+      { id: 'sources',     name: 'Sources',        type: 'list',     placeholder: 'A book, a link…' },
+      { id: 'weblinks',    name: 'Links',          type: 'urls',     placeholder: 'A web address, one per line' },
+      { id: 'facts',       name: 'Fields',         type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER, offered: false },
     ],
   },
   // A fact worth keeping (2026-11-03): standalone, and often what a concept or an idea hub is built
@@ -239,7 +276,7 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
 ];
 
 // The types that make up the Glossary, and the field each one's meaning is in.
-export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', concept: 'summary', acronym: 'expansion', profile: 'summary', fact: 'statement', quote: 'text' };
+export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', concept: 'summary', acronym: 'expansion', profile: 'summary', fact: 'statement', quote: 'text', formula: 'summary' };
 
 // Kinds whose term is a headline worked out from the record, not a name used in writing (a Fact's,
 // a Quote's): never offered as a link while typing, and not a term another headline is built from.

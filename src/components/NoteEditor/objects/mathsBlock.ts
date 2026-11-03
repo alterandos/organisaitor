@@ -10,7 +10,7 @@ export const mathsBlock: NoteBlockKind = {
   id:      'maths',
   label:   LABELS.noteBlocks.maths.label,
   icon:    '∑',
-  aliases: ['math', 'equation', 'eq', 'formula', 'latex'],
+  aliases: ['math', 'equation', 'eq', 'latex'],
   hint:    LABELS.noteBlocks.maths.hint,
   insert:  (view, from, to) => {
     const made = insertMaths(view.state, from, to);

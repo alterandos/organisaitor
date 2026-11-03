@@ -150,6 +150,18 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     related: [{ kind: 'dependsOn', entryId: albedo }],
     importance: 1,   // a Key concept (BlockImportance.ts): shows in its card, hover card and the Glossary filter
   });
+  const forcing = entry('formula', 'CO₂ radiative forcing', carbon, {
+    summary: 'How much extra energy a rise in CO₂ traps, in watts per square metre.',
+    formula: '\\Delta F = 5.35 \\ln\\frac{C}{C_0}',
+    where: [
+      { symbol: '\\Delta F', meaning: 'Radiative forcing', unit: 'W m⁻²' },
+      { symbol: 'C', meaning: 'CO₂ concentration now', unit: 'ppm' },
+      { symbol: 'C_0', meaning: 'Pre-industrial concentration (about 280)', unit: 'ppm' },
+    ],
+    domain: 'C, C₀ > 0; for CO₂ only',
+    reading: 'Doubling CO₂ gives about 3.7 W m⁻² whatever the starting level: the logarithm means each extra ppm counts for a little less.',
+    sources: ['Myhre et al. 1998'],
+  });
   const quartz = entry('profile', 'Quartz', minerals, {
     summary: 'The most common mineral in the continental crust, and the one I keep mistaking for calcite.',
     facts: [
@@ -538,6 +550,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     pId('cc-ice', hubPassage('As sea ice melts, darker ocean is exposed, the albedo falls and more sunlight is absorbed, which melts more ice.', hub, 'demo-hl-ice'), ' This is the textbook positive feedback.'),
     EX.diagram(),
     card(feedback),
+    card(forcing),
     p('Anthropogenic CO₂ is a forcing, not a feedback. ', node('movedStub', { noteId: essayNote, inboxId, itemId: 'demo-ib-sinks', title: 'Essay ideas' })),
     p('Burning a tonne of coal releases about 2.4 t of CO₂. How much carbon is that?'),
     node('convertBlock', { variant: 'card', converter: co2Converter, values: { co2: '2400' } }),

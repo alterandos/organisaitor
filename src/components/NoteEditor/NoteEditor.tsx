@@ -24,8 +24,7 @@ import { setNormalText } from './extensions/normalText';
 import { HubPickerModal } from '@/components/HubPickerModal/HubPickerModal';
 import { addLinkToHub, addPassageToHub, selectedCardEntry, selectionTouchesHub } from '@/services/noteHubs';
 import { glossaryEntry } from '@/services/glossary';
-import { cardFromSelection, insertCardAfter } from './extensions/GlossaryCard';
-import { deleteGlossaryEntryAsked } from '@/services/glossaryDelete';
+import { insertCardAfter } from './extensions/GlossaryCard';
 import { InboxPickerModal } from '@/components/InboxPickerModal/InboxPickerModal';
 import { selectionTouchesInbox, sendToInbox } from '@/services/noteInbox';
 import { NoteBackdrop } from './NoteBackdrop';
@@ -39,7 +38,6 @@ import { StickyHeadings } from './StickyHeadings';
 import { toggleHeadingFoldAtCursor } from './extensions/HeadingFold';
 import { FONT_SIZES, currentFontSize, setFontSize, stepFontSize } from './extensions/fontSize';
 import { noteClipboardText } from './noteClipboardText';
-import { cycleImportance } from './extensions/Importance';
 import { SelectionMenu } from './objects/SelectionMenu';
 import './extensions/annotationMenu';
 import { liveNote, registerLiveNoteEditor, registerOpenNoteEditor } from '@/services/liveNoteEditor';
@@ -94,8 +92,7 @@ import { NoteLinksFrom } from './NoteLinksFrom';
 import type { NoteLinkRequest } from './objects/NoteObjectTrigger';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { openExternalLink, normalizeLinkUrl } from '@/utils/links';
-import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
-import { getStructuredTagType } from '@/config/structuredTagTypes';
+import { applyTextTag, textTagChoices } from './textTags';
 import { selectActiveCollectionId } from '@/store/uiStore';
 import { onVaultStatus, registerBeforeLock } from '@/services/vault';
 import { noteView, isNoteLocked } from '@/services/noteSecrets';
@@ -576,16 +573,6 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       clearStructuredHoverRef.current = setTimeout(() => setStructuredTagHover(null), 180);
     }
   }, [cancelHoverClear, scheduleHoverClear, cancelSectionHoverClear, scheduleSectionHoverClear]);
-
-  // ── Glossary records from selected words ─────────────────────────────────
-  // Marking text as a Definition, Concept or Acronym (the tag picker, Ctrl+2/3/8, `\` on a selection)
-  // makes a card from it (cardFromSelection); the popover it used to open was retired 2026-10-13.
-  // Reads everything dynamic via refs and getState(), since it's called from the editor-focused
-  // keydown effect, whose dependency array is just [editor].
-  const openStructuredTagCreate = (tag: BuiltinTag, from: number, to: number) => {
-    if (!editor) return;
-    cardFromSelection(editor.view, from, to, tag.typeKey, objectTriggerStorage(editor).getContext());
-  };
 
   // An old marked definition (from before the cards): its card, after the paragraph it's in.
   const showMarkAsCard = (el: HTMLElement) => {
@@ -1478,37 +1465,23 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
         return; // any other key cancels silently
       }
 
-      // Ctrl+1–7 → apply built-in tag to selection (or select block first); pressing the
-      // same digit again on text already carrying that exact tag removes it instead.
+      // Ctrl+1–9 → the tag at that number in the tag picker's order (textTags.ts) on the selection
+      // (or its block, selected first); again on text with that tag takes it off. Ctrl+1 is
+      // Important, which steps through its levels.
       if (e.ctrlKey && !e.shiftKey && !e.altKey) {
         const digit = parseInt(e.key);
-        if (digit >= 1 && digit <= BUILTIN_TAGS.length) {
-          const tag = BUILTIN_TAGS[digit - 1];
+        const tag = digit >= 1 && digit <= 9 ? textTagChoices(useNoteStore.getState().noteTags)[digit - 1] : undefined;
+        if (tag) {
           e.preventDefault();
           // Ctrl+1 on a block selected whole: the block's importance (BlockImportance.ts).
           const block = tag.typeKey === 'important' ? selectedBlock(editor.state) : null;
           if (block !== null) { cycleBlockImportance(editor.view, block); return; }
-          const applyTag = () => {
-            // Important steps through its levels (Important, Very important, Critical) and then off.
-            if (tag.typeKey === 'important') { cycleImportance(editor.view); return; }
-            if (editor.isActive('noteTag', { tagId: tag.id })) {
-              const entryId = editor.getAttributes('noteTag').structuredEntryId as string | null;
-              if (entryId) void deleteGlossaryEntryAsked(entryId, editor.schema);
-              else editor.chain().focus().unsetMark('noteTag').run();
-            } else if (getStructuredTagType(tag.typeKey)) {
-              const { from, to } = editor.state.selection;
-              openStructuredTagCreate(tag, from, to);
-              editor.commands.setTextSelection(to);
-            } else {
-              editor.chain().focus().setMark('noteTag', { tagId: tag.id, color: tag.color, typeKey: tag.typeKey }).run();
-            }
-          };
           if (editor.state.selection.empty) {
             const { $from } = editor.state.selection;
             editor.chain().focus().setTextSelection({ from: $from.start($from.depth), to: $from.end($from.depth) }).run();
-            requestAnimationFrame(applyTag);
+            requestAnimationFrame(() => applyTextTag(editor, tag));
           } else {
-            applyTag();
+            applyTextTag(editor, tag);
           }
           return;
         }
@@ -1566,9 +1539,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  // deleteStructuredTagEntry is a stable zustand action; openStructuredTagCreate reads
-  // everything dynamic via .getState() internally (see its own comment above) — neither
-  // needs to be a dep, so this effect still only needs to re-subscribe when `editor` changes.
+  // Everything dynamic is read through refs and getState(), so only `editor` is a dependency.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
@@ -2435,7 +2406,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
           ) : (
             <>
               {editor && <StickyHeadings editor={editor} />}
-              {editor && <FloatingToolbar actionsRef={toolbarActionsRef} editor={editor} noteId={note.id} getLinkTabId={() => linkTabIdFor(viewOf(currentNoteIdRef.current), activeTabIdRef.current)} onStructuredTag={openStructuredTagCreate} />}
+              {editor && <FloatingToolbar actionsRef={toolbarActionsRef} editor={editor} noteId={note.id} getLinkTabId={() => linkTabIdFor(viewOf(currentNoteIdRef.current), activeTabIdRef.current)} />}
               {editor && <NoteObjectMenu editor={editor} getContext={getObjectContext} />}
               {editor && hubPicker?.mode === 'hub' && (
                 <HubPickerModal

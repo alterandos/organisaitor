@@ -92,6 +92,7 @@ src/
   utils/itemOccurrences.ts — an Endeavour's repeating classes and Work, date by date: states, behindDates (pure)
   services/itemOccurrences.ts — marking a date: toggleOccurrence, setAttended, skipOccurrence, openOccurrence
   services/streamConversion.ts — rhythm streams converted to repeating calendar items (once, automatic)
+  services/eventTypeConversion.ts — an event saying birthday / travel turned into the Birthday or Journey Type, its icon and Show quieter (at start, after a load, and as such events arrive)
   utils/subjectItems.ts — a subject's Schedule and Work lists, item drafts, a course outline read as drafts, its Work's bounds (pure)
   services/subjectItems.ts — saveSubjectItem, deleteSubjectItem, outlineDraftsFor, addOutline (the subject editor's items); initSubjectWork (Work bounded by the period)
   utils/courseOutline.ts — readCourseOutline: a pasted course outline's code, name, classes, readings and assessments
@@ -339,7 +340,6 @@ src/
     OverviewRunway/          — an Overview's Runway (time left on a time line, dragging) and Board (time buckets) layouts; the rules are overview/timeline.ts, edits overview/edit.ts
     TimeInput/               — segmented hour/minute/AM-PM combobox respecting settingsStore.clockFormat (not a native <input type="time">, see Clock format setting below and the Timepicker rebuild entry in Implemented features), plus a quick-pick dropdown of half-hour times
     RepeatField/             — the repeat-rule editor (on/off, every N days/weeks/months/years, weekdays for weekly, "on the 2nd Tuesday" for monthly/yearly, ends never/after N/on a date); TaskPane and AddTaskModal
-    TravelModePicker/        — how a travel event travels (flight, train, bus, car, ferry); AddCalendarItemModal and CalendarEventPane
     LinksField/              — the shared links list (clickable / edit / delete / add) used by TaskPane, CalendarEventPane and CalendarReminderPane; links typed into notes arrive via `mergeNewLinks` in the store's update action, never here
     LinkHoverPreview/        — app-wide: shows a hovered link's URL bottom-left (see "Link hover preview" pattern below)
     PinButton/               — the pin / unpin button beside an item's own heading (a list, a tracker, a routine)
@@ -431,7 +431,10 @@ src/
       objects/               — inline objects (`\`) and link rendering (see "Inline objects in notes"): kinds.ts (NOTE_OBJECT_KINDS — THE registry; matchPickable/chosenKind across objects and blocks), blockKinds.ts (NOTE_BLOCK_KINDS — the note-block registry) + timelineBlock.ts, types.ts (NoteObjectKind, NoteBlockKind, PickableKind), taskKind.ts (`\task`), reminderKind.ts, session.ts (the `\` session, derived from the text), actions.ts (accept/commit/unlink/insertObjectTrigger), NoteObjectTrigger.ts (the extension + keys), NoteObjectMenu.tsx, artifactTypes.ts (ARTIFACT_TYPES: live summary per linked type), artifactGroups.ts (ArtifactLinkGroups: the pane per link, states, the expanded box and body widget, Home/End, the stored-mark guard), eventKind.ts, deadlineKind.ts + reminderKind.ts (both from datedKindFactory.ts), ArtifactBody.tsx + WhenLine.tsx + ObjectBody.tsx + CalendarItemBody.tsx + EventBody.tsx + NotifyChips.tsx (the expanded body), flags.ts (ArtifactFlag, calendarFlags, flagMenuItems), calendarItems.ts, whenInput.ts (readWhenInput, expandShortWeekdays, the defaults), contextMenu.ts (right-click on a link), format.ts
       extensions/NoteTagMark.ts      — Mark (tagId/color/typeKey/structuredEntryId attrs) for annotation tags; structuredEntryId links a tagged passage to its StructuredTagEntry (see "Structured tag entries")
       contextMenu.ts         — the editor's right-click providers (clipboard, link/create, Style ▸, select all) on the `note-editor` scope; NoteEditorMenuApi is what NoteEditor hands them
-      builtinTags.ts         — 8 built-in annotation tag definitions (Important/Concept/Definition/Example/Question/Reference/Learn Later/Acronym) — typeKey drives both Learn Later's future create-task action and Acronym's structured-tag-entry behaviour
+      builtinTags.ts         — the built-in tags and Glossary kinds (icon, colour, typeKey); `TEXT_TAGS`, the ones put on text
+      textTags.ts            — the tags put on text in one order: the tag picker (Ctrl+Space) and Ctrl+1…9 (`textTagChoices`, `applyTextTag`)
+      extensions/MathsInput.tsx — a Glossary card's maths field (MathLive, lazy): a Formula's formula and symbols
+      objects/formulaBlock.ts — `\formula`: a Formula card
       NoteBacklinks.tsx      — the "Linked from" bar under a note's title: single pill / "🔗 N" chip + list, each pill openable, draggable into the text, or insertable at the cursor (derived from other items' crossAppRefs via store/noteBacklinks.ts — nothing stored); artifactLinkInsert.ts holds the insert/drop helpers
     NoteEditorPane/          — slide-in pane wrapping NoteEditor for non-Notes sections
     NoteSplitView/           — notes side by side: NoteSplitView (the panes in a grid, the shared ribbon, empty panes' "Choose a note…"), NoteViewMenu (the ribbon's View ▾), openBeside ("Open beside" on a note row)

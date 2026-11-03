@@ -53,8 +53,9 @@ export interface CalendarItemPrefillExtra {
   notes?:        string | null;
   location?:     string | null;
   collectionId?: string | null;
-  // Inferred from a note selection (inferCalendarItemFromSelection) — shown, not silently applied.
-  eventType?:    'default' | 'birthday' | 'travel';
+  // A Type to start from: a birthday or a journey read from a note selection, as its default Type
+  // (services/eventTypeConversion.ts typeForEventKind) — shown, not silently applied.
+  typeId?:       ItemTypeId | null;
   tentative?:    boolean;
   important?:    boolean;
   repeat?:       RepeatConfig | null;

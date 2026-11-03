@@ -7,7 +7,8 @@ import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { iconText } from '@/components/IconPicker/iconValue';
 import { partDue, pickableTypes, resolveItemType } from '@/utils/itemTypes';
 import { formatDate } from '@/utils/date';
-import { setItemType, setItemTypeField, type TypedTarget } from '@/services/itemTypes';
+import { addBuiltInType, setEventType, setItemType, setItemTypeField, type TypedTarget } from '@/services/itemTypes';
+import { EVENT_DEFAULTS, type BuiltInType } from '@/config/builtInTypes';
 import { LABELS } from '@/config/labels';
 import type { ItemTypeId, TypedItem } from '@/types';
 import styles from './ItemTypeField.module.css';
@@ -26,13 +27,18 @@ interface FieldProps {
   onValueChange: (fieldId: string, value: unknown) => void;
   // A creation form: the Type's parts, ticked to be made with it, dated from `date`.
   parts?: { chosen: string[]; onChange: (ids: string[]) => void; date: string | null };
+  // Default Types offered too (an event's Birthday, Journey…), under "Start from a default": choosing
+  // one makes the person's copy (addBuiltInType). One they already have as it came isn't repeated.
+  defaults?: BuiltInType[];
 }
 
-export function ItemTypeField({ typeId, values, onTypeChange, onValueChange, parts }: FieldProps) {
+export function ItemTypeField({ typeId, values, onTypeChange, onValueChange, parts, defaults }: FieldProps) {
   const types = useItemTypeStore((s) => s.types);
   const id = useId();
   const options = pickableTypes(types, typeId);
-  if (options.length === 0 && !typeId) return null;
+  const offered = (defaults ?? []).filter((d) => !options.some((t) => t.builtIn === d.key));
+  if (options.length === 0 && offered.length === 0 && !typeId) return null;
+  const pick = (v: string) => onTypeChange(v.startsWith('default:') ? addBuiltInType(v.slice(8)) : ((v || null) as ItemTypeId | null));
   const resolved = resolveItemType(types, typeId);
 
   return (
@@ -40,11 +46,16 @@ export function ItemTypeField({ typeId, values, onTypeChange, onValueChange, par
       <div className={styles.pickRow}>
         <label className={styles.label} htmlFor={id}>{L.type}</label>
         {resolved && <ItemIcon icon={resolved.type.icon} className={styles.icon} />}
-        <select id={id} className={styles.select} value={typeId ?? ''} onChange={(e) => onTypeChange((e.target.value || null) as ItemTypeId | null)}>
+        <select id={id} className={styles.select} value={typeId ?? ''} onChange={(e) => pick(e.target.value)}>
           <option value="">{L.none}</option>
           {options.map((t) => (
             <option key={t.id} value={t.id}>{[iconText(t.icon), t.name].filter(Boolean).join(' ')}</option>
           ))}
+          {offered.length > 0 && (
+            <optgroup label={L.startFrom}>
+              {offered.map((d) => <option key={d.key} value={`default:${d.key}`}>{`${d.icon} ${d.name}`}</option>)}
+            </optgroup>
+          )}
         </select>
       </div>
 
@@ -97,7 +108,8 @@ export function ItemTypePaneField({ target }: { target: TypedTarget }) {
     <ItemTypeField
       typeId={item.typeId ?? null}
       values={item.typeFields ?? {}}
-      onTypeChange={(id) => setItemType(target, id)}
+      onTypeChange={(id) => (target.kind === 'event' ? setEventType(target.id, id) : setItemType(target, id))}
+      defaults={target.kind === 'event' ? EVENT_DEFAULTS : undefined}
       onValueChange={(fieldId, v) => setItemTypeField(target, fieldId, v)}
     />
   );

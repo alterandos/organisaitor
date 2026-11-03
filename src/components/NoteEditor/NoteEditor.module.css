@@ -6377,4 +6377,5 @@
 .editorContent [data-type="glossary-card"][data-glossary-kind="profile"] { --color-primary: var(--color-kind-profile); --color-primary-subtle: color-mix(in srgb, var(--color-kind-profile) 10%, transparent); }
 .editorContent [data-type="glossary-card"][data-glossary-kind="fact"] { --color-primary: var(--color-kind-fact); --color-primary-subtle: color-mix(in srgb, var(--color-kind-fact) 10%, transparent); }
 .editorContent [data-type="glossary-card"][data-glossary-kind="quote"] { --color-primary: var(--color-kind-quote); --color-primary-subtle: color-mix(in srgb, var(--color-kind-quote) 10%, transparent); }
+.editorContent [data-type="glossary-card"][data-glossary-kind="formula"] { --color-primary: var(--color-kind-formula); --color-primary-subtle: color-mix(in srgb, var(--color-kind-formula) 10%, transparent); }
 .editorContent [data-type="question"] { --color-primary: var(--color-kind-question); --color-primary-subtle: color-mix(in srgb, var(--color-kind-question) 10%, transparent); }

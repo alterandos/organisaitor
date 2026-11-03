@@ -28,6 +28,8 @@ export interface CalendarEventFields {
   background?:        boolean;
   color?:             string | null;
   crossAppRefs?:      CrossAppRef[];
+  icon?:              string | null;
+  quiet?:             boolean;
 }
 
 // The rules for turning what a person (or an agent) supplied for a new event into what is stored.
@@ -58,6 +60,8 @@ export function buildCalendarEventInput(f: CalendarEventFields): CreateCalendarE
     background:        f.background,
     color:             f.color,
     crossAppRefs:      f.crossAppRefs,
+    icon:              f.icon || null,
+    quiet:             f.quiet,
   };
 }
 

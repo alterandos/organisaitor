@@ -543,7 +543,11 @@ Completing a project's last open task offers "Archive the project" in the Comple
 
 ## Calendar
 
-Built (each has its entry in implemented-features.md): month, week and day views; tentative events and reminders; the Deadline kind; drag to move and resize; reminders drawn as points; background events; the time field's clear; Google Calendar sync (`docs/features/external-calendar-sync.md`). Whether the Calendar ever becomes its own app is open, with no trigger.
+### Pictures on calendar items, and one way to attach pictures (asked 2026-11-03; low priority, the user's call)
+
+Paste (Ctrl+V anywhere in the pane), upload, or drag and drop pictures onto an event, in a field below its links to tasks and notes. Proposed as a suite pattern, `PictureField` (`components/PictureField`): thumbnails you can remove and reorder, a click shows one large; the item holds `pictureIds: string[]` into the picture library (`services/pictures.ts`, a new origin `attachment`), so encryption follows the library's rules; on Android a file picker or the camera. Decided: events first, the same field reused for reminders, deadlines and tasks later; a repeating series holds them, a date taken out keeps them. Needs a column on `calendar_events` (migration + mapper). Not built.
+
+### ~~Retire the built-in event type~~ — built 2026-11-03 ("The event's own type retired for Types" in implemented-features.md). Left: the agent's event summary and birthday-times check still speak the old words (docs/ai follow-up).
 
 ### Tentative — ideas not pursued (revisit only if a need shows up)
 

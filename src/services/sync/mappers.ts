@@ -23,6 +23,8 @@ const scheduleIdColumn = (v: string | null | undefined) => (v === undefined ? {}
 const attendedColumn = (v: string[] | undefined) => (v === undefined ? {} : { attended_dates: v });
 // Instead of a class or during it (migration 067, events and Deadlines), likewise.
 const onClassColumn = (v: ClassLink | null | undefined) => (v === undefined ? {} : { on_class: v });
+// An event's icon and Show quieter (migration 070): sent once either is set; both columns nullable.
+const eventLookColumns = (e: CalendarEvent) => (e.icon === undefined && e.quiet === undefined ? {} : { icon: e.icon ?? null, quiet: e.quiet ?? null });
 const typeColumns = (i: TypedItem) => (i.typeId === undefined ? {} : { type_id: i.typeId, type_fields: i.typeFields ?? {} });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const typeFromRow = (r: Record<string, any>): TypedItem => (r.type_id == null ? {} : { typeId: r.type_id, typeFields: r.type_fields ?? {} });
@@ -300,6 +302,7 @@ export function eventToRow(e: CalendarEvent, userId: string) {
     ...scheduleIdColumn(e.scheduleId),
     ...attendedColumn(e.attendedDates),
     ...onClassColumn(e.onClass),
+    ...eventLookColumns(e),
     deleted_at:          null,
   };
 }
@@ -349,6 +352,8 @@ export function rowToEvent(r: Record<string, any>): CalendarEvent {
     ...(r.schedule_id ? { scheduleId: r.schedule_id } : {}),
     ...(Array.isArray(r.attended_dates) && r.attended_dates.length ? { attendedDates: r.attended_dates } : {}),
     ...(r.on_class ? { onClass: r.on_class } : {}),
+    ...(r.icon != null ? { icon: r.icon } : {}),
+    ...(r.quiet != null ? { quiet: r.quiet } : {}),
   };
 }
 

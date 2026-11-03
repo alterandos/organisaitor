@@ -1,3 +1,4 @@
+import { typeForEventKind } from '@/services/eventTypeConversion';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useUIStore } from '@/store/uiStore';
@@ -114,7 +115,7 @@ export const eventKind: NoteObjectKind<EventDraft> = {
       notes:        draft.notes,
       location:     draft.location,
       collectionId: ctx.collectionId,
-      eventType:    draft.eventType,
+      typeId:       typeForEventKind(draft.eventType, null),
       tentative:    draft.tentative,
       important:    draft.important,
       repeat:       draft.repeat,

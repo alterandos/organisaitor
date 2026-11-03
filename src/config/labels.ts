@@ -359,10 +359,14 @@ export const LABELS = {
   // The Glossary card (`\definition`, `cronym`, `\concept`; NoteEditor/extensions/GlossaryCard.ts).
   glossaryCard: {
     removeChip:   (word: string) => `Take off “${word}”`,
-    termPlaceholder: { definition: 'Term', acronym: 'Acronym', concept: 'Concept', profile: 'Name', fact: 'Headline', quote: 'Headline' } as Record<string, string>,
+    termPlaceholder: { definition: 'Term', acronym: 'Acronym', concept: 'Concept', profile: 'Name', fact: 'Headline', quote: 'Headline', formula: 'Name' } as Record<string, string>,
     add:          'Add',
     remove:       'Remove',
     addImage:     'Add a picture',
+    addSymbol:    '+ Symbol',
+    symbol:       'Symbol',
+    symbolMeaning: 'What it stands for',
+    symbolUnit:   'Unit',
     replaceImage: 'Replace picture',
     pasteImage:   'Paste',
     imageSlot:    'Picture: paste one here (Ctrl+V), drop one, or choose a file',
@@ -407,14 +411,14 @@ export const LABELS = {
     linkSuggestionModes: { never: 'Never', once: 'Once per note', always: 'Every time' },
     title:         'Glossary',
     // A record that also counts as another kind (an acronym and what it stands for: one record).
-    kindNames:     { acronym: 'an acronym', definition: 'a definition', concept: 'a concept', profile: 'a profile', fact: 'a fact', quote: 'a quote' },
+    kindNames:     { acronym: 'an acronym', definition: 'a definition', concept: 'a concept', profile: 'a profile', fact: 'a fact', quote: 'a quote', formula: 'a formula' },
     alsoKinds:     (kinds: string[]) => `also ${kinds.join(' and ')}`,
     alsoDefined:   (long: string) => `“${long}” is already in the Glossary.`,
     addAcronymThere: (short: string) => `Add ${short} to it and show that card here`,
     alsoAcronym:   (short: string) => `${short} already has its own Acronym card.`,
     acronymOffer:  (short: string, long: string) => `Add ${short} to${long ? ` ${long}` : ''}`,
     open:          'Glossary',
-    openHint:      'Every definition, concept, acronym, profile and fact',
+    openHint:      'Every definition, concept, acronym, profile, formula, fact and quote',
     search:        'Search terms and meanings…',
     empty:         'Nothing in the Glossary yet. Make something with + New, or select words in a note and choose Mark as.',
     noMatch:       'No term matches that.',
@@ -499,6 +503,7 @@ export const LABELS = {
     profile:     'Profile…',
     fact:        'Fact…',
     quote:       'Quote…',
+    formula:     'Formula…',
     noTerms:     'No terms yet: mark this as a Definition or Concept to start the Glossary.',
     hint:        '↑↓ to choose · Enter · Esc',
   },
@@ -1130,6 +1135,7 @@ export const LABELS = {
       days === 0 ? 'on the day' : `${days} day${days === 1 ? '' : 's'} ${kind === 'task' ? 'before' : 'after'}`,
     partsMade:    'Also make',
     defaultCopy:  (name: string) => `${name} (default)`,
+    startFrom:    'Start from a default',
     usedFor:      'Used for',
     uses:         { item: 'Items (tasks, events, Deadlines)', endeavour: 'Endeavours' } as Record<'item' | 'endeavour', string>,
     inheritHint:  'The Endeavours part of one of this Type take this field, live',
@@ -1800,6 +1806,10 @@ export const LABELS = {
       label: 'Fact',
       hint:  'A fact worth keeping, with a short headline worked out from it, in the Glossary',
     },
+    formula: {
+      label: 'Formula',
+      hint:  'A named formula or measure: the formula, what each symbol stands for, where it holds and how to read it',
+    },
     prosCons: {
       label:              'Pros and cons',
       hint:               'Weigh one thing up: what’s for it, what’s against, and a verdict',
@@ -2187,6 +2197,8 @@ export const LABELS = {
     cancel:       'Cancel',
     // The magic wand's hint here (components/MagicWand; the reader is utils/textToTask.ts).
     wandHint:     'Paste or type a description: "Every 3rd Sunday until Dec 2027, hash run at Minervastrasse 65, Zürich …"',
+    icon:         'Icon on the calendar',
+    quiet:        'Show quieter (a journey: booked out, but not something you go to)',
   },
   toast: {
     dismiss: 'Dismiss',

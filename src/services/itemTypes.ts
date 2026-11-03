@@ -7,7 +7,7 @@ import { trashedBy, deleteForever } from '@/services/trash';
 import { showToast } from '@/components/Toast/showToast';
 import { makeItemLink } from '@/utils/taskLinks';
 import { now } from '@/utils/date';
-import { partDue, resolveItemType } from '@/utils/itemTypes';
+import { eventPresets, partDue, resolveItemType } from '@/utils/itemTypes';
 import { STARTER_SETS, type StarterSet } from '@/config/typeStarters';
 import { BUILT_IN_BY_KEY, type BuiltInType } from '@/config/builtInTypes';
 import { LABELS } from '@/config/labels';
@@ -45,6 +45,14 @@ export function setItemType(t: TypedTarget, typeId: ItemTypeId | null, values?: 
   if (t.kind === 'task') useTaskStore.getState().updateTask(t.id, patch);
   else if (t.kind === 'event') useCalendarStore.getState().updateEvent(t.id, patch);
   else useCalendarStore.getState().updateDeadline(t.id, patch);
+}
+
+// An event's Type changed in its pane: its icon and Show quieter follow the new Type (what it
+// presets), as when an event is made with one; the person can change either again.
+export function setEventType(id: CalendarEventId, typeId: ItemTypeId | null): void {
+  setItemType({ kind: 'event', id }, typeId);
+  const p = eventPresets(useItemTypeStore.getState().types, typeId);
+  useCalendarStore.getState().updateEvent(id, { icon: p?.icon ?? null, quiet: !!p?.quiet });
 }
 
 export function setItemTypeField(t: TypedTarget, fieldId: string, value: unknown): void {

@@ -1,4 +1,5 @@
 import type { TypeUse } from '@/types';
+import { BIRTHDAY_REPEAT } from '@/utils/calendarItemInput';
 import { STARTER_SETS, type StarterType } from '@/config/typeStarters';
 
 // The default Types (docs/features/endeavours.md "Attributes and Types for Endeavours", agreed with
@@ -26,8 +27,26 @@ export const ENDEAVOUR_DEFAULTS: BuiltInType[] = [
   },
 ];
 
+// Events (2026-11-03, agreed with the user): what was the event's own type. A Type only preselects
+// (its icon, Show quieter, a birthday's yearly repeat and no times); the person can change any of
+// it on the event. A journey's kinds each have their own icon. Offered in an event's Type picker.
+const journeyKind = (key: string, name: string, icon: string): BuiltInType =>
+  ({ key, name, icon, extends: 'journey', usedFor: ['item'], fields: [], defaults: {}, parts: [] });
+export const EVENT_DEFAULTS: BuiltInType[] = [
+  { key: 'birthday', name: 'Birthday', icon: '🎉', usedFor: ['item'], fields: [], parts: [],
+    defaults: { makeAs: 'event', allDay: true, repeat: BIRTHDAY_REPEAT } },
+  { key: 'journey', name: 'Journey', icon: '🧳', usedFor: ['item'], fields: [], parts: [],
+    defaults: { makeAs: 'event', quiet: true } },
+  journeyKind('flight', 'Flight', '✈️'),
+  journeyKind('train', 'Train', '🚆'),
+  journeyKind('bus', 'Bus', '🚌'),
+  journeyKind('car', 'Car journey', '🚗'),
+  journeyKind('ferry', 'Ferry', '⛴️'),
+];
+
 export const BUILT_IN_TYPES: BuiltInType[] = [
   ...ENDEAVOUR_DEFAULTS,
+  ...EVENT_DEFAULTS,
   ...STARTER_SETS.university.map((s): BuiltInType => ({ ...s, usedFor: ['item'] })),
 ];
 

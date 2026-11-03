@@ -1,3 +1,4 @@
+import { typeForEventKind } from '@/services/eventTypeConversion';
 import { useState, useEffect, useCallback } from 'react';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { CloseIcon, LinkIcon, TextColorIcon, UnlinkIcon } from '@/components/Icons';
@@ -10,8 +11,7 @@ import { normalizeLinkUrl } from '@/utils/links';
 import { inferTaskFromSelection, inferCalendarItemFromSelection } from '@/utils/textToTask';
 import type { NoteId } from '@/types/notes';
 import type { CrossAppRefType } from '@/types';
-import { BUILTIN_TAGS, type BuiltinTag } from './builtinTags';
-import { getStructuredTagType } from '@/config/structuredTagTypes';
+import { applyTextTag, textTagChoices, type TextTagChoice } from './textTags';
 import { deleteGlossaryEntryAsked } from '@/services/glossaryDelete';
 import styles from './FloatingToolbar.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -38,25 +38,11 @@ interface Props {
   noteId: string;
   // The tab the selection is in, in CrossAppRef.tabId form (undefined for a note without extra tabs).
   getLinkTabId: () => string | undefined;
-  // Applying a structured-type tag (Acronym today — see structuredTagTypes.ts) opens a
-  // create/preview popover instead of tagging immediately; NoteEditor owns that popover's
-  // state since it also needs to apply the resulting mark, so this hands the request up
-  // rather than duplicating the popover here.
-  onStructuredTag: (tag: BuiltinTag, from: number, to: number) => void;
 }
 
 interface ToolbarPos {
   top: number;
   left: number;
-}
-
-interface TagItem {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  typeKey?: string | null;
-  isBuiltin?: boolean;
 }
 
 // The "Create ▸" menu (Ctrl+Q / the "+" toolbar button). Task and Calendar item are wired —
@@ -78,7 +64,7 @@ const CREATE_MENU_OPTIONS: CreateMenuOption[] = [
   { type: 'trackerEntry',label: 'Tracker entry',    icon: '📊', enabled: false },
 ];
 
-export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag, actionsRef }: Props) {
+export function FloatingToolbar({ editor, noteId, getLinkTabId, actionsRef }: Props) {
   const [pos, setPos]           = useState<ToolbarPos | null>(null);
   const [showTags, setShowTags] = useState(false);
   const [search, setSearch]     = useState('');
@@ -86,9 +72,6 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
   const [linkUrl, setLinkUrl]   = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const noteTagsRecord = useNoteStore((s) => s.noteTags);
-  const userTags: TagItem[] = Object.values(noteTagsRecord).map((t) => ({
-    id: t.id, name: t.name, icon: t.icon ?? '📁', color: t.color ?? '#6b7280',
-  }));
 
   // ── Create-linked-item menu (Ctrl+Q, or the "+ Create" button — pipe-separated from the
   // rest of the toolbar). Task is fully wired; the other three are documented stubs. ──
@@ -245,7 +228,7 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
         notes:        cal.notes,
         location:     cal.location,
         collectionId: noteCollectionId ?? activeCollectionId ?? null,
-        eventType:    cal.eventType,
+        typeId:       typeForEventKind(cal.eventType, null),
         tentative:    cal.tentative,
         important:    cal.important,
         repeat:       cal.repeat,
@@ -314,33 +297,18 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, onStructuredTag,
 
   if (!pos) return null;
 
-  // Build filtered tag list: built-ins first, then user tags
+  // The tags in their one order (textTags.ts), numbered as Ctrl+1…9 applies them.
   const q = search.toLowerCase();
-  const filteredBuiltin: TagItem[] = BUILTIN_TAGS
-    .filter((t: BuiltinTag) => t.name.toLowerCase().includes(q))
-    .map((t: BuiltinTag) => ({ ...t, isBuiltin: true }));
-  const filteredUser: TagItem[] = userTags.filter((t) => t.name.toLowerCase().includes(q));
-  const allFiltered: TagItem[] = [...filteredBuiltin, ...filteredUser];
+  const allFiltered = textTagChoices(noteTagsRecord).filter((t) => t.name.toLowerCase().includes(q));
+  const filteredBuiltin = allFiltered.filter((t) => t.builtin);
+  const filteredUser = allFiltered.filter((t) => !t.builtin);
 
   const grip = (e: React.MouseEvent) => e.preventDefault();
 
-  const applyTagItem = (item: TagItem) => {
+  const applyTagItem = (item: TextTagChoice) => {
     setShowTags(false);
     setSearch('');
-    if (getStructuredTagType(item.typeKey)) {
-      const { from, to } = editor.state.selection;
-      const builtinTag = BUILTIN_TAGS.find((t) => t.id === item.id);
-      if (builtinTag) onStructuredTag(builtinTag, from, to);
-      // Collapse the selection so this toolbar hides once the card is made below
-      // the paragraph — same reason selectCreateOption does this for the Task create-menu.
-      editor.commands.setTextSelection(to);
-      return;
-    }
-    editor.chain().focus().setMark('noteTag', {
-      tagId: item.id,
-      color: item.color,
-      typeKey: item.typeKey ?? null,
-    }).run();
+    applyTextTag(editor, item);
   };
 
   // Removing an old marked definition deletes its Glossary record and every link to it (asked).

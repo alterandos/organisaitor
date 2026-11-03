@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { MagicWandButton, MagicWandPanel } from '@/components/MagicWand/MagicWand';
 import { DateInput } from '@/components/DateInput/DateInput';
-import type { CalendarItemKind, CalendarEventType, EventStatus, RepeatConfig, TravelMode } from '@/types';
-import { TravelModePicker } from '@/components/TravelModePicker/TravelModePicker';
+import type { CalendarItemKind, EventStatus, RepeatConfig } from '@/types';
 import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -21,14 +20,16 @@ import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
 import { datedPatch, defaultRule, eventPatch, fitRule, type NotifyRule } from '@/utils/notifyRule';
 import { LinksField } from '@/components/LinksField/LinksField';
-import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput, BIRTHDAY_REPEAT } from '@/utils/calendarItemInput';
+import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput } from '@/utils/calendarItemInput';
 import type { ClassLink, CollectionId, ItemTypeId, CalendarEventId, CalendarDeadlineId } from '@/types';
 import { ItemTypeField } from '@/components/ItemTypeField/ItemTypeField';
 import { ClassClashField } from '@/components/ClassClashField/ClassClashField';
 import { useItemTypeStore } from '@/store/itemTypeStore';
-import { resolveItemType } from '@/utils/itemTypes';
+import { eventPresets, resolveItemType } from '@/utils/itemTypes';
 import { applyItemType } from '@/services/itemTypes';
-import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
+import { typeForEventKind } from '@/services/eventTypeConversion';
+import { EVENT_DEFAULTS } from '@/config/builtInTypes';
+import { IconField } from '@/components/IconPicker/IconField';
 import styles from './AddCalendarItemModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
@@ -77,14 +78,18 @@ export function AddCalendarItemModal() {
   const [notes,             setNotes]             = useState(prefillExtra?.notes ?? '');
   const [links,             setLinks]             = useState<string[]>([]);
   const [location,          setLocation]          = useState(prefillExtra?.location ?? '');
-  const [eventType,         setEventType]         = useState<CalendarEventType>(prefillExtra?.eventType ?? 'default');
   const [status,            setStatus]            = useState<EventStatus>(prefillExtra?.tentative ? 'tentative' : 'confirmed');
   const [collectionId,      setCollectionId]      = useState<CollectionId | null>(
     (prefillExtra?.collectionId ?? activeCollectionId) as CollectionId | null
   );
-  const [important,         setImportant]         = useState(prefillExtra?.important ?? !!resolveItemType(useItemTypeStore.getState().types, useUIStore.getState().pendingItemTypeId)?.defaults.important);
+  // A Type to start from: chosen from the speed dial, or read from a note as a birthday or a journey.
+  const [initialTypeId] = useState<ItemTypeId | null>(() => prefillExtra?.typeId ?? useUIStore.getState().pendingItemTypeId);
+  const [initialPresets] = useState(() => eventPresets(useItemTypeStore.getState().types, initialTypeId));
+  const [important,         setImportant]         = useState(prefillExtra?.important ?? !!resolveItemType(useItemTypeStore.getState().types, initialTypeId)?.defaults.important);
   const [background,        setBackground]        = useState(false);
-  const [travelMode,        setTravelMode]        = useState<TravelMode | null>(null);
+  // The icon before its title on the calendar and Show quieter (2026-11-03): preset by its Type.
+  const [icon,              setIcon]              = useState<string | null>(initialPresets?.icon ?? null);
+  const [quiet,             setQuiet]             = useState(!!initialPresets?.quiet);
   const [color,             setColor]             = useState<string | null>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
@@ -92,17 +97,17 @@ export function AddCalendarItemModal() {
   // a timed reminder at its own time.
   // null until the person touches Notify: an event starts off (opt-in), a reminder or deadline on.
   const [notifyRule,        setNotifyRule]        = useState<NotifyRule | null>(null);
-  const [repeat,            setRepeat]            = useState<RepeatConfig | null>(prefillExtra?.repeat ?? null);
+  const [repeat,            setRepeat]            = useState<RepeatConfig | null>(prefillExtra?.repeat ?? initialPresets?.repeat ?? null);
   const [onClass,           setOnClass]           = useState<ClassLink | null>(null);
   // Opened when something inferred lives in the extra options (repeat, tentative), so the guess is
   // visible rather than silently applied. Closed otherwise, for every kind.
   // A Type (events and Deadlines; a reminder has none): chosen from the speed dial or here. Its
   // Important default sets Important; its parts are made with the item.
-  const [typeId,            setTypeId]            = useState<ItemTypeId | null>(() => useUIStore.getState().pendingItemTypeId);
+  const [typeId,            setTypeId]            = useState<ItemTypeId | null>(initialTypeId);
   const [typeValues,        setTypeValues]        = useState<Record<string, unknown>>({});
   const [typeParts,         setTypeParts]         = useState<string[]>(() => resolveItemType(useItemTypeStore.getState().types, typeId)?.parts.map((p) => p.id) ?? []);
   const typeName = useItemTypeStore((st) => (typeId ? st.types[typeId]?.name : undefined));
-  const [formExpanded,      setFormExpanded]      = useState(!!(prefillExtra?.repeat || prefillExtra?.tentative));
+  const [formExpanded,      setFormExpanded]      = useState(!!(prefillExtra?.repeat || prefillExtra?.tentative || initialPresets?.repeat));
   const [wandOpen,          setWandOpen]          = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   // Tracks whether `endTime` is still just our own auto-linked guess vs. something the user
@@ -115,8 +120,7 @@ export function AddCalendarItemModal() {
 
   const allCollections = Object.values(collectionsRecord);
   const isEvent    = kind === 'event';
-  const isBirthday = isEvent && eventType === 'birthday';
-  const timed = isEvent ? !isBirthday && !!startTime : !!time;
+  const timed = isEvent ? !!startTime : !!time;
   const shownRule: NotifyRule = notifyRule ?? (isEvent ? { kind: 'off' } : defaultRule(kind, timed));
   const multiDay   = isEvent && !!endDate && endDate > date;
 
@@ -161,14 +165,19 @@ export function AddCalendarItemModal() {
     }
   };
 
-  const handleEventTypeChange = (type: CalendarEventType) => {
-    setEventType(type);
-    if (type === 'birthday') {
-      setStartTime('');
-      setEndTime('');
-      setRepeat(BIRTHDAY_REPEAT);
-    }
-  };
+  // A Type chosen: its parts ticked, and what it presets put in (Important; for an event its icon,
+  // Show quieter, a birthday's no times and yearly repeat), all still the person's to change.
+  function chooseType(tid: ItemTypeId | null) {
+    setTypeId(tid);
+    const types = useItemTypeStore.getState().types;
+    setTypeParts(resolveItemType(types, tid)?.parts.map((p) => p.id) ?? []);
+    if (resolveItemType(types, tid)?.defaults.important) setImportant(true);
+    const p = eventPresets(types, tid);
+    setIcon(p?.icon ?? null);
+    setQuiet(!!p?.quiet);
+    if (p?.allDay) { setStartTime(''); setEndTime(''); }
+    if (p?.repeat && !repeat) { setRepeat(p.repeat); setFormExpanded(true); }
+  }
 
   const handleDateChange = (value: string) => {
     setDate(value);
@@ -188,7 +197,8 @@ export function AddCalendarItemModal() {
       setStartTime(cal.startTime ?? '');
       setEndTime(cal.endTime ?? (cal.startTime ? timeAddMinutes(cal.startTime, 30) : ''));
       endAutoRef.current = !cal.endTime;
-      setEventType(cal.eventType);
+      const tid = typeForEventKind(cal.eventType, null);
+      if (tid) chooseType(tid);
     } else {
       setTime(cal.startTime ?? '');
     }
@@ -221,8 +231,8 @@ export function AddCalendarItemModal() {
         startTime,
         endTime,
         location,
-        eventType,
-        travelMode: eventType === 'travel' ? travelMode : null,
+        icon,
+        quiet,
         ...eventPatch(rule),
         background: multiDay ? background : false,
         color: multiDay && background ? color : null,
@@ -270,6 +280,7 @@ export function AddCalendarItemModal() {
           <div className={styles.body}>
             <div className={styles.titleRow}>
               <MagicWandButton open={wandOpen} onToggle={() => setWandOpen((v) => !v)} />
+              {isEvent && <IconField value={icon} onChange={setIcon} fallback={ITEM_TYPE_ICON.event} label={L.icon} />}
               <input
                 className={styles.titleInput}
                 placeholder={L.titleOf(kindLabel)}
@@ -294,7 +305,7 @@ export function AddCalendarItemModal() {
               <label className={styles.label}>{L.date}</label>
               <div className={styles.timeRow}>
                 <DateInput className={styles.dateInput} value={date} onChange={(v) => handleDateChange(v)} required aria-label={L.date} />
-                {isEvent && !isBirthday && (
+                {isEvent && (
                   <>
                     <span className={styles.timeSep}>→</span>
                     <DateInput className={styles.dateInput} value={endDate} min={date} onChange={(v) => setEndDate(v)} aria-label={L.endDate} />
@@ -306,7 +317,7 @@ export function AddCalendarItemModal() {
               </div>
             </div>
 
-            {isEvent && !isBirthday && (
+            {isEvent && (
               <div className={styles.field}>
                 <label className={styles.label}>{L.time}</label>
                 <div className={styles.timeRow}>
@@ -314,26 +325,6 @@ export function AddCalendarItemModal() {
                   <span className={styles.timeSep}>→</span>
                   <TimeInput className={styles.timeInput} value={endTime} onChange={handleEndTimeChange} placeholder={L.end} />
                 </div>
-              </div>
-            )}
-
-            {isEvent && (
-              <div className={styles.field}>
-                <label className={styles.label}>{L.eventType}</label>
-                <div className={styles.typeRow}>
-                  {PICKABLE_EVENT_TYPES.map((t) => (
-                    <button
-                      key={t.value}
-                      type="button"
-                      className={`${styles.typeBtn} ${eventType === t.value ? styles.typeBtnActive : ''}`}
-                      onClick={() => handleEventTypeChange(t.value)}
-                    >
-                      {t.icon && <span>{t.icon}</span>}
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-                {eventType === 'travel' && <TravelModePicker value={travelMode} onChange={setTravelMode} />}
               </div>
             )}
 
@@ -369,12 +360,8 @@ export function AddCalendarItemModal() {
               <ItemTypeField
                 typeId={typeId}
                 values={typeValues}
-                onTypeChange={(tid) => {
-                  setTypeId(tid);
-                  const r = resolveItemType(useItemTypeStore.getState().types, tid);
-                  setTypeParts(r?.parts.map((p) => p.id) ?? []);
-                  if (r?.defaults.important) setImportant(true);
-                }}
+                onTypeChange={chooseType}
+                defaults={isEvent ? EVENT_DEFAULTS : undefined}
                 onValueChange={(fieldId, v) => setTypeValues((prev) => ({ ...prev, [fieldId]: v }))}
                 parts={{ chosen: typeParts, onChange: setTypeParts, date: date || null }}
               />
@@ -392,9 +379,13 @@ export function AddCalendarItemModal() {
 
             {formExpanded && (
               <>
-                {!isBirthday && (
+                <div className={styles.field}>
+                  <Check checked={status === 'tentative'} onChange={(on) => setStatus(on ? 'tentative' : 'confirmed')}>{L.tentative}</Check>
+                </div>
+
+                {isEvent && (
                   <div className={styles.field}>
-                    <Check checked={status === 'tentative'} onChange={(on) => setStatus(on ? 'tentative' : 'confirmed')}>{L.tentative}</Check>
+                    <Check checked={quiet} onChange={setQuiet}>{L.quiet}</Check>
                   </div>
                 )}
 

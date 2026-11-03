@@ -47,6 +47,7 @@
   --color-kind-profile: #be185d;
   --color-kind-fact: #8a6500;
   --color-kind-quote: #9a3412;
+  --color-kind-formula: #1e40af;
   /* The Important levels (NoteEditor/extensions/importanceLevels.ts): accent colours, the same in both themes. */
   --color-important-1: #f59e0b;
   --color-important-2: #f97316;
@@ -225,6 +226,7 @@
   --color-kind-profile: #f9a8d4;
   --color-kind-fact: #fde047;
   --color-kind-quote: #fdba74;
+  --color-kind-formula: #bfdbfe;
   --color-block-timeline: #7dd3fc;
   --color-block-cycle: #6ee7b7;
   --color-block-breakdown: #fde68a;

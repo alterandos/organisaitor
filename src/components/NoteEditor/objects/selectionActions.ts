@@ -83,7 +83,7 @@ export function selectionActions(editor: Editor, range: SelectionRange): Selecti
       card('definition', L.definition), card('concept', L.concept),
       // An acronym from "RECs (Renewable Energy Certificate)", "ASX: Australian Stock Exchange"…:
       // its fields filled by inferAcronymFromSelection.
-      card('acronym', L.acronym), card('profile', L.profile), card('fact', L.fact), card('quote', L.quote),
+      card('acronym', L.acronym), card('profile', L.profile), card('formula', L.formula), card('fact', L.fact), card('quote', L.quote),
       ...IMPORTANCE_LEVELS.map((lv): SelectionAction => ({
         key: `important-${lv.level}`, group: 'mark', set: 'important', icon: lv.icon, label: lv.label, color: lv.color,
         run: () => setImportance(view, range.from, range.to, lv.level),

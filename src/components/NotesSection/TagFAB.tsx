@@ -3,6 +3,7 @@ import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { BUILTIN_TAGS, type BuiltinTag } from '../NoteEditor/builtinTags';
+import { textTagChoices } from '../NoteEditor/textTags';
 import { dueReviews } from '@/services/noteReview';
 import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -21,6 +22,8 @@ export function TagFAB() {
   const closeNoteTagView     = useUIStore((s) => s.closeNoteTagView);
 
   const userTags = Object.values(noteTagsRecord);
+  // The Ctrl+digit each tag answers to in the editor (textTags.ts), shown beside it.
+  const hotkeyOf = (id: string) => { const n = textTagChoices(noteTagsRecord).findIndex((t) => t.id === id) + 1; return n >= 1 && n <= 9 ? n : ''; };
   const setNotesView      = useUIStore((s) => s.setNotesView);
   const notesRecord       = useNoteStore((s) => s.notes);
   // Counted when the panel opens (and when notes change while it's open), never on every render.
@@ -82,14 +85,14 @@ export function TagFAB() {
           {BUILTIN_TAGS.length > 0 && (
             <>
               <div className={styles.sectionLabel}>Tag types</div>
-              {BUILTIN_TAGS.map((t: BuiltinTag, i) => (
+              {BUILTIN_TAGS.map((t: BuiltinTag) => (
                 <button
                   key={t.id}
                   className={`${styles.tagRow} ${isSelected(t.id) ? styles.tagRowSelected : ''}`}
                   onClick={() => handleTagClick(t.id)}
                   style={isSelected(t.id) ? { borderLeft: `3px solid ${t.color}` } : undefined}
                 >
-                  <span className={styles.tagHotkey}>{i + 1}</span>
+                  <span className={styles.tagHotkey}>{hotkeyOf(t.id)}</span>
                   <ItemIcon icon={t.icon} />
                   <span className={styles.tagName}>{t.name}</span>
                   {isSelected(t.id) && <span className={styles.check}>✓</span>}
@@ -101,14 +104,14 @@ export function TagFAB() {
           {userTags.length > 0 && (
             <>
               <div className={styles.sectionLabel}>Your notebooks</div>
-              {userTags.map((t, i) => (
+              {userTags.map((t) => (
                 <button
                   key={t.id}
                   className={`${styles.tagRow} ${isSelected(t.id) ? styles.tagRowSelected : ''}`}
                   onClick={() => handleTagClick(t.id)}
                   style={isSelected(t.id) && t.color ? { borderLeft: `3px solid ${t.color}` } : undefined}
                 >
-                  <span className={styles.tagHotkey}>{BUILTIN_TAGS.length + i + 1 <= 9 ? BUILTIN_TAGS.length + i + 1 : ''}</span>
+                  <span className={styles.tagHotkey}>{hotkeyOf(t.id)}</span>
                   <ItemIcon icon={t.icon} fallback="📁" />
                   <span className={styles.tagName}>{t.name}</span>
                   {isSelected(t.id) && <span className={styles.check}>✓</span>}

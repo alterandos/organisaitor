@@ -1,5 +1,6 @@
 import type { CalendarEvent, CalendarEventType, TravelMode } from '@/types';
 import { LABELS } from '@/config/labels';
+import { iconText } from '@/components/IconPicker/iconValue';
 
 // The event types a person can pick (AddCalendarItemModal, CalendarEventPane, the import review).
 // 'task' is not pickable — it marks a task's shadow event and is set only by taskCalendarLinks.
@@ -26,8 +27,10 @@ export const TRAVEL_MODES: { value: TravelMode; label: string; icon: string }[] 
   { value: 'ferry',  label: LABELS.travelMode.ferry,  icon: '⛴️' },
 ];
 
-// The icon an event shows before its title: its travel mode's for a journey, else its type's.
-export function eventTypeIcon(ev: Pick<CalendarEvent, 'eventType' | 'travelMode'>): string {
+// The icon an event shows before its title: its own (preset by its Type, 2026-11-03; a picture icon
+// shows nothing here, where only text goes); else, until it's converted, its old travel mode's or type's.
+export function eventTypeIcon(ev: Pick<CalendarEvent, 'eventType' | 'travelMode' | 'icon'>): string {
+  if (ev.icon) return iconText(ev.icon, '');
   const type = ev.eventType ?? 'default';
   if (type === 'travel' && ev.travelMode) return TRAVEL_MODES.find((m) => m.value === ev.travelMode)?.icon ?? EVENT_TYPE_ICON.travel;
   return EVENT_TYPE_ICON[type];

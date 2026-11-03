@@ -33,8 +33,8 @@ import { DoneBanner } from '@/components/ItemActions/DoneBanner';
 import itemStyles from '@/components/ItemActions/ItemActions.module.css';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
-import { PICKABLE_EVENT_TYPES } from '@/config/calendarEventTypes';
-import { TravelModePicker } from '@/components/TravelModePicker/TravelModePicker';
+import { IconField } from '@/components/IconPicker/IconField';
+import { ITEM_TYPE_ICON } from '@/config/itemIcons';
 import styles from './CalendarEventPane.module.css';
 import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
 import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
@@ -206,14 +206,19 @@ export function CalendarEventPane() {
             </button>
           )}
 
-          <input
-            className={styles.titleInput}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-            aria-label="Event title"
-          />
+          <div className={styles.titleRow}>
+            {!isTaskShadow && (
+              <IconField value={event.icon ?? null} onChange={(icon) => updateEvent(id, { icon })} fallback={ITEM_TYPE_ICON.event} label={LABELS.calendarForm.icon} />
+            )}
+            <input
+              className={styles.titleInput}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+              aria-label="Event title"
+            />
+          </div>
 
           <textarea
             ref={notesRef}
@@ -238,35 +243,29 @@ export function CalendarEventPane() {
                   if (event.endDate && event.endDate <= v) updateEvent(id, { endDate: null });
                 }}
               />
-              {(event.eventType ?? 'default') !== 'birthday' && (
-                <>
-                  <span className={styles.timeSep}>→</span>
-                  <DateInput className={styles.dateInput} value={event.endDate ?? ''} min={event.date} onChange={(v) => updateEvent(id, { endDate: v || null })} />
-                </>
-              )}
+              <span className={styles.timeSep}>→</span>
+              <DateInput className={styles.dateInput} value={event.endDate ?? ''} min={event.date} onChange={(v) => updateEvent(id, { endDate: v || null })} />
             </div>
           </div>
 
-          {(event.eventType ?? 'default') !== 'birthday' && (
-            <div className={styles.field}>
-              <span className={styles.label}>Time</span>
-              <div className={styles.timeRow}>
-                <TimeInput
-                  className={styles.timeInput}
-                  value={event.startTime ?? ''}
-                  onChange={handleStartTimeChange}
-                  placeholder="Start"
-                />
-                <span className={styles.timeSep}>→</span>
-                <TimeInput
-                  className={styles.timeInput}
-                  value={event.endTime ?? ''}
-                  onChange={handleEndTimeChange}
-                  placeholder="End"
-                />
-              </div>
+          <div className={styles.field}>
+            <span className={styles.label}>Time</span>
+            <div className={styles.timeRow}>
+              <TimeInput
+                className={styles.timeInput}
+                value={event.startTime ?? ''}
+                onChange={handleStartTimeChange}
+                placeholder="Start"
+              />
+              <span className={styles.timeSep}>→</span>
+              <TimeInput
+                className={styles.timeInput}
+                value={event.endTime ?? ''}
+                onChange={handleEndTimeChange}
+                placeholder="End"
+              />
             </div>
-          )}
+          </div>
 
           <div className={styles.field}>
             <span className={styles.label}>Location</span>
@@ -291,28 +290,6 @@ export function CalendarEventPane() {
               )}
             </div>
           </div>
-
-          {!isTaskShadow && (
-            <div className={styles.field}>
-              <span className={styles.label}>Event type</span>
-              <div className={styles.typeRow}>
-                {PICKABLE_EVENT_TYPES.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    className={`${styles.typeBtn} ${(event.eventType ?? 'default') === t.value ? styles.typeBtnActive : ''}`}
-                    onClick={() => updateEvent(id, { eventType: t.value, ...(t.value === 'travel' ? {} : { travelMode: null }) })}
-                  >
-                    {t.icon && <span>{t.icon}</span>}
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              {event.eventType === 'travel' && (
-                <TravelModePicker value={event.travelMode ?? null} onChange={(m) => updateEvent(id, { travelMode: m })} />
-              )}
-            </div>
-          )}
 
           <div className={styles.field}>
             <label className={`${styles.label} ${styles.checkLabel}`}>
@@ -341,22 +318,33 @@ export function CalendarEventPane() {
             </div>
           )}
 
-          {(event.eventType ?? 'default') !== 'birthday' && (
+          {!isTaskShadow && (
             <div className={styles.field}>
               <label className={`${styles.label} ${styles.checkLabel}`}>
                 <input
                   type="checkbox"
-                  checked={(event.status ?? 'confirmed') === 'tentative'}
-                  onChange={(e) => updateEvent(id, { status: e.target.checked ? 'tentative' : 'confirmed' })}
+                  checked={event.quiet ?? false}
+                  onChange={(e) => updateEvent(id, { quiet: e.target.checked })}
                 />
-                Tentative — not confirmed yet, just a placeholder
+                {LABELS.calendarForm.quiet}
               </label>
             </div>
           )}
 
+          <div className={styles.field}>
+            <label className={`${styles.label} ${styles.checkLabel}`}>
+              <input
+                type="checkbox"
+                checked={(event.status ?? 'confirmed') === 'tentative'}
+                onChange={(e) => updateEvent(id, { status: e.target.checked ? 'tentative' : 'confirmed' })}
+              />
+              Tentative — not confirmed yet, just a placeholder
+            </label>
+          </div>
+
           <NotifyRuleField
             item="event"
-            timed={(event.eventType ?? 'default') !== 'birthday' && !!event.startTime}
+            timed={!!event.startTime}
             rule={eventRule(event)}
             onChange={(r) => updateEvent(id, eventPatch(r))}
             labelClassName={`${styles.label} ${styles.checkLabel}`}

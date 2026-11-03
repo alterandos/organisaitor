@@ -1,3 +1,4 @@
+import { legacyKindOf } from '@/services/eventTypeConversion';
 import { useCalendarStore } from '@/store/calendarStore';
 import type { CalendarEvent, CalendarEventId, CollectionId, RepeatConfig } from '@/types';
 import { buildCalendarEventInput } from '@/utils/calendarItemInput';
@@ -73,7 +74,7 @@ export function findExisting(draft: ImportDraft, events = useCalendarStore.getSt
   }
   if (draft.fields.eventType === 'birthday') {
     const k = birthdayKey(draft.fields.title, draft.fields.date);
-    const other = Object.values(events).find((ev) => ev.eventType === 'birthday' && !ev.archivedAt && birthdayKey(ev.title, ev.date) === k);
+    const other = Object.values(events).find((ev) => legacyKindOf(ev).eventType === 'birthday' && !ev.archivedAt && birthdayKey(ev.title, ev.date) === k);
     if (other) return { kind: 'elsewhere', event: other };
   }
   return null;

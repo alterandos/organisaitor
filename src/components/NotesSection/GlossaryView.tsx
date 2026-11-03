@@ -16,7 +16,7 @@ import { BUILTIN_TAGS, kindColor } from '@/components/NoteEditor/builtinTags';
 import { GlossaryOrigin } from './GlossaryOrigin';
 
 // The kinds to filter by, any combination (2026-11-01: none picked is All).
-const KINDS = ['definition', 'concept', 'acronym', 'profile', 'fact', 'quote'];
+const KINDS = ['definition', 'concept', 'acronym', 'profile', 'formula', 'fact', 'quote'];
 // How important, at least (BlockImportance.ts; a record's level is entryImportance): to study the
 // key terms only.
 type Importance = 0 | 1 | 3;
