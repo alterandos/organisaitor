@@ -19,6 +19,8 @@ src/
   agent/                     — the AI agent command layer (see "Agent command layer" below and docs/ai/02-command-layer.md): access.ts (THE boundary: what an agent can read and do), commands/*.ts, run.ts (runCommand), registry.ts (toolDefinitions), batch.ts (snapshot/diff/revert), errors.ts, devHandle.ts (dev-only console handle)
   test/                      — Vitest setup (Map-backed localStorage) and helpers
   config/
+    features.ts              — features switched off but kept in the code (TYPES_ENABLED); see CLAUDE.md "Sunset features"
+    defaultTemplates.ts      — the four built-in Endeavour templates, as data (read-only; the person's copy replaces one)
     hotkeys.ts               — HOTKEYS[] + HOTKEY_GROUPS (single source of truth)
     labels.ts                — all user-facing strings; rename concepts here
     trackerTemplates.ts      — FieldSchema[] presets for habit/books/movies/custom
@@ -73,14 +75,21 @@ src/
   store/goalStore.ts — the person's goals (synced as goals); progress in utils/goals.ts
   utils/goals.ts — goals' rules, pure: goalProgress (the four measures), goalSuggestion, daysLeft, goalsOf
   utils/repeatFollow.ts — a repeat that follows other events: followedDates, inStep (pure)
+  utils/showAs.ts — how an event shows (Normal / Quiet / Background): showAsOf, showAsPatch, over the event's quiet / background flags (pure)
+  components/ShowAsField/ — the Show as choice, in the create form and the event pane
+  components/CalendarItemForm/ — THE fields of a calendar item (CalendarItemFields), rendered by the create form and the event, reminder and deadline panes; makePendingTasks (tasks chosen before Create)
+  components/EventKindField/ — the kind of event (Event, Birthday, Travel; config/calendarEventTypes.ts EVENT_KINDS), a journey's mode, a birthday's year born
+  components/FlagCheck/ — an item's option checkbox with its flag icon (config/itemIcons.ts ITEM_FLAG_ICON); FlagIcon for a shared field's own label
+  components/RecurrenceScopeBar/SeriesScope.tsx — a repeating item's slim line (how it repeats, its Schedule, Editing: All dates ▾); useSeriesScope.ts beside it (copies made at the first change; Delete follows the choice)
   services/repeatFollow.ts — the one watcher keeping following repeats in step (initRepeatFollow)
+  services/eventTaskRules.ts — tasks for each date of an event: the one watcher (initEventTaskRules, applyRuleTasks), setEventTaskRules; rules in utils/eventTaskRules.ts (planRuleTasks, foldRuleTasks)
+  services/templates.ts — THE way to read and change Endeavour templates (useTemplates, templateFor, saveTemplate, duplicateTemplate, restoreDefault, deleteTemplate, captureTemplate); utils/templatePlan.ts makes a template into a plan (planFromTemplate, templateSuggestions)
   utils/endeavourPeriod.ts — an Endeavour's period and breaks, inherited (effectivePeriod), breakDates, teachingWeek
   utils/scheduleItems.ts — a Schedule's items (calendar events): bounds, rows read back (itemToBlock, withItemRows), hiddenBySchedule (pure)
   services/schedules.ts — making, changing, deleting a Schedule's items; bounds watcher, commitment, converting old Schedules (initSchedules)
   services/endeavourFiling.ts — FILED_KINDS: everything that can be filed under an Endeavour, in every app (filedUnder, moveFiled); restructures go through it
   services/endeavourRestructure.ts — mergeEndeavour, splitEndeavour, copyShape, each with its Undo
   config/endeavourTemplates.ts — ENDEAVOUR_TEMPLATES: each template's inputs and pure plan (Semester, Subject, Training plan, Project); semesterSuggestions
-  config/templateEditors.ts — which templates open in an editor of their own (TEMPLATE_EDITORS, editorFor), read by uiStore.openEditCollection
   services/endeavourTemplates.ts — applyTemplate (makes a plan and its parts, with Undo), addToEndeavour, addSubject, planLines (its preview)
   config/currencies.ts — the currencies the Currency converter offers (the ECB's list)
   services/currencyRates.ts — the Currency converter's rates: ensureCurrencyRates, useCurrencyRates (cached on the device, refreshed after 12 h)
@@ -94,7 +103,7 @@ src/
   services/streamConversion.ts — rhythm streams converted to repeating calendar items (once, automatic)
   services/eventTypeConversion.ts — an event saying birthday / travel turned into the Birthday or Journey Type, its icon and Show quieter (at start, after a load, and as such events arrive)
   utils/subjectItems.ts — a subject's Schedule and Work lists, item drafts, a course outline read as drafts, its Work's bounds (pure)
-  services/subjectItems.ts — saveSubjectItem, deleteSubjectItem, outlineDraftsFor, addOutline (the subject editor's items); initSubjectWork (Work bounded by the period)
+  services/subjectItems.ts — saveSubjectItem, deleteSubjectItem, outlineDraftsFor, addOutline (a subject's classes and assessments, the outline's readings as a lecture's task rule); initSubjectWork (Work bounded by the period)
   utils/courseOutline.ts — readCourseOutline: a pasted course outline's code, name, classes, readings and assessments
   config/endeavourLinkKinds.ts — what each kind of link between Endeavours means (partOf rolls up; related doesn't); a new kind is one entry
   hooks/useEndeavourScope.ts — the Endeavour filter's scope: the chosen Endeavour and everything part of it (test items with inEndeavourScope)
@@ -280,15 +289,18 @@ src/
     ItemTypeModal/           — making or editing a Type (Manage → Types)
     RhythmBoard/             — a rhythm's board on an Endeavour's home (weeks by streams), and RhythmDueList (its occurrences in Tasks)
     GoalModal/               — making, editing and settling a goal (opened from an Endeavour's home); its goals panel is EndeavoursSection/GoalsPanel.tsx
-    EndeavourTemplateModal/  — setting up an Endeavour from a template (the University one with the course-outline wand)
+    FieldError/  — the red note under a field saying what it still needs (the one way a form says so)
+    EndeavourCreator/  — THE form for an Endeavour, making and editing (start from, name, does it end, Dates through PeriodEditor, DetailsSection one line each, colour, connections folded; planErrors' red notes)
+    EndeavourPieces/   — what's in an Endeavour, on its home: a tile per kind of thing, each a card that opens it (filedDetail, openFiled), suggestions, a semester's Subjects, a subject's outline wand
     RestructureModal/        — copy an Endeavour's shape, split a part off, merge it into another
-    PeriodField/             — an Endeavour's period and breaks (and a semester's exam period), in its editor (inherited until it sets its own)
+    PeriodField/             — an Endeavour's dates: PeriodEditor (THE period editor: runs, time off, exam period when asked) and PeriodField (in the attributes pane: inherited until it sets its own)
     EndeavourAttributes/     — an Endeavour's attributes pane (its Type, fields, values) and its summary in edit panes
     ClassClashField/         — how an item in a class's time shows: instead of it, during it, or both
     EndeavourContents/       — an Endeavour's "Everything in it" view, and its summary in edit panes
-    TemplateEditors/         — a template's own editor for an Endeavour: SubjectEditor (Schedule and Work lists, SubjectItemEditor, the outline wand), SemesterEditor (period, subjects, suggestions)
     FieldInput/              — THE input for one FieldSchema field (tracker entries, a Type's fields)
-    EndeavourLinksField/     — "Part of" / "Related to" in the Endeavour editor (AddCollectionModal)
+    EndeavourLinksField/     — "Part of" / "Related to" in the Endeavour form (EndeavourCreator)
+    EventTaskRulesField/     — an event's "Tasks for each one" (Prepare · 1 day before …), in its pane
+    TemplateEditor/          — a template's editor (structure only: the Endeavour, what it starts with, its parts), opened from Manage → Templates or Save as template
     EndeavoursSection/       — the Endeavours section: EndeavoursPage (every Endeavour, tree or by Purpose), EndeavourHome (where one stands, its parts, its things, the add row), useEndeavourRows
     WelcomePage/             — what a signed-out visitor sees instead of the app: suite name, tagline (LABELS.welcome), logo (public/brand/logo.png → /brand/logo.png), Sign in / Create an account / Continue without an account; App.tsx decides when
     HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores; PlaceCard.tsx is THE card for a place, shared with the phone's recent notes (MobileNotes)
@@ -307,7 +319,6 @@ src/
     ItemActions/             — the SHARED archive/restore + delete pattern every item pane uses (Task, Calendar event, Calendar reminder; future apps' panes should too) — see "Shared item actions" in Implemented features: icons from components/Icons, ItemActionFooter (optional Complete/Mark-incomplete toggle for task-backed items), ItemActionDialog (archive-with-reason + delete-confirm, portaled z-102), ArchivedBanner, useItemActions hook (dialog state + Escape + Ctrl+Enter + hotkeys)
     AddTaskModal/            — create task (basic + advanced sections)
     AddTaskButton/           — speed-dial FAB (view-aware)
-    AddCollectionModal/      — create endeavour (project/list/tracker/routine)
     AddTrackerModal/         — create tracker (template picker + field config)
     AddRoutineModal/         — create routine (steps + day-of-week picker)
     AddEntryModal/           — add/edit tracker entry (dynamic fields)
@@ -327,6 +338,8 @@ src/
     CalendarSidePane/        — left-sliding pane (Calendar section): Layers toggles + Schedule list/manager (active toggle, conflict hint, overlay-preview grid) in one place — supersedes the old CalendarLayersPicker (header dropdown) and ManageSchedulesPane (right-sliding pane), see "Calendar side pane" in Implemented features
     AllDayNotifyField/       — NotifyLead.tsx: the Notify field for every calendar item (NotifyRuleField with its on/off box, NotifyRuleEditor, LeadAmountInput: a typed amount + ▾ presets); the rules are utils/notifyRule.ts
     EncryptContentsField/    — the "encrypt everything in it" switch on a notebook or Endeavour (encryption by scope)
+    PictureInput/            — giving a picture the same ways everywhere: PictureAddButtons (Add a picture… / From clipboard), usePictureTarget (Ctrl+V, drop), pictureFromClipboard; PicturesField (an item's pictures, with a viewer)
+    PriorityPicker/          — a priority as a traffic light (four dots, a radio group)
     IconPicker/              — IconField (pick an icon: emoji, search, your icons, a picture made into a 96 px icon), ItemIcon (show one), iconValue.ts (an icon is an emoji or picture:<id>); the emoji are config/emojiSet.ts
     BlockGuide/              — the block guide (a Place): every note block by category, its designs, a live read-only example (guideData.ts: keyword → node, examples from demo/blockExamples.ts)
     ConverterPane/           — the converters panel (Alt+=, a Place): built-in units and the person's own; ConverterEditor makes and edits one (Settings → Converters opens it too); ConvertWidget is one conversion as hosted by the `\convert` note block (extensions/Convert.ts), its pure parts in convertValue.ts; SizeLike is "≈ like…" (an amount pictured by something of a known size: utils/sizeComparison.ts over config/referenceSizes.ts)
@@ -432,7 +445,7 @@ src/
       extensions/NoteTagMark.ts      — Mark (tagId/color/typeKey/structuredEntryId attrs) for annotation tags; structuredEntryId links a tagged passage to its StructuredTagEntry (see "Structured tag entries")
       contextMenu.ts         — the editor's right-click providers (clipboard, link/create, Style ▸, select all) on the `note-editor` scope; NoteEditorMenuApi is what NoteEditor hands them
       builtinTags.ts         — the built-in tags and Glossary kinds (icon, colour, typeKey); `TEXT_TAGS`, the ones put on text
-      textTags.ts            — the tags put on text in one order: the tag picker (Ctrl+Space) and Ctrl+1…9 (`textTagChoices`, `applyTextTag`)
+      textMarks.ts           — the marks put on text (statuses, then tags) in one order: the mark picker (Ctrl+Space), Ctrl+1…9, Mark as ▸ on text and on a block (`textMarks`, `applyTextMark`)
       extensions/MathsInput.tsx — a Glossary card's maths field (MathLive, lazy): a Formula's formula and symbols
       objects/formulaBlock.ts — `\formula`: a Formula card
       NoteBacklinks.tsx      — the "Linked from" bar under a note's title: single pill / "🔗 N" chip + list, each pill openable, draggable into the text, or insertable at the cursor (derived from other items' crossAppRefs via store/noteBacklinks.ts — nothing stored); artifactLinkInsert.ts holds the insert/drop helpers
@@ -448,6 +461,7 @@ src/
     ChronicleView/           — Notes section layout: notebook tree, note list, editor; hover-expand on notebooks; NotebookLocationView is the editor column's empty state (path/tree of where you are)
     NoteViews/               — Notes views built on the browse model (CLAUDE.md "Notes views"; no store imports): shared ViewBar, ViewFilter, NoteLevel, gridFocus.ts; Mosaic/ (MosaicView: tiles one level at a time; MosaicTile with its hover peek; MosaicNoteCard; mosaicLayout.ts tile sizes and peek sections); Map/ (see components/NoteViews/Map/ below)
     NotesSection/            — Notes section wrapper (NotesViewSwitcher.tsx: the header's view switcher and its Tab hotkey), rendering the view or tool in uiStore.notesView through noteViewComponents.ts (CLAUDE.md "Notes views"); GlossaryView.tsx (the Glossary) and ReviewView.tsx (Review later), both opened from TagFAB's # panel
+                               ClarifyView.tsx — the Clarify tool: To learn (Clarify later) and To check (unsure), from text, blocks and cards (services/noteClarify.ts)
     ListsSection/            — Lists section: sidebar (Checklists/Watchlists/Reference dividers) + card grid (watchlist), table (reference) or ChecklistView.tsx (checklist — tick-off, checked items struck through and moved to the bottom via listStore.toggleListItemChecked) + tab bar
     AddListModal/            — two-step create/edit list (type picker grouped by kind → form with field schema editor + tabs editor)
     AddListItemModal/        — add/edit list item (tab picker, status picker for watchlists, dynamic fields, notes, links)

@@ -26,6 +26,7 @@ export const PERSISTED_STORAGE_KEYS = [
   'converters-storage', // converterStore: the person's own converters (and this device's recent ones)
   'item-types-storage', // itemTypeStore: the person's Types (Exam, Essay…)
   'goals-storage',      // goalStore: the person's goals (on Endeavours)
+  'endeavour-templates', // templateStore: the person's own Endeavour templates
   'notes-stickies',     // stickyStore: where each sticky note sits on this device's screen, and its design
   'trash-storage',      // trashStore: Recycling Bin — deleted-item snapshots — lives in IndexedDB, not
                         // localStorage: read/write it via readPersistedValue/writePersistedValue (same as notes-storage)

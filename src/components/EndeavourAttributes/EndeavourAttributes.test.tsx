@@ -2,6 +2,7 @@
 //
 // An Endeavour's attributes pane (agreed with the user 2026-10-30): a default Type gives their own
 // copy, fields of its own are added and filled in, and removing the period asks first.
+import { TYPES_ENABLED } from '@/config/features';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -23,7 +24,20 @@ beforeEach(() => {
 afterEach(() => { cleanup(); });
 
 describe('the attributes pane', () => {
-  it('takes a default Type as their own, adds and fills a field of its own, and asks before removing the period', () => {
+  it.skipIf(TYPES_ENABLED)('with Types switched off (config/features.ts): no Type to choose or save; fields of its own still work', () => {
+    const id = useTaskStore.getState().addCollection({ kind: 'project', name: 'Kitchen' });
+    useUIStore.getState().showEndeavourAttributes(id);
+    render(<EndeavourAttributesPane />);
+    const pane = screen.getByRole('dialog', { name: L.title('Kitchen') });
+    expect(within(pane).queryByRole('combobox', { name: L.type })).toBeNull();
+    fireEvent.change(within(pane).getByRole('textbox', { name: L.newName }), { target: { value: 'Builder' } });
+    fireEvent.click(within(pane).getByRole('button', { name: L.addField }));
+    expect(within(pane).getByRole('group', { name: 'Builder' })).toBeInTheDocument();
+    expect(within(pane).queryByRole('button', { name: L.saveAsType })).toBeNull();
+  });
+
+  // Kept for when Types are back.
+  it.skipIf(!TYPES_ENABLED)('takes a default Type as their own, adds and fills a field of its own, and asks before removing the period', () => {
     const id = useTaskStore.getState().addCollection({ kind: 'project', name: 'Semester 2' });
     useUIStore.getState().showEndeavourAttributes(id);
     render(<EndeavourAttributesPane />);
@@ -49,7 +63,7 @@ describe('the attributes pane', () => {
     // A period of its own (no Type): removing it asks first.
     useTaskStore.getState().updateCollection(id, { attributes: { typeId: null, fields: [], values: {} }, period: { start: '2031-07-28', end: '2031-11-07', breaks: [] } });
     render(<EndeavourAttributesPane />);
-    fireEvent.click(screen.getByRole('button', { name: `${L.remove}: Period` }));
+    fireEvent.click(screen.getByRole('button', { name: `${L.remove}: Dates` }));
     expect(useDialogStore.getState().queue).toHaveLength(1);
     expect(useTaskStore.getState().collections[id].period).not.toBeNull();
   });

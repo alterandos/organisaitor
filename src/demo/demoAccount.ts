@@ -7,6 +7,8 @@
 // "Demo account").
 //
 // Dates are days from `base` (the day it's generated), so regenerating moves the semester along.
+import { TYPES_ENABLED } from '@/config/features';
+import { setEventTaskRules } from '@/services/eventTaskRules';
 import { nanoid } from 'nanoid';
 import { usePinnedItemsStore } from '@/store/pinnedItemsStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -38,10 +40,10 @@ import { MAIN_TAB_ID } from '@/utils/noteTabs';
 import { DICTIONARY_TYPE_ID, DICT_FIELDS } from '@/services/dictionary';
 import { SWATCHES, type SwatchId } from '@/config/swatches';
 import { LABELS } from '@/config/labels';
-import { node, kids, bold, italic, sub, sup, weblink, p, pId, h, bullets, numbered, table, section, columns, doc, important, tagged, itemLink, noteLink, termLink, hubPassage, unsure, chip, mathInline, card, embed, mathBlock } from './noteContent';
+import { node, kids, bold, italic, sub, sup, weblink, p, pId, h, bullets, numbered, table, section, columns, doc, important, review, tagged, itemLink, noteLink, termLink, hubPassage, unsure, clarify, chip, mathInline, card, embed, mathBlock } from './noteContent';
 import { EX } from './blockExamples';
 import type { ActivityTypeId } from '@/types/fitness';
-import type { CollectionId, CrossAppRef, NoteId, NoteTagId, PictureId, RhythmStream, StreamKind, StreamRule, TagId, TaskId } from '@/types';
+import type { CalendarEventId, CollectionId, CrossAppRef, NoteId, NoteTagId, PictureId, RhythmStream, StreamKind, StreamRule, TagId, TaskId } from '@/types';
 import type { ListId, ListTypeId } from '@/types/lists';
 
 // ── Dates ────────────────────────────────────────────────────────────────────
@@ -221,20 +223,25 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   cal.addEvent({ title: 'Study group', date: day(nextDow(4)), startTime: '16:00', endTime: '17:30', location: 'Fisher Library, level 3', repeat: { freq: 'weekly', interval: 1, endKind: 'count', count: 10, until: null } });
   cal.addEvent({ title: 'Geology club trivia night', date: day(6), startTime: '19:00', endTime: '21:00', location: 'Uni bar' });
   cal.addEvent({ title: 'Mid-semester break', date: day(20), endDate: day(26), background: true });
+  // The kinds of event (2026-11-05): a birthday (its first date the year they were born, so it says the age) and a journey by train.
+  cal.addEvent({ title: 'Mum’s birthday', date: `1968${day(15).slice(4)}`, eventType: 'birthday', repeat: { freq: 'yearly', interval: 1, endKind: 'forever', count: null, until: null } });
+  cal.addEvent({ title: 'Train home to Newcastle', date: day(20), startTime: '16:10', endTime: '18:45', eventType: 'travel', travelMode: 'train', quiet: true });
   const bookBus = cal.addReminder({ title: 'Book a seat on the field-trip bus', date: day(1), time: '09:00', collectionId: fieldReport, crossAppRefs: [noteRef(trip)] });
   cal.addReminder({ title: 'Charge the camera and GPS', date: day(3), time: '20:00', collectionId: fieldReport });
   const essayDue = cal.addDeadline({ title: 'Climate essay due', date: day(25), time: '23:59', collectionId: essay, important: true, notifyDaysBefore: 3, crossAppRefs: [noteRef(essayNote)] });
   const labDue = cal.addDeadline({ title: 'Lab 3 worksheet due', date: day(2), time: '17:00', crossAppRefs: [noteRef(lab)] });
 
-  // ── Types (docs/features/endeavours.md phase 3): the University starter set, and the semester's
-  // assessments given their Type and values. Their parts already exist above, so none are made,
-  // except the essay's proofread.
-  addStarterSet('university');
-  const typeNamed = (name: string) => Object.values(useItemTypeStore.getState().types).find((x) => x.name === name)!.id;
-  applyItemType({ kind: 'event', id: midsem }, typeNamed('Exam'), { weight: 30, room: 'Exam Hall B', materials: 'One A4 page of notes, both sides', status: 'Not started' }, []);
-  applyItemType({ kind: 'deadline', id: essayDue }, typeNamed('Essay'), { weight: 40, words: 2000, question: 'Should we research solar geoengineering?', status: 'In progress' }, ['proofread']);
-  applyItemType({ kind: 'deadline', id: labDue }, typeNamed('Assessment'), { weight: 5, status: 'In progress' }, []);
-  setItemType({ kind: 'task', id: readIpcc }, typeNamed('Reading'), { source: 'IPCC AR6 Synthesis Report, Summary for Policymakers', pages: '1–36' });
+  // ── Types (docs/features/endeavours.md phase 3; switched off for now, config/features.ts): the
+  // University starter set, and the semester's assessments given their Type and values. Their parts
+  // already exist above, so none are made, except the essay's proofread.
+  const typeNamed = (name: string) => (TYPES_ENABLED ? Object.values(useItemTypeStore.getState().types).find((x) => x.name === name)!.id : null);
+  if (TYPES_ENABLED) {
+    addStarterSet('university');
+    applyItemType({ kind: 'event', id: midsem }, typeNamed('Exam')!, { weight: 30, room: 'Exam Hall B', materials: 'One A4 page of notes, both sides', status: 'Not started' }, []);
+    applyItemType({ kind: 'deadline', id: essayDue }, typeNamed('Essay')!, { weight: 40, words: 2000, question: 'Should we research solar geoengineering?', status: 'In progress' }, ['proofread']);
+    applyItemType({ kind: 'deadline', id: labDue }, typeNamed('Assessment')!, { weight: 5, status: 'In progress' }, []);
+    setItemType({ kind: 'task', id: readIpcc }, typeNamed('Reading')!, { source: 'IPCC AR6 Synthesis Report, Summary for Policymakers', pages: '1–36' });
+  }
 
   const block = (id: string, title: string, daysOfWeek: number[], startTime: string, endTime: string, location: string) =>
     ({ id, title, daysOfWeek, startTime, endTime, location, interval: 1, intervalAnchor: day(-56), exceptions: [], notes: null, requiresCommitment: false, committedDates: [] });
@@ -246,9 +253,11 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     block('geos215t', 'GEOS215 tutorial', [5], '09:00', '10:00', 'Madsen 4.12'),
   ]);
   const geos215Lecture = classes.get('geos215l')!;
+  // Tasks for each date (services/eventTaskRules.ts): a review after each lecture, made a week ahead.
+  setEventTaskRules(geos215Lecture as CalendarEventId, [{ id: 'review', title: 'Review the slides', side: 'after', days: 0 }]);
 
-  // ── Semester 2 as a semester, with a subject (docs/features/endeavours.md phase 7 (d)): Edit on
-  // either opens its own editor, and the subject takes the semester's period and break, live.
+  // ── Semester 2 as a semester, with a subject (docs/features/endeavours.md phase 7 (d)): their
+  // homes show what's in them, and the subject takes the semester's period and break, live.
   tasks.updateCollection(semester, { templateId: 'semester', period: { start: day(-56), end: day(42), breaks: [{ id: 'midsem', label: 'Mid-semester break', from: day(14), to: day(18) }], exams: { from: day(49), to: day(63) } } });
   const geosSubject = tasks.addCollection({ kind: 'project', name: 'GEOS215 Climate Systems', color: colour('cyan'), purposeIds: [honours], tagIds: [uniTag] });
   tasks.updateCollection(geosSubject, { templateId: 'subject' });
@@ -433,7 +442,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
 
   set(rock, doc(section(
     h(1, 'Big picture'),
-    pId('rc-big', important('Rocks are not permanent: every rock is on its way to becoming another kind of rock.', 2, 'demo-imp-rc', reviewTomorrow), ' The rock cycle is how geologists describe those changes and what drives them.'),
+    pId('rc-big', review(important('Rocks are not permanent: every rock is on its way to becoming another kind of rock.', 1, 'demo-imp-rc'), 'demo-rev-rc', reviewTomorrow), ' The rock cycle is how geologists describe those changes and what drives them.'),
     EX.cycle(),
     h(1, 'The three families'),
     EX.types(),
@@ -445,6 +454,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     EX.quoteBlock(),
     h(1, 'Things to check'),
     p(unsure('I think slate forms at lower temperatures than schist.', 'demo-flag-slate', 'Check the metamorphic grade chart in Lecture 7'), ' Ask in the lab if the chart isn’t clear.'),
+    p('The lecturer mentioned ', clarify('foliation', 'demo-clarify-foliation', 'what it looks like in a hand sample'), ' in passing: worth reading up on before the lab.'),
     EX.questionAnswered(at(-4, '15:20')),
     p('Lab write-up for this topic: ', noteLink('Lab 3: hand samples', lab), '.'),
   )));
@@ -522,7 +532,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   useNoteStore.getState().reorderNoteTabs(carbon, [revisionTab, MAIN_TAB_ID]);   // a note opens on its last tab
 
   set(carbon, doc(section(
-    pId('cc-rise', important('CO₂ has risen about 50% since pre-industrial times, from 280 ppm to over 420 ppm.', 3, 'demo-imp-co2', reviewTomorrow), ' ', tagged('Almost certainly in the exam.', examTag, colour('red'))),
+    pId('cc-rise', review(important('CO₂ has risen about 50% since pre-industrial times, from 280 ppm to over 420 ppm.', 3, 'demo-imp-co2'), 'demo-rev-co2', reviewTomorrow), ' ', tagged('Almost certainly in the exam.', examTag, colour('red'))),
     EX.chart(),
     h(1, 'How we found out'),
     kids('timeline', { variant: 'rail', order: 'asc' }, ([

@@ -150,6 +150,10 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
     expect('schedule_id' in eventToRow(e, USER)).toBe(false);
     const item: CalendarEvent = { ...e, scheduleId: 'sch1' as ScheduleId };
     expect(rowToEvent(eventToRow(item, USER))).toEqual(item);
+    // pictureIds: sent once set (migration 073), nullable
+    expect('picture_ids' in eventToRow(e, USER)).toBe(false);
+    const pictured: CalendarEvent = { ...e, pictureIds: ['p1', 'p2'] };
+    expect(rowToEvent(eventToRow(pictured, USER))).toEqual(pictured);
     // attendedDates: sent once set (migration 066), nullable
     expect('attended_dates' in eventToRow(e, USER)).toBe(false);
     const attended: CalendarEvent = { ...e, attendedDates: ['2030-01-07'] };

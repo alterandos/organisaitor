@@ -15,7 +15,8 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { applyTemplate } from '@/services/endeavourTemplates';
 import { saveSubjectItem } from '@/services/subjectItems';
 import { setAttended } from '@/services/itemOccurrences';
-import { TEMPLATE_BY_ID, type TemplateValues } from '@/config/endeavourTemplates';
+import { planFromValues, type TemplateValues } from '@/config/endeavourTemplates';
+import { DEFAULT_TEMPLATE_BY_ID } from '@/config/defaultTemplates';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import type { SubjectItemDraft } from '@/utils/subjectItems';
 import { addTaskWithCalendar, updateTaskLinked, updateCalendarEventLinked } from '@/services/taskCalendarLinks';
@@ -151,12 +152,11 @@ export const write = {
   updateEndeavour: (id: string, changes: Parameters<ReturnType<typeof tasksState>['updateCollection']>[1]): void => tasksState().updateCollection(id as CollectionId, changes),
   createPurpose:   (input: CreatePurposeInput): PurposeId => tasksState().addPurpose(input),
   updatePurpose:   (id: string, changes: Parameters<ReturnType<typeof tasksState>['updatePurpose']>[1]): void => tasksState().updatePurpose(id as PurposeId, changes),
-  // An Endeavour set up from a template (config/endeavourTemplates.ts: 'semester', 'subject'…), the
-  // same way as from the template picker; it remembers its template.
+  // An Endeavour set up from a built-in template ('semester', 'subject'…: config/defaultTemplates.ts)
+  // with the values given (config/endeavourTemplates.ts planFromValues); it remembers its template.
   applyTemplate: (templateId: string, values: TemplateValues, partOf: string | null): CollectionId => {
-    const t = TEMPLATE_BY_ID[templateId];
-    if (!t) throw new AgentError('invalid', `No template "${templateId}".`);
-    return applyTemplate(t.plan(values), partOf as CollectionId | null).id;
+    if (!DEFAULT_TEMPLATE_BY_ID[templateId]) throw new AgentError('invalid', `No template "${templateId}".`);
+    return applyTemplate(planFromValues(templateId, values), partOf as CollectionId | null).id;
   },
   // A subject's Schedule or Work item, made or changed as from its editor (services/subjectItems.ts).
   saveSubjectItem: (subjectId: string, draft: SubjectItemDraft, existing?: string): string | null => saveSubjectItem(subjectId as CollectionId, draft, existing),

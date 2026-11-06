@@ -14,6 +14,7 @@ import { LABELS } from '@/config/labels';
 import { entryImportance, glossaryKindLine, headlineTerms } from '@/services/glossary';
 import { importanceLevel } from './importanceLevels';
 import { addPicture, pictureRef, useFieldPictureSrc } from '@/services/pictures';
+import { clipboardImage, imageFileFrom } from '@/components/PictureInput/pictureInput';
 import { acronymLetterPositions } from '@/utils/acronymInference';
 import { log, errorMessage } from '@/utils/log';
 import { normalizeLinkUrl, openExternalLink } from '@/utils/links';
@@ -23,7 +24,10 @@ import type { GlossaryCardVariant } from './GlossaryCard';
 import { BUILTIN_TAGS } from '../builtinTags';
 import { MathsInput } from './MathsInput';
 import styles from './GlossaryCard.module.css';
-import { CloseIcon, TrashIcon, UnlinkIcon } from '@/components/Icons';
+import { ClarifyIcon, CloseIcon, ReviewIcon, TrashIcon, UnlinkIcon, UnsureIcon } from '@/components/Icons';
+import { recordFlag } from './BlockFlags';
+import { recordReview } from './ReviewMark';
+import { formatDate } from '@/utils/date';
 
 // The card a Glossary card block (GlossaryCard.ts) shows: the record's term, then each field of
 // its type's schema (config/structuredTagTypes.ts) drawn by the field's kind, so a new field is
@@ -63,25 +67,6 @@ interface Props {
 
 const DEFAULT_LAYOUT = DEFAULT_IMAGE_LAYOUT;
 const MIN_IMAGE_PX = 48;
-
-// The first picture on the clipboard (a paste or a drop), if any.
-function imageFileFrom(data: DataTransfer | null): File | null {
-  if (!data) return null;
-  for (const item of Array.from(data.items ?? [])) {
-    if (item.kind === 'file' && item.type.startsWith('image/')) return item.getAsFile();
-  }
-  return Array.from(data.files ?? []).find((f) => f.type.startsWith('image/')) ?? null;
-}
-
-// The clipboard's picture, read on request (the Paste button): needs the browser's permission.
-async function clipboardImage(): Promise<File | null> {
-  const items = await navigator.clipboard.read();
-  for (const item of items) {
-    const type = item.types.find((t) => t.startsWith('image/'));
-    if (type) return new File([await item.getType(type)], 'pasted', { type });
-  }
-  return null;
-}
 
 // The record's current fields merged with `change`, written through the store (encryption-aware).
 function saveEntry(entryId: string, change: { term?: string; fields?: Record<string, unknown> }): void {
@@ -189,8 +174,9 @@ function formatKey(e: KeyboardEvent<HTMLElement>): void {
 // A field of formatted text (utils/richText.ts): editable in place, saved half a second after
 // typing stops and on leaving it, never per keystroke (each save syncs). Shown from the record while
 // it isn't being typed in. Pasting brings in the text only.
-function RichField({ html, onCommit, multiline, placeholder, className, editable, label, autoFocus, termLinksFor, takeLines }: {
+function RichField({ html, onCommit, multiline, items, placeholder, className, editable, label, autoFocus, termLinksFor, takeLines }: {
   html: string; onCommit: (html: string) => void; multiline?: boolean; placeholder?: string; className?: string;
+  items?: boolean;   // a list: a <div> per item, so each is drawn with its bullet while it's edited
   editable: boolean; label: string; autoFocus?: boolean;
   takeLines?: (html: string) => string;   // on leaving it: "Name: value" lines made into fields, the rest kept
   termLinksFor?: string;   // this card's record: Glossary terms typed here are offered as links (CardTermLinks.tsx)
@@ -198,8 +184,9 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
   const ref = useRef<HTMLDivElement>(null);
   const links = useCardTermLinks(termLinksFor);
   const dirty = useRef(false);
-  // A field of several lines keeps its lines as <br>s whatever the browser wrote (linesAsBreaks).
-  const clean = (h: string) => sanitizeInlineHtml(multiline ? linesAsBreaks(h) : h);
+  // A field of several lines keeps its lines as <br>s whatever the browser wrote (linesAsBreaks); a
+  // list, as a <div> per item (2026-11-05: as <br>s its bullets weren't drawn).
+  const clean = (h: string) => (items ? richLines(h).map((l) => `<div>${l}</div>`).join('') : sanitizeInlineHtml(multiline ? linesAsBreaks(h) : h));
   const cleanRef = useRef(clean);
   useEffect(() => { cleanRef.current = clean; });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -256,6 +243,7 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
       onInput={() => {
         const el = ref.current!;
         if (!el.textContent) el.innerHTML = '';
+        else if (items) wrapLooseLine(el);
         dirty.current = true;
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => save.current(), 500);
@@ -290,6 +278,20 @@ function RichField({ html, onCommit, multiline, placeholder, className, editable
   );
 }
 
+// The browser types a list's first line straight into the field, outside any item: it goes into one
+// (keeping the caret), so it has its bullet too.
+function wrapLooseLine(el: HTMLElement): void {
+  const loose = [...el.childNodes].filter((n) => !(n instanceof HTMLElement && n.tagName === 'DIV'));
+  if (!loose.length) return;
+  const sel = window.getSelection();
+  const caret = sel && sel.anchorNode && el.contains(sel.anchorNode) ? { node: sel.anchorNode, offset: sel.anchorOffset } : null;
+  const line = document.createElement('div');
+  el.insertBefore(line, loose[0]);
+  line.append(...loose);
+  if (caret && caret.node !== el) sel!.collapse(caret.node, caret.offset);
+  else sel?.collapse(line, line.childNodes.length);
+}
+
 // A list of formatted items, edited as lines (one item per line), shown with bullets. Enter starts
 // the next item; Enter on an empty last line goes on to the next field (the card's keys).
 function RichList({ items, onCommit, placeholder, editable, label, autoFocus }: {
@@ -314,7 +316,7 @@ function RichList({ items, onCommit, placeholder, editable, label, autoFocus }: 
       }
       e.stopPropagation();   // a new line: the next item
     }}>
-      <RichField html={html} onCommit={(v) => onCommit(richLines(v))} multiline placeholder={placeholder} editable label={label} autoFocus={autoFocus} />
+      <RichField html={html} onCommit={(v) => onCommit(richLines(v))} multiline items placeholder={placeholder} editable label={label} autoFocus={autoFocus} />
     </div>
   );
 }
@@ -383,15 +385,13 @@ function UrlList({ items, onCommit, placeholder, editable, label, autoFocus }: {
 
 // A card's own fields (a profile's Habitat, Born…, and any card's): each its own field, its name as
 // the label, both edited in place; a field emptied of both goes. There's no box of them: a field is
-// made by typing "Name: value" on a line of the card's text (takeOwnFields), or on the new line that
-// Enter in the card's last field opens (`newLine`, a count; also shown while there are none yet).
-function OwnFields({ facts, onCommit, onTake, placeholder, editable, label, autoFocus, newLine }: {
+// made by typing "Name: value" on a line of the card's text (takeOwnFields), or on the new line shown
+// while there are none yet (or when the field is added).
+function OwnFields({ facts, onCommit, onTake, placeholder, editable, label, autoFocus, entryId }: {
   facts: Fact[]; onCommit: (v: Fact[]) => void; onTake: (fact: Fact) => void; placeholder?: string; editable: boolean;
-  label: string; autoFocus: boolean; newLine: number;
+  label: string; autoFocus: boolean; entryId: string;
 }) {
-  const [adding, setAdding] = useState(autoFocus || newLine > 0);
-  const [opened, setOpened] = useState(newLine);
-  if (newLine !== opened) { setOpened(newLine); setAdding(true); }
+  const [adding, setAdding] = useState(autoFocus);
   const change = (i: number, patch: Partial<Fact>) =>
     onCommit(facts.map((f, j) => (j === i ? { ...f, ...patch } : f)).filter((f) => f.label.trim() || f.value.trim()));
   async function remove(i: number) {
@@ -401,22 +401,27 @@ function OwnFields({ facts, onCommit, onTake, placeholder, editable, label, auto
   }
   return (
     <>
-      {facts.map((f, i) => <OwnFieldRow key={i} fact={f} editable={editable} onChange={(patch) => change(i, patch)} onRemove={() => void remove(i)} />)}
+      {facts.map((f, i) => <OwnFieldRow key={i} fact={f} editable={editable} entryId={entryId} onChange={(patch) => change(i, patch)} onRemove={() => void remove(i)} />)}
       {editable && (adding || facts.length === 0) && (
-        <NewOwnField key={newLine} placeholder={placeholder} label={label} onTake={onTake} onDone={() => setAdding(false)} />
+        <NewOwnField placeholder={placeholder} label={label} onTake={onTake} onDone={() => setAdding(false)} />
       )}
     </>
   );
 }
 
-function OwnFieldRow({ fact, editable, onChange, onRemove }: { fact: Fact; editable: boolean; onChange: (patch: Partial<Fact>) => void; onRemove: () => void }) {
+// Its value is formatted text like any field's, so Glossary terms typed there are offered as links
+// (2026-11-05: an acronym couldn't be linked from a concept's own field).
+function OwnFieldRow({ fact, editable, entryId, onChange, onRemove }: { fact: Fact; editable: boolean; entryId: string; onChange: (patch: Partial<Fact>) => void; onRemove: () => void }) {
   const name = useDraft(fact.label, (label) => onChange({ label: label.trim() }));
-  const value = useDraft(fact.value, (v) => onChange({ value: v }));
+  const value = (
+    <RichField html={fact.value} onCommit={(v) => { if (v !== fact.value) onChange({ value: v }); }} editable={editable}
+      label={fact.label || LABELS.glossary.ownFieldName} termLinksFor={entryId} />
+  );
   if (!editable) {
     return (
       <div className={styles.field}>
         {fact.label && <div className={styles.label}>{fact.label}</div>}
-        <div>{fact.value}</div>
+        {value}
       </div>
     );
   }
@@ -425,8 +430,7 @@ function OwnFieldRow({ fact, editable, onChange, onRemove }: { fact: Fact; edita
       <RemoveFieldButton name={fact.label || LABELS.glossary.ownFieldName} onRemove={onRemove} />
       <input className={`${styles.label} ${styles.ownLabel}`} value={name.value} aria-label={LABELS.glossary.ownFieldName}
         onChange={(e) => name.change(e.target.value)} onBlur={name.blur} />
-      <input className={styles.input} value={value.value} aria-label={fact.label || LABELS.glossary.ownFieldName} data-card-input=""
-        onChange={(e) => value.change(e.target.value)} onBlur={value.blur} />
+      {value}
     </div>
   );
 }
@@ -691,7 +695,6 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   const [editingExpansion, setEditingExpansion] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   // Enter in the card's last field: a new line in its own fields (the count asks again).
-  const [factsLine, setFactsLine] = useState(0);
 
   // Runs after the card is drawn, so a request made while it was being drawn still lands: the
   // term (or, arriving from below, the last field), then `text` typed there.
@@ -729,16 +732,17 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
     onHide(f.id);
   }
 
-  // Leaving a field (blur) saves it, so every key that leaves blurs first. Enter never leaves the
-  // card (the user, 2026-10-27: a card is written in like a little page):
-  //   Enter           a field of several lines: a new line, a finished "Name: value" line becoming
-  //                   a field of that name; a one-line field: the next field; the last: a new line
-  //                   in the card's own fields
-  //   arrows          past a field's edge, the next (previous) field, then out of the card
-  //   Ctrl+Enter      done: out of the card, on a new line after it
-  //   Shift+Enter     out of the card, and another card of the same kind below
-  //   Esc             the card is selected
-  //   Enter / Esc     in a fresh card (made by Shift+Enter) nothing was written in: it goes again
+  // Leaving a field (blur) saves it, so every key that leaves blurs first. The user, 2026-11-05:
+  //   Enter             the next field ("Name: value" lines finished first); from the last, on to
+  //                     the text after the card (as the arrow does). In a list: the next item, and from an
+  //                     empty last one the next field (RichList).
+  //   Shift+Enter       a field of several lines: a new line, a finished "Name: value" line becoming
+  //                     a field of that name; a one-line field: as Enter
+  //   arrows            past a field's edge, the next (previous) field, then out of the card
+  //   Ctrl+Enter        done: out of the card, on a new line after it
+  //   Ctrl+Shift+Enter  out of the card, and another card of the same kind below
+  //   Esc               the card is selected
+  //   Enter / Esc       in a fresh card (made by Ctrl+Shift+Enter) nothing was written in: it goes again
   const keyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const inputs = [...e.currentTarget.querySelectorAll<HTMLElement>('[data-card-input]')];
@@ -770,30 +774,34 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
       leave(onUndo);
       return;
     }
-    if (e.key === 'Enter' && e.shiftKey && !mod && !e.altKey) { leave(onAddAnother); return; }
+    if (e.key === 'Enter' && mod && e.shiftKey && !e.altKey) { leave(onAddAnother); return; }
     if (e.key === 'Enter' && mod) { leave(onDone); return; }
     if (e.key === 'Escape') { e.stopPropagation(); leave(onEscape); return; }
-    if (at < 0 || mod || e.shiftKey || e.altKey) return;
+    if (at < 0 || mod || e.altKey) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
-      if (target.hasAttribute('data-multiline') && target.getAttribute('contenteditable') === 'true') {
+      const lines = target.hasAttribute('data-multiline') && target.getAttribute('contenteditable') === 'true';
+      // "Name: value" lines typed so far become fields, whichever key finishes them.
+      if (lines) {
         const fieldId = target.closest<HTMLElement>('[data-field]')?.dataset.field;
         const rest = fieldId ? takeOwnFields(fieldId, target.innerHTML) : target.innerHTML;
         if (rest !== target.innerHTML) {
           target.innerHTML = rest;
           target.dispatchEvent(new Event('input', { bubbles: true }));
           focusField(target, 'end');
-          if (!rest) return;
+          if (!rest && e.shiftKey) return;
         }
-        if (!lineBreakAfterTermLink(target)) document.execCommand?.('insertLineBreak');
-        return;
+        if (e.shiftKey) {
+          if (!lineBreakAfterTermLink(target)) document.execCommand?.('insertLineBreak');
+          return;
+        }
       }
       if (inputs[at + 1]) { focusField(inputs[at + 1], 'start'); return; }
-      const own = typeDef.fields.find((f) => f.id === NAMED_FIELD_ID);
-      if (own) { onShow(own.id); setFactsLine((n) => n + 1); }
+      leave(() => onLeave(true));
       return;
     }
+    if (e.shiftKey) return;
     const edges = e.key.startsWith('Arrow') ? caretEdges(target) : null;
     if (!edges) return;
     if (e.key === 'ArrowDown' && edges.lastLine) go(1, 'start');
@@ -837,6 +845,19 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   // ("also an acronym"): said in the kind line.
   const level = entryImportance(entry);
   const kindLine = glossaryKindLine({ kindLabel: typeDef.label, importance: level, kinds: glossaryKinds(entry) });
+  // Every status mark on the card (textMarks.ts) shows as Important's star does: Clarify later, Not
+  // sure of this (BlockFlags.ts), Review later (ReviewMark.ts).
+  const clarify = recordFlag(entry.fields, 'clarify');
+  const unsure = recordFlag(entry.fields, 'unsure');
+  const review = recordReview(entry.fields);
+  const CL = LABELS.clarify;
+  const flagIcons = (clarify || unsure || review) ? (
+    <>
+      {review && <span className={styles.flagIcon} data-flag="review" title={`${LABELS.importance.reviewLater} · ${LABELS.importance.due(formatDate(review.due))}`}><ReviewIcon /></span>}
+      {clarify && <span className={styles.flagIcon} data-flag="clarify" title={clarify.note ? CL.markerNote(clarify.note) : CL.blockToggle}><ClarifyIcon /></span>}
+      {unsure && <span className={styles.flagIcon} data-flag="unsure" title={unsure.note ? CL.unsureMarkerWhy(unsure.note) : CL.blockUnsure}><UnsureIcon /></span>}
+    </>
+  ) : null;
   // Its acronym and what that stands for (glossaryNames), and the field the acronym is spelled out in.
   const names = glossaryNames(entry);
   const spelled = names.short && names.long ? { field: isAcronym ? 'expansion' : 'acronym', short: names.short, long: names.long } : null;
@@ -920,7 +941,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
       case 'symbols':
         return <SymbolsField items={fieldSymbols(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} editable={editable} autoFocus={autoFocus} />;
       case 'facts':
-        return <OwnFields facts={fieldFacts(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} onTake={(fact) => takeFacts([fact])} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} newLine={factsLine} />;
+        return <OwnFields facts={fieldFacts(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} onTake={(fact) => takeFacts([fact])} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} entryId={id} />;
     }
   }
 
@@ -934,6 +955,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
         <div className={styles.compactLead}>
           {icon && <span className={styles.compactIcon} title={kindLine} aria-hidden="true">{icon}</span>}
           {level > 0 && <span className={styles.compactIcon} title={LABELS.importance.kindLevel(level as 1 | 2 | 3, typeDef.label)}>{importanceLevel(level).icon}</span>}
+          {flagIcons}
           {termField}
         </div>
         {primary && <div className={styles.compactMeaning} data-field={primary.id}>{renderField(primary, false)}</div>}
@@ -961,7 +983,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   const main = (
     <>
       <div className={styles.head}>
-        <span className={styles.kind} data-importance={level || undefined}>{kindLine}</span>
+        <span className={styles.kind} data-importance={level || undefined}>{kindLine}{flagIcons}</span>
         {termField}
       </div>
       <div className={styles.rule} aria-hidden="true" />

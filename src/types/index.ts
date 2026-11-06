@@ -57,6 +57,24 @@ export interface ItemLink {
   targetId:   string;
   reason:     string | null;
   createdAt:  string;
+  // A task made for one date of a repeating event (services/eventTaskRules.ts): which date of the
+  // series (its original date, so a moved one still matches) and which of its task rules.
+  occurrence?: string;
+  ruleId?:     string;
+  at?:         string;   // the date it fell on when the task's dates were set: a move of the date moves them again
+}
+
+// A task made for each date of an event (2026-11-04, the user: "prepare for the lecture", "review
+// it"): its title, before or after the event and by how many days. One watcher makes each task a
+// week before it's due and takes away the open ones whose date is cancelled
+// (services/eventTaskRules.ts). `made`: the dates already given a task, so one the person deleted
+// isn't made again.
+export interface EventTaskRule {
+  id:    string;
+  title: string;
+  side:  'before' | 'after';
+  days:  number;
+  made?: string[];
 }
 
 // ── Routine types ───────────────────────────────────────────────────────────────
@@ -433,7 +451,7 @@ export type CalendarItemKind  = 'event' | 'reminder' | 'deadline';
 // Show quieter by services/eventTypeConversion.ts. Never read them to decide anything.
 export type CalendarEventType = 'default' | 'birthday' | 'task' | 'travel';
 // How a 'travel' event travels; its icon comes from config/calendarEventTypes.ts. null = not said.
-export type TravelMode = 'flight' | 'train' | 'bus' | 'car' | 'ferry';
+export type TravelMode = 'flight' | 'train' | 'bus' | 'car' | 'ferry' | 'bike' | 'walk';
 // A self-created event's confirmation state — 'tentative' is a placeholder the user put on
 // the calendar to be aware something might happen, not yet committed to (see CLAUDE.md
 // "Tentative events"). Named after (and worth keeping compatible with) the iCalendar spec's
@@ -544,6 +562,10 @@ export interface CalendarEvent extends TypedItem {
   // drawn quieter (lighter, dashed: a journey), 2026-11-03. Preset by its Type; absent = none / off.
   icon?:              string | null;
   quiet?:             boolean;
+  // Tasks made for each of its dates (EventTaskRule); absent = none.
+  taskRules?:         EventTaskRule[];
+  // Pictures put on it (the picture library, services/pictures.ts; origin 'item'), in order; absent = none.
+  pictureIds?:        string[];
   // Where an imported event came from (docs/features/external-calendar-sync.md). All null for an
   // event made in the app. A Google event keeps following Google for every field not edited here
   // (services/calendarImport/reconcile.ts); an .ics import is a one-off copy.

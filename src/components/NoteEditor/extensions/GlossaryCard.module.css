@@ -337,6 +337,15 @@
   background: color-mix(in srgb, var(--gc-accent) 10%, var(--color-surface));
 }
 
+/* Clarify later and Not sure of this on a card, beside the kind line or the term, as Important's icon. */
+.flagIcon { display: inline-flex; align-items: center; vertical-align: -0.15em; margin-left: var(--space-1); }
+.flagIcon svg { width: 1.25em; height: 1.25em; }
+.flagIcon svg circle { fill: none; stroke: currentColor; }
+.flagIcon[data-flag="clarify"] { color: var(--color-clarify); }
+.flagIcon[data-flag="unsure"] { color: var(--color-muted); }
+.flagIcon[data-flag="review"] { color: var(--color-primary); }
+.compactLead .flagIcon { margin-left: 0; font-size: var(--text-md); }
+
 .compactIcon {
   flex: none;
   font-size: var(--text-md);

@@ -16,3 +16,14 @@
 .iconBtn { display: inline-flex; border: none; background: none; padding: var(--space-1); color: var(--color-muted); cursor: pointer; border-radius: var(--radius-sm); }
 .iconBtn:hover { color: var(--color-danger); }
 .linkBtn:focus-visible, .iconBtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* PeriodEditor: one line per span (runs, exams, each piece of time off), dates joined by an arrow. */
+.editor { display: flex; flex-direction: column; gap: var(--space-2); }
+.line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.lineLabel { min-width: 6.5rem; font-size: var(--text-sm); color: var(--color-muted); }
+.arrow { color: var(--color-muted); }
+.date {
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  font: inherit; font-size: var(--text-md); background: var(--color-surface); color: var(--color-text);
+}
+.date:focus-within { border-color: var(--color-primary); }

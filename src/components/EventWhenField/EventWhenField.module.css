@@ -1,0 +1,23 @@
+/* Two rows, three columns (label, date, time), so the dates and the times line up. */
+.grid {
+  display: grid;
+  grid-template-columns: max-content max-content max-content;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.label { color: var(--color-muted); font-size: var(--text-sm); font-weight: 500; }
+.date,
+.time {
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.4rem 0.65rem;
+  outline: none;
+  cursor: pointer;
+}
+.time { width: 7.5rem; }
+.date:focus, .time:focus { border-color: var(--color-primary); }
+.grid[data-all-day] { grid-template-columns: max-content max-content; }

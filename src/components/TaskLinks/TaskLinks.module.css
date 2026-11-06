@@ -128,3 +128,21 @@
   border-radius: var(--radius-sm);
   padding: 0.1rem 0.25rem;
 }
+
+/* A repeating event's tasks: for all its dates, or only this one (EventTasksField). */
+.scopePills { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-2); }
+.scopePill {
+  padding: 1px var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.scopePill:hover { border-color: var(--color-primary); }
+.scopePillOn, .scopePillOn:hover { border-color: var(--color-primary); background: var(--color-primary); color: var(--color-on-primary); }
+.scopePill:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.rules { margin-bottom: var(--space-2); }
+.rulesHint { margin: 0 0 var(--space-1); color: var(--color-muted); font-size: var(--text-xs); }

@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { createElement, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { ImageIcon, TrashIcon } from '@/components/Icons';
+import { ImageIcon, PasteIcon, TrashIcon } from '@/components/Icons';
 import { alertDialog, choiceDialog, confirmDelete, confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { LABELS } from '@/config/labels';
 import { NOTE_BACKDROP_PRESETS, noteBackdropLabel, type NoteBackdrop as AppBackdrop } from '@/config/noteBackdrops';
@@ -18,7 +18,12 @@ import {
 } from '@/utils/noteBackdrop';
 import { errorMessage } from '@/utils/log';
 import { useFloatingPlacement } from '@/utils/floatingPlacement';
+import { PictureAddButtons } from '@/components/PictureInput/PictureAddButtons';
+import { pictureFromClipboard, usePictureTarget } from '@/components/PictureInput/pictureInput';
+import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import styles from './NoteBackdrop.module.css';
+
+const L = LABELS.noteBackdrop;
 
 // The room below the end of a note (80% of the visible height, so the last lines can be brought
 // up to mid-screen): the note's own backdrop, else its notebook's, else the app-wide one
@@ -54,7 +59,24 @@ export function NoteBackdrop({ note }: { note: Note | null }) {
   const { backdrop } = resolveNoteBackdrop(note, noteTags, appWide);
   const fill = useFill(backdrop);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  // A picture from the clipboard, waiting in the picker for where it applies (Replace from clipboard).
+  const [pending, setPending] = useState<File | null>(null);
   const ratio = usePictureRatio(fill.src);
+  const areaRef = useRef<HTMLDivElement>(null);
+  const open = (at: DOMRect, file: File | null = null) => { setPending(file); setAnchor(at); };
+
+  // Right-click on the background: Replace (the picker), Replace from clipboard (the picker, with
+  // the clipboard's picture in it, so only where it applies is left to choose).
+  useContextMenuScope(areaRef, () => ({
+    kind: 'note-backdrop',
+    items: (ctx) => {
+      const at = new DOMRect(ctx.x, ctx.y, 0, 0);
+      return [
+        { id: 'backdrop-replace', label: L.replace, icon: createElement(ImageIcon), run: () => open(at) },
+        { id: 'backdrop-replace-clipboard', label: L.replaceFromClipboard, icon: createElement(PasteIcon), run: async () => { const f = await pictureFromClipboard(); if (f) open(at, f); } },
+      ];
+    },
+  }));
 
   // A picture is shown whole, the full width of the note: the room below grows to its height when
   // that's more than the usual room, and never shrinks below it (the user's ask, 2026-10-22).
@@ -63,6 +85,7 @@ export function NoteBackdrop({ note }: { note: Note | null }) {
     : undefined;
   return (
     <div
+      ref={areaRef}
       className={`${styles.area} ${fill.src ? styles.picture : ''}`}
       data-backdrop={fill.preset}
       style={style}
@@ -72,11 +95,11 @@ export function NoteBackdrop({ note }: { note: Note | null }) {
         className={`${styles.change} ${anchor ? styles.changeOpen : ''}`}
         title={LABELS.noteBackdrop.change}
         aria-label={LABELS.noteBackdrop.change}
-        onClick={(e) => setAnchor(anchor ? null : e.currentTarget.getBoundingClientRect())}
+        onClick={(e) => (anchor ? setAnchor(null) : open(e.currentTarget.getBoundingClientRect()))}
       >
         <ImageIcon className={styles.changeIcon} />
       </button>
-      {anchor && <BackdropPicker anchor={anchor} note={note} onClose={() => setAnchor(null)} />}
+      {anchor && <BackdropPicker anchor={anchor} note={note} pending={pending} onClose={() => setAnchor(null)} />}
     </div>
   );
 }
@@ -123,14 +146,13 @@ export function BackdropField({ note, notebook }: { note?: Note; notebook?: Note
 
 interface Scope { target: BackdropTarget; label: string; where: string }
 
-function BackdropPicker({ anchor, note, notebook, only, onClose }: {
-  anchor: DOMRect; note: Note | null; notebook?: NoteTag; only?: boolean; onClose: () => void;
+function BackdropPicker({ anchor, note, notebook, only, pending: given = null, onClose }: {
+  anchor: DOMRect; note: Note | null; notebook?: NoteTag; only?: boolean; pending?: File | null; onClose: () => void;
 }) {
   const noteTags = useNoteStore((s) => s.noteTags);
   const rawNote = useNoteStore((s) => (note ? s.notes[note.id] : undefined));
   const appWide = useSettingsStore((s) => s.noteBackdrop);
   const { ref: panelRef, style: place } = useFloatingPlacement<HTMLDivElement>(anchor, { align: 'center' });
-  const fileRef = useRef<HTMLInputElement>(null);
   useEscapeClose(onClose);
 
   useEffect(() => {
@@ -139,7 +161,6 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
     return () => { clearTimeout(t); document.removeEventListener('mousedown', onDown); };
   }, [onClose, panelRef]);
 
-  const L = LABELS.noteBackdrop;
   const noteBookId = rawNote ? noteNotebookId(rawNote, noteTags) : null;
   const noteBook = noteBookId ? noteTags[noteBookId] : undefined;
   const scopes: Scope[] = [];
@@ -175,6 +196,10 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
     setBackdrop(target, c).catch((err) => void alertDialog(errorMessage(err)));
   };
 
+  // The clipboard's picture (Replace from clipboard): shown first, applied where chosen when clicked.
+  const [pending, setPending] = useState(given);
+  const pendingSrc = useObjectUrl(pending);
+
   async function upload(file: File) {
     try {
       const id = await addPicture(file, { encrypted, origin: 'backdrop' });
@@ -205,8 +230,10 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
     }
   }
 
+  // A picture pasted (Ctrl+V) into the open picker, or dropped on it, is added as from the button.
+  const dropTarget = usePictureTarget((f) => void upload(f));
   return createPortal(
-    <div ref={panelRef} className={styles.panel} style={place} role="dialog" aria-label={L.title}>
+    <div ref={panelRef} className={`${styles.panel} ${dropTarget.dragging ? styles.dropping : ''}`} style={place} role="dialog" aria-label={L.title} tabIndex={-1} {...dropTarget.props}>
       <div className={styles.heading}>{L.title}</div>
       {scopes.length > 1 && (
         <div className={styles.scopes} role="radiogroup" aria-label={L.applyTo}>
@@ -222,23 +249,16 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
           ))}
         </div>
       )}
-      <div className={styles.grid}>
-        {fallback && <Swatch backdrop={fallback} label={inheritLabel} selected={current === null} onPick={() => choose(null)} />}
-        <Swatch label={L.plain} selected={current?.kind === 'plain'} onPick={() => choose({ kind: 'plain' })} />
-        {NOTE_BACKDROP_PRESETS.map((id) => (
-          <Swatch
-            key={id}
-            backdrop={{ kind: 'preset', id }}
-            label={noteBackdropLabel(id)}
-            selected={current?.kind === 'preset' && current.id === id}
-            onPick={() => choose({ kind: 'preset', id })}
-          />
-        ))}
-      </div>
-      {library.length > 0 && (
+      {(library.length > 0 || pendingSrc) && (
         <>
           <div className={`${styles.heading} ${styles.subheading}`}>{L.pictures}</div>
+          {pendingSrc && <div className={styles.pendingHint}>{scopes.length > 1 ? L.clipboardHint : L.clipboardHintOne}</div>}
           <div className={styles.grid}>
+            {pending && pendingSrc && (
+              <div className={`${styles.pictureCell} ${styles.pendingCell}`}>
+                <Swatch backdrop={{ kind: 'image', src: pendingSrc }} label="" title={L.fromClipboard} selected={false} onPick={() => { const f = pending; setPending(null); void upload(f); }} />
+              </div>
+            )}
             {library.map((p) => (
               <div key={p.id} className={styles.pictureCell}>
                 <Swatch
@@ -259,32 +279,46 @@ function BackdropPicker({ anchor, note, notebook, only, onClose }: {
           </div>
         </>
       )}
-      <div className={styles.actions}>
-        <button type="button" className={styles.action} onClick={() => fileRef.current?.click()}>
-          <ImageIcon className={styles.actionIcon} /> {L.upload}
-        </button>
+      <div className={styles.grid}>
+        {fallback && <Swatch backdrop={fallback} label={inheritLabel} selected={current === null} onPick={() => choose(null)} />}
+        <Swatch label={L.plain} selected={current?.kind === 'plain'} onPick={() => choose({ kind: 'plain' })} />
+        {NOTE_BACKDROP_PRESETS.map((id) => (
+          <Swatch
+            key={id}
+            backdrop={{ kind: 'preset', id }}
+            label={noteBackdropLabel(id)}
+            selected={current?.kind === 'preset' && current.id === id}
+            onPick={() => choose({ kind: 'preset', id })}
+          />
+        ))}
       </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f); }}
-      />
+      <PictureAddButtons className={styles.actions} onFile={(f) => void upload(f)} uploadLabel={L.upload} />
     </div>,
     document.body,
   );
 }
 
-function Swatch({ backdrop, label, selected, onPick }: { backdrop?: ShownBackdrop; label: string; selected: boolean; onPick: () => void }) {
+// A blob URL for a file while it's shown, revoked after.
+function useObjectUrl(file: File | null): string | null {
+  const [url, setUrl] = useState<{ file: File; url: string } | null>(null);
+  useEffect(() => {
+    if (!file) return;
+    const u = URL.createObjectURL(file);
+    setUrl({ file, url: u });   // eslint-disable-line react-hooks/set-state-in-effect -- the URL is an external resource made and revoked here
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  return url && url.file === file ? url.url : null;
+}
+
+function Swatch({ backdrop, label, title, selected, onPick }: { backdrop?: ShownBackdrop; label: string; title?: string; selected: boolean; onPick: () => void }) {
   const fill = useFill(backdrop ?? null);
   return (
     <button
       type="button"
       className={`${styles.swatch} ${selected ? styles.swatchSel : ''}`}
       onClick={onPick}
-      title={label || undefined}
-      aria-label={label || LABELS.noteBackdrop.pictures}
+      title={title ?? (label || undefined)}
+      aria-label={title ?? (label || LABELS.noteBackdrop.pictures)}
       aria-pressed={selected}
     >
       <span

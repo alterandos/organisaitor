@@ -50,12 +50,12 @@ describe('attributes', () => {
     setEndeavourType(id, addBuiltInType('subject'));
     addOwnField(id, { name: 'Lecturer', type: 'text', inherit: false });
     const fields = attributeFields(col(id), types());
-    expect(fields.map((f) => [f.field.name, f.fromType])).toEqual([['Code', true], ['Mark aimed for', true], ['Lecturer', false]]);
+    expect(fields.map((f) => [f.field.name, f.fromType])).toEqual([['Code', true], ['Lecturer', false]]);
     setAttributeValue(id, 'code', 'GEOS215');
     expect(attributeValue(col(id), fields[0].field)).toBe('GEOS215');
 
     const t = saveFieldsAsType(id, 'Science subject')!;
-    expect(types()[t]).toMatchObject({ usedFor: ['endeavour'], fields: [{ name: 'Code' }, { name: 'Mark aimed for' }, { name: 'Lecturer' }] });
+    expect(types()[t]).toMatchObject({ usedFor: ['endeavour'], fields: [{ name: 'Code' }, { name: 'Lecturer' }] });
     expect(col(id).attributes).toMatchObject({ typeId: t, fields: [], values: { code: 'GEOS215' } });
   });
 

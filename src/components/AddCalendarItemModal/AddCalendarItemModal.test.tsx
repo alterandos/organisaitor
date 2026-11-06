@@ -8,6 +8,8 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { AddCalendarItemModal } from './AddCalendarItemModal';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore } from '@/store/uiStore';
+import { useTaskStore } from '@/store/taskStore';
+import { LABELS } from '@/config/labels';
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -22,21 +24,30 @@ afterEach(() => {
 });
 
 const heading = () => document.querySelector('[class*="header"] [class*="title"]')?.textContent ?? '';
-const moreOptions = () => screen.getByRole('button', { name: /More options|Fewer options/ });
 
 describe('AddCalendarItemModal', () => {
-  it('More options starts closed for every kind, and opens and closes', () => {
+  it('shows its pane’s fields for every kind, nothing folded away (2026-11-05: one form for creating and editing)', () => {
     for (const kind of ['event', 'reminder', 'deadline'] as const) {
       useUIStore.setState({ calendarItemKind: kind });
       render(<AddCalendarItemModal />);
-      expect(moreOptions()).toHaveAttribute('aria-expanded', 'false');
-      expect(screen.queryByText(/Tentative/)).toBeNull();
-      fireEvent.click(moreOptions());
+      expect(screen.queryByRole('button', { name: /More options/ })).toBeNull();
       expect(screen.getByText(/Tentative/)).toBeInTheDocument();
-      fireEvent.click(moreOptions());
-      expect(screen.queryByText(/Tentative/)).toBeNull();
+      expect(screen.getByText(LABELS.calendarForm.linkedItems)).toBeInTheDocument();
+      if (kind === 'event') expect(screen.getByText(LABELS.pictureInput.field)).toBeInTheDocument();
+      if (kind !== 'reminder') expect(screen.getByText(LABELS.taskLinks.event.heading)).toBeInTheDocument();
       cleanup();
     }
+  });
+
+  it('tasks chosen before the event exists are made with it', () => {
+    render(<AddCalendarItemModal />);
+    fireEvent.change(screen.getByPlaceholderText('Event title'), { target: { value: 'Exam' } });
+    fireEvent.click(screen.getByRole('button', { name: LABELS.taskLinks.event.addPrep }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add Event' }));
+    const [event] = Object.values(useCalendarStore.getState().events);
+    const tasks = Object.values(useTaskStore.getState().tasks);
+    expect(tasks).toEqual([expect.objectContaining({ title: 'Prepare for Exam', deadline: event.date })]);
+    expect(tasks[0].itemLinks).toEqual([expect.objectContaining({ kind: 'prepFor', targetType: 'event', targetId: event.id })]);
   });
 
   it('Ctrl+Tab steps Event → Reminder → Deadline, Ctrl+Shift+Tab back; the heading shows its icon', () => {
@@ -56,7 +67,7 @@ describe('AddCalendarItemModal', () => {
     useUIStore.setState({ calendarItemKind: 'deadline' });
     render(<AddCalendarItemModal />);
     fireEvent.change(screen.getByPlaceholderText('Deadline title'), { target: { value: 'Essay' } });
-    const notify = screen.getByRole('checkbox', { name: 'Notify me' });
+    const notify = screen.getByRole('checkbox', { name: /Notify me/ });
     expect(notify).toBeChecked();
     fireEvent.click(notify);
     fireEvent.click(screen.getByRole('button', { name: 'Add Deadline' }));
@@ -76,7 +87,6 @@ describe('AddCalendarItemModal', () => {
     expect(within(dateField).getByLabelText('Month', { selector: 'input' })).toHaveValue('10');
     expect(within(dateField).getByLabelText('Day', { selector: 'input' })).toHaveValue('18');
     expect(screen.getByPlaceholderText('Address or link')).toHaveValue('Minervastrasse 65, 8032 Zürich, Switzerland');
-    expect(moreOptions()).toHaveAttribute('aria-expanded', 'true');   // the repeat it found is shown
     fireEvent.click(screen.getByRole('button', { name: 'Add Event' }));
     const [saved] = Object.values(useCalendarStore.getState().events);
     expect(saved).toMatchObject({

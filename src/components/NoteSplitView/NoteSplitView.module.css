@@ -36,6 +36,7 @@
 .grid[data-layout="three"] { grid-template-areas: "a v c" "h v c" "b v c"; }
 .grid[data-layout="four"]  { grid-template-areas: "a v b" "hl v hr" "c v d"; }
 
+.pane:focus { outline: none; }   /* focusable only to take Ctrl+PgUp/PgDn into an empty pane */
 .pane {
   position: relative;
   min-width: 0;

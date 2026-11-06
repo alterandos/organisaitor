@@ -18,6 +18,8 @@ import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameB
 import { deleteForever, trashedBy } from '@/services/trash';
 import { entryView, isEntryLocked } from '@/services/noteSecrets';
 import { entryImportance } from '@/services/glossary';
+import { applyFlagAttrs, recordFlag } from './BlockFlags';
+import { applyReviewAttr, recordReview } from './ReviewMark';
 import { GlossaryCardBody } from './GlossaryCardBody';
 import { IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { cardToChip, insertGlossaryChip, setChipDesigns } from './GlossaryChip';
@@ -312,14 +314,19 @@ class GlossaryCardView {
     this.dom.addEventListener('mouseenter', this.placePills);
     this.render();
     // Its record's importance can change from anywhere (another card of it, the margin column).
-    this.unsubscribe = useNoteStore.subscribe(() => {
+    const fromRecord = () => {
       const id = this.node.attrs.entryId as string | null;
       const record = id ? useNoteStore.getState().structuredTagEntries[id as never] : undefined;
-      const level = record && !isEntryLocked(record) ? entryImportance(entryView(record)) : 0;
+      const view = record && !isEntryLocked(record) ? entryView(record) : null;
+      const level = view ? entryImportance(view) : 0;
       if (String(level || '') !== (this.dom.getAttribute('data-importance') ?? '')) {
         if (level) this.dom.setAttribute('data-importance', String(level)); else this.dom.removeAttribute('data-importance');
       }
-    });
+      applyFlagAttrs(this.dom, { clarify: view ? recordFlag(view.fields, 'clarify') : null, unsure: view ? recordFlag(view.fields, 'unsure') : null });
+      applyReviewAttr(this.dom, view ? recordReview(view.fields) : null);
+    };
+    fromRecord();
+    this.unsubscribe = useNoteStore.subscribe(fromRecord);
   }
   private unsubscribe: () => void;
 

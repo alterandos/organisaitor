@@ -132,6 +132,7 @@
 
 .action:hover { background: var(--color-surface-alt); }
 .actionIcon { width: 15px; height: 15px; }
+.panel.dropping { outline: 2px dashed var(--color-primary); outline-offset: -4px; }
 
 /* ── Presets: the same rule draws the area and its swatch (config/noteBackdrops.ts) ──
    Fixed colours on purpose: a backdrop is a picture, the same in both themes. */
@@ -219,6 +220,9 @@
 /* ── The picture library: each picture with its delete ─────────────────── */
 .pictureCell { position: relative; min-width: 0; }
 .pictureCell .swatch { width: 100%; }
+/* The clipboard's picture, waiting for where it applies (Replace from clipboard). */
+.pendingCell .swatch { border-color: var(--color-primary); border-style: dashed; }
+.pendingHint { margin: 0 0 var(--space-2); color: var(--color-muted); font-size: var(--text-xs); }
 
 .deletePicture {
   position: absolute;

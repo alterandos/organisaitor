@@ -44,7 +44,8 @@ export const NoteTitle = Node.create({
         if (dispatch) {
           const text = prefill.trim();
           tr.insert(TITLE_POS, this.type.create(null, text ? state.schema.text(text) : null));
-          tr.setSelection(TextSelection.create(tr.doc, TITLE_POS + 1 + text.length)).scrollIntoView();
+          // The name it was filled in with is selected, so typing replaces it (2026-11-05).
+          tr.setSelection(TextSelection.create(tr.doc, TITLE_POS + 1, TITLE_POS + 1 + text.length)).scrollIntoView();
         }
         return true;
       },
@@ -53,12 +54,16 @@ export const NoteTitle = Node.create({
 
   addKeyboardShortcuts() {
     return {
-      // Enter in the Title continues in ordinary text, never a second Title.
+      // Enter in the Title continues in ordinary text, never a second Title. With the whole Title
+      // selected (the name it was filled in with) Enter keeps it, as a rename box does.
       Enter: ({ editor }) => {
         if (!editor.isActive(this.name)) return false;
         return editor.commands.command(({ tr, state, dispatch }) => {
           if (dispatch) {
-            if (!tr.selection.empty) tr.deleteSelection();
+            const { $from, $to } = tr.selection;
+            const whole = $from.sameParent($to) && $from.parentOffset === 0 && $to.parentOffset === $to.parent.content.size;
+            if (whole) tr.setSelection(TextSelection.create(tr.doc, $to.pos));
+            else if (!tr.selection.empty) tr.deleteSelection();
             const pos = tr.selection.from;
             tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
             tr.setSelection(TextSelection.create(tr.doc, pos + 2)).scrollIntoView();

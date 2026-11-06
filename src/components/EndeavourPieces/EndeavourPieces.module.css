@@ -1,0 +1,78 @@
+/* What's in an Endeavour (EndeavourPieces), on its home: tiles, each holding small cards. */
+.pieces { display: flex; flex-direction: column; gap: var(--space-3); }
+.heading { margin: 0; font-size: var(--text-xs); font-weight: 600; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.groupLabel { font-size: var(--text-xs); font-weight: 600; color: var(--color-muted); }
+.hint { margin: 0; font-size: var(--text-sm); color: var(--color-muted); line-height: 1.4; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: var(--space-3); align-items: start; }
+.tile { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); min-width: 0; }
+.tileFirst { grid-column: 1 / -1; }
+.tileHead { display: flex; align-items: center; gap: var(--space-2); }
+.tileTitle { font-weight: 600; font-size: var(--text-sm); }
+.count { padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--color-surface-alt); color: var(--color-muted); font-size: var(--text-xs); }
+.tileAdd {
+  margin-left: auto;
+  flex: none;
+  white-space: nowrap;
+  border: 1px dashed var(--color-border-strong);
+  background: transparent;
+  color: var(--color-muted);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.tileAdd:hover { color: var(--color-text); border-color: var(--color-primary); }
+
+/* "+ Add" with several kinds: a short list saying what each is. */
+.choices { display: flex; flex-direction: column; gap: var(--space-1); }
+.choice { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-alt); color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
+.choice:hover { border-color: var(--color-primary); }
+.choiceLabel { font-size: var(--text-sm); font-weight: 500; }
+
+/* A small card for each thing in it. */
+.cards { display: flex; flex-direction: column; gap: var(--space-1); }
+.tileFirst .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+.card { position: relative; display: flex; align-items: flex-start; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-alt); }
+.card:hover { border-color: var(--color-primary); }
+.cardMain { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-1) var(--space-2); border: none; background: none; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
+.cardIcon { flex: none; width: 1.25em; text-align: center; }
+.cardText { display: flex; flex-direction: column; min-width: 0; }
+.cardTitle { font-size: var(--text-sm); font-weight: 500; overflow-wrap: anywhere; }
+.cardDetail { font-size: var(--text-xs); color: var(--color-muted); }
+.cardActions { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1); }
+.cardLink { border: none; background: none; padding: 0; color: var(--color-primary); font: inherit; font-size: var(--text-xs); cursor: pointer; white-space: nowrap; }
+/* The card's actions show on hover or focus, and always on touch. */
+@media (hover: hover) {
+  .cardActions { opacity: 0; }
+  .card:hover .cardActions, .card:focus-within .cardActions { opacity: 1; }
+}
+.iconBtn { display: inline-flex; border: none; background: none; padding: var(--space-1); color: var(--color-muted); cursor: pointer; border-radius: var(--radius-sm); }
+.iconBtn:hover { color: var(--color-danger); }
+
+.suggestions { display: flex; flex-direction: column; gap: var(--space-1); }
+.suggestion { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); }
+.suggestion .cardText { flex: 1; }
+.suggestion .tileAdd { margin-left: 0; }
+
+.addLine { display: flex; align-items: center; gap: var(--space-2); }
+.input { flex: 1; min-width: 0; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); }
+.input:focus-visible { outline: none; border-color: var(--color-primary); }
+.linkBtn { align-self: flex-start; border: none; background: none; padding: 0; color: var(--color-primary); font: inherit; font-size: var(--text-sm); cursor: pointer; white-space: nowrap; }
+.linkBtn:hover { text-decoration: underline; }
+
+.wand { display: flex; flex-direction: column; gap: var(--space-2); }
+.wandRow { display: flex; align-items: center; gap: var(--space-2); }
+.found { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-alt); }
+.foundList { margin: 0; padding-left: var(--space-5); font-size: var(--text-sm); }
+.check { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.secondaryBtn, .submitBtn { padding: var(--space-1) var(--space-3); border-radius: var(--radius-md); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.secondaryBtn { border: 1px solid var(--color-border); background: transparent; color: var(--color-text); }
+.submitBtn { border: none; background: var(--color-primary); color: var(--color-on-primary); font-weight: 600; }
+
+.tileAdd:focus-visible, .choice:focus-visible, .cardMain:focus-visible, .cardLink:focus-visible, .iconBtn:focus-visible,
+.linkBtn:focus-visible, .secondaryBtn:focus-visible, .submitBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

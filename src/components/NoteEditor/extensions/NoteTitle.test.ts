@@ -29,13 +29,13 @@ const blocks = () => {
 };
 
 describe('NoteTitle', () => {
-  it('inserts the Title at the top of the tab, filled with the prefill, cursor at its end', () => {
+  it('inserts the Title at the top of the tab, filled with the prefill, selected so typing replaces it', () => {
     make('<p>Body text</p>');
     editor.commands.setTextSelection(5);
     editor.commands.insertOrFocusNoteTitle('Exams');
     expect(blocks()).toEqual(['noteTitle:Exams', 'paragraph:Body text']);
     expect(editor.isActive('noteTitle')).toBe(true);
-    expect(editor.state.selection.from).toBe(1 + 1 + 'Exams'.length);
+    expect([editor.state.selection.from, editor.state.selection.to]).toEqual([2, 2 + 'Exams'.length]);
   });
 
   it('only ever one: a second call goes to the existing Title instead of adding another', () => {
@@ -50,7 +50,9 @@ describe('NoteTitle', () => {
   it('Enter in the Title continues in a normal paragraph', () => {
     make('<p></p>');
     editor.commands.insertOrFocusNoteTitle('Exams');
-    editor.commands.keyboardShortcut('Enter');
+    // A real key press (keyboardShortcut wraps the handler in a transaction of its own, which puts
+    // the old selection back): the filled-in name, selected, is kept.
+    editor.view.someProp('handleKeyDown', (f) => f(editor.view, new KeyboardEvent('keydown', { key: 'Enter' })));
     editor.commands.insertContent('next');
     expect(blocks().slice(0, 2)).toEqual(['noteTitle:Exams', 'paragraph:next']);
   });

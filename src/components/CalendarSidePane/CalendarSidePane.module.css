@@ -29,7 +29,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--color-scrim-light);
   z-index: 100;
 }
 
@@ -42,7 +42,7 @@
   z-index: 101;
   border: none;
   border-radius: 0;
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-pane-start);
 }
 
 .header {

@@ -1,3 +1,5 @@
+import { TYPES_ENABLED } from '@/config/features';
+import { templateFor } from '@/services/templates';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useTaskStore } from '@/store/taskStore';
@@ -85,7 +87,8 @@ export function EndeavourAttributesPane() {
           <button type="button" className={styles.closeBtn} onClick={closeModal} aria-label={L.close}><CloseIcon /></button>
         </div>
         <div className={styles.body}>
-          <label className={styles.row}>
+          {/* Types are switched off for now (config/features.ts): no Type to choose or save. */}
+          {TYPES_ENABLED && <label className={styles.row}>
             <span className={styles.label}>{L.type}</span>
             <select className={styles.select} value={typeId ?? ''} onChange={(e) => chooseType(e.target.value)}>
               <option value="">{L.noType}</option>
@@ -95,8 +98,8 @@ export function EndeavourAttributesPane() {
               </optgroup>
             </select>
             {typeId && <button type="button" className={styles.linkBtn} onClick={() => useUIStore.getState().openEditItemType(typeId)}>{L.editType}</button>}
-          </label>
-          {typeId && <p className={styles.hint}>{L.typeHint}</p>}
+          </label>}
+          {TYPES_ENABLED && typeId && <p className={styles.hint}>{L.typeHint}</p>}
 
           <section className={styles.fields} aria-label={L.fields}>
             {fields.length === 0 && <p className={styles.hint}>{L.noFields}</p>}
@@ -104,7 +107,7 @@ export function EndeavourAttributesPane() {
               <div key={field.id} className={styles.fieldRow} role="group" aria-label={field.name}>
                 <div className={styles.fieldHead}>
                   <span className={styles.fieldName}>{field.name}</span>
-                  {fromType && <span className={styles.badge}>{L.fromType}</span>}
+                  {fromType && TYPES_ENABLED && <span className={styles.badge}>{L.fromType}</span>}
                   {!fromType && field.type !== 'period' && (
                     <label className={styles.inherit}>
                       <input type="checkbox" checked={!!field.inherit} onChange={(e) => updateOwnField(id, field.id, { inherit: e.target.checked })} /> {L.inherit}
@@ -117,7 +120,7 @@ export function EndeavourAttributesPane() {
                   )}
                 </div>
                 {field.type === 'period'
-                  ? <PeriodField id={id as CollectionId} exams />
+                  ? <PeriodField id={id as CollectionId} exams={fromType || !!templateFor(c.templateId)?.dates.exams} />
                   : <FieldInput field={field} value={attributeValue(c, field)} onChange={(v) => setAttributeValue(id, field.id, v)} />}
               </div>
             ))}
@@ -146,7 +149,7 @@ export function EndeavourAttributesPane() {
             <button type="submit" className={styles.btn} disabled={!newName.trim()}>{L.addField}</button>
           </form>
 
-          {fields.length > 0 && (
+          {TYPES_ENABLED && fields.length > 0 && (
             <form className={styles.addRow} onSubmit={saveAsType}>
               <input className={styles.input} aria-label={L.typeName} placeholder={L.typeName} value={typeName} onChange={(e) => setTypeName(e.target.value)} />
               <button type="submit" className={styles.btn} disabled={!typeName.trim()}>{L.saveAsType}</button>
@@ -171,11 +174,11 @@ export function AttributesSummary({ id }: { id: CollectionId }) {
   if (!c) return null;
   const eff = effectivePeriod(id, collections);
   const parts = attributeFields(c, types).flatMap(({ field }) => {
-    if (field.type === 'period') return eff ? [`${field.name} ${day(eff.period.start)} – ${day(eff.period.end)}`] : [];
+    if (field.type === 'period') return eff && (eff.period.start || eff.period.end) ? [`${field.name} ${day(eff.period.start)} – ${day(eff.period.end)}`] : [];
     const v = attributeValue(c, field);
     return hasFieldValue(v) ? [`${field.name} ${formatFieldValue(field, v)}`] : [];
   });
-  if (eff?.inherited && !hasPeriodField(attributeFields(c, types))) parts.unshift(L.periodFrom(collections[eff.from as CollectionId]?.name ?? '', `${day(eff.period.start)} – ${day(eff.period.end)}`));
+  if (eff?.inherited && (eff.period.start || eff.period.end) && !hasPeriodField(attributeFields(c, types))) parts.unshift(L.periodFrom(collections[eff.from as CollectionId]?.name ?? '', `${day(eff.period.start)} – ${day(eff.period.end)}`));
   return (
     <div className={styles.summary} role="group" aria-label={L.summary}>
       <span className={styles.label}>{L.summary}</span>

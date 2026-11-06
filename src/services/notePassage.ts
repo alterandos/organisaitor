@@ -20,13 +20,16 @@ export function openNotePassage(noteId: string, findOrFinds: PassageFind | Passa
   const contents = [{ id: MAIN_TAB_ID, content: note.content }, ...note.tabs.map((t) => ({ id: t.id, content: t.content }))];
   let tabId = MAIN_TAB_ID;
   let find = finds[0];
-  // The open text first: it may hold changes not saved to the store yet.
+  // The finds in their order, each looked for in every tab (the open tab's text first: it may hold
+  // changes not saved yet). Never a later find in the open tab ahead of an earlier one in another:
+  // a term's link beside you isn't where it's defined (2026-11-05: Go to definition stayed put
+  // when the card was on another tab).
   const open = liveNoteFor(noteId);
-  const inOpen = open ? finds.find((f) => docHasPassage(open.view.state.doc, f)) : undefined;
-  if (open && inOpen) { tabId = open.tabId ?? MAIN_TAB_ID; find = inOpen; }
-  else outer: for (const f of finds) {
+  const openTab = open ? open.tabId ?? MAIN_TAB_ID : null;
+  outer: for (const f of finds) {
+    if (open && docHasPassage(open.view.state.doc, f)) { tabId = openTab!; find = f; break; }
     for (const c of contents) {
-      if (contentHasMark(c.content, f)) { tabId = c.id; find = f; break outer; }
+      if (c.id !== openTab && contentHasMark(c.content, f)) { tabId = c.id; find = f; break outer; }
     }
   }
   const ui = useUIStore.getState();

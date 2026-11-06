@@ -1,29 +1,16 @@
-import { useState, useRef } from 'react';
 import { ItemTypePaneField } from '@/components/ItemTypeField/ItemTypeField';
-import { EventTasksField } from '@/components/TaskLinks/EventTasksField';
-import { DateInput } from '@/components/DateInput/DateInput';
-import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
-import { eventPatch, eventRule } from '@/utils/notifyRule';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import type { CalendarEventId } from '@/types';
-import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
-import { timeAddMinutes, computeLinkedEndTime, addDaysToIso } from '@/utils/date';
-import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
-import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
-import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
-import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
-import { LinkedNoteAbstracts } from '@/components/LinkedNoteAbstracts/LinkedNoteAbstracts';
-import { newNoteTitleFor } from '@/services/noteFromItem';
-import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteEventWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
-import { updateCalendarEventLinked as updateEvent } from '@/services/taskCalendarLinks';
+import { updateCalendarEventLinked } from '@/services/taskCalendarLinks';
 import type { CrossAppRef } from '@/types';
-import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
+import { SeriesScopeLine } from '@/components/RecurrenceScopeBar/SeriesScope';
+import { useSeriesScope } from '@/components/RecurrenceScopeBar/useSeriesScope';
 import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
 import { ScheduleCommitBar } from '@/components/RecurrenceScopeBar/ScheduleCommitBar';
 import { afterSeriesDeleted } from '@/services/calendarSeries';
@@ -33,14 +20,11 @@ import { DoneBanner } from '@/components/ItemActions/DoneBanner';
 import itemStyles from '@/components/ItemActions/ItemActions.module.css';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
-import { IconField } from '@/components/IconPicker/IconField';
-import { ITEM_TYPE_ICON } from '@/config/itemIcons';
 import styles from './CalendarEventPane.module.css';
-import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
-import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
-import { CloseIcon, OpenIcon } from '@/components/Icons';
+import { CloseIcon } from '@/components/Icons';
+import { CalendarItemFields } from '@/components/CalendarItemForm/CalendarItemFields';
 
 export function CalendarEventPane() {
   const paneResize = usePaneWidth('item-pane', { edge: 'left', min: 340, max: 820 });
@@ -50,10 +34,13 @@ export function CalendarEventPane() {
   const openPane          = useUIStore((s) => s.openCalendarEventPane);
   const openTaskPane      = useUIStore((s) => s.openTaskPane);
   const eventsRecord      = useCalendarStore((s) => s.events);
-  const collectionsRecord = useTaskStore((s) => s.collections);
   const tasksRecord       = useTaskStore((s) => s.tasks);
 
   const event = editingId ? eventsRecord[editingId as CalendarEventId] : null;
+  // Which dates a change goes to (SeriesScope.tsx): every field below saves through it.
+  const series = useSeriesScope({ kind: 'event', id: editingId, repeats: !!event?.repeat, occurrence: occurrenceDate,
+    update: (itemId, patch: Parameters<typeof updateCalendarEventLinked>[1]) => updateCalendarEventLinked(itemId as CalendarEventId, patch), onSwitch: (newId) => openPane(newId) });
+  const updateEvent = (itemId: CalendarEventId, patch: Parameters<typeof updateCalendarEventLinked>[1]) => series.update(itemId, patch);
   const archiveEvent = useCalendarStore((s) => s.archiveEvent);
   const restoreEvent = useCalendarStore((s) => s.restoreEvent);
   // A task's scheduled shadow event is archived/restored with the task itself, never on its own.
@@ -66,20 +53,9 @@ export function CalendarEventPane() {
     onRestore:  () => { if (editingId) restoreEvent(editingId as CalendarEventId); },
   });
 
-  const [title,          setTitle]          = useState(() => event?.title ?? '');
-  const [notes,          setNotes]          = useState(() => event?.notes ?? '');
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-  const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
-  // See AddCalendarItemModal's identical ref for why this exists — prevents the linked-end-time
-  // cascade from getting "stuck" on its own previous guess while a start time is typed digit by
-  // digit. A pre-existing endTime here counts as genuinely user-set (it was saved), not one of our
-  // own in-progress auto-guesses; App.tsx remounts this pane per event (key), so it starts fresh.
-  const endAutoRef = useRef(!event);
-
   if (!event) return null;
 
   const id = event.id;
-  const allCollections = Object.values(collectionsRecord);
   // scheduledAt auto-creates this exact event (see Task.calendarEventId) — the event is the
   // correct primary entity (it's genuinely blocking calendar time), but the pane still surfaces
   // the link so the user isn't left guessing why an "event" they didn't create exists.
@@ -91,19 +67,9 @@ export function CalendarEventPane() {
     openTaskPane(linkedTask.id);
   };
 
-  const saveTitle = () => {
-    const v = title.trim();
-    if (v && v !== event.title) updateEvent(id, { title: v });
-    else if (!v) setTitle(event.title);
-  };
-
-  const saveNotes = () => {
-    const v = notes.trim() || null;
-    if (v !== event.notes) updateEvent(id, { notes: v });
-  };
-
   // Deleting a series also asks about the dates taken out of it (services/calendarSeries.ts).
   const handleDelete = () => {
+    if (series.deleteScoped()) { closeDialog(); closePane(); return; }
     const wasSeries = !!event.repeat;
     closeDialog(); deleteEventWithCleanup(id); closePane();
     if (wasSeries) void afterSeriesDeleted('event', id);
@@ -125,34 +91,6 @@ export function CalendarEventPane() {
     updateEvent(id, { crossAppRefs: next });
   };
 
-  const handleStartTimeChange = (val: string) => {
-    const newStart = val || null;
-    const changes: Record<string, string | null> = { startTime: newStart };
-    if (val) {
-      const { time, dayOffset } = computeLinkedEndTime(val, endAutoRef.current ? '' : (event.endTime ?? ''));
-      changes.endTime = time;
-      endAutoRef.current = true;
-      if (dayOffset > 0 && !event.endDate) changes.endDate = addDaysToIso(event.date, dayOffset);
-    }
-    updateEvent(id, changes as Parameters<typeof updateEvent>[1]);
-  };
-
-  const handleEndTimeChange = (val: string) => {
-    endAutoRef.current = false;
-    const changes: Record<string, string | null> = { endTime: val || null };
-    if (val && event.startTime && val < event.startTime) {
-      changes.startTime = timeAddMinutes(val, -30);
-    }
-    updateEvent(id, changes as Parameters<typeof updateEvent>[1]);
-  };
-
-  const isLocationUrl = (loc: string) =>
-    /^https?:\/\//i.test(loc) || /^maps\.google\./i.test(loc);
-
-  // A plain address gets wrapped into a Google Maps search — no API key or integration needed,
-  // this is just a URL. A location that's already a link (isLocationUrl) is used as-is.
-  const locationMapsUrl = (loc: string) =>
-    isLocationUrl(loc) ? loc : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}`;
 
   return (
     <>
@@ -189,15 +127,7 @@ export function CalendarEventPane() {
           <ScheduleCommitBar id={id} occurrenceDate={occurrenceDate} onSwitch={(newId) => openPane(newId)} onClose={closePane} />
 
           {event.repeat && (
-            <RecurrenceScopeBar
-              kind="event"
-              id={id}
-              baseDate={event.date}
-              repeat={event.repeat}
-              occurrenceDate={occurrenceDate}
-              onClose={closePane}
-              onSwitch={(newId) => openPane(newId)}
-            />
+            <SeriesScopeLine repeat={event.repeat} firstDate={event.date} occurrence={occurrenceDate} scope={series.scope} onScope={series.setScope} scheduleId={event.scheduleId ?? null} />
           )}
 
           {linkedTask && (
@@ -206,192 +136,10 @@ export function CalendarEventPane() {
             </button>
           )}
 
-          <div className={styles.titleRow}>
-            {!isTaskShadow && (
-              <IconField value={event.icon ?? null} onChange={(icon) => updateEvent(id, { icon })} fallback={ITEM_TYPE_ICON.event} label={LABELS.calendarForm.icon} />
-            )}
-            <input
-              className={styles.titleInput}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={saveTitle}
-              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-              aria-label="Event title"
-            />
-          </div>
-
-          <textarea
-            ref={notesRef}
-            className={styles.notesInput}
-            placeholder="Add notes... (Ctrl+B/I bold/italic, Ctrl+L to insert a link)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            onBlur={saveNotes}
-            rows={3}
-          />
-
-          <LinkedNoteAbstracts refs={event.crossAppRefs ?? []} onOpen={navigateToCrossAppRef} />
-
-          <div className={styles.field}>
-            <span className={styles.label}>Date</span>
-            <div className={styles.timeRow}>
-              <DateInput
-                className={styles.dateInput}
-                value={event.date}
-                onChange={(v) => {
-                  updateEvent(id, { date: v });
-                  if (event.endDate && event.endDate <= v) updateEvent(id, { endDate: null });
-                }}
-              />
-              <span className={styles.timeSep}>→</span>
-              <DateInput className={styles.dateInput} value={event.endDate ?? ''} min={event.date} onChange={(v) => updateEvent(id, { endDate: v || null })} />
-            </div>
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Time</span>
-            <div className={styles.timeRow}>
-              <TimeInput
-                className={styles.timeInput}
-                value={event.startTime ?? ''}
-                onChange={handleStartTimeChange}
-                placeholder="Start"
-              />
-              <span className={styles.timeSep}>→</span>
-              <TimeInput
-                className={styles.timeInput}
-                value={event.endTime ?? ''}
-                onChange={handleEndTimeChange}
-                placeholder="End"
-              />
-            </div>
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Location</span>
-            <div className={styles.locationRow}>
-              <input
-                type="text"
-                className={styles.textInput}
-                value={event.location ?? ''}
-                onChange={(e) => updateEvent(id, { location: e.target.value || null })}
-                placeholder="Address or link"
-              />
-              {event.location && (
-                <a
-                  href={locationMapsUrl(event.location)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.locationLink}
-                  title={isLocationUrl(event.location) ? 'Open link' : 'Open in Google Maps'}
-                >
-                  {isLocationUrl(event.location) ? <OpenIcon /> : '🗺'}
-                </a>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.field}>
-            <label className={`${styles.label} ${styles.checkLabel}`}>
-              <input
-                type="checkbox"
-                checked={event.important ?? false}
-                onChange={(e) => updateEvent(id, { important: e.target.checked })}
-              />
-              ❗ Important — highlight on the calendar
-            </label>
-          </div>
-
-          {event.endDate && event.endDate > event.date && (
-            <div className={styles.field}>
-              <label className={`${styles.label} ${styles.checkLabel}`}>
-                <input
-                  type="checkbox"
-                  checked={event.background ?? false}
-                  onChange={(e) => updateEvent(id, { background: e.target.checked, color: e.target.checked ? event.color : null })}
-                />
-                🧳 Background — show as a thin line instead of a normal event (e.g. travel)
-              </label>
-              {event.background && (
-                <ColorPicker palette="standard" value={event.color ?? null} onChange={(c) => updateEvent(id, { color: c })} />
-              )}
-            </div>
-          )}
-
-          {!isTaskShadow && (
-            <div className={styles.field}>
-              <label className={`${styles.label} ${styles.checkLabel}`}>
-                <input
-                  type="checkbox"
-                  checked={event.quiet ?? false}
-                  onChange={(e) => updateEvent(id, { quiet: e.target.checked })}
-                />
-                {LABELS.calendarForm.quiet}
-              </label>
-            </div>
-          )}
-
-          <div className={styles.field}>
-            <label className={`${styles.label} ${styles.checkLabel}`}>
-              <input
-                type="checkbox"
-                checked={(event.status ?? 'confirmed') === 'tentative'}
-                onChange={(e) => updateEvent(id, { status: e.target.checked ? 'tentative' : 'confirmed' })}
-              />
-              Tentative — not confirmed yet, just a placeholder
-            </label>
-          </div>
-
-          <NotifyRuleField
-            item="event"
-            timed={!!event.startTime}
-            rule={eventRule(event)}
-            onChange={(r) => updateEvent(id, eventPatch(r))}
-            labelClassName={`${styles.label} ${styles.checkLabel}`}
-          />
-
-          {/* A task's scheduled event takes no Type of its own: the task has it. */}
-          {!isTaskShadow && <ItemTypePaneField target={{ kind: 'event', id }} />}
-
-          {/* ── Repeat — not offered on a task's scheduled event: the task itself doesn't repeat ── */}
-          {!isTaskShadow && <div className={styles.field}>
-            <RepeatField value={event.repeat ?? null} onChange={(r) => updateEvent(id, { repeat: r })} date={event.date} onDateChange={(d) => updateEvent(id, { date: d, ...(event.endDate && event.endDate <= d ? { endDate: null } : {}) })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
-          </div>}
-
-          <div className={styles.field}>
-            <span className={styles.label}>Links</span>
-            <LinksField links={event.links ?? []} onChange={(next) => updateEvent(id, { links: next })} />
-          </div>
-
-          {!isTaskShadow && (
-            <div className={styles.field}>
-              <span className={styles.label}>{LABELS.taskLinks.event.heading}</span>
-              <EventTasksField type="event" id={id} title={event.title} />
-            </div>
-          )}
-
-          <div className={styles.field}>
-            <span className={styles.label}>Linked items</span>
-            <CrossAppRefPicker
-              value={event.crossAppRefs ?? []}
-              suggestFrom={event.title}
-              newNoteTitle={newNoteTitleFor(event.title, event.date)}
-              onChange={handleCrossAppRefsChange}
-              onNavigate={navigateToCrossAppRef}
-            />
-          </div>
-
-          {allCollections.length > 0 && (
-            <div className={styles.field}>
-              <span className={styles.label}>{LABELS.collection}</span>
-              <CollectionPicker
-                collections={allCollections}
-                value={event.collectionId}
-                onChange={(cid) => updateEvent(id, { collectionId: cid })}
-                noneLabel={`No ${LABELS.collection}`}
-              />
-            </div>
-          )}
+          <CalendarItemFields kind="event" item={event} savedId={id} occurrence={occurrenceDate} isTaskShadow={isTaskShadow}
+            update={(patch) => updateEvent(id, patch as Parameters<typeof updateCalendarEventLinked>[1])}
+            onRefsChange={handleCrossAppRefsChange} onNavigate={navigateToCrossAppRef}
+            typeField={!isTaskShadow ? <ItemTypePaneField target={{ kind: 'event', id }} /> : undefined} />
         </div>
 
         <ItemActionFooter
@@ -400,7 +148,7 @@ export function CalendarEventPane() {
           completed={linkedTask?.completed}
           onToggleComplete={linkedTask ? () => void toggleTaskCompletion(linkedTask.id) : undefined}
           completeOptions={linkedTask ? taskCompletionOptions(linkedTask.id) : []}
-          deleteLabel={event.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.event.toLowerCase()}`}
+          deleteLabel={event.repeat ? series.deleteLabel(LABELS.calendarSeries.deleteAll) : `Delete ${LABELS.calendarItemKind.event.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreEvent(id)}
           onDelete={() => setDialog('delete')}
@@ -413,20 +161,12 @@ export function CalendarEventPane() {
           noun="event"
           itemTitle={event.title}
           archiveNote={event.repeat ? 'The whole repeating series is archived, not just this occurrence.' : undefined}
-          alsoRemoves={event.repeat ? 'and all of its occurrences' : undefined}
+          alsoRemoves={event.repeat && series.scope === 'all' ? 'and all of its occurrences' : undefined}
           canArchive={!isTaskShadow}
           onArchive={handleArchive}
           onDelete={handleDelete}
           onArchiveInstead={() => setDialog('archive')}
           onCancel={closeDialog}
-        />
-      )}
-      {linkPrompt && (
-        <MarkdownLinkPrompt
-          anchorRect={linkPrompt.anchorRect}
-          initialText={linkPrompt.initialText}
-          onConfirm={confirmLink}
-          onCancel={cancelLink}
         />
       )}
     </>

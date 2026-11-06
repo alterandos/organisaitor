@@ -5,6 +5,7 @@ import { useNoteStore } from '@/store/noteStore';
 import { isNoteLocked, noteView } from '@/services/noteSecrets';
 import { liveNoteEditorFor } from '@/services/liveNoteEditor';
 import { MAIN_TAB_ID } from '@/utils/noteTabs';
+import { parseNoteContent } from '@/utils/noteContent';
 import { log, errorMessage } from '@/utils/log';
 import type { NoteId } from '@/types';
 
@@ -67,7 +68,7 @@ export function editNoteText(
     inJson: (json) => {
       let doc: PMNode;
       try {
-        doc = json ? schema.nodeFromJSON(JSON.parse(json)) : schema.topNodeType.createAndFill()!;
+        doc = json ? schema.nodeFromJSON(schema.nodes.section ? parseNoteContent(json) || { type: 'doc' } : JSON.parse(json)) : schema.topNodeType.createAndFill()!;
       } catch (e) {
         log.warn('noteContentEdit', 'could not read the note to change it', errorMessage(e));
         return null;

@@ -58,6 +58,8 @@ export function followMove(tasks: Record<string, Task>, type: EventTargetType, i
   const out: FollowChange[] = [];
   for (const { task, kind } of tasksLinkedTo(type, id, tasks)) {
     if (task.completed || task.archived) continue;
+    // A task made for one date of a series follows that date, not the series (services/eventTaskRules.ts).
+    if (eventLinksOf(task).some((l) => l.targetId === id && l.occurrence)) continue;
     if (kind === 'prepFor' && task.deadline === before.start && (before.start !== after.start || before.startTime !== after.startTime)) {
       const keepTime = task.deadlineTime !== before.startTime;
       out.push({

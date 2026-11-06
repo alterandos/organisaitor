@@ -1,3 +1,4 @@
+import { TYPES_ENABLED } from '@/config/features';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
@@ -6,7 +7,8 @@ import { addScheduleEvent, endeavourSchedule, setScheduleEvent } from '@/service
 import { addStarterSet, applyItemType, setItemType, type TypedTarget } from '@/services/itemTypes';
 import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
 import { trashedBy, deleteForever } from '@/services/trash';
-import { followIdsFor, isBoundedWork, outlineDrafts, scheduleListOf, subjectShort, workBounds, type SubjectItemDraft, type SubjectItemKind } from '@/utils/subjectItems';
+import { setEventTaskRules } from '@/services/eventTaskRules';
+import { WORTH_FIELD, followIdsFor, isBoundedWork, outlineDrafts, scheduleListOf, subjectShort, workBounds, type SubjectItemDraft, type SubjectItemKind } from '@/utils/subjectItems';
 import { boundedRepeat, sameRepeat } from '@/utils/scheduleItems';
 import { isHydrating, onLoaded } from '@/services/sync/hydrating';
 import { followedDates } from '@/utils/repeatFollow';
@@ -47,8 +49,9 @@ function saveScheduleItem(subjectId: CollectionId, name: string, d: SubjectItemD
     return was.id;
   }
   const id = scheduleId ? addScheduleEvent(scheduleId, fields) : cal().addEvent({ ...fields, collectionId: subjectId });
-  // A new item's input has no onClass: given straight after.
+  // A new item's input has no onClass or task rules: given straight after.
   if (id && fields.onClass) cal().updateEvent(id, { onClass: fields.onClass });
+  if (id && d.taskRules?.length) setEventTaskRules(id as CalendarEventId, d.taskRules);
   if (id) typeItem({ kind: 'event', id }, d, undefined);
   return id;
 }
@@ -147,6 +150,29 @@ export function deleteSubjectItem(kind: SubjectItemKind, id: string): void {
   else cal().deleteDeadline(id as CalendarDeadlineId);
 }
 
+// Makes several drafts at once (an outline, the creator's pieces), Schedule items first so Work has
+// its classes to follow, and records how to take each away again (the item, the tasks its Type
+// made, a Schedule made for them) in `made`, to be run in reverse. Returns how many were made and
+// each one's id by its title.
+export function saveDrafts(subjectId: CollectionId, drafts: SubjectItemDraft[], made: (() => void)[]): { count: number; ids: Map<string, string> } {
+  const at = made.length;
+  const hadSchedule = endeavourSchedule(subjectId, '', false);
+  const ids = new Map<string, string>();
+  let count = 0;
+  for (const d of [...drafts].sort((a, b) => Number(a.kind === 'work') - Number(b.kind === 'work'))) {
+    const parts = new Set(Object.keys(useTaskStore.getState().tasks));
+    const id = saveSubjectItem(subjectId, d);
+    if (!id) continue;
+    count++;
+    if (!ids.has(d.title)) ids.set(d.title, id);
+    for (const t of Object.keys(useTaskStore.getState().tasks)) if (!parts.has(t)) made.push(() => deleteTaskWithCleanup(t as TaskId));
+    made.push(() => deleteSubjectItem(d.kind, id));
+  }
+  const schedule = hadSchedule ? null : endeavourSchedule(subjectId, '', false);
+  if (schedule) made.splice(at, 0, () => useScheduleStore.getState().deleteSchedule(schedule));
+  return { count, ids };
+}
+
 // ── A course outline read into a subject (the editor's magic wand) ──
 
 // What the outline would add, before anything is made.
@@ -156,8 +182,14 @@ export function outlineDraftsFor(subjectId: CollectionId, o: CourseOutline): Sub
   if (!subject) return [];
   const start = o.start ?? effectivePeriod(subjectId, collections)?.period.start ?? todayIso();
   const types = Object.values(useItemTypeStore.getState().types);
-  const typeIdOf = (name: string) => types.find((t) => !t.archivedAt && t.name.toLowerCase() === name.toLowerCase())?.id ?? null;
-  return outlineDrafts(o, subjectShort(o.code ?? subject.name), start, typeIdOf);
+  const typeIdOf = (name: string) => (TYPES_ENABLED ? types.find((t) => !t.archivedAt && t.name.toLowerCase() === name.toLowerCase())?.id ?? null : null);
+  const drafts = outlineDrafts(o, subjectShort(o.code ?? subject.name), start, typeIdOf);
+  if (TYPES_ENABLED) return drafts;
+  // Types switched off (config/features.ts): what an assessment is worth goes in its notes.
+  return drafts.map((d) => {
+    const worth = d.typeFields[WORTH_FIELD];
+    return typeof worth === 'number' ? { ...d, typeFields: {}, notes: [LABELS.subjectEditor.worthNote(worth), d.notes].filter(Boolean).join('\n') } : d;
+  });
 }
 
 // Makes them (the University Types first, so they're typed), and gives the subject the outline's
@@ -165,7 +197,7 @@ export function outlineDraftsFor(subjectId: CollectionId, o: CourseOutline): Sub
 export function addOutline(subjectId: CollectionId, o: CourseOutline, opts: { typeTasks?: boolean } = {}): { made: number; undo: () => void } {
   const made: (() => void)[] = [];
   const typesBefore = new Set(Object.keys(useItemTypeStore.getState().types));
-  addStarterSet('university');
+  if (TYPES_ENABLED) addStarterSet('university');
   for (const tid of Object.keys(useItemTypeStore.getState().types)) {
     if (!typesBefore.has(tid)) made.push(() => useItemTypeStore.getState().deleteItemType(tid as ItemTypeId));
   }
@@ -175,18 +207,8 @@ export function addOutline(subjectId: CollectionId, o: CourseOutline, opts: { ty
     tasks.updateCollection(subjectId, { period: { start: o.start, end: o.end, breaks: [] } });
     made.push(() => useTaskStore.getState().updateCollection(subjectId, { period: before?.period ?? null }));
   }
-  const hadSchedule = endeavourSchedule(subjectId, '', false);
-  let count = 0;
-  for (const d of outlineDraftsFor(subjectId, o).map((x) => (opts.typeTasks === false ? { ...x, partIds: [] } : x))) {
-    const parts = new Set(Object.keys(useTaskStore.getState().tasks));
-    const id = saveSubjectItem(subjectId, d);
-    if (!id) continue;
-    count++;
-    for (const t of Object.keys(useTaskStore.getState().tasks)) if (!parts.has(t)) made.push(() => deleteTaskWithCleanup(t as TaskId));
-    made.push(() => deleteSubjectItem(d.kind, id));
-  }
-  const schedule = hadSchedule ? null : endeavourSchedule(subjectId, '', false);
-  if (schedule) made.unshift(() => useScheduleStore.getState().deleteSchedule(schedule));
+  const drafts = outlineDraftsFor(subjectId, o).map((x) => (opts.typeTasks === false ? { ...x, partIds: [] } : x));
+  const { count } = saveDrafts(subjectId, drafts, made);
   const undo = () => { for (const run of [...made].reverse()) for (const entry of trashedBy(run)) deleteForever(entry); };
   return { made: count, undo };
 }

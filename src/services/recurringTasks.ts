@@ -3,7 +3,7 @@ import { addTaskWithCalendar, updateTaskLinked } from '@/services/taskCalendarLi
 import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
 import { deleteForever, trashedBy } from '@/services/trash';
 import { expandRepeat, repeatPattern } from '@/utils/recurrence';
-import { addDaysToIso, todayIso } from '@/utils/date';
+import { addDaysToIso, formatDate, todayIso } from '@/utils/date';
 import { makeItemLink } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
 import type { RepeatConfig, Task, TaskId } from '@/types';
@@ -159,6 +159,7 @@ export function repeatSummary(repeat: RepeatConfig): string {
   const pattern = repeatPattern(repeat);
   const every = L.summaryEvery(repeat.interval, repeat.interval === 1 ? one : many) + (pattern ? ` ${L.onPattern(pattern)}` : '');
   if (repeat.endKind === 'count' && repeat.count) return `${every} · ${L.summaryMore(repeat.count - 1)}`;
-  if (repeat.endKind === 'until' && repeat.until) return `${every} · ${L.summaryUntil(repeat.until)}`;
+  // The end date in the computer's own date format, as every date the app shows (2026-11-05: it was 2026-12-04).
+  if (repeat.endKind === 'until' && repeat.until) return `${every} · ${L.summaryUntil(formatDate(`${repeat.until}T00:00:00`))}`;
   return every;
 }

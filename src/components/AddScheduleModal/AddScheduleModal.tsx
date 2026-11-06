@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { nanoid } from 'nanoid';
 import { DateInput } from '@/components/DateInput/DateInput';
+import { PeriodEditor } from '@/components/PeriodField/PeriodEditor';
 import { useTaskStore } from '@/store/taskStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useCalendarStore } from '@/store/calendarStore';
@@ -17,6 +17,8 @@ import { effectivePeriod } from '@/utils/endeavourPeriod';
 import { createScheduleWithItems, deleteScheduleWithItems, saveScheduleRows } from '@/services/schedules';
 import type { CollectionId, PeriodBreak, ScheduleBlock } from '@/types';
 import styles from './AddScheduleModal.module.css';
+
+const EMPTY_BREAKS: PeriodBreak[] = [];
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
@@ -99,6 +101,7 @@ export function AddScheduleModal() {
   const [itemIds]                       = useState(() => new Set(editingSchedule ? scheduleItems(editingSchedule.id, useCalendarStore.getState().events).map((e) => e.id as string) : []));
   const [blocks,       setBlocks]       = useState<BlockRow[]>(() => editingSchedule ? withItemRows(editingSchedule, useCalendarStore.getState().events).blocks.map(blockToRow) : []);
   const [breaks,       setBreaks]       = useState<PeriodBreak[] | undefined>(() => editingSchedule?.breaks);
+  const [showErrors,   setShowErrors]   = useState(false);
   const [addingBlock,  setAddingBlock]  = useState(false);
   // Scrolls a block's row into view right after it expands — both the ⚙ button and clicking
   // a block in the grid preview go through this, so the edit panel is never left off-screen
@@ -212,6 +215,7 @@ export function AddScheduleModal() {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
+    if (Object.keys(breakErrors).length) { setShowErrors(true); return; }
     const payload = { name: trimmed, color, startDate: startDate || null, endDate: endDate || null, collectionId };
     const rows = blocks.map(({ expanded, ...b }) => b);
     if (editingSchedule) {
@@ -235,6 +239,10 @@ export function AddScheduleModal() {
   const allCollections = Object.values(collectionsRecord);
   const inherited = collectionId ? effectivePeriod(collectionId, collectionsRecord) : null;
   const inheritedFrom = inherited?.period.breaks.length ? collectionsRecord[inherited.from as CollectionId]?.name ?? null : null;
+  const shownBreaks = breaks ?? inherited?.period.breaks ?? EMPTY_BREAKS;
+  // A piece of time off with no name or dates gets a red note under it (CLAUDE.md "A form says what's missing").
+  const breakErrors: Record<string, string> = Object.fromEntries((breaks ?? []).flatMap((b, i): [string, string][] =>
+    !b.label.trim() ? [[`break-${i}`, LABELS.period.breakNeeded]] : !b.from ? [[`break-${i}`, LABELS.period.breakDates]] : []));
   // Dates taken out of an item ("only this one") show as changed in its skip list, not as skips.
   const changedDates = (itemId: string) => new Set(Object.values(events).filter((e) => e.seriesId === itemId && e.seriesDate).map((e) => e.seriesDate as string));
 
@@ -264,44 +272,24 @@ export function AddScheduleModal() {
               <ColorPicker palette="standard" value={color} onChange={setColor} />
             </div>
 
-            <div className={styles.dateRow}>
-              <div className={styles.field}>
-                <label className={styles.label}>Start date</label>
-                <DateInput className={styles.dateInput} value={startDate} onChange={(v) => setStartDate(v)} />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label}>End date</label>
-                <DateInput className={styles.dateInput} value={endDate} min={startDate || undefined} onChange={(v) => setEndDate(v)} />
-              </div>
-            </div>
-            <p className={styles.hint}>Blocks only appear on the calendar within this date range — e.g. a semester's start/end. {LABELS.period.scheduleDates}</p>
-
-            <div className={styles.field}>
-              <span className={styles.label}>{LABELS.period.breaks}</span>
-              {breaks ? (
-                <>
-                  {breaks.map((b) => (
-                    <div key={b.id} className={styles.dateRow} role="group" aria-label={b.label || LABELS.period.breakLabel}>
-                      <input className={styles.input} aria-label={LABELS.period.breakLabel} placeholder={LABELS.period.breakPlaceholder} value={b.label}
-                        onChange={(e) => setBreaks(breaks.map((x) => (x.id === b.id ? { ...x, label: e.target.value } : x)))} />
-                      <DateInput className={styles.dateInput} aria-label={LABELS.period.from} value={b.from}
-                        onChange={(v) => v && setBreaks(breaks.map((x) => (x.id === b.id ? { ...x, from: v, to: x.to < v ? v : x.to } : x)))} />
-                      <DateInput className={styles.dateInput} aria-label={LABELS.period.to} value={b.to} min={b.from}
-                        onChange={(v) => v && setBreaks(breaks.map((x) => (x.id === b.id ? { ...x, to: v } : x)))} />
-                      <button type="button" className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} aria-label={LABELS.period.removeBreak} title={LABELS.period.removeBreak}
-                        onClick={() => setBreaks(breaks.filter((x) => x.id !== b.id))}><TrashIcon width="1em" height="1em" /></button>
-                    </div>
-                  ))}
-                  <div className={styles.dateRow}>
-                    <button type="button" className={styles.addFieldBtn} onClick={() => { const from = startDate || todayIso(); setBreaks([...breaks, { id: nanoid(8), label: '', from, to: from }]); }}>{LABELS.period.addBreak}</button>
-                    {collectionId && <button type="button" className={styles.addFieldBtn} onClick={() => setBreaks(undefined)}>{LABELS.period.scheduleTakeBreaks}</button>}
-                  </div>
-                </>
-              ) : (
-                <>
-                  {inheritedFrom && <p className={styles.hint}>{LABELS.period.scheduleInherited(inheritedFrom)}</p>}
-                  <button type="button" className={styles.addFieldBtn} onClick={() => setBreaks(collectionId ? structuredClone(effectivePeriod(collectionId, collectionsRecord)?.period.breaks ?? []) : [])}>{LABELS.period.scheduleOwnBreaks}</button>
-                </>
+            {/* Its dates and time off, in the one period editor (CLAUDE.md "One period editor"), open from the
+                start. Under an Endeavour with time off it shows that Endeavour's; changing it gives the
+                Schedule its own, and "Take …'s instead" goes back. */}
+            <div className={styles.field} role="group" aria-label={LABELS.period.title}>
+              <span className={styles.label}>{LABELS.period.title}</span>
+              <p className={styles.hint}>Its classes only appear on the calendar within these dates — e.g. a semester's start and end. {LABELS.period.scheduleDates}</p>
+              {breaks === undefined && inheritedFrom && <p className={styles.hint}>{LABELS.period.scheduleInherited(inheritedFrom)}</p>}
+              <PeriodEditor
+                period={{ start: startDate || null, end: endDate || null, breaks: shownBreaks }}
+                errors={showErrors ? breakErrors : {}}
+                onChange={(p) => {
+                  setStartDate(p.start ?? '');
+                  setEndDate(p.end ?? '');
+                  if (p.breaks !== shownBreaks) setBreaks(p.breaks);
+                }}
+              />
+              {breaks !== undefined && collectionId && inherited && (
+                <button type="button" className={styles.addFieldBtn} onClick={() => setBreaks(undefined)}>{LABELS.period.scheduleTakeBreaks}</button>
               )}
             </div>
 

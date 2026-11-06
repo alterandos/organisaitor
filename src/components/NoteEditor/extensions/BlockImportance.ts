@@ -1,19 +1,18 @@
 import { Extension } from '@tiptap/core';
 import { NodeSelection, type EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import { getStructuredTagType } from '@/config/structuredTagTypes';
 import { useNoteStore } from '@/store/noteStore';
 import { entryView, isEntryLocked } from '@/services/noteSecrets';
 import { entryImportance, setEntryImportance } from '@/services/glossary';
 import { NOTE_BLOCK_NODES } from '../blockNodes';
-import { blockPosAt, openBlockPopover, pillButton, popoverClass, registerPillAddition } from './blockDesigns';
-import { IMPORTANCE_LEVELS, importanceLevel } from './importanceLevels';
+import { openBlockPopover, pillButton, popoverClass, registerPillAddition } from './blockDesigns';
+import { IMPORTANCE_LEVELS, importanceLevel, nextImportance } from './importanceLevels';
 import { refreshMarginColumns, registerMarginSource } from './MarginColumn';
 
-// Important blocks and cards (asked for by the user 2026-10-26): the three levels Important text
-// has (Important, Very important, Critical), for a whole block. Set from every block's pill (★
+// Important blocks and cards (asked for by the user 2026-10-26): the levels Important text has
+// (Important, Critical: two since 2026-11-05), for a whole block. Set from every block's pill (★
 // toggles Important, ▾ chooses a level: a quick toggle for the usual case, the levels a click
 // away), its right-click menu (Importance ▸), or Ctrl+1 on a selected block (steps through the
 // levels and off, as on text). Shown as its level's icon in the margin column, beside the block.
@@ -53,8 +52,7 @@ export function setBlockImportance(view: EditorView, pos: number, level: Level):
 }
 
 export function cycleBlockImportance(view: EditorView, pos: number): void {
-  const now = blockImportance(view.state, pos);
-  setBlockImportance(view, pos, (now >= 3 ? 0 : now + 1) as Level);
+  setBlockImportance(view, pos, nextImportance(blockImportance(view.state, pos)));
 }
 
 // The block a whole-block selection holds, or null.
@@ -135,28 +133,6 @@ registerMarginSource('important-blocks', (state) => {
     return false;
   });
   return out;
-});
-
-// Right-click on a block: Importance ▸ with the levels.
-registerContextMenuProvider({
-  id: 'note-editor.block-importance',
-  kind: 'note-editor',
-  order: 7,
-  when: (ctx) => !!ctx.target.closest('[data-note-block]'),
-  items: (ctx, scope) => {
-    const view = (scope.data as { editor: { view: EditorView } }).editor.view;
-    const pos = blockPosAt(view, ctx.target);
-    if (pos === null) return [];
-    const now = blockImportance(view.state, pos);
-    const levels = [
-      ...IMPORTANCE_LEVELS.map((lv) => ({ level: lv.level as Level, label: levelLabel(view.state, pos, lv.level), icon: now === lv.level ? '✓' : lv.icon })),
-      { level: 0 as Level, label: LABELS.importance.notImportant, icon: now === 0 ? '✓' : undefined },
-    ];
-    return [{
-      id: 'block-importance', label: LABELS.importance.menuLevel, icon: '⭐',
-      submenu: [levels.map((l) => ({ id: `block-importance-${l.level}`, label: l.label, icon: l.icon, run: () => setBlockImportance(view, pos, l.level) }))],
-    }];
-  },
 });
 
 // The attribute on every block but a Glossary card (whose level is its record's).

@@ -4,7 +4,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--color-scrim);
   z-index: 102;
   display: flex;
   align-items: flex-end;
@@ -21,13 +21,13 @@
   max-width: 560px;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 1.5rem;
-  box-shadow: 0 -4px 28px rgba(0,0,0,0.14);
+  box-shadow: var(--shadow-sheet);
   max-height: 92vh;
   overflow-y: auto;
 }
 
 @media (min-width: 520px) {
-  .modal { border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+  .modal { border-radius: var(--radius-lg); box-shadow: var(--shadow-modal); }
 }
 
 .header {
@@ -108,7 +108,11 @@
   margin-bottom: 1rem;
 }
 
-.row .field { margin-bottom: 0; flex: 1; min-width: 160px; }
+/* A field in a row never shrinks below what it holds (a date with its time): the row wraps it onto
+   the next line instead, so nothing is drawn over its neighbour (2026-11-05: the due time covered
+   Priority). A snug field (Priority) takes only its own width. */
+.row .field { margin-bottom: 0; flex: 1 1 160px; min-width: min-content; }
+.row .fieldSnug { flex: 0 0 auto; }
 
 .label {
   font-size: 0.78rem;
@@ -165,30 +169,6 @@
   font-size: 0.72rem;
   color: var(--color-text-muted);
 }
-
-.priorityGroup {
-  display: flex;
-  gap: 0.3rem;
-}
-
-.priorityBtn {
-  flex: 1;
-  padding: 0.45rem 0;
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: 0.8rem;
-  font-family: inherit;
-  cursor: pointer;
-  color: var(--color-muted);
-  transition: all 120ms ease;
-}
-
-.priorityBtn:hover { border-color: var(--color-primary); color: var(--color-primary); }
-
-.priority_low    { background: #dcfce7; border-color: #22c55e; color: #15803d; }
-.priority_medium { background: #fef9c3; border-color: #eab308; color: #854d0e; }
-.priority_high   { background: #fee2e2; border-color: #ef4444; color: #b91c1c; }
 
 .select {
   padding: 0.6rem 0.75rem;

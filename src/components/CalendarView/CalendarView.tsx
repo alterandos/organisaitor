@@ -26,7 +26,7 @@ import {
   type TimeGridEntry as TimeGridEntryG,
   type HourLayout,
 } from '@/utils/timeGrid';
-import { eventTypeIcon } from '@/config/calendarEventTypes';
+import { eventKind, eventTypeIcon, occurrenceTitle } from '@/config/calendarEventTypes';
 import { LABELS } from '@/config/labels';
 import { MiniDatePickerPopover } from '@/components/MiniDatePicker/MiniDatePicker';
 import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane';
@@ -38,14 +38,16 @@ import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { CloseIcon, DateCalcIcon } from '@/components/Icons';
 import { CalendarItemHoverCard, type HoverCardItem } from './CalendarItemHoverCard';
 import type { AnchorBox } from '@/utils/floatingPlacement';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
+import { isPictureIcon } from '@/components/IconPicker/iconValue';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type CalDisplayItem =
   | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
-  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean; travelIcon: string; color: string | null; scheduleId: ScheduleId | null }
-  | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
-  | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
+  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; flags?: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean; travelIcon: string; pictureIcon: string | null; color: string | null; scheduleId: ScheduleId | null }
+  | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; flags?: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
+  | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; flags?: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
   // A rhythm stream's occurrence whose stream shows on the calendar (docs/features/endeavours.md
   // phase 4): `marker` draws it small; a click ticks it done. id is its tickKey.
   | { kind: 'rhythm';   id: string; rhythmId: string; streamId: string; occurrenceDate: string; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; done: boolean; marker: boolean; behind: boolean };
@@ -63,6 +65,7 @@ interface SpanSlot {
   important:    boolean;
   background:   boolean;
   travel:       boolean;
+  icon:         string;   // its own or its kind's (eventTypeIcon)
   color:        string | null;
 }
 
@@ -150,6 +153,7 @@ function getWeekSpanSlots(weekDateStrs: string[], spanEvents: CalendarEvent[]): 
       important:    ev.important ?? false,
       background:   ev.background ?? false,
       travel:       !!ev.quiet,
+      icon:         eventTypeIcon(ev),
       color:        ev.color ?? null,
     });
   }
@@ -176,6 +180,25 @@ interface TooltipState {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
+
+// The icon before an item's title, in every view (2026-11-05: timed blocks in the week and day
+// views showed only a journey's): its own or its kind's; a picture icon drawn as itself.
+function CalItemIcon({ item }: { item: CalDisplayItem }) {
+  const pic = item.kind === 'event' ? item.pictureIcon : null;
+  if (!item.typeIcon && !pic) return null;
+  return (
+    <span className={styles.calItemIcon} aria-hidden="true">
+      {pic && <ItemIcon icon={pic} className={styles.calItemPicture} />}{item.typeIcon}
+    </span>
+  );
+}
+
+// What the app adds about an item (❗ important, 🔁 repeats), small and quiet after its time (or
+// its title, with no time), so they don't crowd the icon and title (the user, 2026-11-06).
+function CalItemFlags({ item }: { item: CalDisplayItem }) {
+  const flags = 'flags' in item ? item.flags : '';
+  return flags ? <span className={styles.calItemFlags} aria-hidden="true">{flags}</span> : null;
+}
 
 export function CalendarView() {
   const paneResize = usePaneWidth('calendar-day', { edge: 'left', min: 280, max: 720 });
@@ -313,12 +336,19 @@ export function CalendarView() {
         // The event's own icon takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
         // event auto-created from a task's scheduledAt (see Task.calendarEventId) so the calendar
         // reads as task-linked without changing the event's click/edit behaviour.
-        typeIcon: `${ev.important ? '❗' : ''}${eventTypeIcon(ev) || scheduleIcon || (taskLinkedEventIds.has(ev.id) ? '🕐' : '')}`,
+        // 🔁 on anything that repeats, or a date taken out of a series (2026-11-05: the user couldn't
+        // tell a Schedule's items or a repeating event from a one-off).
+        // What it is before its title (its own or its kind's icon); what the app adds about it (❗, 🔁)
+        // small after its time, so a few at once don't crowd the title (2026-11-06). A kind that
+        // repeats by its nature (a birthday) doesn't say so.
+        typeIcon: eventTypeIcon(ev) || scheduleIcon || (taskLinkedEventIds.has(ev.id) ? '🕐' : ''),
+        flags: `${ev.important ? ITEM_FLAG_ICON.important : ''}${(ev.repeat || ev.seriesId) && !eventKind(ev.eventType).presets.repeat ? ITEM_FLAG_ICON.repeats : ''}`,
         status: ev.status ?? 'confirmed',
         important: ev.important ?? false,
         occurrenceDate: ev.date,
         travel: !!ev.quiet,
         travelIcon: eventTypeIcon(ev),
+        pictureIcon: isPictureIcon(ev.icon) ? ev.icon ?? null : null,
         color: ev.color ?? null,
         scheduleId: ev.scheduleId ?? null,
       };
@@ -333,9 +363,11 @@ export function CalendarView() {
           cur = toDateStr(d);
         }
       } else {
+        // What a date of it says (a birthday: the age it turns: config/calendarEventTypes.ts).
+        const titled = (d: string) => occurrenceTitle(ev, d);
         if (!isOccurrenceSkipped(ev.repeat, ev.date)) push(ev.date, item);
         if (ev.repeat) {
-          for (const d of expandRepeat(ev.date, ev.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d });
+          for (const d of expandRepeat(ev.date, ev.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d, title: titled(d) });
         }
       }
     });
@@ -361,7 +393,8 @@ export function CalendarView() {
         collectionId: rem.collectionId,
         notes: rem.notes,
         links: rem.links,
-        typeIcon: rem.important ? '❗' : '',
+        typeIcon: '',
+        flags: `${rem.important ? ITEM_FLAG_ICON.important : ''}${rem.repeat || rem.seriesId ? ITEM_FLAG_ICON.repeats : ''}`,
         status: rem.status ?? 'confirmed',
         important: rem.important ?? false,
         occurrenceDate: rem.date,
@@ -390,7 +423,8 @@ export function CalendarView() {
         collectionId: dl.collectionId,
         notes: dl.notes,
         links: dl.links,
-        typeIcon: dl.important ? ITEM_FLAG_ICON.important : ITEM_TYPE_ICON.deadline,
+        typeIcon: ITEM_TYPE_ICON.deadline,
+        flags: `${dl.important ? ITEM_FLAG_ICON.important : ''}${dl.repeat || dl.seriesId ? ITEM_FLAG_ICON.repeats : ''}`,
         status: dl.status ?? 'confirmed',
         important: dl.important ?? false,
         occurrenceDate: dl.date,
@@ -890,7 +924,7 @@ export function CalendarView() {
     const date = item.kind === 'task' ? null : item.occurrenceDate;
     const rect = el.getBoundingClientRect();
     setTooltip({
-      item: { kind: item.kind, id: item.id, title: item.title, typeIcon: item.typeIcon, time: item.time, endTime, location, date, notes: item.notes, links, collectionId: item.collectionId },
+      item: { kind: item.kind, id: item.id, title: item.title, typeIcon: item.typeIcon, flags: 'flags' in item ? item.flags : undefined, time: item.time, endTime, location, date, notes: item.notes, links, collectionId: item.collectionId },
       anchor: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
     });
   };
@@ -1027,8 +1061,9 @@ export function CalendarView() {
                   style={getPillStyle(item)}
                   onClick={(e) => handleItemClick(e, item)}
                 >
-                  {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
                   {item.time && <span className={styles.calItemTime}>{formatTime(item.time, clockFormat)}</span>}
+                  <CalItemFlags item={item} />
+                  <CalItemIcon item={item} />
                   <span className={styles.dayListItemTitle}>{item.title}</span>
                 </button>
               );
@@ -1154,11 +1189,11 @@ export function CalendarView() {
                                   className={styles.spanPillBackgroundLabel}
                                   style={{ background: `color-mix(in srgb, ${resolveSpanColor(slot)} 18%, var(--color-surface))`, color: resolveSpanColor(slot) }}
                                 >
-                                  {slot.title}
+                                  {slot.icon && <span className={styles.calItemIcon} aria-hidden="true">{slot.icon}</span>}{slot.title}
                                 </span>
                               </>
                             ) : (
-                              slot.isStart && <span className={styles.spanPillTitle}>{slot.title}</span>
+                              slot.isStart && <span className={styles.spanPillTitle}>{slot.icon && <span className={styles.calItemIcon} aria-hidden="true">{slot.icon}</span>}{slot.title}</span>
                             )}
                           </button>
                         ))}
@@ -1192,9 +1227,11 @@ export function CalendarView() {
                                   onMouseLeave={() => setTooltip(null)}
                                   title=""
                                 >
-                                  {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
                                   {item.time    && <span className={styles.calItemTime}>{formatTime(item.time, clockFormat)}</span>}
+                                  <CalItemFlags item={item} />
+                                  <CalItemIcon item={item} />
                                   <span className={styles.calItemTitle}>{item.title}</span>
+                                  <CalItemFlags item={item} />
                                 </button>
                               );
                             })}
@@ -1263,11 +1300,11 @@ export function CalendarView() {
                               className={styles.spanPillBackgroundLabel}
                               style={{ background: `color-mix(in srgb, ${resolveSpanColor(slot)} 18%, var(--color-surface))`, color: resolveSpanColor(slot) }}
                             >
-                              {slot.title}
+                              {slot.icon && <span className={styles.calItemIcon} aria-hidden="true">{slot.icon}</span>}{slot.title}
                             </span>
                           </>
                         ) : (
-                          slot.isStart && <span className={styles.spanPillTitle}>{slot.title}</span>
+                          slot.isStart && <span className={styles.spanPillTitle}>{slot.icon && <span className={styles.calItemIcon} aria-hidden="true">{slot.icon}</span>}{slot.title}</span>
                         )}
                       </button>
                     ))}
@@ -1292,8 +1329,9 @@ export function CalendarView() {
                               onMouseLeave={() => setTooltip(null)}
                               title=""
                             >
-                              {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
+                              <CalItemIcon item={item} />
                               <span className={styles.calItemTitle}>{item.title}</span>
+                              <CalItemFlags item={item} />
                             </button>
                           );
                         })}
@@ -1383,9 +1421,9 @@ export function CalendarView() {
                                 title=""
                               >
                                 <span className={styles.weekTimeBlockTime}>
-                                  {formatItemTimeLabel(item, resizing ? dragPreview!.endMin : endMin)}
+                                  {formatItemTimeLabel(item, resizing ? dragPreview!.endMin : endMin)}<CalItemFlags item={item} />
                                 </span>
-                                <span className={styles.weekTimeBlockTitle}>{isTravelItem(item) && item.kind === 'event' && `${item.travelIcon} `}{item.title}</span>
+                                <span className={styles.weekTimeBlockTitle}><CalItemIcon item={item} />{item.title}</span>
                                 {getItemLocation(item) && (
                                   <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                                 )}
@@ -1461,8 +1499,9 @@ export function CalendarView() {
                             onMouseEnter={(e) => handleItemMouseEnter(e, item)}
                             onMouseLeave={() => setTooltip(null)}
                           >
-                            {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
+                            <CalItemIcon item={item} />
                             <span className={styles.calItemTitle}>{item.title}</span>
+                            <CalItemFlags item={item} />
                           </button>
                         );
                       })}
@@ -1543,9 +1582,9 @@ export function CalendarView() {
                               onMouseLeave={() => setTooltip(null)}
                             >
                               <span className={styles.weekTimeBlockTime}>
-                                {formatItemTimeLabel(item, liveEndMin)}
+                                {formatItemTimeLabel(item, liveEndMin)}<CalItemFlags item={item} />
                               </span>
-                              <span className={styles.weekTimeBlockTitle}>{isTravelItem(item) && item.kind === 'event' && `${item.travelIcon} `}{item.title}</span>
+                              <span className={styles.weekTimeBlockTitle}><CalItemIcon item={item} />{item.title}</span>
                               {getItemLocation(item) && (
                                 <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                               )}
@@ -1607,8 +1646,9 @@ export function CalendarView() {
                       style={getPillStyle(item)}
                       onClick={(e) => { handleItemClick(e, item); setDayPaneDate(null); }}
                     >
-                      {item.typeIcon && <span className={styles.calItemIcon}>{item.typeIcon}</span>}
                       {item.time    && <span className={styles.calItemTime}>{formatTime(item.time, clockFormat)}</span>}
+                      <CalItemFlags item={item} />
+                      <CalItemIcon item={item} />
                       <span>{item.title}</span>
                     </button>
                   );

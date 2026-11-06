@@ -7,6 +7,7 @@ import { usePictureStore } from '@/store/pictureStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTrashStore } from '@/store/trashStore';
+import { useCalendarStore } from '@/store/calendarStore';
 import { encryptField, decryptField, isVaultUnlocked, onVaultStatus } from '@/services/vault';
 import { entryView, isEntryLocked, isNoteLocked, noteView } from '@/services/noteSecrets';
 import { editNoteContent } from '@/services/noteContentEdit';
@@ -245,6 +246,7 @@ function plainUses(): Set<string> | null {
     add(entryText(e));
   }
   for (const t of Object.values(noteTags)) if (t.backdrop?.kind === 'picture') used.add(t.backdrop.pictureId);
+  for (const e of Object.values(useCalendarStore.getState().events)) for (const id of e.pictureIds ?? []) used.add(id);
   const app = useSettingsStore.getState().noteBackdrop;
   if (app?.kind === 'picture') used.add(app.pictureId);
   for (const t of Object.values(useTrashStore.getState().entries)) {

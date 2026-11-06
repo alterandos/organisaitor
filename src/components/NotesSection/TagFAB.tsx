@@ -3,11 +3,11 @@ import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { BUILTIN_TAGS, type BuiltinTag } from '../NoteEditor/builtinTags';
-import { textTagChoices } from '../NoteEditor/textTags';
+import { markDigit } from '../NoteEditor/textMarks';
 import { dueReviews } from '@/services/noteReview';
 import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { GlossaryIcon, HubIcon, MapIcon, ReviewIcon } from '@/components/Icons';
+import { ClarifyIcon, GlossaryIcon, HubIcon, MapIcon, ReviewIcon } from '@/components/Icons';
 import styles from './TagFAB.module.css';
 
 export function TagFAB() {
@@ -22,8 +22,8 @@ export function TagFAB() {
   const closeNoteTagView     = useUIStore((s) => s.closeNoteTagView);
 
   const userTags = Object.values(noteTagsRecord);
-  // The Ctrl+digit each tag answers to in the editor (textTags.ts), shown beside it.
-  const hotkeyOf = (id: string) => { const n = textTagChoices(noteTagsRecord).findIndex((t) => t.id === id) + 1; return n >= 1 && n <= 9 ? n : ''; };
+  // The Ctrl+digit each tag answers to in the editor (textMarks.ts), shown beside it.
+  const hotkeyOf = (id: string) => markDigit(noteTagsRecord, id) ?? '';
   const setNotesView      = useUIStore((s) => s.setNotesView);
   const notesRecord       = useNoteStore((s) => s.notes);
   // Counted when the panel opens (and when notes change while it's open), never on every render.
@@ -65,6 +65,9 @@ export function TagFAB() {
             </button>
             <button className={styles.viewBtn} onClick={() => { setOpen(false); setNotesView('review'); }} title={LABELS.review.openHint}>
               <ReviewIcon className={styles.viewIcon} />{LABELS.review.open(dueCount)}
+            </button>
+            <button className={styles.viewBtn} onClick={() => { setOpen(false); setNotesView('clarify'); }} title={LABELS.clarify.openHint}>
+              <ClarifyIcon className={styles.viewIcon} />{LABELS.clarify.title}
             </button>
             <button className={styles.viewBtn} onClick={() => { setOpen(false); setNotesView('hubs'); }} title={LABELS.hubs.viewHint}>
               <HubIcon className={styles.viewIcon} />{LABELS.hubs.title}

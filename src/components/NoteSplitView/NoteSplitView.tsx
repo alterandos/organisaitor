@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { hasOpenOverlay } from '@/hooks/useEscapeClose';
 import { notePaneCount, useUIStore } from '@/store/uiStore';
 import './openBeside';
 import { NoteEditor } from '@/components/NoteEditor/NoteEditor';
@@ -50,6 +51,26 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
       />
     </div>
   );
+  // Ctrl+PgUp / Ctrl+PgDn: the previous / next note side by side (2026-11-05). Caught on the window
+  // before the editor's own capture listener, which cycles a note's tabs with them while one note
+  // is open (Ctrl+Tab still does, side by side too).
+  useEffect(() => {
+    if (n < 2) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.metaKey || (e.key !== 'PageUp' && e.key !== 'PageDown')) return;
+      const grid = gridRef.current;
+      const active = document.activeElement;
+      if (!grid || hasOpenOverlay() || (active && active !== document.body && !grid.contains(active))) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const next = (useUIStore.getState().focusedNotePane + (e.key === 'PageDown' ? 1 : -1) + n) % n;
+      focusPane(next);
+      const pane = grid.querySelector<HTMLElement>(`[data-note-pane="${next}"]`);
+      (pane?.querySelector<HTMLElement>('.ProseMirror') ?? pane)?.focus();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [n, focusPane]);
   const areas = ['a', 'b', 'c', 'd'];
   const openIds = new Set(panes.filter((p): p is string => !!p));
 
@@ -76,6 +97,8 @@ export function NoteSplitView({ focusSignal, onNavReturn }: Props) {
               onMouseDownCapture={() => focusPane(i)}
               onFocusCapture={() => focusPane(i)}
               aria-label={`${i + 1}`}
+              data-note-pane={i}
+              tabIndex={-1}
             >
               {noteId ? (
                 <NoteEditor

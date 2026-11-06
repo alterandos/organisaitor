@@ -1,68 +1,61 @@
 import { useCalendarStore } from '@/store/calendarStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { onLoaded } from '@/services/sync/hydrating';
-import { addBuiltInType } from '@/services/itemTypes';
-import { builtInKeys, eventPresets } from '@/utils/itemTypes';
-import type { CalendarEvent, CalendarEventType, ItemTypeId, TravelMode } from '@/types';
+import { builtInKeys } from '@/utils/itemTypes';
+import { EVENT_TYPE_ICON, TRAVEL_MODES } from '@/config/calendarEventTypes';
+import type { CalendarEvent, CalendarEventType, TravelMode } from '@/types';
 
-// The event's own type (birthday, travel) retired for Types (2026-11-03, agreed with the user).
-// What still says "birthday" or "travel" (an event from before, an import, the agent, words read as
-// a birthday or a flight) is turned here, and only here, into the default Type (Birthday, or a
-// Journey of its mode: config/builtInTypes.ts EVENT_DEFAULTS), the person's own copy made the first
-// time, with that Type's icon and Show quieter. An event that already has a Type keeps it.
+// Event kinds are back (2026-11-05, agreed with the user: a few built in, config/calendarEventTypes.ts,
+// instead of Types). On 2026-11-03 every birthday and journey was turned into the default event
+// with a Type or just an icon and Show quieter; this turns them back, and only this: an event whose
+// Type was the default Birthday or a Journey (by its mode), or with no Type but the icon and look a
+// birthday or journey was given (🎉 repeating yearly; a journey's icon, shown quieter). Its icon goes
+// back to following its kind. Run at startup and after each sync load; an event that already has a
+// kind is left alone.
 
-const isLegacy = (ev: CalendarEvent) => ev.eventType === 'birthday' || ev.eventType === 'travel';
+const MODE_BY_ICON = new Map(TRAVEL_MODES.map((m) => [m.icon, m.value]));
 
-// The person's copy of the default Type for a birthday or a journey (by its mode); null otherwise.
-export function typeForEventKind(eventType: CalendarEventType | undefined, travelMode: TravelMode | null | undefined): ItemTypeId | null {
-  if (eventType === 'birthday') return addBuiltInType('birthday');
-  if (eventType === 'travel') return addBuiltInType(travelMode ?? 'journey');
+// The kind an event should have, from what it was converted to; null if it's an ordinary event.
+export function restoredKind(ev: CalendarEvent, keys: string[]): { eventType: CalendarEventType; travelMode: TravelMode | null } | null {
+  if ((ev.eventType ?? 'default') !== 'default') return null;
+  if (keys.includes('birthday')) return { eventType: 'birthday', travelMode: null };
+  if (keys.includes('journey')) return { eventType: 'travel', travelMode: TRAVEL_MODES.find((m) => keys.includes(m.value))?.value ?? null };
+  if (ev.typeId) return null;
+  if (ev.icon === EVENT_TYPE_ICON.birthday && ev.repeat?.freq === 'yearly') return { eventType: 'birthday', travelMode: null };
+  if (ev.quiet && ev.icon && (ev.icon === '🧳' || ev.icon === EVENT_TYPE_ICON.travel || MODE_BY_ICON.has(ev.icon))) return { eventType: 'travel', travelMode: MODE_BY_ICON.get(ev.icon) ?? null };
   return null;
 }
 
 let running = false;
 
-export function convertLegacyEventTypes(): number {
+export function restoreEventKinds(): number {
   if (running) return 0;
   running = true;
   try {
-    const legacy = Object.values(useCalendarStore.getState().events).filter(isLegacy);
-    for (const ev of legacy) {
-      const typeId = ev.typeId ?? typeForEventKind(ev.eventType, ev.travelMode);
-      const presets = eventPresets(useItemTypeStore.getState().types, typeId);
-      useCalendarStore.getState().updateEvent(ev.id, {
-        eventType:  'default',
-        travelMode: null,
-        typeId,
-        typeFields: ev.typeFields ?? {},
-        icon:       ev.icon ?? presets?.icon ?? null,
-        quiet:      ev.quiet ?? (ev.eventType === 'travel' || !!presets?.quiet),
-      });
+    const types = useItemTypeStore.getState().types;
+    let n = 0;
+    for (const ev of Object.values(useCalendarStore.getState().events)) {
+      const kind = restoredKind(ev, builtInKeys(types, ev.typeId));
+      if (!kind) continue;
+      // The icon it was given by the conversion: back to following its kind (a journey's mode).
+      const given = ev.icon === EVENT_TYPE_ICON[kind.eventType] || (kind.eventType === 'travel' && !!ev.icon && (ev.icon === '🧳' || MODE_BY_ICON.has(ev.icon)));
+      useCalendarStore.getState().updateEvent(ev.id, { ...kind, icon: given ? null : ev.icon ?? null });
+      n++;
     }
-    return legacy.length;
+    return n;
   } finally {
     running = false;
   }
 }
 
-// At startup, after each sync load, and whenever an event arrives still saying birthday or travel.
-export function initEventTypeConversion(): () => void {
-  convertLegacyEventTypes();
-  const offLoaded = onLoaded(() => { convertLegacyEventTypes(); });
-  const offStore = useCalendarStore.subscribe((s, prev) => {
-    if (s.events !== prev.events && Object.values(s.events).some(isLegacy)) convertLegacyEventTypes();
-  });
-  return () => { offLoaded(); offStore(); };
+export function initEventKinds(): () => void {
+  restoreEventKinds();
+  return onLoaded(() => { restoreEventKinds(); });
 }
 
-// What an event would have said before: 'birthday' or 'travel' (with its mode) from its Type, for
-// what still compares in those words (an import checking whether its copy changed, or matching a
-// birthday it already has).
-const MODES: TravelMode[] = ['flight', 'train', 'bus', 'car', 'ferry'];
+// An event's kind and mode, for what compares them (an import checking whether its copy changed, or
+// matching a birthday it already has): its own, or the one it will be given back.
 export function legacyKindOf(ev: CalendarEvent): { eventType: CalendarEventType; travelMode: TravelMode | null } {
-  if (isLegacy(ev)) return { eventType: ev.eventType, travelMode: ev.travelMode ?? null };
-  const keys = builtInKeys(useItemTypeStore.getState().types, ev.typeId);
-  if (keys.includes('birthday')) return { eventType: 'birthday', travelMode: null };
-  if (keys.includes('journey')) return { eventType: 'travel', travelMode: MODES.find((m) => keys.includes(m)) ?? null };
-  return { eventType: ev.eventType, travelMode: null };
+  if (ev.eventType === 'birthday' || ev.eventType === 'travel') return { eventType: ev.eventType, travelMode: ev.travelMode ?? null };
+  return restoredKind(ev, builtInKeys(useItemTypeStore.getState().types, ev.typeId)) ?? { eventType: ev.eventType, travelMode: null };
 }

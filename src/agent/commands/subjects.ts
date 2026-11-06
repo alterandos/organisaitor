@@ -1,3 +1,5 @@
+import { LABELS } from '@/config/labels';
+import { TYPES_ENABLED } from '@/config/features';
 import { z } from 'zod';
 import { defineCommand } from '@/agent/types';
 import { read, write } from '@/agent/access';
@@ -61,12 +63,14 @@ function itemOut(d: SubjectItemDraft, id: string) {
 
 const itemFields = {
   title:  z.string().trim().min(1).max(200),
-  type:   z.string().trim().max(100).nullish().describe('A Type by name (Lecture, Tutorial, Assessment, Essay, Exam, Reading…), from get_subject or get_context'),
+  type:   z.string().trim().max(100).nullish().describe(TYPES_ENABLED ? 'A Type by name (Lecture, Tutorial, Assessment, Essay, Exam, Reading…), from get_subject or get_context' : 'Types are switched off for now: leave this out'),
   date:   dateStr.describe('Schedule: its (first) date. Work: when it is due. Ignored when followClass is given'),
   start:  timeStr.nullish().describe('Schedule: from. Work: due by'),
   end:    timeStr.nullish().describe('Schedule only: until'),
   place:  z.string().trim().max(300).nullish().describe('Schedule only: where'),
-  worth:  z.number().min(0).max(100).nullish().describe('Work only: what it counts for, in percent (kept in its Type\'s Weight field, so give a Type that has one, such as Assessment)'),
+  worth:  z.number().min(0).max(100).nullish().describe(TYPES_ENABLED
+    ? 'Work only: what it counts for, in percent (kept in its Type\'s Weight field, so give a Type that has one, such as Assessment)'
+    : 'Work only: what it counts for, in percent (kept as the first line of its notes, "Worth 40%")'),
   notes:  z.string().max(2000).nullish().describe('Anything else, e.g. "best 8 of 9 count"'),
   repeat: repeatSchema.nullish().describe('How it repeats. A subject\'s repeats end with its period and skip its breaks by themselves'),
   onDates: z.array(dateStr).min(1).max(60).optional().describe('Instead of repeat: every date it falls on (an almost-weekly quiz)'),
@@ -78,6 +82,13 @@ const itemFields = {
 
 type ItemInput = { [K in keyof typeof itemFields]?: z.output<(typeof itemFields)[K]> };
 
+// Types switched off: an item's worth is the first line of its notes ("Worth 40%"), replaced when it changes.
+const WORTH_LINE = /^Worth \d+(?:\.\d+)?%$/;
+function withWorthNote(notes: string | null, worth: number | null): string | null {
+  const rest = (notes ?? '').split('\n').filter((l) => !WORTH_LINE.test(l.trim())).join('\n').trim();
+  return [worth !== null ? LABELS.subjectEditor.worthNote(worth) : '', rest].filter(Boolean).join('\n') || null;
+}
+
 // The draft an input describes, on top of `base` (a new item's blank, or the item as it is).
 function applyInput(base: SubjectItemDraft, i: ItemInput): SubjectItemDraft {
   const work = base.kind === 'work';
@@ -86,13 +97,20 @@ function applyInput(base: SubjectItemDraft, i: ItemInput): SubjectItemDraft {
   if (i.repeat && i.onDates) throw new AgentError('invalid', 'Give repeat or onDates, not both.');
   const d: SubjectItemDraft = { ...base };
   if (i.title !== undefined) d.title = i.title;
-  if (i.type !== undefined) d.typeId = typeIdOf(i.type);
+  // Types are switched off for now (config/features.ts): none can be given, and worth goes in the notes.
+  if (!TYPES_ENABLED && i.type) throw new AgentError('invalid', 'Types are switched off in this app for now: leave type out (put what kind of item it is in its title or notes).');
+  if (i.type !== undefined) d.typeId = TYPES_ENABLED ? typeIdOf(i.type) : null;
   if (i.date !== undefined) d.date = i.date;
   if (i.start !== undefined) d.start = i.start ?? null;
   if (i.end !== undefined) d.end = i.end ?? null;
   if (i.place !== undefined) d.place = i.place ?? null;
-  if (i.worth !== undefined) d.typeFields = { ...d.typeFields, [WORTH_FIELD]: i.worth ?? null };
-  if (i.notes !== undefined) d.notes = i.notes ?? null;
+  if (i.notes !== undefined) {
+    // Types switched off: new notes keep the worth line they replace, unless a worth is given too.
+    const kept = TYPES_ENABLED ? null : (base.notes ?? '').split('\n').map((l) => l.trim()).find((l) => WORTH_LINE.test(l));
+    d.notes = [kept, i.notes].filter(Boolean).join('\n') || null;
+  }
+  if (i.worth !== undefined && TYPES_ENABLED) d.typeFields = { ...d.typeFields, [WORTH_FIELD]: i.worth ?? null };
+  if (i.worth !== undefined && !TYPES_ENABLED) d.notes = withWorthNote(d.notes, i.worth ?? null);
   if (i.repeat !== undefined) { d.repeat = i.repeat ? toRepeatConfig(i.repeat) : null; d.follow = null; }
   if (i.onDates) {
     const dates = [...new Set(i.onDates)].sort();
@@ -102,7 +120,7 @@ function applyInput(base: SubjectItemDraft, i: ItemInput): SubjectItemDraft {
   }
   if (i.followClass) { d.follow = { title: i.followClass.title, offsetDays: i.followClass.offsetDays }; d.repeat = null; }
   assertOrder(d.start, d.end, 'Times');
-  if (i.worth != null) {
+  if (i.worth != null && TYPES_ENABLED) {
     const types = Object.fromEntries(read.itemTypes().map((t) => [t.id, t]));
     if (!resolveItemType(types, d.typeId)?.fields.some((f) => f.id === WORTH_FIELD)) throw new AgentError('invalid', 'worth is kept in a Type\'s Weight field: give a type that has one, such as Assessment.');
   }

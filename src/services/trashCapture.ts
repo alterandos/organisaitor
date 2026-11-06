@@ -1,3 +1,4 @@
+import type { EndeavourTemplateDef } from '@/types/templates';
 import { nanoid } from 'nanoid';
 import { now, formatDate } from '@/utils/date';
 import { LABELS } from '@/config/labels';
@@ -34,6 +35,7 @@ interface EntityMap {
   converter: CustomConverter;
   itemType: ItemType;
   goal: Goal;
+  endeavourTemplate: EndeavourTemplateDef;
 }
 
 interface ResolvedContext {
@@ -107,6 +109,7 @@ const RESOLVERS: { [K in TrashableKind]: (e: EntityMap[K]) => ResolvedContext } 
   converter: (c) => ({ title: c.name, contextLine: LABELS.converters.noun, sourceApp: 'suite', sourceSection: LABELS.converters.title }),
   itemType: (t) => ({ title: t.name, contextLine: LABELS.itemTypes.noun, sourceApp: 'organizer', sourceSection: LABELS.itemTypes.title }),
   goal: (g) => ({ title: g.title, contextLine: LABELS.goals.noun, sourceApp: 'suite', sourceSection: LABELS.views.endeavours }),
+  endeavourTemplate: (t) => ({ title: t.name, contextLine: LABELS.templates.noun, sourceApp: 'suite', sourceSection: LABELS.views.endeavours }),
 };
 
 export function moveToTrash<K extends TrashableKind>(

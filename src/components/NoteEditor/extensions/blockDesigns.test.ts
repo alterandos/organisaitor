@@ -97,7 +97,7 @@ describe('frames fit around what a block draws', () => {
     let pos = -1;
     editor.state.doc.descendants((n, p) => { if (pos < 0 && n.type.name === 'cycle') pos = p; });
     const frames = frameButtons(editor.view, () => pos + 1, editor.state.doc.nodeAt(pos)!.attrs);
-    expect([...frames.querySelectorAll('[data-block-frame]')].map((b) => b.getAttribute('data-block-frame'))).toEqual(['outlined', 'shaded', 'options']);
+    expect([...frames.querySelectorAll('[data-block-frame]')].map((b) => b.getAttribute('data-block-frame'))).toEqual(['outlined', 'options']);   // Shade isn't in the pill (2026-11-05)
   });
 
   it('an outlined ring whose side cards hang outside it gets a wider frame', () => {

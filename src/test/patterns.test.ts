@@ -856,7 +856,7 @@ describe('pattern: styles use the design tokens in index.css (CLAUDE.md "Design 
   // agreed (2026-10-09). Replace them as files are touched; the counts may only go down. When
   // this fails because a count went DOWN, lower the number here to lock the gain in. When it
   // fails because one went UP, use the token (var(--text-sm), var(--space-3), var(--z-toast)…).
-  const BASELINE = { hex: 123, fontSize: 1204, zIndex: 136, radius: 303, shadow: 121 };
+  const BASELINE = { hex: 114, fontSize: 1177, zIndex: 131, radius: 299, shadow: 62 };
   const CSS = walk(SRC, ['.css']).filter((f) => f.endsWith('.module.css'))
     .map((f) => fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''));
   const count = (re: RegExp) => CSS.reduce((n, s) => n + (s.match(re) ?? []).length, 0);
@@ -1081,6 +1081,36 @@ describe('pattern: pictures are stored once, through services/pictures.ts (CLAUD
   });
 });
 
+describe('pattern: modals and panes take their dim and shadows from tokens (CLAUDE.md "Design tokens and theming")', () => {
+  it('no hand-written backdrop dim, modal, sheet or pane shadow in a *.module.css', () => {
+    const literal = [
+      /background: rgba\(0, ?0, ?0, ?0\.(45|4|35|25)\)/,
+      /box-shadow: 0 8px (40|32)px rgba\(0, ?0, ?0/,
+      /box-shadow: 0 -4px 28px rgba\(0, ?0, ?0/,
+      /box-shadow: -?4px 0 (16|20|24)px rgba\(0, ?0, ?0/,
+    ];
+    const hits: string[] = [];
+    for (const f of walk(SRC, ['.css']).filter((x) => x.endsWith('.module.css'))) {
+      fs.readFileSync(f, 'utf8').split('\n').forEach((line, i) => { if (literal.some((r) => r.test(line))) hits.push(`${path.relative(ROOT, f)}:${i + 1}`); });
+    }
+    expect(hits).toEqual([]);
+  });
+});
+
+describe('pattern: a picture is given through components/PictureInput (CLAUDE.md "Adding pictures to something")', () => {
+  // Waiting for their retrofit (BACKLOG.md "Pattern retrofit backlog"): the card's picture slot
+  // (its design is the user's to do) and the icon picker's own file box.
+  const KNOWN = ['src/components/NoteEditor/extensions/GlossaryCardBody.tsx', 'src/components/IconPicker/IconField.tsx'];
+  it('no picture file box, and no reading a picture off the clipboard or a drop, outside it', () => {
+    const own = (r: string) => r.startsWith('src/components/PictureInput/');
+    const hits = SOURCE_FILES.map((f) => [rel(f), fs.readFileSync(f, 'utf8')] as const)
+      .filter(([r, t]) => !own(r) && !/\.test\.tsx?$/.test(r) && (/accept="image/.test(t) || /function (imageFileFrom|clipboardImage)\b/.test(t)))
+      .map(([r]) => r)
+      .filter((r) => !KNOWN.includes(r));
+    expect(hits).toEqual([]);
+  });
+});
+
 describe('pattern: the editor library\'s classes are :global in scoped CSS (CLAUDE.md "Design tokens and theming")', () => {
   it('no .ProseMirror-… class in a *.module.css outside :global(…), where CSS Modules would rename it and the rule would match nothing', () => {
     const hits: string[] = [];
@@ -1099,7 +1129,7 @@ describe('pattern: the editor library\'s classes are :global in scoped CSS (CLAU
 
 describe('pattern: marks on text keep out of the palette (CLAUDE.md "Colours a person picks")', () => {
   // The marks the app draws over words to say what they are. A new one joins this list.
-  const TEXT_MARKS = ['[data-artifact-type]', '[data-term]', '[data-dict-word]', '[data-hub-ref]', '[data-autolink]', '[data-concept-ref]', '[data-concept-hover]', '[data-unsure-flag]', '[data-unsure-marker]', '[data-number-ready]'];
+  const TEXT_MARKS = ['[data-artifact-type]', '[data-term]', '[data-dict-word]', '[data-hub-ref]', '[data-autolink]', '[data-concept-ref]', '[data-concept-hover]', '[data-unsure-flag]', '[data-unsure-marker]', '[data-clarify]', '[data-clarify-marker]', '[data-review]', '[data-number-ready]'];
   it('no rule for a text mark uses a palette colour (--color-swatch-*), which is kept for colours a person picks', () => {
     const hits: string[] = [];
     for (const f of walk(SRC, ['.css'])) {
@@ -1287,26 +1317,46 @@ describe('pattern: a block\'s parts are moved, duplicated and deleted through th
   });
 });
 
-describe('pattern: Edit opens the template\'s editor (CLAUDE.md "Type system")', () => {
-  // Which editor an Endeavour opens in is decided once, by uiStore.openEditCollection through
-  // config/templateEditors.ts; an Edit button never checks the template itself (adopted 2026-10-30).
-  it('only the registry, uiStore and the places that open or mount an editor read it', () => {
-    const ALLOWED = new Set([
-      'src/config/templateEditors.ts', 'src/store/uiStore.ts', 'src/App.tsx',                 // the registry, the routing, the mounts
-      'src/components/AddCollectionModal/AddCollectionModal.tsx',                               // "Edit as" a subject / a semester
-      'src/components/EndeavourTemplateModal/EndeavourTemplateModal.tsx',                       // opens the editor once made
-    ]);
-    const hits = SOURCE_FILES
-      .filter((f) => /config\/templateEditors'|'(?:subject|semester)-editor'/.test(fs.readFileSync(f, 'utf8')))
-      .map((f) => path.relative(ROOT, f).replace(/\\/g, '/'))
-      .filter((f) => !ALLOWED.has(f));
-    expect(hits).toEqual([]);
+describe('pattern: one form for an Endeavour, one place for what\'s in it (CLAUDE.md "Type system")', () => {
+  // Agreed with the user 2026-11-04: an Endeavour is made and edited in one form
+  // (components/EndeavourCreator), and what's in it is added and opened only through
+  // components/EndeavourPieces, on its home. The template editors and the separate edit form
+  // were retired; their Schedule/Work lists, subjects and suggestions had each grown their own.
+  const rel = (f: string) => path.relative(ROOT, f).replace(/\\/g, '/');
+  it('Edit always opens the one form', () => {
+    const ui = fs.readFileSync(path.join(SRC, 'store', 'uiStore.ts'), 'utf8');
+    expect(ui).toContain("openEditCollection:  (collection) => set({ editingCollection: collection, openModal: 'add-collection' })");
+    expect(fs.existsSync(path.join(SRC, 'components', 'AddCollectionModal'))).toBe(false);
+    expect(fs.existsSync(path.join(SRC, 'components', 'TemplateEditors'))).toBe(false);
   });
-  it('no component picks an editor by comparing an Endeavour\'s template', () => {
+  it('only the form edits an Endeavour\'s links, and only EndeavourPieces offers the kinds of thing to add', () => {
+    const links = TSX_FILES.filter((f) => !f.endsWith('.test.tsx') && /<EndeavourLinksField/.test(fs.readFileSync(f, 'utf8'))).map(rel);
+    expect(links).toEqual(['src/components/EndeavourCreator/EndeavourCreator.tsx']);
+    const adders = TSX_FILES.filter((f) => !f.endsWith('.test.tsx'))
+      .filter((f) => { const t = fs.readFileSync(f, 'utf8'); return t.includes('showAddSchedule(') && t.includes('showAddList(') && t.includes('showAddTracker('); })
+      .map(rel);
+    expect(adders).toEqual(['src/components/EndeavourPieces/EndeavourPieces.tsx']);
+    expect(fs.readFileSync(path.join(SRC, 'components', 'EndeavoursSection', 'EndeavourHome.tsx'), 'utf8')).toContain('<EndeavourPieces');
+  });
+  it('no component picks what to do by comparing an Endeavour\'s template', () => {
     const hits = SOURCE_FILES
-      .filter((f) => f.includes(`${path.sep}components${path.sep}`) && !f.includes(`${path.sep}TemplateEditors${path.sep}`))
-      .filter((f) => /templateId\s*===\s*'(?:subject|semester|training-plan|project)'/.test(fs.readFileSync(f, 'utf8')));
-    expect(hits.map((f) => path.relative(ROOT, f))).toEqual([]);
+      .filter((f) => f.includes(`${path.sep}components${path.sep}`))
+      .filter((f) => /(?:templateId|template\??\.id)\s*===\s*'(?:subject|semester|training-plan|project)'/.test(fs.readFileSync(f, 'utf8')));
+    expect(hits.map(rel)).toEqual([]);
+  });
+});
+
+describe('pattern: one period editor (CLAUDE.md "Type system")', () => {
+  // An Endeavour's dates, time off and exam period are drawn only by
+  // components/PeriodField/PeriodEditor (adopted 2026-11-04: the creator had grown a copy that
+  // always showed the exam dates; a Schedule's own breaks moved onto it 2026-11-05).
+  const KNOWN: string[] = [];
+  it('no other component edits breaks with date inputs', () => {
+    const hits = TSX_FILES.filter((f) => !f.endsWith('.test.tsx'))
+      .filter((f) => { const t = fs.readFileSync(f, 'utf8'); return t.includes('<DateInput') && /breaks\.map\(/.test(t); })
+      .map((f) => path.relative(ROOT, f).replace(/\\/g, '/'))
+      .filter((f) => f !== 'src/components/PeriodField/PeriodEditor.tsx' && !KNOWN.includes(f));
+    expect(hits).toEqual([]);
   });
 });
 
@@ -1369,6 +1419,26 @@ describe('pattern: deleting something empty doesn\'t ask (CLAUDE.md "Confirmatio
     const calls = SOURCE_FILES.filter((f) => !f.endsWith('dialogs.ts'))
       .flatMap((f) => fs.readFileSync(f, 'utf8').split('\n').filter((l) => l.includes('confirmDelete(') && !l.includes('import')));
     expect(calls.filter((l) => !l.includes('empty')).length).toBeLessThanOrEqual(NOT_YET);
+  });
+});
+
+describe('pattern: a form says what is missing, under the field (CLAUDE.md "Component patterns")', () => {
+  // Adopted 2026-11-03 (the user): an entry missing something is never quietly refused (a save
+  // button greyed out with no reason) or quietly dropped; the save says what's missing in red
+  // under the field, through components/FieldError. Older forms grey out Save on an empty name:
+  // a ratchet, listed in BACKLOG.md's Pattern retrofit backlog.
+  const NOT_YET = 39;
+  it(`buttons greyed out on empty text don't increase (baseline ${NOT_YET})`, () => {
+    const hits = TSX_FILES.flatMap((f) => fs.readFileSync(f, 'utf8').split('\n').filter((l) => /disabled=\{[^}]*\.trim\(\)/.test(l)));
+    expect(hits.length).toBeLessThanOrEqual(NOT_YET);
+  });
+  it('the red note comes from FieldError wherever an entry is checked', () => {
+    for (const f of ['EndeavourCreator/EndeavourCreator.tsx', 'EndeavourPieces/EndeavourPieces.tsx', 'EndeavourCreator/DetailsSection.tsx', 'PeriodField/PeriodEditor.tsx']) {
+      expect(fs.readFileSync(path.join(SRC, 'components', f), 'utf8'), f).toContain('<FieldError');
+    }
+    const ownNotes = TSX_FILES.filter((f) => !f.includes(`${path.sep}FieldError${path.sep}`))
+      .filter((f) => /className=\{styles\.error\}>\{[^}]*(Needed|needed)/.test(fs.readFileSync(f, 'utf8')));
+    expect(ownNotes.map((f) => path.relative(ROOT, f))).toEqual([]);
   });
 });
 
@@ -1537,8 +1607,8 @@ describe('pattern: a built-in list fed from elsewhere (2026-11-02)', () => {
   });
 });
 
-describe('pattern: an event’s look comes from itself, preset by its Type (2026-11-03)', () => {
-  it('nothing decides from a stored event saying birthday or travel, outside the converter', () => {
+describe('pattern: an event’s kind is read through config/calendarEventTypes.ts (2026-11-05; kinds back from Types)', () => {
+  it('nothing decides from a stored event saying birthday or travel, outside the kinds registry and the converter', () => {
     // The agent still checks its own input words; the icon helper reads them only until converted.
     const allowed = new Set(['src/services/eventTypeConversion.ts', 'src/agent/commands/calendar.ts', 'src/config/calendarEventTypes.ts']);
     const hits = findMatches(SOURCE_FILES, /\b(ev|event|e)\.eventType\s*[!=]==\s*'(birthday|travel)'/, { skipComments: true }).filter((h) => !allowed.has(rel(h.file)));
@@ -1546,11 +1616,41 @@ describe('pattern: an event’s look comes from itself, preset by its Type (2026
   });
 });
 
-describe('pattern: tags on text come from one list, apart from making cards (2026-11-03)', () => {
-  it('the tag picker and Ctrl+1…9 read textTags.ts; neither offers a Glossary kind', () => {
+describe('pattern: one form for a calendar item, created or edited (2026-11-05)', () => {
+  it('the create form and the event, reminder and deadline panes all render CalendarItemFields, and lay out no field of their own', () => {
     const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
-    for (const f of ['components/NoteEditor/FloatingToolbar.tsx', 'components/NoteEditor/NoteEditor.tsx']) {
-      expect(read(f), f).toContain("from './textTags'");
+    const hosts = ['components/AddCalendarItemModal/AddCalendarItemModal.tsx', 'components/CalendarEventPane/CalendarEventPane.tsx',
+      'components/CalendarReminderPane/CalendarReminderPane.tsx', 'components/CalendarDeadlinePane/CalendarDeadlinePane.tsx'];
+    for (const f of hosts) {
+      const src = read(f);
+      expect(src, f).toContain('<CalendarItemFields');
+      // The fields are the shared component's; a host adds only what's around them.
+      expect(src, f).not.toMatch(/<(DateInput|TimeInput|RepeatField|NotifyRuleField|LinksField|PicturesField|CollectionPicker|CrossAppRefPicker|EventTasksField|FlagCheck)/);
+    }
+  });
+});
+
+describe('pattern: an item option shows its flag icon from config/itemIcons.ts (2026-11-05)', () => {
+  it('the calendar forms and panes use FlagCheck / FlagIcon, and no option spells its emoji itself', () => {
+    const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+    const files = ['components/CalendarItemForm/CalendarItemFields.tsx'];
+    for (const f of files) {
+      expect(read(f), f).toContain('FlagCheck');
+      expect(read(f), f).not.toMatch(/[❗🧳]\s*(Important|Background)/u);
+    }
+    expect(read('components/RepeatField/RepeatField.tsx')).toContain('<FlagIcon flag="repeats"');
+    expect(read('components/AllDayNotifyField/NotifyLead.tsx')).toContain('<FlagIcon flag="notifies"');
+    expect(read('config/labels.ts')).not.toMatch(/'(❗|🧳) (Important|Background)/u);
+  });
+});
+
+describe('pattern: marking text, making blocks, linking, sending (2026-11-05)', () => {
+  const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+  it('the mark picker, Ctrl+1…9, the selection actions and a block’s right-click read textMarks.ts; none offers a Glossary kind', () => {
+    for (const f of ['components/NoteEditor/FloatingToolbar.tsx', 'components/NoteEditor/NoteEditor.tsx', 'components/NoteEditor/objects/selectionActions.ts']) {
+      expect(read(f), f).toContain(f.includes('/objects/') ? "from '../textMarks'" : "from './textMarks'");
+    }
+    for (const f of ['components/NoteEditor/FloatingToolbar.tsx', 'components/NoteEditor/NoteEditor.tsx', 'components/NoteEditor/textMarks.ts']) {
       expect(read(f), f).not.toMatch(/BUILTIN_TAGS|cardFromSelection/);
     }
     // Read as text: this file's tsconfig has no path aliases, so it can't import the modules.
@@ -1558,6 +1658,16 @@ describe('pattern: tags on text come from one list, apart from making cards (202
     const textTags = /TEXT_TAG_IDS\s*=\s*\[([^\]]*)\]/.exec(read('components/NoteEditor/builtinTags.ts'))![1];
     expect(kinds.length).toBeGreaterThan(0);
     expect(kinds.filter((k) => textTags.includes(`'builtin-${k}'`))).toEqual([]);
+  });
+
+  it('a card is made under Turn into, never Mark as; a block’s marks are one right-click menu', () => {
+    const actions = read('components/NoteEditor/objects/selectionActions.ts');
+    expect(actions).toMatch(/set: 'glossary'/);
+    expect(actions).not.toMatch(/group: 'mark', set: 'glossary'/);
+    // No block-status file registers a right-click menu of its own: textMarks.ts's Mark as ▸ does.
+    for (const f of ['BlockImportance.ts', 'BlockFlags.ts', 'ReviewMark.ts']) {
+      expect(read(`components/NoteEditor/extensions/${f}`), f).not.toContain('registerContextMenuProvider');
+    }
   });
 });
 
@@ -1593,5 +1703,33 @@ describe('pattern: a Glossary list is built from records (2026-11-03)', () => {
     expect(read('components/SendToList/SendToListFlow.tsx')).toContain('sendDraftsToList(');
     const hits = findMatches(SOURCE_FILES, /GLOSSARY_ENTRY_FIELD/, { skipComments: true }).filter((h) => rel(h.file) !== 'src/services/glossaryLists.ts');
     expect(describeHits(hits)).toBe('');
+  });
+});
+
+describe('pattern: a sunset feature is behind its switch (CLAUDE.md "Sunset features")', () => {
+  // Types were switched off 2026-11-04 (config/features.ts TYPES_ENABLED), the code kept. Every way
+  // into them outside their own modules checks the switch; the Type fields gate themselves.
+  const OWN = ['src/services/itemTypes.ts', 'src/utils/itemTypes.ts', 'src/components/ItemTypeField/', 'src/components/ItemTypeModal/', 'src/config/features.ts'];
+  const rel = (f: string) => path.relative(ROOT, f).replace(/\\/g, '/');
+  it('every way into Types outside their own modules checks TYPES_ENABLED', () => {
+    const hits = SOURCE_FILES.filter((f) => !/\.test\.tsx?$/.test(f) && !OWN.some((o) => rel(f).startsWith(o)))
+      .filter((f) => { const t = fs.readFileSync(f, 'utf8'); return /pickableTypes\(|makeTagAType\(|showAddItemType\(|addStarterSet\(|addBuiltInType\(/.test(t) && !t.includes('TYPES_ENABLED'); })
+      .map(rel);
+    expect(hits).toEqual([]);
+    expect(fs.readFileSync(path.join(SRC, 'components', 'ItemTypeField', 'ItemTypeField.tsx'), 'utf8')).toContain('TYPES_ENABLED ?');
+  });
+});
+
+describe('pattern: templates are data, read and changed through services/templates.ts (CLAUDE.md "Type system")', () => {
+  // Adopted 2026-11-05: the built-in templates (config/defaultTemplates.ts) and the person's own
+  // (templateStore) are read together, a built-in one replaced by the person's copy, only through
+  // services/templates.ts; what a template makes comes only from utils/templatePlan.ts.
+  const ALLOWED = ['src/services/templates.ts', 'src/store/templateStore.ts', 'src/services/sync/syncService.ts', 'src/utils/backupExport.ts', 'src/services/clearLocalData.ts', 'src/services/trash.ts'];
+  it('only the service (and sync, backup, the sign-out wipe and the Recycling Bin) touches templateStore', () => {
+    const hits = SOURCE_FILES.filter((f) => !/\.test\.tsx?$/.test(f))
+      .filter((f) => fs.readFileSync(f, 'utf8').includes("from '@/store/templateStore'"))
+      .map((f) => path.relative(ROOT, f).split(path.sep).join('/'))
+      .filter((f) => !ALLOWED.includes(f));
+    expect(hits).toEqual([]);
   });
 });

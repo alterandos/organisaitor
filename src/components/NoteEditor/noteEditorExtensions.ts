@@ -54,6 +54,7 @@ import { BlockParts } from './extensions/blockParts';
 import { GlossaryAutolink } from './extensions/GlossaryAutolink';
 import { AcronymOffer } from './extensions/AcronymOffer';
 import { UnsureFlagExtensions } from './extensions/UnsureFlag';
+import { ClarifyExtensions } from './extensions/ClarifyMark';
 import { BlockOffers } from './extensions/BlockOffers';
 import { OccurrenceHighlight } from './extensions/OccurrenceHighlight';
 import { SpecialCharInput } from './extensions/SpecialCharInput';
@@ -71,6 +72,8 @@ import { NoteLinkExtensions } from './extensions/NoteLink';
 import { NoteEmbedExtensions } from './extensions/NoteEmbed';
 import { TextAlign } from './extensions/TextAlign';
 import { BlockImportance } from './extensions/BlockImportance';
+import { BlockFlags } from './extensions/BlockFlags';
+import { ReviewExtensions } from './extensions/ReviewMark';
 
 // THE note editor's extensions, in order: every block, mark and behaviour a note has. NoteEditor
 // builds its editor from this, and anything else that shows note content as a note shows it (the
@@ -99,6 +102,8 @@ export function noteEditorExtensions({ noteEncrypted, linkClass }: { noteEncrypt
       FontSize,
       TextAlign,
       BlockImportance,
+      BlockFlags,
+      ...ReviewExtensions,
       Table.configure({ resizable: false }),
       TableRow,
       TableHeader,
@@ -149,6 +154,7 @@ export function noteEditorExtensions({ noteEncrypted, linkClass }: { noteEncrypt
       GlossaryAutolink,
       AcronymOffer,
       ...UnsureFlagExtensions,
+      ...ClarifyExtensions,
       BlockOffers,
       OccurrenceHighlight,
       SpecialCharInput,

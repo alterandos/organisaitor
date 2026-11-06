@@ -20,7 +20,7 @@ import { SET_IDS, regionOf, vennLayout, type SetId } from './vennLayout';
 // (the usual advice: a diagram for a few, a matrix for many). The same content, so switching is
 // free. Which sets a thing is in: the set buttons beside it while it's being edited (or on hover),
 // or right-click. Keys: Enter adds the next thing (in the same sets), an empty one leaves; Tab /
-// Shift+Tab move between parts; Backspace on an empty thing removes it.
+// Shift+Tab move between parts; Backspace on an empty thing removes it, and so does leaving it.
 
 export const VENN_VARIANTS = ['circles', 'table'] as const;
 export type VennVariant = typeof VENN_VARIANTS[number];
@@ -374,6 +374,21 @@ function toolsWidget(view: EditorView, getPos: () => number | undefined, variant
 
 const vennKey = new PluginKey('vennBlock');
 
+// A thing left empty is taken away once the cursor leaves it (2026-11-05: an empty one stayed as its
+// placeholder, "Something…", where it had been clicked out of). Not an undo step of its own.
+function dropLeftEmptyItem(trs: readonly Transaction[], old: EditorState, state: EditorState): Transaction | null {
+  if (!trs.some((tr) => tr.selectionSet || tr.docChanged)) return null;
+  const $was = old.selection.$from;
+  if ($was.parent.type.name !== 'vennItem' || $was.parent.content.size !== 0) return null;
+  let at = $was.before();
+  for (const tr of trs) at = tr.mapping.map(at, 1);
+  const item = state.doc.nodeAt(at);
+  if (item?.type.name !== 'vennItem' || item.content.size !== 0) return null;
+  const { from, to } = state.selection;
+  if (from >= at && to <= at + item.nodeSize) return null;
+  return state.tr.delete(at, at + item.nodeSize).setMeta('addToHistory', false);
+}
+
 export const VennBehaviour = Extension.create({
   name: 'vennBehaviour',
   priority: 110,
@@ -382,7 +397,7 @@ export const VennBehaviour = Extension.create({
     return { Enter: run(vennEnter), Tab: run(vennTab(1)), 'Shift-Tab': run(vennTab(-1)), Backspace: run(vennBackspace), Delete: run(vennDelete) };
   },
   addProseMirrorPlugins() {
-    return [new Plugin({ key: vennKey, props: { decorations: vennDecorations } })];
+    return [new Plugin({ key: vennKey, props: { decorations: vennDecorations }, appendTransaction: (trs, old, state) => dropLeftEmptyItem(trs, old, state) })];
   },
 });
 

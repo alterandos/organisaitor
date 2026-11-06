@@ -19,8 +19,8 @@ const L = LABELS.iconPicker;
 // (pictures made into icons before, to reuse), and a picture chosen, pasted or dropped, made into
 // a 96 px icon in the picture library (services/pictures.ts addIconPicture). The value is a string
 // (iconValue.ts); null takes the icon away.
-export function IconField({ value, onChange, fallback = '🙂', label = L.label }: {
-  value: string | null; onChange: (icon: string | null) => void; fallback?: string; label?: string;
+export function IconField({ value, onChange, fallback = '🙂', label = L.label, className }: {
+  value: string | null; onChange: (icon: string | null) => void; fallback?: string; label?: string; className?: string;
 }) {
   const [anchor, setAnchor] = useState<AnchorBox | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -32,7 +32,7 @@ export function IconField({ value, onChange, fallback = '🙂', label = L.label 
   };
   return (
     <>
-      <button ref={buttonRef} type="button" className={styles.field} onClick={toggle} aria-label={label} aria-haspopup="dialog" aria-expanded={open} title={label}>
+      <button ref={buttonRef} type="button" className={className ? `${styles.field} ${className}` : styles.field} onClick={toggle} aria-label={label} aria-haspopup="dialog" aria-expanded={open} title={label}>
         <ItemIcon icon={value} fallback={fallback} className={value ? styles.fieldIcon : `${styles.fieldIcon} ${styles.fieldEmpty}`} />
       </button>
       {open && (

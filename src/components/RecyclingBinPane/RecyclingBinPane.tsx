@@ -39,6 +39,7 @@ const KIND_LABELS: Record<TrashEntry['kind'], string> = {
   converter:          'Converter',
   itemType:           LABELS.itemTypes.noun,
   goal:               LABELS.goals.noun,
+  endeavourTemplate:  LABELS.templates.noun,
 };
 
 export function RecyclingBinPane() {

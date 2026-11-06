@@ -1,0 +1,31 @@
+/* The fields of a calendar item, the same in the create form and the item panes
+   (CalendarItemFields.tsx). The host's body spaces them. */
+.field { display: flex; flex-direction: column; gap: 0.4rem; }
+.label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--color-muted); }
+.checkLabel { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; color: var(--color-text); font-size: var(--text-sm); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.titleRow { display: flex; align-items: stretch; gap: var(--space-2); }
+.titleIcon { height: auto; align-self: stretch; }
+.titleInput {
+  font-size: var(--text-md); font-weight: 600; font-family: inherit; color: var(--color-text);
+  background: transparent; border: none; border-bottom: 2px solid var(--color-border); border-radius: 0;
+  padding: 0.25rem 0; width: 100%; outline: none; transition: border-color 140ms ease;
+}
+.titleInput:focus { border-bottom-color: var(--color-primary); }
+.notesInput,
+.textInput,
+.dateInput,
+.timeInput {
+  font-size: var(--text-sm); font-family: inherit; color: var(--color-text); background: var(--color-bg);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); outline: none;
+  transition: border-color 140ms ease;
+}
+.notesInput { padding: 0.6rem 0.75rem; resize: vertical; width: 100%; flex-shrink: 0; min-height: 4.5rem; max-height: 40vh; }
+.textInput { padding: 0.4rem 0.65rem; width: 100%; }
+.dateInput, .timeInput { padding: 0.4rem 0.65rem; cursor: pointer; }
+.dateInput { width: fit-content; }
+.timeInput { width: 7.5rem; }
+.notesInput:focus, .textInput:focus, .dateInput:focus, .timeInput:focus { border-color: var(--color-primary); }
+.timeRow { display: flex; align-items: center; gap: 0.5rem; }
+.locationRow { display: flex; align-items: center; gap: 0.4rem; }
+.locationLink { flex-shrink: 0; font-size: var(--text-sm); color: var(--color-primary); text-decoration: none; padding: 0.3rem; border-radius: var(--radius-sm); }
+.locationLink:hover { background: color-mix(in srgb, var(--color-primary) 10%, transparent); }

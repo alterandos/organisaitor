@@ -1,0 +1,24 @@
+/* A priority as a traffic light (PriorityPicker.tsx): a ring per level, the chosen one filled in its
+   colour (None: the text colour) and ringed, its name beside them. */
+
+.picker { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 2.2rem; }
+.dots { display: inline-flex; gap: var(--space-2); }
+
+.dot {
+  --dot: var(--color-border-strong);
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 2px solid var(--dot);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.dot[data-level="low"]    { --dot: var(--color-success); }
+.dot[data-level="medium"] { --dot: var(--color-warning); }
+.dot[data-level="high"]   { --dot: var(--color-danger); }
+.dot:hover { background: color-mix(in srgb, var(--dot) 25%, transparent); }
+.dot[aria-checked="true"] { background: var(--dot); box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--dot); }
+.dot:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 4px; }
+
+.name { min-width: 3.5em; font-size: var(--text-sm); color: var(--color-muted); }

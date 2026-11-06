@@ -6,7 +6,8 @@ import { firstNthWeekdayFrom, weekOfMonth } from '@/utils/recurrence';
 import { formatDate } from '@/utils/date';
 import { useCalendarStore } from '@/store/calendarStore';
 import { CloseIcon } from '@/components/Icons';
-import styles from './RepeatField.module.css';
+import styles from './RepeatField.module.css';
+import { FlagIcon } from '@/components/FlagCheck/FlagCheck';
 
 interface Props {
   value:    RepeatConfig | null;
@@ -21,6 +22,14 @@ interface Props {
 }
 
 const FREQS: RepeatFreq[] = ['daily', 'weekly', 'monthly', 'yearly', 'dates'];
+const MONTHS = Array.from({ length: 12 }, (_, m) => new Date(2001, m, 1).toLocaleDateString(undefined, { month: 'long' }));
+
+// The same year with this day and month (0-based), the day kept within the month (31 → 30 April).
+function withDayMonth(iso: string, day: number, month: number): string {
+  const year = Number(iso.slice(0, 4));
+  const last = new Date(year, month + 1, 0).getDate();
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(Math.min(day, last)).padStart(2, '0')}`;
+}
 const DEFAULT: RepeatConfig = { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null };
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const NTH_ORDER = [1, 2, 3, 4, -1];
@@ -65,6 +74,7 @@ export function RepeatField({ value, onChange, hint, labelClassName, date, onDat
     <div className={styles.field}>
       <label className={labelClassName ?? styles.toggle}>
         <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked ? { ...DEFAULT } : null)} />
+        <FlagIcon flag="repeats" />
         {L.repeat}
       </label>
       {value && (
@@ -118,9 +128,25 @@ export function RepeatField({ value, onChange, hint, labelClassName, date, onDat
                 value={value.monthWeekday ? 'weekday' : 'day'}
                 onChange={(e) => pickWeekday(e.target.value === 'day' ? undefined : { week: nth.week <= 4 ? nth.week : -1, day: startDay })}
               >
-                <option value="day">{L.monthOnDay(start.getDate())}</option>
+                <option value="day">{value.freq === 'yearly' ? L.yearOnDate : L.monthOnDate}</option>
                 <option value="weekday">{L.monthOnThe}</option>
               </select>
+              {/* On a date (the default): the day, and for yearly the month, chosen here; they're the
+                  item's own date (a series starts on one of its dates), so choosing moves it. */}
+              {!value.monthWeekday && (
+                <>
+                  <select className={styles.select} aria-label={L.whichDate} value={start.getDate()} disabled={!onDateChange}
+                    onChange={(e) => onDateChange?.(withDayMonth(date!, Number(e.target.value), start.getMonth()))}>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  {value.freq === 'yearly' && (
+                    <select className={styles.select} aria-label={L.whichMonth} value={start.getMonth()} disabled={!onDateChange}
+                      onChange={(e) => onDateChange?.(withDayMonth(date!, start.getDate(), Number(e.target.value)))}>
+                      {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                    </select>
+                  )}
+                </>
+              )}
               {value.monthWeekday && (
                 <>
                   <select

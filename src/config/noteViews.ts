@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from 'react';
 import { LABELS } from '@/config/labels';
-import { GlossaryIcon, HubIcon, MapIcon, MosaicIcon, ReviewIcon, TagIcon, TreeIcon } from '@/components/Icons';
+import { ClarifyIcon, GlossaryIcon, HubIcon, MapIcon, MosaicIcon, ReviewIcon, TagIcon, TreeIcon } from '@/components/Icons';
 import type { PlaceId } from '@/config/places';
 
 // THE list of what the Notes section can show (CLAUDE.md "Notes views", agreed 2026-10-17):
@@ -12,7 +12,7 @@ import type { PlaceId } from '@/config/places';
 // uiStore can read it; what each one renders is components/NotesSection/noteViewComponents.ts.
 // A new view is one entry here, its component there, and its label in LABELS.
 
-export type NotesViewId = 'tree' | 'mosaic' | 'map' | 'glossary' | 'review' | 'hubs' | 'tagView';
+export type NotesViewId = 'tree' | 'mosaic' | 'map' | 'glossary' | 'review' | 'clarify' | 'hubs' | 'tagView';
 
 export interface NoteViewDef {
   id:          NotesViewId;
@@ -37,6 +37,7 @@ export const NOTE_VIEWS: Record<NotesViewId, NoteViewDef> = {
   map:      { id: 'map',      kind: 'view', label: LABELS.noteMap.title,      Icon: MapIcon,      showsEditor: true, place: 'map', historyStops: true },
   glossary: { id: 'glossary', kind: 'tool', label: LABELS.glossary.open,      Icon: GlossaryIcon, showsEditor: false, place: 'glossary' },
   review:   { id: 'review',   kind: 'tool', label: LABELS.review.title,       Icon: ReviewIcon,   showsEditor: false, place: 'review' },
+  clarify:  { id: 'clarify',  kind: 'tool', label: LABELS.clarify.title,      Icon: ClarifyIcon,  showsEditor: false, place: 'clarify' },
   hubs:     { id: 'hubs',     kind: 'tool', label: LABELS.hubs.title,         Icon: HubIcon,      showsEditor: false, place: 'hubs' },
   tagView:  { id: 'tagView',  kind: 'tool', label: LABELS.notesViews.tagView, Icon: TagIcon,      showsEditor: true },
 };

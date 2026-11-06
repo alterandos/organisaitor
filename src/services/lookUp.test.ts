@@ -5,7 +5,7 @@ import { act } from '@testing-library/react';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { noteEditorExtensions } from '@/components/NoteEditor/noteEditorExtensions';
-import { allPassages, embedHere, linkHere, noteSchema, passageText } from './lookUp';
+import { allPassages, embedHere, linkHere, noteSchema, passageDoc, passageText } from './lookUp';
 import { searchPassages } from '@/utils/notePassages';
 
 let editor: Editor;
@@ -45,5 +45,17 @@ describe('Look up: Glossary terms', () => {
     let linked = '';
     editor.state.doc.descendants((n) => { if (n.isText && n.marks.some((m) => m.type.name === 'conceptRef')) linked += n.text; });
     expect(linked).toBe('Osmosis');
+  });
+});
+
+describe('Look up: old notes', () => {
+  // A note saved before sections has its blocks straight under the document: read as the editor
+  // reads it (one section), never as an invalid document (it crashed the preview, 2026-11-05).
+  it('a note with no sections is read, and its passages found', () => {
+    const noteId = useNoteStore.getState().addNote({ title: 'Old' });
+    useNoteStore.getState().updateNote(noteId, { content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Coefficient of determination' }] }] }) });
+    const found = searchPassages(allPassages(noteSchema()), 'determination');
+    expect(found.map((p) => p.text)).toContain('Coefficient of determination');
+    expect(() => passageDoc(found[0], noteSchema())!.check()).not.toThrow();
   });
 });

@@ -1,0 +1,104 @@
+/* The form for an Endeavour itself (EndeavourCreator) and its details (DetailsSection): the everyday
+   modal tier, a bottom sheet on a phone and a centred card from 520px. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-backdrop);
+  z-index: var(--z-pane-modal);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+@media (min-width: 520px) { .overlay { align-items: center; padding: var(--space-4); } }
+
+.modal {
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 640px;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-lg);
+}
+@media (min-width: 520px) { .modal { border-radius: var(--radius-lg); max-height: calc(100dvh - 2rem); } }
+
+.header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4) var(--space-5) var(--space-2); }
+.title { flex: 1; margin: 0; font-size: var(--text-lg); font-weight: 600; }
+.badge { margin-left: var(--space-2); padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--color-surface-alt); color: var(--color-muted); font-size: var(--text-xs); font-weight: 500; }
+.closeBtn, .iconBtn { display: inline-flex; background: none; border: none; color: var(--color-muted); cursor: pointer; padding: var(--space-1); border-radius: var(--radius-sm); }
+.closeBtn:hover { color: var(--color-text); }
+.iconBtn:hover { color: var(--color-danger); }
+
+.body { overflow-y: auto; min-height: 0; padding: var(--space-2) var(--space-5) var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+.field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.labelRow { display: flex; align-items: center; gap: var(--space-2); }
+.labelRow .label { flex: 1; }
+.label { font-size: var(--text-xs); font-weight: 600; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.small { margin: 0; font-size: var(--text-sm); color: var(--color-muted); line-height: 1.4; }
+.input {
+  min-width: 0;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+.input:focus-visible { border-color: var(--color-primary); outline: none; }
+
+/* Start from: a card each, saying what you get. */
+.starts { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: var(--space-2); }
+.start {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.start:hover { border-color: var(--color-primary); }
+.startOn { border-color: var(--color-primary); background: var(--color-primary-subtle); }
+.startTitle { font-weight: 600; font-size: var(--text-sm); }
+.startDetail { font-size: var(--text-xs); color: var(--color-muted); line-height: 1.35; }
+
+/* Does it end? */
+.segmented { display: inline-flex; align-self: flex-start; border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
+.segment { padding: var(--space-1) var(--space-4); border: none; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.segment + .segment { border-left: 1px solid var(--color-border); }
+.segmentOn { background: var(--color-primary-subtle); color: var(--color-primary); font-weight: 600; }
+
+/* Details: one line each, label · value · kind of value · remove. */
+.detailLine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.detailFixed { flex: 0 0 9rem; font-size: var(--text-sm); }
+.detailName { flex: 0 1 9rem; }
+.detailValue { flex: 1 1 10rem; min-width: 0; display: flex; }
+.detailValue > * { flex: 1; min-width: 0; }
+.detailKind { width: auto; flex: 0 0 auto; }
+
+.connections { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-alt); }
+.chip { padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.chipOn { border-color: var(--color-primary); background: var(--color-primary-subtle); }
+
+.linkBtn { align-self: flex-start; background: none; border: none; padding: 0; color: var(--color-primary); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.linkBtn:hover { text-decoration: underline; }
+
+.footer { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-5) var(--space-4); border-top: 1px solid var(--color-border); }
+.spacer { flex: 1; }
+.secondaryBtn, .submitBtn { padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); font: inherit; font-size: var(--text-md); cursor: pointer; }
+.secondaryBtn { border: 1px solid var(--color-border); background: transparent; color: var(--color-text); }
+.submitBtn { border: none; background: var(--color-primary); color: var(--color-on-primary); font-weight: 600; }
+
+.closeBtn:focus-visible, .iconBtn:focus-visible, .start:focus-visible, .segment:focus-visible, .chip:focus-visible,
+.linkBtn:focus-visible, .secondaryBtn:focus-visible, .submitBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

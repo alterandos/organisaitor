@@ -36,8 +36,11 @@ export const doc = (...sections: J[]) => JSON.stringify({ type: 'doc', content: 
 
 // Marks the app puts on text.
 export const IMPORTANT = { tagId: 'builtin-important', color: '#f59e0b', typeKey: 'important' };
-export const important = (text: string, level: 1 | 2 | 3, passageId: string, reviewDue: string | null = null) =>
-  marked(text, { type: 'noteTag', attrs: { ...IMPORTANT, level, passageId, reviewDue, reviewStep: reviewDue ? 0 : null } });
+export const important = (text: string, level: 1 | 3, passageId: string) =>
+  marked(text, { type: 'noteTag', attrs: { ...IMPORTANT, level, passageId } });
+// On the review list (Review later, its own mark since 2026-11-05).
+export const review = (inner: J, reviewId: string, reviewDue: string): J =>
+  ({ ...inner, marks: [...((inner.marks as J[] | undefined) ?? []), { type: 'review', attrs: { reviewId, reviewDue, reviewStep: 0 } }] });
 export const tagged = (text: string, tagId: string, color: string) => marked(text, { type: 'noteTag', attrs: { tagId, color } });
 export const itemLink = (text: string, targetType: CrossAppRef['type'], targetId: string, display: 'basic' | 'expanded' = 'basic') =>
   marked(text, { type: 'artifactLink', attrs: { targetType, targetId, display } });
@@ -46,6 +49,7 @@ export const termLink = (text: string, entryId: string, typeKey: string) => mark
 export const hubPassage = (text: string, hub: { hubId: string; noteId: string; title: string }, linkId: string) =>
   marked(text, { type: 'hubRef', attrs: { hubId: hub.hubId, linkId, hubNoteId: hub.noteId, hubTitle: hub.title } });
 export const unsure = (text: string, flagId: string, reason: string | null = null) => marked(text, { type: 'unsureFlag', attrs: { flagId, reason, qid: null } });
+export const clarify = (text: string, clarifyId: string, note: string | null = null) => marked(text, { type: 'clarify', attrs: { clarifyId, note } });
 export const chip = (entryId: string) => node('glossaryChip', { entryId });
 export const mathInline = (latex: string) => node('mathInline', { latex });
 

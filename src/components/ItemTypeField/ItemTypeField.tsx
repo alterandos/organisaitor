@@ -1,3 +1,4 @@
+import { TYPES_ENABLED } from '@/config/features';
 import { useId } from 'react';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { useTaskStore } from '@/store/taskStore';
@@ -32,7 +33,12 @@ interface FieldProps {
   defaults?: BuiltInType[];
 }
 
-export function ItemTypeField({ typeId, values, onTypeChange, onValueChange, parts, defaults }: FieldProps) {
+// Types are switched off for now (config/features.ts): no form or pane shows them.
+export function ItemTypeField(props: FieldProps) {
+  return TYPES_ENABLED ? <TypeField {...props} /> : null;
+}
+
+function TypeField({ typeId, values, onTypeChange, onValueChange, parts, defaults }: FieldProps) {
   const types = useItemTypeStore((s) => s.types);
   const id = useId();
   const options = pickableTypes(types, typeId);
@@ -102,6 +108,10 @@ export function ItemTypeField({ typeId, values, onTypeChange, onValueChange, par
 
 // In an item's pane: reads the item's Type from its store and saves each change straight away.
 export function ItemTypePaneField({ target }: { target: TypedTarget }) {
+  return TYPES_ENABLED ? <TypePaneField target={target} /> : null;
+}
+
+function TypePaneField({ target }: { target: TypedTarget }) {
   const item = useTypedItem(target);
   if (!item) return null;
   return (

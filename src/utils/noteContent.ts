@@ -3,6 +3,8 @@
 // when the entity it points at is deleted, without needing a live editor instance mounted —
 // the note being cleaned up is very often not the one currently open.
 
+import { NOTE_BLOCK_NODES } from '@/components/NoteEditor/blockNodes';
+
 interface TiptapNode {
   marks?:   { type: string; attrs?: Record<string, unknown> }[];
   content?: TiptapNode[];
@@ -151,11 +153,16 @@ export function countConceptRefs(contentJson: string, into: Map<string, number> 
 
 // Important passages on the review list in a stored content JSON string: each passage (by its
 // passageId), its text, the text of the block it's in (for context), level and schedule.
+// What's on the review list in a stored note (Review later): passages of text (the `review` mark,
+// NoteEditor/extensions/ReviewMark.ts; or, from before 2026-11-05, an Important mark with a date)
+// and whole blocks (their reviewId / reviewDue / reviewStep). A Glossary card's is on its record
+// (services/noteReview.ts reads those).
 export interface ReviewPassage {
-  passageId:  string;
+  passageId:  string;           // the review mark's / block's reviewId, or the old Important passageId
+  where:      'text' | 'block';
   text:       string;
   context:    string;
-  level:      number;
+  level:      number;           // the old Important mark's level; 0 for the rest
   reviewDue:  string;
   reviewStep: number;
 }
@@ -164,21 +171,30 @@ export function collectReviewPassages(contentJson: string): ReviewPassage[] {
   if (!contentJson || !contentJson.includes('reviewDue')) return [];
   const out = new Map<string, ReviewPassage>();
   const blockText = (node: TiptapNode): string =>
-    typeof node.text === 'string' ? node.text : (node.content ?? []).map(blockText).join('');
+    typeof node.text === 'string' ? node.text : (node.content ?? []).map(blockText).join(node.type === 'paragraph' ? '' : ' ');
   const walk = (node: TiptapNode) => {
+    const attrs = node.attrs as Record<string, unknown> | undefined;
+    if (typeof node.type === 'string' && NOTE_BLOCK_NODES.has(node.type) && attrs?.reviewId && attrs?.reviewDue) {
+      const id = String(attrs.reviewId);
+      if (!out.has(id)) out.set(id, { passageId: id, where: 'block', text: blockText(node).trim(), context: '', level: 0, reviewDue: String(attrs.reviewDue), reviewStep: Number(attrs.reviewStep ?? 0) });
+    }
     const children = node.content ?? [];
     if (children.some((c) => typeof c.text === 'string')) {
       const context = blockText(node);
       for (const c of children) {
-        const m = c.marks?.find((mk) => mk.type === 'noteTag' && mk.attrs?.typeKey === 'important' && mk.attrs?.reviewDue && mk.attrs?.passageId);
-        if (!m || typeof c.text !== 'string') continue;
-        const id = String(m.attrs!.passageId);
-        const existing = out.get(id);
-        if (existing) { existing.text += c.text; continue; }
-        out.set(id, {
-          passageId: id, text: c.text, context,
-          level: Number(m.attrs!.level ?? 1), reviewDue: String(m.attrs!.reviewDue), reviewStep: Number(m.attrs!.reviewStep ?? 0),
-        });
+        if (typeof c.text !== 'string') continue;
+        for (const m of c.marks ?? []) {
+          const review = m.type === 'review' && m.attrs?.reviewDue && m.attrs?.reviewId;
+          const legacy = m.type === 'noteTag' && m.attrs?.typeKey === 'important' && m.attrs?.reviewDue && m.attrs?.passageId;
+          if (!review && !legacy) continue;
+          const id = String(review ? m.attrs!.reviewId : m.attrs!.passageId);
+          const existing = out.get(id);
+          if (existing) { existing.text += c.text; continue; }
+          out.set(id, {
+            passageId: id, where: 'text', text: c.text, context,
+            level: legacy ? Number(m.attrs!.level ?? 1) : 0, reviewDue: String(m.attrs!.reviewDue), reviewStep: Number(m.attrs!.reviewStep ?? 0),
+          });
+        }
       }
       return;
     }
@@ -188,8 +204,18 @@ export function collectReviewPassages(contentJson: string): ReviewPassage[] {
   return [...out.values()];
 }
 
-// Sets attributes on every noteTag mark of one passage (by passageId) in a stored content JSON
-// string. Returns the string unchanged (changed: false) if the passage isn't in it.
+// The ways to find a review item in its note, for openNotePassage: its review mark, the old
+// Important mark, or a block holding it.
+export const reviewFinds = (id: string): PassageFind[] => [
+  { mark: 'review', attr: 'reviewId', value: id },
+  { mark: 'noteTag', attr: 'passageId', value: id },
+  ...[...NOTE_BLOCK_NODES].map((node) => ({ node, attr: 'reviewId', value: id })),
+];
+
+// Sets attributes on one passage in a stored content JSON string, by id: every noteTag mark with
+// that passageId, every review mark with that reviewId, a block with that reviewId. Returns the
+// string unchanged (changed: false) if it isn't in it. A review mark or block given reviewDue null
+// loses its schedule (off the list).
 export function updatePassageInContent(contentJson: string, passageId: string, attrs: Record<string, unknown>): { changed: boolean; content: string } {
   if (!contentJson || !contentJson.includes(passageId)) return { changed: false, content: contentJson };
   let doc: TiptapNode;
@@ -197,10 +223,46 @@ export function updatePassageInContent(contentJson: string, passageId: string, a
   let changed = false;
   const walk = (node: TiptapNode) => {
     for (const m of node.marks ?? []) {
-      if (m.type === 'noteTag' && m.attrs?.passageId === passageId) { m.attrs = { ...m.attrs, ...attrs }; changed = true; }
+      if ((m.type === 'noteTag' && m.attrs?.passageId === passageId) || (m.type === 'review' && m.attrs?.reviewId === passageId)) { m.attrs = { ...m.attrs, ...attrs }; changed = true; }
+    }
+    if (node.marks) node.marks = node.marks.filter((m) => !(m.type === 'review' && m.attrs?.reviewId === passageId && !m.attrs?.reviewDue));
+    const a = node.attrs as Record<string, unknown> | undefined;
+    if (a?.reviewId === passageId && typeof node.type === 'string' && NOTE_BLOCK_NODES.has(node.type)) {
+      node.attrs = { ...a, ...attrs, ...(attrs.reviewDue === null ? { reviewId: null, reviewStep: null } : {}) };
+      changed = true;
     }
     node.content?.forEach(walk);
   };
   walk(doc);
   return changed ? { changed: true, content: JSON.stringify(doc) } : { changed: false, content: contentJson };
+}
+
+// The document schema requires content to be `section+` (see extensions/Section.ts).
+// Notes saved before the sections feature (or very old plain-text notes) have block
+// nodes directly under doc — wrap them in a single default section so old notes keep
+// loading unchanged. Every reader of stored note content goes through this (the editor, Look up,
+// links and embeds, editNoteText), or an old note is an invalid document there (2026-11-05: Look up
+// crashed on one). Content that's already sectioned round-trips as-is.
+export function parseNoteContent(raw: string): '' | { type: string; content?: Record<string, unknown>[] } {
+  if (!raw) return '';
+  let parsed: { type: string; content?: Record<string, unknown>[] } | null;
+  try {
+    const candidate = JSON.parse(raw);
+    parsed = candidate?.type === 'doc' ? candidate : null;
+  } catch {
+    parsed = null;
+  }
+  if (!parsed) {
+    parsed = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: raw ? [{ type: 'text', text: raw }] : [] }],
+    };
+  }
+  const content = parsed.content ?? [];
+  const alreadySectioned = content.length > 0 && content.every((n) => n.type === 'section');
+  if (alreadySectioned) return parsed;
+  return {
+    type: 'doc',
+    content: [{ type: 'section', attrs: { columns: 1 }, content: content.length ? content : [{ type: 'paragraph' }] }],
+  };
 }

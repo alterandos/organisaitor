@@ -7,7 +7,8 @@ import { NoteTagMark } from './NoteTagMark';
 import { ConceptRefMark, collectRefGroups, linkConceptRef, unlinkConceptRef } from './ConceptRef';
 import { marginItems } from './MarginColumn';
 import { IMPORTANCE_LEVELS } from './importanceLevels';
-import { collectImportantPassages, cycleImportance, nextReview, setImportance, toggleReview } from './Importance';
+import { collectImportantPassages, cycleImportance, setImportance } from './Importance';
+import { ReviewExtensions, collectReviewRuns, nextReview, reviewingIn, toggleReview } from './ReviewMark';
 import { NoteObjectTrigger } from '../objects/NoteObjectTrigger';
 import { getSelectionMenu } from '../objects/selectionMenuState';
 import { insertObjectTrigger } from '../objects/actions';
@@ -31,7 +32,7 @@ beforeEach(() => useNoteStore.setState(useNoteStore.getInitialState(), true));
 function make(content = '<p>Plants use photosynthesis to make sugar from light.</p>') {
   editor = new Editor({
     element: document.createElement('div'),
-    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteTagMark, ConceptRefMark, NoteObjectTrigger],
+    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteTagMark, ConceptRefMark, NoteObjectTrigger, ...ReviewExtensions],
     content,
   });
 }
@@ -47,18 +48,19 @@ const select = (text: string) => { const r = rangeOf(text); editor.commands.setT
 const json = () => JSON.stringify(editor.getJSON());
 
 describe('Important levels', () => {
-  it('Ctrl+1 steps Important → Very important → Critical → off, keeping one passage id', () => {
+  it('Ctrl+1 steps Important → Critical → off, keeping one passage id (two levels since 2026-11-05)', () => {
     make();
     select('photosynthesis');
     const levels: (number | null)[] = [];
     let ids = new Set<string | null>();
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       cycleImportance(editor.view);
       const p = collectImportantPassages(editor.state.doc);
       levels.push(p[0]?.level ?? null);
       ids = new Set([...ids, ...p.map((x) => x.passageId)]);
     }
-    expect(levels).toEqual([1, 2, 3, null]);
+    expect(levels).toEqual([1, 3, null]);
+    expect(IMPORTANCE_LEVELS.map((l) => l.level)).toEqual([1, 3]);
     expect(ids.size).toBe(1);
   });
 
@@ -70,35 +72,48 @@ describe('Important levels', () => {
     setImportance(editor.view, r.from, r.to, 3);
     const items = marginItems(editor.state).filter((i) => i.key.startsWith('important-'));
     expect(items.map((i) => editor.state.doc.textBetween(i.from, i.to))).toEqual(['One', 'three']);
-    expect(items[1].title).toBe(IMPORTANCE_LEVELS[2].label);
+    expect(items[1].title).toBe(IMPORTANCE_LEVELS[1].label);
   });
 
-  it('Review later puts it on the list (due tomorrow); Got it pushes it further out each time', () => {
+  it('Review later is its own mark: on the list (due tomorrow) without making the passage Important; Got it pushes it further out', () => {
     make();
     const r = rangeOf('photosynthesis');
     toggleReview(editor.view, r.from, r.to, '2026-10-07');
-    const [p] = collectImportantPassages(editor.state.doc);
-    expect(p).toMatchObject({ level: 1, reviewDue: '2026-10-08', reviewStep: 0 });
+    expect(collectReviewRuns(editor.state.doc)).toEqual([expect.objectContaining({ due: '2026-10-08', step: 0, from: r.from, to: r.to })]);
+    expect(collectImportantPassages(editor.state.doc)).toEqual([]);
     expect(nextReview(0, 'good', '2026-10-08')).toEqual({ due: '2026-10-11', step: 1 });
     expect(nextReview(1, 'good', '2026-10-11')).toEqual({ due: '2026-10-18', step: 2 });
     expect(nextReview(2, 'again', '2026-10-18')).toEqual({ due: '2026-10-19', step: 0 });
     expect(nextReview(2, 'stop')).toEqual({ due: null, step: null });
     toggleReview(editor.view, r.from, r.to);
-    expect(collectImportantPassages(editor.state.doc)[0]).toMatchObject({ reviewDue: null, level: 1 });
+    expect(collectReviewRuns(editor.state.doc)).toEqual([]);
+  });
+
+  it('a passage put on the list before (on its Important mark) is still on it, and comes off without losing its importance', () => {
+    make();
+    const r = rangeOf('photosynthesis');
+    setImportance(editor.view, r.from, r.to, 3, { due: '2026-10-08', step: 0 });
+    expect(reviewingIn(editor.state, r.from, r.to)).toBe(true);
+    expect(collectReviewPassages(json())[0]).toMatchObject({ where: 'text', level: 3, reviewDue: '2026-10-08' });
+    toggleReview(editor.view, r.from, r.to);
+    expect(reviewingIn(editor.state, r.from, r.to)).toBe(false);
+    expect(collectImportantPassages(editor.state.doc)[0]).toMatchObject({ level: 3, reviewDue: null });
   });
 
   it('levels and review survive saving and loading', () => {
     make();
     const r = rangeOf('photosynthesis');
-    setImportance(editor.view, r.from, r.to, 2);
+    setImportance(editor.view, r.from, r.to, 3);
     toggleReview(editor.view, r.from, r.to, '2026-10-07');
     const saved = editor.getJSON();
     const html = editor.getHTML();
-    expect(html).toContain('data-level="2"');
-    editor.commands.setContent(saved);
-    expect(collectImportantPassages(editor.state.doc)[0]).toMatchObject({ level: 2, reviewDue: '2026-10-08' });
-    editor.commands.setContent(html);
-    expect(collectImportantPassages(editor.state.doc)[0]).toMatchObject({ level: 2, reviewDue: '2026-10-08' });
+    expect(html).toContain('data-level="3"');
+    expect(html).toContain('data-review');
+    for (const content of [saved, html]) {
+      editor.commands.setContent(content);
+      expect(collectImportantPassages(editor.state.doc)[0]).toMatchObject({ level: 3 });
+      expect(collectReviewRuns(editor.state.doc)[0]).toMatchObject({ due: '2026-10-08', step: 0 });
+    }
   });
 
   it('text typed at the end of an Important or Review later passage is not marked', () => {
@@ -110,7 +125,7 @@ describe('Important levels', () => {
     editor.view.dispatch(editor.state.tr.insertText(' daily'));
     const marked = collectImportantPassages(editor.state.doc).map((p) => editor.state.doc.textBetween(p.from, p.to));
     expect(marked).toEqual(['photosynthesis']);
-    expect(editor.getHTML()).toMatch(/photosynthesis<\/mark> daily/);
+    expect(editor.getHTML()).toMatch(/photosynthesis(<\/(mark|span)>)+ daily/);
   });
 });
 
@@ -210,7 +225,29 @@ describe('Review', () => {
     const before = useNoteStore.getState().notes[noteId].content;
     answerReview(dueReviews('2026-10-07')[0], 'again', '2026-10-07');
     expect(useNoteStore.getState().notes[noteId].content).toBe(before);   // the store is the editor's to write
-    expect(collectImportantPassages(editor.state.doc)[0]).toMatchObject({ reviewDue: '2026-10-08', reviewStep: 0 });
+    expect(collectReviewRuns(editor.state.doc)[0]).toMatchObject({ due: '2026-10-08', step: 0 });
+  });
+
+  it('a whole block on the list is found in the stored note and rescheduled there', () => {
+    make('<p>x</p><blockquote><p>All models are wrong</p></blockquote>');
+    const noteId = useNoteStore.getState().addNote({ title: 'Stats', content: JSON.stringify({ type: 'doc', content: [{ type: 'section', content: [
+      { type: 'quoteBlock', attrs: { reviewId: 'blk1', reviewDue: '2026-10-07', reviewStep: 0 }, content: [{ type: 'quoteText', content: [{ type: 'text', text: 'All models are wrong' }] }] },
+    ] }] }) }) as NoteId;
+    const [item] = dueReviews('2026-10-07');
+    expect(item).toMatchObject({ noteId, where: 'block', text: 'All models are wrong', passageId: 'blk1' });
+    answerReview(item, 'good', '2026-10-07');
+    expect(reviewItems()[0]).toMatchObject({ passageId: 'blk1', reviewDue: '2026-10-10', reviewStep: 1 });
+    answerReview(reviewItems()[0], 'stop', '2026-10-10');
+    expect(reviewItems()).toEqual([]);
+  });
+
+  it('a Glossary card on the list is its record’s, answered there', () => {
+    const noteId = useNoteStore.getState().addNote({ title: 'Stats' }) as NoteId;
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'concept', tagId: 'builtin-concept', term: 'Variance', fields: { review: { id: 'c1', due: '2026-10-07', step: 0 } }, noteId, collectionId: null });
+    const [item] = dueReviews('2026-10-07');
+    expect(item).toMatchObject({ where: 'card', entryId: id, text: 'Variance' });
+    answerReview(item, 'again', '2026-10-07');
+    expect(useNoteStore.getState().structuredTagEntries[id as never].fields.review).toEqual({ id: 'c1', due: '2026-10-08', step: 0 });
   });
 
   it('updatePassageInContent leaves other passages alone', () => {

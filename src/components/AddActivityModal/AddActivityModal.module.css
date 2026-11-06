@@ -1,7 +1,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--color-scrim);
   z-index: 30;
   display: flex;
   align-items: flex-end;
@@ -18,13 +18,13 @@
   max-width: 480px;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 1.5rem;
-  box-shadow: 0 -4px 28px rgba(0,0,0,0.14);
+  box-shadow: var(--shadow-sheet);
   max-height: 90vh;
   overflow-y: auto;
 }
 
 @media (min-width: 520px) {
-  .modal { border-radius: var(--radius-lg); box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+  .modal { border-radius: var(--radius-lg); box-shadow: var(--shadow-modal); }
 }
 
 .header {

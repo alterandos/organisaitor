@@ -4109,6 +4109,15 @@
 .editorContent [data-block-importance] { display: flex; gap: 0; }
 .editorContent [data-block-importance] > button { font-size: var(--text-sm); line-height: 1; }
 .editorContent [data-block-star-more] { min-width: 0; padding-inline: 2px; font-size: var(--text-2xs) !important; }
+/* ★, Clarify later and Not sure of this (BlockFlags.ts) are the same size, centred, with room
+   between them (2026-11-05: they sat off-centre and crowded). */
+.editorContent [data-block-tools] [data-block-star],
+.editorContent [data-block-tools] [data-block-flag],
+.editorContent [data-block-tools] [data-block-review] { width: 24px; padding: 0; }
+.editorContent [data-block-tools] [data-block-review] { margin-left: 3px; }
+.editorContent [data-block-tools] [data-block-review] svg { width: 15px; height: 15px; }
+.editorContent [data-block-reviewing] [data-block-review] { color: var(--color-primary); }
+.editorContent [data-block-flags] { display: flex; gap: 3px; margin-left: 3px; }
 .editorContent [data-importance="1"] [data-block-star] { color: var(--color-important-1); }
 .editorContent [data-importance="2"] [data-block-star] { color: var(--color-important-2); }
 .editorContent [data-importance="3"] [data-block-star] { color: var(--color-important-3); }
@@ -4585,6 +4594,46 @@
 .editorContent [data-unsure-marker="answered"] { opacity: 0.45; }
 .editorContent [data-unsure-marker] svg { width: 0.95em; height: 0.95em; }
 
+/* ── Clarify later (extensions/ClarifyMark.ts) ───────────────────────────────────────────────────
+   As an Unsure flag is drawn, in the Clarify colour (its own token, not the palette): a dashed
+   underline on the words, the icon (a graduation cap) once after the passage. */
+/* On the review list (ReviewMark.ts): a light dotted underline; its icon is in the margin column. */
+.editorContent [data-review] {
+  text-decoration: underline dotted var(--color-primary);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
+}
+.editorContent [data-clarify] {
+  text-decoration: underline dashed var(--color-clarify);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
+}
+.editorContent [data-clarify-marker] {
+  display: inline-grid;
+  place-items: center;
+  width: 1em;
+  height: 1em;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-clarify);
+  vertical-align: -0.12em;
+  cursor: pointer;
+}
+.editorContent [data-clarify-marker]:hover,
+.editorContent [data-clarify-marker]:focus-visible { color: var(--color-text); }
+.editorContent [data-clarify-marker] svg { width: 0.95em; height: 0.95em; }
+
+/* A block's Clarify later / Not sure of this buttons (BlockFlags.ts), pressed through the block's own
+   attribute, as the importance star is. */
+/* Drawn as the same icons are in the text (the Unsure ring stays an outline: the pill's rule that
+   fills design drawings' circles mustn't reach it). */
+.editorContent [data-block-tools] [data-block-flag] svg { width: 15px; height: 15px; stroke-width: 2; }
+.editorContent [data-block-tools] [data-block-flag] svg circle { fill: none; stroke: currentColor; }
+.editorContent [data-flag-clarify] [data-block-flag="clarify"] { color: var(--color-clarify); }
+.editorContent [data-flag-unsure] [data-block-flag="unsure"] { color: var(--color-text); background: var(--color-text-mark); }
+
 /* ── Maths (extensions/Maths.ts, `\maths`) ───────────────────────────────────────────────────────
    A MathLive field (a custom element; its insides are styled through its CSS variables and
    ::part), or the LaTeX as text until MathLive has loaded. A block centres, sits left, or carries
@@ -4899,7 +4948,7 @@
   position: absolute;
   left: 6px;
   display: flex;
-  gap: 2px;
+  gap: 3px;
   height: 22px;
 }
 /* Open, a row that holds a "+N" opens leftwards (it's wider than the room beside the text). */
@@ -6239,8 +6288,12 @@
 }
 .editorContent [data-variant="circles"] > [data-venn-item] { padding: 0 0.2rem; border-radius: var(--radius-sm); line-height: 1.3; }
 .editorContent [data-variant="circles"] > [data-venn-item][data-venn-editing] { z-index: calc(var(--z-sticky) - 3); background: var(--color-surface); outline: 1px solid var(--color-border-strong); }
-.editorContent [data-venn-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
-.editorContent [data-venn-empty]::after { content: attr(data-venn-placeholder); color: var(--color-muted); opacity: 0.6; font-weight: 400; letter-spacing: normal; text-transform: none; pointer-events: none; }
+/* The empty part keeps its line break, so the caret has a line to sit on (hiding it sent typing into the
+   set name before it, 2026-11-05); the placeholder floats over that line at no height, as Tiptap's does.
+   An empty thing shows it only while it's being written in (one left empty is removed, Venn.ts). */
+.editorContent [data-venn-set][data-venn-empty]::before,
+.editorContent [data-venn-item][data-venn-empty][data-venn-editing]::before { content: attr(data-venn-placeholder); float: left; height: 0; white-space: nowrap; color: var(--color-muted); opacity: 0.6; font-weight: 400; letter-spacing: normal; text-transform: none; pointer-events: none; }
+.editorContent [data-variant="circles"] > [data-venn-empty] { min-width: 4rem; text-align: left; }
 
 .editorContent [data-venn-sets] { display: none; gap: 2px; white-space: nowrap; }
 .editorContent [data-variant="circles"] [data-venn-sets] { position: absolute; z-index: calc(var(--z-sticky) - 2); top: 100%; left: 50%; transform: translateX(-50%); }

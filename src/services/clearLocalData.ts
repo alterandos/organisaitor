@@ -1,3 +1,4 @@
+import { useTemplateStore } from '@/store/templateStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { clearMicrosoftCursors } from '@/services/microsoftCalendar';
@@ -48,6 +49,7 @@ export function clearSyncedLocalData(): void {
   useConverterStore.setState({ converters: useConverterStore.getInitialState().converters, recent: [] });
   useItemTypeStore.setState({ types: useItemTypeStore.getInitialState().types });
   useGoalStore.setState({ goals: useGoalStore.getInitialState().goals });
+  useTemplateStore.setState({ templates: useTemplateStore.getInitialState().templates });
   usePinnedItemsStore.setState({ pins: usePinnedItemsStore.getInitialState().pins });
   // Synced since 2026-10-22 (before that it stayed on the device, and showed under the next account).
   const fitness = useFitnessStore.getInitialState();

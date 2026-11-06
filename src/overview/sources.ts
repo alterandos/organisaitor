@@ -1,3 +1,4 @@
+import { foldRuleTasks } from '@/utils/eventTaskRules';
 import { LABELS } from '@/config/labels';
 import { INBOX_ICON, QUESTION_ICON, REVIEW_ICON, RHYTHM_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { BEHIND_DAYS, rhythmOccurrences, tickIndex, isRhythm, isDealtWith } from '@/utils/rhythms';
@@ -95,10 +96,14 @@ const nextOf = (repeat: RepeatConfig | null, w: { when: string; status: Overview
 export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   {
     key: 'task', icon: ITEM_TYPE_ICON.task, label: LABELS.overview.sources.task,
-    rows: (snap) => ({
+    rows: (snap) => {
+      // A rule's open tasks are one row, the one due first (utils/eventTaskRules.ts).
+      const { folded } = foldRuleTasks(Object.values(snap.tasks).filter((t) => !t.completed && !t.archived));
+      const hidden = new Set([...folded.values()].flat().map((t) => t.id));
+      return {
       locked: [],
-      rows: Object.values(snap.tasks).map((t) => row('task', t.id, {
-        title:       t.title,
+      rows: Object.values(snap.tasks).filter((t) => !hidden.has(t.id)).map((t) => row('task', t.id, {
+        title:       folded.get(t.id)?.length ? LABELS.eventTaskRules.foldedTitle(t.title, folded.get(t.id)!.length) : t.title,
         when:        t.deadline ?? t.scheduledAt,
         time:        t.deadline ? t.deadlineTime : t.scheduledTime,
         status:      t.archived ? 'archived' : t.completed ? 'done' : 'open',
@@ -111,7 +116,8 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
           under: underEvent(t),
         }),
       })),
-    }),
+      };
+    },
   },
   {
     // A task's own scheduled/deadline shadows are left out — the task row already stands for them.
@@ -281,7 +287,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     },
   },
   {
-    // Important passages on the review list (Review later): due on their next review day. Their
+    // Passages and blocks on the review list (Review later): due on their next review day. Their
     // Endeavour is their note's. Rescheduling is the Review view's spaced repetition, so not draggable.
     key: 'review', icon: REVIEW_ICON, label: LABELS.overview.sources.review,
     rows: (snap) => {
@@ -295,7 +301,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
             title: p.text, when: p.reviewDue, time: null,
             status: 'open',
             endeavourId, context: n.title || '(Untitled)',
-            plan: plan('point', { important: p.level >= 2 }),
+            plan: plan('point', { important: p.level >= 3 }),
           })));
         }),
       };

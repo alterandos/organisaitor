@@ -31,12 +31,7 @@ import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLink
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { CloseIcon, OpenIcon } from '@/components/Icons';
-
-const PRIORITY_OPTIONS: { value: Priority; label: string; color: string }[] = [
-  { value: 'low',    label: 'Low',    color: '#22c55e' },
-  { value: 'medium', label: 'Medium', color: '#f59e0b' },
-  { value: 'high',   label: 'High',   color: '#ef4444' },
-];
+import { PriorityPicker } from '@/components/PriorityPicker/PriorityPicker';
 
 export function TaskPane() {
   const paneResize = usePaneWidth('item-pane', { edge: 'left', min: 340, max: 820 });
@@ -125,8 +120,7 @@ export function TaskPane() {
 
   const handleScheduledTimeChange = (v: string) => updateTaskLinked(taskId, { scheduledTime: v || null });
 
-  const handlePriorityClick = (p: Priority) =>
-    updateTask(taskId, { priority: p === task.priority ? 'none' : p });
+  const handlePriorityChange = (p: Priority) => updateTask(taskId, { priority: p });
 
   const handleKindClick = (k: TaskKind) =>
     updateTask(taskId, { kind: k });
@@ -272,22 +266,8 @@ export function TaskPane() {
           )}
 
           <div className={styles.field}>
-            <span className={styles.label}>Priority</span>
-            <div className={styles.row}>
-              {PRIORITY_OPTIONS.map((opt) => {
-                const active = task.priority === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    className={`${styles.pill} ${active ? styles.pillActive : ''}`}
-                    style={active ? { borderColor: opt.color, color: opt.color } : undefined}
-                    onClick={() => handlePriorityClick(opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+            <span className={styles.label}>{LABELS.priority.label}</span>
+            <PriorityPicker id="task-pane-priority" value={task.priority} onChange={handlePriorityChange} />
           </div>
 
           <div className={styles.field}>
@@ -311,16 +291,17 @@ export function TaskPane() {
             <span className={styles.label}>Time intensity</span>
             <div className={styles.row}>
               {([
-                { value: 'low',    label: 'Low',  color: '#22c55e' },
-                { value: 'medium', label: 'Med',  color: '#f59e0b' },
-                { value: 'high',   label: 'High', color: '#ef4444' },
-              ] as { value: TimeIntensity; label: string; color: string }[]).map((opt) => {
+                { value: 'low',    label: 'Low' },
+                { value: 'medium', label: 'Med' },
+                { value: 'high',   label: 'High' },
+              ] as { value: TimeIntensity; label: string }[]).map((opt) => {
                 const active = (task.timeIntensity ?? null) === opt.value;
                 return (
                   <button
                     key={opt.value}
                     className={`${styles.pill} ${active ? styles.pillActive : ''}`}
-                    style={active ? { borderColor: opt.color, color: opt.color } : undefined}
+                    data-level={opt.value}
+                    aria-pressed={active}
                     onClick={() => handleIntensityClick(opt.value)}
                   >
                     {opt.label}

@@ -1,6 +1,7 @@
-import { typeForEventKind } from '@/services/eventTypeConversion';
-import { useState, useEffect, useCallback } from 'react';
+import { travelModeFromTitle } from '@/services/calendarImport/classify';
+import { Fragment, useState, useEffect, useCallback } from 'react';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
+import { LABELS } from '@/config/labels';
 import { CloseIcon, LinkIcon, TextColorIcon, UnlinkIcon } from '@/components/Icons';
 import { NodeSelection } from '@tiptap/pm/state';
 import { createPortal } from 'react-dom';
@@ -11,7 +12,7 @@ import { normalizeLinkUrl } from '@/utils/links';
 import { inferTaskFromSelection, inferCalendarItemFromSelection } from '@/utils/textToTask';
 import type { NoteId } from '@/types/notes';
 import type { CrossAppRefType } from '@/types';
-import { applyTextTag, textTagChoices, type TextTagChoice } from './textTags';
+import { applyTextMark, textMarks, type TextMark } from './textMarks';
 import { deleteGlossaryEntryAsked } from '@/services/glossaryDelete';
 import styles from './FloatingToolbar.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -228,7 +229,8 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, actionsRef }: Pr
         notes:        cal.notes,
         location:     cal.location,
         collectionId: noteCollectionId ?? activeCollectionId ?? null,
-        typeId:       typeForEventKind(cal.eventType, null),
+        eventType:    cal.eventType,
+        travelMode:   cal.eventType === 'travel' ? travelModeFromTitle(cal.title, false) : null,
         tentative:    cal.tentative,
         important:    cal.important,
         repeat:       cal.repeat,
@@ -297,18 +299,23 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, actionsRef }: Pr
 
   if (!pos) return null;
 
-  // The tags in their one order (textTags.ts), numbered as Ctrl+1…9 applies them.
+  // The marks in their one order (textMarks.ts): the statuses, then the tags, numbered as Ctrl+1…9
+  // applies them. A number is the mark's own, so it stays the same while searching.
   const q = search.toLowerCase();
-  const allFiltered = textTagChoices(noteTagsRecord).filter((t) => t.name.toLowerCase().includes(q));
-  const filteredBuiltin = allFiltered.filter((t) => t.builtin);
-  const filteredUser = allFiltered.filter((t) => !t.builtin);
+  const allMarks = textMarks(noteTagsRecord);
+  const numberOf = (m: TextMark) => { const n = allMarks.indexOf(m) + 1; return n <= 9 ? n : null; };
+  const allFiltered = allMarks.filter((t) => t.name.toLowerCase().includes(q));
+  const filteredStatus = allFiltered.filter((t) => t.family === 'status');
+  const filteredTags = allFiltered.filter((t) => t.family === 'tag');
+  const { from: selFrom, to: selTo } = editor.state.selection;
 
   const grip = (e: React.MouseEvent) => e.preventDefault();
 
-  const applyTagItem = (item: TextTagChoice) => {
+  const applyTagItem = (item: TextMark) => {
     setShowTags(false);
     setSearch('');
-    applyTextTag(editor, item);
+    applyTextMark(editor, item);
+    editor.commands.focus();
   };
 
   // Removing an old marked definition deletes its Glossary record and every link to it (asked).
@@ -327,11 +334,11 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, actionsRef }: Pr
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') { e.stopPropagation(); setShowTags(false); setSearch(''); return; }
     if (e.key === 'Enter' && allFiltered.length === 1) { applyTagItem(allFiltered[0]); return; }
-    // 1–9 selects by position in the filtered list
+    // 1–9 picks the mark with that number (the same as Ctrl+1…9)
     const num = parseInt(e.key);
     if (!isNaN(num) && num >= 1 && num <= 9) {
       e.preventDefault();
-      const item = allFiltered[num - 1];
+      const item = allMarks[num - 1];
       if (item) applyTagItem(item);
     }
   };
@@ -453,39 +460,36 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, actionsRef }: Pr
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            placeholder="Search tags… (1–9 to pick)"
+            placeholder={LABELS.textMarks.search}
+            aria-label={LABELS.textMarks.search}
           />
           <div className={styles.tagList}>
             {allFiltered.length === 0 ? (
-              <div className={styles.tagEmpty}>No tags found</div>
+              <div className={styles.tagEmpty}>{LABELS.textMarks.none}</div>
             ) : (
               <>
-                {filteredBuiltin.map((tag, i) => (
-                  <button
-                    key={tag.id}
-                    className={`${styles.tagOption} ${styles.tagOptionBuiltin}`}
-                    onClick={() => applyTagItem(tag)}
-                    style={{ borderLeft: `3px solid ${tag.color}` }}
-                  >
-                    <span className={styles.tagShortcut}>{i + 1}</span>
-                    <ItemIcon className={styles.tagIcon} icon={tag.icon} />
-                    <span>{tag.name}</span>
-                  </button>
-                ))}
-                {filteredBuiltin.length > 0 && filteredUser.length > 0 && (
-                  <div className={styles.tagSeparator}>Your tags</div>
-                )}
-                {filteredUser.map((tag, i) => (
-                  <button
-                    key={tag.id}
-                    className={styles.tagOption}
-                    onClick={() => applyTagItem(tag)}
-                    style={tag.color !== '#6b7280' ? { borderLeft: `3px solid ${tag.color}` } : undefined}
-                  >
-                    <span className={styles.tagShortcut}>{filteredBuiltin.length + i + 1 <= 9 ? filteredBuiltin.length + i + 1 : ''}</span>
-                    <ItemIcon className={styles.tagIcon} icon={tag.icon} />
-                    <span>{tag.name}</span>
-                  </button>
+                {[[filteredStatus, LABELS.textMarks.statuses], [filteredTags, LABELS.textMarks.tags]].map(([list, heading]) => (list as TextMark[]).length > 0 && (
+                  <Fragment key={heading as string}>
+                    <div className={styles.tagSeparator}>{heading as string}</div>
+                    {(list as TextMark[]).map((mark) => {
+                      const on = mark.on(editor.state, selFrom, selTo);
+                      return (
+                        <button
+                          key={mark.id}
+                          type="button"
+                          className={`${styles.tagOption} ${mark.family === 'status' ? styles.tagOptionBuiltin : ''}`}
+                          onClick={() => applyTagItem(mark)}
+                          aria-pressed={on}
+                          style={{ borderLeft: `3px solid ${mark.color}` }}
+                        >
+                          <span className={styles.tagShortcut}>{numberOf(mark) ?? ''}</span>
+                          <span className={styles.tagIcon}>{mark.icon}</span>
+                          <span>{mark.name}</span>
+                          {on && <span className={styles.tagOn} aria-hidden="true">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </Fragment>
                 ))}
               </>
             )}

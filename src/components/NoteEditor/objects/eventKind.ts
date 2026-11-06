@@ -1,4 +1,4 @@
-import { typeForEventKind } from '@/services/eventTypeConversion';
+import { travelModeFromTitle } from '@/services/calendarImport/classify';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useUIStore } from '@/store/uiStore';
@@ -97,6 +97,7 @@ export const eventKind: NoteObjectKind<EventDraft> = {
       location:     draft.location,
       notes:        draft.notes,
       eventType:    draft.eventType,
+      travelMode:   draft.eventType === 'travel' ? travelModeFromTitle(draft.title, false) : null,
       collectionId: ctx.collectionId,
       repeat:       draft.repeat,
       status:       draft.tentative ? 'tentative' : 'confirmed',
@@ -115,7 +116,8 @@ export const eventKind: NoteObjectKind<EventDraft> = {
       notes:        draft.notes,
       location:     draft.location,
       collectionId: ctx.collectionId,
-      typeId:       typeForEventKind(draft.eventType, null),
+      eventType:    draft.eventType,
+      travelMode:   draft.eventType === 'travel' ? travelModeFromTitle(draft.title, false) : null,
       tentative:    draft.tentative,
       important:    draft.important,
       repeat:       draft.repeat,

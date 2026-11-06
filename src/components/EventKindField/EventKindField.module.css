@@ -1,0 +1,22 @@
+.wrap { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.chips, .modes { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.chip, .mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.mode { padding: var(--space-1) var(--space-2); font-size: var(--text-md); line-height: 1; }
+.chip:hover, .mode:hover { border-color: var(--color-primary); }
+.on, .on:hover { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 14%, var(--color-bg)); }
+.chip:focus-visible, .mode:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.year { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-text); font-size: var(--text-sm); }
+.yearInput { width: 4.5em; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); color: var(--color-text); font: inherit; }
+.age { color: var(--color-muted); }

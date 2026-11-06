@@ -1,10 +1,5 @@
 import { useMemo } from 'react';
 import { useTaskStore } from '@/store/taskStore';
-import { useNoteStore } from '@/store/noteStore';
-import { useScheduleStore } from '@/store/scheduleStore';
-import { useCalendarStore } from '@/store/calendarStore';
-import { scheduleItems } from '@/utils/scheduleItems';
-import { useListViews } from '@/store/listViews';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { formatDate } from '@/utils/date';
@@ -17,11 +12,13 @@ import { rowsOfEndeavour, summarizeRows } from '@/utils/endeavourSummary';
 import { SOURCE_BY_KEY } from '@/overview/sources';
 import { openOverviewRow } from '@/overview/open';
 import { canTickDone, tickOverviewRow } from '@/overview/done';
-import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { EditIcon } from '@/components/Icons';
-import type { Collection, CollectionId, NoteTagId } from '@/types';
+import type { Collection, CollectionId } from '@/types';
 import type { OverviewRow } from '@/types/overview';
 import { useEndeavourRows } from './useEndeavourRows';
+import { EndeavourPieces } from '@/components/EndeavourPieces/EndeavourPieces';
+import { captureTemplate } from '@/services/templates';
+import { effectivePeriod } from '@/utils/endeavourPeriod';
 import styles from './EndeavoursSection.module.css';
 
 const L = LABELS.endeavourHome;
@@ -34,10 +31,6 @@ const day = (iso: string) => formatDate(`${iso}T00:00:00`);
 // Endeavour, selectActiveCollectionId). A parent's home is its parts' work together.
 export function EndeavourHome({ id }: { id: CollectionId }) {
   const collections = useTaskStore((s) => s.collections);
-  const noteTags    = useNoteStore((s) => s.noteTags);
-  const schedules   = useScheduleStore((s) => s.schedules);
-  const events      = useCalendarStore((s) => s.events);
-  const lists       = useListViews();
   const ui          = useUIStore.getState;
   const openHome    = useUIStore((s) => s.openEndeavourHome);
   const { rows, today } = useEndeavourRows();
@@ -77,36 +70,9 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
   }
   const otherParents = parents.slice(1).map((p) => collections[p]);
   const parts = childrenOf(id, collections).filter((k) => isEndeavour(collections[k])).sort((a, b) => collections[a].name.localeCompare(collections[b].name));
-  const notebooks = Object.values(noteTags).filter((t) => t.kind === 'area' && t.collectionId === id).sort((a, b) => a.name.localeCompare(b.name));
-  const ownLists = Object.values(lists).filter((l) => l.collectionId === id).sort((a, b) => a.name.localeCompare(b.name));
-  const timetables = Object.values(schedules).filter((s) => s.collectionId === id).sort((a, b) => a.name.localeCompare(b.name));
-  const records = Object.values(collections)
-    .filter((x) => (x.kind === 'tracker' || x.kind === 'routine') && !x.archivedAt && parentsOf(x, collections).includes(id))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
+  const ends = effectivePeriod(id, collections)?.period.end ?? null;
+  const meta = [c.kind === 'project' ? (ends ? L.ends(day(ends)) : '') : L.ongoing, c.description ?? ''].filter(Boolean).join(' · ');
   const openInCalendar = () => { ui().setActiveView('calendar'); ui().setActiveCollection(id); };
-  const openNotebook = (tagId: string) => { ui().setActiveView('notes'); ui().setSelectedNoteTag(tagId as NoteTagId); };
-  const openList = (listId: string) => { ui().requestListSelection(listId); ui().setActiveView('lists'); };
-  const openRecord = (x: Collection) => {
-    if (x.kind === 'tracker') ui().setActiveTracker(x.id); else ui().setActiveRoutine(x.id);
-    ui().setActiveView('records');
-  };
-
-  // The add row, in small labelled groups, A to Z within each (2026-10-30: ten equal pills in one
-  // row were hard to scan). The + button holds the five made most often.
-  type Add = { key: keyof typeof L.add; group: keyof typeof L.groups; run: () => void };
-  const adds = ([
-    { key: 'task',      group: 'plan',  run: () => ui().showAddTask() },
-    { key: 'event',     group: 'plan',  run: () => ui().showAddCalendarItem() },
-    { key: 'goal',      group: 'plan',  run: () => ui().showAddGoal(id) },
-    { key: 'notebook',  group: 'keep',  run: () => ui().showAddNoteTag(null, 'area') },
-    { key: 'list',      group: 'keep',  run: () => ui().showAddList() },
-    { key: 'timetable', group: 'track', run: () => ui().showAddSchedule() },
-    { key: 'tracker',   group: 'track', run: () => ui().showAddTracker() },
-    { key: 'routine',   group: 'track', run: () => ui().showAddRoutine() },
-    { key: 'endeavour', group: 'shape', run: () => ui().showAddCollection() },
-  ] as Add[]).sort((a, b) => L.add[a.key].localeCompare(L.add[b.key]));
-  const groups = (Object.keys(L.groups) as (keyof typeof L.groups)[]).map((g) => ({ g, items: adds.filter((a) => a.group === g) }));
 
   return (
     <div className={styles.page}>
@@ -128,15 +94,13 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
           <h2 className={styles.homeTitle}>{c.name}</h2>
           {summary.behind.length > 0 ? <span className={styles.pillBad}>{L.behind(summary.behind.length)}</span> : <span className={styles.pillOk}>{L.onTrack}</span>}
         </div>
-        <p className={styles.homeMeta}>
-          {c.kind === 'project' ? (c.deadline ? L.due(day(c.deadline)) : LABELS.collectionKind.project) : L.ongoing}
-          {c.description && <> · {c.description}</>}
-        </p>
+        {meta && <p className={styles.homeMeta}>{meta}</p>}
         <div className={styles.homeActions}>
           <button type="button" className={styles.btn} onClick={() => ui().openEditCollection(c)}><EditIcon /> {L.edit}</button>
           <button type="button" className={styles.btn} onClick={openInCalendar}>{L.openCalendar}</button>
           <button type="button" className={styles.btn} onClick={() => ui().openEndeavourOverview(id)}>{L.openOverview}</button>
           <button type="button" className={styles.btn} onClick={() => ui().showEndeavourContents(id)}>{LABELS.endeavourContents.manage}</button>
+          <button type="button" className={styles.btn} onClick={() => { const t = captureTemplate(id); if (t) ui().openTemplateEditor(t); }}>{LABELS.templates.saveFrom}</button>
           <button type="button" className={styles.btn} onClick={() => ui().showRestructure(id)}>{LABELS.restructure.menu}…</button>
         </div>
       </header>
@@ -173,57 +137,7 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
         </section>
       )}
 
-      {(notebooks.length > 0 || ownLists.length > 0 || timetables.length > 0 || records.length > 0) && (
-        <div className={styles.panels}>
-          {notebooks.length > 0 && (
-            <Panel title={L.panels.notebooks}>
-              {notebooks.map((t) => (
-                <button key={t.id} type="button" className={styles.thing} onClick={() => openNotebook(t.id)}>
-                  <ItemIcon icon={t.icon} fallback="📁" /> {t.name}
-                </button>
-              ))}
-            </Panel>
-          )}
-          {ownLists.length > 0 && (
-            <Panel title={L.panels.lists}>
-              {ownLists.map((l) => (
-                <button key={l.id} type="button" className={styles.thing} onClick={() => openList(l.id)}>
-                  <ItemIcon icon={l.icon} fallback="📋" /> {l.name}
-                </button>
-              ))}
-            </Panel>
-          )}
-          {timetables.length > 0 && (
-            <Panel title={L.panels.timetables}>
-              {timetables.map((s) => (
-                <button key={s.id} type="button" className={styles.thing} onClick={() => ui().openEditSchedule(s)}>
-                  🗓 {s.name} <span className={styles.muted}>· {scheduleItems(s.id, events).length}</span>
-                </button>
-              ))}
-            </Panel>
-          )}
-          {records.length > 0 && (
-            <Panel title={L.panels.records}>
-              {records.map((x) => (
-                <button key={x.id} type="button" className={styles.thing} onClick={() => openRecord(x)}>
-                  {x.kind === 'tracker' ? LABELS.tracker : LABELS.routine}: {x.name}
-                </button>
-              ))}
-            </Panel>
-          )}
-        </div>
-      )}
-
-      <div className={styles.addRow} role="group" aria-label={L.addTo(c.name)}>
-        <span className={styles.addTitle}>{L.addTo(c.name)}</span>
-        {groups.map(({ g, items }) => (
-          <div key={g} className={styles.addGroup} role="group" aria-label={L.groups[g]}>
-            <span className={styles.addGroupLabel}>{L.groups[g]}</span>
-            {items.map((a) => <button key={a.key} type="button" className={styles.ghost} onClick={a.run}>+ {L.add[a.key]}</button>)}
-            {g === 'shape' && <button type="button" className={styles.ghost} onClick={() => ui().showTemplates(id)}>{LABELS.restructure.fromTemplate}</button>}
-          </div>
-        ))}
-      </div>
+      <EndeavourPieces id={id} />
     </div>
   );
 }

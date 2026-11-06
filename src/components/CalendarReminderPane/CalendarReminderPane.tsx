@@ -1,24 +1,14 @@
-import { useState, useRef } from 'react';
-import { DateInput } from '@/components/DateInput/DateInput';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import type { CalendarReminderId } from '@/types';
-import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
-import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
-import { TimeInput } from '@/components/TimeInput/TimeInput';
-import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
-import { datedPatch, datedRule } from '@/utils/notifyRule';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
-import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
-import { LinkedNoteAbstracts } from '@/components/LinkedNoteAbstracts/LinkedNoteAbstracts';
-import { newNoteTitleFor } from '@/services/noteFromItem';
-import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteReminderWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import type { CrossAppRef } from '@/types';
-import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
+import { SeriesScopeLine } from '@/components/RecurrenceScopeBar/SeriesScope';
+import { useSeriesScope } from '@/components/RecurrenceScopeBar/useSeriesScope';
 import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
 import { afterSeriesDeleted } from '@/services/calendarSeries';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
@@ -28,11 +18,10 @@ import itemStyles from '@/components/ItemActions/ItemActions.module.css';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
 import styles from './CalendarReminderPane.module.css';
-import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
-import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { CloseIcon } from '@/components/Icons';
+import { CalendarItemFields } from '@/components/CalendarItemForm/CalendarItemFields';
 
 export function CalendarReminderPane() {
   const paneResize = usePaneWidth('item-pane', { edge: 'left', min: 340, max: 820 });
@@ -41,12 +30,14 @@ export function CalendarReminderPane() {
   const closePane         = useUIStore((s) => s.closeCalendarReminderPane);
   const openPane          = useUIStore((s) => s.openCalendarReminderPane);
   const remindersRecord   = useCalendarStore((s) => s.reminders);
-  const updateReminder    = useCalendarStore((s) => s.updateReminder);
-  const collectionsRecord = useTaskStore((s) => s.collections);
   const tasksRecord       = useTaskStore((s) => s.tasks);
   const openTaskPane      = useUIStore((s) => s.openTaskPane);
 
   const reminder = editingId ? remindersRecord[editingId as CalendarReminderId] : null;
+  // Which dates a change goes to (SeriesScope.tsx): every field below saves through it.
+  const series = useSeriesScope({ kind: 'reminder', id: editingId, repeats: !!reminder?.repeat, occurrence: occurrenceDate,
+    update: (itemId, patch: Parameters<ReturnType<typeof useCalendarStore.getState>['updateReminder']>[1]) => useCalendarStore.getState().updateReminder(itemId as CalendarReminderId, patch), onSwitch: (newId) => openPane(newId as CalendarReminderId) });
+  const updateReminder = (itemId: CalendarReminderId, patch: Parameters<ReturnType<typeof useCalendarStore.getState>['updateReminder']>[1]) => series.update(itemId, patch);
   const archiveReminder = useCalendarStore((s) => s.archiveReminder);
   const restoreReminder = useCalendarStore((s) => s.restoreReminder);
   const setOccurrenceDone = useCalendarStore((s) => s.setOccurrenceDone);
@@ -57,15 +48,10 @@ export function CalendarReminderPane() {
     onRestore: () => { if (editingId) restoreReminder(editingId as CalendarReminderId); },
   });
 
-  const [title,          setTitle]          = useState(() => reminder?.title ?? '');
-  const [notes,          setNotes]          = useState(() => reminder?.notes ?? '');
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-  const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
 
   if (!reminder) return null;
 
   const id = reminder.id;
-  const allCollections = Object.values(collectionsRecord);
   // A task's deadline is mirrored as a reminder (Task.calendarReminderId) — same link as the
   // event pane's, so the task can be opened or completed from here.
   const linkedTask = Object.values(tasksRecord).find((t) => t.calendarReminderId === id) ?? null;
@@ -80,19 +66,11 @@ export function CalendarReminderPane() {
     openTaskPane(linkedTask.id);
   };
 
-  const saveTitle = () => {
-    const v = title.trim();
-    if (v && v !== reminder.title) updateReminder(id, { title: v });
-    else if (!v) setTitle(reminder.title);
-  };
 
-  const saveNotes = () => {
-    const v = notes.trim() || null;
-    if (v !== reminder.notes) updateReminder(id, { notes: v });
-  };
 
   // Deleting a series also asks about the dates taken out of it (services/calendarSeries.ts).
   const handleDelete = () => {
+    if (series.deleteScoped()) { closeDialog(); closePane(); return; }
     const wasSeries = !!reminder.repeat;
     closeDialog(); deleteReminderWithCleanup(id); closePane();
     if (wasSeries) void afterSeriesDeleted('reminder', id);
@@ -135,15 +113,7 @@ export function CalendarReminderPane() {
           )}
 
           {reminder.repeat && (
-            <RecurrenceScopeBar
-              kind="reminder"
-              id={id}
-              baseDate={reminder.date}
-              repeat={reminder.repeat}
-              occurrenceDate={occurrenceDate}
-              onClose={closePane}
-              onSwitch={(newId) => openPane(newId)}
-            />
+            <SeriesScopeLine repeat={reminder.repeat} firstDate={reminder.date} occurrence={occurrenceDate} scope={series.scope} onScope={series.setScope} />
           )}
 
           {linkedTask && (
@@ -152,105 +122,9 @@ export function CalendarReminderPane() {
             </button>
           )}
 
-          <input
-            className={styles.titleInput}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-            aria-label="Reminder title"
-          />
-
-          <textarea
-            ref={notesRef}
-            className={styles.notesInput}
-            placeholder="Add notes... (Ctrl+L to insert a link)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            onBlur={saveNotes}
-            rows={3}
-          />
-
-          <LinkedNoteAbstracts refs={reminder.crossAppRefs ?? []} onOpen={navigateToCrossAppRef} />
-
-          <div className={styles.field}>
-            <span className={styles.label}>Date</span>
-            <DateInput className={styles.dateInput} value={reminder.date} onChange={(v) => updateReminder(id, { date: v })} />
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Time</span>
-            <TimeInput
-              className={styles.timeInput}
-              value={reminder.time ?? ''}
-              onChange={(v) => updateReminder(id, { time: v || null })}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <NotifyRuleField
-              item="reminder"
-              timed={!!reminder.time}
-              rule={datedRule(reminder, 'reminder')}
-              onChange={(r) => updateReminder(id, datedPatch(r))}
-              labelClassName={`${styles.label} ${styles.checkLabel}`}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={`${styles.label} ${styles.checkLabel}`}>
-              <input
-                type="checkbox"
-                checked={reminder.important ?? false}
-                onChange={(e) => updateReminder(id, { important: e.target.checked })}
-              />
-              ❗ Important — highlight on the calendar
-            </label>
-          </div>
-
-          <div className={styles.field}>
-            <label className={`${styles.label} ${styles.checkLabel}`}>
-              <input
-                type="checkbox"
-                checked={(reminder.status ?? 'confirmed') === 'tentative'}
-                onChange={(e) => updateReminder(id, { status: e.target.checked ? 'tentative' : 'confirmed' })}
-              />
-              Tentative — not confirmed yet, just a placeholder
-            </label>
-          </div>
-
-          {/* ── Repeat ── */}
-          <div className={styles.field}>
-            <RepeatField value={reminder.repeat ?? null} onChange={(r) => updateReminder(id, { repeat: r })} date={reminder.date} onDateChange={(d) => updateReminder(id, { date: d })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Links</span>
-            <LinksField links={reminder.links ?? []} onChange={(next) => updateReminder(id, { links: next })} />
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Linked items</span>
-            <CrossAppRefPicker
-              value={reminder.crossAppRefs ?? []}
-              suggestFrom={reminder.title}
-              newNoteTitle={newNoteTitleFor(reminder.title, reminder.date)}
-              onChange={handleCrossAppRefsChange}
-              onNavigate={navigateToCrossAppRef}
-            />
-          </div>
-
-          {allCollections.length > 0 && (
-            <div className={styles.field}>
-              <span className={styles.label}>{LABELS.collection}</span>
-              <CollectionPicker
-                collections={allCollections}
-                value={reminder.collectionId}
-                onChange={(cid) => updateReminder(id, { collectionId: cid })}
-                noneLabel={`No ${LABELS.collection}`}
-              />
-            </div>
-          )}
+          <CalendarItemFields kind="reminder" item={reminder} savedId={id} occurrence={occurrenceDate}
+            update={(patch) => updateReminder(id, patch as Parameters<typeof updateReminder>[1])}
+            onRefsChange={handleCrossAppRefsChange} onNavigate={navigateToCrossAppRef} />
         </div>
 
         <ItemActionFooter
@@ -259,7 +133,7 @@ export function CalendarReminderPane() {
           onToggleComplete={linkedTask ? () => void toggleTaskCompletion(linkedTask.id) : () => setOccurrenceDone('reminder', id, doneDate, !occurrenceDone)}
           completeOptions={linkedTask ? taskCompletionOptions(linkedTask.id) : []}
           completeLabels={linkedTask ? undefined : { on: LABELS.itemActions.markDone, off: LABELS.itemActions.notDone }}
-          deleteLabel={reminder.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.reminder.toLowerCase()}`}
+          deleteLabel={reminder.repeat ? series.deleteLabel(LABELS.calendarSeries.deleteAll) : `Delete ${LABELS.calendarItemKind.reminder.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreReminder(id)}
           onDelete={() => setDialog('delete')}
@@ -272,19 +146,11 @@ export function CalendarReminderPane() {
           noun="reminder"
           itemTitle={reminder.title}
           archiveNote={reminder.repeat ? 'The whole repeating series is archived, not just this occurrence.' : undefined}
-          alsoRemoves={reminder.repeat ? 'and all of its occurrences' : undefined}
+          alsoRemoves={reminder.repeat && series.scope === 'all' ? 'and all of its occurrences' : undefined}
           onArchive={handleArchive}
           onDelete={handleDelete}
           onArchiveInstead={() => setDialog('archive')}
           onCancel={closeDialog}
-        />
-      )}
-      {linkPrompt && (
-        <MarkdownLinkPrompt
-          anchorRect={linkPrompt.anchorRect}
-          initialText={linkPrompt.initialText}
-          onConfirm={confirmLink}
-          onCancel={cancelLink}
         />
       )}
     </>

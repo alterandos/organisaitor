@@ -191,4 +191,18 @@ describe('Venn diagram', () => {
     expect(node.attrs.variant).toBe('table');
     expect(node.lastChild!.attrs.sets).toEqual(['a', 'b']);
   });
+
+  it('a thing left empty goes when the cursor leaves it; one being written in stays', () => {
+    make();
+    type('\\venn ');
+    type('Mammals');
+    press('Enter');
+    type('Ocean');
+    press('Enter');                       // an empty thing, the cursor in it
+    const count = () => { let n = 0; find('vennBlock').node.forEach((c) => { if (c.type.name === 'vennItem') n++; }); return n; };
+    expect(count()).toBe(1);
+    editor.commands.setTextSelection(find('vennBlock').pos + 3);   // into the first set's name
+    expect(count()).toBe(0);
+    expect(editor.state.doc.textContent).toContain('Mammals');
+  });
 });

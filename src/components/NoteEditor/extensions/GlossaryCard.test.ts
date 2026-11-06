@@ -99,6 +99,19 @@ describe('Glossary cards', () => {
     expect(entries()).toHaveLength(1);
   });
 
+  it('Clarify later and Not sure show on a card as Important does, beside its kind line; not once learned (2026-11-05)', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'concept', tagId: 'builtin-concept', term: 'Variance', fields: { importance: 1, clarifyLater: { id: 'c1', note: null }, unsureOf: { id: 'u1', note: 'heard it once' } }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
+    await flush();
+    const kind = () => editor.view.dom.querySelector<HTMLElement>('[data-type="glossary-card"] [data-importance]')!;
+    expect(kind().textContent).toContain('⭐');
+    expect(kind().querySelector('[data-flag="clarify"] svg')).not.toBeNull();
+    expect(kind().querySelector<HTMLElement>('[data-flag="unsure"]')?.title).toContain('heard it once');
+    await act(async () => { useNoteStore.getState().updateStructuredTagEntry(id, { fields: { ...entry(id).fields, clarifyLater: { id: 'c1', note: null, learnedAt: '2026-11-05T10:00:00.000Z' } } }); });
+    await flush();
+    expect(kind().querySelector('[data-flag="clarify"]')).toBeNull();
+  });
+
   it('a Formula shows its formula from the start, and what each symbol stands for (2026-11-03)', async () => {
     const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'formula', tagId: 'builtin-formula', term: 'Coefficient of determination', fields: { where: [{ symbol: 'n', meaning: 'Sample size', unit: '' }] }, noteId, collectionId: null });
     await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
@@ -113,7 +126,7 @@ describe('Glossary cards', () => {
     await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
     await flush();
     const rows = [...editor.view.dom.querySelectorAll<HTMLElement>('[data-type="glossary-card"] [data-field="facts"]')];
-    expect(rows.map((r) => [...r.querySelectorAll('input')].map((i) => i.value))).toEqual([['Family', 'Accipitridae'], ['Wingspan', '1.8–2.3 m']]);
+    expect(rows.map((r) => [r.querySelector('input')!.value, r.querySelector('[data-card-input]')!.textContent])).toEqual([['Family', 'Accipitridae'], ['Wingspan', '1.8–2.3 m']]);
     expect(editor.view.dom.textContent).not.toContain('Your fields');
   });
 
@@ -126,7 +139,28 @@ describe('Glossary cards', () => {
     expect(more.some((t) => /Fields/.test(t ?? ''))).toBe(false);
   });
 
-  it('Enter makes a new line in a card; a finished "Name: value" line becomes a field of that name, or fills an empty one the card has', async () => {
+  it('a field of the card\'s own is formatted text, so Glossary terms typed there can be linked', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'concept', tagId: 'builtin-concept', term: 'Index fund', fields: { facts: [{ label: 'Listed on', value: 'the <b>ASX</b>' }] }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
+    await flush();
+    const value = editor.view.dom.querySelector('[data-type="glossary-card"] [data-field="facts"] [data-card-input]') as HTMLElement;
+    expect(value.getAttribute('contenteditable')).toBe('true');
+    expect(value.innerHTML).toBe('the <b>ASX</b>');
+  });
+
+  it('a list field is a bulleted item per line while it is edited, its first line too', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'concept', tagId: 'builtin-concept', term: 'Entropy', fields: { examples: ['Ice melting', 'Gas spreading'] }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
+    await flush();
+    const field = editor.view.dom.querySelector('[data-type="glossary-card"] [data-field="examples"] [data-card-input]') as HTMLElement;
+    expect([...field.children].map((c) => [c.tagName, c.textContent])).toEqual([['DIV', 'Ice melting'], ['DIV', 'Gas spreading']]);
+    await act(async () => { field.focus(); field.blur(); });
+    expect([...field.children].map((c) => c.tagName)).toEqual(['DIV', 'DIV']);
+    await act(async () => { field.innerHTML = 'Tea cooling'; field.dispatchEvent(new Event('input', { bubbles: true })); });
+    expect([...field.children].map((c) => [c.tagName, c.textContent])).toEqual([['DIV', 'Tea cooling']]);
+  });
+
+  it('Shift+Enter makes a new line in a card; a finished "Name: value" line becomes a field of that name, or fills an empty one the card has', async () => {
     const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Osmosis', fields: { meaning: 'Water moving across a membrane' }, noteId, collectionId: null });
     await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
     await flush();
@@ -135,7 +169,7 @@ describe('Glossary cards', () => {
     meaning.innerHTML = 'Water moving across a membrane<br>Origin: Greek, a push';
     meaning.dispatchEvent(new Event('input', { bubbles: true }));
     const enter = (el: HTMLElement, init: KeyboardEventInit = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init }));
-    expect(enter(meaning)).toBe(false);   // handled in the card, never by the note
+    expect(enter(meaning, { shiftKey: true })).toBe(false);   // a new line, handled in the card, never by the note
     await flush();
     expect(entry(id)?.fields.facts).toEqual([{ label: 'Origin', value: 'Greek, a push' }]);
     expect(meaning.textContent).toBe('Water moving across a membrane');
@@ -149,7 +183,7 @@ describe('Glossary cards', () => {
     expect(entry(id)?.fields.facts).toEqual([{ label: 'Origin', value: 'Greek, a push' }]);
   });
 
-  it('Shift+Enter in any field: another card of the same kind; Enter in the term goes to the next field', async () => {
+  it('Ctrl+Shift+Enter in any field: another card of the same kind; Enter in the term goes to the next field', async () => {
     const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Osmosis', fields: { meaning: 'Water moving' }, noteId, collectionId: null });
     await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
     await flush();
@@ -158,7 +192,7 @@ describe('Glossary cards', () => {
     inputs()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     expect(document.activeElement).toBe(inputs()[1]);
     inputs()[0].focus();
-    inputs()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true }));
+    inputs()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
     await flush();
     expect(cards()).toHaveLength(2);
     expect(entry(cards()[1].entryId)?.typeKey).toBe('definition');
@@ -305,6 +339,20 @@ describe('Glossary cards', () => {
     openNotePassage(noteId, definitionPassage(id));
     expect(useUIStore.getState().requestedNotePassage).toMatchObject({ noteId, node: 'glossaryCard', attr: 'entryId', value: id });
   });
+
+  it('"where it\'s defined" goes to the card on another tab, not the link on the open one', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Osmosis', fields: {}, noteId, collectionId: null });
+    const tabId = useNoteStore.getState().addNoteTab(noteId, 'Terms');
+    const card = JSON.stringify({ type: 'doc', content: [{ type: 'section', content: [{ type: 'glossaryCard', attrs: { entryId: id } }] }] });
+    useNoteStore.getState().updateNoteTabContent(noteId, tabId, card);
+    await make(`<p><span data-concept-ref="${id}">Osmosis</span> again</p>`);
+    let linked = false;
+    editor.state.doc.descendants((n) => { if (n.marks.some((m) => m.type.name === 'conceptRef')) linked = true; });
+    expect(linked).toBe(true);
+    openNotePassage(noteId, definitionPassage(id));
+    expect(useUIStore.getState().requestedNoteTab).toEqual({ noteId, tabId });
+    expect(useUIStore.getState().requestedNotePassage).toMatchObject({ node: 'glossaryCard', value: id });
+  });
 });
 
 describe('adding fields and more cards', () => {
@@ -340,10 +388,10 @@ describe('adding fields and more cards', () => {
     expect(morePillSide(r(0, 1000), 120, bounds, [])).toBe('none');
   });
 
-  it('Shift+Enter in any field makes another card of the same kind, design and width below, its term focused', async () => {
+  it('Ctrl+Shift+Enter in any field makes another card of the same kind, design and width below, its term focused', async () => {
     await oneCard();
     const meaning = cardEls()[0].querySelector('[data-field="meaning"] [data-card-input]')!;
-    await keyOn(meaning, 'Enter', { shiftKey: true });
+    await keyOn(meaning, 'Enter', { ctrlKey: true, shiftKey: true });
     await flush();
     expect(cards()).toHaveLength(2);
     const made = editor.state.doc.nodeAt(cards()[1].pos)!;
@@ -355,7 +403,7 @@ describe('adding fields and more cards', () => {
   it('Enter in the new card while it is still empty takes it away again, unasked and not in the Recycling Bin; Esc selects the card before', async () => {
     await oneCard('compact');
     const last = () => cardEls()[cardEls().length - 1];
-    await keyOn(last().querySelector('[data-field] [data-card-input]')!, 'Enter', { shiftKey: true });
+    await keyOn(last().querySelector('[data-field] [data-card-input]')!, 'Enter', { ctrlKey: true, shiftKey: true });
     await flush();
     const fresh = cards()[1].entryId;
     await keyOn(last().querySelector('[data-card-input]')!, 'Enter');
@@ -366,7 +414,7 @@ describe('adding fields and more cards', () => {
     expect(Object.keys(useTrashStore.getState().entries)).toHaveLength(0);
     expect(editor.state.selection.$from.parent.textContent).toBe('after');
 
-    await keyOn(last().querySelector('[data-field] [data-card-input]')!, 'Enter', { shiftKey: true });
+    await keyOn(last().querySelector('[data-field] [data-card-input]')!, 'Enter', { ctrlKey: true, shiftKey: true });
     await flush();
     await keyOn(last().querySelector('[data-card-input]')!, 'Escape');
     await flush();
@@ -442,7 +490,7 @@ describe('adding fields and more cards', () => {
 
   it('once something is typed in the new card, Enter and Esc keep it', async () => {
     await oneCard();
-    await keyOn(cardEls()[0].querySelector('[data-field="meaning"] [data-card-input]')!, 'Enter', { shiftKey: true });
+    await keyOn(cardEls()[0].querySelector('[data-field="meaning"] [data-card-input]')!, 'Enter', { ctrlKey: true, shiftKey: true });
     await flush();
     const term = cardEls()[1].querySelector('[data-card-input]') as HTMLElement;
     await typeInto(term, 'Diffusion');

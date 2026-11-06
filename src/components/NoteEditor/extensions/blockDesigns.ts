@@ -188,6 +188,13 @@ export function applyFrameAttrs(dom: HTMLElement, attrs: Record<string, unknown>
   const level = attrs.importance;
   if (level === 1 || level === 2 || level === 3) dom.setAttribute('data-importance', String(level));
   else dom.removeAttribute('data-importance');
+  // Clarify later / Not sure of this (BlockFlags.ts), likewise.
+  for (const kind of ['clarify', 'unsure']) {
+    const on = attrs[kind] && !(kind === 'clarify' && attrs.clarifyLearnedAt);   // a learned one isn't drawn as on
+    if (on) dom.setAttribute(`data-flag-${kind}`, String(attrs[kind])); else dom.removeAttribute(`data-flag-${kind}`);
+  }
+  // On the review list (ReviewMark.ts), likewise.
+  if (attrs.reviewId && attrs.reviewDue) dom.setAttribute('data-block-reviewing', String(attrs.reviewDue)); else dom.removeAttribute('data-block-reviewing');
 }
 
 export type FrameSettings = Partial<{
@@ -239,7 +246,8 @@ export function frameButtons(view: EditorView, getPos: () => number | undefined,
   group.setAttribute('data-block-frames', '');
   const at = getPos();
   const nodeName = at === undefined ? undefined : view.state.doc.nodeAt(at - 1)?.type.name;
-  for (const frame of framesFor(nodeName)) {
+  // Shade isn't in the pill (2026-11-05, the user's call): it's in the frame options and right-click.
+  for (const frame of framesFor(nodeName).filter((f) => f !== 'shaded')) {
     const b = pillButton(LABELS.noteBlocks.frames[frame], () => { const p = getPos(); if (p !== undefined) toggleBlockFrame(view, p - 1, frame); });
     b.setAttribute('data-block-frame', frame);
     b.setAttribute('aria-pressed', String(!!attrs[frame]));

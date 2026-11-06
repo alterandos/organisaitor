@@ -131,8 +131,9 @@ pendingItemTypeId: ItemTypeId | null, showAddTyped(typeId, kind)   // sets it, t
 // Goals (phase 5): the goal editor (modal 'add-goal'), for a new goal on an Endeavour or an existing one. Cleared by closeModal.
 editingGoalId: GoalId | null, pendingGoalEndeavourId: CollectionId | null, showAddGoal(endeavourId?), openEditGoal(id)
 
-// Templates and restructuring (phase 6): modals 'endeavour-template' (part of templatePartOf) and 'restructure'.
-templatePartOf: CollectionId | null, showTemplates(partOf?)
+// The Endeavour creator has a slot of its own (not openModal), so it stays open under the panes its tiles open:
+creator: { partOf } | null, showAddCollection(), showTemplates(partOf?), closeCreator() — the one Endeavour form; editing is openEditCollection(collection) (openModal 'add-collection', the same form). dismissedSuggestions: Record<endeavourId, suggestionId[]>, dismissSuggestion(id, sid) — a template's suggestions passed over on a home (persisted, read with a default). templateEditor: EndeavourTemplateDef | null, openTemplateEditor(def), closeTemplateEditor() — the template editor (not persisted). ManageSection gains 'templates'.
+// Restructuring: modal 'restructure'.
 restructureId: CollectionId | null, restructureMode: 'copy' | 'split' | 'merge', showRestructure(id, mode?)
 
 // Notes: a passage to select once a note is open (services/notePassage.ts sets it with openNote;

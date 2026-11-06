@@ -11,7 +11,7 @@ describe('the one Notify field for every calendar item', () => {
   it('ticking it starts from the usual rule; an item with no time offers only days before, at a time', () => {
     const onChange = vi.fn();
     const { rerender } = render(<NotifyRuleField item="event" timed={false} rule={{ kind: 'off' }} onChange={onChange} />);
-    fireEvent.click(screen.getByLabelText('Notify me'));
+    fireEvent.click(screen.getByLabelText(/Notify me/));
     expect(onChange).toHaveBeenLastCalledWith({ kind: 'daysAt', days: 1, at: '17:00' });
     rerender(<NotifyRuleField item="event" timed={false} rule={{ kind: 'daysAt', days: 1, at: '17:00' }} onChange={onChange} />);
     expect(unitSelect()).toBeNull();

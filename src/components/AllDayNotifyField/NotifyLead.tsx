@@ -6,7 +6,8 @@ import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { DEFAULT_NOTIFY_AT, defaultRule, fitRule, ruleKindsFor, type NotifyRule } from '@/utils/notifyRule';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useFloatingPlacement, type AnchorBox } from '@/utils/floatingPlacement';
-import styles from './AllDayNotifyField.module.css';
+import styles from './AllDayNotifyField.module.css';
+import { FlagIcon } from '@/components/FlagCheck/FlagCheck';
 
 const L = LABELS.calendarForm;
 
@@ -147,6 +148,7 @@ export function NotifyRuleField({ item, timed, rule, onChange, labelClassName }:
     <div className={styles.field}>
       <label className={labelClassName ?? styles.check}>
         <input type="checkbox" checked={shown.kind !== 'off'} onChange={(e) => onChange(e.target.checked ? defaultRule(item, timed) : { kind: 'off' })} />
+        <FlagIcon flag="notifies" />
         {L.notifyMe}
       </label>
       {shown.kind !== 'off' && <NotifyRuleEditor item={item} timed={timed} rule={shown} onChange={onChange} />}

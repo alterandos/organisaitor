@@ -2,9 +2,10 @@
 // The Endeavours section (docs/features/endeavours.md phase 2): the page and an Endeavour's home.
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { EndeavoursSection } from './EndeavoursSection';
 import { useTaskStore } from '@/store/taskStore';
+import { LABELS } from '@/config/labels';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { openNewItem } from '@/services/newItem';
 import { AddTaskButton } from '@/components/AddTaskButton/AddTaskButton';
@@ -84,11 +85,13 @@ describe('adding to an Endeavour', () => {
     expect(useUIStore.getState()).toMatchObject({ openModal: 'add-goal', pendingGoalEndeavourId: geos });
   });
 
-  it('the add row is in labelled groups', () => {
+  it('the home shows what’s in it, a tile per kind of thing (EndeavourPieces)', () => {
     const { geos } = semester();
     act(() => { useUIStore.getState().openEndeavourHome(geos); });
     render(<EndeavoursSection />);
-    expect(screen.getByRole('group', { name: 'Plan' })).toHaveTextContent('+ Calendar item+ Goal+ Task');
-    expect(screen.getByRole('group', { name: 'Shape' })).toHaveTextContent('From a template');
+    const pieces = screen.getByRole('region', { name: LABELS.endeavourPieces.title });
+    for (const t of ['calendar', 'tasks', 'notebooks', 'lists', 'records', 'goals'] as const) {
+      expect(within(pieces).getByRole('region', { name: LABELS.endeavourPieces[t] })).toBeInTheDocument();
+    }
   });
 });

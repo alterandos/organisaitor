@@ -31,7 +31,7 @@ import { NoteBackdrop } from './NoteBackdrop';
 import { MobileNoteSidePanel } from './MobileNoteSidePanel';
 import { AlignIcon, CloseIcon, ColorDotIcon, DisclosureIcon, PinIcon, TableIcon, TextColorIcon, TrashIcon, SwapIcon } from '@/components/Icons';
 import { TEXT_ALIGNS, setTextAlign, textAlignAt } from './extensions/TextAlign';
-import { cycleBlockImportance, selectedBlock } from './extensions/BlockImportance';
+import { selectedBlock } from './extensions/BlockImportance';
 import { SWATCHES, swatchLabel } from '@/config/swatches';
 import './extensions/unsureMenu';
 import { StickyHeadings } from './StickyHeadings';
@@ -92,7 +92,7 @@ import { NoteLinksFrom } from './NoteLinksFrom';
 import type { NoteLinkRequest } from './objects/NoteObjectTrigger';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { openExternalLink, normalizeLinkUrl } from '@/utils/links';
-import { applyTextTag, textTagChoices } from './textTags';
+import { applyTextMark, markForDigit } from './textMarks';
 import { selectActiveCollectionId } from '@/store/uiStore';
 import { onVaultStatus, registerBeforeLock } from '@/services/vault';
 import { noteView, isNoteLocked } from '@/services/noteSecrets';
@@ -101,6 +101,7 @@ import styles from './NoteEditor.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 import { log } from '@/utils/log';
+import { parseNoteContent } from '@/utils/noteContent';
 
 // Read a note by id THROUGH noteView() — an encrypted note's title/content/tabs are blanked in
 // the store and only resolve via the plaintext cache (see services/noteSecrets.ts).
@@ -134,34 +135,6 @@ function viewOf(id: string | null | undefined): Note | undefined {
   if (!id) return undefined;
   const raw = useNoteStore.getState().notes[id as NoteId];
   return raw ? noteView(raw) : undefined;
-}
-
-// The document schema requires content to be `section+` (see extensions/Section.ts).
-// Notes saved before the sections feature (or very old plain-text notes) have block
-// nodes directly under doc — wrap them in a single default section so old notes keep
-// loading unchanged. Content that's already sectioned round-trips as-is.
-function parseContent(raw: string) {
-  if (!raw) return '';
-  let parsed: { type: string; content?: Record<string, unknown>[] } | null;
-  try {
-    const candidate = JSON.parse(raw);
-    parsed = candidate?.type === 'doc' ? candidate : null;
-  } catch {
-    parsed = null;
-  }
-  if (!parsed) {
-    parsed = {
-      type: 'doc',
-      content: [{ type: 'paragraph', content: raw ? [{ type: 'text', text: raw }] : [] }],
-    };
-  }
-  const content = parsed.content ?? [];
-  const alreadySectioned = content.length > 0 && content.every((n) => n.type === 'section');
-  if (alreadySectioned) return parsed;
-  return {
-    type: 'doc',
-    content: [{ type: 'section', attrs: { columns: 1 }, content: content.length ? content : [{ type: 'paragraph' }] }],
-  };
 }
 
 // ── Toolbar icon SVGs ─────────────────────────────────────────────────────
@@ -974,7 +947,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     setTabFor(latestNote ? id : null, tabId);
     if (!latestNote || !editor) return;
     isLoadingRef.current = true;
-    editor.commands.setContent(parseContent(content));
+    editor.commands.setContent(parseNoteContent(content));
     isLoadingRef.current = false;
     // Switching tabs (click, Ctrl+Tab cycle, or a cross-app "open this tab" request) moves the
     // cursor into the editor, same as opening a note does — a switch always means the user
@@ -1215,7 +1188,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     isLoadingRef.current = true;
     // A locked note's view has blank content — keep the editor empty (it's hidden behind the
     // lock placeholder anyway) rather than ever parsing anything derived from ciphertext.
-    editor.commands.setContent(noteLocked ? '' : parseContent(nextContent));
+    editor.commands.setContent(noteLocked ? '' : parseNoteContent(nextContent));
     isLoadingRef.current = false;
     const focusAsked = useUIStore.getState().requestedNoteFocus === note.id;
     if (focusAsked) useUIStore.getState().setRequestedNoteFocus(null);
@@ -1257,36 +1230,57 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     if (!editor || !note || !requestedNotePassage || requestedNotePassage.noteId !== note.id) return;
     const find = requestedNotePassage;
     useUIStore.getState().setRequestedNotePassage(null);
-    let from = -1;
-    let to = -1;
-    let done = false;
-    editor.state.doc.descendants((node, pos) => {
-      if (done) return false;
-      // A node (an inbox item, a sent passage's marker): the cursor at its start.
-      if (isNodeFind(find)) {
-        if (node.type.name !== find.node || node.attrs[find.attr] !== find.value) return true;
-        from = to = Selection.near(editor.state.doc.resolve(node.isInline ? pos : pos + 1)).from;
-        done = true;
+    const locate = (): { from: number; to: number } | null => {
+      let from = -1;
+      let to = -1;
+      let done = false;
+      editor.state.doc.descendants((node, pos) => {
+        if (done) return false;
+        // A node (an inbox item, a sent passage's marker, a flagged block): the cursor at its start.
+        if (isNodeFind(find)) {
+          if (node.type.name !== find.node || node.attrs[find.attr] !== find.value) return true;
+          from = to = Selection.near(editor.state.doc.resolve(node.isInline ? pos : pos + 1)).from;
+          done = true;
+          return false;
+        }
+        if (!node.isText) return true;
+        if (node.marks.some((m) => m.type.name === find.mark && m.attrs[find.attr] === find.value)) {
+          if (from < 0) from = pos;
+          to = pos + node.nodeSize;
+        } else if (from >= 0 && node.text?.trim()) {
+          done = true;
+        }
         return false;
-      }
-      if (!node.isText) return true;
-      if (node.marks.some((m) => m.type.name === find.mark && m.attrs[find.attr] === find.value)) {
-        if (from < 0) from = pos;
-        to = pos + node.nodeSize;
-      } else if (from >= 0 && node.text?.trim()) {
-        done = true;
-      }
-      return false;
-    });
-    if (from < 0) return;
+      });
+      return from < 0 ? null : { from, to };
+    };
     // Two frames on: opening the note (or its tab) focuses the editor at the end a frame late
-    // (Tiptap's delayed focus), which would move the cursor and the scroll to the bottom.
-    // (Not cancelled on cleanup: clearing the request above re-runs this effect at once.)
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    // (Tiptap's delayed focus), which would move the cursor and the scroll to the bottom. Then once
+    // more a moment later: blocks drawn by node views (cards, charts) change the note's height after
+    // the first scroll, which could leave the passage off screen (2026-11-05: the Clarify tool's
+    // Open landed on the note but not the passage).
+    const go = (at: { from: number; to: number }) => requestAnimationFrame(() => requestAnimationFrame(() => {
       if (editor.isDestroyed) return;
-      editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection({ from, to }).run();
-      scrollPosTo(editor.view, from, 1 / 5, 'smooth');
+      editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection(at).run();
+      scrollPosTo(editor.view, editor.state.selection.from, 1 / 5);
+      setTimeout(() => {
+        if (editor.isDestroyed) return;
+        const host = scrollHostOf(editor.view.dom);
+        if (!host) return;
+        try {
+          const top = editor.view.coordsAtPos(editor.state.selection.from).top;
+          const box = host.getBoundingClientRect();
+          if (top < box.top || top > box.bottom - 24) scrollPosTo(editor.view, editor.state.selection.from, 1 / 5);
+        } catch { /* not laid out */ }
+      }, 350);
     }));
+    // (Not cancelled on cleanup: clearing the request above re-runs this effect at once.)
+    const found = locate();
+    if (found) { go(found); return; }
+    // Not in the text yet (its tab still loading): look again as the text arrives, for a few seconds.
+    const retry = () => { const at = locate(); if (at) { editor.off('update', retry); go(at); } };
+    editor.on('update', retry);
+    setTimeout(() => editor.off('update', retry), 3000);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the request is the trigger; only the note's id matters
   }, [requestedNotePassage, editor, note?.id]);
 
@@ -1308,7 +1302,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     } else {
       const { tabId, content } = resolveNoteTab(note, activeTabIdRef.current);
       if (tabId !== activeTabIdRef.current) setTabFor(note.id, tabId);
-      editor.commands.setContent(parseContent(content));
+      editor.commands.setContent(parseNoteContent(content));
       restoreCursor(false);
     }
     isLoadingRef.current = false;
@@ -1465,24 +1459,16 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
         return; // any other key cancels silently
       }
 
-      // Ctrl+1–9 → the tag at that number in the tag picker's order (textTags.ts) on the selection
-      // (or its block, selected first); again on text with that tag takes it off. Ctrl+1 is
-      // Important, which steps through its levels.
+      // Ctrl+1–9 → the mark at that number in the picker's order (textMarks.ts: Important, Clarify
+      // later, Not sure, Review later, Example, Reference, your own tags) on the selection, else the
+      // block selected whole (statuses), else the cursor's paragraph; again takes it off. Ctrl+1
+      // steps Important → Critical → off.
       if (e.ctrlKey && !e.shiftKey && !e.altKey) {
-        const digit = parseInt(e.key);
-        const tag = digit >= 1 && digit <= 9 ? textTagChoices(useNoteStore.getState().noteTags)[digit - 1] : undefined;
-        if (tag) {
+        const mark = markForDigit(useNoteStore.getState().noteTags, parseInt(e.key));
+        if (mark) {
           e.preventDefault();
-          // Ctrl+1 on a block selected whole: the block's importance (BlockImportance.ts).
-          const block = tag.typeKey === 'important' ? selectedBlock(editor.state) : null;
-          if (block !== null) { cycleBlockImportance(editor.view, block); return; }
-          if (editor.state.selection.empty) {
-            const { $from } = editor.state.selection;
-            editor.chain().focus().setTextSelection({ from: $from.start($from.depth), to: $from.end($from.depth) }).run();
-            requestAnimationFrame(() => applyTextTag(editor, tag));
-          } else {
-            applyTextTag(editor, tag);
-          }
+          const block = mark.block ? selectedBlock(editor.state) : null;
+          applyTextMark(editor, mark, block);
           return;
         }
       }

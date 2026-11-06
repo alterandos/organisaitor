@@ -1,26 +1,15 @@
-import { useState, useRef } from 'react';
 import { ItemTypePaneField } from '@/components/ItemTypeField/ItemTypeField';
-import { EventTasksField } from '@/components/TaskLinks/EventTasksField';
-import { DateInput } from '@/components/DateInput/DateInput';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import type { CalendarDeadlineId } from '@/types';
-import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
-import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
-import { TimeInput } from '@/components/TimeInput/TimeInput';
-import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
-import { datedPatch, datedRule } from '@/utils/notifyRule';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
-import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
-import { LinkedNoteAbstracts } from '@/components/LinkedNoteAbstracts/LinkedNoteAbstracts';
-import { newNoteTitleFor } from '@/services/noteFromItem';
-import { LinksField } from '@/components/LinksField/LinksField';
 import { deleteDeadlineWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import type { CrossAppRef } from '@/types';
-import { RecurrenceScopeBar } from '@/components/RecurrenceScopeBar/RecurrenceScopeBar';
+import { SeriesScopeLine } from '@/components/RecurrenceScopeBar/SeriesScope';
+import { useSeriesScope } from '@/components/RecurrenceScopeBar/useSeriesScope';
 import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
 import { afterSeriesDeleted } from '@/services/calendarSeries';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
@@ -30,11 +19,10 @@ import itemStyles from '@/components/ItemActions/ItemActions.module.css';
 import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
 import styles from './CalendarDeadlinePane.module.css';
-import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
-import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { CloseIcon } from '@/components/Icons';
+import { CalendarItemFields } from '@/components/CalendarItemForm/CalendarItemFields';
 
 // Structurally close to CalendarReminderPane (same fields, same repeat/tentative/important
 // machinery) — the one deliberate difference: the "Notify me" lead-time field is always shown
@@ -49,12 +37,14 @@ export function CalendarDeadlinePane() {
   const closePane         = useUIStore((s) => s.closeCalendarDeadlinePane);
   const openPane          = useUIStore((s) => s.openCalendarDeadlinePane);
   const deadlinesRecord   = useCalendarStore((s) => s.deadlines);
-  const updateDeadline    = useCalendarStore((s) => s.updateDeadline);
-  const collectionsRecord = useTaskStore((s) => s.collections);
   const tasksRecord       = useTaskStore((s) => s.tasks);
   const openTaskPane      = useUIStore((s) => s.openTaskPane);
 
   const deadline = editingId ? deadlinesRecord[editingId as CalendarDeadlineId] : null;
+  // Which dates a change goes to (SeriesScope.tsx): every field below saves through it.
+  const series = useSeriesScope({ kind: 'deadline', id: editingId, repeats: !!deadline?.repeat, occurrence: occurrenceDate,
+    update: (itemId, patch: Parameters<ReturnType<typeof useCalendarStore.getState>['updateDeadline']>[1]) => useCalendarStore.getState().updateDeadline(itemId as CalendarDeadlineId, patch), onSwitch: (newId) => openPane(newId as CalendarDeadlineId) });
+  const updateDeadline = (itemId: CalendarDeadlineId, patch: Parameters<ReturnType<typeof useCalendarStore.getState>['updateDeadline']>[1]) => series.update(itemId, patch);
   const archiveDeadline = useCalendarStore((s) => s.archiveDeadline);
   const restoreDeadline = useCalendarStore((s) => s.restoreDeadline);
   const setOccurrenceDone = useCalendarStore((s) => s.setOccurrenceDone);
@@ -65,15 +55,10 @@ export function CalendarDeadlinePane() {
     onRestore: () => { if (editingId) restoreDeadline(editingId as CalendarDeadlineId); },
   });
 
-  const [title,          setTitle]          = useState(() => deadline?.title ?? '');
-  const [notes,          setNotes]          = useState(() => deadline?.notes ?? '');
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-  const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
 
   if (!deadline) return null;
 
   const id = deadline.id;
-  const allCollections = Object.values(collectionsRecord);
   // A task's deadline is mirrored as a CalendarDeadline (Task.calendarDeadlineId) — same link
   // pattern as the event/reminder panes', so the task can be opened or completed from here.
   const linkedTask = Object.values(tasksRecord).find((t) => t.calendarDeadlineId === id) ?? null;
@@ -88,19 +73,11 @@ export function CalendarDeadlinePane() {
     openTaskPane(linkedTask.id);
   };
 
-  const saveTitle = () => {
-    const v = title.trim();
-    if (v && v !== deadline.title) updateDeadline(id, { title: v });
-    else if (!v) setTitle(deadline.title);
-  };
 
-  const saveNotes = () => {
-    const v = notes.trim() || null;
-    if (v !== deadline.notes) updateDeadline(id, { notes: v });
-  };
 
   // Deleting a series also asks about the dates taken out of it (services/calendarSeries.ts).
   const handleDelete = () => {
+    if (series.deleteScoped()) { closeDialog(); closePane(); return; }
     const wasSeries = !!deadline.repeat;
     closeDialog(); deleteDeadlineWithCleanup(id); closePane();
     if (wasSeries) void afterSeriesDeleted('deadline', id);
@@ -143,15 +120,7 @@ export function CalendarDeadlinePane() {
           )}
 
           {deadline.repeat && (
-            <RecurrenceScopeBar
-              kind="deadline"
-              id={id}
-              baseDate={deadline.date}
-              repeat={deadline.repeat}
-              occurrenceDate={occurrenceDate}
-              onClose={closePane}
-              onSwitch={(newId) => openPane(newId)}
-            />
+            <SeriesScopeLine repeat={deadline.repeat} firstDate={deadline.date} occurrence={occurrenceDate} scope={series.scope} onScope={series.setScope} />
           )}
 
           {linkedTask && (
@@ -160,115 +129,10 @@ export function CalendarDeadlinePane() {
             </button>
           )}
 
-          <input
-            className={styles.titleInput}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-            aria-label="Deadline title"
-          />
-
-          <textarea
-            ref={notesRef}
-            className={styles.notesInput}
-            placeholder="Add notes..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            onBlur={saveNotes}
-            rows={3}
-          />
-
-          <LinkedNoteAbstracts refs={deadline.crossAppRefs ?? []} onOpen={navigateToCrossAppRef} />
-
-          <div className={styles.field}>
-            <span className={styles.label}>Date</span>
-            <DateInput className={styles.dateInput} value={deadline.date} onChange={(v) => updateDeadline(id, { date: v })} />
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Time (optional)</span>
-            <TimeInput
-              className={styles.timeInput}
-              value={deadline.time ?? ''}
-              onChange={(v) => updateDeadline(id, { time: v || null })}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <NotifyRuleField
-              item="deadline"
-              timed={!!deadline.time}
-              rule={datedRule(deadline, 'deadline')}
-              onChange={(r) => updateDeadline(id, datedPatch(r))}
-              labelClassName={`${styles.label} ${styles.checkLabel}`}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={`${styles.label} ${styles.checkLabel}`}>
-              <input
-                type="checkbox"
-                checked={deadline.important ?? false}
-                onChange={(e) => updateDeadline(id, { important: e.target.checked })}
-              />
-              ❗ Important — highlight on the calendar
-            </label>
-          </div>
-
-          <div className={styles.field}>
-            <label className={`${styles.label} ${styles.checkLabel}`}>
-              <input
-                type="checkbox"
-                checked={(deadline.status ?? 'confirmed') === 'tentative'}
-                onChange={(e) => updateDeadline(id, { status: e.target.checked ? 'tentative' : 'confirmed' })}
-              />
-              Tentative — not confirmed yet, just a placeholder
-            </label>
-          </div>
-
-          {/* A task's deadline takes no Type of its own: the task has it. */}
-          {deadline.deadlineType !== 'task' && <ItemTypePaneField target={{ kind: 'deadline', id }} />}
-
-          {/* ── Repeat ── */}
-          <div className={styles.field}>
-            <RepeatField value={deadline.repeat ?? null} onChange={(r) => updateDeadline(id, { repeat: r })} date={deadline.date} onDateChange={(d) => updateDeadline(id, { date: d })} labelClassName={`${styles.label} ${styles.checkLabel}`} />
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Links</span>
-            <LinksField links={deadline.links ?? []} onChange={(next) => updateDeadline(id, { links: next })} />
-          </div>
-
-          {!linkedTask && (
-            <div className={styles.field}>
-              <span className={styles.label}>{LABELS.taskLinks.event.heading}</span>
-              <EventTasksField type="deadline" id={id} title={deadline.title} />
-            </div>
-          )}
-
-          <div className={styles.field}>
-            <span className={styles.label}>Linked items</span>
-            <CrossAppRefPicker
-              value={deadline.crossAppRefs ?? []}
-              suggestFrom={deadline.title}
-              newNoteTitle={newNoteTitleFor(deadline.title, deadline.date)}
-              onChange={handleCrossAppRefsChange}
-              onNavigate={navigateToCrossAppRef}
-            />
-          </div>
-
-          {allCollections.length > 0 && (
-            <div className={styles.field}>
-              <span className={styles.label}>{LABELS.collection}</span>
-              <CollectionPicker
-                collections={allCollections}
-                value={deadline.collectionId}
-                onChange={(cid) => updateDeadline(id, { collectionId: cid })}
-                noneLabel={`No ${LABELS.collection}`}
-              />
-            </div>
-          )}
+          <CalendarItemFields kind="deadline" item={deadline} savedId={id} occurrence={occurrenceDate}
+            update={(patch) => updateDeadline(id, patch as Parameters<typeof updateDeadline>[1])}
+            onRefsChange={handleCrossAppRefsChange} onNavigate={navigateToCrossAppRef} hasLinkedTask={!!linkedTask}
+            typeField={deadline.deadlineType !== 'task' ? <ItemTypePaneField target={{ kind: 'deadline', id }} /> : undefined} />
         </div>
 
         <ItemActionFooter
@@ -277,7 +141,7 @@ export function CalendarDeadlinePane() {
           onToggleComplete={linkedTask ? () => void toggleTaskCompletion(linkedTask.id) : () => setOccurrenceDone('deadline', id, doneDate, !occurrenceDone)}
           completeOptions={linkedTask ? taskCompletionOptions(linkedTask.id) : []}
           completeLabels={linkedTask ? undefined : { on: LABELS.itemActions.markDone, off: LABELS.itemActions.notDone }}
-          deleteLabel={deadline.repeat ? 'Delete all occurrences' : `Delete ${LABELS.calendarItemKind.deadline.toLowerCase()}`}
+          deleteLabel={deadline.repeat ? series.deleteLabel(LABELS.calendarSeries.deleteAll) : `Delete ${LABELS.calendarItemKind.deadline.toLowerCase()}`}
           onArchive={() => setDialog('archive')}
           onRestore={() => restoreDeadline(id)}
           onDelete={() => setDialog('delete')}
@@ -290,19 +154,11 @@ export function CalendarDeadlinePane() {
           noun="deadline"
           itemTitle={deadline.title}
           archiveNote={deadline.repeat ? 'The whole repeating series is archived, not just this occurrence.' : undefined}
-          alsoRemoves={deadline.repeat ? 'and all of its occurrences' : undefined}
+          alsoRemoves={deadline.repeat && series.scope === 'all' ? 'and all of its occurrences' : undefined}
           onArchive={handleArchive}
           onDelete={handleDelete}
           onArchiveInstead={() => setDialog('archive')}
           onCancel={closeDialog}
-        />
-      )}
-      {linkPrompt && (
-        <MarkdownLinkPrompt
-          anchorRect={linkPrompt.anchorRect}
-          initialText={linkPrompt.initialText}
-          onConfirm={confirmLink}
-          onCancel={cancelLink}
         />
       )}
     </>

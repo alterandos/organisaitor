@@ -19,10 +19,8 @@ export const ENDEAVOUR_DEFAULTS: BuiltInType[] = [
   },
   {
     key: 'subject', name: 'Subject', icon: '🎓', usedFor: ['endeavour'],
-    fields: [
-      { id: 'code',   name: 'Code', type: 'text' },
-      { id: 'target', name: 'Mark aimed for', type: 'number', unit: '%' },
-    ],
+    // The mark aimed for is a goal, not a detail (the user, 2026-11-03).
+    fields: [{ id: 'code', name: 'Code', type: 'text' }],
     defaults: {}, parts: [],
   },
 ];

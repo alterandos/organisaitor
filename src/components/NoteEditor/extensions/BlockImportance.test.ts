@@ -51,8 +51,7 @@ describe('important blocks', () => {
     expect(marginItems(editor.state).filter((m) => m.key.startsWith('important-block'))).toHaveLength(1);
     editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, pos)));
     expect(selectedBlock(editor.state)).toBe(pos);
-    cycleBlockImportance(editor.view, pos);
-    cycleBlockImportance(editor.view, pos);
+    cycleBlockImportance(editor.view, pos);   // Important → Critical (two levels)
     expect(blockImportance(editor.state, pos)).toBe(3);
     cycleBlockImportance(editor.view, pos);
     expect(blockImportance(editor.state, pos)).toBe(0);

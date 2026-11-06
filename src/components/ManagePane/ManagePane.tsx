@@ -1,3 +1,4 @@
+import { TYPES_ENABLED } from '@/config/features';
 import { useRef, useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { usePinAction } from '@/hooks/usePinAction';
@@ -8,12 +9,14 @@ import { now } from '@/utils/date';
 import type { Collection, Purpose, Tag, CollectionId, PurposeId, TagId } from '@/types';
 import styles from './ManagePane.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
+import { confirmDelete, confirmDialog } from '@/components/ConfirmDialog/dialogs';
+import { blankTemplate, deleteTemplate, duplicateTemplate, isBuiltIn, isChangedBuiltIn, restoreDefault, useTemplates } from '@/services/templates';
+import type { EndeavourTemplateDef } from '@/types/templates';
 import { endeavourInUse, purposeInUse, tagInUse } from '@/services/inUse';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
-import { ArchiveIcon, CloseIcon, DisclosureIcon, EditIcon, EndeavourIcon, PurposeIcon, RestoreIcon, TagIcon, TrashIcon, TypeIcon } from '@/components/Icons';
+import { ArchiveIcon, CloseIcon, DisclosureIcon, EditIcon, EndeavourIcon, PresetIcon, PurposeIcon, ResetIcon, RestoreIcon, TagIcon, TrashIcon, TypeIcon } from '@/components/Icons';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { addBuiltInType, addStarterSet, itemsOfType, makeTagAType } from '@/services/itemTypes';
 import { BUILT_IN_TYPES } from '@/config/builtInTypes';
@@ -26,12 +29,15 @@ import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 
 // Left-nav tabs — add an entry here (+ a render branch below) to extend this view with
 // future sections (e.g. Notebooks, List types) without redesigning the layout.
-const MANAGE_SECTIONS: { id: ManageSection; label: string; Icon: typeof TagIcon }[] = [
+const ALL_SECTIONS: { id: ManageSection; label: string; Icon: typeof TagIcon }[] = [
   { id: 'endeavours', label: LABELS.collectionPlural, Icon: EndeavourIcon },
   { id: 'purposes',   label: 'Purposes',              Icon: PurposeIcon },
   { id: 'tags',       label: 'Tags',                  Icon: TagIcon },
   { id: 'types',      label: LABELS.itemTypes.title,  Icon: TypeIcon },
+  { id: 'templates',  label: LABELS.templates.title,  Icon: PresetIcon },
 ];
+// Types are switched off for now (config/features.ts).
+const MANAGE_SECTIONS = ALL_SECTIONS.filter((s) => TYPES_ENABLED || s.id !== 'types');
 
 // Each section's "+ New" (2026-10-18: Manage could edit and delete but not create). Opens the
 // same creation modal the Sidebar does; it sits above Manage (z-index 102).
@@ -40,6 +46,7 @@ const NEW_ACTIONS: Record<ManageSection, () => void> = {
   purposes:   () => useUIStore.getState().showAddPurpose(),
   tags:       () => useUIStore.getState().showAddTag(),
   types:      () => useUIStore.getState().showAddItemType(),
+  templates:  () => useUIStore.getState().openTemplateEditor(blankTemplate()),
 };
 
 interface RowProps {
@@ -271,6 +278,56 @@ function TagsSection() {
   );
 }
 
+// ── Templates (docs/features/endeavours.md "Saved templates") ─────────────
+// The built-in ones (changed or not) then the person's own; each edits in the template editor.
+
+function TemplatesSection() {
+  const templates = useTemplates();
+  const open = useUIStore((s) => s.openTemplateEditor);
+  const own = templates.filter((t) => !isBuiltIn(t) && !isChangedBuiltIn(t));
+
+  async function remove(t: EndeavourTemplateDef) {
+    // A template is never empty in the sense of the rule: it's a definition someone wrote.
+    if (await confirmDelete(LABELS.templates.noun.toLowerCase(), t.name, undefined, { empty: false })) deleteTemplate(t);
+  }
+  async function restore(t: EndeavourTemplateDef) {
+    if (await confirmDialog({ title: LABELS.templates.restoreTitle(t.name), message: LABELS.templates.restoreMessage, confirmLabel: LABELS.templates.restore })) restoreDefault(t);
+  }
+  const row = (t: EndeavourTemplateDef) => (
+    <TemplateRow key={t.id} t={t} onEdit={() => open(t)}
+      onDuplicate={() => open(duplicateTemplate(t, LABELS.templates.copyOf(t.name)))}
+      onRestore={isChangedBuiltIn(t) ? () => void restore(t) : undefined}
+      onDelete={!isBuiltIn(t) && !isChangedBuiltIn(t) ? () => void remove(t) : undefined} />
+  );
+  return (
+    <div className={styles.group}>
+      <span className={styles.groupLabel}>{LABELS.templates.builtIn}</span>
+      {templates.filter((t) => isBuiltIn(t) || isChangedBuiltIn(t)).map(row)}
+      <span className={styles.groupLabel}>{LABELS.templates.yours}</span>
+      {own.length === 0 && <EmptyHint>{LABELS.templates.empty}</EmptyHint>}
+      {own.map(row)}
+    </div>
+  );
+}
+
+function TemplateRow({ t, onEdit, onDuplicate, onRestore, onDelete }: { t: EndeavourTemplateDef; onEdit: () => void; onDuplicate: () => void; onRestore?: () => void; onDelete?: () => void }) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={rowRef} className={styles.row}>
+      <RowOptionsMenu rowRef={rowRef} title={t.name} icon={<ItemIcon icon={t.icon} fallback="📁" />}>
+        <RowAction className={styles.iconBtn} icon={<EditIcon />} label={LABELS.templates.edit} onClick={onEdit} />
+        <RowAction className={styles.iconBtn} icon={<PresetIcon width="1em" height="1em" />} label={LABELS.templates.duplicate} onClick={onDuplicate} />
+        {onRestore && <RowAction className={styles.iconBtn} icon={<ResetIcon width="1em" height="1em" />} label={LABELS.templates.restore} onClick={onRestore} />}
+        {onDelete && <RowAction className={`${styles.iconBtn} ${styles.iconBtnDelete}`} icon={<TrashIcon width="1em" height="1em" />} label={LABELS.rowActions.delete} onClick={onDelete} destructive />}
+      </RowOptionsMenu>
+      <button type="button" className={styles.rowMain} onClick={onEdit}>
+        <TruncatedText text={t.name} className={styles.name} />
+        <span className={styles.detail}>{isChangedBuiltIn(t) ? LABELS.templates.changed : t.description}</span>
+      </button>
+    </div>
+  );
+}
+
 // ── Types (docs/features/endeavours.md phase 3) ──────────────────────────
 
 function TypesSection() {
@@ -331,7 +388,9 @@ function TypesSection() {
 export function ManagePane() {
   const paneResize = usePaneWidth('manage-nav', { edge: 'right', min: 140, max: 360 });
   const manageOpen    = useUIStore((s) => s.manageOpen);
-  const manageSection = useUIStore((s) => s.manageSection);
+  const storedSection = useUIStore((s) => s.manageSection);
+  // One left on Types before they were switched off opens on Endeavours.
+  const manageSection = !TYPES_ENABLED && storedSection === 'types' ? 'endeavours' : storedSection;
   const setManageSection = useUIStore((s) => s.setManageSection);
   const closeManage   = useUIStore((s) => s.closeManage);
 
@@ -388,6 +447,7 @@ export function ManagePane() {
             {manageSection === 'purposes'   && <PurposesSection />}
             {manageSection === 'tags'       && <TagsSection />}
             {manageSection === 'types'      && <TypesSection />}
+            {manageSection === 'templates'  && <TemplatesSection />}
           </div>
         </div>
       </div>

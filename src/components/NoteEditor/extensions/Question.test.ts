@@ -124,11 +124,11 @@ describe('question block', () => {
     expect(dom().getAttribute('data-qn-icon')).toBe('✅');
   });
 
-  it('a question is a card with its own border: Shade but no Outline, and an old outline stops drawing', () => {
+  it('a question is a card with its own border: no Outline, and an old outline stops drawing', () => {
     make('<div data-type="question" data-qid="Q1" data-outlined="true"><div data-qn-text>Why?</div></div>');
     expect(editor.view.dom.querySelector('[data-type="question"]')!.hasAttribute('data-outlined')).toBe(false);
     const frames = frameButtons(editor.view, () => qPos() + 1, q().attrs);
-    expect([...frames.querySelectorAll('[data-block-frame]')].map((b) => b.getAttribute('data-block-frame'))).toEqual(['shaded', 'options']);
+    expect([...frames.querySelectorAll('[data-block-frame]')].map((b) => b.getAttribute('data-block-frame'))).toEqual(['options']);   // Shade: in the options and right-click only
     setBlockFrame(editor.view, qPos(), { outlined: true, shaded: true });
     expect(q().attrs).toMatchObject({ outlined: false, shaded: true });
     const menu = frameMenuItem(editor.view, qPos(), q().attrs);

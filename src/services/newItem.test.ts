@@ -69,8 +69,8 @@ describe('openNewItem (N / Space / Ctrl+N)', () => {
   });
   it('Endeavours: the page makes an Endeavour; a home makes a task', () => {
     openNewItem('endeavours');
-    expect(useUIStore.getState().openModal).toBe('add-collection');
-    useUIStore.getState().closeModal();
+    expect(useUIStore.getState().creator).toEqual({ partOf: null });
+    useUIStore.getState().closeCreator();
     useUIStore.setState({ endeavourHomeId: 'e1' });
     openNewItem('endeavours');
     expect(useUIStore.getState().openModal).toBe('add-task');

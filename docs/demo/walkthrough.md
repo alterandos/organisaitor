@@ -17,7 +17,9 @@ due in about three and a half weeks.
 
 ## 2. Thinking in structures (The rock cycle, Identifying minerals, Geological time)
 - **The rock cycle:** the cycle block, the three rock types, a definition card, a pull quote, an
-  unsure flag and an answered question. Ctrl+] switches a block's design (try the cycle).
+  unsure flag and an answered question, and "foliation" marked Clarify later (open the Clarify tool
+  from the Notes tools panel to see it under To learn, the slate flag under To check). Ctrl+]
+  switches a block's design (try the cycle).
 - **Identifying minerals:** the identification key, the quartz vs calcite comparison, the Quartz
   profile card, maths with numbering.
 - **Geological time:** the hierarchy (eon, era, period), the breakdown, half-life maths, and the
@@ -42,6 +44,7 @@ due in about three and a half weeks.
 - Notes views: **Mosaic** and **Map** (how the notes link).
 
 ## 5. Everything for one thing (Overview, Records, the rest)
+- **Kinds of event and repeats:** in the Calendar, Mum's birthday says how old she turns (it's a Birthday, its first date the year she was born), and the train home shows 🚆, dimmed (Travel, shown Quiet). Press N: Event / Birthday / Travel chips at the top; pick Travel and choose ✈️ 🚆 🚗… Open the Study group (it repeats, 🔁 in the grid): one line says "Every week · from …", and **Editing: All dates ▾** chooses which dates a change goes to; nothing is copied until you change something.
 - **Date calculator:** the calculator button in the Calendar header (or Quick Access → Places). Press the wand and type "the 12th Friday from 1 October 2026" or "how many days until 25 December"; Ctrl+Enter shows the answer in the Calendar.
 - **Why it's warming, Weather or climate?, A case that worked** (Week 6 note): a cause-and-effect chain (hover any item to light its chain; press an item's dot, then one in the next column, to link them; Ctrl+] for the List design, again for the Fishbone), a Venn diagram (Ctrl+] for the table; edit a thing to see its set buttons) and a case study (Ctrl+] for Report, then Compact).
 - **Icons:** edit a notebook (or a list, an Overview) and press its icon: emoji by group or by search, or upload a picture, which becomes a small icon you can reuse anywhere under Your icons.

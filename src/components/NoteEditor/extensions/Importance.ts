@@ -4,22 +4,19 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { nanoid } from 'nanoid';
 import { LABELS } from '@/config/labels';
 import { createReviewIcon } from '@/components/Icons';
-import { addDaysToIso, todayIso } from '@/utils/date';
 import { BUILTIN_TAGS } from '../builtinTags';
-import { IMPORTANCE_LEVELS, importanceLevel } from './importanceLevels';
+import { IMPORTANCE_LEVELS, importanceLevel, nextImportance } from './importanceLevels';
 import { openBlockPopover, popoverClass } from './blockDesigns';
 import { registerMarginSource } from './MarginColumn';
 
-// Important passages, built out (2026-10-07): three levels (Important, Very important, Critical),
-// its icon in the margin column (extensions/MarginColumn.ts), a Key points list (NoteTOC), and Review later — a light
-// spaced-repetition list of passages to come back to (NotesSection/ReviewView). All of it lives
-// on the Important tag's own mark (NoteTagMark: level, passageId, reviewDue, reviewStep), so it
-// syncs and encrypts with the note and needs no store of its own.
+// Important passages, built out (2026-10-07): two levels (Important, Critical; three until
+// 2026-11-05), its icon in the margin column (extensions/MarginColumn.ts) and a Key points list
+// (NoteTOC). It lives on the Important tag's own mark (NoteTagMark: level, passageId), so it syncs
+// and encrypts with the note. Review later was kept on this mark too (reviewDue, reviewStep) until
+// it became its own mark (ReviewMark.ts, 2026-11-05); passages put on the list before still carry
+// it here, and the Review view still reads and answers them.
 
 export const IMPORTANT_TAG = BUILTIN_TAGS.find((t) => t.typeKey === 'important')!;
-
-// Days until the next review after each successful one; "Again" starts over at the first.
-export const REVIEW_INTERVALS = [1, 3, 7, 16, 35, 90];
 
 export interface ImportantPassage {
   passageId:  string | null;
@@ -96,38 +93,25 @@ export function setImportance(view: EditorView, from: number, to: number, level:
   view.dispatch(tr);
 }
 
-// Ctrl+1 on a selection: Important, then Very important, then Critical, then off.
+// Ctrl+1 on a selection: Important, then Critical, then off.
 export function cycleImportance(view: EditorView): void {
   const { from, to } = view.state.selection;
+  cycleImportanceIn(view, from, to);
+}
+export function cycleImportanceIn(view: EditorView, from: number, to: number): void {
   const existing = importantAttrsIn(view.state, from, to);
-  const level = existing ? importanceLevel(existing.level).level : 0;
-  setImportance(view, from, to, level >= 3 ? null : ((level + 1) as 1 | 2 | 3));
+  const next = nextImportance(existing ? importanceLevel(existing.level).level : 0);
+  setImportance(view, from, to, next || null);
 }
 
-// "Review later": makes the passage Important (if it wasn't) and puts it on the review list,
-// first due tomorrow — or takes it off the list if it was on it.
-export function toggleReview(view: EditorView, from: number, to: number, today = todayIso()): void {
-  const existing = importantAttrsIn(view.state, from, to);
-  const level = existing ? importanceLevel(existing.level).level : 1;
-  const on = !existing?.reviewDue;
-  setImportance(view, from, to, level, on ? { due: addDaysToIso(today, REVIEW_INTERVALS[0]), step: 0 } : { due: null, step: null });
-}
-
-export type ReviewAnswer = 'again' | 'good' | 'stop';
-
-// The schedule after reviewing a passage at `step`.
-export function nextReview(step: number | null, answer: ReviewAnswer, today = todayIso()): { due: string | null; step: number | null } {
-  if (answer === 'stop') return { due: null, step: null };
-  if (answer === 'again') return { due: addDaysToIso(today, REVIEW_INTERVALS[0]), step: 0 };
-  const next = Math.min((step ?? 0) + 1, REVIEW_INTERVALS.length - 1);
-  return { due: addDaysToIso(today, REVIEW_INTERVALS[next]), step: next };
-}
+// Whether from..to is marked Important (any level).
+export const isImportantIn = (state: EditorState, from: number, to: number): boolean => !!importantAttrsIn(state, from, to);
 
 // ── In the margin column ─────────────────────────────────────────────────────
 
 // Each Important passage in the margin column (extensions/MarginColumn.ts, which replaced the
 // markers in the left margin 2026-10-17): its level's icon, and the Review icon when it's on the
-// review list. A click offers the level, Review later and Remove, as its right-click menu does.
+// review list from before. A click offers the level, Stop reviewing (from before) and Remove.
 registerMarginSource('important', (state) => collectImportantPassages(state.doc).map((p) => {
   const info = importanceLevel(p.level);
   const review = !!p.reviewDue;
@@ -164,7 +148,7 @@ registerMarginSource('important', (state) => collectImportantPassages(state.doc)
       box.append(
         row(IMPORTANCE_LEVELS.map((lv) => [`${lv.icon} ${lv.label}`, lv.level === p.level, () => setImportance(view, p.from, p.to, lv.level)])),
         row([
-          [review ? I.stopReviewing : I.reviewLater, false, () => toggleReview(view, p.from, p.to)],
+          ...(review ? [[I.stopReviewing, false, () => setImportance(view, p.from, p.to, p.level, { due: null, step: null })] as [string, boolean, () => void]] : []),
           [LABELS.contextMenu.removeImportant, false, () => setImportance(view, p.from, p.to, null)],
         ]),
       );

@@ -4,9 +4,8 @@ import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews } from '@/store/noteViews';
 import { noteName } from '@/utils/notes';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { answerReview, dueReviews, reviewItems, type ReviewItem } from '@/services/noteReview';
-import { openNotePassage } from '@/services/notePassage';
-import { nextReview, REVIEW_INTERVALS, type ReviewAnswer } from '../NoteEditor/extensions/Importance';
+import { answerReview, dueReviews, openReviewItem, reviewItems, type ReviewItem } from '@/services/noteReview';
+import { nextReview, REVIEW_INTERVALS, type ReviewAnswer } from '../NoteEditor/extensions/ReviewMark';
 import { importanceLevel } from '../NoteEditor/extensions/importanceLevels';
 import { formatDate, todayIso } from '@/utils/date';
 import { LABELS } from '@/config/labels';
@@ -15,7 +14,7 @@ import styles from './ReviewView.module.css';
 
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
 
-// Review later, one passage at a time: the passages marked "Review later" that are due today
+// Review later, one at a time: the passages, blocks and cards marked "Review later" that are due today
 // (services/noteReview.ts). "Got it" pushes the next review further out each time (1, 3, 7, 16,
 // 35, 90 days); "Again" brings it back tomorrow; "Stop reviewing" takes it off the list. The
 // list is taken when the view opens, so answering never reshuffles what's left.
@@ -40,7 +39,8 @@ export function ReviewView() {
   };
 
   const upcoming = item ? [] : reviewItems().filter((r) => r.reviewDue > today);
-  const level = item ? importanceLevel(item.level) : null;
+  // A passage put on the list as Important (before 2026-11-05) still says its level.
+  const level = item && item.level ? importanceLevel(item.level) : null;
   const goodDays = item ? daysBetween(today, nextReview(item.reviewStep, 'good', today).due!) : REVIEW_INTERVALS[0];
 
   // The passage within its paragraph, the passage itself picked out.
@@ -64,11 +64,11 @@ export function ReviewView() {
       )}
 
       <div className={styles.body}>
-        {item && level ? (
-          <div className={styles.card} key={index} style={{ ['--level-color' as string]: level.color }}>
+        {item ? (
+          <div className={styles.card} key={index} style={level ? { ['--level-color' as string]: level.color } : undefined}>
             <div className={styles.cardKicker}>
-              <span>{level.icon} {level.label}</span>
-              <button type="button" className={styles.source} onClick={() => openNotePassage(item.noteId, { mark: 'noteTag', attr: 'passageId', value: item.passageId })}>
+              <span>{level ? `${level.icon} ${level.label}` : L.kinds[item.where]}</span>
+              <button type="button" className={styles.source} onClick={() => openReviewItem(item)}>
                 {L.from(views[item.noteId as never] ? noteName(views[item.noteId as never], noteTags, { untitled: LABELS.glossary.untitledNote }).full : item.noteTitle || LABELS.glossary.untitledNote)} <OpenIcon />
               </button>
             </div>

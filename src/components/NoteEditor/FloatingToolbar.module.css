@@ -137,6 +137,8 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.tagOn { margin-left: auto; color: var(--color-primary); }
+.tagIcon svg { width: 1em; height: 1em; }
 .tagShortcut {
   width: 14px;
   flex-shrink: 0;

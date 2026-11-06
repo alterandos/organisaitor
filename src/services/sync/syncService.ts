@@ -12,6 +12,8 @@ import { useOverviewStore } from '@/store/overviewStore';
 import { useConverterStore } from '@/store/converterStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { useGoalStore } from '@/store/goalStore';
+import { useTemplateStore } from '@/store/templateStore';
+import type { EndeavourTemplateDef } from '@/types/templates';
 import type { Goal, ItemType } from '@/types';
 import type { CustomConverter } from '@/types/converters';
 import { usePictureStore } from '@/store/pictureStore';
@@ -51,6 +53,7 @@ import {
   converterToRow,          rowToConverter,
   itemTypeToRow,           rowToItemType,
   goalToRow,               rowToGoal,
+  templateToRow,           rowToTemplate,
   pictureToRow,            rowToPicture,
   pinToRow,                rowToPin,
   visitToRow,              rowToVisit,
@@ -112,6 +115,7 @@ const TABLE_DEFS: Record<(typeof SYNC_TABLES)[number], TableDef> = {
   converters:             { get: () => useConverterStore.getState().converters,         toRow: (i, u) => converterToRow(i as CustomConverter, u) },
   item_types:             { get: () => useItemTypeStore.getState().types,               toRow: (i, u) => itemTypeToRow(i as ItemType, u) },
   goals:                  { get: () => useGoalStore.getState().goals,                   toRow: (i, u) => goalToRow(i as Goal, u) },
+  endeavour_templates:    { get: () => useTemplateStore.getState().templates,           toRow: (i, u) => templateToRow(i as EndeavourTemplateDef, u) },
   pictures:               { get: () => usePictureStore.getState().pictures,             toRow: (i, u) => pictureToRow(i as Picture, u) },
   quick_access_pins:      { get: () => usePinnedItemsStore.getState().pins,             toRow: (i, u) => pinToRow(i as PinnedItem, u), onConflict: PER_ACCOUNT_KEY },
   quick_access_visits:    { get: () => useRecentItemsStore.getState().items,            toRow: (i, u) => visitToRow(i as RecentItemEntry, u), onConflict: PER_ACCOUNT_KEY },
@@ -398,6 +402,7 @@ const SYNC_TABLES = [
   'converters',
   'item_types',
   'goals',
+  'endeavour_templates',
   'pictures',
   'quick_access_pins',
   'quick_access_visits',
@@ -524,7 +529,7 @@ export type UploadCounts = {
   schedules: number; lists: number; listItems: number; listTypes: number;
   notes: number; noteTags: number; structuredTagEntries: number;
   watchlistItems: number; portfolioTags: number; investmentPurposes: number;
-  trashItems: number; overviews: number; converters: number; itemTypes: number; goals: number; pictures: number; pins: number; visits: number;
+  trashItems: number; overviews: number; converters: number; itemTypes: number; goals: number; templates: number; pictures: number; pins: number; visits: number;
   activities: number; activityTypes: number;
 };
 
@@ -686,6 +691,10 @@ function hydrateStores(remote: RemoteRows) {
     goals: mergeRecords(local.goals, remote.goals, rowToGoal, 'goals'),
   }));
 
+  useTemplateStore.setState((local) => ({
+    templates: mergeRecords(local.templates, remote.endeavour_templates, rowToTemplate, 'endeavour_templates'),
+  }));
+
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   usePictureStore.setState((local) => ({
     pictures: mergeRecords(local.pictures, remote.pictures, rowToPicture, 'pictures'),
@@ -735,6 +744,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const { converters } = useConverterStore.getState();
   const { types: itemTypes } = useItemTypeStore.getState();
   const { goals } = useGoalStore.getState();
+  const { templates } = useTemplateStore.getState();
   const { pictures } = usePictureStore.getState();
   const { pins } = usePinnedItemsStore.getState();
   const { items: visits } = useRecentItemsStore.getState();
@@ -766,6 +776,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
   const allConverters         = unheld('converters', Object.values(converters));
   const allItemTypes          = unheld('item_types', Object.values(itemTypes));
   const allGoals              = unheld('goals', Object.values(goals));
+  const allTemplates          = unheld('endeavour_templates', Object.values(templates));
   const allPictures           = unheld('pictures', Object.values(pictures));
   const allPins               = unheld('quick_access_pins', Object.values(pins));
   const allVisits             = unheld('quick_access_visits', Object.values(visits));
@@ -796,6 +807,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     allConverters.length         > 0 ? supabase.from('converters').upsert(allConverters.map((c) => converterToRow(c, userId))) : null,
     allItemTypes.length          > 0 ? supabase.from('item_types').upsert(allItemTypes.map((t) => itemTypeToRow(t, userId))) : null,
     allGoals.length              > 0 ? supabase.from('goals').upsert(allGoals.map((g) => goalToRow(g, userId))) : null,
+    allTemplates.length          > 0 ? supabase.from('endeavour_templates').upsert(allTemplates.map((t) => templateToRow(t, userId))) : null,
     allPictures.length           > 0 ? supabase.from('pictures').upsert(allPictures.map((p) => pictureToRow(p, userId))) : null,
     allPins.length               > 0 ? supabase.from('quick_access_pins').upsert(allPins.map((p) => pinToRow(p, userId)), { onConflict: PER_ACCOUNT_KEY }) : null,
     allVisits.length             > 0 ? supabase.from('quick_access_visits').upsert(allVisits.map((v) => visitToRow(v, userId)), { onConflict: PER_ACCOUNT_KEY }) : null,
@@ -814,7 +826,7 @@ async function upsertAllToSupabase(userId: string): Promise<UploadCounts> {
     listItems: allListItems.length, listTypes: allListTypes.length,
     notes: allNotes.length, noteTags: allNoteTags.length, structuredTagEntries: allStructuredTagEntries.length,
     watchlistItems: allWatchlistItems.length, portfolioTags: allPortfolioTags.length, investmentPurposes: allInvestmentPurposes.length,
-    trashItems: allTrashItems.length, overviews: allOverviews.length, converters: allConverters.length, itemTypes: allItemTypes.length, goals: allGoals.length, pictures: allPictures.length, pins: allPins.length, visits: allVisits.length,
+    trashItems: allTrashItems.length, overviews: allOverviews.length, converters: allConverters.length, itemTypes: allItemTypes.length, goals: allGoals.length, templates: allTemplates.length, pictures: allPictures.length, pins: allPins.length, visits: allVisits.length,
     activities: allActivities.length, activityTypes: allActivityTypes.length,
   };
 }
@@ -883,6 +895,7 @@ function setupSubscriptions(userId: string): void {
     watch(userId, useConverterStore, [{ prop: 'converters', table: 'converters' }]),
     watch(userId, useItemTypeStore, [{ prop: 'types', table: 'item_types' }]),
     watch(userId, useGoalStore, [{ prop: 'goals', table: 'goals' }]),
+    watch(userId, useTemplateStore, [{ prop: 'templates', table: 'endeavour_templates' }]),
     watch(userId, usePictureStore, [{ prop: 'pictures', table: 'pictures' }]),
     watch(userId, usePinnedItemsStore, [{ prop: 'pins', table: 'quick_access_pins' }]),
     watch(userId, useRecentItemsStore, [{ prop: 'items', table: 'quick_access_visits' }]),

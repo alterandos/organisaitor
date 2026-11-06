@@ -22,7 +22,7 @@ describe('PeriodField', () => {
     expect(screen.getByText(/From Autumn 2026:/)).toBeInTheDocument();
     fireEvent.click(screen.getByText('Set its own'));
     expect(useTaskStore.getState().collections[geos].period).toEqual({ start: '2026-09-14', end: '2026-12-18', breaks: [] });
-    fireEvent.click(screen.getByText('+ Add a break'));
+    fireEvent.click(screen.getByText('+ Add time off'));
     expect(useTaskStore.getState().collections[geos].period?.breaks).toHaveLength(1);
     fireEvent.click(screen.getByText('Take Autumn 2026’s instead'));
     expect(useTaskStore.getState().collections[geos].period).toBeNull();   // null, so the cloud's copy is cleared too

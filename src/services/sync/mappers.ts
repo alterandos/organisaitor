@@ -1,11 +1,12 @@
 import type {
   ClassLink,
   Task, Collection, Tag, Purpose,
-  CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry,
+  CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, EventTaskRule,
   ScheduleTemplate, ItemType, TypedItem, Goal,
 } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
+import type { EndeavourTemplateDef } from '@/types/templates';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
 import type { TrashEntry, TrashEntryId, TrashableKind, DeletedBy } from '@/types/trash';
 import type { Overview } from '@/types/overview';
@@ -21,6 +22,10 @@ import type { Activity, ActivityType } from '@/types/fitness';
 const scheduleIdColumn = (v: string | null | undefined) => (v === undefined ? {} : { schedule_id: v });
 // The dates attended (migration 066), likewise: nullable, sent once set.
 const attendedColumn = (v: string[] | undefined) => (v === undefined ? {} : { attended_dates: v });
+// Sent once an event has had task rules (migration 071), so sync works before it's run.
+const taskRulesColumn = (v: EventTaskRule[] | undefined) => (v === undefined ? {} : { task_rules: v });
+// An event's pictures (migration 073): sent once it has had any; the column is nullable.
+const pictureIdsColumn = (v: string[] | undefined) => (v === undefined ? {} : { picture_ids: v });
 // Instead of a class or during it (migration 067, events and Deadlines), likewise.
 const onClassColumn = (v: ClassLink | null | undefined) => (v === undefined ? {} : { on_class: v });
 // An event's icon and Show quieter (migration 070): sent once either is set; both columns nullable.
@@ -301,6 +306,8 @@ export function eventToRow(e: CalendarEvent, userId: string) {
     ...typeColumns(e),
     ...scheduleIdColumn(e.scheduleId),
     ...attendedColumn(e.attendedDates),
+    ...taskRulesColumn(e.taskRules),
+    ...pictureIdsColumn(e.pictureIds),
     ...onClassColumn(e.onClass),
     ...eventLookColumns(e),
     deleted_at:          null,
@@ -351,6 +358,8 @@ export function rowToEvent(r: Record<string, any>): CalendarEvent {
     ...typeFromRow(r),
     ...(r.schedule_id ? { scheduleId: r.schedule_id } : {}),
     ...(Array.isArray(r.attended_dates) && r.attended_dates.length ? { attendedDates: r.attended_dates } : {}),
+    ...(Array.isArray(r.task_rules) ? { taskRules: r.task_rules as EventTaskRule[] } : {}),
+    ...(Array.isArray(r.picture_ids) ? { pictureIds: (r.picture_ids as unknown[]).filter((x): x is string => typeof x === 'string') } : {}),
     ...(r.on_class ? { onClass: r.on_class } : {}),
     ...(r.icon != null ? { icon: r.icon } : {}),
     ...(r.quiet != null ? { quiet: r.quiet } : {}),
@@ -1223,5 +1232,30 @@ export function rowToGoal(r: Record<string, any>): Goal {
     statusAt:  r.status_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+// ── Endeavour template (endeavour_templates, migration 072) ─────
+export function templateToRow(t: EndeavourTemplateDef, userId: string) {
+  const { id, name, icon, builtIn, createdAt, updatedAt, ...definition } = t;
+  return {
+    id, user_id: userId, name, icon: icon ?? null, built_in: builtIn ?? null,
+    // Everything else as one blob, so a new part of a template never needs a migration.
+    definition,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    deleted_at: null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToTemplate(r: Record<string, any>): EndeavourTemplateDef {
+  const d = r.definition ?? {};
+  return {
+    description: '', kind: 'project', dates: { show: false, exams: false, timeOff: [] }, details: [], notebooks: [], lists: [], tasks: [],
+    classes: [], deadlines: [], goals: [], partsFrom: null,
+    ...d,
+    id: r.id, name: r.name, icon: r.icon ?? null, ...(r.built_in ? { builtIn: r.built_in } : {}),
+    createdAt: r.created_at, updatedAt: r.updated_at,
   };
 }

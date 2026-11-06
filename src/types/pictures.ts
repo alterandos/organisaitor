@@ -5,8 +5,9 @@ export type PictureId = string & { readonly _brand: 'PictureId' };
 
 // Where a picture was added: only backdrop pictures are offered in the backdrop picker; one pasted
 // into a note's text or put on a Glossary card belongs to that note or card; an icon (a small
-// square, components/IconPicker) is offered under "Your icons" wherever an icon is picked.
-export type PictureOrigin = 'backdrop' | 'note' | 'card' | 'icon';
+// square, components/IconPicker) is offered under "Your icons" wherever an icon is picked; one put
+// on an item (a calendar event's pictures, components/PictureInput's PicturesField) belongs to it.
+export type PictureOrigin = 'backdrop' | 'note' | 'card' | 'icon' | 'item';
 
 export interface Picture {
   id:        PictureId;

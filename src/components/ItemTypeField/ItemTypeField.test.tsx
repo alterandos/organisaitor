@@ -3,6 +3,7 @@
 // Types in the creation forms and the Type editor (docs/features/endeavours.md phase 3): a Type
 // chosen from the speed dial starts the form; its fields are filled in; its parts are made with
 // the item; and a Type is made in the editor.
+import { TYPES_ENABLED } from '@/config/features';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -32,7 +33,8 @@ afterEach(() => {
 
 const typeId = (name: string) => Object.values(useItemTypeStore.getState().types).find((t) => t.name === name)!.id as ItemTypeId;
 
-describe('a Type in the creation forms', () => {
+// Types are switched off for now (config/features.ts); kept for when they're back.
+describe.skipIf(!TYPES_ENABLED)('a Type in the creation forms', () => {
   it('shows nothing while the person has no Types', () => {
     render(<AddTaskModal />);
     expect(screen.queryByLabelText('Type')).toBeNull();

@@ -6,7 +6,8 @@ import { glossaryEntry } from '@/services/glossary';
 import { openGlossaryEntry } from '@/services/notePassage';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { refGroupAt, unlinkConceptRef } from './ConceptRef';
-import { collectImportantPassages, setImportance, toggleReview } from './Importance';
+import { collectImportantPassages, setImportance } from './Importance';
+import { reviewingIn, toggleReview } from './ReviewMark';
 import { IMPORTANCE_LEVELS } from './importanceLevels';
 
 // Right-click on text linked to a Glossary term, or on an Important passage.
@@ -57,7 +58,7 @@ registerContextMenuProvider({
           run: () => setImportance(view, passage.from, passage.to, lv.level),
         }))],
       },
-      { id: 'review', label: passage.reviewDue ? I.stopReviewing : I.reviewLater, icon: createElement(ReviewIcon), run: () => toggleReview(view, passage.from, passage.to) },
+      { id: 'review', label: reviewingIn(view.state, passage.from, passage.to) ? I.stopReviewing : I.reviewLater, icon: createElement(ReviewIcon), run: () => toggleReview(view, passage.from, passage.to) },
       { id: 'remove', label: LABELS.contextMenu.removeImportant, icon: createElement(CloseIcon), run: () => setImportance(view, passage.from, passage.to, null) },
     ];
   },

@@ -17,6 +17,7 @@ import { resolveItemType } from '@/utils/itemTypes';
 import { applyItemType } from '@/services/itemTypes';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TimeInput } from '@/components/TimeInput/TimeInput';
+import { PriorityPicker } from '@/components/PriorityPicker/PriorityPicker';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import styles from './AddTaskModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -26,13 +27,6 @@ import { CloseIcon, DisclosureIcon, TrashIcon } from '@/components/Icons';
 import { ITEM_LINK_KINDS } from '@/config/itemLinkKinds';
 
 type PendingTag = { id: TagId; name: string; isNew: boolean };
-
-const PRIORITIES: { value: Priority; label: string }[] = [
-  { value: 'none',   label: 'None' },
-  { value: 'low',    label: 'Low'  },
-  { value: 'medium', label: 'Med'  },
-  { value: 'high',   label: 'High' },
-];
 
 export function AddTaskModal() {
   const taskModalAdvanced  = useUIStore((s) => s.taskModalAdvanced);
@@ -61,7 +55,7 @@ export function AddTaskModal() {
 
   // Preparation for, or a follow-up of, an event or a Deadline: its dates, title and Endeavour.
   const eventItem  = pendingEventLink ? eventTarget(pendingEventLink.targetType, pendingEventLink.targetId) : undefined;
-  const eventDates = pendingEventLink && eventItem ? linkedTaskDates(pendingEventLink.kind, pendingEventLink.targetType, pendingEventLink.targetId) : {};
+  const eventDates = pendingEventLink && eventItem ? linkedTaskDates(pendingEventLink.kind, pendingEventLink.targetType, pendingEventLink.targetId, pendingEventLink.occurrence ?? null) : {};
   const eventTitle = eventItem ? (pendingEventLink!.kind === 'prepFor' ? LABELS.taskLinks.event.prepTitle : LABELS.taskLinks.event.followTitle)(eventItem.title) : '';
   const [title,         setTitle]         = useState(quickAddPrefill?.title ?? eventTitle);
   const [notes,         setNotes]         = useState('');
@@ -259,7 +253,7 @@ export function AddTaskModal() {
       parentId:     parentId ? parentId as TaskId : null,
       crossAppRefs,
       itemLinks:    followUpOrigin ? [makeItemLink('followUpOf', followUpOrigin.id, null, now())]
-        : pendingEventLink && eventItem ? [makeItemLink(pendingEventLink.kind, pendingEventLink.targetId, null, now(), pendingEventLink.targetType)]
+        : pendingEventLink && eventItem ? [{ ...makeItemLink(pendingEventLink.kind, pendingEventLink.targetId, null, now(), pendingEventLink.targetType), ...(pendingEventLink.occurrence ? { occurrence: pendingEventLink.occurrence } : {}) }]
         : undefined,
       repeat:       parentId ? null : repeat,
     });
@@ -323,20 +317,9 @@ export function AddTaskModal() {
                 )}
               </div>
             </div>
-            <div className={styles.field}>
-              <label className={styles.label}>Priority</label>
-              <div className={styles.priorityGroup}>
-                {PRIORITIES.map((p) => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    className={`${styles.priorityBtn} ${priority === p.value ? styles[`priority_${p.value}`] : ''}`}
-                    onClick={() => { priorityTouched.current = true; setPriority(p.value); }}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
+            <div className={`${styles.field} ${styles.fieldSnug}`}>
+              <span className={styles.label}>{LABELS.priority.label}</span>
+              <PriorityPicker id="new-task-priority" value={priority} onChange={(p) => { priorityTouched.current = true; setPriority(p); }} />
             </div>
           </div>
 

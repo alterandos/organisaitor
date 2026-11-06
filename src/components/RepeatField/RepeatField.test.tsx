@@ -62,13 +62,23 @@ describe('RepeatField', () => {
     // 2026-10-27 is the 4th (and last) Tuesday of October.
     render(<Host initial={{ ...weekly, freq: 'monthly' }} date="2026-10-27" />);
     const on = screen.getAllByRole('combobox')[1];
-    expect(Array.from(on.querySelectorAll('option')).map((o) => o.textContent)).toEqual(['On day 27', 'On the…']);
+    expect(Array.from(on.querySelectorAll('option')).map((o) => o.textContent)).toEqual(['On day', 'On the…']);
+    expect(screen.getByRole('combobox', { name: 'Day of the month' })).toHaveValue('27');
     fireEvent.change(on, { target: { value: 'weekday' } });
     expect(last).toMatchObject({ freq: 'monthly', monthWeekday: { week: 4, day: 2 } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Which one in the month' }), { target: { value: '-1' } });
     expect(last).toMatchObject({ monthWeekday: { week: -1, day: 2 } });
     fireEvent.change(on, { target: { value: 'day' } });
     expect(last).not.toHaveProperty('monthWeekday');
+  });
+
+  it('yearly: on a date, its day and month chosen here, moving the item’s date (a birthday: 24 July every year)', () => {
+    let moved: string | null = null;
+    render(<RepeatField value={{ ...weekly, freq: 'yearly' }} onChange={(r) => { last = r; }} date="2026-03-10" onDateChange={(d) => { moved = d; }} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Month' }), { target: { value: '6' } });
+    expect(moved).toBe('2026-07-10');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Day of the month' }), { target: { value: '31' } });
+    expect(moved).toBe('2026-03-31');
   });
 
   it('any nth weekday ("every third Sunday"), and the date moves onto it when the host allows', () => {

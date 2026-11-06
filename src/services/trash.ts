@@ -1,3 +1,5 @@
+import type { EndeavourTemplateDef } from '@/types/templates';
+import { useTemplateStore } from '@/store/templateStore';
 import { now } from '@/utils/date';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
@@ -125,6 +127,10 @@ const RESTORE_TARGETS: { [K in TrashableKind]: RestoreTarget } = {
   goal: {
     has: (id) => id in useGoalStore.getState().goals,
     put: (g) => useGoalStore.setState((s) => ({ goals: { ...s.goals, [(g as Goal).id]: g as Goal } })),
+  },
+  endeavourTemplate: {
+    has: (id) => id in useTemplateStore.getState().templates,
+    put: (t) => useTemplateStore.setState((s) => ({ templates: { ...s.templates, [(t as EndeavourTemplateDef).id]: t as EndeavourTemplateDef } })),
   },
 };
 

@@ -1,3 +1,4 @@
+import { TYPES_ENABLED } from '@/config/features';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
@@ -38,16 +39,16 @@ function semesterWithSubject(): { sem: CollectionId; sub: CollectionId } {
 }
 
 describe('a course outline read into a subject', () => {
-  it('shows what it would add, then adds it: classes with the semester’s breaks, a reading before each lecture; Undo leaves nothing', () => {
+  it('shows what it would add, then adds it: classes with the semester’s breaks, a reading task before each lecture; Undo leaves nothing', () => {
     const { sub } = semesterWithSubject();
     const outline = readCourseOutline(OUTLINE, '2026-07-27');
     expect(outlineDraftsFor(sub, outline).map((d) => [d.kind, d.title])).toEqual([
-      ['schedule', 'GEOS215 lecture'], ['schedule', 'GEOS215 lecture'], ['schedule', 'GEOS215 Lab 1'], ['work', 'Essay'], ['work', 'Reading'],
+      ['schedule', 'GEOS215 lecture'], ['schedule', 'GEOS215 lecture'], ['schedule', 'GEOS215 Lab 1'], ['work', 'Essay'],
     ]);
     expect(useCalendarStore.getState().events).toEqual({});   // nothing made yet
 
     const { made, undo } = addOutline(sub, outline);
-    expect(made).toBe(5);
+    expect(made).toBe(4);
     const { events, deadlines } = useCalendarStore.getState();
     const schedule = scheduleListOf(sub, events);
     const [wed, fri, lab] = schedule;
@@ -62,13 +63,13 @@ describe('a course outline read into a subject', () => {
 
     const work = workListOf(sub, deadlines);
     const essay = work.find((d) => d.title === 'Essay')!;
-    expect(essay.typeFields).toMatchObject({ weight: 40 });
-    expect(useItemTypeStore.getState().types[essay.typeId!].name).toBe('Essay');
-    const reading = work.find((d) => d.title === 'Reading')!;
-    expect(reading.repeat?.follows?.ids.sort()).toEqual([wed.id, fri.id].sort());
-    expect(reading.repeat?.dates?.slice(0, 2)).toEqual(['2026-07-28', '2026-07-30']);
-    expect(reading.repeat?.dates).not.toContain('2026-09-29');   // no lecture on the break's Wednesday
-    expect(draftFromDeadline(reading, events).follow).toEqual({ title: 'GEOS215 lecture', offsetDays: -1 });
+    // Types are switched off (config/features.ts): untyped, its worth in its notes.
+    expect(essay.typeId ?? null).toBeNull();
+    expect(essay.notes).toBe('Worth 40%');
+    // The reading is a task for each lecture (2026-11-04), made a week before it's due by the watcher.
+    expect(work.some((d) => d.title === 'Reading')).toBe(false);
+    expect([wed.taskRules, fri.taskRules].map((r) => r?.map((x) => [x.title, x.side, x.days]))).toEqual([[['Reading', 'before', 1]], [['Reading', 'before', 1]]]);
+    expect(lab.taskRules).toBeUndefined();
 
     undo();
     expect(useCalendarStore.getState().events).toEqual({});
@@ -145,7 +146,8 @@ describe('a subject’s repeating Work', () => {
   });
 });
 
-describe('a Type’s tasks are made only when wanted (the user, 2026-10-30)', () => {
+// Types are switched off for now (config/features.ts); kept for when they're back.
+describe.skipIf(!TYPES_ENABLED)('a Type’s tasks are made only when wanted (the user, 2026-10-30)', () => {
   it('a new Exam makes the tasks chosen; changing its values makes none; the outline can leave them out', () => {
     const { sub } = semesterWithSubject();
     addStarterSet('university');

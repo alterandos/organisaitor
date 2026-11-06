@@ -9,6 +9,7 @@ import { GoalModal } from './GoalModal';
 import { EndeavoursSection } from '@/components/EndeavoursSection/EndeavoursSection';
 import { useGoalStore } from '@/store/goalStore';
 import { useTaskStore } from '@/store/taskStore';
+import { LABELS } from '@/config/labels';
 import { useUIStore } from '@/store/uiStore';
 import type { CollectionId } from '@/types';
 
@@ -78,10 +79,10 @@ describe('goals on the home', () => {
     expect(card).toHaveTextContent('Achieved');
   });
 
-  it('the home offers "+ Goal", opening the editor for this Endeavour', () => {
+  it('the home’s Goals tile adds one, opening the editor for this Endeavour', () => {
     const geos = setUp();
     render(<EndeavoursSection />);
-    fireEvent.click(screen.getByText('+ Goal'));
+    fireEvent.click(screen.getByRole('button', { name: LABELS.endeavourPieces.addTo(LABELS.endeavourPieces.goals) }));
     expect(useUIStore.getState()).toMatchObject({ openModal: 'add-goal', pendingGoalEndeavourId: geos });
   });
 });

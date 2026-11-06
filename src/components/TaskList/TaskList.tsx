@@ -12,6 +12,7 @@ import { isBlocked } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
 import styles from './TaskList.module.css';
 import { DisclosureIcon } from '@/components/Icons';
+import { foldRuleTasks } from '@/utils/eventTaskRules';
 
 function deadlineMs(t: Task): number {
   return t.deadline ? new Date(t.deadline).getTime() : Infinity;
@@ -51,6 +52,9 @@ export function TaskList() {
   const [completedOpen, setCompletedOpen] = useState(false);
   const [archivedOpen,  setArchivedOpen]  = useState(false);
   const [blockedOpen,   setBlockedOpen]   = useState(false);
+  // Tasks for each date of an event, folded under the one due first (utils/eventTaskRules.ts):
+  // the lead tasks whose others are shown.
+  const [unfolded,      setUnfolded]      = useState<string[]>([]);
   const hideBlockedTasks = useSettingsStore((s) => s.hideBlockedTasks);
 
   const tasksRecord         = useTaskStore((s) => s.tasks);
@@ -178,7 +182,26 @@ export function TaskList() {
   return (
     <div className={styles.list}>
       {due}
-      {active.map((task) => renderTaskGroup(task))}
+      {(() => {
+        const { shown, folded } = foldRuleTasks(active);
+        return shown.map((task) => {
+          const more = folded.get(task.id) ?? [];
+          // The task open in the pane is always shown.
+          const open = unfolded.includes(task.id) || more.some((t) => t.id === openRootId);
+          return (
+            <div key={`fold-${task.id}`}>
+              {renderTaskGroup(task)}
+              {more.length > 0 && (
+                <button type="button" className={styles.foldToggle} aria-expanded={open}
+                  onClick={() => setUnfolded((ids) => (ids.includes(task.id) ? ids.filter((x) => x !== task.id) : [...ids, task.id]))}>
+                  <DisclosureIcon open={open} /> {open ? LABELS.eventTaskRules.foldHide : LABELS.eventTaskRules.foldMore(more.length)}
+                </button>
+              )}
+              {open && more.map((t) => renderTaskGroup(t))}
+            </div>
+          );
+        });
+      })()}
       {blocked.length > 0 && (
         <>
           <button

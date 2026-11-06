@@ -1,4 +1,4 @@
-import type { CalendarDeadline, CalendarEvent, ClassLink, Collection, ItemTypeId, RepeatConfig } from '@/types';
+import type { CalendarDeadline, CalendarEvent, ClassLink, Collection, EventTaskRule, ItemTypeId, RepeatConfig } from '@/types';
 import type { ScheduleBounds } from '@/utils/scheduleItems';
 import { breakDates, effectivePeriod } from '@/utils/endeavourPeriod';
 import type { CourseOutline } from '@/utils/courseOutline';
@@ -33,6 +33,8 @@ export interface SubjectItemDraft {
   // Work: before or after each class of this title ("1 day before each GEOS215 lecture"), kept in
   // step by services/repeatFollow.ts. Negative: days before.
   follow: { title: string; offsetDays: number } | null;
+  // Schedule: tasks made for each of its dates (services/eventTaskRules.ts).
+  taskRules?: EventTaskRule[];
 }
 
 // The Type field a Work item's worth is kept in (the University Types' Assessment has it).
@@ -122,13 +124,14 @@ export function subjectShort(name: string): string {
 const weekly = (day: number): RepeatConfig => ({ freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null, daysOfWeek: [day] });
 
 // What a course outline adds to a subject: its regular classes (weekly from `start`), one-off
-// classes, assessments (with their Type and weight) and, when it mentions readings, a reading the
-// day before each lecture. Classes first, so the reading has its lectures to follow.
+// classes, assessments (with their Type and weight) and, when it mentions readings, a reading task
+// the day before each lecture (the lecture's task rule, 2026-11-04: a task, not Work).
 export function outlineDrafts(o: CourseOutline, short: string, start: string, typeIdOf: (name: string) => ItemTypeId | null): SubjectItemDraft[] {
   const classTitle = (type: string) => `${short} ${type.toLowerCase()}`;
   const classes = o.classes.map((c): SubjectItemDraft => ({
     ...blankDraft('schedule', firstWeekdayOn(start, c.day)), title: classTitle(c.type), typeId: typeIdOf(c.type),
     start: c.start, end: c.end, place: c.location, repeat: weekly(c.day),
+    ...(o.readings && c.type === 'Lecture' ? { taskRules: [{ id: `reading-${c.day}`, title: 'Reading', side: 'before' as const, days: 1 }] } : {}),
   }));
   const oneOffs = o.oneOffs.map((c): SubjectItemDraft => ({
     ...blankDraft('schedule', c.date), title: `${short} ${c.title}`, typeId: typeIdOf(c.type), start: c.start, end: c.end, place: c.location,
@@ -136,8 +139,5 @@ export function outlineDrafts(o: CourseOutline, short: string, start: string, ty
   const assessments = o.assessments.map((a): SubjectItemDraft => ({
     ...blankDraft('work', a.date), title: a.title, typeId: typeIdOf(a.typeName), typeFields: a.weight !== null ? { [WORTH_FIELD]: a.weight } : {},
   }));
-  const reading: SubjectItemDraft[] = o.readings && o.classes.some((c) => c.type === 'Lecture')
-    ? [{ ...blankDraft('work', start), title: 'Reading', typeId: typeIdOf('Reading'), follow: { title: classTitle('Lecture'), offsetDays: -1 } }]
-    : [];
-  return [...classes, ...oneOffs, ...assessments, ...reading];
+  return [...classes, ...oneOffs, ...assessments];
 }

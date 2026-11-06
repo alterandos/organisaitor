@@ -1,0 +1,114 @@
+/* Adding pictures (components/PictureInput): the two buttons, and a field of pictures on an item. */
+
+.buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.button:hover { background: var(--color-surface-alt); }
+.button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.icon { width: 15px; height: 15px; flex: none; }
+
+/* The field: the pictures, then the buttons; outlined while a picture is dragged over it. */
+.field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+.field:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.dragging { border-color: var(--color-primary); background: var(--color-primary-subtle); }
+.dropHint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  color: var(--color-primary);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.thumbs { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.thumb { position: relative; width: 72px; height: 72px; }
+.thumbOpen {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-alt);
+  cursor: zoom-in;
+}
+.thumbOpen img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.thumbOpen:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.thumbMissing { display: flex; align-items: center; justify-content: center; height: 100%; }
+.thumbRemove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  padding: 3px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  opacity: 0;
+}
+.thumb:hover .thumbRemove,
+.thumbRemove:focus-visible { opacity: 1; }
+.thumbRemove:hover { color: var(--color-danger); }
+@media (hover: none) { .thumbRemove { opacity: 1; } }
+
+/* One picture, large, over everything (it can be opened from a pane). */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-picker);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-7);
+  background: var(--color-scrim-strong);
+  outline: none;
+}
+.viewerImg { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+.viewerClose,
+.viewerStep {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-on-scrim) 15%, transparent);
+  color: var(--color-on-scrim);
+  cursor: pointer;
+}
+.viewerClose { top: var(--space-4); right: var(--space-4); width: 36px; height: 36px; }
+.viewerStep { top: 50%; width: 44px; height: 44px; transform: translateY(-50%); font-size: var(--text-2xl); line-height: 1; }
+.viewerPrev { left: var(--space-4); }
+.viewerNext { right: var(--space-4); }
+.viewerClose:hover,
+.viewerStep:hover { background: color-mix(in srgb, var(--color-on-scrim) 30%, transparent); }
+.viewerClose:focus-visible,
+.viewerStep:focus-visible { outline: 2px solid var(--color-on-scrim); outline-offset: 2px; }

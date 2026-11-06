@@ -48,6 +48,8 @@
   --color-kind-fact: #8a6500;
   --color-kind-quote: #9a3412;
   --color-kind-formula: #1e40af;
+  /* Clarify later (NoteEditor/extensions/ClarifyMark.ts, BlockFlags.ts): something to come back and learn. */
+  --color-clarify: #0e7490;
   /* The Important levels (NoteEditor/extensions/importanceLevels.ts): accent colours, the same in both themes. */
   --color-important-1: #f59e0b;
   --color-important-2: #f97316;
@@ -126,6 +128,11 @@
   --space-6: 1.5rem;
   --space-7: 2rem;
 
+  /* A picture shown large (components/PictureInput's viewer): dark behind it, light controls, the same
+     in both themes, as a photo viewer is. */
+  --color-scrim-strong: rgba(0, 0, 0, 0.8);
+  --color-on-scrim:     #fff;
+
   /* ── Stacking tiers: an overlay summoned from anywhere sits above every modal ── */
   --z-sticky:        5;      /* content pinned while its container scrolls (sticky headings) */
   /* A mark the app draws over words to say what they are (a Dictionary word): a neutral tint of the
@@ -160,6 +167,15 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  /* Modals and panes (2026-11-05: every one wrote its own): the dim behind a modal, the lighter dim
+     behind a slide-in pane, a modal card's shadow, a phone bottom sheet's (cast upwards), a pane's
+     from the right edge (cast left), and one from the left edge (the Sidebar, Calendar's side pane). */
+  --color-scrim:       rgba(0, 0, 0, 0.45);
+  --color-scrim-light: rgba(0, 0, 0, 0.25);
+  --shadow-modal:      0 8px 40px rgba(0, 0, 0, 0.18);
+  --shadow-sheet:      0 -4px 28px rgba(0, 0, 0, 0.14);
+  --shadow-pane:       -4px 0 20px rgba(0, 0, 0, 0.1);
+  --shadow-pane-start: 4px 0 20px rgba(0, 0, 0, 0.08);
   --color-backdrop: rgba(0, 0, 0, 0.45);
   --color-overscroll: #e8e9ed; /* past the end of a note (NoteEditor's NoteBackdrop, when no backdrop is chosen) */
   --color-occurrence: rgba(250, 204, 21, 0.28); /* other mentions of the selected text in a note */
@@ -227,6 +243,7 @@
   --color-kind-fact: #fde047;
   --color-kind-quote: #fdba74;
   --color-kind-formula: #bfdbfe;
+  --color-clarify: #67e8f9;
   --color-block-timeline: #7dd3fc;
   --color-block-cycle: #6ee7b7;
   --color-block-breakdown: #fde68a;
@@ -286,6 +303,12 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.32);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.48);
+  --color-scrim:       rgba(0, 0, 0, 0.6);
+  --color-scrim-light: rgba(0, 0, 0, 0.4);
+  --shadow-modal:      0 8px 40px rgba(0, 0, 0, 0.55);
+  --shadow-sheet:      0 -4px 28px rgba(0, 0, 0, 0.5);
+  --shadow-pane:       -4px 0 20px rgba(0, 0, 0, 0.45);
+  --shadow-pane-start: 4px 0 20px rgba(0, 0, 0, 0.4);
   --color-backdrop: rgba(0, 0, 0, 0.6);
   --color-overscroll: #2e2e33;
   --color-occurrence: rgba(250, 204, 21, 0.2);

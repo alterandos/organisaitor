@@ -38,4 +38,7 @@ export const ITEM_FLAG_ICON = {
   important: '❗',
   tentative: '✏️',   // "pencilled in"
   repeats:   '🔁',
+  notifies:  '🔔',
+  quiet:     '🔅',   // shown quieter on the calendar (dimmed)
+  background: '🧳',  // a long item drawn as a thin line behind the rest
 } as const;

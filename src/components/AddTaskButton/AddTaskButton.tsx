@@ -1,3 +1,4 @@
+import { TYPES_ENABLED } from '@/config/features';
 import { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { usePlatform } from '@/hooks/usePlatform';
@@ -77,7 +78,7 @@ const MAX_TYPES = 6;
 
 function TypeOptions({ onPick }: { onPick: () => void }) {
   const types = useItemTypeStore((s) => s.types);
-  const shown = pickableTypes(types).slice(0, MAX_TYPES);
+  const shown = TYPES_ENABLED ? pickableTypes(types).slice(0, MAX_TYPES) : [];
   if (shown.length === 0) return null;
   return (
     <>

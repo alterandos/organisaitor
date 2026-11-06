@@ -1,3 +1,4 @@
+import { TYPES_ENABLED } from '@/config/features';
 import { createElement, useEffect, useRef } from 'react';
 import { checklistProgress, linkedListIds } from '@/services/taskListLinks';
 import { toggleTaskCompletion, taskCompletionOptions, skipOption } from '@/services/taskCompletion';
@@ -123,7 +124,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   const blockers       = task.completed || task.archived ? [] : openBlockers(task, tasksRecord);
   // Its Type (docs/features/endeavours.md phase 3), with the values filled in as the tooltip.
   const itemTypes      = useItemTypeStore((s) => s.types);
-  const itemType       = resolveItemType(itemTypes, task.typeId);
+  const itemType       = TYPES_ENABLED ? resolveItemType(itemTypes, task.typeId) : null;
   const checklist      = checklistProgress(linkedListIds(task.crossAppRefs), listsRecord, listItemsRecord);
   const subtaskIds     = task.subtaskIds ?? [];
   const hasSubtasks    = subtaskIds.length > 0;

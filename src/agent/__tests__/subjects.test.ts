@@ -5,7 +5,6 @@ import { fails, ok, resetStores, run } from '@/test/helpers';
 import { useNoteStore } from '@/store/noteStore';
 import { useListStore } from '@/store/listStore';
 import { useGoalStore } from '@/store/goalStore';
-import { useItemTypeStore } from '@/store/itemTypeStore';
 import { expandRepeat } from '@/utils/recurrence';
 
 // Semesters and subjects for the agent (docs/features/endeavours.md phase 7 (d)): the same
@@ -58,33 +57,38 @@ describe('a subject\'s items', () => {
 
   it('adds a weekly lecture, a reading the day before each, and a weekly quiz bounded by the period and the break', () => {
     const id = subject();
-    ok('add_subject_item', { subjectId: id, kind: 'schedule', title: 'GEOS215 lecture', type: 'Lecture', date: '2031-07-30', start: '10:00', end: '12:00', place: 'Carslaw 175',
+    ok('add_subject_item', { subjectId: id, kind: 'schedule', title: 'GEOS215 lecture', date: '2031-07-30', start: '10:00', end: '12:00', place: 'Carslaw 175',
       repeat: { freq: 'weekly', daysOfWeek: [3] } });
-    ok('add_subject_item', { subjectId: id, kind: 'work', title: 'Reading', type: 'Reading', date: '2031-07-28', followClass: { title: 'GEOS215 lecture', offsetDays: -1 } });
-    const quiz = ok('add_subject_item', { subjectId: id, kind: 'work', title: 'Weekly quiz', type: 'Assessment', date: '2031-08-01', start: '17:00', worth: 10,
+    ok('add_subject_item', { subjectId: id, kind: 'work', title: 'Reading', date: '2031-07-28', followClass: { title: 'GEOS215 lecture', offsetDays: -1 } });
+    const quiz = ok('add_subject_item', { subjectId: id, kind: 'work', title: 'Weekly quiz', date: '2031-08-01', start: '17:00', worth: 10,
       notes: 'best 8 of 9 count', repeat: { freq: 'weekly', daysOfWeek: [5] } }).added;
 
     const got = ok('get_subject', { endeavourId: id });
-    expect(got.schedule).toEqual([expect.objectContaining({ title: 'GEOS215 lecture', type: 'Lecture', place: 'Carslaw 175' })]);
+    expect(got.schedule).toEqual([expect.objectContaining({ title: 'GEOS215 lecture', place: 'Carslaw 175' })]);
     expect(got.work.map((w: { title: string }) => w.title).sort()).toEqual(['Reading', 'Weekly quiz']);
     expect(got.work.find((w: { title: string }) => w.title === 'Reading').follows).toEqual({ title: 'GEOS215 lecture', offsetDays: -1 });
-    expect(got.work.find((w: { title: string }) => w.title === 'Weekly quiz')).toMatchObject({ worth: 10, notes: 'best 8 of 9 count', type: 'Assessment' });
+    // Types are switched off (config/features.ts): the worth is the first line of its notes.
+    expect(got.work.find((w: { title: string }) => w.title === 'Weekly quiz')).toMatchObject({ notes: 'Worth 10%\nbest 8 of 9 count' });
 
     const d = read.deadline(quiz)!;
     expect(d.repeat).toMatchObject({ endKind: 'until', until: '2031-11-07' });
     expect(expandRepeat(d.date, d.repeat!, '2031-09-26', '2031-10-10')).toEqual(['2031-09-26', '2031-10-10']);   // not in the break
-    expect(useItemTypeStore.getState().types[d.typeId!].name).toBe('Assessment');
+    expect(d.typeId ?? null).toBeNull();
   });
 
   it('updates only what is given; refuses what doesn\'t fit', () => {
     const id = subject();
-    const item = ok('add_subject_item', { subjectId: id, kind: 'work', title: 'Essay', type: 'Essay', date: '2031-10-24', worth: 40 }).added;
-    ok('update_subject_item', { itemId: item, worth: 35, notes: 'Word limit 2,000' });
-    expect(read.deadline(item)).toMatchObject({ title: 'Essay', date: '2031-10-24', notes: 'Word limit 2,000', typeFields: { weight: 35 } });
+    const item = ok('add_subject_item', { subjectId: id, kind: 'work', title: 'Essay', date: '2031-10-24', worth: 40 }).added;
+    expect(read.deadline(item)?.notes).toBe('Worth 40%');
+    ok('update_subject_item', { itemId: item, worth: 35 });
+    ok('update_subject_item', { itemId: item, notes: 'Word limit 2,000' });
+    expect(read.deadline(item)?.notes).toBe('Worth 35%\nWord limit 2,000');
+    ok('update_subject_item', { itemId: item, worth: 30 });
+    expect(read.deadline(item)).toMatchObject({ title: 'Essay', date: '2031-10-24', notes: 'Worth 30%\nWord limit 2,000' });
 
     expect(fails('add_subject_item', { subjectId: id, kind: 'work', title: 'Reading', date: '2031-08-01', followClass: { title: 'Lecture', offsetDays: -1 } }).message).toMatch(/No repeating Schedule item/);
     expect(fails('add_subject_item', { subjectId: id, kind: 'schedule', title: 'Lab', date: '2031-08-01', worth: 5 }).message).toMatch(/Work items only/);
-    expect(fails('add_subject_item', { subjectId: id, kind: 'work', title: 'Quiz', type: 'Nonsense', date: '2031-08-01' }).message).toMatch(/No Type named/);
+    expect(fails('add_subject_item', { subjectId: id, kind: 'work', title: 'Quiz', type: 'Assessment', date: '2031-08-01' }).message).toMatch(/switched off/);
     const notSubject = read.endeavours().find((c) => c.templateId === 'semester')!.id;
     expect(fails('add_subject_item', { subjectId: notSubject, kind: 'work', title: 'X', date: '2031-08-01' }).message).toMatch(/isn't a subject/);
   });

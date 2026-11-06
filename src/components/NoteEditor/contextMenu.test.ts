@@ -71,6 +71,18 @@ describe('right-click on selected note text', () => {
     expect(keys.filter((k) => !offered.includes(k))).toEqual([]);
   });
 
+  it('a Glossary term the selected words name is offered as a link right under its kind\'s card', () => {
+    const noteId = useNoteStore.getState().addNote({ title: 'Stats' });
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'concept', tagId: 'builtin-concept', term: 'Coefficient of determination', fields: {}, noteId, collectionId: null });
+    make('<p>the coefficient of determination here</p>');
+    const keys = selectionActions(editor as never, { from: 6, to: 34 }).map((a) => a.key);
+    expect(keys.indexOf(`link-term-${id}`)).toBe(keys.indexOf('concept') + 1);
+    // a plural, and the selection a whole-word part of a longer name, count too; an unrelated word doesn't
+    make('<p>coefficients of determination, and bananas</p>');
+    expect(selectionActions(editor as never, { from: 2, to: 31 }).some((a) => a.key === `link-term-${id}`)).toBe(true);
+    expect(selectionActions(editor as never, { from: 37, to: 44 }).some((a) => a.key === `link-term-${id}`)).toBe(false);
+  });
+
   it('every selection action has a key of its own (2026-11-03: Mark as ▸ Quote and Turn into ▸ Quote once shared one)', () => {
     make('<p>photosynthesis</p>');
     const keys = selectionActions(editor as never, { from: 2, to: 16 }).map((a) => a.key);

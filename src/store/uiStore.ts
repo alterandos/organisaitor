@@ -1,7 +1,7 @@
+import type { EndeavourTemplateDef } from '@/types/templates';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { editorFor, type TemplateEditorModal } from '@/config/templateEditors';
-import type { Tag, Purpose, Collection, CalendarItemKind, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType, RepeatConfig, ItemTypeId, TypeableKind, GoalId, CollectionId } from '@/types';
+import type { Tag, Purpose, Collection, CalendarItemKind, CalendarEventType, TravelMode, TaskViewMode, NoteTagId, ScheduleTemplate, Priority, CrossAppRefType, RepeatConfig, ItemTypeId, TypeableKind, GoalId, CollectionId } from '@/types';
 import type { Activity } from '@/types/fitness';
 import { setVisitFrontCheck, useRecentItemsStore } from '@/store/recentItemsStore';
 import { useNoteStore } from '@/store/noteStore';
@@ -53,9 +53,12 @@ export interface CalendarItemPrefillExtra {
   notes?:        string | null;
   location?:     string | null;
   collectionId?: string | null;
-  // A Type to start from: a birthday or a journey read from a note selection, as its default Type
-  // (services/eventTypeConversion.ts typeForEventKind) — shown, not silently applied.
+  // A Type to start from (Types are switched off: config/features.ts).
   typeId?:       ItemTypeId | null;
+  // The kind of event (config/calendarEventTypes.ts): a birthday or a journey read from a note
+  // selection — shown in the form, not silently applied.
+  eventType?:    CalendarEventType;
+  travelMode?:   TravelMode | null;
   tentative?:    boolean;
   important?:    boolean;
   repeat?:       RepeatConfig | null;
@@ -111,7 +114,7 @@ function expandNotebookAncestors(
 }
 
 // Manage view (library administration) — left-nav tabs, extensible for future sections.
-export type ManageSection = 'endeavours' | 'purposes' | 'tags' | 'types';
+export type ManageSection = 'endeavours' | 'purposes' | 'tags' | 'types' | 'templates';
 
 export type ModalType =
   | 'add-task'
@@ -137,9 +140,7 @@ export type ModalType =
   | 'add-schedule'
   | 'add-item-type'
   | 'add-goal'
-  | 'endeavour-template'
   | 'restructure'
-  | TemplateEditorModal
   | 'endeavour-contents'
   | null;
 
@@ -185,8 +186,9 @@ interface UIState {
   pendingFollowUpOf: string | null;
   // New task linked to an event or a Deadline as its preparation or follow-up
   // (utils/eventTaskLinks.ts): AddTaskModal takes its dates, title and Endeavour from it and links it.
-  showAddTaskForEvent: (link: { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'deadline'; targetId: string }) => void;
-  pendingEventLink:    { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'deadline'; targetId: string } | null;
+  // `occurrence`: for one date of a repeating event only (the task's link names the date).
+  showAddTaskForEvent: (link: { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'deadline'; targetId: string; occurrence?: string }) => void;
+  pendingEventLink:    { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'deadline'; targetId: string; occurrence?: string } | null;
   // MobileQuickAddBar's "More options…" escape hatch (docs/android/01-tasks-app.md §3.2), and
   // the Notes "Create ▸ Task" flow (FloatingToolbar) — both open the full AddTaskModal
   // pre-filled rather than duplicating its fields in a bespoke form.
@@ -235,9 +237,20 @@ interface UIState {
   pendingGoalEndeavourId: CollectionId | null;
   showAddGoal:            (endeavourId?: CollectionId | null) => void;
   openEditGoal:           (id: GoalId) => void;
-  // Templates and restructuring (docs/features/endeavours.md phase 6): a new Endeavour from a
-  // template (part of `templatePartOf` if set), and copying, splitting or merging one.
-  templatePartOf:   CollectionId | null;
+  // Making an Endeavour (EndeavourCreator), in a slot of its own: `partOf` is what a new one
+  // starts as part of. Editing one opens the same form through `openEditCollection`. Then
+  // restructuring: copying, splitting or merging one (docs/features/endeavours.md).
+  creator:          { partOf: CollectionId | null } | null;
+  closeCreator:     () => void;
+  // A template's suggestions passed over on an Endeavour's home ("Not needed"), by Endeavour id.
+  // Kept on this device (persisted, read with a default).
+  dismissedSuggestions: Record<string, string[]>;
+  // The template editor (components/TemplateEditor): the template being edited, a built-in one, a
+  // new one or one saved from an Endeavour. Over Manage or a home.
+  templateEditor:       EndeavourTemplateDef | null;
+  openTemplateEditor:   (def: EndeavourTemplateDef) => void;
+  closeTemplateEditor:  () => void;
+  dismissSuggestion:    (endeavourId: CollectionId, suggestionId: string) => void;
   restructureId:    CollectionId | null;
   // An Endeavour's "Everything in it" view (EndeavourContentsModal), on one kind of thing or all.
   contentsFor:      { id: CollectionId; kind: string | null } | null;
@@ -296,10 +309,8 @@ interface UIState {
   closeEditTag:         () => void;
   openEditPurpose:      (purpose: Purpose) => void;
   closeEditPurpose:     () => void;
-  // Opens the editor of the template it was made from (config/templateEditors.ts), else the ordinary one.
+  // The form for the Endeavour itself (EndeavourCreator); what's in it is on its home.
   openEditCollection:   (collection: Collection) => void;
-  // Always the ordinary Endeavour editor (a template editor's "All settings").
-  openEndeavourSettings: (collection: Collection) => void;
   closeEditCollection:  () => void;
 
   settingsOpen:  boolean;
@@ -725,7 +736,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     s.pendingArtifactLink ? { pendingArtifactLink: { ...s.pendingArtifactLink, resolvedTargetId: targetId, ...(targetType ? { targetType } : {}) } } : {}
   ),
   clearPendingArtifactLink: () => set({ pendingArtifactLink: null }),
-  showAddCollection: () => set({ openModal: 'add-collection' }),
+  showAddCollection: () => set({ creator: { partOf: null } }),
   showAddPurpose:    () => set({ openModal: 'add-purpose'    }),
   showAddTag:        () => set({ openModal: 'add-tag'        }),
   editingItemTypeId: null,
@@ -735,7 +746,15 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   pendingGoalEndeavourId: null,
   showAddGoal:            (endeavourId) => set({ openModal: 'add-goal', editingGoalId: null, pendingGoalEndeavourId: endeavourId ?? null }),
   openEditGoal:           (id) => set({ openModal: 'add-goal', editingGoalId: id, pendingGoalEndeavourId: null }),
-  templatePartOf:   null,
+  creator:          null,
+  closeCreator:     () => set({ creator: null }),
+  dismissedSuggestions: {},
+  templateEditor:       null,
+  openTemplateEditor:   (def) => set({ templateEditor: def }),
+  closeTemplateEditor:  () => set({ templateEditor: null }),
+  dismissSuggestion:    (endeavourId, suggestionId) => set((s) => ({
+    dismissedSuggestions: { ...s.dismissedSuggestions, [endeavourId]: [...new Set([...(s.dismissedSuggestions[endeavourId] ?? []), suggestionId])] },
+  })),
   restructureId:    null,
   contentsFor:      null,
   attributesFor:    null,
@@ -743,7 +762,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeEndeavourAttributes: () => set({ attributesFor: null }),
   showEndeavourContents: (id, kind = null) => set({ openModal: 'endeavour-contents', contentsFor: { id, kind } }),
   restructureMode:  'copy',
-  showTemplates:    (partOf) => set({ openModal: 'endeavour-template', templatePartOf: partOf ?? null }),
+  showTemplates:    (partOf) => set({ creator: { partOf: partOf ?? null } }),
   showRestructure:  (id, mode = 'copy') => set({ openModal: 'restructure', restructureId: id, restructureMode: mode }),
   showAddItemType:   (use = null) => set({ openModal: 'add-item-type', editingItemTypeId: null, pendingItemTypeUse: use }),
   openEditItemType:  (id) => set({ openModal: 'add-item-type', editingItemTypeId: id }),
@@ -780,7 +799,6 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     pendingItemTypeId: null,
     editingGoalId: null,
     pendingGoalEndeavourId: null,
-    templatePartOf: null,
     restructureId: null,
     taskModalAdvanced: false,
     pendingParentId: null,
@@ -841,8 +859,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeEditTag:        ()           => set({ editingTag:        null,       openModal: null              }),
   openEditPurpose:     (purpose)    => set({ editingPurpose:    purpose,    openModal: 'add-purpose'    }),
   closeEditPurpose:    ()           => set({ editingPurpose:    null,       openModal: null              }),
-  openEditCollection:  (collection) => set({ editingCollection: collection, openModal: editorFor(collection.templateId) ?? 'add-collection' }),
-  openEndeavourSettings: (collection) => set({ editingCollection: collection, openModal: 'add-collection' }),
+  openEditCollection:  (collection) => set({ editingCollection: collection, openModal: 'add-collection' }),
   closeEditCollection: ()           => set({ editingCollection: null,       openModal: null              }),
 
   settingsOpen:  false,
@@ -1361,6 +1378,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     overviewSelection:        s.overviewSelection,
     overviewLayouts:          s.overviewLayouts,
     glossaryLayout:           s.glossaryLayout,
+    dismissedSuggestions:     s.dismissedSuggestions,
     endeavourHomeId:          s.endeavourHomeId,
     activeTrackerId:          s.activeTrackerId,
     activeRoutineId:          s.activeRoutineId,

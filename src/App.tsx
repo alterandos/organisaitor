@@ -67,14 +67,12 @@ import { CalendarEventPane } from '@/components/CalendarEventPane/CalendarEventP
 import { CalendarReminderPane } from '@/components/CalendarReminderPane/CalendarReminderPane';
 import { CalendarDeadlinePane } from '@/components/CalendarDeadlinePane/CalendarDeadlinePane';
 import { AddTaskModal } from '@/components/AddTaskModal/AddTaskModal';
-import { AddCollectionModal } from '@/components/AddCollectionModal/AddCollectionModal';
 import { AddPurposeModal } from '@/components/AddPurposeModal/AddPurposeModal';
 import { AddTagModal } from '@/components/AddTagModal/AddTagModal';
 import { ItemTypeModal } from '@/components/ItemTypeModal/ItemTypeModal';
 import { GoalModal } from '@/components/GoalModal/GoalModal';
-import { EndeavourTemplateModal } from '@/components/EndeavourTemplateModal/EndeavourTemplateModal';
-import { SubjectEditor } from '@/components/TemplateEditors/SubjectEditor';
-import { SemesterEditor } from '@/components/TemplateEditors/SemesterEditor';
+import { EndeavourCreator } from '@/components/EndeavourCreator/EndeavourCreator';
+import { TemplateEditor } from '@/components/TemplateEditor/TemplateEditor';
 import { EndeavourContentsModal } from '@/components/EndeavourContents/EndeavourContentsModal';
 import { EndeavourAttributesPane } from '@/components/EndeavourAttributes/EndeavourAttributesPane';
 import { RestructureModal } from '@/components/RestructureModal/RestructureModal';
@@ -102,10 +100,11 @@ import { HistoryBrowser } from '@/components/HistoryBrowser/HistoryBrowser';
 import { initPictures } from '@/services/pictures';
 import { initEventTaskFollow } from '@/services/eventTaskLinks';
 import { initRepeatFollow } from '@/services/repeatFollow';
+import { initEventTaskRules } from '@/services/eventTaskRules';
 import { initSchedules } from '@/services/schedules';
 import { initSubjectWork } from '@/services/subjectItems';
 import { initStreamConversion } from '@/services/streamConversion';
-import { initEventTypeConversion } from '@/services/eventTypeConversion';
+import { initEventKinds } from '@/services/eventTypeConversion';
 import { initClassClashes } from '@/services/classClashes';
 import { adoptLegacyNotePins } from '@/services/quickAccessPins';
 import { installSpecialCharInput } from '@/specialChars/fieldInput';
@@ -191,6 +190,8 @@ export default function App() {
   const editingCollection            = useUIStore((s) => s.editingCollection);
   const contentsFor                  = useUIStore((s) => s.contentsFor);
   const attributesFor                = useUIStore((s) => s.attributesFor);
+  const creator                      = useUIStore((s) => s.creator);
+  const templateEditor               = useUIStore((s) => s.templateEditor);
   const editingPurpose               = useUIStore((s) => s.editingPurpose);
   const editingTag                   = useUIStore((s) => s.editingTag);
   const editingItemTypeId            = useUIStore((s) => s.editingItemTypeId);
@@ -303,9 +304,10 @@ export default function App() {
   useEffect(() => installSpecialCharInput(), []);
   useEffect(() => initEventTaskFollow(), []);
   useEffect(() => initRepeatFollow(), []);
+  useEffect(() => initEventTaskRules(), []);
   useEffect(() => initSchedules(), []);
   useEffect(() => initStreamConversion(), []);
-  useEffect(() => initEventTypeConversion(), []);
+  useEffect(() => initEventKinds(), []);
   useEffect(() => initSubjectWork(), []);
   useEffect(() => initClassClashes(), []);
   useEffect(() => initEncryptionScopes(), []);
@@ -820,15 +822,15 @@ export default function App() {
         {editingCalendarDeadlineId && <CalendarDeadlinePane key={editingCalendarDeadlineId} />}
 
         {openModal === 'add-task'            && <AddTaskModal />}
-        {openModal === 'add-collection'      && <AddCollectionModal key={editingCollection?.id ?? 'new'} />}
+        {openModal === 'add-collection'      && editingCollection && <EndeavourCreator key={editingCollection.id} editing={editingCollection} />}
         {openModal === 'add-purpose'         && <AddPurposeModal key={editingPurpose?.id ?? 'new'} />}
         {openModal === 'add-tag'             && <AddTagModal key={editingTag?.id ?? 'new'} />}
         {openModal === 'add-item-type'       && <ItemTypeModal key={editingItemTypeId ?? 'new'} />}
         {openModal === 'add-goal'            && <GoalModal key={editingGoalId ?? 'new'} />}
-        {openModal === 'endeavour-template'  && <EndeavourTemplateModal />}
-        {openModal === 'subject-editor'      && editingCollection && <SubjectEditor key={editingCollection.id} id={editingCollection.id} />}
-        {openModal === 'semester-editor'     && editingCollection && <SemesterEditor key={editingCollection.id} id={editingCollection.id} />}
         {attributesFor && <EndeavourAttributesPane key={attributesFor} />}
+        {/* Over the panes and editors it's opened from, under the creation panes its tiles open (z-index) */}
+        {creator && <EndeavourCreator key={`new-${creator.partOf ?? ''}`} partOf={creator.partOf} />}
+        {templateEditor && <TemplateEditor key={templateEditor.id || 'new'} def={templateEditor} />}
         {openModal === 'endeavour-contents'  && <EndeavourContentsModal key={contentsFor ? `${contentsFor.id}:${contentsFor.kind ?? ''}` : 'none'} />}
         {openModal === 'restructure'         && <RestructureModal key={restructureId ?? 'none'} />}
         {openModal === 'add-calendar-item'   && <AddCalendarItemModal />}

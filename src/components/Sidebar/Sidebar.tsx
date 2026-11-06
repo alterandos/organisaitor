@@ -1,3 +1,4 @@
+import { TYPES_ENABLED } from '@/config/features';
 import { useRef, useState } from 'react';
 import type { TagId, PurposeId, CollectionId } from '@/types';
 import { usePinAction } from '@/hooks/usePinAction';
@@ -60,7 +61,7 @@ function SidebarTagRow({ tag, isActive, onToggle, onEdit, onDelete }: { tag: Tag
     >
       <RowOptionsMenu rowRef={rowRef} title={tag.name} icon={<span className={styles.dot} style={{ background: tag.color ?? 'var(--color-border)' }} />}>
         <RowAction className={styles.iconBtn} icon={<EditIcon />} label={LABELS.rowActions.edit} onClick={onEdit} />
-        <RowAction className={styles.iconBtn} icon={<TypeIcon width="1em" height="1em" />} label={LABELS.itemTypes.fromTag} onClick={() => makeTagAType(tag.id as TagId)} />
+        {TYPES_ENABLED && <RowAction className={styles.iconBtn} icon={<TypeIcon width="1em" height="1em" />} label={LABELS.itemTypes.fromTag} onClick={() => makeTagAType(tag.id as TagId)} />}
         <RowAction className={`${styles.iconBtn} ${styles.deleteIconBtn}`} icon={<TrashIcon width="1em" height="1em" />} label={LABELS.rowActions.delete} onClick={onDelete} destructive />
       </RowOptionsMenu>
       <button className={styles.rowMain} onClick={onToggle}>

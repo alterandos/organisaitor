@@ -15,7 +15,7 @@ export interface AttributeField { field: FieldSchema; fromType: boolean }
 
 // A period with no period field to show it (an Endeavour given one before attributes, or whose
 // Type changed to one without): shown as a field of its own, so it's never lost without asking.
-export const LOOSE_PERIOD_FIELD: FieldSchema = { id: 'period', name: 'Period', type: 'period', inherit: true };
+export const LOOSE_PERIOD_FIELD: FieldSchema = { id: 'period', name: 'Dates', type: 'period', inherit: true };
 
 // Its fields: its Type's (with what that Type extends), then its own; one per id.
 export function attributeFields(c: Collection | undefined, types: Record<string, ItemType>): AttributeField[] {

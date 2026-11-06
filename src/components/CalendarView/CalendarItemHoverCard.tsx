@@ -15,6 +15,7 @@ export interface HoverCardItem {
   id:           string;
   title:        string;
   typeIcon:     string;
+  flags?:       string;   // ❗ 🔁, after the time
   time:         string | null;
   endTime?:     string | null;
   location?:    string | null;
@@ -47,7 +48,7 @@ export function CalendarItemHoverCard({ item, anchor }: { item: HoverCardItem; a
         {item.typeIcon && <span aria-hidden>{item.typeIcon} </span>}
         {item.title}
       </span>
-      {when && <span className={styles.tooltipWhen}>{when}</span>}
+      {when && <span className={styles.tooltipWhen}>{when}{item.flags && <span aria-hidden> {item.flags}</span>}</span>}
       {location && <span className={styles.tooltipWhen}>📍 {location}</span>}
       {collection && (
         <span className={styles.tooltipCollection} style={collection.color ? { color: collection.color } : undefined}>

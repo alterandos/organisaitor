@@ -22,7 +22,7 @@ const eventFields = {
   location: z.string().trim().max(300).nullish(),
   tentative: z.boolean().optional().describe('A placeholder the user has not confirmed yet'),
   notifyBefore: notifyBefore.nullish(),
-  travelMode: z.enum(['flight', 'train', 'bus', 'car', 'ferry']).nullish().describe('A travel event only: how it travels (sets its icon)'),
+  travelMode: z.enum(['flight', 'train', 'bus', 'car', 'ferry', 'bike', 'walk']).nullish().describe('A travel event only: how it travels (sets its icon)'),
 };
 
 const reminderFields = {

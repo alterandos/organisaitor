@@ -5,6 +5,7 @@ import { MobileNotes } from '../MobileNotes/MobileNotes';
 import { TagView } from './TagView';
 import { GlossaryView } from './GlossaryView';
 import { ReviewView } from './ReviewView';
+import { ClarifyView } from './ClarifyView';
 import { HubsView } from './HubsView';
 import { MosaicView } from '../NoteViews/Mosaic/MosaicView';
 
@@ -26,6 +27,7 @@ export const NOTE_VIEW_COMPONENTS: Record<NotesViewId, NoteViewComponents> = {
   map:      { Component: MapView, lazy: true },
   glossary: { Component: GlossaryView },
   review:   { Component: ReviewView },
+  clarify:  { Component: ClarifyView },
   hubs:     { Component: HubsView },
   tagView:  { Component: TagView },
 };

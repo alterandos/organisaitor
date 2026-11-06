@@ -9,7 +9,7 @@ import { openNotePassage } from '@/services/notePassage';
 import { findBlock, passageRange } from '@/utils/noteLinks';
 import { MAIN_TAB_ID } from '@/utils/noteTabs';
 import { noteName } from '@/utils/notes';
-import type { PassageFind } from '@/utils/noteContent';
+import { parseNoteContent, type PassageFind } from '@/utils/noteContent';
 import type { NoteId } from '@/types';
 import { LINKABLE_BLOCK_NODES } from '@/components/NoteEditor/blockNodes';
 
@@ -29,7 +29,11 @@ export function noteDocFor(noteId: string, tabId: string | null | undefined, sch
   const n = noteView(raw);
   const json = tab(tabId) ? n.tabs.find((t) => t.id === tab(tabId))?.content : n.content;
   if (!json) return null;
-  try { return PMNode.fromJSON(schema, JSON.parse(json)); } catch { return null; }
+  try {
+    const doc = PMNode.fromJSON(schema, schema.nodes.section ? parseNoteContent(json) || { type: 'doc' } : JSON.parse(json));
+    doc.check();
+    return doc;
+  } catch { return null; }   // content the schema can't read: shown nowhere rather than crashing a view
 }
 
 export type TargetState = 'ok' | 'missing-note' | 'missing-passage' | 'locked';

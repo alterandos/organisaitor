@@ -5,7 +5,7 @@ import { isHydrating } from '@/services/sync/hydrating';
 import { showToast } from '@/components/Toast/showToast';
 import { anchorOf, datesForLink, followMove, isEventLink, type Anchor, type EventLinkKind, type EventTargetType } from '@/utils/eventTaskLinks';
 import { makeItemLink } from '@/utils/taskLinks';
-import { todayIso } from '@/utils/date';
+import { addDaysToIso, todayIso } from '@/utils/date';
 import { LABELS } from '@/config/labels';
 import type { CalendarDeadline, CalendarEvent, Task, TaskId } from '@/types';
 
@@ -19,21 +19,30 @@ export function eventTarget(type: EventTargetType, id: string): CalendarEvent | 
   return type === 'event' ? cal.events[id as never] : cal.deadlines[id as never];
 }
 
-// The dates a new task linked this way starts with (AddTaskModal's prefill).
-export function linkedTaskDates(kind: EventLinkKind, type: EventTargetType, id: string): ReturnType<typeof datesForLink> {
+// The dates a new task linked this way starts with (AddTaskModal's prefill); for one date of a
+// series (`occurrence`), that date's.
+export function linkedTaskDates(kind: EventLinkKind, type: EventTargetType, id: string, occurrence: string | null = null): ReturnType<typeof datesForLink> {
   const item = eventTarget(type, id);
-  return item ? datesForLink(kind, anchorOf(type, item, todayIso())) : {};
+  if (!item) return {};
+  const a = anchorOf(type, item, todayIso());
+  return datesForLink(kind, occurrence ? { start: occurrence, startTime: a.startTime, end: addDaysToIso(occurrence, daysBetween(a.start, a.end)) } : a);
 }
+
+const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 
 // Link an existing task (or relink it another way). Preparation gets the event's start as its
 // deadline and a follow-up its end as its start, unless it already has its own.
-export function linkTaskToEvent(taskId: TaskId, kind: EventLinkKind, type: EventTargetType, id: string): void {
+// For one date of a series (`occurrence`; kept if it already had one), the link names that date.
+export function linkTaskToEvent(taskId: TaskId, kind: EventLinkKind, type: EventTargetType, id: string, occurrence: string | null = null): void {
   const task = useTaskStore.getState().tasks[taskId];
   if (!task) return;
-  const others = (task.itemLinks ?? []).filter((l) => !(isEventLink(l) && l.targetType === type && l.targetId === id));
+  const was = (task.itemLinks ?? []).find((l) => isEventLink(l) && l.targetType === type && l.targetId === id);
+  const others = (task.itemLinks ?? []).filter((l) => l !== was);
   const ts = new Date().toISOString();
-  useTaskStore.getState().updateTask(taskId, { itemLinks: [...others, makeItemLink(kind, id, null, ts, type)] });
-  const dates = linkedTaskDates(kind, type, id);
+  const date = occurrence ?? was?.occurrence ?? null;
+  const link = { ...makeItemLink(kind, id, null, ts, type), ...(date ? { occurrence: date } : {}), ...(was?.ruleId ? { ruleId: was.ruleId } : {}) };
+  useTaskStore.getState().updateTask(taskId, { itemLinks: [...others, link] });
+  const dates = linkedTaskDates(kind, type, id, date);
   const patch: Partial<Task> = {};
   if (dates.deadline && !task.deadline) Object.assign(patch, { deadline: dates.deadline, deadlineTime: dates.deadlineTime ?? null });
   if (dates.scheduledAt && !task.scheduledAt) patch.scheduledAt = dates.scheduledAt;

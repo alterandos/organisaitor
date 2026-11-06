@@ -79,6 +79,8 @@ describe('completing a recurring task', () => {
   it('"after N times" counts down, and the last one doesn’t repeat', () => {
     const id = makeWeeklyReview({ ...weekly, endKind: 'count', count: 2 });
     expect(repeatSummary(tasks()[id].repeat!)).toBe('Every week · 1 more');
+    // an end date reads in the computer's date format, never as 2026-12-04 (2026-11-05)
+    expect(repeatSummary({ freq: 'weekly', interval: 1, endKind: 'until', count: null, until: '2026-12-04' })).not.toContain('2026-12-04');
     const second = toggleTaskWithLists(id)!;
     expect(tasks()[second].repeat).toMatchObject({ count: 1 });
     expect(toggleTaskWithLists(second)).toBeNull();
