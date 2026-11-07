@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
@@ -7,7 +7,7 @@ import { MagicWandButton, MagicWandPanel } from '@/components/MagicWand/MagicWan
 import { CloseIcon, DateCalcIcon } from '@/components/Icons';
 import { showToast } from '@/components/Toast/showToast';
 import { CALC_UNITS, between, countFrom, readDateCalc, type CalcUnit } from '@/utils/dateCalc';
-import { todayIso } from '@/utils/date';
+import { dateRangeSuggest, todayIso } from '@/utils/date';
 import { log } from '@/utils/log';
 import { LABELS } from '@/config/labels';
 import styles from './DateCalculator.module.css';
@@ -25,6 +25,30 @@ const longDate = (iso: string) =>
 // in the Calendar.
 export function DateCalculator() {
   const close = useUIStore((s) => s.closeDateCalculator);
+  const show = useRef<(() => void) | null>(null);
+  useEscapeClose(close);
+  useCtrlEnterSubmit(() => show.current?.());
+  return (
+    <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+      <div className={styles.modal} role="dialog" aria-label={L.title}>
+        <div className={styles.header}>
+          <span className={styles.title}><DateCalcIcon aria-hidden="true" /> {L.title}</span>
+          <button type="button" className={styles.closeBtn} onClick={close} aria-label={L.close}><CloseIcon /></button>
+        </div>
+        <DateCalcBody showRef={show} onShow={(date) => {
+          const ui = useUIStore.getState();
+          ui.setActiveView('calendar');
+          ui.requestCalendarDate(date);
+          close();
+        }} />
+      </div>
+    </div>
+  );
+}
+
+// The calculator itself (2026-11-07: also in the calendar pad, where "Show" picks the date in its
+// small calendar rather than going to Calendar). `showRef` hands the host what Ctrl+Enter does.
+export function DateCalcBody({ onShow, showRef, showLabel }: { onShow: (date: string) => void; showRef?: React.MutableRefObject<(() => void) | null>; showLabel?: string }) {
   const today = todayIso();
   const [mode, setMode] = useState<Mode>('count');
   const [from, setFrom] = useState(today);
@@ -33,9 +57,6 @@ export function DateCalculator() {
   const [unit, setUnit] = useState<CalcUnit>('days');
   const [dir, setDir] = useState<1 | -1>(1);
   const [wandOpen, setWandOpen] = useState(false);
-
-  useEscapeClose(close);
-  useCtrlEnterSubmit(() => showInCalendar());
 
   const n = Math.max(0, Math.floor(Number(amount)));
   const valid = mode === 'count' ? !!from && Number.isFinite(n) : !!from && !!to;
@@ -54,12 +75,9 @@ export function DateCalculator() {
   }
 
   function showInCalendar() {
-    if (!target) return;
-    const ui = useUIStore.getState();
-    ui.setActiveView('calendar');
-    ui.requestCalendarDate(target);
-    close();
+    if (target) onShow(target);
   }
+  useEffect(() => { if (showRef) showRef.current = showInCalendar; });
 
   function copy() {
     const text = result ? longDate(result) : span ? L.span(Math.abs(span.days), span.weeks, span.rest) : '';
@@ -71,12 +89,6 @@ export function DateCalculator() {
   }
 
   return (
-    <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className={styles.modal} role="dialog" aria-label={L.title}>
-        <div className={styles.header}>
-          <span className={styles.title}><DateCalcIcon aria-hidden="true" /> {L.title}</span>
-          <button type="button" className={styles.closeBtn} onClick={close} aria-label={L.close}><CloseIcon /></button>
-        </div>
         <div className={styles.body}>
           <div className={styles.topRow}>
             <MagicWandButton open={wandOpen} onToggle={() => setWandOpen((v) => !v)} />
@@ -112,7 +124,7 @@ export function DateCalculator() {
           ) : (
             <div className={styles.field}>
               <span className={styles.label}>{L.to}</span>
-              <DateInput value={to} onChange={setTo} aria-label={L.to} />
+              <DateInput value={to} onChange={setTo} suggest={dateRangeSuggest.to(from)} aria-label={L.to} />
             </div>
           )}
 
@@ -133,10 +145,8 @@ export function DateCalculator() {
 
           <div className={styles.actions}>
             <button type="button" className={styles.secondary} onClick={copy} disabled={!target}>{L.copy}</button>
-            <button type="button" className={styles.primary} onClick={showInCalendar} disabled={!target}>{L.showInCalendar}</button>
+            <button type="button" className={styles.primary} onClick={showInCalendar} disabled={!target}>{showLabel ?? L.showInCalendar}</button>
           </div>
         </div>
-      </div>
-    </div>
   );
 }

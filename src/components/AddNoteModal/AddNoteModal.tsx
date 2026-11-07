@@ -1,44 +1,37 @@
+import { commitTags } from '@/services/tags';
+import { togglePin } from '@/services/quickAccessPins';
 import { useState } from 'react';
-import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
-import { useTaskStore } from '@/store/taskStore';
-import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { NOTE_TEMPLATES } from '@/config/noteTemplates';
 import { LABELS } from '@/config/labels';
 import { resolveNoteInheritedCollectionId, takesNotes } from '@/utils/notes';
-import type { NoteTagId, CollectionId } from '@/types';
+import type { NoteTagId } from '@/types';
 import styles from './AddNoteModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CreateKindSwitcher } from '@/components/CreateKindSwitcher/CreateKindSwitcher';
 import { CloseIcon } from '@/components/Icons';
+import { NoteFields, type NoteDraft } from '@/components/NoteFields/NoteFields';
 
+const L = LABELS.noteFields;
+
+// A new note: its title and template, then the same details as its edit form (components/NoteFields,
+// "Creating and editing a thing is one form").
 export function AddNoteModal() {
-  const closeModal        = useUIStore((s) => s.closeModal);
-  const openNote          = useUIStore((s) => s.openNote);
-  const selectedNoteTagId = useUIStore((s) => s.selectedNoteTagId);
+  const closeModal = useUIStore((s) => s.closeModal);
+  const openNote   = useUIStore((s) => s.openNote);
+  const addNote    = useNoteStore((s) => s.addNote);
+  const noteTags   = useNoteStore((s) => s.noteTags);
 
-  const addNote       = useNoteStore((s) => s.addNote);
-  const getRootTags   = useNoteStore((s) => s.getRootTags);
-  const getChildTags  = useNoteStore((s) => s.getChildTags);
-  const noteTags      = useNoteStore((s) => s.noteTags);
-  const collectionsRecord = useTaskStore((s) => s.collections);
-  const allCollections = Object.values(collectionsRecord);
-
-  const [title, setTitle]             = useState(() => useUIStore.getState().createDraft ?? '');
-  const [selectedTagIds, setSelectedTagIds] = useState<NoteTagId[]>(() => {
-    const tag = selectedNoteTagId ? useNoteStore.getState().noteTags[selectedNoteTagId] : undefined;
-    return tag && takesNotes(tag) ? [selectedNoteTagId!] : [];
+  const [title, setTitle] = useState(() => useUIStore.getState().createDraft ?? '');
+  const [templateId, setTemplateId] = useState(NOTE_TEMPLATES[0].id);
+  const [draft, setDraft] = useState<NoteDraft>(() => {
+    const sel = useUIStore.getState().selectedNoteTagId;
+    const tag = sel ? useNoteStore.getState().noteTags[sel] : undefined;
+    return { tagIds: tag && takesNotes(tag) ? [sel!] : [], collectionId: null, suiteTagIds: [], color: null, pinned: false };
   });
-  const [showTagPicker, setShowTagPicker]   = useState(false);
-  const [tagPickerPath, setTagPickerPath]   = useState<NoteTagId[]>([]);
-  const [templateId, setTemplateId]         = useState(NOTE_TEMPLATES[0].id);
-  // undefined = follow the selected notebook(s)' Endeavour; anything else is the user's explicit pick
-  const [pickedCollectionId, setPickedCollectionId] = useState<CollectionId | null | undefined>(undefined);
-  const collectionId = pickedCollectionId !== undefined
-    ? pickedCollectionId
-    : resolveNoteInheritedCollectionId(selectedTagIds, noteTags);
+  const inherited = resolveNoteInheritedCollectionId(draft.tagIds as NoteTagId[], noteTags);
 
   useEscapeClose(() => { closeModal(); });
   // Creating a note opens it with the cursor in it, ready to type (asked for 2026-10-19); Save &
@@ -51,86 +44,42 @@ export function AddNoteModal() {
     const noteId = addNote({
       title,
       content: template?.content ? JSON.stringify(template.content) : '',
-      tagIds: selectedTagIds,
+      tagIds: draft.tagIds as NoteTagId[],
       templateId,
-      collectionId,
+      collectionId: draft.collectionId ?? inherited,
     });
+    const madeTags = commitTags(draft.suiteTagIds);
+    useNoteStore.getState().updateNote(noteId, { ...(madeTags.length ? { suiteTagIds: madeTags } : {}), ...(draft.color ? { color: draft.color } : {}) });
+    if (draft.pinned) togglePin('note', noteId);
+    closeModal();
     if (openEditor) {
-      closeModal();
       useUIStore.getState().setRequestedNoteFocus(noteId);
       openNote(noteId);
-    } else {
-      setTitle('');
-      setSelectedTagIds([]);
-      setTemplateId(NOTE_TEMPLATES[0].id);
-      setPickedCollectionId(undefined);
-      closeModal();
     }
   }
-
-  const handleTagSelect = (tagId: NoteTagId) => {
-    const children = getChildTags(tagId);
-    if (children.length > 0) {
-      setTagPickerPath([...tagPickerPath, tagId]);
-    } else {
-      if (selectedTagIds.includes(tagId)) {
-        setSelectedTagIds(selectedTagIds.filter((t) => t !== tagId));
-      } else {
-        setSelectedTagIds([...selectedTagIds, tagId]);
-      }
-      setTagPickerPath([]);
-    }
-  };
-
-  const handleBackTag = () => {
-    setTagPickerPath(tagPickerPath.slice(0, -1));
-  };
-
-  const currentTagLevel = tagPickerPath.length > 0
-    ? tagPickerPath[tagPickerPath.length - 1]
-    : null;
-
-  const tagsToShow = (currentTagLevel
-    ? getChildTags(currentTagLevel)
-    : getRootTags()).filter(takesNotes);
 
   return (
     <div className={styles.overlay} onClick={closeModal}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <CreateKindSwitcher current="note" draft={title} />
         <div className={styles.header}>
-          <h2>Add Note</h2>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
+          <h2>{L.newTitle}</h2>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label={L.close}><CloseIcon /></button>
         </div>
 
         <div className={styles.body}>
           <div className={styles.field}>
-            <label htmlFor="title" className={styles.label}>Title</label>
-            <input
-              id="title"
-              autoFocus
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSave(false);
-              }}
-              placeholder="Note title..."
-              className={styles.input}
-            />
+            <label htmlFor="title" className={styles.label}>{L.title}</label>
+            <input id="title" autoFocus type="text" value={title} placeholder={L.titlePlaceholder} className={styles.input}
+              onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSave(false); }} />
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Template</label>
+            <span className={styles.label}>{L.template}</span>
             <div className={styles.templateGrid}>
               {NOTE_TEMPLATES.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  className={`${styles.templateOption} ${templateId === t.id ? styles.templateOptionSelected : ''}`}
-                  onClick={() => setTemplateId(t.id)}
-                  title={t.description}
-                >
+                <button key={t.id} type="button" aria-pressed={templateId === t.id} title={t.description}
+                  className={`${styles.templateOption} ${templateId === t.id ? styles.templateOptionSelected : ''}`} onClick={() => setTemplateId(t.id)}>
                   <span className={styles.templateIcon}>{t.icon}</span>
                   <span className={styles.templateName}>{t.name}</span>
                 </button>
@@ -138,76 +87,13 @@ export function AddNoteModal() {
             </div>
           </div>
 
-          <div className={styles.field}>
-            <label className={styles.label}>Tags</label>
-            <button
-              className={styles.tagPickerBtn}
-              onClick={() => setShowTagPicker(!showTagPicker)}
-            >
-              {selectedTagIds.length > 0
-                ? `${selectedTagIds.length} tag(s) selected`
-                : 'Select tags...'}
-            </button>
-
-            {showTagPicker && (
-              <div className={styles.tagPicker}>
-                {tagPickerPath.length > 0 && (
-                  <button className={styles.tagPickerBack} onClick={handleBackTag}>
-                    ← Back
-                  </button>
-                )}
-                <div className={styles.tagPickerList}>
-                  {tagsToShow.map((tag) => (
-                    <button
-                      key={tag.id}
-                      className={`${styles.tagPickerItem} ${
-                        selectedTagIds.includes(tag.id as NoteTagId) ? styles.tagPickerItemSelected : ''
-                      }`}
-                      onClick={() => handleTagSelect(tag.id as NoteTagId)}
-                    >
-                      <span className={styles.tagPickerIcon}><ItemIcon icon={tag.icon} fallback="📁" /></span>
-                      <span>{tag.name}</span>
-                      {selectedTagIds.includes(tag.id as NoteTagId) && (
-                        <span className={styles.checkmark}>✓</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {allCollections.length > 0 && (
-            <div className={styles.field}>
-              <label className={styles.label}>{LABELS.collection}</label>
-              <CollectionPicker
-                collections={allCollections}
-                value={collectionId}
-                onChange={setPickedCollectionId}
-                noneLabel={`No ${LABELS.collection}`}
-              />
-            </div>
-          )}
+          <NoteFields value={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} inheritedCollectionId={inherited} />
         </div>
 
         <div className={styles.footer}>
-          <button className={styles.btnSecondary} onClick={closeModal}>
-            Cancel
-          </button>
-          <button
-            className={styles.btnSecondary}
-            onClick={() => handleSave(false)}
-            disabled={!title.trim()}
-          >
-            Save & Close
-          </button>
-          <button
-            className={styles.btnPrimary}
-            onClick={() => handleSave(true)}
-            disabled={!title.trim()}
-          >
-            Save & Edit
-          </button>
+          <button className={styles.btnSecondary} onClick={closeModal}>{L.cancel}</button>
+          <button className={styles.btnSecondary} onClick={() => handleSave(false)} disabled={!title.trim()}>{L.saveClose}</button>
+          <button className={styles.btnPrimary} onClick={() => handleSave(true)} disabled={!title.trim()}>{L.saveEdit}</button>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import type { CollectionId, NoteTag } from '@/types';
 import { inEndeavourScope } from '@/utils/endeavourGraph';
+import { ANNOTATION_ICON } from '@/config/itemIcons';
 
 // The Stickies notebook (services/stickyNotes.ts) and the Scratchpad (services/scratchpad.ts, beside
 // it since 2026-10-19) are special sets of notes, not notebooks among the others: at the top level
@@ -9,6 +10,13 @@ import { inEndeavourScope } from '@/utils/endeavourGraph';
 export const STICKIES_PRESET = 'stickies';
 export const SCRATCHPAD_PRESET = 'scratchpad';
 const PINNED_PRESETS = [STICKIES_PRESET, SCRATCHPAD_PRESET];
+
+// The person's annotation tags (labels for passages and notes), never a notebook (2026-11-06: the
+// annotations filter listed every notebook, Stickies included, from when the two were one list).
+// Every list of annotation tags reads this, never a `kind` filter of its own (pattern test).
+export function annotationTags<T extends Pick<NoteTag, 'kind'>>(noteTags: Record<string, T>): T[] {
+  return Object.values(noteTags).filter((t) => t.kind === 'tag');
+}
 
 export function isPinnedNotebook(t: Pick<NoteTag, 'kind' | 'presetKey' | 'parentTagId'>): boolean {
   return t.kind === 'area' && !t.parentTagId && PINNED_PRESETS.includes(t.presetKey ?? '');
@@ -74,7 +82,7 @@ export function getNotebookIcon(
   notes: Record<string, { tagIds: readonly string[]; archivedAt: string | null }>,
 ): string {
   if (tag.icon) return tag.icon;
-  if (tag.kind === 'tag') return '🏷️';
+  if (tag.kind === 'tag') return tag.icon || ANNOTATION_ICON;
   const hasChildren = Object.values(noteTags).some((t) => t.parentTagId === tag.id && t.kind === 'area');
   const hasNotes = Object.values(notes).some((n) => n.tagIds.includes(tag.id) && !n.archivedAt);
   if (hasChildren && hasNotes) return '📚';

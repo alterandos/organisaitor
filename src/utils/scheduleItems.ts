@@ -1,6 +1,7 @@
 import type { CalendarEvent, Collection, CreateCalendarEventInput, RepeatConfig, ScheduleBlock, ScheduleId, ScheduleTemplate } from '@/types';
 import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
 import { breakDates, effectivePeriod } from '@/utils/endeavourPeriod';
+import { periodFromUse, periodsFor } from '@/utils/datePeriods';
 import { addDaysToIso } from '@/utils/date';
 
 // A Schedule's items (docs/features/endeavours.md phase 7 (c)), pure: a Schedule is a named set
@@ -13,8 +14,13 @@ export const COMMITTED_NOTIFY_MINUTES = 30;
 
 export interface ScheduleBounds { start: string | null; end: string | null; breaks: string[] }
 
-// Its own dates and breaks, else its Endeavour's period (live, from above if it has none).
+// The named periods it runs during and pauses during (live: moving a semester's dates moves its
+// Schedules), else its own dates and breaks, else its Endeavour's period (from above if it has none).
 export function scheduleBounds(schedule: ScheduleTemplate, collections: Record<string, Collection>): ScheduleBounds {
+  if (schedule.periodUse && (schedule.periodUse.runs.length || schedule.periodUse.pauses.length)) {
+    const p = periodFromUse(schedule.periodUse, periodsFor(schedule.collectionId, collections));
+    return { start: p?.start ?? null, end: p?.end ?? null, breaks: breakDates(p) };
+  }
   const inherited = schedule.collectionId ? effectivePeriod(schedule.collectionId, collections)?.period ?? null : null;
   return {
     start:  schedule.startDate ?? inherited?.start ?? null,
@@ -86,6 +92,7 @@ export function itemToBlock(e: CalendarEvent): ScheduleBlock {
     notes: e.notes,
     requiresCommitment: e.status === 'tentative',
     committedDates: [],
+    onClass: e.onClass ?? null,
   };
 }
 

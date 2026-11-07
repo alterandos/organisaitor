@@ -1,4 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { useTaskStore } from '@/store/taskStore';
+import { groupState, scheduleTree, schedulesIn, type ScheduleGroup } from '@/utils/scheduleTree';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { ArchiveIcon, CloseIcon, DisclosureIcon } from '@/components/Icons';
@@ -110,6 +113,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
   }, [eventsRecord, remindersRecord]);
 
   const schedulesRecord = useScheduleStore((s) => s.schedules);
+  const collections     = useTaskStore((s) => s.collections);
   const toggleActive    = useScheduleStore((s) => s.toggleScheduleActive);
   const clockFormat     = useSettingsStore((s) => s.clockFormat);
   const layerVisibility = useSettingsStore((s) => s.calendarLayerVisibility);
@@ -227,6 +231,48 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
   const previewTemplates = schedules.filter((s) => previewIds.has(s.id));
   const previewEntries = useMemo(() => templatesToPreviewEntries(previewTemplates), [previewTemplates]);
 
+  // One schedule's line (its switch, colour, dates, preview, edit, delete).
+  const scheduleRow = (schedule: ScheduleTemplate) => {
+    const conflicts = countTemplateConflicts(schedule, schedules.filter((s) => s.active));
+    return (
+      <div key={schedule.id} className={styles.row}>
+        <label className={styles.activeToggle} title="Show on the real calendar">
+          <input type="checkbox" checked={schedule.active} onChange={() => toggleActive(schedule.id)} />
+        </label>
+        <span className={styles.swatch} style={{ background: schedule.color ?? 'var(--color-border)' }} />
+        <div className={styles.rowMain}>
+          <span className={styles.rowName}>{schedule.name}</span>
+          <span className={styles.rowMeta}>
+            {schedule.blocks.length} block{schedule.blocks.length !== 1 ? 's' : ''}
+            {schedule.startDate && ` · from ${formatDate(schedule.startDate)}`}
+            {schedule.endDate && ` to ${formatDate(schedule.endDate)}`}
+            {schedule.active && conflicts > 0 && (
+              <span className={styles.conflictBadge}> · ⚠ {conflicts} potential conflict{conflicts !== 1 ? 's' : ''}</span>
+            )}
+          </span>
+        </div>
+        <button
+          type="button"
+          className={`${styles.previewToggle} ${previewIds.has(schedule.id) ? styles.previewToggleActive : ''}`}
+          onClick={() => togglePreview(schedule.id)}
+          title="Preview this schedule below"
+        >
+          👁
+        </button>
+        <button type="button" className={styles.rowActionBtn} onClick={() => openEditSchedule(schedule)} title="Edit">✏️</button>
+        <button
+          type="button"
+          className={`${styles.rowActionBtn} ${styles.rowActionBtnDelete}`}
+          onClick={async () => { if (await confirmDelete('schedule', schedule.name, undefined, { empty: schedule.blocks.length === 0 })) deleteScheduleWithItems(schedule.id); }}
+          title="Delete"
+        >
+          🗑
+        </button>
+      </div>
+    );
+  };
+  const tree = scheduleTree(schedules, collections);
+
   if (!open) return null;
 
   return (
@@ -278,7 +324,7 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
           <div className={styles.section}>
             <span className={styles.label}>Schedules</span>
             <p className={styles.intro}>
-              A recurring weekly timetable (a class schedule, a gym timetable) that can be switched on and off as a
+              A set of repeating items (your classes, a gym routine) that can be switched on and off as a
               layer over your calendar. Check "Preview" on a few below to compare them before turning any on.
             </p>
 
@@ -286,45 +332,8 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
               <p className={styles.empty}>No schedules yet.</p>
             ) : (
               <div className={styles.list}>
-                {schedules.map((schedule) => {
-                  const conflicts = countTemplateConflicts(schedule, schedules.filter((s) => s.active));
-                  return (
-                    <div key={schedule.id} className={styles.row}>
-                      <label className={styles.activeToggle} title="Show on the real calendar">
-                        <input type="checkbox" checked={schedule.active} onChange={() => toggleActive(schedule.id)} />
-                      </label>
-                      <span className={styles.swatch} style={{ background: schedule.color ?? 'var(--color-border)' }} />
-                      <div className={styles.rowMain}>
-                        <span className={styles.rowName}>{schedule.name}</span>
-                        <span className={styles.rowMeta}>
-                          {schedule.blocks.length} block{schedule.blocks.length !== 1 ? 's' : ''}
-                          {schedule.startDate && ` · from ${formatDate(schedule.startDate)}`}
-                          {schedule.endDate && ` to ${formatDate(schedule.endDate)}`}
-                          {schedule.active && conflicts > 0 && (
-                            <span className={styles.conflictBadge}> · ⚠ {conflicts} potential conflict{conflicts !== 1 ? 's' : ''}</span>
-                          )}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className={`${styles.previewToggle} ${previewIds.has(schedule.id) ? styles.previewToggleActive : ''}`}
-                        onClick={() => togglePreview(schedule.id)}
-                        title="Preview this schedule below"
-                      >
-                        👁
-                      </button>
-                      <button type="button" className={styles.rowActionBtn} onClick={() => openEditSchedule(schedule)} title="Edit">✏️</button>
-                      <button
-                        type="button"
-                        className={`${styles.rowActionBtn} ${styles.rowActionBtnDelete}`}
-                        onClick={async () => { if (await confirmDelete('schedule', schedule.name, undefined, { empty: schedule.blocks.length === 0 })) deleteScheduleWithItems(schedule.id); }}
-                        title="Delete"
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  );
-                })}
+                {tree.groups.map((g) => <ScheduleGroupRow key={g.endeavourId} group={g} depth={0} row={scheduleRow} />)}
+                {tree.loose.map(scheduleRow)}
               </div>
             )}
 
@@ -437,5 +446,39 @@ export function CalendarSidePane({ viewMode, anchorDate, onJumpToDate }: Props) 
         </div>
       </aside>
     </>
+  );
+}
+
+// An Endeavour's schedules (and its parts'), folded by default: one switch turns them all on or off,
+// showing ▣ while some are on (utils/scheduleTree.ts).
+function ScheduleGroupRow({ group, depth, row }: { group: ScheduleGroup; depth: number; row: (s: ScheduleTemplate) => ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLInputElement>(null);
+  const state = groupState(group);
+  const all = schedulesIn(group);
+  useEffect(() => { if (boxRef.current) boxRef.current.indeterminate = state === 'mixed'; }, [state]);
+  function toggle() {
+    const next = state !== 'on';
+    for (const s of all) if (s.active !== next) useScheduleStore.getState().updateSchedule(s.id, { active: next });
+  }
+  return (
+    <div className={styles.group} style={{ '--depth': depth } as CSSProperties}>
+      <div className={styles.groupHead}>
+        <label className={styles.activeToggle} title={LABELS.scheduleTree.toggle(group.name)}>
+          <input ref={boxRef} type="checkbox" checked={state === 'on'} onChange={toggle} aria-label={LABELS.scheduleTree.toggle(group.name)} />
+        </label>
+        <button type="button" className={styles.groupName} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <DisclosureIcon open={open} />
+          <span>{group.name}</span>
+          <span className={styles.groupCount}>{LABELS.scheduleTree.count(all.length, all.filter((s) => s.active).length)}</span>
+        </button>
+      </div>
+      {open && (
+        <div className={styles.groupBody}>
+          {group.groups.map((g) => <ScheduleGroupRow key={g.endeavourId} group={g} depth={depth + 1} row={row} />)}
+          {group.schedules.map(row)}
+        </div>
+      )}
+    </div>
   );
 }

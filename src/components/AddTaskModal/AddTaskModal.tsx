@@ -1,263 +1,165 @@
-import { useState, useEffect, useRef } from 'react';
-import { DateInput } from '@/components/DateInput/DateInput';
-import type { FormEvent, KeyboardEvent } from 'react';
+import { useState, useRef } from 'react';
+import type { FormEvent } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { addTaskWithCalendar } from '@/services/taskCalendarLinks';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
-import { newTagId } from '@/utils/id';
+import { commitTags } from '@/services/tags';
 import { makeItemLink } from '@/utils/taskLinks';
-import { eventTarget, linkedTaskDates } from '@/services/eventTaskLinks';
+import { eventTarget, linkTaskToEvent, linkedTaskDates } from '@/services/eventTaskLinks';
+import { type CalendarItemPick } from '@/components/CalendarItemPickerModal/CalendarItemPickerModal';
+import { TaskCalendarLinks } from '@/components/TaskLinks/TaskCalendarLinks';
 import { now, todayIso } from '@/utils/date';
-import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { LABELS } from '@/config/labels';
-import type { Priority, TagId, PurposeId, CollectionId, TaskKind, TaskId, CrossAppRef, RepeatConfig, ItemTypeId } from '@/types';
+import type { CollectionId, TaskId, CrossAppRef, ItemTypeId, PurposeId } from '@/types';
 import { ItemTypeField } from '@/components/ItemTypeField/ItemTypeField';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { resolveItemType } from '@/utils/itemTypes';
 import { applyItemType } from '@/services/itemTypes';
-import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
-import { TimeInput } from '@/components/TimeInput/TimeInput';
-import { PriorityPicker } from '@/components/PriorityPicker/PriorityPicker';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import styles from './AddTaskModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
-import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
-import { CloseIcon, DisclosureIcon, TrashIcon } from '@/components/Icons';
+import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
+import { CloseIcon } from '@/components/Icons';
 import { ITEM_LINK_KINDS } from '@/config/itemLinkKinds';
+import { TaskFields, type TaskValues } from '@/components/TaskFields/TaskFields';
 
-type PendingTag = { id: TagId; name: string; isNew: boolean };
+const L = LABELS.taskFields;
 
+// A new task: the same fields as its pane (components/TaskFields, "Creating and editing a thing is
+// one form"), then its parent. Made on Add, with whatever links were chosen.
 export function AddTaskModal() {
   const taskModalAdvanced  = useUIStore((s) => s.taskModalAdvanced);
-  const activeCollectionId = useUIStore(selectActiveCollectionId);
   const pendingParentId    = useUIStore((s) => s.pendingParentId);
   const pendingFollowUpOf  = useUIStore((s) => s.pendingFollowUpOf);
   const pendingEventLink   = useUIStore((s) => s.pendingEventLink);
   const quickAddPrefill    = useUIStore((s) => s.quickAddPrefill);
   const closeModal         = useUIStore((s) => s.closeModal);
+  const tasksRecord        = useTaskStore((s) => s.tasks);
 
-  // Abandoning the modal (Escape/backdrop/Cancel) without submitting must drop any pending
-  // Notes "Create ▸ Task" link request — otherwise a later, unrelated task creation could
-  // pick it up. Reads uiStore imperatively (not a subscribed value) since this is an
-  // event-time check, not something the component needs to re-render on. The success path
-  // (handleSubmit) does NOT use this: it resolves the link first and lets NoteEditor clear
-  // it itself once the mark is applied (see uiStore).
+  // Abandoning the modal without making the task drops a pending Notes "Create ▸ Task" link
+  // request, or a later, unrelated task could pick it up. The success path resolves it instead.
   const handleClose = () => {
     if (useUIStore.getState().pendingArtifactLink) useUIStore.getState().clearPendingArtifactLink();
     closeModal();
   };
 
-  // A follow-up of an event shows its start, which sits among the advanced fields.
+  // A follow-up of an event shows its start, which sits among the less-used fields.
   const [advanced, setAdvanced] = useState(taskModalAdvanced || !!pendingParentId || pendingEventLink?.kind === 'followUpOf');
-  const [repeat, setRepeat] = useState<RepeatConfig | null>(null);
+  const [prevAdvanced, setPrevAdvanced] = useState(taskModalAdvanced);
+  if (prevAdvanced !== taskModalAdvanced) { setPrevAdvanced(taskModalAdvanced); setAdvanced(taskModalAdvanced); }
   const formRef = useRef<HTMLFormElement>(null);
 
   // Preparation for, or a follow-up of, an event or a Deadline: its dates, title and Endeavour.
   const eventItem  = pendingEventLink ? eventTarget(pendingEventLink.targetType, pendingEventLink.targetId) : undefined;
-  const eventDates = pendingEventLink && eventItem ? linkedTaskDates(pendingEventLink.kind, pendingEventLink.targetType, pendingEventLink.targetId, pendingEventLink.occurrence ?? null) : {};
-  const eventTitle = eventItem ? (pendingEventLink!.kind === 'prepFor' ? LABELS.taskLinks.event.prepTitle : LABELS.taskLinks.event.followTitle)(eventItem.title) : '';
-  const [title,         setTitle]         = useState(quickAddPrefill?.title ?? eventTitle);
-  const [notes,         setNotes]         = useState('');
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-  const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
-  const [deadline,      setDeadline]      = useState(quickAddPrefill?.deadline ?? eventDates.deadline ?? '');
-  const [deadlineTime,  setDeadlineTime]  = useState(quickAddPrefill?.deadlineTime ?? eventDates.deadlineTime ?? '');
-  const [scheduledAt,   setScheduledAt]   = useState(eventDates.scheduledAt ?? '');
-  const [scheduledTime, setScheduledTime] = useState('');
-  // A sub-task starts with its parent's priority, Endeavour, tags and purposes; the user's
-  // own pick always wins over that (tracked per-field via a *Touched ref, same pattern as
-  // priority already used).
+  // A sub-task starts with its parent's priority, Endeavour, tags and purposes; a follow-up with
+  // those of the task it came from, but not its priority. The person's own picks win (*touched*).
   const parentTaskInitial = pendingParentId ? useTaskStore.getState().tasks[pendingParentId as TaskId] : undefined;
-  // A follow-up (task links) starts with the Endeavour, tags and purposes of the task it came
-  // from, the same way a sub-task does from its parent — but not its priority.
   const followUpOrigin = pendingFollowUpOf ? useTaskStore.getState().tasks[pendingFollowUpOf as TaskId] : undefined;
   const seedTask = parentTaskInitial ?? followUpOrigin;
 
-  // A Type (chosen from the speed dial, or here): its fields, the parts to make with it, and its
-  // defaults (Important → high priority, its tags), which the person's own picks override.
+  // A Type (Types are switched off: config/features.ts): its fields, parts and defaults.
   const [typeId, setTypeId] = useState<ItemTypeId | null>(() => useUIStore.getState().pendingItemTypeId);
   const [typeValues, setTypeValues] = useState<Record<string, unknown>>({});
   const initialType = resolveItemType(useItemTypeStore.getState().types, typeId);
   const [typeParts, setTypeParts] = useState<string[]>(() => initialType?.parts.map((p) => p.id) ?? []);
+  const typeName = useItemTypeStore((st) => (typeId ? st.types[typeId]?.name : undefined));
 
-  const [priority,      setPriority]      = useState<Priority>(
-    quickAddPrefill?.priority ?? parentTaskInitial?.priority ?? (initialType?.defaults.important ? 'high' : 'none')
-  );
-  const priorityTouched = useRef(quickAddPrefill?.priority !== undefined);
+  const [draft, setDraft] = useState<TaskValues>(() => {
+    const eventDates = pendingEventLink && eventItem ? linkedTaskDates(pendingEventLink.kind, pendingEventLink.targetType, pendingEventLink.targetId, pendingEventLink.occurrence ?? null) : {};
+    const eventTitle = eventItem ? (pendingEventLink!.kind === 'prepFor' ? LABELS.taskLinks.event.prepTitle : LABELS.taskLinks.event.followTitle)(eventItem.title) : '';
+    return {
+      title: quickAddPrefill?.title ?? eventTitle,
+      notes: null,
+      deadline: quickAddPrefill?.deadline ?? eventDates.deadline ?? null,
+      deadlineTime: quickAddPrefill?.deadlineTime ?? eventDates.deadlineTime ?? null,
+      scheduledAt: eventDates.scheduledAt ?? null,
+      scheduledTime: null,
+      priority: quickAddPrefill?.priority ?? parentTaskInitial?.priority ?? (initialType?.defaults.important ? 'high' : 'none'),
+      timeIntensity: null,
+      kind: 'action',
+      collectionId: (quickAddPrefill?.collectionId ?? (seedTask ? seedTask.collectionId : eventItem?.collectionId ?? selectActiveCollectionId(useUIStore.getState()))) as CollectionId | null ?? null,
+      purposeIds: (seedTask?.purposeIds ?? []) as PurposeId[],
+      tagIds: [...new Set([...(seedTask?.tagIds ?? []), ...(initialType?.defaults.tagIds ?? [])])].filter((id) => useTaskStore.getState().tags[id]),
+      links: quickAddPrefill?.links ?? [],
+      repeat: null,
+      parentId: pendingParentId ?? null,
+    };
+  });
+  const touched = useRef(new Set<keyof TaskValues>(quickAddPrefill?.priority !== undefined ? ['priority'] : []));
+  const update = (patch: Partial<TaskValues>) => {
+    for (const k of Object.keys(patch) as (keyof TaskValues)[]) touched.current.add(k);
+    setDraft((d) => ({ ...d, ...patch }));
+  };
 
-  // Advanced fields — pre-fill collection from the parent task (sub-task creation), else the
-  // active filter, or from MobileQuickAddBar's "More options…" handoff
-  // (docs/android/01-tasks-app.md §3.2) when that took place instead
-  const [collectionId,       setCollectionId]       = useState<CollectionId | ''>(
-    (quickAddPrefill?.collectionId
-      ?? (seedTask ? (seedTask.collectionId ?? '') : eventItem?.collectionId ?? (activeCollectionId ?? ''))
-    ) as CollectionId | ''
-  );
-  const collectionTouched = useRef(quickAddPrefill?.collectionId !== undefined);
-  const [selectedPurposeIds, setSelectedPurposeIds] = useState<PurposeId[]>(seedTask?.purposeIds ?? []);
-  const purposesTouched = useRef(false);
-  const [pendingTags,        setPendingTags]         = useState<PendingTag[]>(
-    [...new Set([...(seedTask?.tagIds ?? []), ...(initialType?.defaults.tagIds ?? [])])]
-      .filter((id) => useTaskStore.getState().tags[id])
-      .map((id) => ({ id, name: useTaskStore.getState().tags[id]?.name ?? '', isNew: false }))
-  );
-  const tagsTouched = useRef(false);
-  const [tagInput,           setTagInput]            = useState('');
-  const [showSuggestions,    setShowSuggestions]     = useState(false);
-  const [taskKind,           setTaskKind]            = useState<TaskKind>('action');
-  const [parentId,           setParentId]            = useState<TaskId | ''>((pendingParentId as TaskId) ?? '');
-  const [links,              setLinks]               = useState<string[]>(quickAddPrefill?.links ?? []);
-  const [linkInput,          setLinkInput]           = useState('');
-  // Manually-picked links only — the automatic "created from this note" backlink (see
-  // pendingArtifactLink below) is kept separate and merged in at submit time, so removing a
-  // manual pick here can never be mistaken for undoing the automatic one.
-  const [manualCrossAppRefs, setManualCrossAppRefs]  = useState<CrossAppRef[]>([]);
+  // Linked items, held until the task is made: notes and lists picked by hand (the automatic
+  // "created from this note" link is added at submit), and calendar items.
+  const [manualCrossAppRefs, setManualCrossAppRefs] = useState<CrossAppRef[]>([]);
+  const [calendarLinks, setCalendarLinks] = useState<CalendarItemPick[]>([]);
+  const [pickingCalendar, setPickingCalendar] = useState(false);
 
-  const addTag  = useTaskStore((s) => s.addTag);
-  const collectionsRecord = useTaskStore((s) => s.collections);
-  const purposes   = useTaskStore((s) => s.purposes);
-  const tags       = useTaskStore((s) => s.tags);
-  const tasksRecord = useTaskStore((s) => s.tasks);
-
-  const collectionList = Object.values(collectionsRecord);
-  const purposeList    = Object.values(purposes).filter((p) => !p.archivedAt);
-  const existingTags   = Object.values(tags);
-  const topLevelTasks  = Object.values(tasksRecord).filter((t) => !t.parentId && !t.completed && !t.archived);
-
-  const [prevTaskModalAdvanced, setPrevTaskModalAdvanced] = useState(taskModalAdvanced);
-  if (prevTaskModalAdvanced !== taskModalAdvanced) {
-    setPrevTaskModalAdvanced(taskModalAdvanced);
-    setAdvanced(taskModalAdvanced);
-  }
+  const topLevelTasks = Object.values(tasksRecord).filter((t) => !t.parentId && !t.completed && !t.archived);
 
   useEscapeClose(() => { handleClose(); });
-
-  useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formRef.current?.requestSubmit(); }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [closeModal]);
-
-  const suggestions = tagInput.trim()
-    ? existingTags.filter(
-        (t) =>
-          t.name.toLowerCase().includes(tagInput.toLowerCase()) &&
-          !pendingTags.some((p) => p.id === t.id)
-      )
-    : [];
-
-  const addExistingTag = (tag: { id: TagId; name: string }) => {
-    tagsTouched.current = true;
-    setPendingTags((prev) => [...prev, { id: tag.id, name: tag.name, isNew: false }]);
-    setTagInput('');
-    setShowSuggestions(false);
-  };
-
-  const handleTagKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    // Only consumes Escape while there is a suggestions list to dismiss; otherwise it falls
-    // through to the modal's own close (this input is always present, unlike the inline editors).
-    if (e.key === 'Escape') { if (showSuggestions && suggestions.length > 0) { e.stopPropagation(); setShowSuggestions(false); } return; }
-    if (e.key !== 'Enter' && e.key !== ',') return;
-    e.preventDefault();
-    const raw = tagInput.trim();
-    if (!raw) return;
-    if (pendingTags.some((t) => t.name.toLowerCase() === raw.toLowerCase())) {
-      setTagInput('');
-      return;
-    }
-    const existing = existingTags.find((t) => t.name.toLowerCase() === raw.toLowerCase());
-    tagsTouched.current = true;
-    if (existing) {
-      setPendingTags((prev) => [...prev, { id: existing.id, name: existing.name, isNew: false }]);
-    } else {
-      setPendingTags((prev) => [...prev, { id: newTagId(), name: raw, isNew: true }]);
-    }
-    setTagInput('');
-    setShowSuggestions(false);
-  };
-
-  const removeTag = (id: TagId) => {
-    tagsTouched.current = true;
-    setPendingTags((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  const addLink = () => {
-    const url = linkInput.trim();
-    if (!url || links.includes(url)) return;
-    setLinks((prev) => [...prev, url]);
-    setLinkInput('');
-  };
-
-  const removeLink = (url: string) => setLinks((prev) => prev.filter((l) => l !== url));
-
-  const togglePurpose = (id: PurposeId) => {
-    purposesTouched.current = true;
-    setSelectedPurposeIds((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
-    );
-  };
-
-  const typeName = useItemTypeStore((st) => (typeId ? st.types[typeId]?.name : undefined));
+  useCtrlEnterSubmit(() => formRef.current?.requestSubmit());
 
   const pickType = (id: ItemTypeId | null) => {
     setTypeId(id);
     const r = resolveItemType(useItemTypeStore.getState().types, id);
     setTypeParts(r?.parts.map((p) => p.id) ?? []);
     if (!r) return;
-    if (r.defaults.important && !priorityTouched.current) setPriority('high');
-    const add = (r.defaults.tagIds ?? []).filter((t) => tags[t] && !pendingTags.some((p) => p.id === t));
-    if (add.length) setPendingTags((prev) => [...prev, ...add.map((t) => ({ id: t, name: tags[t].name, isNew: false }))]);
+    const tags = useTaskStore.getState().tags;
+    setDraft((d) => ({
+      ...d,
+      ...(r.defaults.important && !touched.current.has('priority') ? { priority: 'high' as const } : {}),
+      tagIds: [...d.tagIds, ...(r.defaults.tagIds ?? []).filter((t) => tags[t] && !d.tagIds.includes(t))],
+    }));
+  };
+
+  // A new parent brings its priority, Endeavour, tags and purposes, unless the person set them.
+  const pickParent = (next: TaskId | '') => {
+    const p = next ? tasksRecord[next] : undefined;
+    setDraft((d) => ({
+      ...d, parentId: next || null,
+      ...(!touched.current.has('priority') ? { priority: p?.priority || 'none' } : {}),
+      ...(!touched.current.has('collectionId') ? { collectionId: p?.collectionId ?? null } : {}),
+      ...(!touched.current.has('tagIds') ? { tagIds: p?.tagIds ?? [] } : {}),
+      ...(!touched.current.has('purposeIds') ? { purposeIds: p?.purposeIds ?? [] } : {}),
+    }));
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
-
-    pendingTags.filter((t) => t.isNew).forEach((t) =>
-      addTag({ id: t.id, name: t.name, color: null, notes: null })
-    );
-
-    // If this creation originated from a Notes selection (FloatingToolbar's "+ Create"
-    // menu), record the reverse link now and report the new id back so NoteEditor can
-    // apply the forward ArtifactLinkMark and clear the pending request itself. The ref's
-    // `type` is the *source* of the link (always 'note' today) — not
-    // pendingArtifactLink.targetType, which instead describes the forward mark's target
-    // (i.e. 'task', what's being created) and would be backwards here. Merged with whatever
-    // was manually picked via the "Linked items" field, deduped in case the same note was
-    // both the creation source and manually re-added.
+    if (!draft.title.trim()) return;
     const pendingArtifactLink = useUIStore.getState().pendingArtifactLink;
     const autoRef = pendingArtifactLink
       ? [{ type: 'note' as const, id: pendingArtifactLink.noteId, ...(pendingArtifactLink.tabId ? { tabId: pendingArtifactLink.tabId } : {}) }]
       : [];
-    const crossAppRefs = [...autoRef, ...manualCrossAppRefs].filter(
-      (ref, i, all) => all.findIndex((r) => r.type === ref.type && r.id === ref.id) === i
-    );
+    const crossAppRefs = [...autoRef, ...manualCrossAppRefs].filter((ref, i, all) => all.findIndex((r) => r.type === ref.type && r.id === ref.id) === i);
 
     const taskId = addTaskWithCalendar({
-      title,
-      notes:           notes || null,
-      links:           links.filter(Boolean),
+      title: draft.title.trim(),
+      notes: draft.notes || null,
+      links: draft.links.filter(Boolean),
       // A repeating task with no date starts from today (services/recurringTasks.ts).
-      deadline:        deadline || (repeat && !scheduledAt ? todayIso() : null),
-      deadlineTime:    deadlineTime || null,
-      scheduledAt:     scheduledAt  || null,
-      scheduledTime:   scheduledTime || null,
-      priority,
-      collectionId: collectionId ? collectionId as CollectionId : null,
-      tagIds:       pendingTags.map((t) => t.id),
-      purposeIds:   selectedPurposeIds,
-      kind:         taskKind,
-      parentId:     parentId ? parentId as TaskId : null,
+      deadline: draft.deadline || (draft.repeat && !draft.scheduledAt ? todayIso() : null),
+      deadlineTime: draft.deadlineTime || null,
+      scheduledAt: draft.scheduledAt || null,
+      scheduledTime: draft.scheduledTime || null,
+      priority: draft.priority,
+      timeIntensity: draft.timeIntensity,
+      collectionId: draft.collectionId,
+      tagIds: commitTags(draft.tagIds),
+      purposeIds: draft.purposeIds,
+      kind: draft.kind,
+      parentId: (draft.parentId as TaskId | null) ?? null,
       crossAppRefs,
-      itemLinks:    followUpOrigin ? [makeItemLink('followUpOf', followUpOrigin.id, null, now())]
+      itemLinks: followUpOrigin ? [makeItemLink('followUpOf', followUpOrigin.id, null, now())]
         : pendingEventLink && eventItem ? [{ ...makeItemLink(pendingEventLink.kind, pendingEventLink.targetId, null, now(), pendingEventLink.targetType), ...(pendingEventLink.occurrence ? { occurrence: pendingEventLink.occurrence } : {}) }]
         : undefined,
-      repeat:       parentId ? null : repeat,
+      repeat: draft.parentId ? null : draft.repeat,
     });
 
+    for (const c of calendarLinks) linkTaskToEvent(taskId, c.kind, c.type, c.id, c.occurrence);
     if (typeId) applyItemType({ kind: 'task', id: taskId }, typeId, typeValues, typeParts);
     if (pendingArtifactLink) useUIStore.getState().resolveArtifactLink(taskId);
     closeModal();
@@ -267,8 +169,8 @@ export function AddTaskModal() {
     <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
       <div className={styles.modal}>
         <div className={styles.header}>
-          <span className={styles.title}>{typeName ? LABELS.itemTypes.newOf(typeName) : 'New Task'}</span>
-          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close"><CloseIcon /></button>
+          <span className={styles.title}>{typeName ? LABELS.itemTypes.newOf(typeName) : L.newTitle}</span>
+          <button className={styles.closeBtn} onClick={handleClose} aria-label={L.close}><CloseIcon /></button>
         </div>
         {followUpOrigin && <div className={styles.followUpBanner}>{ITEM_LINK_KINDS.followUpOf.icon} {LABELS.taskLinks.followUpBanner(followUpOrigin.title)}</div>}
         {pendingEventLink && eventItem && (
@@ -278,298 +180,42 @@ export function AddTaskModal() {
         )}
 
         <form ref={formRef} onSubmit={handleSubmit}>
-          {/* ── Basic fields ── */}
-          <input
-            className={styles.titleInput}
-            placeholder="What needs to be done?"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            autoFocus
-          />
-
-          <textarea
-            ref={notesRef}
-            className={styles.notes}
-            placeholder="Notes (optional) — Ctrl+B/I bold/italic, Ctrl+L to insert a link"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-          />
-
-          <div className={styles.row}>
-            <div className={styles.field}>
-              <label className={styles.label}>
-                {taskKind === 'milestone' ? LABELS.milestoneDate : 'Due date'}
-                {taskKind === 'milestone' && <span className={styles.required}>*</span>}
-              </label>
-              <div className={styles.dateTimeRow}>
-                <DateInput className={styles.dateInput} value={deadline} onChange={(v) => {
-                    setDeadline(v);
-                    if (!v) setDeadlineTime('');
-                  }} required={taskKind === 'milestone'} />
-                {(deadline || taskKind === 'milestone') && (
-                  <TimeInput
-                    className={styles.timeInput}
-                    value={deadlineTime}
-                    onChange={setDeadlineTime}
-                    placeholder="Time"
-                  />
-                )}
-              </div>
-            </div>
-            <div className={`${styles.field} ${styles.fieldSnug}`}>
-              <span className={styles.label}>{LABELS.priority.label}</span>
-              <PriorityPicker id="new-task-priority" value={priority} onChange={(p) => { priorityTouched.current = true; setPriority(p); }} />
-            </div>
-          </div>
-
-          <ItemTypeField
-            typeId={typeId}
-            values={typeValues}
-            onTypeChange={pickType}
-            onValueChange={(fieldId, v) => setTypeValues((prev) => ({ ...prev, [fieldId]: v }))}
-            parts={{ chosen: typeParts, onChange: setTypeParts, date: deadline || scheduledAt || null }}
-          />
-
-          <div className={styles.row}>
-            <div className={styles.field}>
-              <label className={styles.label}>{LABELS.scheduledFor}</label>
-              <div className={styles.dateTimeRow}>
-                <DateInput className={styles.dateInput} value={scheduledAt} onChange={(v) => {
-                    setScheduledAt(v);
-                    if (!v) setScheduledTime('');
-                  }} />
-                {scheduledAt && (
-                  <TimeInput
-                    className={styles.timeInput}
-                    value={scheduledTime}
-                    onChange={setScheduledTime}
-                    placeholder="Time"
-                  />
-                )}
-              </div>
-              {scheduledAt && (
-                <span className={styles.scheduledHint}>Added to calendar automatically</span>
-              )}
-            </div>
-          </div>
-
-          {/* ── Endeavour (always visible) ── */}
-          {collectionList.length > 0 && (
-            <div className={styles.row}>
-              <div className={`${styles.field} ${styles.fieldGrow}`}>
-                <label className={styles.label}>{LABELS.collection}</label>
-                <CollectionPicker
-                  collections={collectionList}
-                  value={collectionId || null}
-                  onChange={(id) => { collectionTouched.current = true; setCollectionId(id ?? ''); }}
-                  noneLabel={LABELS.noCollection}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ── Expand bar (hover to reveal advanced) ── */}
-          {!advanced && (
-            <div
-              className={styles.expandBar}
-              onMouseEnter={() => setAdvanced(true)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setAdvanced(true)}
-              aria-label="Show more options"
-            >
-              <DisclosureIcon open={false} className={styles.expandBarChevron} />
-              <span className={styles.expandBarLabel}>More options</span>
-            </div>
-          )}
-
-          {/* ── Advanced fields ── */}
-          {advanced && (
-            <div className={styles.advanced}>
-              {/* Repeat — not for a sub-task, which repeats with its parent */}
-              {!parentId && (
-                <div className={styles.field}>
-                  <RepeatField value={repeat} onChange={setRepeat} hint={LABELS.recurring.hint} date={deadline || scheduledAt || null} />
-                </div>
-              )}
-
-              {/* Task kind */}
+          <TaskFields item={draft} update={update} liveText autoFocusTitle idPrefix="new-task" scheduledHint={L.addedToCalendar}
+            moreHidden={!advanced} onShowMore={() => setAdvanced(true)}
+            typeField={<ItemTypeField typeId={typeId} values={typeValues} onTypeChange={pickType}
+              onValueChange={(fieldId, v) => setTypeValues((prev) => ({ ...prev, [fieldId]: v }))}
+              parts={{ chosen: typeParts, onChange: setTypeParts, date: draft.deadline || draft.scheduledAt || null }} />}
+            linkedItems={<>
+              <CrossAppRefPicker value={manualCrossAppRefs} onChange={setManualCrossAppRefs} suggestFrom={draft.title}
+                extraAdds={[{ label: LABELS.taskLinks.linkCalendar, onClick: () => setPickingCalendar(true) }]} />
+              {/* Calendar items, linked when the task is made; the first date chosen fills its dates. */}
+              <TaskCalendarLinks pending={calendarLinks} suggestFrom={draft.title} picking={pickingCalendar} onPicking={setPickingCalendar} onPending={(next, added) => {
+                setCalendarLinks(next);
+                if (!added?.length) return;
+                const dates = linkedTaskDates(added[0].kind, added[0].type, added[0].id, added[0].occurrence);
+                setDraft((d) => ({
+                  ...d,
+                  ...(dates.deadline && !d.deadline ? { deadline: dates.deadline, deadlineTime: dates.deadlineTime ?? null } : {}),
+                  ...(dates.scheduledAt && !d.scheduledAt ? { scheduledAt: dates.scheduledAt } : {}),
+                }));
+              }} />
+            </>}
+            more={topLevelTasks.length > 0 && (
               <div className={styles.field}>
-                <label className={styles.label}>Type</label>
-                <div className={styles.kindGroup}>
-                  <button
-                    type="button"
-                    className={`${styles.kindBtn} ${taskKind === 'action' ? styles.kindBtnActive : ''}`}
-                    onClick={() => setTaskKind('action')}
-                  >
-                    {LABELS.taskKind.action}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.kindBtn} ${taskKind === 'waiting' ? styles.kindBtnActive : ''}`}
-                    onClick={() => setTaskKind('waiting')}
-                  >
-                    ⏳ {LABELS.taskKind.waiting}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.kindBtn} ${taskKind === 'milestone' ? styles.kindBtnActive : ''}`}
-                    onClick={() => setTaskKind('milestone')}
-                  >
-                    ◆ {LABELS.taskKind.milestone}
-                  </button>
-                </div>
+                <label className={styles.label} htmlFor="new-task-parent">{L.parent}</label>
+                <select id="new-task-parent" className={styles.select} value={draft.parentId ?? ''} onChange={(e) => pickParent(e.target.value as TaskId | '')}>
+                  <option value="">{L.noParent}</option>
+                  {topLevelTasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </select>
               </div>
-
-              {/* Purposes */}
-              {purposeList.length > 0 && (
-                <div className={styles.field}>
-                  <label className={styles.label}>Purposes</label>
-                  <div className={styles.chips}>
-                    {purposeList.map((p) => {
-                      const active = selectedPurposeIds.includes(p.id as PurposeId);
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className={`${styles.chip} ${active ? styles.chipActive : ''}`}
-                          style={active && p.color ? { background: p.color, borderColor: p.color, color: '#fff' } : undefined}
-                          onClick={() => togglePurpose(p.id as PurposeId)}
-                        >
-                          {p.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Tags */}
-              <div className={styles.field}>
-                <label className={styles.label}>Tags — Enter or comma to add</label>
-                <div className={styles.tagBox}>
-                  {pendingTags.map((t) => (
-                    <span key={t.id} className={styles.tag}>
-                      {t.name}
-                      <button type="button" className={styles.tagRemove} onClick={() => removeTag(t.id)} aria-label={`Remove ${t.name}`}><CloseIcon /></button>
-                    </span>
-                  ))}
-                  <input
-                    className={styles.tagInput}
-                    placeholder={pendingTags.length === 0 ? 'e.g. urgent, reading' : ''}
-                    value={tagInput}
-                    onChange={(e) => { setTagInput(e.target.value); setShowSuggestions(true); }}
-                    onKeyDown={handleTagKeyDown}
-                    onFocus={() => setShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
-                  />
-                </div>
-                {showSuggestions && suggestions.length > 0 && (
-                  <ul className={styles.suggestions}>
-                    {suggestions.map((s) => (
-                      <li key={s.id}>
-                        <button
-                          type="button"
-                          className={styles.suggestion}
-                          onMouseDown={(e) => { e.preventDefault(); addExistingTag(s); }}
-                        >
-                          {s.color && <span className={styles.suggestionDot} style={{ background: s.color }} />}
-                          {s.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Links */}
-              <div className={styles.field}>
-                <label className={styles.label}>Links</label>
-                {links.length > 0 && (
-                  <ul className={styles.linkList}>
-                    {links.map((url) => {
-                      let label = url;
-                      try { label = new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch { /* not a URL: show it as typed */ }
-                      return (
-                        <li key={url} className={styles.linkRow}>
-                          <span className={styles.linkLabel}>{label}</span>
-                          <button type="button" className={styles.linkRemove} onClick={() => removeLink(url)} aria-label="Remove link"><TrashIcon width="1em" height="1em" /></button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                <div className={styles.linkInputRow}>
-                  <input
-                    className={styles.input}
-                    type="url"
-                    placeholder="https://"
-                    value={linkInput}
-                    onChange={(e) => setLinkInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
-                    onBlur={addLink}
-                  />
-                  <button type="button" className={styles.linkAddBtn} onClick={addLink} disabled={!linkInput.trim()}>Add</button>
-                </div>
-              </div>
-
-              {/* Linked items (Notes today; Calendar/List/Tracker are stubs in the picker
-                  itself — see CLAUDE.md "Cross-app linking") */}
-              <div className={styles.field}>
-                <label className={styles.label}>Linked items</label>
-                <CrossAppRefPicker value={manualCrossAppRefs} onChange={setManualCrossAppRefs} suggestFrom={title} />
-              </div>
-
-              {/* Parent task */}
-              {topLevelTasks.length > 0 && (
-                <div className={styles.field}>
-                  <label className={styles.label}>Parent task (sub-task of)</label>
-                  <select
-                    className={styles.select}
-                    value={parentId}
-                    onChange={(e) => {
-                      const next = e.target.value as TaskId | '';
-                      setParentId(next);
-                      const nextParent = next ? tasksRecord[next] : undefined;
-                      if (!priorityTouched.current) setPriority(nextParent?.priority || 'none');
-                      if (!collectionTouched.current) setCollectionId(nextParent?.collectionId ?? '');
-                      if (!tagsTouched.current) {
-                        setPendingTags((nextParent?.tagIds ?? []).map((id) => ({ id, name: tags[id]?.name ?? '', isNew: false })));
-                      }
-                      if (!purposesTouched.current) setSelectedPurposeIds(nextParent?.purposeIds ?? []);
-                    }}
-                  >
-                    <option value="">None (top-level task)</option>
-                    {topLevelTasks.map((t) => (
-                      <option key={t.id} value={t.id}>{t.title}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          )}
+            )} />
 
           <div className={styles.actions}>
-            <button type="button" className={styles.cancelBtn} onClick={handleClose}>Cancel</button>
-            <button
-              type="submit"
-              className={styles.submitBtn}
-              disabled={!title.trim() || (taskKind === 'milestone' && !deadline)}
-            >
-              Add Task
-            </button>
+            <button type="button" className={styles.cancelBtn} onClick={handleClose}>{L.cancel}</button>
+            <button type="submit" className={styles.submitBtn} disabled={!draft.title.trim() || (draft.kind === 'milestone' && !draft.deadline)}>{L.add}</button>
           </div>
         </form>
       </div>
-      {linkPrompt && (
-        <MarkdownLinkPrompt
-          anchorRect={linkPrompt.anchorRect}
-          initialText={linkPrompt.initialText}
-          onConfirm={confirmLink}
-          onCancel={cancelLink}
-        />
-      )}
     </div>
   );
 }

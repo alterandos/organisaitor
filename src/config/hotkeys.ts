@@ -47,7 +47,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'nav-notes',     group: 'Navigation', primary: '5', secondary: 'Ctrl+5', action: 'Notes section',     customizable: true, touch: 'More tab → Notes' },
   { id: 'nav-portfolio', group: 'Navigation', primary: '6', secondary: 'Ctrl+6', action: 'Portfolio section', customizable: true, touch: 'More tab → Portfolio' },
   { id: 'nav-fitness',   group: 'Navigation', primary: '7', secondary: 'Ctrl+7', action: 'Fitness section',   customizable: true, touch: 'More tab → Fitness' },
-  { id: 'nav-alt-digit', group: 'Navigation', primary: 'Alt+0–7', action: 'Go to that section (0 Overview … 7 Fitness), also from inside a text field or a note', touch: 'The bottom bar tabs, or the More tab' },
+  { id: 'nav-alt-digit', group: 'Navigation', primary: 'Alt+0–7', secondary: 'Alt+`', action: 'Go to that section (` Endeavours, 0 Overview … 7 Fitness), also from inside a text field or a note', touch: 'The bottom bar tabs, or the More tab' },
   { id: 'nav-alt-letter', group: 'Navigation', primary: 'Alt+S / Alt+M / Alt+A', action: 'Open Settings, Manage or Account, also from inside a text field or a note (Alt + the letter each is bound to)', touch: 'More tab → Settings / Manage Library / Account' },
   // Actions
   { id: 'action-new-item',  group: 'Actions', primary: 'N', secondary: 'Space',  action: 'New item for where you are (task / event / entry; in Notes, a notebook from the Chronicle column, a note from the notes column) — Ctrl+N also works', customizable: true, touch: 'The + button, or the section’s quick-add bar' },
@@ -69,6 +69,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: 'action-recycling-bin', group: 'Actions', primary: 'Ctrl+Shift+R', secondary: 'Alt+R', action: 'Open/close the Recycling Bin (also from inside a text field)', customizable: true, touch: 'More tab → Account → Recycling Bin' },
   { id: 'action-look-up', group: 'Actions', primary: 'Alt+L', action: 'Look up: find a passage or picture in your notes, read it, then embed it, link it, copy it or open it (from anywhere, a text field too)', customizable: true, touch: 'Quick Access → Places → Look up' },
   { id: 'action-scratchpad', group: 'Actions', primary: 'Alt+P', action: 'Open/close the scratchpad, from anywhere (also from inside a text field)', customizable: true, touch: 'Quick Access → Scratchpad (pinned there by default)' },
+  { id: 'action-calendar-pad', group: 'Actions', primary: 'Alt+C', action: 'Open/close the calendar pad: a small calendar over whatever is open, with the date calculator (also from inside a text field)', customizable: true, touch: 'Quick Access → Calendar pad' },
   { id: 'action-theme', group: 'Actions', primary: 'Alt+T', action: 'Switch between the dark and light theme (also from inside a text field)', customizable: true, touch: 'More tab → Settings → Appearance → Theme' },
   // Item panes — handled locally by useItemActions (src/components/ItemActions/), only while a
   // task / calendar event / calendar reminder pane is open. Not customizable (component-local).
@@ -136,9 +137,12 @@ export const HOTKEY_GROUPS = ['Navigation', 'Actions', 'Item panes', 'Calendar',
 // Read from the physical key (`code`), since Option+digit types a character on a Mac. The top row
 // only: Alt and the number pad types a character by its code on Windows.
 const ALT_DIGIT_SECTIONS: AppView[] = ['overview', 'tasks', 'calendar', 'records', 'lists', 'notes', 'portfolio', 'fitness'];
+// Alt+` (the key left of 1) goes to Endeavours, which sits above Overview (the user, 2026-11-07).
+const ALT_BACKQUOTE_SECTION: AppView = 'endeavours';
 
 export function altDigitSection(e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'code'>): AppView | null {
   if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return null;
+  if (e.code === 'Backquote') return ALT_BACKQUOTE_SECTION;
   const m = /^Digit([0-9])$/.exec(e.code);
   return m ? (ALT_DIGIT_SECTIONS[Number(m[1])] ?? null) : null;
 }

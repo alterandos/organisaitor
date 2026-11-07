@@ -1,18 +1,12 @@
 import { useMemo } from 'react';
-import { nanoid } from 'nanoid';
 import { useTemplateStore, type TemplateInput } from '@/store/templateStore';
 import { useTaskStore } from '@/store/taskStore';
-import { useCalendarStore } from '@/store/calendarStore';
 import { useNoteStore } from '@/store/noteStore';
-import { useListStore } from '@/store/listStore';
-import { useGoalStore } from '@/store/goalStore';
 import { DEFAULT_TEMPLATES, DEFAULT_TEMPLATE_BY_ID } from '@/config/defaultTemplates';
 import { codeFromName } from '@/utils/templatePlan';
 import { childrenOf } from '@/utils/endeavourGraph';
-import { scheduleListOf } from '@/utils/subjectItems';
-import { listView } from '@/services/listSecrets';
-import type { CollectionId, GoalMeasure } from '@/types';
-import type { EndeavourTemplateDef, EndeavourTemplateId, TemplateGoalMeasure } from '@/types/templates';
+import type { CollectionId } from '@/types';
+import type { EndeavourTemplateDef, EndeavourTemplateId } from '@/types/templates';
 
 // THE way to read and change Endeavour templates (types/templates.ts): the built-in ones
 // (config/defaultTemplates.ts), each replaced by the person's copy once they've changed it, then
@@ -91,51 +85,30 @@ export function blankTemplate(name = ''): EndeavourTemplateDef {
   const ts = new Date().toISOString();
   return {
     id: '' as EndeavourTemplateId, name, icon: null, description: '', kind: 'project',
-    dates: { show: false, exams: false, timeOff: [] }, details: [], notebooks: [], lists: [], tasks: [], classes: [],
-    deadlines: [], goals: [], partsFrom: null, partsLabel: null, createdAt: ts, updatedAt: ts,
+    dates: { show: false, exams: false, timeOff: [] }, details: [], tags: [], notebook: false,
+    partsFrom: null, partsLabel: null, createdAt: ts, updatedAt: ts,
   };
 }
 
-// "Save as template" (an Endeavour's home): what it is and holds, as structure. Its name in the
-// names of what's in it becomes {name} (its code {short}); dates become weekdays; values, notes,
-// list items' content beyond their titles, and one-off dates are left out.
+// "Save as template" (an Endeavour's home): what the form says about it, as structure: whether it
+// ends, its dates' shape and the names of its time off, its details' labels, its own tags, whether
+// it has a notebook, and the template its parts came from. No values, no dates, nothing in it.
 export function captureTemplate(endeavourId: CollectionId): EndeavourTemplateDef | null {
   const tasks = useTaskStore.getState();
   const c = tasks.collections[endeavourId];
   if (!c) return null;
-  const code = codeFromName(c.name);
-  const generic = (s: string) => {
-    let out = s.split(c.name).join('{name}');
-    if (code) out = out.split(code).join('{short}');
-    return out;
-  };
-  const events = useCalendarStore.getState().events;
-  const lists = Object.values(useListStore.getState().lists).filter((l) => l.collectionId === endeavourId && !l.encryptedPayload);
-  const items = Object.values(useListStore.getState().listItems);
-  const goals = Object.values(useGoalStore.getState().goals).filter((g) => g.target.type === 'endeavour' && g.target.id === endeavourId);
   const parts = childrenOf(endeavourId, tasks.collections).map((k) => tasks.collections[k]).filter((p) => p && (p.kind === 'project' || p.kind === 'list'));
-  const t = blankTemplate(c.name);
+  const own = templateFor(c.templateId);
   return {
-    ...t,
-    name: c.name, icon: null, description: c.description ?? '', kind: c.kind === 'list' ? 'list' : 'project',
+    ...blankTemplate(c.name),
+    icon: c.icon ?? null, description: c.description ?? '', kind: c.kind === 'list' ? 'list' : 'project',
     dates: { show: !!c.period, exams: !!c.period?.exams, timeOff: (c.period?.breaks ?? []).map((b) => b.label).filter(Boolean) },
     details: (c.attributes?.fields ?? []).filter((f) => f.type !== 'period').map((f) => ({ ...f })),
-    codeFromName: !!code,
-    notebooks: Object.values(useNoteStore.getState().noteTags).filter((n) => n.kind === 'area' && n.collectionId === endeavourId).map((n) => ({ id: nanoid(8), name: generic(n.name) })),
-    lists: lists.map((l) => ({ id: nanoid(8), name: generic(listView(l).name), items: items.filter((i) => i.listId === l.id).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((i) => i.title) })),
-    tasks: Object.values(tasks.tasks).filter((x) => x.collectionId === endeavourId && !x.parentId && !x.archived && !x.itemLinks?.some((l) => l.ruleId))
-      .map((x) => ({ id: nanoid(8), title: generic(x.title), kind: x.kind, weekly: x.repeat?.freq === 'weekly' && x.repeat.daysOfWeek?.length === 1 ? x.repeat.daysOfWeek[0] : null })),
-    classes: scheduleListOf(endeavourId, events).filter((e) => e.repeat?.freq === 'weekly').map((e) => ({
-      id: nanoid(8), title: generic(e.title), weekdays: e.repeat?.daysOfWeek ?? [new Date(`${e.date}T00:00:00`).getDay()],
-      start: e.startTime, end: e.endTime, place: e.location, taskRules: (e.taskRules ?? []).map((r) => ({ id: r.id, title: r.title, side: r.side, days: r.days })),
-    })),
-    goals: goals.map((g) => ({ id: nanoid(8), title: generic(g.title), measure: templateMeasure(g.measure) })).filter((g): g is { id: string; title: string; measure: TemplateGoalMeasure } => !!g.measure),
-    partsFrom: parts.map((p) => p.templateId).find(Boolean) ?? null,
+    codeFromName: !!codeFromName(c.name) || !!own?.codeFromName,
+    readsOutline: !!own?.readsOutline,
+    tags: c.tagIds.map((t) => tasks.tags[t]?.name).filter((n): n is string => !!n),
+    notebook: Object.values(useNoteStore.getState().noteTags).some((n) => n.kind === 'area' && n.collectionId === endeavourId),
+    partsFrom: parts.map((p) => p.templateId).find(Boolean) ?? own?.partsFrom ?? null,
+    partsLabel: own?.partsLabel ?? null,
   };
-}
-
-function templateMeasure(m: GoalMeasure): TemplateGoalMeasure | null {
-  if (m.kind === 'manual') return { kind: 'manual', unit: m.unit, target: m.target };
-  if (m.kind === 'completion') return { kind: 'completion' };
-  return null;
 }

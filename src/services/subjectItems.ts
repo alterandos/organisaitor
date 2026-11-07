@@ -42,7 +42,7 @@ export function saveSubjectItem(subjectId: CollectionId, draft: SubjectItemDraft
 function saveScheduleItem(subjectId: CollectionId, name: string, d: SubjectItemDraft, existing?: CalendarEventId): string | null {
   const was = existing ? cal().events[existing] : undefined;
   const scheduleId = d.repeat ? (was?.scheduleId ?? endeavourSchedule(subjectId, LABELS.subjectEditor.scheduleName(subjectShort(name)), true)) : null;
-  const fields = { title: d.title, date: d.date, startTime: d.start, endTime: d.end, location: d.place, notes: d.notes, repeat: d.repeat, ...classLink(subjectId, d, existing) };
+  const fields = { title: d.title, date: d.date, startTime: d.start, endTime: d.end, location: d.place, notes: d.notes, repeat: d.repeat, ...classLink(d, existing) };
   if (was) {
     setScheduleEvent(was.id, fields, scheduleId);
     typeItem({ kind: 'event', id: was.id }, d, was.typeId ?? null);
@@ -71,7 +71,7 @@ function saveWorkItem(subjectId: CollectionId, d: SubjectItemDraft, existing?: C
     delete kept.follows;
     repeat = kept;
   }
-  const fields = { title: d.title, date, time: d.start, notes: d.notes, repeat, ...classLink(subjectId, { ...d, date, repeat }, existing) };
+  const fields = { title: d.title, date, time: d.start, notes: d.notes, repeat, ...classLink({ ...d, date, repeat }, existing) };
   const was = existing ? cal().deadlines[existing] : undefined;
   if (was) {
     cal().updateDeadline(was.id, fields);
@@ -86,13 +86,13 @@ function saveWorkItem(subjectId: CollectionId, d: SubjectItemDraft, existing?: C
   return id;
 }
 
-// Instead of a class or during it: kept only while it still falls in that class's time (a one-off,
+// Instead of a class or during it: kept only while it still falls in that event's time (a one-off,
 // not repeating); never sent when it was never asked.
-function classLink(subjectId: CollectionId, d: SubjectItemDraft, existing?: string): { onClass?: ClassLink | null } {
+function classLink(d: SubjectItemDraft, existing?: string): { onClass?: ClassLink | null } {
   if (d.onClass === undefined) return {};
   if (!d.onClass || d.repeat || d.follow) return { onClass: null };
-  const still = clashingClasses({ id: existing, date: d.date, start: d.start, end: d.end, collectionId: subjectId }, cal().events)
-    .some((c) => c.event.id === d.onClass!.eventId && c.date === d.onClass!.date);
+  const still = clashingClasses({ id: existing, date: d.date, start: d.start, end: d.end }, cal().events)
+    .some((c) => c.event.id === d.onClass!.eventId && c.dates.includes(d.onClass!.date ?? d.date));
   return { onClass: still ? d.onClass : null };
 }
 

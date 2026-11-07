@@ -1,20 +1,23 @@
 import { itemOccurrences } from '@/utils/itemOccurrences';
 import { addDaysToIso } from '@/utils/date';
+import { seriesHorizon } from '@/utils/recurrence';
 import type { CalendarDeadline, CalendarEvent, EventTaskRule, ItemLink, Task } from '@/types';
 
 // Tasks for each date of an event (the user, 2026-11-04: "prepare for the lecture" for every
 // lecture, gone when one is cancelled). Pure: what the watcher (services/eventTaskRules.ts) should
 // make, move and take away, from the events, their rules and the tasks already made.
-// - A task appears LEAD_DAYS before it's due (rolling, decided with the user: not the whole term
-//   at once), and only for a date not yet given one (`made`), so one the person deleted stays gone.
+// - Every date's task is made at once, to the series' end, or 90 days ahead for one that never ends
+//   (seriesHorizon; the user, 2026-11-07, replacing a week at a time, which confused), and only for
+//   a date not yet given one (`made`), so one the person deleted stays gone. The first open one of a
+//   rule is shown as usual, the rest quietly (quietRuleTasks).
 // - A date cancelled (skipped, a break, the series deleted or ended) takes its open task away; a
 //   task already done stays. A date moved ("only this one") moves its task; dates the person set
 //   on the task themselves are left alone.
-// - Before: due N days before the class (at its start time on the day). After: from the class,
-//   due N days after it.
+// - Before (a preparation, 2026-11-07): due when the class starts, to be started N days before it.
+//   After (a follow-up): from the class, due N days after it.
 
-export const LEAD_DAYS = 7;
-const AROUND = 60;          // how far either side of today a task's date is checked
+const AROUND = 60;          // how far back a task's date is checked
+const AHEAD = 760;          // how far ahead: past the longest horizon (two years)
 const KEEP_MADE = 120;      // `made` dates older than this are forgotten
 
 export interface RuleOccurrence { key: string; date: string; time: string | null }
@@ -32,7 +35,7 @@ export function eventOccurrences(e: CalendarEvent, events: Record<string, Calend
 
 export function ruleDates(rule: EventTaskRule, occ: RuleOccurrence): Pick<Task, 'deadline' | 'deadlineTime' | 'scheduledAt'> {
   if (rule.side === 'before') {
-    return { deadline: addDaysToIso(occ.date, -rule.days), deadlineTime: rule.days === 0 ? occ.time : null, scheduledAt: null };
+    return { deadline: occ.date, deadlineTime: occ.time, scheduledAt: addDaysToIso(occ.date, -rule.days) };
   }
   return { deadline: addDaysToIso(occ.date, rule.days), deadlineTime: null, scheduledAt: occ.date };
 }
@@ -58,7 +61,7 @@ const hosts = (events: Record<string, CalendarEvent>) =>
 // (the user, 2026-11-05: a task for each date must never arrive in the past).
 export function planRuleTasks(events: Record<string, CalendarEvent>, tasks: Record<string, Task>, today: string, now: string | null = null): RulePlan {
   const plan: RulePlan = { create: [], move: [], remove: [], made: [] };
-  const from = addDaysToIso(today, -AROUND), to = addDaysToIso(today, AROUND);
+  const from = addDaysToIso(today, -AROUND), to = addDaysToIso(today, AHEAD);
   const occs = new Map<string, Map<string, RuleOccurrence>>();
   const occOf = (e: CalendarEvent) => {
     if (!occs.has(e.id)) occs.set(e.id, new Map(eventOccurrences(e, events, from, to).map((o) => [o.key, o])));
@@ -84,13 +87,14 @@ export function planRuleTasks(events: Record<string, CalendarEvent>, tasks: Reco
 
   for (const e of hosts(events)) {
     let changed = false;
+    const horizon = e.repeat ? seriesHorizon(e.date, e.repeat, today) : to;
     const rules = e.taskRules!.map((rule) => {
       if (!rule.title.trim()) return rule;   // still being named
       const made = new Set((rule.made ?? []).filter((d) => d >= addDaysToIso(today, -KEEP_MADE)));
       if (made.size !== (rule.made ?? []).length) changed = true;
       for (const occ of occOf(e).values()) {
         const dates = ruleDates(rule, occ);
-        if (!dates.deadline || dates.deadline < today || dates.deadline > addDaysToIso(today, LEAD_DAYS)) continue;
+        if (!dates.deadline || dates.deadline < today || occ.date > horizon) continue;
         if (dates.deadline === today && now && dates.deadlineTime && dates.deadlineTime <= now) continue;
         if (made.has(occ.key) || existing.has(`${e.id}|${rule.id}|${occ.key}`)) continue;
         plan.create.push({ event: e, rule, occ, dates });
@@ -125,4 +129,11 @@ export function foldRuleTasks<T extends Task>(tasks: T[]): { shown: T[]; folded:
     return false;
   });
   return { shown, folded };
+}
+
+// The open tasks of a rule after its first: shown quietly wherever they're listed one by one (the
+// calendar, Overview), as the first stands for "what's next" (2026-11-07).
+export function quietRuleTasks(tasks: Iterable<Task>): Set<string> {
+  const { folded } = foldRuleTasks([...tasks].filter((t) => !t.completed && !t.archived));
+  return new Set([...folded.values()].flat().map((t) => t.id));
 }

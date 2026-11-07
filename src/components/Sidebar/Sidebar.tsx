@@ -1,3 +1,4 @@
+import { endeavourColor } from '@/utils/endeavourLook';
 import { TYPES_ENABLED } from '@/config/features';
 import { useRef, useState } from 'react';
 import type { TagId, PurposeId, CollectionId } from '@/types';
@@ -29,10 +30,11 @@ interface Props {
 
 function SidebarCollectionRow({ col, onEdit, onDelete }: { col: Collection; onEdit: () => void; onDelete: () => void }) {
   const rowRef = useRef<HTMLDivElement>(null);
+  const collections = useTaskStore((s) => s.collections);
   const pin = usePinAction('endeavour', col.id);
   return (
     <div ref={rowRef} className={styles.row}>
-      <RowOptionsMenu rowRef={rowRef} title={col.name} icon={<span className={styles.dot} style={{ background: col.color ?? 'var(--color-border)' }} />}>
+      <RowOptionsMenu rowRef={rowRef} title={col.name} icon={<span className={styles.dot} style={{ background: endeavourColor(col.id, collections) ?? 'var(--color-border)' }} />}>
         <RowAction
           className={styles.iconBtn}
           icon="◔"
@@ -111,7 +113,7 @@ export function Sidebar({ onHoverEnter, onHoverLeave }: Props) {
   const deletePurpose     = useTaskStore((s) => s.deletePurpose);
   const deleteCollection  = useTaskStore((s) => s.deleteCollection);
 
-  const tags     = Object.values(tagsRecord);
+  const tags     = Object.values(tagsRecord).filter((t) => !t.archivedAt);
   const purposes = Object.values(purposesRecord).filter((p) => !p.archivedAt);
   const allCollections = Object.values(collectionsRecord).filter((c) => !c.archivedAt);
   const projects = allCollections.filter((c) => c.kind === 'project');

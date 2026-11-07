@@ -114,7 +114,10 @@ function expandNotebookAncestors(
 }
 
 // Manage view (library administration) — left-nav tabs, extensible for future sections.
-export type ManageSection = 'endeavours' | 'purposes' | 'tags' | 'types' | 'templates';
+// What the pad holds (uiStore.pad).
+export type PadContent = { kind: 'scratchpad' } | { kind: 'note'; noteId: string } | { kind: 'calendar' };
+
+export type ManageSection = 'endeavours' | 'purposes' | 'tags' | 'annotations' | 'types' | 'templates';
 
 export type ModalType =
   | 'add-task'
@@ -161,6 +164,7 @@ interface UIState {
   activeCollectionIdByView: Partial<Record<AppView, string | null>>;
   endeavourPickerOpen:      boolean;
   purposePickerOpen:        boolean;
+  tagPickerOpen:            boolean;   // the header's tag filter (components/TagFilterPicker)
   manageOpen:               boolean;
   manageSection:            ManageSection;
   editingTaskId:      string | null;
@@ -187,8 +191,8 @@ interface UIState {
   // New task linked to an event or a Deadline as its preparation or follow-up
   // (utils/eventTaskLinks.ts): AddTaskModal takes its dates, title and Endeavour from it and links it.
   // `occurrence`: for one date of a repeating event only (the task's link names the date).
-  showAddTaskForEvent: (link: { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'deadline'; targetId: string; occurrence?: string }) => void;
-  pendingEventLink:    { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'deadline'; targetId: string; occurrence?: string } | null;
+  showAddTaskForEvent: (link: { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'reminder' | 'deadline'; targetId: string; occurrence?: string }) => void;
+  pendingEventLink:    { kind: 'prepFor' | 'followUpOf'; targetType: 'event' | 'reminder' | 'deadline'; targetId: string; occurrence?: string } | null;
   // MobileQuickAddBar's "More options…" escape hatch (docs/android/01-tasks-app.md §3.2), and
   // the Notes "Create ▸ Task" flow (FloatingToolbar) — both open the full AddTaskModal
   // pre-filled rather than duplicating its fields in a bespoke form.
@@ -240,17 +244,14 @@ interface UIState {
   // Making an Endeavour (EndeavourCreator), in a slot of its own: `partOf` is what a new one
   // starts as part of. Editing one opens the same form through `openEditCollection`. Then
   // restructuring: copying, splitting or merging one (docs/features/endeavours.md).
-  creator:          { partOf: CollectionId | null } | null;
+  // The Endeavour form, new: part of what, and (from a home's parts tile) its template and name.
+  creator:          { partOf: CollectionId | null; template?: string | null; name?: string } | null;
   closeCreator:     () => void;
-  // A template's suggestions passed over on an Endeavour's home ("Not needed"), by Endeavour id.
-  // Kept on this device (persisted, read with a default).
-  dismissedSuggestions: Record<string, string[]>;
   // The template editor (components/TemplateEditor): the template being edited, a built-in one, a
   // new one or one saved from an Endeavour. Over Manage or a home.
   templateEditor:       EndeavourTemplateDef | null;
   openTemplateEditor:   (def: EndeavourTemplateDef) => void;
   closeTemplateEditor:  () => void;
-  dismissSuggestion:    (endeavourId: CollectionId, suggestionId: string) => void;
   restructureId:    CollectionId | null;
   // An Endeavour's "Everything in it" view (EndeavourContentsModal), on one kind of thing or all.
   contentsFor:      { id: CollectionId; kind: string | null } | null;
@@ -260,7 +261,7 @@ interface UIState {
   closeEndeavourAttributes: () => void;
   showEndeavourContents: (id: CollectionId, kind?: string | null) => void;
   restructureMode:  'copy' | 'split' | 'merge';
-  showTemplates:    (partOf?: CollectionId | null) => void;
+  showTemplates:    (partOf?: CollectionId | null, template?: string | null, name?: string) => void;
   showRestructure:  (id: CollectionId, mode?: 'copy' | 'split' | 'merge') => void;
   showAddActivity:   () => void;
   openEditActivity:  (activity: Activity) => void;
@@ -295,6 +296,9 @@ interface UIState {
   toggleEndeavourPicker:  () => void;
   closePurposePicker:     () => void;
   togglePurposePicker:    () => void;
+  closeTagPicker:         () => void;
+  toggleTagPicker:        () => void;
+  clearTagFilter:         () => void;
   openManage:             (section?: ManageSection) => void;
   closeManage:            () => void;
   toggleManage:           () => void;
@@ -350,9 +354,19 @@ interface UIState {
   lookUpOpen:        boolean;   // Look up (Alt+L): components/LookUpPane
   openLookUp:        () => void;
   closeLookUp:       () => void;
-  scratchpadOpen:    boolean;
+  // The pad (2026-11-07): one floating window over any section, holding the scratchpad (Alt+P), a
+  // note opened in it (Quick Access, Shift+Enter) or the calendar (Alt+C). It shows only in the
+  // section it was opened in (hidden elsewhere, back on returning), and doesn't stop moving around.
+  // Closing a note or the calendar opened over the scratchpad goes back to the scratchpad (`padBack`).
+  pad:               PadContent | null;
+  padSection:        AppView | null;
+  padBack:           PadContent | null;
+  openPad:           (content: PadContent) => void;
+  closePad:          () => void;
+  openNoteInPad:     (noteId: string) => void;
   openScratchpad:    () => void;
   closeScratchpad:   () => void;
+  openCalendarPad:   () => void;
 
   sortField:    SortField;
   sortDir:      SortDir;
@@ -706,6 +720,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   activeCollectionIdByView: {},
   endeavourPickerOpen:      false,
   purposePickerOpen:        false,
+  tagPickerOpen:            false,
   manageOpen:               false,
   manageSection:            'endeavours',
   editingTaskId:      null,
@@ -748,13 +763,9 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   openEditGoal:           (id) => set({ openModal: 'add-goal', editingGoalId: id, pendingGoalEndeavourId: null }),
   creator:          null,
   closeCreator:     () => set({ creator: null }),
-  dismissedSuggestions: {},
   templateEditor:       null,
   openTemplateEditor:   (def) => set({ templateEditor: def }),
   closeTemplateEditor:  () => set({ templateEditor: null }),
-  dismissSuggestion:    (endeavourId, suggestionId) => set((s) => ({
-    dismissedSuggestions: { ...s.dismissedSuggestions, [endeavourId]: [...new Set([...(s.dismissedSuggestions[endeavourId] ?? []), suggestionId])] },
-  })),
   restructureId:    null,
   contentsFor:      null,
   attributesFor:    null,
@@ -762,7 +773,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   closeEndeavourAttributes: () => set({ attributesFor: null }),
   showEndeavourContents: (id, kind = null) => set({ openModal: 'endeavour-contents', contentsFor: { id, kind } }),
   restructureMode:  'copy',
-  showTemplates:    (partOf) => set({ creator: { partOf: partOf ?? null } }),
+  showTemplates:    (partOf, template, name) => set({ creator: { partOf: partOf ?? null, template: template ?? null, name: name ?? '' } }),
   showRestructure:  (id, mode = 'copy') => set({ openModal: 'restructure', restructureId: id, restructureMode: mode }),
   showAddItemType:   (use = null) => set({ openModal: 'add-item-type', editingItemTypeId: null, pendingItemTypeUse: use }),
   openEditItemType:  (id) => set({ openModal: 'add-item-type', editingItemTypeId: id }),
@@ -834,6 +845,9 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   toggleEndeavourPicker: () => set((s) => ({ endeavourPickerOpen: !s.endeavourPickerOpen })),
   closePurposePicker:    () => set({ purposePickerOpen: false }),
   togglePurposePicker:   () => set((s) => ({ purposePickerOpen: !s.purposePickerOpen })),
+  closeTagPicker:        () => set({ tagPickerOpen: false }),
+  toggleTagPicker:       () => set((s) => ({ tagPickerOpen: !s.tagPickerOpen })),
+  clearTagFilter:        () => set({ activeTagIds: [] }),
   openManage:            (section) => { useRecentItemsStore.getState().recordVisit('place', 'manage'); set({ manageOpen: true, manageSection: section ?? 'endeavours' }); },
   closeManage:           () => set({ manageOpen: false }),
   toggleManage:          () => set((s) => ({ manageOpen: !s.manageOpen })),
@@ -892,9 +906,24 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
   lookUpOpen:        false,
   openLookUp:        () => { useRecentItemsStore.getState().recordVisit('place', 'look-up'); set({ lookUpOpen: true }); },
   closeLookUp:       () => set({ lookUpOpen: false }),
-  scratchpadOpen:    false,
-  openScratchpad:    () => { useRecentItemsStore.getState().recordVisit('place', 'scratchpad'); set({ scratchpadOpen: true }); },
-  closeScratchpad:   () => set({ scratchpadOpen: false }),
+  pad:               null,
+  padSection:        null,
+  padBack:           null,
+  openPad:           (content) => set((s) => {
+    const showing = s.pad && s.padSection === s.activeView ? s.pad : null;
+    const same = !!showing && showing.kind === content.kind && (content.kind !== 'note' || (showing.kind === 'note' && showing.noteId === content.noteId));
+    return { pad: content, padSection: s.activeView, padBack: same ? s.padBack : showing };
+  }),
+  closePad:          () => set((s) => (s.padBack ? { pad: s.padBack, padBack: null } : { pad: null, padSection: null, padBack: null })),
+  // A note already open in Notes, here, is shown there instead (two editors would save over each other).
+  openNoteInPad:     (noteId) => {
+    const s = get();
+    if (s.activeView === 'notes' && (s.editingNoteId === noteId || s.notePanes.includes(noteId))) { s.openNote(noteId); return; }
+    s.openPad({ kind: 'note', noteId });
+  },
+  openScratchpad:    () => { useRecentItemsStore.getState().recordVisit('place', 'scratchpad'); get().openPad({ kind: 'scratchpad' }); },
+  closeScratchpad:   () => get().closePad(),
+  openCalendarPad:   () => { useRecentItemsStore.getState().recordVisit('place', 'calendar-pad'); get().openPad({ kind: 'calendar' }); },
 
   sortField: 'createdAt',
   sortDir:   'desc',
@@ -953,6 +982,7 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
       // state — close them on any section switch so they don't reopen stale later.
       endeavourPickerOpen: false,
       purposePickerOpen:   false,
+      tagPickerOpen:       false,
       // TaskPane can be opened while jumping sections (e.g. clicking an ArtifactLinkMark in
       // Notes) — every *pre-existing* way to open it from another section (CalendarEventPane's
       // "Linked task" chip, etc.) explicitly closes its own pane first and never itself calls
@@ -1378,7 +1408,6 @@ export const useUIStore = create<UIState>()(persist((set, get) => ({
     overviewSelection:        s.overviewSelection,
     overviewLayouts:          s.overviewLayouts,
     glossaryLayout:           s.glossaryLayout,
-    dismissedSuggestions:     s.dismissedSuggestions,
     endeavourHomeId:          s.endeavourHomeId,
     activeTrackerId:          s.activeTrackerId,
     activeRoutineId:          s.activeRoutineId,

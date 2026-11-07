@@ -218,3 +218,13 @@ const ALIGN_GLYPH = { left: 'alignLeft', center: 'alignCenter', right: 'alignRig
 export function AlignIcon({ align, ...props }: SVGProps<SVGSVGElement> & { align: keyof typeof ALIGN_GLYPH }) {
   return <Glyph glyph={ALIGN_GLYPH[align]} {...EM} {...props} />;
 }
+
+// An annotation on a passage of text: a pen over a line (Manage's Annotations, 2026-11-07).
+export function AnnotationIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M4 21h16" />
+      <path d="M14.5 4.5l3 3L9 16H6v-3z" />
+    </Icon>
+  );
+}

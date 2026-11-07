@@ -83,7 +83,7 @@ describe('getNotebookIcon', () => {
   });
 
   it('an annotation tag (kind: tag) always shows the label icon', () => {
-    expect(getNotebookIcon(tag('a', { kind: 'tag' }), {}, {})).toBe('🏷️');
+    expect(getNotebookIcon(tag('a', { kind: 'tag' }), {}, {})).toBe('🖍️');
   });
 
   it('empty notebook (no sub-notebooks, no notes): plain folder', () => {

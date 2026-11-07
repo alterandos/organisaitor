@@ -6,7 +6,8 @@ import type { ContextMenuItem, ContextMenuScope, ContextMenuSection } from '@/co
 import { LABELS } from '@/config/labels';
 import { setNormalText } from './extensions/normalText';
 import { LinkIcon, TagIcon } from '@/components/Icons';
-import { linkToTerm, selectionActions, termsFor, type SelectionAction, type SelectionActionGroup } from './objects/selectionActions';
+import { annotationActions, linkToTerm, selectionActions, termsFor, type SelectionAction, type SelectionActionGroup } from './objects/selectionActions';
+import { markRange } from './textMarks';
 
 // The Notes editor's right-click menu. NoteEditor declares a `note-editor` scope on the editing
 // surface whose data is this API (the actions only it can perform); the providers below turn it
@@ -16,7 +17,7 @@ import { linkToTerm, selectionActions, termsFor, type SelectionAction, type Sele
 // Laid out by "clicked thing first, families fold" (CLAUDE.md "Right-click menus"; tidied
 // 2026-11-02, when it had grown to a dozen sections): whatever the click landed on (a heading, a
 // block, a link: their own providers, orders 4–7) first; then, on selected text, its four families
-// (Mark as, Turn into, Link, Send to: objects/selectionActions.ts, the list the `\` menu reads);
+// (Annotate, Turn into, Link, Send to: objects/selectionActions.ts, the list the `\` menu reads);
 // then the clipboard; then formatting (section 'format'); then the note itself (section 'note').
 export interface NoteEditorMenuApi {
   editor:      Editor;
@@ -67,10 +68,18 @@ registerContextMenuProvider({
   id: 'note-editor.selection',
   kind: 'note-editor',
   order: 8,
-  items: (_ctx, scope) => {
+  items: (ctx, scope) => {
     const { editor, openLink, openCreate } = api(scope);
     const { from, to, empty } = editor.state.selection;
-    if (empty) return [];
+    if (empty) {
+      // Nothing selected: Annotate ▸ for the whole line clicked (the user, 2026-11-06). A block's
+      // own Annotate ▸ (textMarks.ts) covers a click inside a block.
+      if (!editor.isEditable || ctx.target.closest('[data-note-block]')) return [];
+      // A click outside the document's text (the editor's padding) has no position: nothing to annotate.
+      const at = (() => { try { return editor.view.posAtDOM(ctx.target, 0); } catch { return null; } })();
+      const line = at === null ? null : markRange(editor.state, at);
+      return line ? [{ id: 'mark-as', label: LABELS.contextMenu.markAs, icon: createElement(TagIcon), submenu: bySet(annotationActions(editor, line)) }] : [];
+    }
     const range = { from, to };
     const actions = selectionActions(editor, range);
     const of = (g: SelectionActionGroup) => actions.filter((a) => a.group === g);

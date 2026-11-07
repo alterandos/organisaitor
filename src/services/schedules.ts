@@ -17,7 +17,11 @@ export function addScheduleItem(scheduleId: ScheduleId, block: ScheduleBlock): C
   const schedule = useScheduleStore.getState().schedules[scheduleId];
   if (!schedule) return null;
   const input = blockToItem(schedule, block, scheduleBounds(schedule, useTaskStore.getState().collections));
-  return input ? cal().addEvent(input) : null;
+  if (!input) return null;
+  const id = cal().addEvent(input);
+  // The clash answer, given straight after (a new item's input has none).
+  if (block.onClass) cal().updateEvent(id, { onClass: block.onClass });
+  return id;
 }
 
 // An item with any repeat (the subject editor: weekly, on a list of dates, following other events)
@@ -84,6 +88,7 @@ export function updateScheduleItem(eventId: CalendarEventId, block: ScheduleBloc
     title: block.title.trim() || e.title, startTime: block.startTime, endTime: block.endTime,
     location: block.location, notes: block.notes, status: block.requiresCommitment ? 'tentative' : 'confirmed',
     collectionId: schedule.collectionId,
+    ...(block.onClass !== undefined ? { onClass: block.onClass } : {}),
   };
   let repeat = e.repeat;
   const days = [...block.daysOfWeek].sort((a, b) => a - b);

@@ -1,0 +1,22 @@
+/* Named periods (PeriodsField): one line each, what it does here first, then its name and dates. */
+.field { display: flex; flex-direction: column; gap: var(--space-2); }
+.summary { margin: 0; font-size: var(--text-sm); color: var(--color-text); }
+.hint { margin: 0; font-size: var(--text-sm); color: var(--color-muted); }
+.line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.inherited { color: var(--color-muted); }
+.inheritedName { min-width: 8rem; color: var(--color-text); }
+.role, .name, .date {
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  font: inherit; font-size: var(--text-sm); background: var(--color-surface); color: var(--color-text);
+}
+.role { flex: 0 0 9.5rem; }
+.name { flex: 1 1 8rem; min-width: 0; }
+.role:focus-visible, .name:focus-visible, .date:focus-within { outline: none; border-color: var(--color-primary); }
+.arrow, .from { color: var(--color-muted); }
+.from { font-size: var(--text-xs); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.linkBtn { border: none; background: none; padding: 0; font: inherit; font-size: var(--text-sm); color: var(--color-primary); cursor: pointer; }
+.linkBtn:hover { text-decoration: underline; }
+.iconBtn { display: inline-flex; border: none; background: none; padding: var(--space-1); color: var(--color-muted); cursor: pointer; border-radius: var(--radius-sm); }
+.iconBtn:hover { color: var(--color-danger); }
+.linkBtn:focus-visible, .iconBtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }

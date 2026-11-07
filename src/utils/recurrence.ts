@@ -171,3 +171,39 @@ export function repeatPattern(repeat: RepeatConfig): string | null {
   }
   return null;
 }
+
+// How far ahead a series is laid out where every date is wanted at once (the tasks for each date,
+// Overview's rows; the user, 2026-11-07: one at a time, week by week, was confusing): to its last
+// date, or OPEN_SERIES_DAYS ahead for one that never ends; never more than two years.
+export const OPEN_SERIES_DAYS = 90;
+const MAX_SERIES_DAYS = 730;
+export function seriesHorizon(date: string, repeat: RepeatConfig, today: string): string {
+  const cap = addDaysToIso(today, MAX_SERIES_DAYS);
+  let end: string;
+  if (repeat.freq === 'dates') end = [...(repeat.dates ?? [])].sort().pop() ?? date;
+  else if (repeat.endKind === 'until' && repeat.until) end = repeat.until;
+  else if (repeat.endKind === 'count') { const all = expandRepeat(date, { ...repeat, exceptions: [] }, date, cap); end = all[all.length - 1] ?? date; }
+  else end = addDaysToIso(today, OPEN_SERIES_DAYS);
+  return end < cap ? end : cap;
+}
+
+// A series' dates from today to its horizon (seriesHorizon), its first date included when ahead.
+export function seriesDatesAhead(date: string, repeat: RepeatConfig, today: string): string[] {
+  const end = seriesHorizon(date, repeat, today);
+  const rest = expandRepeat(date, repeat, today, end);
+  return date >= today && date <= end && !isOccurrenceSkipped(repeat, date) ? [date, ...rest] : rest;
+}
+
+// The time one date of an item starts at: its own (a list of dates, each with its time: `dateTimes`),
+// else the item's. Every reader of an occurrence's time goes through this.
+export function occurrenceTime(repeat: RepeatConfig | null | undefined, date: string, time: string | null): string | null {
+  return (repeat?.freq === 'dates' && repeat.dateTimes?.[date]) || time;
+}
+
+// An event's end on a date whose start moved (occurrenceTime): the same length after it.
+export function occurrenceEndTime(startTime: string | null, endTime: string | null, at: string | null): string | null {
+  if (!startTime || !endTime || !at || at === startTime) return endTime;
+  const min = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const end = Math.min(23 * 60 + 59, min(at) + Math.max(0, min(endTime) - min(startTime)));
+  return `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
+}

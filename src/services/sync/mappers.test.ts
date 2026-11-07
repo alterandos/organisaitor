@@ -119,8 +119,10 @@ describe('mapper round-trip (rowToX(xToRow(x)) === x)', () => {
   });
 
   it('Tag', () => {
-    const t: Tag = { id: 'tag1' as TagId, name: 'Urgent', color: '#f00', notes: 'why' };
+    const t: Tag = { id: 'tag1' as TagId, name: 'Urgent', color: '#f00', notes: 'why', icon: '🎓', archivedAt: null, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-02T00:00:00.000Z' };
     expect(rowToTag(tagToRow(t, USER))).toEqual(t);
+    // From before migration 074: no timestamps, read as unknown (the cloud's copy wins, as before).
+    expect(rowToTag({ id: 'tag1', name: 'Urgent' })).toMatchObject({ icon: null, archivedAt: null, createdAt: '', updatedAt: '' });
   });
 
   it('Purpose', () => {

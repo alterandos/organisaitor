@@ -7,7 +7,9 @@ import { LABELS } from '@/config/labels';
 import { ClarifyIcon, ReviewIcon, UnsureIcon } from '@/components/Icons';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { TEXT_TAGS } from './builtinTags';
-import { cycleImportanceIn, isImportantIn } from './extensions/Importance';
+import { annotationTags } from '@/utils/notes';
+import { ANNOTATION_ICON } from '@/config/itemIcons';
+import { collectImportantPassages, cycleImportanceIn, isImportantIn, setImportance } from './extensions/Importance';
 import { blockImportance, cycleBlockImportance, levelLabel, setBlockImportance } from './extensions/BlockImportance';
 import { IMPORTANCE_LEVELS } from './extensions/importanceLevels';
 import { blockPosAt } from './extensions/blockDesigns';
@@ -20,14 +22,17 @@ import { blockReview, reviewingIn, toggleBlockReview, toggleReview } from './ext
 
 // Marking text (CLAUDE.md "Marking, making, linking, sending", agreed with the user 2026-11-05): the
 // text stays text and gains a mark. THE list of marks, in ONE order, read by the tag picker
-// (Ctrl+Space), Ctrl+1…9 (the same numbers), right-click's Mark ▸ and the `\` selection menu
-// (objects/selectionActions.ts), and a block's right-click Mark ▸ (contextMenu.ts). A new mark is one
+// (Ctrl+Space), Ctrl+1…9 (the same numbers), right-click's Annotate ▸ and the `\` selection menu
+// (objects/selectionActions.ts), and a block's right-click Annotate ▸ (contextMenu.ts). A new mark is one
 // entry here. Making a block from text (a card, a quote…) is not a mark: that's Turn into.
 //
 //   status  a mark with a tool or behaviour of its own: Important (two levels), Clarify later,
 //           Not sure, Review later. Each also goes on a whole block or card.
 //   tag     a label to find things by: Example, Reference, then the person's own annotation tags
 //           (notebooks are linked to, never put on text). On text only.
+//
+// In the UI they're all "annotations" (the user, 2026-11-06): Annotate ▸ on right-click and in `\`,
+// the annotation picker on Ctrl+Space. What those menus list is `markChoices` below, one list.
 
 export type TextMarkFamily = 'status' | 'tag';
 
@@ -116,7 +121,7 @@ export function textMarks(noteTags: Record<string, NoteTag>): TextMark[] {
     ...STATUS_MARKS,
     // Important is a status above, not a tag.
     ...TEXT_TAGS.filter((t) => t.typeKey !== 'important').map((t) => tagMark(t.id, t.name, t.icon, t.color, t.typeKey)),
-    ...Object.values(noteTags).filter((t) => t.kind !== 'area').map((t) => tagMark(t.id, t.name, t.icon, t.color ?? '#6b7280', null)),
+    ...annotationTags(noteTags).map((t) => tagMark(t.id, t.name, t.icon || ANNOTATION_ICON, t.color ?? '#6b7280', null)),
   ];
 }
 
@@ -131,18 +136,61 @@ export const markDigit = (noteTags: Record<string, NoteTag>, id: string): number
   return n >= 1 && n <= 9 ? n : null;
 };
 
+// What a mark goes on with no block chosen: the selected text, else the line the cursor (or `at`,
+// a right-click) is in. Null when that line holds no text.
+export function markRange(state: EditorState, at?: number): { from: number; to: number } | null {
+  const { from, to, empty } = state.selection;
+  if (!empty && at === undefined) return { from, to };
+  const $at = state.doc.resolve(at ?? from);
+  if (!$at.parent.isTextblock || !$at.parent.textContent.trim()) return null;
+  return { from: $at.start(), to: $at.end() };
+}
+
 // A mark on what's selected: the selected text, else the block selected whole (statuses), else the
 // paragraph the cursor is in.
 export function applyTextMark(editor: Editor, mark: TextMark, blockPos: number | null = null): void {
   const view = editor.view;
   if (blockPos !== null) { mark.block?.toggle(view, blockPos); return; }
-  let { from, to } = view.state.selection;
-  if (from === to) {
-    const { $from } = view.state.selection;
-    from = $from.start($from.depth);
-    to = $from.end($from.depth);
-  }
-  mark.toggle(view, from, to);
+  const range = markRange(view.state);
+  if (range) mark.toggle(view, range.from, range.to);
+}
+
+// One entry of the annotation menus (the Ctrl+Space picker, Annotate ▸ on right-click and in `\`):
+// the marks in their order, Important as its two levels. Both menus read this, so they can't drift
+// apart again (2026-11-06: the picker had one Important, right-click had Important and Critical).
+export interface MarkChoice {
+  key:    string;
+  family: TextMarkFamily;
+  set:    'important' | 'status' | 'tags';
+  label:  string;
+  icon:   ReactNode;
+  color:  string;
+  on:     boolean;
+  // Its Ctrl+1…9 number, or null.
+  digit:  number | null;
+  run:    (view: EditorView) => void;
+}
+
+export function markChoices(noteTags: Record<string, NoteTag>, state: EditorState, from: number, to: number): MarkChoice[] {
+  const level = collectImportantPassages(state.doc).find((p) => p.from < to && p.to > from)?.level ?? 0;
+  const out: MarkChoice[] = [];
+  textMarks(noteTags).forEach((m, i) => {
+    const digit = i < 9 ? i + 1 : null;
+    if (m.id === 'important') {
+      for (const lv of IMPORTANCE_LEVELS) out.push({
+        key: `important-${lv.level}`, family: 'status', set: 'important', label: lv.label, icon: lv.icon, color: lv.color,
+        on: level === lv.level, digit: lv.level === 1 ? digit : null,
+        run: (view) => setImportance(view, from, to, level === lv.level ? null : lv.level),
+      });
+      return;
+    }
+    out.push({
+      key: m.family === 'status' ? m.id : `tag-${m.id}`, family: m.family, set: m.family === 'status' ? 'status' : 'tags',
+      label: m.name, icon: m.icon, color: m.color, on: m.on(state, from, to), digit,
+      run: (view) => m.toggle(view, from, to),
+    });
+  });
+  return out;
 }
 
 // Right-click on a block: Mark as ▸, the statuses for the whole block (or card), each ✓ while on;

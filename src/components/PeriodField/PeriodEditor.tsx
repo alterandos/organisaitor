@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
 import { DateInput } from '@/components/DateInput/DateInput';
+import { dateRangeSuggest } from '@/utils/date';
 import { FieldError } from '@/components/FieldError/FieldError';
 import { TrashIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
@@ -21,25 +23,35 @@ interface Props {
 }
 
 export function PeriodEditor({ period, onChange, exams, errors = {} }: Props) {
-  const patch = (p: Partial<EndeavourPeriod>) => onChange({ ...period, ...p });
+  // Starts from the latest change, not this render's period: leaving a start and the end filling in
+  // its suggestion happen before the next render (found 2026-11-07, the start was lost).
+  const latest = useRef(period);
+  useEffect(() => { latest.current = period; });
+  const patch = (p: Partial<EndeavourPeriod> | ((cur: EndeavourPeriod) => Partial<EndeavourPeriod>)) => {
+    const cur = latest.current;
+    const next = { ...cur, ...(typeof p === 'function' ? p(cur) : p) };
+    latest.current = next;
+    onChange(next);
+  };
   const setBreak = (id: string, p: Partial<EndeavourPeriod['breaks'][number]> | null) =>
-    patch({ breaks: p === null ? period.breaks.filter((b) => b.id !== id) : period.breaks.map((b) => (b.id === id ? { ...b, ...p } : b)) });
+    patch((cur) => ({ breaks: p === null ? cur.breaks.filter((b) => b.id !== id) : cur.breaks.map((b) => (b.id === id ? { ...b, ...p } : b)) }));
 
   return (
     <div className={styles.editor}>
       <div className={styles.line} role="group" aria-label={L.runs}>
         <span className={styles.lineLabel}>{L.runs}</span>
-        <DateInput className={styles.date} value={period.start ?? ''} aria-label={L.start} onChange={(v) => patch({ start: v || null })} />
+        <DateInput className={styles.date} value={period.start ?? ''} suggest={dateRangeSuggest.from()} aria-label={L.start} onChange={(v) => patch((cur) => ({ start: v || null, end: v && cur.end && cur.end < v ? v : cur.end }))} />
         <span className={styles.arrow} aria-hidden>→</span>
-        <DateInput className={styles.date} value={period.end ?? ''} min={period.start ?? undefined} aria-label={L.end} onChange={(v) => patch({ end: v || null })} />
+        <DateInput className={styles.date} value={period.end ?? ''} min={period.start ?? undefined} suggest={dateRangeSuggest.to(period.start)} aria-label={L.end} onChange={(v) => patch({ end: v || null })} />
       </div>
+      <FieldError>{errors.dates}</FieldError>
       {(exams || period.exams) && (
         <div className={styles.line} role="group" aria-label={L.exams}>
           <span className={styles.lineLabel}>{L.exams}</span>
-          <DateInput className={styles.date} value={period.exams?.from ?? ''} min={period.end ?? undefined} aria-label={L.examsFrom}
+          <DateInput className={styles.date} value={period.exams?.from ?? ''} min={period.end ?? undefined} suggest={dateRangeSuggest.from()} aria-label={L.examsFrom}
             onChange={(v) => patch({ exams: v ? { from: v, to: period.exams?.to && period.exams.to >= v ? period.exams.to : v } : null })} />
           <span className={styles.arrow} aria-hidden>→</span>
-          <DateInput className={styles.date} value={period.exams?.to ?? ''} min={period.exams?.from} aria-label={L.examsTo}
+          <DateInput className={styles.date} value={period.exams?.to ?? ''} min={period.exams?.from} suggest={dateRangeSuggest.to(period.exams?.from)} aria-label={L.examsTo}
             onChange={(v) => { if (period.exams && v) patch({ exams: { ...period.exams, to: v } }); }} />
         </div>
       )}
@@ -50,9 +62,9 @@ export function PeriodEditor({ period, onChange, exams, errors = {} }: Props) {
             <input className={styles.input} aria-label={L.breakLabel} placeholder={L.breakPlaceholder} value={b.label} autoFocus={!b.label}
               aria-invalid={!!errors[`break-${i}`] || undefined}
               onChange={(e) => setBreak(b.id, { label: e.target.value })} />
-            <DateInput className={styles.date} value={b.from} aria-label={L.from} onChange={(v) => setBreak(b.id, { from: v, to: b.to && b.to >= v ? b.to : v })} />
+            <DateInput className={styles.date} value={b.from} suggest={dateRangeSuggest.from()} aria-label={L.from} onChange={(v) => patch((cur) => ({ breaks: cur.breaks.map((x) => (x.id === b.id ? { ...x, from: v, to: x.to && x.to < v ? v : x.to } : x)) }))} />
             <span className={styles.arrow} aria-hidden>→</span>
-            <DateInput className={styles.date} value={b.to} min={b.from || undefined} aria-label={L.to} onChange={(v) => setBreak(b.id, { to: v })} />
+            <DateInput className={styles.date} value={b.to} min={b.from || undefined} suggest={dateRangeSuggest.to(b.from)} aria-label={L.to} onChange={(v) => setBreak(b.id, { to: v })} />
             <button type="button" className={styles.iconBtn} aria-label={`${L.removeBreak}: ${b.label || L.breakLabel}`} title={L.removeBreak} onClick={() => setBreak(b.id, null)}>
               <TrashIcon width="1em" height="1em" />
             </button>

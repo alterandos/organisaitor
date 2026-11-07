@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
-import { Editor } from '@tiptap/core';
+import { Editor, type Extensions } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { NoteTagMark } from './NoteTagMark';
 import { ConceptRefMark } from './ConceptRef';
 import { moveFromBlock } from './blockDesigns';
 import { GlossaryCardExtensions, cardFromSelection, cardWidth, insertCardAfter, morePillSide } from './GlossaryCard';
+import { GlossaryChipExtensions } from './GlossaryChip';
 import { useSettingsStore } from '@/store/settingsStore';
 import { setBlockWidth, snapBlockWidth } from './blockWidth';
 import { useTrashStore } from '@/store/trashStore';
@@ -55,12 +56,12 @@ beforeEach(() => {
 });
 afterEach(() => { registerLiveNoteEditor(null); editor?.destroy(); });
 
-async function make(content = '<p></p>') {
+async function make(content = '<p></p>', more: Extensions = []) {
   const element = document.createElement('div');
   document.body.append(element);
   editor = new Editor({
     element,
-    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteTagMark, ConceptRefMark, NoteObjectTrigger, ...GlossaryCardExtensions, AcronymOffer, NoteBlockSelect],
+    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteTagMark, ConceptRefMark, NoteObjectTrigger, ...GlossaryCardExtensions, AcronymOffer, NoteBlockSelect, ...more],
     content,
   });
   objectTriggerStorage(editor).getContext = () => ({ noteId, collectionId: null, now: new Date() });
@@ -623,21 +624,34 @@ describe('recording an acronym as you type', () => {
 describe('making and deleting definitions', () => {
   const linksIn = (id: string) => { let n = 0; editor.state.doc.descendants((x) => { if (x.isText && x.marks.some((m) => m.type.name === 'conceptRef' && m.attrs.entryId === id)) n++; }); return n; };
 
-  it('selected words make a card (marking text as a definition is retired): the term worked out, the words linked to it', async () => {
-    await make('<p>Plants make sugar by photosynthesis every day.</p>');
-    const text = editor.state.doc.textContent;
-    const from = 2 + text.indexOf('photosynthesis');
+  it('a selected line becomes a card in its place (2026-11-06: the words no longer stay above it)', async () => {
+    await make('<p>Before.</p><p>photosynthesis</p><p>After.</p>');
+    const from = 2 + editor.state.doc.textContent.indexOf('photosynthesis') + 2;
     cardFromSelection(editor.view, from, from + 'photosynthesis'.length, 'definition', { noteId, collectionId: null, now: new Date() });
     await flush();
     const made = entries();
     expect(made).toHaveLength(1);
     expect(made[0]).toMatchObject({ typeKey: 'definition', term: 'photosynthesis' });
     expect(cards()).toEqual([expect.objectContaining({ entryId: made[0].id })]);
-    expect(linksIn(made[0].id)).toBe(1);
+    expect(editor.state.doc.textContent).toBe('Before.After.');
+    expect(linksIn(made[0].id)).toBe(0);
+  });
+
+  it('selected words within a line become the card\'s chip, right there', async () => {
+    await make('<p>Plants make sugar by photosynthesis every day.</p>', GlossaryChipExtensions);
+    const from = 2 + editor.state.doc.textContent.indexOf('photosynthesis');
+    cardFromSelection(editor.view, from, from + 'photosynthesis'.length, 'definition', { noteId, collectionId: null, now: new Date() });
+    await flush();
+    const id = entries()[0].id;
+    const chips: string[] = [];
+    editor.state.doc.descendants((n) => { if (n.type.name === 'glossaryChip') chips.push(n.attrs.entryId); });
+    expect(chips).toEqual([id]);
+    expect(cards()).toHaveLength(0);
+    expect(editor.state.doc.textContent).toBe('Plants make sugar by  every day.');
   });
 
   it('taking out a card linked from another note asks nothing: the card goes, the record stays (2026-11-03)', async () => {
-    await make('<p>Plants use photosynthesis.</p>');
+    await make('<p>photosynthesis</p>');
     const from = 2 + editor.state.doc.textContent.indexOf('photosynthesis');
     cardFromSelection(editor.view, from, from + 14, 'definition', { noteId, collectionId: null, now: new Date() });
     await flush();
@@ -653,7 +667,7 @@ describe('making and deleting definitions', () => {
   });
 
   it('taking out a record\'s last card asks; kept, the record stays in the Glossary; deleted, it goes with every link', async () => {
-    await make('<p>Plants use photosynthesis.</p>');
+    await make('<p>photosynthesis</p>');
     const from = 2 + editor.state.doc.textContent.indexOf('photosynthesis');
     cardFromSelection(editor.view, from, from + 14, 'definition', { noteId, collectionId: null, now: new Date() });
     await flush();

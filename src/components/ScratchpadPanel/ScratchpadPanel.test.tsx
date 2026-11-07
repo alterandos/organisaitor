@@ -15,7 +15,7 @@ Element.prototype.getClientRects = noRects;
 
 beforeEach(() => {
   useNoteStore.setState(useNoteStore.getInitialState(), true);
-  useUIStore.setState({ ...useUIStore.getInitialState(), scratchpadOpen: true }, true);
+  useUIStore.setState({ ...useUIStore.getInitialState(), pad: { kind: 'scratchpad' }, padSection: 'tasks' }, true);
   useSettingsStore.setState({ scratchpadDesign: 'paper' });
 });
 afterEach(() => { cleanup(); });
@@ -33,7 +33,7 @@ describe('ScratchpadPanel', () => {
     expect(useSettingsStore.getState().scratchpadDesign).toBe('simple');
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(useUIStore.getState().scratchpadOpen).toBe(false);
+    expect(useUIStore.getState().pad).toBeNull();
   });
 
   it('Escape typed in its text closes it (the tooltip says so)', async () => {
@@ -41,6 +41,15 @@ describe('ScratchpadPanel', () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
     const text = screen.getByRole('textbox', { name: 'Scratchpad' });
     fireEvent.keyDown(text, { key: 'Escape', keyCode: 27 });   // keyCode: ProseMirror cancels a real Escape (see EscapePassThrough)
-    expect(useUIStore.getState().scratchpadOpen).toBe(false);
+    expect(useUIStore.getState().pad).toBeNull();
+  });
+});
+
+describe('ScratchpadPanel: moving around while it is open (2026-11-07)', () => {
+  it('is docked: the page and its section keys aren’t blocked by it', async () => {
+    const { hasOpenOverlay } = await import('@/hooks/useEscapeClose');
+    render(<ScratchpadPanel />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    expect(hasOpenOverlay()).toBe(false);
   });
 });

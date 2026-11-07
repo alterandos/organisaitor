@@ -11,4 +11,5 @@ export const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
   { value: 'select',   label: 'Select' },
   { value: 'date',     label: 'Date' },
   { value: 'url',      label: 'URL' },
+  { value: 'dateRange', label: 'Dates (from – to)' },
 ];

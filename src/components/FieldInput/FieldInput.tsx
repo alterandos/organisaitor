@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { DateInput } from '@/components/DateInput/DateInput';
 import type { FieldSchema } from '@/types';
 import styles from './FieldInput.module.css';
@@ -80,6 +81,10 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
         <DateInput className={styles.input} value={String(value ?? '')} onChange={(v) => onChange(v || null)} />
       );
 
+    // A named period's dates (utils/datePeriods.ts): from and to, the end never before the start.
+    case 'dateRange':
+      return <DateRangeInput name={field.name} value={value} onChange={onChange} />;
+
     case 'duration': {
       const totalSecs = Number(value) || 0;
       const h = Math.floor(totalSecs / 3600);
@@ -150,4 +155,21 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
         />
       );
   }
+}
+
+// A named period's dates. Each side starts from the other's latest change (leaving "from" and the
+// "to" filling in its suggestion happen before the next render; see PeriodsField).
+function DateRangeInput({ name, value, onChange }: { name: string; value: unknown; onChange: (v: unknown) => void }) {
+  const r = (value ?? {}) as { from?: string; to?: string };
+  const from = r.from ?? '', to = r.to ?? '';
+  const latest = useRef({ from, to });
+  useEffect(() => { latest.current = { from, to }; });
+  const set = (next: { from: string; to: string }) => { latest.current = next; onChange(next); };
+  return (
+    <span className={styles.range}>
+      <DateInput className={styles.input} value={from} aria-label={`${name}: from`} onChange={(v) => set({ from: v, to: latest.current.to && v && latest.current.to < v ? v : latest.current.to })} />
+      <span aria-hidden>→</span>
+      <DateInput className={styles.input} value={to} min={from || undefined} aria-label={`${name}: to`} onChange={(v) => set({ from: latest.current.from, to: v })} />
+    </span>
+  );
 }

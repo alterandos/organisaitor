@@ -46,14 +46,20 @@ describe('sources — every app maps onto the common row', () => {
     expect(r.map((x) => [x.title, x.when, x.context])).toEqual([['Sub', '2026-10-03', 'Parent'], ['Parent', '2026-10-05', null]]);
   });
 
-  it('calendar: a task’s own shadow event is left out, a past one is "past", a repeating one shows its next date', () => {
+  it('calendar: a task’s own shadow event is left out, a past one is "past", a repeating one shows its next date, then its later ones quietly', () => {
     const s = snap({ events: byId(
       event('e1', 'Shadow', '2026-10-02', { eventType: 'task' }),
       event('e2', 'Old', '2026-09-01'),
       event('e3', 'Weekly', '2026-09-03', { repeat: { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null } }),
     ) });
     const rows = runOverview(q({ status: 'all' }), s, TODAY).groups[0].rows;
-    expect(rows.map((r) => [r.title, r.when, r.status])).toEqual([['Old', '2026-09-01', 'past'], ['Weekly', '2026-10-01', 'open']]);
+    expect(rows.slice(0, 3).map((r) => [r.title, r.when, r.status, !!r.quiet])).toEqual([
+      ['Old', '2026-09-01', 'past', false], ['Weekly', '2026-10-01', 'open', false], ['Weekly', '2026-10-08', 'open', true],
+    ]);
+    // Never ending: its dates for 90 days ahead (2026-11-07).
+    const weekly = rows.filter((r) => r.title === 'Weekly');
+    expect(weekly.length).toBe(13);
+    expect(weekly.every((r, i) => !!r.quiet === (i > 0))).toBe(true);
   });
 
   it('list items: date from the list’s first date field (or the tab’s own), Endeavour from the list, done when ticked', () => {

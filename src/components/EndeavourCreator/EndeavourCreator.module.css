@@ -82,7 +82,7 @@
 .detailName { flex: 0 1 9rem; }
 .detailValue { flex: 1 1 10rem; min-width: 0; display: flex; }
 .detailValue > * { flex: 1; min-width: 0; }
-.detailKind { width: auto; flex: 0 0 auto; }
+.detailKind { width: 7.5rem; flex: 0 0 7.5rem; }
 
 .connections { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-alt); }
 .chip { padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); cursor: pointer; }
@@ -102,3 +102,42 @@
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* Its icon beside its name. */
+.nameLine { display: flex; align-items: flex-end; gap: var(--space-2); }
+.nameLine .field { flex: 1; }
+.inlineIcon { width: 1em; height: 1em; vertical-align: -0.125em; }
+
+/* What it takes from what it's part of: greyed, saying where it's from. */
+.inheritedLine { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-text); }
+.from { color: var(--color-muted); font-size: var(--text-xs); }
+.dot { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; vertical-align: -0.05em; }
+
+/* Make a notebook, and where. */
+.check { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); cursor: pointer; }
+.insideLine { display: flex; align-items: center; gap: var(--space-2); padding-left: var(--space-5); }
+.insideLine .input { flex: 1; }
+
+/* Make a notebook: a card, so it's seen (the user, 2026-11-07). */
+.optionCard {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface); cursor: pointer;
+}
+.optionCard:hover { border-color: var(--color-primary); }
+.optionCardOn { border-color: var(--color-primary); background: var(--color-primary-subtle); }
+.optionCheck { flex-shrink: 0; width: 1.1rem; height: 1.1rem; margin: 0; }
+.optionIcon { flex-shrink: 0; width: 1.6rem; height: 1.6rem; color: var(--color-primary); }
+.optionText { display: flex; flex-direction: column; gap: 0.1rem; }
+.optionTitle { font-weight: 600; font-size: var(--text-sm); }
+
+/* Custom details: its column headings, and the hint on hover. */
+.detailHead { font-size: var(--text-xs); color: var(--color-muted); }
+.detailHead > span { overflow: hidden; }
+.detailHead .detailName, .detailHead .detailValue, .detailHead .detailKind { padding-left: var(--space-3); }
+.detailGap { flex: 0 0 1.75rem; }
+.hintMark {
+  display: inline-flex; align-items: center; justify-content: center; width: 1.1em; height: 1.1em; margin-left: var(--space-1);
+  border: 1px solid var(--color-border); border-radius: 50%; font-size: var(--text-2xs); cursor: help; text-transform: none;
+}
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

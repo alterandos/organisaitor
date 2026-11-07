@@ -217,7 +217,8 @@ interface ListState {
   // updateList this works on a LOCKED one too (deleting a note must still drop a list's link to it).
   // Plaintext metadata that sits outside an encrypted list's secrets (links, the reusable flag,
   // the Endeavour) — written straight to the record, never through the re-encrypt path.
-  updateListLinks:       (id: ListId, patch: Partial<Pick<List, 'crossAppRefs' | 'resetOnTaskComplete' | 'collectionId'>>) => void;
+  // Plaintext fields, so they change on an encrypted list too (its links, its Endeavour, its tags).
+  updateListLinks:       (id: ListId, patch: Partial<Pick<List, 'crossAppRefs' | 'resetOnTaskComplete' | 'collectionId' | 'tagIds'>>) => void;
 
   // ListType CRUD — users can add custom types; built-ins are protected
   addListType:    (type: Omit<ListType, 'id' | 'isBuiltIn'>) => ListTypeId;

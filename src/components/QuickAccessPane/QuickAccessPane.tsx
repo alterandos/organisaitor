@@ -94,11 +94,13 @@ export function QuickAccessPane() {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
-  // A note Ctrl+clicked or middle-clicked opens beside the one open (openBeside).
-  const select = (item: QuickAccessItem, beside = false) => {
-    if (beside && item.type === 'note') openBeside(item.entityId);
-    else navigateToQuickAccessItem(item);
+  // A note Ctrl+clicked or middle-clicked opens beside the one open (openBeside); Shift+Enter or
+  // Shift+click opens it in the pad, over whatever is open (2026-11-07).
+  const select = (item: QuickAccessItem, beside = false, inPad = false) => {
     closeQuickAccess();
+    if (inPad && item.type === 'note') useUIStore.getState().openNoteInPad(item.entityId);
+    else if (beside && item.type === 'note') openBeside(item.entityId);
+    else navigateToQuickAccessItem(item);
   };
 
   // Moves a pin one place up or down (Alt+↑↓, the long-press sheet), keeping the highlight on it.
@@ -146,7 +148,7 @@ export function QuickAccessPane() {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const item = items[highlightIndex];
-      if (item) select(item);
+      if (item) select(item, false, e.shiftKey);
     }
   };
 
@@ -229,7 +231,7 @@ export function QuickAccessPane() {
               last={i === items.length - 1}
               dragging={dragging === item.key}
               onHover={() => setHighlightIndex(i)}
-              onSelect={(beside) => select(item, beside)}
+              onSelect={(beside, inPad) => select(item, beside, inPad)}
               onMove={(delta) => movePin(item, delta)}
               onDragStart={() => setDragging(item.key)}
               onDragEnd={() => setDragging(null)}
@@ -257,7 +259,7 @@ export function QuickAccessPane() {
 // (Android); a pinned row on the Quick Access tab can also be dragged or moved up and down.
 function ItemRow({ item, active, reorderable, first, last, dragging, onHover, onSelect, onMove, onDragStart, onDragEnd, onDrop }: {
   item: QuickAccessItem; active: boolean; reorderable: boolean; first: boolean; last: boolean; dragging: boolean;
-  onHover: () => void; onSelect: (beside?: boolean) => void; onMove: (delta: -1 | 1) => void;
+  onHover: () => void; onSelect: (beside?: boolean, inPad?: boolean) => void; onMove: (delta: -1 | 1) => void;
   onDragStart: () => void; onDragEnd: () => void; onDrop: () => void;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
@@ -274,6 +276,7 @@ function ItemRow({ item, active, reorderable, first, last, dragging, onHover, on
     kind: 'quick-access-item',
     data: { type: item.type, entityId: item.entityId },
     items: () => type ? [
+      ...(item.type === 'note' ? [{ id: 'open-in-pad', label: L.openInPad, run: () => onSelect(false, true) }] : []),
       pinMenuItem(type as PinnableType, item.entityId),
       ...moves().map((m) => ({ id: m.id, label: m.label, run: () => onMove(m.delta) })),
     ] : [],
@@ -296,7 +299,7 @@ function ItemRow({ item, active, reorderable, first, last, dragging, onHover, on
       onDragOver={(e) => { if (reorderable) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
     >
-      <button type="button" className={styles.item} onClick={(e) => onSelect(opensBeside(e))}
+      <button type="button" className={styles.item} onClick={(e) => onSelect(opensBeside(e), e.shiftKey)}
         onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onSelect(true); } }} onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>
         <ItemIcon className={styles.itemIcon} icon={item.icon} />
         <span className={styles.itemText}>

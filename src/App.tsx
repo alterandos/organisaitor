@@ -1,3 +1,4 @@
+import { endeavourColor } from '@/utils/endeavourLook';
 import { useRef, useEffect, useState, lazy, Suspense } from 'react';
 import type React from 'react';
 import { App as CapApp } from '@capacitor/app';
@@ -31,6 +32,7 @@ import { AddTaskButton } from '@/components/AddTaskButton/AddTaskButton';
 import { CollectionFilterPicker } from '@/components/CollectionPicker/CollectionFilterPicker';
 import { SortBar } from '@/components/SortBar/SortBar';
 import { PurposeFilterPicker } from '@/components/PurposeFilterPicker/PurposeFilterPicker';
+import { TagFilterPicker } from '@/components/TagFilterPicker/TagFilterPicker';
 import { Sidebar } from '@/components/Sidebar/Sidebar';
 import { NavSidebar } from '@/components/NavSidebar/NavSidebar';
 import { MobileNav } from '@/components/MobileNav/MobileNav';
@@ -39,7 +41,7 @@ import { CalendarView } from '@/components/CalendarView/CalendarView';
 import { RecordsView } from '@/components/RecordsView/RecordsView';
 import { NotesSection } from '@/components/NotesSection/NotesSection';
 import { ListsSection } from '@/components/ListsSection/ListsSection';
-import { SECTION_BY_VIEW, showsEndeavourFilter } from '@/config/sections';
+import { SECTION_BY_VIEW, showsEndeavourFilter, showsTagFilter } from '@/config/sections';
 import { EndeavoursSection } from '@/components/EndeavoursSection/EndeavoursSection';
 import { OverviewSection } from '@/components/OverviewSection/OverviewSection';
 import { AddOverviewModal } from '@/components/AddOverviewModal/AddOverviewModal';
@@ -104,6 +106,8 @@ import { initEventTaskRules } from '@/services/eventTaskRules';
 import { initSchedules } from '@/services/schedules';
 import { initSubjectWork } from '@/services/subjectItems';
 import { initStreamConversion } from '@/services/streamConversion';
+import { initPeriodConversion } from '@/services/periodConversion';
+import { initAnnotationIcons } from '@/services/annotationIcons';
 import { initEventKinds } from '@/services/eventTypeConversion';
 import { initClassClashes } from '@/services/classClashes';
 import { adoptLegacyNotePins } from '@/services/quickAccessPins';
@@ -117,6 +121,7 @@ import { toggleDictation } from '@/services/speech/dictation';
 import { AddNoteModal } from '@/components/AddNoteModal/AddNoteModal';
 import { openNewItem } from '@/services/newItem';
 import { AddNoteTagModal } from '@/components/AddNoteTagModal/AddNoteTagModal';
+import { EditNoteTagModal } from '@/components/EditNoteTagModal/EditNoteTagModal';
 import { NoteTagPresetModal } from '@/components/NoteTagPresetModal/NoteTagPresetModal';
 import { EditNoteMetaModal } from '@/components/EditNoteMetaModal/EditNoteMetaModal';
 import { NoteEditorPane } from '@/components/NoteEditorPane/NoteEditorPane';
@@ -156,6 +161,9 @@ export default function App() {
   const accountOpen                = useUIStore((s) => s.accountOpen);
   const openModal                  = useUIStore((s) => s.openModal);
   const pendingNoteTagKind         = useUIStore((s) => s.pendingNoteTagKind);
+  // A notebook's or annotation's edit form: here, not in Notes, so Manage can open it too.
+  const editNoteTagOpen            = useUIStore((s) => s.editNoteTagOpen);
+  const editingNoteTagId           = useUIStore((s) => s.editingNoteTagId);
   const editingTaskId              = useUIStore((s) => s.editingTaskId);
   const activeCollectionId         = useUIStore(selectActiveCollectionId);
   const endeavourPickerOpen        = useUIStore((s) => s.endeavourPickerOpen);
@@ -178,7 +186,8 @@ export default function App() {
   const dateCalcOpen               = useUIStore((s) => s.dateCalcOpen);
   const convertersOpen             = useUIStore((s) => s.convertersOpen);
   const blockGuideOpen             = useUIStore((s) => s.blockGuideOpen);
-  const scratchpadOpen             = useUIStore((s) => s.scratchpadOpen);
+  // The pad shows only in the section it was opened in (uiStore.pad).
+  const padShown                   = useUIStore((s) => !!s.pad && s.padSection === s.activeView);
   const lookUpOpen                 = useUIStore((s) => s.lookUpOpen);
   const glossaryRecordId           = useUIStore((s) => s.glossaryRecordId);
   const sendToListRequest          = useUIStore((s) => s.sendToListRequest);
@@ -307,6 +316,8 @@ export default function App() {
   useEffect(() => initEventTaskRules(), []);
   useEffect(() => initSchedules(), []);
   useEffect(() => initStreamConversion(), []);
+  useEffect(() => initPeriodConversion(), []);
+  useEffect(() => initAnnotationIcons(), []);
   useEffect(() => initEventKinds(), []);
   useEffect(() => initSubjectWork(), []);
   useEffect(() => initClassClashes(), []);
@@ -533,11 +544,14 @@ export default function App() {
         return;
       }
 
-      // The scratchpad: from anywhere, a text field too (Alt+P types nothing there).
-      if (matchesHotkeyId(e, 'action-scratchpad')) {
+      // The scratchpad (Alt+P) and the calendar pad (Alt+C): from anywhere, a text field too (neither
+      // types anything there). Pressed again while it shows here, it closes.
+      if (matchesHotkeyId(e, 'action-scratchpad') || matchesHotkeyId(e, 'action-calendar-pad')) {
         e.preventDefault();
         const ui = useUIStore.getState();
-        if (ui.scratchpadOpen) ui.closeScratchpad(); else ui.openScratchpad();
+        const kind = matchesHotkeyId(e, 'action-scratchpad') ? 'scratchpad' : 'calendar';
+        if (ui.pad?.kind === kind && ui.padSection === ui.activeView) ui.closePad();
+        else if (kind === 'scratchpad') ui.openScratchpad(); else ui.openCalendarPad();
         return;
       }
       if (matchesHotkeyId(e, 'action-theme')) {
@@ -657,8 +671,8 @@ export default function App() {
     : null;
   const headerStyle: React.CSSProperties = (() => {
     if (activeView === 'portfolio') return {};
-    if (!activeCollection?.color) return {};
-    const c = activeCollection.color;
+    const c = endeavourColor(activeCollection?.id, collectionsRecord);
+    if (!c) return {};
     const style: React.CSSProperties = {
       boxShadow: `inset 0 -2px 0 ${c}, 0 1px 3px rgba(0,0,0,0.06), 0 4px 14px ${hexToRgba(c, 0.2)}`,
     };
@@ -723,6 +737,7 @@ export default function App() {
           </div>
           <div className={styles.headerRight}>
             {activeView === 'tasks' && <PurposeFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />}
+            {showsTagFilter(activeView) && <TagFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />}
             {showsEndeavourFilter(activeView) && (
               <CollectionFilterPicker variant={isAndroid ? 'sheet' : 'dropdown'} />
             )}
@@ -813,7 +828,7 @@ export default function App() {
         {dateCalcOpen              && <DateCalculator />}
         {convertersOpen            && <ConverterPane />}
         {blockGuideOpen            && <Suspense fallback={null}><BlockGuide /></Suspense>}
-        {scratchpadOpen            && <ScratchpadPanel />}
+        {padShown                  && <ScratchpadPanel />}
         {lookUpOpen                && <Suspense fallback={null}><LookUpPane /></Suspense>}
         {sendToListRequest         && <Suspense fallback={null}><SendToListFlow request={sendToListRequest} /></Suspense>}
         {glossaryRecordId          && <Suspense fallback={null}><GlossaryRecordModal key={glossaryRecordId} entryId={glossaryRecordId} fresh={glossaryRecordFresh} /></Suspense>}
@@ -829,7 +844,7 @@ export default function App() {
         {openModal === 'add-goal'            && <GoalModal key={editingGoalId ?? 'new'} />}
         {attributesFor && <EndeavourAttributesPane key={attributesFor} />}
         {/* Over the panes and editors it's opened from, under the creation panes its tiles open (z-index) */}
-        {creator && <EndeavourCreator key={`new-${creator.partOf ?? ''}`} partOf={creator.partOf} />}
+        {creator && <EndeavourCreator key={`new-${creator.partOf ?? ''}-${creator.template ?? ''}-${creator.name ?? ''}`} partOf={creator.partOf} template={creator.template} name={creator.name} />}
         {templateEditor && <TemplateEditor key={templateEditor.id || 'new'} def={templateEditor} />}
         {openModal === 'endeavour-contents'  && <EndeavourContentsModal key={contentsFor ? `${contentsFor.id}:${contentsFor.kind ?? ''}` : 'none'} />}
         {openModal === 'restructure'         && <RestructureModal key={restructureId ?? 'none'} />}
@@ -846,6 +861,7 @@ export default function App() {
         {openModal === 'add-list-item'          && <AddListItemModal key={editingListItemId ?? 'new'} />}
         {openModal === 'add-note'               && <AddNoteModal />}
         {openModal === 'add-note-tag'           && <AddNoteTagModal key={pendingNoteTagKind} />}
+        {editNoteTagOpen && <EditNoteTagModal key={editingNoteTagId ?? 'none'} />}
         {openModal === 'note-tag-presets'       && <NoteTagPresetModal />}
         {openModal === 'edit-note-meta'         && <EditNoteMetaModal />}
         {openModal === 'add-activity'           && <AddActivityModal key={editingActivity?.id ?? 'new'} />}

@@ -42,3 +42,8 @@ export const ITEM_FLAG_ICON = {
   quiet:     '🔅',   // shown quieter on the calendar (dimmed)
   background: '🧳',  // a long item drawn as a thin line behind the rest
 } as const;
+
+// An annotation label (a NoteTag of kind 'tag': "here's an instance of X" on a passage) with no icon
+// of its own (2026-11-07): a crayon, marking text, in place of the folder (which read as a notebook)
+// and the star (Important's). Used wherever an annotation is listed.
+export const ANNOTATION_ICON = '🖍️';

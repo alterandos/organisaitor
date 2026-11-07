@@ -5,6 +5,7 @@ import type { EndeavourTemplateDef, EndeavourTemplateId } from '@/types/template
 import { now } from '@/utils/date';
 import { persistStorage } from '@/utils/persistStorage';
 import { moveToTrash } from '@/services/trashCapture';
+import { normaliseTemplate } from '@/utils/templatePlan';
 
 // The person's own Endeavour templates (types/templates.ts), synced (`endeavour_templates`, migration
 // 072). The built-in ones are config/defaultTemplates.ts; editing one adds the person's copy here
@@ -46,7 +47,16 @@ export const useTemplateStore = create<TemplateState>()(
     {
       name: 'endeavour-templates',
       storage: persistStorage(),
-      version: 1,
+      // v2 (2026-11-06): a template only fills in the form (types/templates.ts); one from before is
+      // read into today's shape (a notebook in it ticks "Make a notebook"; the rest is dropped).
+      version: 2,
+      migrate: (persisted, fromVersion) => {
+        const state = persisted as { templates?: Record<string, unknown> };
+        if (fromVersion < 2 && state.templates) {
+          state.templates = Object.fromEntries(Object.entries(state.templates).map(([k, t]) => [k, normaliseTemplate(t as Record<string, unknown>)]));
+        }
+        return state as unknown as TemplateState;
+      },
     },
   ),
 );

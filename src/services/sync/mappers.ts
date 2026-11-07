@@ -1,6 +1,6 @@
 import type {
   ClassLink,
-  Task, Collection, Tag, Purpose,
+  Task, Collection, Tag, TagId, Purpose, DateUse,
   CalendarEvent, CalendarReminder, CalendarDeadline, TrackerEntry, EventTaskRule,
   ScheduleTemplate, ItemType, TypedItem, Goal,
 } from '@/types';
@@ -13,6 +13,7 @@ import type { Overview } from '@/types/overview';
 import type { CustomConverter } from '@/types/converters';
 import type { Picture } from '@/types/pictures';
 import type { PinnedItem } from '@/store/pinnedItemsStore';
+import { normaliseTemplate } from '@/utils/templatePlan';
 import { keyFor, type RecentItemEntry } from '@/store/recentItemsStore';
 import type { Activity, ActivityType } from '@/types/fitness';
 
@@ -26,6 +27,21 @@ const attendedColumn = (v: string[] | undefined) => (v === undefined ? {} : { at
 const taskRulesColumn = (v: EventTaskRule[] | undefined) => (v === undefined ? {} : { task_rules: v });
 // An event's pictures (migration 073): sent once it has had any; the column is nullable.
 const pictureIdsColumn = (v: string[] | undefined) => (v === undefined ? {} : { picture_ids: v });
+// The suite's tags on a calendar item or a list (migration 074), and on a note or notebook
+// (`suite_tag_ids`, since their `tag_ids` are its notebooks): sent once set; the columns are nullable.
+const tagIdsColumn = (v: string[] | undefined) => (v === undefined ? {} : { tag_ids: v });
+const suiteTagIdsColumn = (v: string[] | undefined) => (v === undefined ? {} : { suite_tag_ids: v });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const idList = (v: any): string[] | undefined => (Array.isArray(v) ? v.filter((x: unknown): x is string => typeof x === 'string') : undefined);
+// An Endeavour's icon (migration 074): sent once set, nullable.
+const collectionIconColumn = (v: string | null | undefined) => (v === undefined ? {} : { icon: v });
+
+// Which named periods an Endeavour or a Schedule runs and pauses during (migration 075): sent once set,
+// nullable; null once taken off, so the cloud's copy is cleared too.
+const dateUseColumn = (key: string, v: DateUse | null | undefined) => (v === undefined ? {} : { [key]: v });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const dateUseFrom = (v: any): DateUse | null | undefined => (v === null ? null : v && Array.isArray(v.runs) && Array.isArray(v.pauses) ? { runs: v.runs.filter((x: unknown) => typeof x === 'string'), pauses: v.pauses.filter((x: unknown) => typeof x === 'string') } : undefined);
+
 // Instead of a class or during it (migration 067, events and Deadlines), likewise.
 const onClassColumn = (v: ClassLink | null | undefined) => (v === undefined ? {} : { on_class: v });
 // An event's icon and Show quieter (migration 070): sent once either is set; both columns nullable.
@@ -157,6 +173,8 @@ export function collectionToRow(c: Collection, userId: string) {
     ...streamsColumn(c.streams),
     ...periodColumn(c.period),
     ...templateColumn(c.templateId),
+    ...collectionIconColumn(c.icon),
+    ...dateUseColumn('date_use', c.dateUse),
     ...attributesColumn(c.attributes),
     created_at:    c.createdAt,
     updated_at:    c.updatedAt,
@@ -185,6 +203,8 @@ export function rowToCollection(r: Record<string, any>): Collection {
     ...(Array.isArray(r.streams) && r.streams.length ? { streams: r.streams } : {}),
     ...(r.period ? { period: r.period } : {}),
     ...(typeof r.template_id === 'string' && r.template_id ? { templateId: r.template_id } : {}),
+    ...(typeof r.icon === 'string' && r.icon ? { icon: r.icon } : {}),
+    ...(dateUseFrom(r.date_use) !== undefined ? { dateUse: dateUseFrom(r.date_use) } : {}),
     ...(r.attributes ? { attributes: r.attributes } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
@@ -222,13 +242,22 @@ export function rowToEntry(r: Record<string, any>): TrackerEntry {
 
 // ── Tag ─────────────────────────────────────────────────────────
 
+// A tag's icon, archive date and timestamps since migration 074 (2026-11-06).
 export function tagToRow(t: Tag, userId: string) {
-  return { id: t.id, user_id: userId, name: t.name, color: t.color, notes: t.notes ?? null, deleted_at: null };
+  return {
+    id: t.id, user_id: userId, name: t.name, color: t.color, notes: t.notes ?? null,
+    icon: t.icon ?? null, archived_at: t.archivedAt ?? null, created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: null,
+  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToTag(r: Record<string, any>): Tag {
-  return { id: r.id, name: r.name, color: r.color ?? null, notes: r.notes ?? null };
+  // A row from before migration 074 has no timestamps: '' reads as "unknown", so the cloud's copy
+  // wins as it always did for tags.
+  return {
+    id: r.id, name: r.name, color: r.color ?? null, notes: r.notes ?? null,
+    icon: r.icon ?? null, archivedAt: r.archived_at ?? null, createdAt: r.created_at ?? r.updated_at ?? '', updatedAt: r.updated_at ?? '',
+  };
 }
 
 // ── Purpose ─────────────────────────────────────────────────────
@@ -308,6 +337,7 @@ export function eventToRow(e: CalendarEvent, userId: string) {
     ...attendedColumn(e.attendedDates),
     ...taskRulesColumn(e.taskRules),
     ...pictureIdsColumn(e.pictureIds),
+    ...tagIdsColumn(e.tagIds),
     ...onClassColumn(e.onClass),
     ...eventLookColumns(e),
     deleted_at:          null,
@@ -359,6 +389,7 @@ export function rowToEvent(r: Record<string, any>): CalendarEvent {
     ...(r.schedule_id ? { scheduleId: r.schedule_id } : {}),
     ...(Array.isArray(r.attended_dates) && r.attended_dates.length ? { attendedDates: r.attended_dates } : {}),
     ...(Array.isArray(r.task_rules) ? { taskRules: r.task_rules as EventTaskRule[] } : {}),
+    ...(idList(r.tag_ids) ? { tagIds: idList(r.tag_ids) as TagId[] } : {}),
     ...(Array.isArray(r.picture_ids) ? { pictureIds: (r.picture_ids as unknown[]).filter((x): x is string => typeof x === 'string') } : {}),
     ...(r.on_class ? { onClass: r.on_class } : {}),
     ...(r.icon != null ? { icon: r.icon } : {}),
@@ -393,6 +424,7 @@ export function reminderToRow(r: CalendarReminder, userId: string) {
     series_id:          r.seriesId ?? null,
     series_date:        r.seriesDate ?? null,
     remind_occurrence:  r.remindOccurrence ?? null,
+    ...tagIdsColumn(r.tagIds),
     cross_app_refs: r.crossAppRefs ?? [],
     archived_at:    r.archivedAt ?? null,
     archive_reason: r.archiveReason ?? null,
@@ -428,6 +460,7 @@ export function rowToReminder(r: Record<string, any>): CalendarReminder {
     seriesId:         r.series_id          ?? null,
     seriesDate:       r.series_date        ?? null,
     remindOccurrence: r.remind_occurrence  ?? null,
+    ...(idList(r.tag_ids) ? { tagIds: idList(r.tag_ids) as TagId[] } : {}),
     crossAppRefs: r.cross_app_refs ?? [],
     archivedAt:    r.archived_at    ?? null,
     archiveReason: r.archive_reason ?? null,
@@ -465,6 +498,7 @@ export function deadlineToRow(d: CalendarDeadline, userId: string) {
     remind_occurrence:  d.remindOccurrence ?? null,
     seen_dates:         d.seenDates ?? [],
     ...onClassColumn(d.onClass),
+    ...tagIdsColumn(d.tagIds),
     cross_app_refs: d.crossAppRefs ?? [],
     archived_at:    d.archivedAt ?? null,
     archive_reason: d.archiveReason ?? null,
@@ -503,6 +537,7 @@ export function rowToDeadline(r: Record<string, any>): CalendarDeadline {
     remindOccurrence: r.remind_occurrence  ?? null,
     seenDates:        r.seen_dates         ?? [],
     ...(r.on_class ? { onClass: r.on_class } : {}),
+    ...(idList(r.tag_ids) ? { tagIds: idList(r.tag_ids) as TagId[] } : {}),
     crossAppRefs: r.cross_app_refs ?? [],
     archivedAt:    r.archived_at    ?? null,
     archiveReason: r.archive_reason ?? null,
@@ -526,6 +561,7 @@ export function scheduleToRow(s: ScheduleTemplate, userId: string) {
     collection_id: s.collectionId ?? null,
     blocks:        s.blocks       ?? [],
     ...(s.breaks === undefined ? {} : { breaks: s.breaks }),   // migration 064: nullable, sent once set
+    ...dateUseColumn('period_use', s.periodUse),
     created_at:    s.createdAt,
     updated_at:    s.updatedAt,
     deleted_at:    null,
@@ -544,6 +580,7 @@ export function rowToSchedule(r: Record<string, any>): ScheduleTemplate {
     collectionId: r.collection_id ?? null,
     blocks:       r.blocks        ?? [],
     ...(Array.isArray(r.breaks) ? { breaks: r.breaks } : {}),
+    ...(dateUseFrom(r.period_use) !== undefined ? { periodUse: dateUseFrom(r.period_use) } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
   };
@@ -562,6 +599,7 @@ export function overviewToRow(o: Overview, userId: string) {
     definition: {
       sources: o.sources, collectionId: o.collectionId, status: o.status, when: o.when,
       windowDays: o.windowDays, search: o.search, sort: o.sort, groupBy: o.groupBy,
+      ...(o.tagIds?.length ? { tagIds: o.tagIds } : {}),
     },
     created_at: o.createdAt,
     updated_at: o.updatedAt,
@@ -584,6 +622,7 @@ export function rowToOverview(r: Record<string, any>): Overview {
     search:       d.search ?? '',
     sort:         d.sort ?? 'when-asc',
     groupBy:      d.groupBy ?? 'none',
+    ...(idList(d.tagIds)?.length ? { tagIds: idList(d.tagIds) } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
   };
@@ -638,6 +677,7 @@ export function listToRow(l: List, userId: string) {
     cross_app_refs:    l.crossAppRefs     ?? [],
     reset_on_task_complete: l.resetOnTaskComplete ?? false,
     collection_id: l.collectionId ?? null,
+    ...tagIdsColumn(l.tagIds),
     created_at:   l.createdAt,
     updated_at:   l.updatedAt,
     deleted_at:   null,
@@ -661,6 +701,7 @@ export function rowToList(r: Record<string, any>): List {
     crossAppRefs:     r.cross_app_refs    ?? [],
     resetOnTaskComplete: r.reset_on_task_complete ?? false,
     collectionId: r.collection_id ?? null,
+    ...(idList(r.tag_ids) ? { tagIds: idList(r.tag_ids) as TagId[] } : {}),
     createdAt:   r.created_at,
     updatedAt:   r.updated_at,
   };
@@ -760,6 +801,7 @@ export function noteToRow(n: Note, userId: string) {
     is_encrypted:    n.isEncrypted ?? false,
     encrypted_payload: n.encryptedPayload ?? null,
     backdrop:        n.backdrop ?? null,
+    ...suiteTagIdsColumn(n.suiteTagIds),
     last_viewed_at:  n.lastViewedAt ?? null,
     archived_at:     n.archivedAt ?? null,
     created_at:      n.createdAt,
@@ -788,6 +830,7 @@ export function rowToNote(r: Record<string, any>): Note {
     isEncrypted:  r.is_encrypted ?? false,
     encryptedPayload: r.encrypted_payload ?? null,
     backdrop:     r.backdrop ?? null,
+    ...(idList(r.suite_tag_ids) ? { suiteTagIds: idList(r.suite_tag_ids) as TagId[] } : {}),
     lastViewedAt: r.last_viewed_at ?? null,
     archivedAt:   r.archived_at ?? null,
     createdAt:    r.created_at,
@@ -815,6 +858,7 @@ export function noteTagToRow(t: NoteTag, userId: string) {
     collection_id: t.collectionId ?? null,
     backdrop:      t.backdrop ?? null,
     ...encryptContentsColumn(t.encryptContents),
+    ...suiteTagIdsColumn(t.suiteTagIds),
     created_at:    t.createdAt,
     updated_at:    t.updatedAt,
     deleted_at:    null,
@@ -838,6 +882,7 @@ export function rowToNoteTag(r: Record<string, any>): NoteTag {
     collectionId: r.collection_id ?? null,
     backdrop:     r.backdrop ?? null,
     ...(r.encrypt_contents ? { encryptContents: true } : {}),
+    ...(idList(r.suite_tag_ids) ? { suiteTagIds: idList(r.suite_tag_ids) as TagId[] } : {}),
     createdAt:    r.created_at,
     updatedAt:    r.updated_at,
     userId:       r.user_id,
@@ -1250,12 +1295,11 @@ export function templateToRow(t: EndeavourTemplateDef, userId: string) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToTemplate(r: Record<string, any>): EndeavourTemplateDef {
-  const d = r.definition ?? {};
-  return {
-    description: '', kind: 'project', dates: { show: false, exams: false, timeOff: [] }, details: [], notebooks: [], lists: [], tasks: [],
-    classes: [], deadlines: [], goals: [], partsFrom: null,
-    ...d,
-    id: r.id, name: r.name, icon: r.icon ?? null, ...(r.built_in ? { builtIn: r.built_in } : {}),
+  // Read through normaliseTemplate, so one saved before 2026-11-06 (with lists, tasks, classes…) or
+  // by a newer app reads in today's shape.
+  return normaliseTemplate({
+    ...(r.definition ?? {}),
+    id: r.id, name: r.name, icon: r.icon ?? null, builtIn: r.built_in ?? undefined,
     createdAt: r.created_at, updatedAt: r.updated_at,
-  };
+  });
 }

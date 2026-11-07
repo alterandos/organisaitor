@@ -8,8 +8,8 @@ import { collectFlags } from './extensions/UnsureFlag';
 import { blockReview, collectReviewRuns } from './extensions/ReviewMark';
 import { blockFlag } from './extensions/BlockFlags';
 import { blockImportance } from './extensions/BlockImportance';
-import { applyTextMark, markDigit, markForDigit, textMarks } from './textMarks';
-import { selectionActions } from './objects/selectionActions';
+import { applyTextMark, markChoices, markDigit, markForDigit, markRange, textMarks } from './textMarks';
+import { annotationActions, selectionActions } from './objects/selectionActions';
 import { useNoteStore } from '@/store/noteStore';
 import type { NoteTag } from '@/types/notes';
 
@@ -22,13 +22,15 @@ afterEach(() => editor?.destroy());
 
 const userTag = { id: 'u1', name: 'Exam', icon: null, color: null, kind: 'tag' } as unknown as NoteTag;
 const notebook = { id: 'n1', name: 'Biology', icon: null, color: null, kind: 'area' } as unknown as NoteTag;
+// A notebook stored before `kind` existed has none, and is still a notebook (found 2026-11-06).
+const oldNotebook = { id: 'n2', name: 'Chemistry', icon: null, color: null } as unknown as NoteTag;
 const make = (content: string | object) => {
   editor = new Editor({ element: document.createElement('div'), extensions: noteEditorExtensions({ noteEncrypted: () => null, linkClass: '' }), content });
 };
 
 describe('the marks', () => {
   it('are the statuses, then Example and Reference, then the person’s own tags; no Glossary kinds, no notebooks', () => {
-    const marks = textMarks({ u1: userTag, n1: notebook });
+    const marks = textMarks({ u1: userTag, n1: notebook, n2: oldNotebook });
     expect(marks.map((m) => [m.id, m.family])).toEqual([
       ['important', 'status'], ['clarify', 'status'], ['unsure', 'status'], ['review', 'status'],
       ['builtin-example', 'tag'], ['builtin-reference', 'tag'], ['u1', 'tag'],
@@ -83,5 +85,24 @@ describe('the marks', () => {
     const of = (g: string) => actions.filter((a) => a.group === g).map((a) => a.key);
     expect(of('mark')).toEqual(['important-1', 'important-3', 'clarify', 'unsure', 'review', 'tag-builtin-example', 'tag-builtin-reference']);
     expect(of('turn')).toEqual(expect.arrayContaining(['definition', 'concept', 'acronym', 'quote']));
+  });
+
+  it('the picker and the menus list the same annotations: Important as its two levels, numbered', () => {
+    make('<p>photosynthesis</p>');
+    const choices = markChoices({ u1: userTag }, editor.state, 2, 16);
+    expect(choices.map((c) => [c.key, c.digit])).toEqual([
+      ['important-1', 1], ['important-3', null], ['clarify', 2], ['unsure', 3], ['review', 4],
+      ['tag-builtin-example', 5], ['tag-builtin-reference', 6], ['tag-u1', 7],
+    ]);
+    useNoteStore.setState({ noteTags: { u1: userTag } as never });
+    expect(annotationActions(editor as never, { from: 2, to: 16 }).map((a) => a.key)).toEqual(choices.map((c) => c.key));
+  });
+
+  it('with nothing selected, an annotation goes on the whole line (a right-click on it, or the cursor’s)', () => {
+    make('<p>Plants use light</p><p></p>');
+    expect(markRange(editor.state, 5)).toEqual({ from: 2, to: 18 });
+    expect(markRange(editor.state, 20)).toBeNull();
+    editor.commands.setTextSelection(5);
+    expect(markRange(editor.state)).toEqual({ from: 2, to: 18 });
   });
 });

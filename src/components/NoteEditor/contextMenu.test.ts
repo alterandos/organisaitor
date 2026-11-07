@@ -89,9 +89,14 @@ describe('right-click on selected note text', () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('with nothing selected: the clipboard, then a web link with the formatting', () => {
+  it('with nothing selected on a line of text: Annotate (the whole line), the clipboard, then a web link with the formatting', () => {
     make('<p>text</p>');
     editor.commands.setTextSelection(2);
+    expect(menu().map(ids)).toEqual([['mark-as'], ['cut', 'copy', 'paste', 'paste-plain', 'select-all'], ['link', 'style']]);
+  });
+
+  it('on an empty line, nothing to annotate', () => {
+    make('<p></p>');
     expect(menu().map(ids)).toEqual([['cut', 'copy', 'paste', 'paste-plain', 'select-all'], ['link', 'style']]);
   });
 });

@@ -1,6 +1,9 @@
+import { endeavourColor } from '@/utils/endeavourLook';
 import { getOrderedEndeavours } from '@/utils/collections';
-import { byNotebookOrder, getNoteEffectiveCollectionId, isPinnedNotebook } from '@/utils/notes';
+import { annotationTags, byNotebookOrder, getNoteEffectiveCollectionId, isPinnedNotebook } from '@/utils/notes';
 import type { Collection, Purpose } from '@/types';
+import { endeavourSubtree } from '@/utils/endeavourGraph';
+import { noteItem, type TagTest } from '@/utils/tagScope';
 import type { Note, NoteId, NoteTag } from '@/types/notes';
 
 // The browse model behind every Notes view (CLAUDE.md "Notes views", agreed 2026-10-17): the
@@ -40,6 +43,7 @@ export interface BrowseInput {
   collections: Record<string, Collection>;
   purposes:    Record<string, Purpose>;
   filter:      NotesFilter;
+  tags?:       TagTest | null;         // the header's tag filter (hooks/useTagFilter.ts)
 }
 
 export interface NotesBrowse {
@@ -99,7 +103,7 @@ export const NOTE_GROUPINGS: Record<NoteGroupingId, NoteGrouping> = {
   endeavour: {
     id: 'endeavour',
     groups: ({ collections }) => getOrderedEndeavours(collections)
-      .map((c) => ({ sourceId: c.id, label: c.name, color: c.color, icon: null, parentId: null })),
+      .map((c) => ({ sourceId: c.id, label: c.name, color: endeavourColor(c.id, collections), icon: null, parentId: null })),
     of: (note, { collections, noteTags }) => {
       const e = endeavourOf(note, noteTags);
       return e && collections[e] && !collections[e].archivedAt ? [e] : [];
@@ -118,7 +122,7 @@ export const NOTE_GROUPINGS: Record<NoteGroupingId, NoteGrouping> = {
   // Annotation tags: cross-cutting labels.
   tag: {
     id: 'tag',
-    groups: ({ noteTags }) => Object.values(noteTags).filter((t) => t.kind === 'tag').sort(byOrder)
+    groups: ({ noteTags }) => annotationTags(noteTags).sort(byOrder)
       .map((t) => ({ sourceId: t.id, label: t.name, color: t.color, icon: t.icon, parentId: null })),
     of: (note, { noteTags }) => note.tagIds.filter((id) => noteTags[id]?.kind === 'tag'),
   },
@@ -130,8 +134,12 @@ const newest = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b 
 
 export function browseNotes(input: BrowseInput, grouping: NoteGroupingId): NotesBrowse {
   const def = NOTE_GROUPINGS[grouping];
+  // Choosing an Endeavour includes what's part of it (CLAUDE.md "An Endeavour filter includes …").
+  const within = input.filter.collectionIds.length
+    ? { ...input.filter, collectionIds: [...new Set(input.filter.collectionIds.flatMap((id) => [...endeavourSubtree(id, input.collections)]))] }
+    : input.filter;
   const notes = input.notes
-    .filter((n) => !n.archivedAt && passesFilter(n, input.filter, input.collections, input.noteTags))
+    .filter((n) => !n.archivedAt && passesFilter(n, within, input.collections, input.noteTags) && (!input.tags || input.tags(noteItem(n, input.noteTags))))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const shown = new Set(notes.map((n) => n.id as string));
   const subNotes: Record<string, NoteId[]> = {};

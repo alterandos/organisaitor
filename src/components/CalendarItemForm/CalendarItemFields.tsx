@@ -1,5 +1,7 @@
-import { useRef, useState, type ReactNode } from 'react';
-import type { CalendarDeadline, CalendarEvent, CalendarItemKind, CalendarReminder, CollectionId, CrossAppRef } from '@/types';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCalendarStore } from '@/store/calendarStore';
+import { effectivePeriod } from '@/utils/endeavourPeriod';
+import type { CalendarDeadline, CalendarEvent, CalendarItemKind, CalendarReminder, CollectionId, CrossAppRef, TagId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { LABELS } from '@/config/labels';
 import { ITEM_TYPE_ICON } from '@/config/itemIcons';
@@ -27,6 +29,9 @@ import { EventTasksField, type PendingTask } from '@/components/TaskLinks/EventT
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { PicturesField } from '@/components/PictureInput/PicturesField';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { TagField } from '@/components/TagField/TagField';
+import { commitTags } from '@/services/tags';
+import { tagsFromParents } from '@/utils/tagScope';
 import { OpenIcon } from '@/components/Icons';
 import styles from './CalendarItemFields.module.css';
 
@@ -85,6 +90,13 @@ export function CalendarItemFields({ kind, item, update, savedId, occurrence = n
   if ((item.notes ?? '') !== shownNotes) { setShownNotes(item.notes ?? ''); setNotes(item.notes ?? ''); }
 
   const date = item.date ?? '';
+  // Dates of this series taken out as items of their own: shown in Leave out dates, not ticked back.
+  const sameKind = useCalendarStore((s) => (kind === 'event' ? s.events : kind === 'reminder' ? s.reminders : s.deadlines));
+  const changedDates = useMemo(() => new Set(savedId
+    ? Object.values(sameKind as Record<string, { seriesId?: string | null; seriesDate?: string | null }>).filter((x) => x.seriesId === savedId && x.seriesDate).map((x) => x.seriesDate as string)
+    : []), [sameKind, savedId]);
+  // Its Endeavour's end (its own or taken from above): a new repeat ends there (2026-11-07).
+  const endeavourEnd = item.collectionId ? effectivePeriod(item.collectionId, collections)?.period.end ?? null : null;
   const multiDay = isEvent && !!item.endDate && item.endDate > date;
   const repeats = !!item.repeat;
 
@@ -190,9 +202,10 @@ export function CalendarItemFields({ kind, item, update, savedId, occurrence = n
         </div>
       )}
 
-      {kind !== 'reminder' && !repeats && date && (
+      {kind !== 'reminder' && date && (
         <ClassClashField
-          item={{ id: savedId ?? undefined, date, start: isEvent ? item.startTime || null : item.time || null, end: isEvent ? item.endTime || null : null, collectionId: item.collectionId ?? null }}
+          item={{ id: savedId ?? undefined, date, start: isEvent ? item.startTime || null : item.time || null, end: isEvent ? item.endTime || null : null,
+            repeat: item.repeat ?? null, status: item.status ?? 'confirmed' }}
           value={item.onClass ?? null}
           onChange={(onClass) => update({ onClass })}
         />
@@ -219,7 +232,8 @@ export function CalendarItemFields({ kind, item, update, savedId, occurrence = n
 
       {!isTaskShadow && (
         <div className={styles.field}>
-          <RepeatField value={item.repeat ?? null} onChange={(r) => update({ repeat: r })} date={date} onDateChange={setDate} labelClassName={styles.checkLabel} />
+          <RepeatField value={item.repeat ?? null} onChange={(r) => update({ repeat: r })} date={date} onDateChange={setDate} labelClassName={styles.checkLabel} skippable={{ changed: changedDates }}
+            itemTime={(isEvent ? item.startTime : item.time) ?? null} defaultUntil={endeavourEnd} />
         </div>
       )}
 
@@ -228,10 +242,10 @@ export function CalendarItemFields({ kind, item, update, savedId, occurrence = n
         <LinksField links={item.links ?? []} onChange={(links) => update({ links })} />
       </div>
 
-      {kind !== 'reminder' && !isTaskShadow && !hasLinkedTask && (
+      {!isTaskShadow && !hasLinkedTask && (
         <div className={styles.field}>
           <span className={styles.label}>{LABELS.taskLinks.event.heading}</span>
-          <EventTasksField type={isEvent ? 'event' : 'deadline'} id={savedId} title={item.title ?? ''} repeats={repeats} occurrence={occurrence}
+          <EventTasksField type={isEvent ? 'event' : kind === 'reminder' ? 'reminder' : 'deadline'} id={savedId} title={item.title ?? ''} repeats={repeats} occurrence={occurrence}
             draft={savedId ? undefined : { rules: item.taskRules ?? [], onRules: (taskRules) => update({ taskRules }), pending: pending ?? [], onPending: onPending ?? (() => {}) }} />
         </div>
       )}
@@ -260,6 +274,17 @@ export function CalendarItemFields({ kind, item, update, savedId, occurrence = n
           <CollectionPicker collections={allCollections} value={(item.collectionId ?? null) as CollectionId | null}
             onChange={(collectionId) => update({ collectionId })} noneLabel={`No ${LABELS.collection}`} />
         </div>
+      )}
+
+      {!isTaskShadow && (
+        <TagField
+          value={item.tagIds ?? []}
+          // A saved item takes a new tag at once; the create form makes it on Create.
+          onChange={(ids) => update({ tagIds: (savedId ? commitTags(ids) : ids) as TagId[] })}
+          inherited={item.collectionId ? tagsFromParents([item.collectionId], collections) : []}
+          fromName={(id) => collections[id as CollectionId]?.name ?? ''}
+          labelClassName={styles.label}
+        />
       )}
 
       {linkPrompt && <MarkdownLinkPrompt anchorRect={linkPrompt.anchorRect} initialText={linkPrompt.initialText} onConfirm={confirmLink} onCancel={cancelLink} />}

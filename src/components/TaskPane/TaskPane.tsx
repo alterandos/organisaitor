@@ -1,22 +1,20 @@
-import { useState, useEffect, useRef } from 'react';
+import { commitTags } from '@/services/tags';
+import { useState } from 'react';
 import { ItemTypePaneField } from '@/components/ItemTypeField/ItemTypeField';
-import { DateInput } from '@/components/DateInput/DateInput';
 import { linkedListIds } from '@/services/taskListLinks';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import { LinkedChecklists } from '@/components/LinkedChecklists/LinkedChecklists';
 import { TaskLinksField } from '@/components/TaskLinks/TaskLinksField';
-import type { Priority, TagId, PurposeId, TaskKind, TaskId, TimeIntensity } from '@/types';
+import { TaskCalendarLinks } from '@/components/TaskLinks/TaskCalendarLinks';
+import type { TaskId } from '@/types';
+import { TaskFields, type TaskValues } from '@/components/TaskFields/TaskFields';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
-import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
-import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { deleteTaskWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import { addTaskWithCalendar, updateTaskLinked } from '@/services/taskCalendarLinks';
 import { openArtifactTarget } from '@/services/openCrossAppTarget';
 import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
-import { LinksField } from '@/components/LinksField/LinksField';
-import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { todayIso } from '@/utils/date';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
@@ -26,12 +24,9 @@ import itemStyles from '@/components/ItemActions/ItemActions.module.css';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
 import type { CrossAppRef } from '@/types';
 import styles from './TaskPane.module.css';
-import { useMarkdownHotkeys } from '@/hooks/useMarkdownHotkeys';
-import { MarkdownLinkPrompt } from '@/components/MarkdownLinkPrompt/MarkdownLinkPrompt';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { CloseIcon, OpenIcon } from '@/components/Icons';
-import { PriorityPicker } from '@/components/PriorityPicker/PriorityPicker';
 
 export function TaskPane() {
   const paneResize = usePaneWidth('item-pane', { edge: 'left', min: 340, max: 820 });
@@ -41,9 +36,6 @@ export function TaskPane() {
   const showAddSubtask = useUIStore((s) => s.showAddSubtask);
 
   const tasksRecord       = useTaskStore((s) => s.tasks);
-  const collectionsRecord = useTaskStore((s) => s.collections);
-  const purposesRecord    = useTaskStore((s) => s.purposes);
-  const tagsRecord        = useTaskStore((s) => s.tags);
   const updateTask        = useTaskStore((s) => s.updateTask);
   const archiveTask       = useTaskStore((s) => s.archiveTask);
   const restoreTask       = useTaskStore((s) => s.restoreTask);
@@ -51,33 +43,8 @@ export function TaskPane() {
   const task = editingTaskId ? tasksRecord[editingTaskId as TaskId] : null;
 
   // App.tsx remounts this pane per task (key), so these initialise from the task being edited.
-  const [title,          setTitle]          = useState(() => task?.title ?? '');
-  const [notes,          setNotes]          = useState(() => task?.notes ?? '');
-  const [tagSearch,      setTagSearch]      = useState('');
-  const [tagDropOpen,    setTagDropOpen]    = useState(false);
   const [subtaskInput,   setSubtaskInput]   = useState('');
-  const tagInputRef  = useRef<HTMLInputElement>(null);
-  const notesRef     = useRef<HTMLTextAreaElement>(null);
-  const { linkPrompt, confirmLink, cancelLink } = useMarkdownHotkeys(notesRef, notes, setNotes);
-
-  // Notes field grows with content up to 40% of the window height, then scrolls.
-  useEffect(() => {
-    const el = notesRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.4)}px`;
-  }, [notes]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      const el = notesRef.current;
-      if (!el) return;
-      el.style.height = 'auto';
-      el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.4)}px`;
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  const [pickingCalendar, setPickingCalendar] = useState(false);
 
   const { dialog, setDialog, closeDialog } = useItemActions({
     itemKey:   editingTaskId,
@@ -90,54 +57,16 @@ export function TaskPane() {
 
   const taskId = task.id;
 
-  const collectionList = Object.values(collectionsRecord);
-  const purposeList    = Object.values(purposesRecord);
-  const tagList        = Object.values(tagsRecord);
-
-  const saveTitle = () => {
-    const trimmed = title.trim();
-    if (trimmed && trimmed !== task.title) updateTaskLinked(taskId, { title: trimmed });
-    else if (!trimmed) setTitle(task.title);
-  };
-
-  const saveNotes = () => {
-    const val = notes.trim() || null;
-    if (val !== task.notes) updateTask(taskId, { notes: val });
-  };
-
-  // The shadow calendar reminder/event follow from these — see services/taskCalendarLinks.ts.
-  const handleDeadlineChange = (v: string) => {
-    const val = v || null;
-    updateTaskLinked(taskId, val ? { deadline: val } : { deadline: null, deadlineTime: null });
-  };
-
-  const handleDeadlineTimeChange = (v: string) => updateTaskLinked(taskId, { deadlineTime: v || null });
-
-  const handleScheduledAtChange = (v: string) => {
-    const val = v || null;
-    updateTaskLinked(taskId, val ? { scheduledAt: val } : { scheduledAt: null, scheduledTime: null });
-  };
-
-  const handleScheduledTimeChange = (v: string) => updateTaskLinked(taskId, { scheduledTime: v || null });
-
-  const handlePriorityChange = (p: Priority) => updateTask(taskId, { priority: p });
-
-  const handleKindClick = (k: TaskKind) =>
-    updateTask(taskId, { kind: k });
-
-  const handleIntensityClick = (i: TimeIntensity) =>
-    updateTask(taskId, { timeIntensity: i === (task.timeIntensity ?? null) ? null : i });
-
-  const togglePurpose = (id: PurposeId) => {
-    const current = task.purposeIds ?? [];
-    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
-    updateTask(taskId, { purposeIds: next });
-  };
-
-  const toggleTag = (id: TagId) => {
-    const current = task.tagIds ?? [];
-    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
-    updateTask(taskId, { tagIds: next });
+  // Each change saves at once; the shadow calendar entries follow the title, dates and repeat
+  // (services/taskCalendarLinks.ts). A repeating task with no date starts from today.
+  const LINKED: (keyof TaskValues)[] = ['title', 'deadline', 'deadlineTime', 'scheduledAt', 'scheduledTime', 'repeat'];
+  const update = (patch: Partial<TaskValues>) => {
+    const changes = { ...patch } as Partial<TaskValues>;
+    if (changes.tagIds) changes.tagIds = commitTags(changes.tagIds);
+    if (changes.repeat && !task.deadline && !task.scheduledAt) changes.deadline = todayIso();
+    const typed = changes as Parameters<typeof updateTask>[1];
+    if ((Object.keys(changes) as (keyof TaskValues)[]).some((k) => LINKED.includes(k))) updateTaskLinked(taskId, typed);
+    else updateTask(taskId, typed);
   };
 
   const handleAddSubtask = () => {
@@ -194,235 +123,24 @@ export function TaskPane() {
           {task.archived && <ArchivedBanner archivedAt={task.archivedAt} reason={task.archiveReason} />}
           {task.completed && <DoneBanner doneAt={task.completedAt} reopenLabel={LABELS.itemActions.reopenTask} onReopen={() => void toggleTaskCompletion(taskId)} />}
 
-          <input
-            className={styles.titleInput}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-            aria-label="Task title"
-          />
-
-          <textarea
-            ref={notesRef}
-            className={styles.notesInput}
-            placeholder="Add notes... (Ctrl+B/I bold/italic, Ctrl+L to insert a link)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            onBlur={saveNotes}
-            rows={3}
-          />
-
-          <div className={styles.field}>
-            <span className={styles.label}>
-              {task.kind === 'milestone' ? LABELS.milestoneDate : 'Due date'}
-            </span>
-            <div className={styles.dateTimeRow}>
-              <DateInput className={styles.dateInput} value={task.deadline ?? ''} onChange={handleDeadlineChange} required={task.kind === 'milestone'} />
-              {(task.deadline || task.kind === 'milestone') && (
-                <TimeInput
-                  className={styles.timeInput}
-                  value={task.deadlineTime ?? ''}
-                  onChange={handleDeadlineTimeChange}
-                  placeholder="Time"
-                />
-              )}
-            </div>
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>{LABELS.scheduledFor}</span>
-            <div className={styles.dateTimeRow}>
-              <DateInput className={styles.dateInput} value={task.scheduledAt ?? ''} onChange={handleScheduledAtChange} />
-              {task.scheduledAt && (
-                <TimeInput
-                  className={styles.timeInput}
-                  value={task.scheduledTime ?? ''}
-                  onChange={handleScheduledTimeChange}
-                  placeholder="Time"
-                />
-              )}
-            </div>
-            {task.scheduledAt && (
-              <span className={styles.scheduledHint}>
-                {task.calendarEventId ? 'Synced to calendar' : 'Added to calendar'}
-              </span>
-            )}
-          </div>
-
-          <ItemTypePaneField target={{ kind: 'task', id: taskId }} />
-
-          {/* Repeat (services/recurringTasks.ts). Not on a sub-task: it repeats with its parent.
-              A repeating task with no date starts from today. */}
-          {!task.parentId && (
-            <div className={styles.field}>
-              <RepeatField
-                value={task.repeat ?? null}
-                hint={LABELS.recurring.hint}
-                date={task.deadline ?? task.scheduledAt}
-                onChange={(repeat) => updateTaskLinked(taskId, repeat && !task.deadline && !task.scheduledAt ? { repeat, deadline: todayIso() } : { repeat })}
-              />
-            </div>
-          )}
-
-          <div className={styles.field}>
-            <span className={styles.label}>{LABELS.priority.label}</span>
-            <PriorityPicker id="task-pane-priority" value={task.priority} onChange={handlePriorityChange} />
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Type</span>
-            <div className={styles.row}>
-              {(['action', 'waiting', 'milestone'] as TaskKind[]).map((k) => (
-                <button
-                  key={k}
-                  className={`${styles.pill} ${task.kind === k ? styles.pillKindActive : ''}`}
-                  onClick={() => handleKindClick(k)}
-                >
-                  {k === 'waiting' && '⏳ '}
-                  {k === 'milestone' && '◆ '}
-                  {LABELS.taskKind[k]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Time intensity</span>
-            <div className={styles.row}>
-              {([
-                { value: 'low',    label: 'Low' },
-                { value: 'medium', label: 'Med' },
-                { value: 'high',   label: 'High' },
-              ] as { value: TimeIntensity; label: string }[]).map((opt) => {
-                const active = (task.timeIntensity ?? null) === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    className={`${styles.pill} ${active ? styles.pillActive : ''}`}
-                    data-level={opt.value}
-                    aria-pressed={active}
-                    onClick={() => handleIntensityClick(opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {collectionList.length > 0 && (
-            <div className={styles.field}>
-              <span className={styles.label}>{LABELS.collection}</span>
-              <CollectionPicker
-                collections={collectionList}
-                value={task.collectionId}
-                onChange={(id) => updateTask(taskId, { collectionId: id })}
-                noneLabel={LABELS.noCollection}
-              />
-            </div>
-          )}
-
-          {purposeList.length > 0 && (
-            <div className={styles.field}>
-              <span className={styles.label}>Purposes</span>
-              <div className={styles.chips}>
-                {purposeList.map((p) => {
-                  const active = (task.purposeIds ?? []).includes(p.id as PurposeId);
-                  return (
-                    <button
-                      key={p.id}
-                      className={`${styles.chip} ${active ? styles.chipActive : ''}`}
-                      style={active && p.color
-                        ? { background: p.color + '22', borderColor: p.color, color: p.color }
-                        : undefined}
-                      onClick={() => togglePurpose(p.id as PurposeId)}
-                    >
-                      {p.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className={styles.field}>
-            <span className={styles.label}>Tags</span>
-            <div className={styles.tagBox} onClick={() => tagInputRef.current?.focus()}>
-              {(task.tagIds ?? []).map((id) => {
-                const tag = tagsRecord[id];
-                if (!tag) return null;
-                return (
-                  <span
-                    key={id}
-                    className={styles.activeTag}
-                    style={tag.color ? { borderColor: tag.color, color: tag.color, background: tag.color + '18' } : undefined}
-                  >
-                    {tag.name}
-                    <button
-                      className={styles.tagRemove}
-                      onMouseDown={(e) => { e.preventDefault(); toggleTag(id); }}
-                      aria-label={`Remove ${tag.name}`}
-                    ><CloseIcon /></button>
-                  </span>
-                );
-              })}
-              <input
-                ref={tagInputRef}
-                className={styles.tagInput}
-                placeholder={!(task.tagIds ?? []).length ? 'Add tags…' : ''}
-                value={tagSearch}
-                onChange={(e) => { setTagSearch(e.target.value); setTagDropOpen(true); }}
-                onFocus={() => setTagDropOpen(true)}
-                onBlur={() => setTimeout(() => setTagDropOpen(false), 150)}
-              />
-            </div>
-            {tagDropOpen && (
-              <ul className={styles.tagSuggestions}>
-                {tagList
-                  .filter((t) =>
-                    !(task.tagIds ?? []).includes(t.id as TagId) &&
-                    t.name.toLowerCase().includes(tagSearch.toLowerCase())
-                  )
-                  .map((t) => (
-                    <li key={t.id}>
-                      <button
-                        className={styles.tagSuggestion}
-                        onMouseDown={(e) => { e.preventDefault(); toggleTag(t.id as TagId); setTagSearch(''); }}
-                      >
-                        {t.color && <span className={styles.tagDot} style={{ background: t.color }} />}
-                        {t.name}
-                      </button>
-                    </li>
-                  ))
-                }
-                {tagList.filter((t) => !(task.tagIds ?? []).includes(t.id as TagId)).length === 0 && (
-                  <li className={styles.tagEmpty}>All tags added</li>
-                )}
-              </ul>
-            )}
-          </div>
-
-          {/* ── Links ── */}
-          <div className={styles.field}>
-            <span className={styles.label}>Links</span>
-            <LinksField links={task.links ?? []} onChange={(next) => updateTask(taskId, { links: next })} />
-          </div>
-
-          {/* ── Linked items (notes and lists). Populated automatically by the Notes "Create ▸
-               Task" flow, and manually addable/removable here. A linked checklist's items show
-               below as tickable steps (LinkedChecklists — see services/taskListLinks.ts). ── */}
-          <div className={styles.field}>
-            <span className={styles.label}>Linked items</span>
-            <CrossAppRefPicker
-              value={task.crossAppRefs ?? []}
-              suggestFrom={task.title}
-              onChange={handleCrossAppRefsChange}
-              onNavigate={navigateToCrossAppRef}
-            />
-            <LinkedChecklists listIds={linkedListIds(task.crossAppRefs)} />
-          </div>
-
+          <TaskFields idPrefix="task-pane" liveText={false} update={update}
+            scheduledHint={task.calendarEventId ? LABELS.taskFields.syncedToCalendar : LABELS.taskFields.addedToCalendar}
+            item={{
+              title: task.title, notes: task.notes, deadline: task.deadline, deadlineTime: task.deadlineTime, scheduledAt: task.scheduledAt,
+              scheduledTime: task.scheduledTime, priority: task.priority, timeIntensity: task.timeIntensity ?? null, kind: task.kind,
+              collectionId: task.collectionId, purposeIds: task.purposeIds ?? [], tagIds: task.tagIds ?? [], links: task.links ?? [],
+              repeat: task.repeat ?? null, parentId: task.parentId,
+            }}
+            typeField={<ItemTypePaneField target={{ kind: 'task', id: taskId }} />}
+            linkedItems={<>
+              {/* Notes and lists (filled in by Notes' "Create ▸ Task" too), calendar items, and a linked
+                  checklist's items as tickable steps (services/taskListLinks.ts). */}
+              <CrossAppRefPicker value={task.crossAppRefs ?? []} suggestFrom={task.title} onChange={handleCrossAppRefsChange} onNavigate={navigateToCrossAppRef}
+                extraAdds={[{ label: LABELS.taskLinks.linkCalendar, onClick: () => setPickingCalendar(true) }]} />
+              <TaskCalendarLinks task={task} suggestFrom={task.title} picking={pickingCalendar} onPicking={setPickingCalendar} />
+              <LinkedChecklists listIds={linkedListIds(task.crossAppRefs)} />
+            </>}
+            more={<>
           {/* ── Task links: waiting on / follow-ups / related (services/taskCompletion.ts,
                utils/taskLinks.ts) ── */}
           <div className={styles.field}>
@@ -478,6 +196,7 @@ export function TaskPane() {
               >⊞</button>
             </div>
           </div>
+            </>} />
         </div>
 
         <ItemActionFooter
@@ -504,14 +223,6 @@ export function TaskPane() {
           onDelete={handleDelete}
           onArchiveInstead={() => setDialog('archive')}
           onCancel={closeDialog}
-        />
-      )}
-      {linkPrompt && (
-        <MarkdownLinkPrompt
-          anchorRect={linkPrompt.anchorRect}
-          initialText={linkPrompt.initialText}
-          onConfirm={confirmLink}
-          onCancel={cancelLink}
         />
       )}
     </>

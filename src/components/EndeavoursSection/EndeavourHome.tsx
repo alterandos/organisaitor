@@ -1,4 +1,6 @@
-import { useMemo } from 'react';
+import { endeavourColor, endeavourIcon } from '@/utils/endeavourLook';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
+import { useMemo, useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
@@ -12,10 +14,12 @@ import { rowsOfEndeavour, summarizeRows } from '@/utils/endeavourSummary';
 import { SOURCE_BY_KEY } from '@/overview/sources';
 import { openOverviewRow } from '@/overview/open';
 import { canTickDone, tickOverviewRow } from '@/overview/done';
-import { EditIcon } from '@/components/Icons';
+import { DisclosureIcon, EditIcon } from '@/components/Icons';
+import { foldSeries } from '@/overview/series';
 import type { Collection, CollectionId } from '@/types';
 import type { OverviewRow } from '@/types/overview';
 import { useEndeavourRows } from './useEndeavourRows';
+import { useEndeavourMenu } from './endeavourMenu';
 import { EndeavourPieces } from '@/components/EndeavourPieces/EndeavourPieces';
 import { captureTemplate } from '@/services/templates';
 import { effectivePeriod } from '@/utils/endeavourPeriod';
@@ -50,6 +54,7 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
       .filter((x): x is Collection => !!x && (x.kind === 'project' || x.kind === 'list') && !x.archivedAt);
   }, [id, collections]);
   const summary = useMemo(() => summarizeRows(rowsOfEndeavour(rows, id, collections), today), [rows, id, collections, today]);
+  const headRef = useEndeavourMenu<HTMLElement>(id);
 
   if (!c) {
     return (
@@ -88,9 +93,11 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
         )}
       </nav>
 
-      <header className={styles.homeHead}>
+      <header ref={headRef} className={styles.homeHead}>
         <div className={styles.homeTitleRow}>
-          <span className={styles.dotLarge} style={c.color ? { background: c.color } : undefined} aria-hidden />
+          {endeavourIcon(c.id, collections)
+            ? <ItemIcon icon={endeavourIcon(c.id, collections)} className={styles.homeIcon} />
+            : <span className={styles.dotLarge} style={endeavourColor(c.id, collections) ? { background: endeavourColor(c.id, collections)! } : undefined} aria-hidden />}
           <h2 className={styles.homeTitle}>{c.name}</h2>
           {summary.behind.length > 0 ? <span className={styles.pillBad}>{L.behind(summary.behind.length)}</span> : <span className={styles.pillOk}>{L.onTrack}</span>}
         </div>
@@ -110,17 +117,17 @@ export function EndeavourHome({ id }: { id: CollectionId }) {
       <div className={`${styles.panels} ${styles.summaryPanels}`}>
         {summary.behind.length > 0 && (
           <Panel title={L.panels.behind} tone="bad">
-            {summary.behind.map((r) => <Row key={r.key} row={r} homeId={id} collections={collections} />)}
+            <FoldedRowList rows={summary.behind} homeId={id} collections={collections} />
           </Panel>
         )}
         <Panel title={L.panels.thisWeek}>
           {summary.thisWeek.length === 0
             ? <p className={styles.muted}>{L.weekEmpty}</p>
-            : summary.thisWeek.map((r) => <Row key={r.key} row={r} homeId={id} collections={collections} />)}
+            : <FoldedRowList rows={summary.thisWeek} homeId={id} collections={collections} />}
         </Panel>
         {summary.comingUp.length > 0 && (
           <Panel title={L.panels.comingUp}>
-            {summary.comingUp.map((r) => <Row key={r.key} row={r} homeId={id} collections={collections} />)}
+            <FoldedRowList rows={summary.comingUp} homeId={id} collections={collections} />
           </Panel>
         )}
       </div>
@@ -151,15 +158,36 @@ function Panel({ title, tone, children }: { title: string; tone?: 'bad'; childre
   );
 }
 
+// A panel's rows, a rule's tasks for each date folded under the next one (overview/series.ts).
+function FoldedRowList({ rows, homeId, collections }: { rows: OverviewRow[]; homeId: string; collections: Record<string, Collection> }) {
+  const { shown, folded } = foldSeries(rows);
+  return <>{shown.map((r) => <FoldedRow key={r.key} row={r} more={folded.get(r.key) ?? []} homeId={homeId} collections={collections} />)}</>;
+}
+
+function FoldedRow({ row, more, homeId, collections }: { row: OverviewRow; more: OverviewRow[]; homeId: string; collections: Record<string, Collection> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Row row={row} homeId={homeId} collections={collections} />
+      {more.length > 0 && (
+        <button type="button" className={styles.foldToggle} aria-expanded={open} title={row.series?.label} onClick={() => setOpen((o) => !o)}>
+          <DisclosureIcon open={open} /> {open ? LABELS.eventTaskRules.foldHide : LABELS.eventTaskRules.foldMore(more.length)}
+        </button>
+      )}
+      {open && more.map((r) => <Row key={r.key} row={r} homeId={homeId} collections={collections} />)}
+    </>
+  );
+}
+
 function Row({ row, homeId, collections }: { row: OverviewRow; homeId: string; collections: Record<string, Collection> }) {
   const owner = row.endeavourId && row.endeavourId !== homeId ? collections[row.endeavourId] : null;
   return (
-    <div className={styles.row}>
+    <div className={`${styles.row} ${row.quiet ? styles.rowQuiet : ''}`}>
       {canTickDone(row)
         ? <input type="checkbox" className={styles.tick} checked={row.status === 'done'} onChange={() => tickOverviewRow(row)} aria-label={row.title} />
         : <span className={styles.rowIcon} aria-hidden>{SOURCE_BY_KEY[row.source].icon}</span>}
-      <button type="button" className={styles.rowTitle} onClick={() => openOverviewRow(row)}>{row.title}</button>
-      {owner && <span className={styles.owner}><span className={styles.dot} style={owner.color ? { background: owner.color } : undefined} aria-hidden />{owner.name}</span>}
+      <button type="button" className={styles.rowTitle} onClick={() => openOverviewRow(row)} title={row.series?.label}>{row.title}</button>
+      {owner && <span className={styles.owner}><span className={styles.dot} style={endeavourColor(owner.id, collections) ? { background: endeavourColor(owner.id, collections)! } : undefined} aria-hidden />{owner.name}</span>}
       {row.when && <span className={styles.rowWhen}>{day(row.when)}{row.time ? ` ${row.time}` : ''}</span>}
     </div>
   );
@@ -167,9 +195,10 @@ function Row({ row, homeId, collections }: { row: OverviewRow; homeId: string; c
 
 function PartCard({ part, rows, today, collections }: { part: Collection; rows: OverviewRow[]; today: string; collections: Record<string, Collection> }) {
   const openHome = useUIStore((s) => s.openEndeavourHome);
+  const ref = useEndeavourMenu<HTMLButtonElement>(part.id);
   const s = useMemo(() => summarizeRows(rowsOfEndeavour(rows, part.id, collections), today), [rows, part.id, collections, today]);
   return (
-    <button type="button" className={styles.card} style={part.color ? { borderTopColor: part.color } : undefined} onClick={() => openHome(part.id)}>
+    <button ref={ref} type="button" className={styles.card} style={endeavourColor(part.id, collections) ? { borderTopColor: endeavourColor(part.id, collections)! } : undefined} onClick={() => openHome(part.id)}>
       <span className={styles.cardTitle}>{part.name}</span>
       <span className={styles.cardRow}>
         <span className={styles.muted}>{L.colBehind}</span>

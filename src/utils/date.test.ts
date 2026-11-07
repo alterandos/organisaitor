@@ -61,3 +61,16 @@ describe('addDaysToIso', () => {
     expect(addDaysToIso('2026-03-01', -1)).toBe('2026-02-28');
   });
 });
+
+describe('dateRangeSuggest', () => {
+  it('the from is today; the to is the day after the from, or after today with none', async () => {
+    const { vi } = await import('vitest');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 6, 12));
+    const { dateRangeSuggest } = await import('@/utils/date');
+    expect(dateRangeSuggest.from()).toBe('2026-11-06');
+    expect(dateRangeSuggest.to('2026-09-30')).toBe('2026-10-01');
+    expect(dateRangeSuggest.to(null)).toBe('2026-11-07');
+    vi.useRealTimers();
+  });
+});

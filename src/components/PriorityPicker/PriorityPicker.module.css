@@ -14,9 +14,9 @@
   background: transparent;
   cursor: pointer;
 }
-.dot[data-level="low"]    { --dot: var(--color-success); }
-.dot[data-level="medium"] { --dot: var(--color-warning); }
-.dot[data-level="high"]   { --dot: var(--color-danger); }
+.dot[data-level="low"]    { --dot: var(--color-level-low); }
+.dot[data-level="medium"] { --dot: var(--color-level-medium); }
+.dot[data-level="high"]   { --dot: var(--color-level-high); }
 .dot:hover { background: color-mix(in srgb, var(--dot) 25%, transparent); }
 .dot[aria-checked="true"] { background: var(--dot); box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--dot); }
 .dot:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 4px; }

@@ -70,7 +70,7 @@ describe('AddNoteTagModal: where the new notebook goes', () => {
 });
 
 describe('CreateKindSwitcher in the Notes creation panes', () => {
-  it('offers Note / Notebook / Tag, and switching keeps the typed text', async () => {
+  it('offers Note / Notebook / Annotation, and switching keeps the typed text', async () => {
     useUIStore.setState({ selectedNoteTagId: bio });
     useUIStore.getState().showAddNote();
     render(<Mounted />);
@@ -82,7 +82,7 @@ describe('CreateKindSwitcher in the Notes creation panes', () => {
     // A notebook made from Notes goes inside the selected one.
     expect(screen.getByTitle(LABELS.notebookParent.change)).toHaveTextContent('University › Biology');
 
-    await userEvent.click(screen.getByRole('tab', { name: /Tag/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /Annotation/ }));
     expect(useUIStore.getState().pendingNoteTagKind).toBe('tag');
     expect(screen.getByLabelText('Name')).toHaveValue('Week 3');
 

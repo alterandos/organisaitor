@@ -11,9 +11,9 @@ import type { RepeatConfig } from '@/types';
 afterEach(() => { cleanup(); });
 
 let last: RepeatConfig | null = null;
-function Host({ initial, date }: { initial: RepeatConfig | null; date?: string }) {
+function Host({ initial, date, itemTime, defaultUntil }: { initial: RepeatConfig | null; date?: string; itemTime?: string | null; defaultUntil?: string | null }) {
   const [value, setValue] = useState(initial);
-  return <RepeatField value={value} onChange={(r) => { last = r; setValue(r); }} date={date} />;
+  return <RepeatField value={value} onChange={(r) => { last = r; setValue(r); }} date={date} itemTime={itemTime} defaultUntil={defaultUntil} />;
 }
 
 const weekly: RepeatConfig = { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null };
@@ -96,10 +96,19 @@ describe('RepeatField', () => {
   });
 });
 
+describe('RepeatField: ends on its Endeavour’s end by default (2026-11-07)', () => {
+  it('turned on under an Endeavour that ends: until that date', () => {
+    render(<Host initial={null} date="2026-09-18" defaultUntil="2026-12-18" />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Repeat/ }));
+    expect(last).toMatchObject({ freq: 'weekly', endKind: 'until', until: '2026-12-18' });
+  });
+});
+
 describe('RepeatField: on a list of dates (2026-10-30)', () => {
   it('starts from the item\u2019s date; dates are added and taken off; there is no "every" or end', () => {
     render(<Host initial={weekly} date="2026-09-18" />);
-    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'dates' } });
+    // Its own pill (2026-11-07), not the last of the units.
+    fireEvent.click(screen.getByRole('radio', { name: 'On these dates' }));
     expect(last).toMatchObject({ freq: 'dates', dates: ['2026-09-18'] });
     expect(screen.queryByRole('spinbutton')).toBeNull();
     const add = screen.getByRole('group', { name: 'Add a date' });
@@ -108,6 +117,16 @@ describe('RepeatField: on a list of dates (2026-10-30)', () => {
     expect(last?.dates).toEqual(['2026-09-18', '2026-09-25']);
     fireEvent.click(screen.getByRole('button', { name: /Remove .*18/ }));
     expect(last?.dates).toEqual(['2026-09-25']);
+  });
+
+  it('each date can have its own time; one taken off loses its time (2026-11-07)', () => {
+    render(<Host initial={{ freq: 'dates', interval: 1, endKind: 'forever', count: null, until: null, dates: ['2026-09-18', '2026-09-25'] }} itemTime="10:00" />);
+    expect(screen.getByText(/takes the time set above/)).toBeInTheDocument();
+    const hour = screen.getAllByRole('textbox', { name: /hour/i })[1];
+    for (const key of '14') fireEvent.keyDown(hour, { key });
+    expect(last?.dateTimes?.['2026-09-25']?.startsWith('14')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /Remove .*25/ }));
+    expect(last?.dateTimes).toBeUndefined();
   });
 
   it('following other events, it says so, and stopping keeps the dates', () => {

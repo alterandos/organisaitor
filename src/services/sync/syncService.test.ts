@@ -195,8 +195,8 @@ describe('mergeRecords, via initSync', () => {
     expect(useTaskStore.getState().tasks[id]?.title).toBe('Only here');
   });
 
-  it('Tag has no updatedAt — remote wins, but stays tombstone-aware', async () => {
-    useTaskStore.setState({ tags: { ['g1' as TagId]: { id: 'g1' as TagId, name: 'Local', color: null, notes: null } } });
+  it('a tag row from before its timestamps (migration 074): remote wins, but stays tombstone-aware', async () => {
+    useTaskStore.setState({ tags: { ['g1' as TagId]: { id: 'g1' as TagId, name: 'Local', color: null, notes: null, icon: null, archivedAt: null, createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-01-01T00:00:00.000Z' } } });
     fake.reset({
       collections: { rows: [KEEP_ALIVE_COLLECTION] },
       tags: { rows: [{ id: 'g1', name: 'Remote', color: null, notes: null }] },
@@ -211,6 +211,17 @@ describe('mergeRecords, via initSync', () => {
     });
     await initSync(USER);
     expect(useTaskStore.getState().tags['g1' as TagId]).toBeUndefined();
+  });
+
+  it('a tag renamed here after the cloud copy keeps the newer name', async () => {
+    const ts = (d: string) => `2030-01-0${d}T00:00:00.000Z`;
+    useTaskStore.setState({ tags: { ['g1' as TagId]: { id: 'g1' as TagId, name: 'Newer here', color: null, notes: null, icon: null, archivedAt: null, createdAt: ts('1'), updatedAt: ts('3') } } });
+    fake.reset({
+      collections: { rows: [KEEP_ALIVE_COLLECTION] },
+      tags: { rows: [{ id: 'g1', name: 'Older', color: null, notes: null, created_at: ts('1'), updated_at: ts('2') }] },
+    });
+    await initSync(USER);
+    expect(useTaskStore.getState().tags['g1' as TagId].name).toBe('Newer here');
   });
 });
 

@@ -1,9 +1,11 @@
 import { expandRepeat } from '@/utils/recurrence';
 import { addDaysToIso } from '@/utils/date';
-import type { CalendarDeadline, CalendarEvent, ItemLink, Task } from '@/types';
+import type { CalendarDeadline, CalendarEvent, CalendarReminder, ItemLink, Task } from '@/types';
 
-// Tasks linked to an event or a standalone Deadline (agreed with the user 2026-10-23), stored as
-// the task's own ItemLinks (targetType 'event' | 'deadline'), so nothing new syncs:
+// Tasks linked to an event, a Reminder or a standalone Deadline (agreed with the user 2026-10-23;
+// Reminders 2026-11-07), stored as the task's own ItemLinks (targetType 'event' | 'reminder' |
+// 'deadline'), so nothing new syncs. A Reminder and a Deadline are moments: they start and end on
+// their date.
 //   - prepFor:    the task gets ready for it, so it's due when the event starts;
 //   - followUpOf: the task comes after it, so it starts when the event ends;
 //   - related:    anything else (work that runs through it); its dates are its own.
@@ -13,10 +15,10 @@ import type { CalendarDeadline, CalendarEvent, ItemLink, Task } from '@/types';
 // AddTaskModal, the pane and the Overview all read them the same way.
 
 export type EventLinkKind = 'prepFor' | 'followUpOf' | 'related';
-export type EventTargetType = 'event' | 'deadline';
+export type EventTargetType = 'event' | 'reminder' | 'deadline';
 export const EVENT_LINK_KINDS: EventLinkKind[] = ['prepFor', 'followUpOf', 'related'];
 
-export const isEventLink = (l: ItemLink): boolean => l.targetType === 'event' || l.targetType === 'deadline';
+export const isEventLink = (l: ItemLink): boolean => l.targetType === 'event' || l.targetType === 'reminder' || l.targetType === 'deadline';
 export const eventLinksOf = (t: Task): ItemLink[] => (t.itemLinks ?? []).filter(isEventLink);
 
 // The tasks linked to one event or Deadline, with how each relates.
@@ -33,9 +35,9 @@ export function tasksLinkedTo(targetType: EventTargetType, targetId: string, tas
 // A series uses its next occurrence on or after today (its first date if that's still ahead).
 export interface Anchor { start: string; startTime: string | null; end: string }
 
-export function anchorOf(type: EventTargetType, item: CalendarEvent | CalendarDeadline, today: string): Anchor {
+export function anchorOf(type: EventTargetType, item: CalendarEvent | CalendarReminder | CalendarDeadline, today: string): Anchor {
   const e = type === 'event' ? item as CalendarEvent : null;
-  const time = e ? e.startTime : (item as CalendarDeadline).time ?? null;
+  const time = e ? e.startTime : (item as CalendarReminder | CalendarDeadline).time ?? null;
   const span = e?.endDate ? daysFrom(e.date, e.endDate) : 0;
   let start = item.date;
   if (item.repeat && item.date < today) start = expandRepeat(item.date, item.repeat, today, addDaysToIso(today, 730))[0] ?? item.date;

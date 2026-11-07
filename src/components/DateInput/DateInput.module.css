@@ -3,6 +3,8 @@
 .wrapper { gap: 0.1rem; }
 .part { display: inline-flex; align-items: center; }
 .year { width: 2.9rem; }
+/* The go-to-date calendar's button: sized from the field's text, not the time field's small ▾. */
+.calendarBtn { display: inline-flex; align-items: center; font-size: var(--text-sm); padding: 0 var(--space-1); }
 
 .popover {
   position: fixed;

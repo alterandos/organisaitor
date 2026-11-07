@@ -164,7 +164,7 @@ export function OverviewRunway({ rows, today, onOpen }: Props) {
     const dated = !!row.when && row.plan!.shape !== 'tray';
     return (
       <div key={row.key} role="group">
-        <div className={`${styles.line} ${row.status !== 'open' ? styles.lineDone : ''} ${row.plan?.important ? styles.important : ''} ${parent ? styles.child : ''}`}>
+        <div className={`${styles.line} ${row.status !== 'open' ? styles.lineDone : ''} ${row.plan?.important ? styles.important : ''} ${parent ? styles.child : ''} ${row.quiet ? styles.lineQuiet : ''}`}>
           <div className={styles.what}>
             {kids.length > 0 && (
               <button type="button" className={styles.fold} onClick={() => toggleFold(row.key)} aria-expanded={!isFolded}

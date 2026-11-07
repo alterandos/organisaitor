@@ -11,11 +11,12 @@ import { resolveTimezone, todayIsoInZone } from '@/utils/timezone';
 import { inferCalendarItemFromSelection } from '@/utils/textToTask';
 import { datedPatch, datedRule, defaultRule, eventPatch, eventRule, fitRule } from '@/utils/notifyRule';
 import { buildCalendarEventInput, buildCalendarReminderInput, buildCalendarDeadlineInput } from '@/utils/calendarItemInput';
-import type { CollectionId, ItemTypeId, CalendarEventId, CalendarDeadlineId } from '@/types';
+import type { CollectionId, ItemTypeId, CalendarEventId, CalendarDeadlineId, CalendarReminderId } from '@/types';
 import { ItemTypeField } from '@/components/ItemTypeField/ItemTypeField';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { eventPresets, resolveItemType } from '@/utils/itemTypes';
 import { applyItemType } from '@/services/itemTypes';
+import { commitTags } from '@/services/tags';
 import { eventKind, kindPatch } from '@/config/calendarEventTypes';
 import { travelModeFromTitle } from '@/services/calendarImport/classify';
 import { EVENT_DEFAULTS } from '@/config/builtInTypes';
@@ -199,6 +200,7 @@ export function AddCalendarItemModal() {
       title, date, notes: v.notes ?? '', links: v.links ?? [], collectionId: (v.collectionId ?? null) as CollectionId | null,
       repeat: v.repeat ?? null, status: v.status ?? 'confirmed', important: !!v.important, crossAppRefs: v.crossAppRefs ?? [],
     };
+    const tagIds = commitTags(v.tagIds ?? []);
     let id: string;
     if (isEvent) {
       const rule = fitRule(eventRule(v as CalendarEvent), 'event', timed);
@@ -209,16 +211,21 @@ export function AddCalendarItemModal() {
         ...eventPatch(rule), background: multiDay ? !!v.background : false, color: multiDay && v.background ? v.color ?? null : null,
       }));
       const after = {
-        ...(v.onClass && !v.repeat ? { onClass: v.onClass } : {}),
+        ...(v.onClass ? { onClass: v.onClass } : {}),
         ...(v.pictureIds?.length ? { pictureIds: v.pictureIds } : {}),
         ...(v.taskRules?.length ? { taskRules: v.taskRules } : {}),
+        ...(tagIds.length ? { tagIds } : {}),
       };
       if (Object.keys(after).length) useCalendarStore.getState().updateEvent(id as CalendarEventId, after);
     } else {
       const rule = fitRule(datedRule(v as CalendarReminder, kind), kind, timed);
       const dated = { ...common, time: v.time ?? '', ...datedPatch(rule) };
       id = kind === 'reminder' ? addReminder(buildCalendarReminderInput(dated)) : addDeadline(buildCalendarDeadlineInput(dated));
-      if (kind === 'deadline' && v.onClass && !v.repeat) useCalendarStore.getState().updateDeadline(id as CalendarDeadlineId, { onClass: v.onClass });
+      if (kind === 'deadline' && v.onClass) useCalendarStore.getState().updateDeadline(id as CalendarDeadlineId, { onClass: v.onClass });
+      if (tagIds.length) {
+        if (kind === 'reminder') useCalendarStore.getState().updateReminder(id as CalendarReminderId, { tagIds });
+        else useCalendarStore.getState().updateDeadline(id as CalendarDeadlineId, { tagIds });
+      }
     }
     if (kind !== 'reminder' && pending.length) makePendingTasks(pending, isEvent ? 'event' : 'deadline', id, title, common.collectionId);
     if (typeId && kind === 'event') applyItemType({ kind, id: id as CalendarEventId }, typeId, typeValues, typeParts);

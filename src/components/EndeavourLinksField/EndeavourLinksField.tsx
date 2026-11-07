@@ -14,6 +14,7 @@ interface Props {
   selfId:   CollectionId | null;
   value?:   CollectionId[];
   onChange?: (ids: CollectionId[]) => void;
+  onLinked?: () => void;   // editing: after a link is made or removed (the form asks about its notebooks)
 }
 
 const L = LABELS.endeavourLinks;
@@ -26,7 +27,7 @@ function refusalText(r: EndeavourLinkRefusal, targetName: string): string {
 // Endeavour, each change applies at once through the store (which refuses loops); creating one, the
 // picks are held and made once it exists. Only ongoing and finishable Endeavours are offered (not
 // trackers or routines, which keep their own "filed under").
-export function EndeavourLinksField({ kind, selfId, value, onChange }: Props) {
+export function EndeavourLinksField({ kind, selfId, value, onChange, onLinked }: Props) {
   const collections = useTaskStore((s) => s.collections);
   const addLink    = useTaskStore((s) => s.addEndeavourLink);
   const removeLink = useTaskStore((s) => s.removeEndeavourLink);
@@ -53,13 +54,14 @@ export function EndeavourLinksField({ kind, selfId, value, onChange }: Props) {
     setRefused(null);
     if (!selfId) { onChange?.([...linked, id]); return; }
     const r = addLink(selfId, kind, id);
-    if (r) setRefused(refusalText(r, collections[id]?.name ?? ''));
+    if (r) setRefused(refusalText(r, collections[id]?.name ?? '')); else onLinked?.();
   }
 
   function remove(id: CollectionId) {
     setRefused(null);
     if (!selfId) { onChange?.(linked.filter((x) => x !== id)); return; }
     removeLink(selfId, kind, id);
+    onLinked?.();
   }
 
   const contains = kind === 'partOf' && selfId

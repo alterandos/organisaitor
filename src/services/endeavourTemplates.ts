@@ -11,14 +11,15 @@ import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
 import { addBuiltInType, addStarterSet } from '@/services/itemTypes';
 import { repeatSummary } from '@/services/recurringTasks';
 import { ITEM_TYPE_ICON } from '@/config/itemIcons';
-import { blankPlan, type TemplatePlan } from '@/config/endeavourTemplates';
-import { planFromTemplate } from '@/utils/templatePlan';
-import { templateFor } from '@/services/templates';
+import type { TemplatePlan } from '@/config/endeavourTemplates';
 import { formatDate } from '@/utils/date';
 import type { CollectionId, GoalMeasure, ItemTypeId, NoteTagId } from '@/types';
 import { saveDrafts } from '@/services/subjectItems';
 import { filedUnder, removeFiled } from '@/services/endeavourFiling';
 import { endeavourAncestors, parentsOf } from '@/utils/endeavourGraph';
+import { tagsFromParents } from '@/utils/tagScope';
+import { tagsByName } from '@/services/tags';
+import { uniqueName } from '@/services/endeavourNames';
 
 // Makes what a template's plan says (config/endeavourTemplates.ts), all filed under one new
 // Endeavour (part of `partOf` if given), and returns its Undo, which deletes everything it made
@@ -56,27 +57,6 @@ export function applyTemplate(plan: TemplatePlan, partOf: CollectionId | Collect
     if (!typesBefore.has(tid)) made.unshift(() => useItemTypeStore.getState().deleteItemType(tid as ItemTypeId));
   }
   return { id, made: made.length, undo: undoOf(made) };
-}
-
-// Adds a plan's parts (all but the Endeavour itself) to an Endeavour that already exists: a
-// semester's suggestions taken up later from its editor.
-export function addToEndeavour(id: CollectionId, plan: TemplatePlan, typesBefore: Set<string> = typeIds()): { made: number; undo: () => void } {
-  const made: Made = [];
-  if (TYPES_ENABLED && plan.starterTypes) addStarterSet(plan.starterTypes);
-  const c = useTaskStore.getState().collections[id];
-  fill(id, plan, made, c ? parentsOf(c, useTaskStore.getState().collections)[0] ?? null : null);
-  for (const tid of Object.keys(useItemTypeStore.getState().types)) {
-    if (!typesBefore.has(tid)) made.unshift(() => useItemTypeStore.getState().deleteItemType(tid as ItemTypeId));
-  }
-  return { made: made.length, undo: undoOf(made) };
-}
-
-// A new part of an Endeavour, made from the template its parts start from (a semester's subject),
-// taking its period live. Its name may hold its code ("GEOS215 Climate Systems").
-export function addPart(parentId: CollectionId, templateId: string | null, name: string): { id: CollectionId; undo: () => void } {
-  const def = templateFor(templateId);
-  const { id, undo } = applyTemplate(def ? planFromTemplate(def, { name }) : blankPlan(name.trim()), parentId);
-  return { id, undo };
 }
 
 const typeIds = () => new Set(Object.keys(useItemTypeStore.getState().types));
@@ -119,9 +99,13 @@ function makeEndeavour(plan: TemplatePlan, partOfIn: CollectionId | CollectionId
   const e = plan.endeavour;
   const parents = partOfIn === null ? [] : Array.isArray(partOfIn) ? partOfIn : [partOfIn];
   const partOf = parents[0] ?? null;
-  const id = tasks.addCollection({ kind: e.kind, name: e.name, deadline: e.deadline, description: e.description ?? null, color: e.color ?? null, purposeIds: e.purposeIds ?? [] });
+  // Its tags: the form's, and a template's by name (made if there's none of that name), less those it
+  // takes from what it's part of anyway.
+  const inherited = new Set(tagsFromParents(parents, tasks.collections).map((t) => t.id));
+  const tagIds = [...new Set([...(e.tagIds ?? []), ...tagsByName(e.tagNames ?? [])])].filter((t) => !inherited.has(t));
+  const id = tasks.addCollection({ kind: e.kind, name: e.name, deadline: e.deadline, description: e.description ?? null, color: e.color ?? null, purposeIds: e.purposeIds ?? [], tagIds });
   made.push(() => useTaskStore.getState().deleteCollection(id));
-  tasks.updateCollection(id, { ...(e.templateId ? { templateId: e.templateId } : {}), ...(e.period ? { period: e.period } : {}) });
+  tasks.updateCollection(id, { ...(e.templateId ? { templateId: e.templateId } : {}), ...(e.period ? { period: e.period } : {}), ...(e.icon ? { icon: e.icon } : {}), ...(e.dateUse ? { dateUse: e.dateUse } : {}) });
   // Its Type: the person's own copy of a default (docs/features/endeavours.md "Attributes").
   // Its details: its Type's fields and its own (docs/features/endeavours.md "Attributes").
   // With Types switched off (config/features.ts), the Type's fields become details of its own (a
@@ -137,8 +121,9 @@ function makeEndeavour(plan: TemplatePlan, partOfIn: CollectionId | CollectionId
 }
 
 // The notebook a new Endeavour's notebook goes in: the one of the nearest Endeavour above it that
-// has one (a subject's inside its semester's; the user, 2026-10-30), else none (the top level).
-function parentNotebook(partOf: CollectionId | null): NoteTagId | null {
+// has one (a subject's inside its semester's; the user, 2026-10-30), else none (the top level). The
+// form shows it ("Inside: …") and lets the person choose another, or the top level.
+export function parentNotebook(partOf: CollectionId | null): NoteTagId | null {
   if (!partOf) return null;
   const collections = useTaskStore.getState().collections;
   const areas = Object.values(useNoteStore.getState().noteTags).filter((t) => t.kind === 'area');
@@ -152,7 +137,7 @@ function parentNotebook(partOf: CollectionId | null): NoteTagId | null {
 function fill(id: CollectionId, plan: TemplatePlan, made: Made, partOf: CollectionId | null = null): void {
   const inside = parentNotebook(partOf);
   for (const n of plan.notebooks) {
-    const nb = useNoteStore.getState().addNoteTag({ name: n.name, kind: 'area', collectionId: id, parentTagId: inside });
+    const nb = useNoteStore.getState().addNoteTag({ name: uniqueName('notebook', n.name), kind: 'area', collectionId: id, parentTagId: n.inside === undefined ? inside : (n.inside as NoteTagId | null) });
     made.push(() => useNoteStore.getState().deleteNoteTag(nb));
   }
 

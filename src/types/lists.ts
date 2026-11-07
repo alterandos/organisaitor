@@ -1,4 +1,4 @@
-import type { CollectionId, CrossAppRef } from './index';
+import type { CollectionId, CrossAppRef, TagId } from './index';
 // ── Branded ID types ──────────────────────────────────────────────────────────
 export type ListId     = string & { readonly _brand: 'ListId'     };
 export type ListItemId = string & { readonly _brand: 'ListItemId' };
@@ -87,6 +87,9 @@ export interface List {
   // 2026-10-01). Lets a list take part in "everything for this Endeavour" (Overview). Plaintext even
   // on an encrypted list, like a note's collectionId.
   collectionId: CollectionId | null;
+  // The suite's tags on it (2026-11-06); plaintext even when encrypted, like collectionId. Absent =
+  // none; sent once set (migration 073).
+  tagIds?:     TagId[];
   createdAt:   string;
   updatedAt:   string;
 }

@@ -50,7 +50,7 @@ export type TimeIntensity  = 'low' | 'medium' | 'high'; // extensible — add mo
 // standalone Deadline: a task that prepares for it, follows it up, or is related to it
 // (utils/eventTaskLinks.ts). Old links have targetType 'task'.
 export type ItemLinkKind = 'dependsOn' | 'followUpOf' | 'related' | 'repeatOf' | 'prepFor';
-export type ItemLinkTargetType = 'task' | 'event' | 'deadline';
+export type ItemLinkTargetType = 'task' | 'event' | 'reminder' | 'deadline';
 export interface ItemLink {
   kind:       ItemLinkKind;
   targetType: ItemLinkTargetType;
@@ -99,8 +99,20 @@ export type FieldType =
   | 'text' | 'number' | 'date' | 'rating'
   | 'select' | 'boolean' | 'url' | 'duration'
   // An Endeavour's period with its breaks and exam period (docs/features/endeavours.md "Attributes"):
-  // at most one per Endeavour, its value kept in Collection.period, where the app reads it.
-  | 'period';
+  // at most one per Endeavour, its value kept in Collection.period, where the app reads it. Replaced
+  // 2026-11-07 by named periods ('dateRange'); converted on load (services/periodConversion.ts).
+  | 'period'
+  // A named period (2026-11-07): "Teaching", "Exams", "Mid-semester break". Its value is a
+  // DateRangeValue. An Endeavour and a Schedule choose which they run during and pause during
+  // (DateUse); a period itself is neither on nor off.
+  | 'dateRange';
+
+export interface DateRangeValue { from: string; to: string }   // YYYY-MM-DD, both days included; '' = not yet given
+
+// Which named periods (date-range details, its own or taken from above, by field id) something runs
+// during and pauses during. An Endeavour's is the default for everything repeating in it; a Schedule
+// can choose its own. Read with utils/datePeriods.ts.
+export interface DateUse { runs: string[]; pauses: string[] }
 
 export interface FieldSchema {
   id:       string;
@@ -131,12 +143,23 @@ export interface CreateTrackerEntryInput {
 }
 
 // ── Tags ───────────────────────────────────────────────────────────────────────
+// One set of tags for the whole suite (agreed with the user 2026-11-06): the same "University" on an
+// Endeavour, a task, a calendar item, a note, a notebook and a list. What a tag is on is worked out
+// (services/inUse.ts), never stored. Notes' own labels for passages are annotations (NoteTag kind
+// 'tag'), not these. An Endeavour passes its tags down (utils/tagScope.ts).
 export interface Tag {
-  id:    TagId;
-  name:  string;
-  color: string | null;
-  notes: string | null;
+  id:         TagId;
+  name:       string;
+  color:      string | null;
+  notes:      string | null;
+  icon:       string | null;    // components/IconPicker's value (2026-11-06)
+  archivedAt: string | null;    // sunset: off the pickers, kept where it's on
+  createdAt:  string;
+  updatedAt:  string;
 }
+
+// A tag as made: the rest is filled in by the store.
+export type NewTag = Pick<Tag, 'id' | 'name'> & Partial<Omit<Tag, 'id' | 'name'>>;
 
 // ── Purposes ───────────────────────────────────────────────────────────────────
 // High-level life areas ("Career", "Health"). Labels only — not hierarchy nodes.
@@ -194,6 +217,12 @@ export interface Collection {
   // (an ItemType used for Endeavours), fields of its own, and every field's value by field id (a
   // period field's value is `period`). Absent until first given; sent once set (migration 068).
   attributes?:  EndeavourAttributes | null;
+  // Which of its named periods (and those above it) it runs during and pauses during (2026-11-07);
+  // absent = as the Endeavour above. Sent once set (migration 075).
+  dateUse?:     DateUse | null;
+  // Its icon (components/IconPicker's value, 2026-11-06). Like its colour, absent or null = the one
+  // of the Endeavour it's part of (utils/endeavourLook.ts). Sent once set (migration 073).
+  icon?:        string | null;
   createdAt:    string;
   updatedAt:    string;
 }
@@ -497,6 +526,9 @@ export interface RepeatConfig {
   exceptions?: string[];
   // freq 'dates' only: every occurrence date (YYYY-MM-DD, sorted), the item's own date the first.
   dates?: string[];
+  // freq 'dates' only: a date's own start time (HH:MM), where it isn't the item's (2026-11-07). An
+  // event keeps its length. Read with utils/recurrence.ts occurrenceTime, never directly.
+  dateTimes?: Record<string, string>;
   // freq 'dates', kept in step with other calendar events ("1 day before each GEOS215 lecture"):
   // its dates are each followed event's dates moved by `offsetDays`, worked out again whenever one
   // of them changes (services/repeatFollow.ts). Taking it off keeps the dates as they are.
@@ -514,8 +546,10 @@ export interface RepeatConfig {
 // on it), or during it (drawn on the class, not on its own). Absent: both show, as a clash.
 export type ClassLinkMode = 'replaces' | 'during';
 export interface ClassLink {
-  eventId: string;          // the class (a repeating event)
-  date:    string;          // which of its dates
+  eventId: string;          // the event it falls in (any confirmed, timed one: 2026-11-07)
+  // Which date (a one-off item); absent on a repeating item, whose link holds for every one of its
+  // dates that falls in the event (utils/classClashes.ts).
+  date?:   string | null;
   mode:    ClassLinkMode;
 }
 
@@ -566,6 +600,8 @@ export interface CalendarEvent extends TypedItem {
   taskRules?:         EventTaskRule[];
   // Pictures put on it (the picture library, services/pictures.ts; origin 'item'), in order; absent = none.
   pictureIds?:        string[];
+  // Its tags (the suite's, 2026-11-06); absent = none. Sent once set (migration 073).
+  tagIds?:            TagId[];
   // Where an imported event came from (docs/features/external-calendar-sync.md). All null for an
   // event made in the app. A Google event keeps following Google for every field not edited here
   // (services/calendarImport/reconcile.ts); an .ics import is a one-off copy.
@@ -622,6 +658,7 @@ export interface CalendarReminder {
   seriesId:         string | null;    // see CalendarEvent.seriesId
   seriesDate:       string | null;
   remindOccurrence: string | null;    // see CalendarEvent.remindOccurrence ("Got it" on a reminder marks it done)
+  tagIds?:          TagId[];          // see CalendarEvent.tagIds
 }
 
 export interface CreateCalendarEventInput {
@@ -742,6 +779,7 @@ export interface CalendarDeadline extends TypedItem {
   remindOccurrence: string | null;    // see CalendarEvent.remindOccurrence
   seenDates:        string[];         // notifications acknowledged ("Got it") — not done: a deadline still needs doing
   onClass?:         ClassLink | null; // see CalendarEvent.onClass
+  tagIds?:          TagId[];          // see CalendarEvent.tagIds
 }
 
 export interface CreateCalendarDeadlineInput {
@@ -791,6 +829,8 @@ export interface ScheduleBlock {
   // See CLAUDE.md "Schedule commitment mode".
   requiresCommitment: boolean;
   committedDates:     string[];  // YYYY-MM-DD — occurrences explicitly committed to (meaningful only when requiresCommitment is true)
+  // How its item shows where it clashes with another event (ClassClashField; its item's `onClass`).
+  onClass?:           ClassLink | null;
 }
 
 export interface ScheduleTemplate {
@@ -803,6 +843,9 @@ export interface ScheduleTemplate {
   collectionId: CollectionId | null;
   blocks:       ScheduleBlock[];   // before phase 7; converted to calendar events (its items) on load, then []
   breaks?:      PeriodBreak[];     // its own breaks (phase 7); without them it takes its Endeavour's
+  // The named periods it runs during and pauses during (2026-11-07), followed live; absent = as its
+  // Endeavour (or its own dates and breaks above). Sent once set (migration 075).
+  periodUse?:   DateUse | null;
   createdAt:    string;
   updatedAt:    string;
 }

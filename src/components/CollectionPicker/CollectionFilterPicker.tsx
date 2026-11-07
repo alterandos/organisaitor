@@ -1,3 +1,4 @@
+import { endeavourColor } from '@/utils/endeavourLook';
 import { useEffect, useRef } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
@@ -72,7 +73,7 @@ export function CollectionFilterPicker({ variant = 'dropdown' }: Props) {
               onClick={() => select(c.id as CollectionId)}
             >
               {indexOf(c.id) <= 9 && <span className={styles.indexBadge}>{indexOf(c.id)}</span>}
-              {c.color && <span className={styles.dot} style={{ background: c.color }} />}
+              {endeavourColor(c.id, collectionsRecord) && <span className={styles.dot} style={{ background: endeavourColor(c.id, collectionsRecord)! }} />}
               {c.name}
             </button>
           ))}
@@ -90,7 +91,7 @@ export function CollectionFilterPicker({ variant = 'dropdown' }: Props) {
               onClick={() => select(c.id as CollectionId)}
             >
               {indexOf(c.id) <= 9 && <span className={styles.indexBadge}>{indexOf(c.id)}</span>}
-              {c.color && <span className={styles.dot} style={{ background: c.color }} />}
+              {endeavourColor(c.id, collectionsRecord) && <span className={styles.dot} style={{ background: endeavourColor(c.id, collectionsRecord)! }} />}
               {c.name}
             </button>
           ))}
@@ -129,8 +130,8 @@ export function CollectionFilterPicker({ variant = 'dropdown' }: Props) {
         aria-expanded={open}
         aria-label={`${LABELS.collection} filter — Ctrl+E`}
       >
-        {active?.color && (
-          <span className={styles.dot} style={{ background: active.color }} />
+        {endeavourColor(active?.id, collectionsRecord) && (
+          <span className={styles.dot} style={{ background: endeavourColor(active?.id, collectionsRecord)! }} />
         )}
         <span className={active ? styles.name : styles.all}>
           {active ? active.name : `All ${LABELS.collectionPlural}`}

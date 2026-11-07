@@ -127,3 +127,10 @@
   background-attachment: local;
 }
 .pad[data-design='paper'] .text :global(p.is-editor-empty:first-child::before) { color: var(--sticky-ink-soft); }
+
+/* A note in the pad: larger, its editor filling it (2026-11-07). */
+.panel[data-pad='note'] { width: min(560px, calc(100vw - 2rem)); height: min(75dvh, calc(100dvh - 6rem)); }
+.panel[data-pad='calendar'] { width: min(340px, calc(100vw - 2rem)); height: auto; max-height: calc(100dvh - 6rem); }
+.notePad { min-height: 0; }
+.noteHost { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.noteHost > * { flex: 1; min-height: 0; }

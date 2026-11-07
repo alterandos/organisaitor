@@ -79,3 +79,15 @@ export function canAddEndeavourLink(all: Collections, fromId: string, kind: Ende
 export function inEndeavourScope(scope: ReadonlySet<string> | null, id: string | null | undefined): boolean {
   return !scope || (!!id && scope.has(id));
 }
+
+// The Endeavour and those it's part of, nearest first, following each one's first parent: how an
+// item says where it comes from ("Biology · Semester 2") when a parent gathers what's in its parts.
+export function endeavourChain(id: string | null | undefined, all: Collections): Collection[] {
+  const out: Collection[] = [];
+  const seen = new Set<string>();
+  for (let cur = id ? all[id] : undefined; cur && !seen.has(cur.id); cur = all[parentsOf(cur, all)[0] ?? '']) {
+    seen.add(cur.id);
+    out.push(cur);
+  }
+  return out;
+}

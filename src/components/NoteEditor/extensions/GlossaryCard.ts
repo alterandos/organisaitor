@@ -135,8 +135,10 @@ export function goesInline(state: EditorState, from: number, to: number): boolea
 
 // Selected words made into a Glossary card: the one way to make a Definition, Concept or Acronym
 // from text since marking text as one (and its popover) was retired, 2026-10-13. The term (and, for
-// an acronym, what it stands for) is worked out from the words as before (the type's `infer`); the
-// card goes after the paragraph, and the words are linked to it, so hovering them shows it.
+// an acronym, what it stands for) is worked out from the words as before (the type's `infer`). The
+// card takes the words' place (the user, 2026-11-06: leaving them, linked, above the card doubled
+// them): a whole line (or several) becomes the card; part of a line becomes its chip, right there,
+// as the card category places it (objects/blockCategories.ts).
 export function cardFromSelection(view: EditorView, from: number, to: number, typeKey: string, ctx: NoteObjectContext | null): void {
   const typeDef = getStructuredTagType(typeKey);
   const state = view.state;
@@ -148,13 +150,14 @@ export function cardFromSelection(view: EditorView, from: number, to: number, ty
   if (!entryId) return;
   const fields = Object.fromEntries(Object.entries(inferred.fields).filter(([, v]) => v));
   useNoteStore.getState().updateStructuredTagEntry(entryId as never, { term: inferred.term, fields });
-  const tr = state.tr;
-  const ref = state.schema.marks.conceptRef;
-  if (ref) tr.addMark(from, to, ref.create({ entryId, typeKey }));
-  const at = placeBlock(tr, to, cardType.create({ entryId }));
-  if (at === null) return;
-  view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, at)).scrollIntoView());
-  focusGlossaryCard(view, at);
+  if (state.doc.resolve(from).sameParent(state.doc.resolve(to)) && goesInline(state, from, to)) {
+    insertGlossaryChip(view, from, to, entryId);
+    return;
+  }
+  const made = replaceTypedWithBlock(state, from, to, cardType.create({ entryId }));
+  if (!made) return;
+  view.dispatch(made.tr.setSelection(NodeSelection.create(made.tr.doc, made.at)).scrollIntoView());
+  focusGlossaryCard(view, made.at);
 }
 
 // "Show as a card" on marked text: a card for the same record, after the block the text is in.

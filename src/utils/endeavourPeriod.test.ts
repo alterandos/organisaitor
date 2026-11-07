@@ -30,3 +30,10 @@ describe("an Endeavour's period and breaks", () => {
     expect(teachingWeek('2026-09-01', autumn)).toBeNull();
   });
 });
+
+describe('a break with no end yet', () => {
+  it('is its one day', () => {
+    const p = { start: '2026-09-01', end: '2026-12-01', breaks: [{ id: 'b', label: 'Holiday', from: '2026-10-05', to: '' }] } as unknown as EndeavourPeriod;
+    expect(breakDates(p)).toEqual(['2026-10-05']);
+  });
+});

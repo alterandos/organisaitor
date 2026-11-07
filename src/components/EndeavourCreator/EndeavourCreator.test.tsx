@@ -38,7 +38,6 @@ describe('making an Endeavour', () => {
     render(<EndeavourCreator />);
     fireEvent.change(screen.getByLabelText(L.name), { target: { value: 'Kitchen' } });
     fireEvent.change(screen.getByLabelText(L.description), { target: { value: 'New benches' } });
-    fireEvent.click(screen.getByRole('button', { name: L.endsList }));
     create();
     const made = byName('Kitchen')!;
     expect(made).toMatchObject({ kind: 'list', description: 'New benches', deadline: null });
@@ -55,42 +54,44 @@ describe('making an Endeavour', () => {
     expect(Object.keys(useTaskStore.getState().collections)).toHaveLength(0);
   });
 
-  it('a blank one has no dates until added, and then no exam period; details are one line each', () => {
+  it('a blank one: a period added runs during it by default; details are one line each', () => {
     render(<EndeavourCreator />);
-    expect(screen.queryByLabelText(LABELS.period.start)).toBeNull();
-    fireEvent.click(screen.getByText(L.addDates));
-    expect(screen.getByLabelText(LABELS.period.start)).toBeInTheDocument();
-    expect(screen.queryByLabelText(LABELS.period.examsFrom)).toBeNull();
+    expect(screen.getByText(LABELS.periods.nothing)).toBeInTheDocument();
+    fireEvent.click(screen.getByText(LABELS.periods.add));
+    fireEvent.change(screen.getByRole('textbox', { name: LABELS.periods.name }), { target: { value: 'Build' } });
+    expect(screen.getByLabelText(`${LABELS.periods.role}: Build`)).toHaveValue('runs');
     fireEvent.click(screen.getByText(L.addDetail));
     fireEvent.change(screen.getByLabelText(L.detailName), { target: { value: 'Builder' } });
     fireEvent.change(screen.getByLabelText(L.name), { target: { value: 'Kitchen' } });
     create();
     const made = byName('Kitchen')!;
-    expect(made.period).toMatchObject({ start: null, end: null, breaks: [] });
-    expect(made.attributes?.fields.map((f) => f.name)).toEqual(['Builder']);
+    const build = made.attributes!.fields.find((f) => f.name === 'Build')!;
+    expect(build.type).toBe('dateRange');
+    expect(made.attributes?.fields.map((f) => f.name).sort()).toEqual(['Build', 'Builder']);
+    expect(made.dateUse).toEqual({ runs: [build.id], pauses: [] });
+    expect(made.kind).toBe('list');   // no dates yet, so no end
   });
 
-  it('time off with no name or dates gets a red note', () => {
+  it('a period with no name gets a red note', () => {
     render(<EndeavourCreator />);
     fireEvent.change(screen.getByLabelText(L.name), { target: { value: 'Term' } });
-    fireEvent.click(screen.getByText(L.addDates));
-    fireEvent.click(screen.getByText(LABELS.period.addBreak));
+    fireEvent.click(screen.getByText(LABELS.periods.add));
     create();
-    expect(screen.getByText(LABELS.period.breakNeeded)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(LABELS.period.breakLabel), { target: { value: 'Holiday' } });
-    create();
-    expect(screen.getByText(LABELS.period.breakDates)).toBeInTheDocument();
+    expect(screen.getByText(LABELS.periods.nameNeeded)).toBeInTheDocument();
     expect(byName('Term')).toBeUndefined();
   });
 
-  it('a semester shows its dates with an exam period, and makes its notebook but nothing it only suggests', () => {
+  it('a semester starts with Teaching (runs during it) and Exams (not used), and makes its notebook', () => {
     render(<EndeavourCreator />);
     fireEvent.click(screen.getByRole('button', { name: /Semester/ }));
-    expect(screen.getByLabelText(LABELS.period.examsFrom)).toBeInTheDocument();
+    expect(screen.getByLabelText(`${LABELS.periods.role}: Teaching`)).toHaveValue('runs');
+    expect(screen.getByLabelText(`${LABELS.periods.role}: Exams`)).toHaveValue('');
     fireEvent.change(screen.getByLabelText(L.name), { target: { value: 'Semester 2' } });
     create();
     const sem = byName('Semester 2')!;
     expect(sem.templateId).toBe('semester');
+    const teaching = sem.attributes!.fields.find((f) => f.name === 'Teaching')!;
+    expect(sem.dateUse).toEqual({ runs: [teaching.id], pauses: [] });
     expect(Object.values(useNoteStore.getState().noteTags).map((t) => t.name)).toEqual(['Semester 2']);
     expect(Object.keys(useListStore.getState().lists)).toHaveLength(0);
     expect(Object.keys(useGoalStore.getState().goals)).toHaveLength(0);
@@ -129,6 +130,61 @@ describe('making an Endeavour', () => {
   });
 });
 
+describe('what it takes from what it’s part of, and its notebook (2026-11-06)', () => {
+  it('a blank one makes a notebook only when ticked', () => {
+    render(<EndeavourCreator />);
+    expect(screen.getByLabelText(L.notebook)).not.toBeChecked();
+    fireEvent.change(screen.getByLabelText(L.name), { target: { value: 'Kitchen' } });
+    fireEvent.click(screen.getByLabelText(L.notebook));
+    create();
+    expect(Object.values(useNoteStore.getState().noteTags).map((n) => [n.name, n.collectionId])).toEqual([['Kitchen', byName('Kitchen')!.id]]);
+  });
+
+  it('a template fills in its tags and ticks its notebook; unticked, none is made', () => {
+    render(<EndeavourCreator />);
+    fireEvent.click(screen.getByRole('button', { name: /Semester/ }));
+    expect(screen.getByText('University')).toBeInTheDocument();
+    expect(screen.getByLabelText(L.notebook)).toBeChecked();
+    fireEvent.click(screen.getByLabelText(L.notebook));
+    fireEvent.change(screen.getByLabelText(L.name), { target: { value: 'Sem 1' } });
+    create();
+    const sem = byName('Sem 1')!;
+    expect(sem.tagIds.map((t) => useTaskStore.getState().tags[t]?.name)).toEqual(['University']);
+    expect(Object.keys(useNoteStore.getState().noteTags)).toHaveLength(0);
+  });
+
+  it('under a semester: its tags, dates and colour show as from it; the subject keeps only its own; its notebook goes inside', () => {
+    const sem = useTaskStore.getState().addCollection({ kind: 'project', name: 'Sem 2', color: '#1d4ed8' });
+    useTaskStore.getState().addTag({ id: 'uni' as never, name: 'University' });
+    useTaskStore.getState().updateCollection(sem, {
+      tagIds: ['uni' as never],
+      attributes: { typeId: null, fields: [{ id: 'teach', name: 'Teaching', type: 'dateRange' }], values: { teach: { from: '2026-07-27', to: '2026-11-06' } } },
+      dateUse: { runs: ['teach'], pauses: [] },
+    });
+    const semNb = useNoteStore.getState().addNoteTag({ name: 'Sem 2', kind: 'area', collectionId: sem, parentTagId: null });
+    useUIStore.getState().openEndeavourHome(sem);
+    // From the semester's Subjects tile: the form starts as a Subject, named, part of it.
+    render(<EndeavourCreator partOf={sem} template="subject" name="BIOL101 Biology" />);
+    expect(screen.getByRole('button', { name: /Subject/, pressed: true })).toBeInTheDocument();
+    expect(screen.getByLabelText(L.name)).toHaveValue('BIOL101 Biology');
+    expect(screen.getByTitle(LABELS.tagField.from('Sem 2'))).toHaveTextContent('University');
+    expect(screen.getAllByText(L.from('Sem 2')).length).toBeGreaterThan(0);
+    expect(screen.getByText(L.colourFrom('Sem 2'))).toBeInTheDocument();
+    expect(screen.getByLabelText(L.inside)).toHaveDisplayValue('Sem 2');
+    // Its periods come from the semester, used as the semester uses them, until it chooses its own.
+    expect(screen.getByLabelText(`${LABELS.periods.role}: Teaching`)).toHaveValue('runs');
+    expect(screen.getByText(LABELS.periods.asEndeavour('Sem 2'), { exact: false })).toBeInTheDocument();
+    create();
+    const bio = byName('BIOL101 Biology')!;
+    expect(bio.tagIds.map((t) => useTaskStore.getState().tags[t]?.name)).toEqual(['Subject']);
+    expect(bio.color).toBeNull();
+    expect(bio.period).toBeUndefined();
+    expect(bio.dateUse).toBeUndefined();
+    expect(bio.kind).toBe('project');   // it ends when the semester's teaching does
+    expect(Object.values(useNoteStore.getState().noteTags).find((n) => n.collectionId === bio.id)?.parentTagId).toBe(semNb);
+  });
+});
+
 describe('editing an Endeavour', () => {
   it('Edit opens this form for every Endeavour, template or not, and Save keeps the changes', () => {
     const a = useTaskStore.getState().addCollection({ kind: 'project', name: 'Semester 2' });
@@ -142,6 +198,21 @@ describe('editing an Endeavour', () => {
     fireEvent.click(screen.getByRole('button', { name: L.save }));
     expect(useTaskStore.getState().collections[a].name).toBe('Semester 2, 2026');
     expect(useUIStore.getState().openModal).toBeNull();
+  });
+
+  it('periods and details set later are edited here too, and whether it ends follows its dates', () => {
+    const a = useTaskStore.getState().addCollection({ kind: 'list', name: 'Thesis' });
+    render(<EndeavourCreator editing={useTaskStore.getState().collections[a]} />);
+    expect(screen.queryByRole('group', { name: 'Does it end?' })).toBeNull();
+    fireEvent.click(screen.getByText(LABELS.periods.add));
+    fireEvent.change(screen.getByRole('textbox', { name: LABELS.periods.name }), { target: { value: 'Writing' } });
+    fireEvent.click(screen.getByRole('button', { name: L.addDetail }));
+    fireEvent.change(screen.getByLabelText(L.detailName), { target: { value: 'Supervisor' } });
+    fireEvent.click(screen.getByRole('button', { name: L.save }));
+    const c = useTaskStore.getState().collections[a];
+    expect(c.attributes?.fields.map((f) => f.name).sort()).toEqual(['Supervisor', 'Writing']);
+    expect(c.dateUse?.runs).toHaveLength(1);
+    expect(c.kind).toBe('list');
   });
 
   it('Archive archives it', () => {

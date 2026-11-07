@@ -406,3 +406,15 @@
   color: var(--color-muted);
   font-size: var(--text-2xs);
 }
+
+/* Schedules grouped by Endeavour (utils/scheduleTree.ts): folded by default, one switch each. */
+.group { display: flex; flex-direction: column; gap: var(--space-1); }
+.groupHead { display: flex; align-items: center; gap: var(--space-2); padding-left: calc(var(--depth, 0) * var(--space-3)); }
+.groupName {
+  display: flex; align-items: center; gap: var(--space-2); flex: 1; min-width: 0;
+  padding: var(--space-1) 0; border: none; background: none; color: var(--color-text);
+  font: inherit; font-size: var(--text-sm); font-weight: 600; text-align: left; cursor: pointer;
+}
+.groupName > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.groupCount { margin-left: auto; color: var(--color-muted); font-weight: 400; font-size: var(--text-xs); white-space: nowrap; }
+.groupBody { display: flex; flex-direction: column; gap: var(--space-1); padding-left: calc((var(--depth, 0) + 1) * var(--space-3)); }

@@ -7,10 +7,10 @@ import { useGoalStore } from '@/store/goalStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { useTrashStore } from '@/store/trashStore';
 import { useListStore } from '@/store/listStore';
-import { blankPlan, planFromValues, type TemplateValues } from '@/config/endeavourTemplates';
+import { planFromValues, type TemplateValues } from '@/config/endeavourTemplates';
 import { DEFAULT_TEMPLATES, DEFAULT_TEMPLATE_BY_ID } from '@/config/defaultTemplates';
-import { planFromTemplate, templateSuggestions } from '@/utils/templatePlan';
-import { addPart, addToEndeavour, applyTemplate, planLines } from './endeavourTemplates';
+import { planFromTemplate } from '@/utils/templatePlan';
+import { applyTemplate, planLines } from './endeavourTemplates';
 import { ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { childrenOf } from '@/utils/endeavourGraph';
 import { effectivePeriod } from '@/utils/endeavourPeriod';
@@ -79,21 +79,16 @@ describe('the Semester template', () => {
     expect(Object.keys(useTrashStore.getState().entries)).toHaveLength(0);
   });
 
-  it('made from the template, it makes only its notebook; a subject added is part of it; a suggestion is taken up later', () => {
+  it('made from the template, it makes only itself and its notebook; a subject added is part of it', () => {
     const t = DEFAULT_TEMPLATE_BY_ID.semester;
     const { id } = applyTemplate(planFromTemplate(t, { name: 'Sem 1' }), null);
     expect(Object.keys(useListStore.getState().lists)).toHaveLength(0);
     expect(Object.keys(useTaskStore.getState().tasks)).toHaveLength(0);
-    const { id: sub } = addPart(id, t.partsFrom, 'HIST110 Modern Europe');
+    expect(Object.values(useNoteStore.getState().noteTags).map((n) => n.name)).toEqual(['Sem 1']);
+    const { id: sub } = applyTemplate(planFromTemplate(DEFAULT_TEMPLATE_BY_ID[t.partsFrom!], { name: 'HIST110 Modern Europe' }), id);
     expect(useTaskStore.getState().collections[sub]).toMatchObject({ name: 'HIST110 Modern Europe', templateId: 'subject' });
     expect(useTaskStore.getState().collections[sub].attributes?.values).toEqual({ code: 'HIST110' });
     expect(childrenOf(id, useTaskStore.getState().collections)).toEqual([sub]);
-    const admin = templateSuggestions(t, 'Sem 1', { list: 'A list', task: () => 'A task', goal: 'A goal' }).find((x) => x.id === 'list:admin')!;
-    expect(admin.title).toBe('Sem 1 admin');
-    const { undo } = addToEndeavour(id, { ...blankPlan('Sem 1'), ...admin.plan });
-    expect(Object.values(useListStore.getState().lists).map((l) => [l.name, l.collectionId])).toEqual([['Sem 1 admin', id]]);
-    undo();
-    expect(Object.keys(useListStore.getState().lists)).toHaveLength(0);
   });
 });
 
@@ -115,20 +110,13 @@ describe('the Subject template', () => {
 });
 
 describe('the other templates', () => {
-  it('a training plan: sessions as repeating classes and a goal of keeping them up', () => {
-    const plan = planFromTemplate(DEFAULT_TEMPLATE_BY_ID['training-plan'], { name: 'Half marathon' });
-    expect(planLines(plan)).toEqual(['🎯 Half marathon', '🔄 Session · Every week on Tue, Thu, Sat', '🎯 Keep up the sessions']);
-    const { id } = applyTemplate(plan, null);
-    const session = Object.values(useCalendarStore.getState().events).find((e) => e.title === 'Session')!;
-    expect(session).toMatchObject({ collectionId: id, repeat: { freq: 'weekly', daysOfWeek: [2, 4, 6] } });
-    expect(Object.values(useGoalStore.getState().goals).find((g) => g.title === 'Keep up the sessions')!.measure).toEqual({ kind: 'keepUp', itemIds: [session.id], count: 3, outOf: 4 });
-    expect(plan.endeavour).toMatchObject({ kind: 'project', templateId: 'training-plan' });
-  });
-
-  it('a project: a notebook and a goal of getting its tasks done', () => {
+  it('a training plan and a project make only themselves (a project its notebook): their sessions and goals are added on the home', () => {
+    const { id: plan } = applyTemplate(planFromTemplate(DEFAULT_TEMPLATE_BY_ID['training-plan'], { name: 'Half marathon' }), null);
+    expect(useTaskStore.getState().collections[plan]).toMatchObject({ kind: 'project', templateId: 'training-plan' });
     const { id } = applyTemplate(planFromTemplate(DEFAULT_TEMPLATE_BY_ID.project, { name: 'Renovation' }), null);
     expect(Object.values(useNoteStore.getState().noteTags).map((n) => [n.name, n.collectionId])).toEqual([['Renovation', id]]);
-    expect(Object.values(useGoalStore.getState().goals)[0].measure).toEqual({ kind: 'completion', milestonesOnly: false });
+    expect(Object.keys(useCalendarStore.getState().events)).toHaveLength(0);
+    expect(Object.keys(useGoalStore.getState().goals)).toHaveLength(0);
   });
 
   it('every built-in template plans something', () => {

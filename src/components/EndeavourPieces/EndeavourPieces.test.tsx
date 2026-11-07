@@ -2,7 +2,7 @@
 //
 // What's in an Endeavour, on its home (components/EndeavourPieces): each thing a card saying what it
 // is that opens it; "+ Add" through the app's own panes, with a choice where a tile holds several
-// kinds; a deadline's "+ Task for this"; a template's suggestions (Add, Not needed); a semester's
+// kinds; a deadline's "+ Task for this"; what a parent's parts hold, folded per part; a semester's
 // subjects added by name.
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -70,30 +70,40 @@ describe('EndeavourPieces', () => {
     expect(useUIStore.getState().pendingEventLink).toEqual({ kind: 'prepFor', targetType: 'deadline', targetId: d });
   });
 
-  it('a semester suggests, making nothing until asked; Not needed hides one', () => {
-    const id = endeavour('Semester 2', 'semester');
-    render(<EndeavourPieces id={id} />);
-    const group = screen.getByRole('group', { name: L.suggested });
-    expect(within(group).getByText('Semester 2 admin')).toBeInTheDocument();
-    expect(within(group).getByText(L.suggestWeekly('Sunday'))).toBeInTheDocument();
-    expect(Object.keys(useListStore.getState().lists)).toHaveLength(0);
-    fireEvent.click(within(group).getAllByRole('button', { name: L.addSuggestion })[0]);
-    expect(Object.values(useListStore.getState().lists).map((l) => l.name)).toEqual(['Semester 2 admin']);
-    expect(within(screen.getByRole('group', { name: L.suggested })).queryByText('Semester 2 admin')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: L.notNeeded }));
-    expect(screen.queryByRole('group', { name: L.suggested })).toBeNull();
-    expect(Object.keys(useTaskStore.getState().tasks)).toHaveLength(0);
+  it('a parent gathers what its parts hold: one folded line per part, opening in place', () => {
+    const sem = endeavour('Semester 2', 'semester');
+    const bio = endeavour('Biology');
+    useTaskStore.getState().addEndeavourLink(bio, 'partOf', sem);
+    useCalendarStore.getState().addDeadline({ title: 'Lab report', date: '2026-08-01', collectionId: bio });
+    useCalendarStore.getState().addDeadline({ title: 'Essay', date: '2026-08-08', collectionId: bio });
+    render(<EndeavourPieces id={sem} />);
+    const cal = screen.getByRole('region', { name: L.calendar });
+    const line = within(cal).getByRole('button', { name: /Biology/ });
+    expect(line).toHaveAttribute('aria-expanded', 'false');
+    expect(within(cal).queryByText('Lab report')).toBeNull();
+    fireEvent.click(line);
+    expect(within(cal).getByText('Lab report')).toBeInTheDocument();
+    expect(within(cal).getByText('Essay')).toBeInTheDocument();
+    // Nothing for it under Tasks: no line there.
+    expect(within(screen.getByRole('region', { name: L.tasks })).queryByRole('button', { name: /Biology/ })).toBeNull();
   });
 
-  it('a semester adds its subjects by name, the code split off', () => {
+  it('a template suggests nothing on the home (2026-11-06: things are added there by hand)', () => {
+    const id = endeavour('Semester 2', 'semester');
+    render(<EndeavourPieces id={id} />);
+    expect(screen.queryByText('Semester 2 admin')).toBeNull();
+    expect(Object.keys(useListStore.getState().lists)).toHaveLength(0);
+  });
+
+  it('a semester adds a subject by name through the Endeavour form, filled in', () => {
     const id = endeavour('Semester 2', 'semester');
     render(<EndeavourPieces id={id} />);
     fireEvent.click(screen.getByRole('button', { name: L.add }));
     expect(screen.getByText(L.partNeeded('Subject'))).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(L.partName('Subject')), { target: { value: 'GEOS215 Climate Systems' } });
     fireEvent.keyDown(screen.getByLabelText(L.partName('Subject')), { key: 'Enter' });
-    const subj = Object.values(useTaskStore.getState().collections).find((c) => c.name === 'GEOS215 Climate Systems')!;
-    expect(subj.links?.[0]).toMatchObject({ kind: 'partOf', targetId: id });
-    expect(subj.attributes?.values.code).toBe('GEOS215');
+    // It opens the Endeavour form, filled in, so nothing is made until Create.
+    expect(useUIStore.getState().creator).toEqual({ partOf: id, template: 'subject', name: 'GEOS215 Climate Systems' });
+    expect(Object.values(useTaskStore.getState().collections).find((c) => c.name === 'GEOS215 Climate Systems')).toBeUndefined();
   });
 });

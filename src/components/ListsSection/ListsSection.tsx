@@ -1,3 +1,4 @@
+import { useTagFilter } from '@/hooks/useTagFilter';
 import { useState, useEffect, useRef } from 'react';
 import { useWaitingForEncryption } from '@/hooks/useWaitingForEncryption';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
@@ -334,6 +335,7 @@ export function ListsSection() {
   // contents are blank in the store (see services/listSecrets.ts). `rawLists` is only for the
   // lock check. Writes below go through store actions that route encrypted lists themselves.
   const lists      = useListViews();
+  const tagFilter  = useTagFilter();
   const listItems  = useListItemViews();
   const rawLists   = useListStore((s) => s.lists);
   const listTypes  = useListStore((s) => s.listTypes);
@@ -395,7 +397,8 @@ export function ListsSection() {
     setTabDragOverInfo(null);
   };
 
-  const allLists = Object.values(lists).sort(
+  // The header's tag filter (its own tags, or its Endeavour's); the open list always stays.
+  const allLists = Object.values(lists).filter((l) => !tagFilter || l.id === selectedListId || tagFilter(l)).sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
   const selectedList = selectedListId ? lists[selectedListId] : null;

@@ -1,8 +1,10 @@
+import { endeavourColor } from '@/utils/endeavourLook';
 import { useState } from 'react';
 import { RhythmDueList } from '@/components/RhythmBoard/RhythmDueList';
 import { useEndeavourScope } from '@/hooks/useEndeavourScope';
+import { useTagFilter } from '@/hooks/useTagFilter';
 import { inEndeavourScope } from '@/utils/endeavourGraph';
-import type { PurposeId, TagId, Task, TaskId, Collection } from '@/types';
+import type { PurposeId, Task, TaskId, Collection } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import type { SortField, SortDir } from '@/store/uiStore';
@@ -63,7 +65,7 @@ export function TaskList() {
   const activeCollectionId = useUIStore(selectActiveCollectionId);
   const endeavourScope = useEndeavourScope(activeCollectionId);
   const activePurposeIds   = useUIStore((s) => s.activePurposeIds);
-  const activeTagIds       = useUIStore((s) => s.activeTagIds);
+  const tagFilter          = useTagFilter();
   const sortField          = useUIStore((s) => s.sortField);
   const sortDir            = useUIStore((s) => s.sortDir);
   const taskViewMode       = useUIStore((s) => s.taskViewMode);
@@ -113,11 +115,7 @@ export function TaskList() {
       })
     : byCollection;
 
-  const tasks = activeTagIds.length > 0
-    ? byPurpose.filter((t) =>
-        activeTagIds.some((tid) => (t.tagIds ?? []).includes(tid as TagId))
-      )
-    : byPurpose;
+  const tasks = tagFilter ? byPurpose.filter((t) => tagFilter(t)) : byPurpose;
 
   const sorter    = buildSorter(sortField, sortDir, collectionsRecord);
   const open      = tasks.filter((t) => !t.archived && !t.completed).sort(sorter);
@@ -130,7 +128,7 @@ export function TaskList() {
 
   function getCollectionColor(task: Task): string | null {
     if (!task.collectionId) return null;
-    return collectionsRecord[task.collectionId]?.color ?? null;
+    return endeavourColor(task.collectionId, collectionsRecord);
   }
 
   function renderTaskGroup(task: Task) {

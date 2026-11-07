@@ -8,22 +8,23 @@ import { useListStore } from '@/store/listStore';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { useGoalStore } from '@/store/goalStore';
 import { useUIStore } from '@/store/uiStore';
-import { TrashIcon } from '@/components/Icons';
+import { DisclosureIcon, TrashIcon } from '@/components/Icons';
 import { FieldError } from '@/components/FieldError/FieldError';
 import { MagicWandButton, MagicWandPanel } from '@/components/MagicWand/MagicWand';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { showToast } from '@/components/Toast/showToast';
 import { filedDetail, filedIcon, filedUnder, openFiled, removeFiled, type FiledItem, type FiledKind } from '@/services/endeavourFiling';
-import { addPart, addToEndeavour, partsOf } from '@/services/endeavourTemplates';
+import { parentNotebook, partsOf } from '@/services/endeavourTemplates';
+import { nameFromEndeavour } from '@/services/endeavourNames';
 import { templateFor } from '@/services/templates';
-import { templateSuggestions, type PlanSuggestion } from '@/utils/templatePlan';
+import { childrenOf, endeavourSubtree, parentsOf } from '@/utils/endeavourGraph';
+import { endeavourColor } from '@/utils/endeavourLook';
 import { addOutline, outlineDraftsFor } from '@/services/subjectItems';
-import { blankPlan } from '@/config/endeavourTemplates';
 import { LABELS } from '@/config/labels';
 import { readCourseOutline, type CourseOutline } from '@/utils/courseOutline';
 import { effectivePeriod } from '@/utils/endeavourPeriod';
 import { itemWhen } from './itemWhen';
-import type { CollectionId } from '@/types';
+import type { Collection, CollectionId } from '@/types';
 import type { SubjectItemDraft } from '@/utils/subjectItems';
 import styles from './EndeavourPieces.module.css';
 
@@ -31,11 +32,11 @@ import styles from './EndeavourPieces.module.css';
 // agreed with the user 2026-11-04): on its home, one tile per kind of thing that can be filed under
 // it, each thing a small card saying what it is, which opens it where it's edited; "+ Add" opens the
 // app's own creation pane (filed under it, since its home is the active Endeavour). A template adds
-// its suggestions (never made silently), the Endeavours made from its parts' template (a semester's
-// subjects), and a subject's course-outline reader.
+// the Endeavours made from its parts' template (a semester's subjects) and a subject's course-outline
+// reader. A parent gathers what its parts hold (the user, 2026-11-06): under its own things, one
+// folded line per part ("Biology · 3"), opening in place, so a semester's tile isn't every class.
 
 const L = LABELS.endeavourPieces;
-const DAY_NAMES = LABELS.templates.dayNames;
 const SHOWN = 6;
 
 interface AddChoice { label: string; hint?: string; run: (id: CollectionId) => void }
@@ -46,13 +47,19 @@ const K = L.kinds;
 const TILES: TileDef[] = [
   { key: 'calendar', title: L.calendar, hint: L.calendarHint, kinds: ['event', 'timetable', 'deadline', 'reminder'], adds: [
     { label: K.event, hint: L.kindHints.event, run: () => ui().showAddCalendarItem(undefined, 'event') },
-    { label: K.timetable, hint: L.kindHints.timetable, run: () => ui().showAddSchedule() },
+    { label: K.timetable, hint: L.kindHints.timetable, run: (id) => { ui().showAddSchedule(); ui().setCreateDraft(nameFromEndeavour('schedule', id)); } },
     { label: K.deadline, hint: L.kindHints.deadline, run: () => ui().showAddCalendarItem(undefined, 'deadline') },
     { label: K.reminder, hint: L.kindHints.reminder, run: () => ui().showAddCalendarItem(undefined, 'reminder') },
   ] },
   { key: 'tasks', title: L.tasks, hint: L.tasksHint, kinds: ['task'], adds: [{ label: K.task, run: () => ui().showAddTask() }] },
-  { key: 'notebooks', title: L.notebooks, hint: L.notebooksHint, kinds: ['notebook'], adds: [{ label: L.notebooks, run: () => ui().showAddNoteTag(null, 'area') }] },
-  { key: 'lists', title: L.lists, hint: L.listsHint, kinds: ['list'], adds: [{ label: L.lists, run: () => ui().showAddList() }] },
+  // A notebook or list made here starts with the Endeavour's name (services/endeavourNames.ts); a
+  // notebook goes inside the notebook of what it's part of, as the form's own does.
+  { key: 'notebooks', title: L.notebooks, hint: L.notebooksHint, kinds: ['notebook'], adds: [{ label: L.notebooks, run: (id) => {
+    const c = useTaskStore.getState().collections[id];
+    ui().showAddNoteTag(parentNotebook(c ? parentsOf(c, useTaskStore.getState().collections)[0] ?? null : null), 'area');
+    ui().setCreateDraft(nameFromEndeavour('notebook', id));
+  } }] },
+  { key: 'lists', title: L.lists, hint: L.listsHint, kinds: ['list'], adds: [{ label: L.lists, run: (id) => { ui().showAddList(); ui().setCreateDraft(nameFromEndeavour('list', id)); } }] },
   { key: 'records', title: L.records, hint: L.recordsHint, kinds: ['record'], adds: [
     { label: K.tracker, hint: L.kindHints.tracker, run: () => ui().showAddTracker() },
     { label: K.routine, hint: L.kindHints.routine, run: () => ui().showAddRoutine() },
@@ -73,18 +80,20 @@ export function EndeavourPieces({ id }: { id: CollectionId }) {
   useListStore((s) => s.listItems);
   useScheduleStore((s) => s.schedules);
   useGoalStore((s) => s.goals);
-  const dismissed = useUIStore((s) => s.dismissedSuggestions[id]);
   const c = collections[id];
   if (!c) return null;
 
   const filed = filedUnder(id);
   const template = templateFor(c.templateId);
   const partsTemplate = templateFor(template?.partsFrom);
-  const filedTitles = new Set(filed.map((i) => i.title));
-  const suggestions = template
-    ? templateSuggestions(template, c.name, { list: L.suggestList, task: (w) => (w === null ? L.suggestTask : L.suggestWeekly(DAY_NAMES[w])), goal: L.suggestGoal })
-      .filter((s) => !dismissed?.includes(s.id) && !filedTitles.has(s.title))
-    : [];
+  // Each part and everything filed under it (at any depth), once each.
+  const parts = childrenOf(id, collections).map((pid) => collections[pid]).filter((p) => p && !p.archivedAt && (p.kind === 'project' || p.kind === 'list'));
+  const partItems = parts.map((p) => {
+    const seen = new Set<string>();
+    const items = [...endeavourSubtree(p.id, collections)].flatMap((sub) => filedUnder(sub))
+      .filter((i) => { const k = `${i.kind}:${i.id}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    return { part: p, items };
+  });
 
   return (
     <section className={styles.pieces} aria-label={L.title}>
@@ -92,29 +101,47 @@ export function EndeavourPieces({ id }: { id: CollectionId }) {
 
       {template?.readsOutline && <OutlineWand id={id} />}
 
-      {suggestions.length > 0 && (
-        <div className={styles.suggestions} role="group" aria-label={L.suggested}>
-          <span className={styles.groupLabel}>{L.suggested}</span>
-          {suggestions.map((s) => <SuggestionCard key={s.id} id={id} name={c.name} s={s} />)}
-        </div>
-      )}
-
       <div className={styles.tiles}>
         {template?.partsFrom && <PartsTile id={id} from={template.partsFrom} one={partsTemplate?.name ?? L.partOne} many={template.partsLabel || partsTemplate?.name || L.partOne} count={partsOf(id).length} />}
-        {TILES.map((t) => <FiledTile key={t.key} tile={t} id={id} items={filed.filter((i) => t.kinds.includes(i.kind))} />)}
+        {TILES.map((t) => (
+          <FiledTile key={t.key} tile={t} id={id} items={filed.filter((i) => t.kinds.includes(i.kind))}
+            fromParts={partItems.map(({ part, items }) => ({ part, items: items.filter((i) => t.kinds.includes(i.kind)) })).filter((g) => g.items.length)} />
+        ))}
       </div>
     </section>
   );
 }
 
-function FiledTile({ tile, id, items }: { tile: TileDef; id: CollectionId; items: FiledItem[] }) {
+interface PartGroup { part: Collection; items: FiledItem[] }
+
+function FiledTile({ tile, id, items, fromParts }: { tile: TileDef; id: CollectionId; items: FiledItem[]; fromParts: PartGroup[] }) {
   const [all, setAll] = useState(false);
   const shown = all ? items : items.slice(0, SHOWN);
+  const inParts = fromParts.reduce((n, g) => n + g.items.length, 0);
   return (
-    <Tile title={tile.title} hint={tile.hint} count={items.length} adds={tile.adds} id={id}>
+    <Tile title={tile.title} hint={tile.hint} count={items.length + inParts} adds={tile.adds} id={id}>
       {shown.map((i) => <MiniCard key={`${i.kind}:${i.id}`} item={i} noun={tile.title} />)}
       {items.length > SHOWN && !all && <button type="button" className={styles.linkBtn} onClick={() => setAll(true)}>{L.more(items.length - SHOWN)}</button>}
+      {fromParts.map((g) => <PartRow key={g.part.id} group={g} noun={tile.title} />)}
     </Tile>
+  );
+}
+
+// What one of its parts holds of this kind: folded to a line ("Biology · 3"), opening in place.
+function PartRow({ group, noun }: { group: PartGroup; noun: string }) {
+  const [open, setOpen] = useState(false);
+  const collections = useTaskStore((s) => s.collections);
+  const colour = endeavourColor(group.part.id, collections);
+  return (
+    <div className={styles.partRow}>
+      <button type="button" className={styles.partHead} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <DisclosureIcon open={open} />
+        <span className={styles.partDot} style={colour ? { background: colour } : undefined} aria-hidden />
+        <span className={styles.partName}>{group.part.name}</span>
+        <span className={styles.count}>{group.items.length}</span>
+      </button>
+      {open && <div className={styles.partCards}>{group.items.map((i) => <MiniCard key={`${i.kind}:${i.id}`} item={i} noun={noun} />)}</div>}
+    </div>
   );
 }
 
@@ -179,11 +206,12 @@ function PartsTile({ id, from, one, many, count }: { id: CollectionId; from: str
   const [name, setName] = useState('');
   const [error, setError] = useState(false);
 
+  // Opens the Endeavour form, filled in (its template, its name, part of this one), so what it
+  // takes and whether it makes a notebook are seen before anything is made (the user, 2026-11-06).
   function add() {
     if (!name.trim()) { setError(true); return; }
-    const { undo } = addPart(id, from, name);
+    useUIStore.getState().showTemplates(id, from, name.trim());
     setName('');
-    showToast({ message: `${one}: ${name.trim()}`, actions: [{ label: L.undo, onClick: undo }] });
   }
 
   return (
@@ -199,23 +227,6 @@ function PartsTile({ id, from, one, many, count }: { id: CollectionId; from: str
       </div>
       <FieldError id={`parts-error-${id}`}>{error ? L.partNeeded(one) : null}</FieldError>
     </section>
-  );
-}
-
-function SuggestionCard({ id, name, s }: { id: CollectionId; name: string; s: PlanSuggestion }) {
-  function take() {
-    const { undo } = addToEndeavour(id, { ...blankPlan(name), ...s.plan });
-    showToast({ message: `${L.added1}: ${s.title}`, actions: [{ label: L.undo, onClick: undo }] });
-  }
-  return (
-    <div className={styles.suggestion}>
-      <span className={styles.cardText}>
-        <span className={styles.cardTitle}>{s.label}</span>
-        <span className={styles.cardDetail}>{s.detail}</span>
-      </span>
-      <button type="button" className={styles.tileAdd} onClick={take}>{L.addSuggestion}</button>
-      <button type="button" className={styles.linkBtn} onClick={() => ui().dismissSuggestion(id, s.id)}>{L.notNeeded}</button>
-    </div>
   );
 }
 

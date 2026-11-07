@@ -67,13 +67,13 @@ describe('the Mosaic', () => {
     expect(screen.getByRole('button', { name: /^Enzymes/ })).toBeInTheDocument();
   });
 
-  it('grouping and filter: by tag, then only notes with a chosen tag', () => {
+  it('grouping and filter: by annotation, then only notes with a chosen one', () => {
     const ns = useNoteStore.getState();
     const key = ns.addNoteTag({ name: 'Key idea', kind: 'tag' }) as NoteTagId;
     const cells = Object.values(useNoteStore.getState().notes).find((n) => n.title === 'Cells')!;
     act(() => useNoteStore.getState().updateNote(cells.id, { tagIds: [...cells.tagIds, key] }));
     render(<MosaicView />);
-    fireEvent.click(screen.getByRole('button', { name: 'Tags' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Annotations' }));
     expect(screen.getByRole('button', { name: /^Key idea, 1 note/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Filter/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Key idea', pressed: false }));

@@ -254,3 +254,6 @@
 }
 .child .bar { top: 0.4rem; }
 .child .block { top: 0.55rem; }
+
+/* A later date of a series, or a later task of a rule (OverviewRow.quiet). */
+.lineQuiet { opacity: 0.6; }

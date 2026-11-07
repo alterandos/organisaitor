@@ -1,3 +1,4 @@
+import { endeavourColor } from '@/utils/endeavourLook';
 import { useMemo, useRef, useState } from 'react';
 import { TodayCard } from '@/components/TodayCard/TodayCard';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
@@ -9,6 +10,7 @@ import { useOverviewSnapshot } from '@/overview/useOverviewSnapshot';
 import { runOverview, endeavourOverviewQuery, INBOXES_QUERY } from '@/overview/engine';
 import { INBOX_ICON } from '@/config/itemIcons';
 import { SOURCE_BY_KEY } from '@/overview/sources';
+import { foldSeries } from '@/overview/series';
 import { openOverviewRow } from '@/overview/open';
 import { canTickDone, tickOverviewRow } from '@/overview/done';
 import { getOrderedEndeavours } from '@/utils/collections';
@@ -72,14 +74,30 @@ function SavedRow({ overview, active }: { overview: Overview; active: boolean })
   );
 }
 
-function RowView({ row, showEndeavour, today }: { row: OverviewRow; showEndeavour: boolean; today: string }) {
+// A row, and when it leads a folded set (a rule's task for each date), its toggle and the rest.
+function FoldedRows({ row, more, showEndeavour, today }: { row: OverviewRow; more: OverviewRow[]; showEndeavour: boolean; today: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <RowLine row={row} showEndeavour={showEndeavour} today={today} />
+      {more.length > 0 && (
+        <button type="button" className={styles.foldToggle} aria-expanded={open} title={row.series?.label} onClick={() => setOpen((o) => !o)}>
+          <DisclosureIcon open={open} /> {open ? LABELS.eventTaskRules.foldHide : LABELS.eventTaskRules.foldMore(more.length)}
+        </button>
+      )}
+      {open && more.map((r) => <RowLine key={r.key} row={r} showEndeavour={showEndeavour} today={today} />)}
+    </>
+  );
+}
+
+function RowLine({ row, showEndeavour, today }: { row: OverviewRow; showEndeavour: boolean; today: string }) {
   const collections = useTaskStore((s) => s.collections);
   const clockFormat = useSettingsStore((s) => s.clockFormat);
   const source = SOURCE_BY_KEY[row.source];
   const endeavour = row.endeavourId ? collections[row.endeavourId as CollectionId] : undefined;
   const overdue = row.status === 'open' && !!row.when && row.when < today;
   return (
-    <div className={`${styles.row} ${row.status !== 'open' ? styles.rowDone : ''}`} data-status={row.status}>
+    <div className={`${styles.row} ${row.status !== 'open' ? styles.rowDone : ''} ${row.quiet ? styles.rowQuiet : ''}`} data-status={row.status}>
       <span className={styles.cellTick}>
         {canTickDone(row) && (
           <input type="checkbox" className={styles.tick} checked={row.status === 'done'}
@@ -88,7 +106,7 @@ function RowView({ row, showEndeavour, today }: { row: OverviewRow; showEndeavou
             onChange={() => tickOverviewRow(row)} />
         )}
       </span>
-      <button className={styles.rowOpen} onClick={() => openOverviewRow(row)}>
+      <button className={styles.rowOpen} onClick={() => openOverviewRow(row)} title={row.series?.label}>
         <span className={styles.cellIcon} title={source.label}>{source.icon}</span>
         <span className={styles.cellWhat}>
           <span className={styles.title}>{row.title}</span>
@@ -102,7 +120,7 @@ function RowView({ row, showEndeavour, today }: { row: OverviewRow; showEndeavou
         </span>
         {showEndeavour && (
           <span className={styles.cellEndeavour}>
-            {endeavour && <span className={styles.dot} style={endeavour.color ? { background: endeavour.color } : undefined} />}
+            {endeavour && <span className={styles.dot} style={endeavourColor(endeavour.id, collections) ? { background: endeavourColor(endeavour.id, collections)! } : undefined} />}
             {endeavour?.name ?? ''}
           </span>
         )}
@@ -183,7 +201,7 @@ export function OverviewSection() {
           return (
             <div key={c.id} className={`${styles.navItem} ${active ? styles.navItemActive : ''}`}>
               <button className={styles.navBtn} onClick={() => setSelection({ kind: 'endeavour', id: c.id })}>
-                <span className={styles.dot} style={c.color ? { background: c.color } : undefined} />
+                <span className={styles.dot} style={endeavourColor(c.id, collections) ? { background: endeavourColor(c.id, collections)! } : undefined} />
                 <TruncatedText text={c.name} className={styles.navName} />
               </button>
             </div>
@@ -227,8 +245,8 @@ export function OverviewSection() {
             {result.hiddenLocked > 0 && <p className={styles.locked}>🔒 {L.lockedHidden(result.hiddenLocked)}</p>}
             {result.total === 0 && <p className={styles.hint}>{L.noRows}</p>}
 
-            {shownLayout === 'runway' && <OverviewRunway rows={allRows} today={today} onOpen={openOverviewRow} />}
-            {shownLayout === 'board' && <OverviewBoard rows={allRows} today={today} onOpen={openOverviewRow} />}
+            {shownLayout === 'runway' && <OverviewRunway rows={foldSeries(allRows).shown} today={today} onOpen={openOverviewRow} />}
+            {shownLayout === 'board' && <OverviewBoard rows={foldSeries(allRows).shown} today={today} onOpen={openOverviewRow} />}
             {shownLayout === 'list' && result.groups.map((g) => {
               const isCollapsed = collapsed.has(g.key);
               return (
@@ -241,7 +259,10 @@ export function OverviewSection() {
                   )}
                   {!isCollapsed && (
                     <div className={styles.rows}>
-                      {g.rows.map((r) => <RowView key={r.key} row={r} showEndeavour={!query.collectionId} today={today} />)}
+                      {(() => {
+                        const { shown, folded } = foldSeries(g.rows);
+                        return shown.map((r) => <FoldedRows key={r.key} row={r} more={folded.get(r.key) ?? []} showEndeavour={!query.collectionId} today={today} />);
+                      })()}
                     </div>
                   )}
                 </section>

@@ -3,6 +3,7 @@ import { addDaysToIso } from '@/utils/date';
 import { OVERVIEW_SOURCES, SOURCE_BY_KEY, type OverviewSnapshot } from './sources';
 import type { CollectionId } from '@/types';
 import { endeavourSubtree, inEndeavourScope } from '@/utils/endeavourGraph';
+import { tagTest } from '@/utils/tagScope';
 import type { OverviewQuery, OverviewRow } from '@/types/overview';
 
 // Runs an Overview's question against every source: which rows, in what order, in which groups.
@@ -97,10 +98,16 @@ export function runOverview(q: OverviewQuery, snap: OverviewSnapshot, today: str
   let hiddenLocked = 0;
   const rows: OverviewRow[] = [];
   const scope = q.collectionId ? endeavourSubtree(q.collectionId, snap.collections) : null;
+  // Its tags: one of them, the row's own or passed down from its Endeavour or notebook.
+  const tags = tagTest(q.tagIds ?? [], snap.collections, snap.noteTags);
   for (const s of wanted) {
     const res = s.rows(snap, today);
     hiddenLocked += res.locked.filter((e) => inEndeavourScope(scope, e)).length;
-    for (const r of res.rows) if (matches(r, q, today, scope)) rows.push(r);
+    for (const r of res.rows) {
+      if (!matches(r, q, today, scope)) continue;
+      if (tags && !tags(s.tagged?.(r, snap) ?? { collectionId: r.endeavourId })) continue;
+      rows.push(r);
+    }
   }
   rows.sort(sorter(q));
   return { groups: group(rows, q, snap), total: rows.length, hiddenLocked };

@@ -24,7 +24,7 @@ export function OverviewBoard({ rows, today, onOpen }: { rows: OverviewRow[]; to
           <h3 className={styles.columnTitle}>{L.buckets[b]} <span className={styles.count}>{buckets[b].length}</span></h3>
           <div className={styles.cards}>
             {buckets[b].map((r) => (
-              <button key={r.key} type="button" className={`${styles.card} ${r.status !== 'open' ? styles.cardDone : ''}`} onClick={() => onOpen(r)}>
+              <button key={r.key} type="button" className={`${styles.card} ${r.status !== 'open' ? styles.cardDone : ''} ${r.quiet ? styles.cardQuiet : ''}`} onClick={() => onOpen(r)}>
                 <span className={styles.cardHead}>
                   <span aria-hidden="true">{SOURCE_BY_KEY[r.source].icon}</span>
                   <span className={styles.cardTitle}>{r.title}</span>

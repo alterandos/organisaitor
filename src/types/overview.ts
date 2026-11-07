@@ -24,6 +24,7 @@ export type OverviewGroupBy      = 'none' | 'source' | 'endeavour' | 'month';
 export interface OverviewQuery {
   sources:      OverviewSourceKey[];   // [] = every source
   collectionId: CollectionId | null;   // Endeavour filter; null = any (including none)
+  tagIds?:      string[];              // has one of these tags, its own or passed down (2026-11-06); absent or [] = any
   status:       OverviewStatusFilter;
   when:         OverviewWhenFilter;
   windowDays:   number | null;         // for 'upcoming'/'past': how far ahead/back; null = no limit
@@ -53,6 +54,12 @@ export interface OverviewRow {
   context:     string | null;        // where it lives, e.g. the list's or tracker's name
   plan?:       OverviewPlan;         // how it's drawn on a timeline (the Runway, the Board); absent = left off them
   occurrence?: string;               // YYYY-MM-DD: the one date of a repeating calendar item this row stands for (opened at it)
+  // A later date of a series, or a later task of a rule: listed, but drawn quietly, so the next one
+  // stands out (2026-11-07).
+  quiet?:      boolean;
+  // One of a set done again and again (a rule's task for each date of an event): folded under the
+  // next one open wherever rows are listed (overview/series.ts). `label` says what the set is.
+  series?:     { key: string; label: string };
 }
 
 // How a row is drawn on a timeline (components/OverviewRunway, agreed with the user 2026-10-22):

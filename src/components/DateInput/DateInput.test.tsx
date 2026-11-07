@@ -42,6 +42,47 @@ describe('DateInput — the suite’s date field', () => {
     vi.useRealTimers();
   });
 
+  it('with a min (a "to" after a "from"), the year filled in is the first that comes on or after it', () => {
+    const onChange = vi.fn();
+    render(<DateInput value="" onChange={onChange} min="2026-09-01" />);
+    act(() => seg('Day').focus());
+    type(seg('Day'), '01');
+    act(() => seg('Month').focus());
+    type(seg('Month'), '02');
+    expect(seg('Year').value).toBe('2027');
+    expect(onChange).toHaveBeenLastCalledWith('2027-02-01');
+  });
+
+  it('with a min, a day and month on or after it stay in its year', () => {
+    const onChange = vi.fn();
+    render(<DateInput value="" onChange={onChange} min="2026-09-01" />);
+    act(() => seg('Day').focus());
+    type(seg('Day'), '15');
+    act(() => seg('Month').focus());
+    type(seg('Month'), '12');
+    expect(onChange).toHaveBeenLastCalledWith('2026-12-15');
+  });
+
+  it('an empty field with a suggestion fills it on focus, and typing replaces the segment', () => {
+    const onChange = vi.fn();
+    render(<DateInput value="" onChange={onChange} suggest="2026-09-02" />);
+    act(() => seg('Day').focus());
+    expect(onChange).toHaveBeenLastCalledWith('2026-09-02');
+    type(seg('Day'), '15');
+    expect(onChange).toHaveBeenLastCalledWith('2026-09-15');
+  });
+
+  it('a suggestion never replaces a value, and is raised to min', () => {
+    const onChange = vi.fn();
+    const { unmount } = render(<DateInput value="2026-01-01" onChange={onChange} suggest="2026-09-02" />);
+    act(() => seg('Day').focus());
+    expect(onChange).not.toHaveBeenCalled();
+    unmount();
+    render(<DateInput value="" onChange={onChange} suggest="2026-09-02" min="2026-10-01" />);
+    act(() => seg('Day').focus());
+    expect(onChange).toHaveBeenLastCalledWith('2026-10-01');
+  });
+
   it('a digit nothing can follow is complete at once ("4" as a day, "3" as a month)', () => {
     render(<DateInput value="" onChange={vi.fn()} />);
     act(() => seg('Day').focus());

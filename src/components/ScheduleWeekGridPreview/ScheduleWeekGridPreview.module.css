@@ -58,7 +58,37 @@
   position: relative;
 }
 
-.dayBodyClickable { cursor: crosshair; }
+.dayBodyClickable { cursor: pointer; }
+
+/* What the pointer is over: its day's column and its time's row lightly, the cell (or block) itself
+   more, and its time in the gutter. */
+.dayColHover { background: var(--color-primary-subtle); }
+.dayHeaderHover { color: var(--color-primary); }
+.rowHover,
+.cellHover,
+.gutterHover {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+.rowHover { background: var(--color-primary-subtle); }
+.cellHover {
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  border-radius: var(--radius-sm);
+}
+.gutterHover {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-align: right;
+  padding-right: var(--space-1);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.blockHover { outline: 2px solid var(--color-primary); outline-offset: -1px; }
 
 .hourLine {
   position: absolute;

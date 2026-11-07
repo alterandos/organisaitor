@@ -1,0 +1,29 @@
+/* How much time a task needs (TimeNeededPicker.tsx): clocks filled clockwise in their level's colour,
+   the chosen one ringed, its name beside them. Sized and spaced as PriorityPicker, its neighbour. */
+
+.picker { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 2.2rem; }
+.clocks { display: inline-flex; gap: var(--space-1); }
+
+.clock {
+  --clock: var(--color-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 1.35rem;
+  color: var(--clock);
+  cursor: pointer;
+}
+.clock[data-level="low"]    { --clock: var(--color-level-low); }
+.clock[data-level="medium"] { --clock: var(--color-level-medium); }
+.clock[data-level="high"]   { --clock: var(--color-level-high); }
+.clock:hover { background: color-mix(in srgb, var(--clock) 14%, transparent); }
+.clock[aria-checked="true"] { border-color: var(--clock); }
+.clock:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+.name { min-width: 3.5em; font-size: var(--text-sm); color: var(--color-muted); }

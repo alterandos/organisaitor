@@ -27,15 +27,38 @@ function subjectWithLecture() {
 }
 
 describe('items in a class\'s time', () => {
-  it('finds the class an item falls in: same Endeavour, the class on that day, the times overlapping', () => {
-    const { sub } = subjectWithLecture();
-    const at = (date: string, start: string, end: string | null = null, collectionId: string | null = sub) => clashingClasses({ date, start, end, collectionId }, cal().events).length;
+  it('finds the event an item falls in: any Endeavour, the event on that day, the times overlapping', () => {
+    subjectWithLecture();
+    const at = (date: string, start: string, end: string | null = null) => clashingClasses({ date, start, end }, cal().events).length;
     expect(at('2031-03-11', '12:30')).toBe(1);             // a quiz at 12:30, in the lecture
     expect(at('2031-03-11', '12:00', '14:00')).toBe(1);    // the whole slot
     expect(at('2031-03-11', '14:00')).toBe(0);             // as it ends
     expect(at('2031-03-12', '12:30')).toBe(0);             // not a lecture day
     expect(at('2031-03-25', '12:30')).toBe(0);             // a date the person skipped
-    expect(at('2031-03-11', '12:30', null, null)).toBe(0); // not filed under the subject
+  });
+
+  it('only confirmed items clash: a tentative item, or a tentative event (a Schedule item chosen each time), never asks (2026-11-07)', () => {
+    const { lec } = subjectWithLecture();
+    expect(clashingClasses({ date: '2031-03-11', start: '12:30', status: 'tentative' }, cal().events)).toHaveLength(0);
+    cal().updateEvent(lec, { status: 'tentative' });
+    expect(clashingClasses({ date: '2031-03-11', start: '12:30' }, cal().events)).toHaveLength(0);
+  });
+
+  it('a repeating item: every one of its dates that falls in the event, found at once (2026-11-07)', () => {
+    const { lec } = subjectWithLecture();
+    // Some Tuesdays at 12:15, on a list of dates: the 11th and 25th (the 25th the lecture is skipped).
+    const clash = clashingClasses({ date: '2031-03-11', start: '12:15', end: '13:00',
+      repeat: { freq: 'dates', interval: 1, endKind: 'forever', count: null, until: null, dates: ['2031-03-11', '2031-03-18', '2031-03-25'] } }, cal().events);
+    expect(clash.map((c) => [c.event.id, c.dates])).toEqual([[lec, ['2031-03-11', '2031-03-18']]]);
+  });
+
+  it('a repeating item linked during: drawn on the event on each date that falls in it', () => {
+    const { lec } = subjectWithLecture();
+    const tut = cal().addEvent({ title: 'Help desk', date: '2031-03-11', startTime: '12:15', endTime: '13:00',
+      repeat: { freq: 'dates', interval: 1, endKind: 'forever', count: null, until: null, dates: ['2031-03-11', '2031-03-12'] } });
+    cal().updateEvent(tut, { onClass: { eventId: lec, mode: 'during' } });
+    const during = duringIndex(cal().events, cal().deadlines);
+    expect([...during.keys()]).toEqual([`${lec}|2031-03-11`]);   // the 12th isn't a lecture day
   });
 
   it('instead: the class that day is skipped, and comes back when the item moves or goes; the person\'s own skips stay', () => {
@@ -47,7 +70,7 @@ describe('items in a class\'s time', () => {
     expect(dates()).toEqual(['2031-03-11']);   // the 18th replaced, the 25th the person's own skip
     expect(cal().events[lec].repeat!.replacedSkips).toEqual(['2031-03-18']);
     // Still asked about the class when it's opened again (the replaced date is still the class's).
-    expect(clashingClasses({ id: essay, date: '2031-03-18', start: '12:00', end: '14:00', collectionId: sub }, cal().events)).toHaveLength(1);
+    expect(clashingClasses({ id: essay, date: '2031-03-18', start: '12:00', end: '14:00' }, cal().events)).toHaveLength(1);
 
     saveSubjectItem(sub, { ...draftFromEvent(cal().events[essay]), date: '2031-03-19' }, essay);   // moved off the lecture
     expect(cal().events[essay].onClass).toBeNull();
@@ -61,7 +84,7 @@ describe('items in a class\'s time', () => {
     const quiz = saveSubjectItem(sub, { ...blankDraft('work', '2031-03-11'), title: 'Quiz 1', start: '13:30',
       onClass: { eventId: lec, date: '2031-03-11', mode: 'during' } }) as CalendarDeadlineId;
     applyClassReplacements();
-    expect(duringIndex(cal().events, cal().deadlines).get(`${lec}|2031-03-11`)).toEqual([{ id: quiz, title: 'Quiz 1' }]);
+    expect(duringIndex(cal().events, cal().deadlines).get(`${lec}|2031-03-11`)).toEqual([expect.objectContaining({ id: quiz, title: 'Quiz 1' })]);
     expect(cal().events[lec].repeat!.replacedSkips).toBeUndefined();
     // Both again: nothing linked.
     saveSubjectItem(sub, { ...draftFromDeadline(cal().deadlines[quiz], {}), onClass: null }, quiz);

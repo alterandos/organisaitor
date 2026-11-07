@@ -1,4 +1,4 @@
-import type { CollectionId, EndeavourPeriod, FieldSchema, GoalMeasure, PeriodBreak, PurposeId, RepeatConfig, TaskKind } from '@/types';
+import type { CollectionId, EndeavourPeriod, FieldSchema, GoalMeasure, PeriodBreak, PurposeId, RepeatConfig, TagId, TaskKind, DateUse } from '@/types';
 import { blankDraft, firstWeekdayOn, type SubjectItemDraft, type SubjectItemKind } from '@/utils/subjectItems';
 import type { StarterSet } from '@/config/typeStarters';
 import { DEFAULT_TEMPLATE_BY_ID } from '@/config/defaultTemplates';
@@ -25,9 +25,14 @@ export interface TemplatePlan {
     name: string; kind: 'project' | 'list'; deadline: string | null; templateId?: string; period?: EndeavourPeriod; typeKey?: string; values?: Record<string, unknown>;
     description?: string | null; color?: string | null; purposeIds?: PurposeId[]; related?: CollectionId[];
     fields?: FieldSchema[];   // details of its own, besides its Type's (values in `values`)
+    tagIds?: TagId[];         // its tags (the form's, made already)
+    dateUse?: DateUse;        // which of its named periods it runs and pauses during
+    tagNames?: string[];      // tags by name (a template's), made on Create where there's none of that name
+    icon?: string | null;
   };
-  // Its notebooks. The first is its main one: a part's notebooks go inside it.
-  notebooks:    { name: string }[];
+  // Its notebooks. The first is its main one: a part's notebooks go inside it. `inside`: the notebook
+  // it goes in (null: the top level); absent: the one of the nearest Endeavour above that has one.
+  notebooks:    { name: string; inside?: string | null }[];
   // Its classes (calendar events) and Deadlines, made through services/subjectItems.ts.
   items:        SubjectItemDraft[];
   starterTypes: StarterSet | null;

@@ -7,16 +7,18 @@ import { anchorOf, datesForLink, followMove, isEventLink, type Anchor, type Even
 import { makeItemLink } from '@/utils/taskLinks';
 import { addDaysToIso, todayIso } from '@/utils/date';
 import { LABELS } from '@/config/labels';
-import type { CalendarDeadline, CalendarEvent, Task, TaskId } from '@/types';
+import type { CalendarDeadline, CalendarEvent, CalendarReminder, Task, TaskId } from '@/types';
 
 // Tasks linked to events and Deadlines (rules: utils/eventTaskLinks.ts). Linking, changing how a
 // task relates, unlinking, and the watcher that moves linked tasks when the event moves.
 
 const L = LABELS.taskLinks.event;
 
-export function eventTarget(type: EventTargetType, id: string): CalendarEvent | CalendarDeadline | undefined {
+type LinkTarget = CalendarEvent | CalendarReminder | CalendarDeadline;
+
+export function eventTarget(type: EventTargetType, id: string): LinkTarget | undefined {
   const cal = useCalendarStore.getState();
-  return type === 'event' ? cal.events[id as never] : cal.deadlines[id as never];
+  return type === 'event' ? cal.events[id as never] : type === 'reminder' ? cal.reminders[id as never] : cal.deadlines[id as never];
 }
 
 // The dates a new task linked this way starts with (AddTaskModal's prefill); for one date of a
@@ -32,11 +34,15 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00
 
 // Link an existing task (or relink it another way). Preparation gets the event's start as its
 // deadline and a follow-up its end as its start, unless it already has its own.
-// For one date of a series (`occurrence`; kept if it already had one), the link names that date.
+// For one date of a series (`occurrence`), the link names that date; a task can be linked to
+// several dates of one series, a link each (2026-11-07). With no `occurrence`, relinking changes the
+// link to the whole item, else the task's only link to it (keeping its date).
 export function linkTaskToEvent(taskId: TaskId, kind: EventLinkKind, type: EventTargetType, id: string, occurrence: string | null = null): void {
   const task = useTaskStore.getState().tasks[taskId];
   if (!task) return;
-  const was = (task.itemLinks ?? []).find((l) => isEventLink(l) && l.targetType === type && l.targetId === id);
+  const toThis = (task.itemLinks ?? []).filter((l) => isEventLink(l) && l.targetType === type && l.targetId === id);
+  const was = occurrence ? toThis.find((l) => l.occurrence === occurrence)
+    : toThis.find((l) => !l.occurrence) ?? (toThis.length === 1 ? toThis[0] : undefined);
   const others = (task.itemLinks ?? []).filter((l) => l !== was);
   const ts = new Date().toISOString();
   const date = occurrence ?? was?.occurrence ?? null;
@@ -49,10 +55,13 @@ export function linkTaskToEvent(taskId: TaskId, kind: EventLinkKind, type: Event
   if (Object.keys(patch).length) updateTaskLinked(taskId, patch);
 }
 
-export function unlinkTaskFromEvent(taskId: TaskId, type: EventTargetType, id: string): void {
+// Every link to the item, or with `occurrence` given, just that one (null: the link to the whole item).
+export function unlinkTaskFromEvent(taskId: TaskId, type: EventTargetType, id: string, occurrence?: string | null): void {
   const task = useTaskStore.getState().tasks[taskId];
   if (!task) return;
-  useTaskStore.getState().updateTask(taskId, { itemLinks: (task.itemLinks ?? []).filter((l) => !(l.targetType === type && l.targetId === id)) });
+  const goes = (l: { targetType: string; targetId: string; occurrence?: string }) =>
+    l.targetType === type && l.targetId === id && (occurrence === undefined || (l.occurrence ?? null) === occurrence);
+  useTaskStore.getState().updateTask(taskId, { itemLinks: (task.itemLinks ?? []).filter((l) => !goes(l)) });
 }
 
 // Linked tasks follow their event (decided with the user 2026-10-23: automatically, with Undo).
@@ -67,7 +76,7 @@ export function initEventTaskFollow(): () => void {
     if (following || isHydrating()) return;
     const today = todayIso();
     const moved: { type: EventTargetType; id: string; title: string; before: Anchor; after: Anchor }[] = [];
-    const scan = (type: EventTargetType, now: Record<string, CalendarEvent | CalendarDeadline>, was: Record<string, CalendarEvent | CalendarDeadline>) => {
+    const scan = (type: EventTargetType, now: Record<string, LinkTarget>, was: Record<string, LinkTarget>) => {
       if (now === was) return;
       for (const [id, item] of Object.entries(now)) {
         const old = was[id];
@@ -78,6 +87,7 @@ export function initEventTaskFollow(): () => void {
       }
     };
     scan('event', state.events, prev.events);
+    scan('reminder', state.reminders, prev.reminders);
     scan('deadline', state.deadlines, prev.deadlines);
     if (!moved.length) return;
 
@@ -97,5 +107,6 @@ export function initEventTaskFollow(): () => void {
   });
 }
 
-const isTaskShadow = (item: CalendarEvent | CalendarDeadline): boolean =>
-  ('eventType' in item && item.eventType === 'task') || ('deadlineType' in item && item.deadlineType === 'task');
+const isTaskShadow = (item: LinkTarget): boolean =>
+  ('eventType' in item && item.eventType === 'task') || ('deadlineType' in item && item.deadlineType === 'task')
+  || ('reminderType' in item && item.reminderType === 'task');

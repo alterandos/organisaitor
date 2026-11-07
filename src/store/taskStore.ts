@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
-  AppData, Task, TaskId, TagId, Tag,
+  AppData, Task, TaskId, TagId, Tag, NewTag,
   CollectionId, Collection, Purpose, PurposeId,
   CreateTaskInput, CreateCollectionInput, CreatePurposeInput,
   FieldSchema, RoutineTask, ItemLinkKind, EndeavourLinkKind,
@@ -41,13 +41,13 @@ export interface TaskActions {
   removeItemLink:       (ownerId: TaskId, kind: ItemLinkKind, targetId: TaskId) => void;
 
   // Tags
-  addTag:    (tag: Tag) => void;
-  updateTag: (id: TagId, changes: Partial<Pick<Tag, 'name' | 'color' | 'notes'>>) => void;
+  addTag:    (tag: NewTag) => void;
+  updateTag: (id: TagId, changes: Partial<Pick<Tag, 'name' | 'color' | 'notes' | 'icon' | 'archivedAt'>>) => void;
   deleteTag: (id: TagId) => void;
 
   // Collections (projects, lists, trackers …)
   addCollection:    (input: CreateCollectionInput) => CollectionId;
-  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt' | 'encryptContents' | 'streams' | 'period' | 'templateId' | 'attributes'>>) => void;
+  updateCollection: (id: CollectionId, changes: Partial<Pick<Collection, 'name' | 'color' | 'description' | 'deadline' | 'purposeIds' | 'tagIds' | 'fieldSchema' | 'routineTasks' | 'repeatConfig' | 'collectionId' | 'archivedAt' | 'encryptContents' | 'streams' | 'period' | 'templateId' | 'attributes' | 'icon' | 'kind' | 'dateUse'>>) => void;
   deleteCollection: (id: CollectionId) => void;
   // Links between Endeavours (utils/endeavourGraph.ts has the rules). Returns why a link was refused,
   // or null once it's made.
@@ -200,13 +200,17 @@ export const useTaskStore = create<TaskStore>()(
       // ── Tags ───────────────────────────────────────────────────────────────
 
       addTag: (tag) =>
-        set((state) => ({ tags: { ...state.tags, [tag.id]: tag } })),
+        set((state) => {
+          const ts = now();
+          const full: Tag = { color: null, notes: null, icon: null, archivedAt: null, createdAt: ts, updatedAt: ts, ...tag };
+          return { tags: { ...state.tags, [tag.id]: full } };
+        }),
 
       updateTag: (id, changes) =>
         set((state) => {
           const tag = state.tags[id];
           if (!tag) return {};
-          return { tags: { ...state.tags, [id]: { ...tag, ...changes } } };
+          return { tags: { ...state.tags, [id]: { ...tag, ...changes, updatedAt: now() } } };
         }),
 
       deleteTag: (id) =>
@@ -370,7 +374,7 @@ export const useTaskStore = create<TaskStore>()(
     {
       name:    'todo-app-storage',
       storage: persistStorage(),
-      version: 15,
+      version: 16,
       // Cumulative: every step below whose version threshold the persisted store is behind
       // on gets applied, in order, to the same `state` — none of them return early. (A v9 ->
       // v11 upgrade, say, must also carry forward whatever a v2 -> v11 upgrade needs from the
@@ -494,6 +498,16 @@ export const useTaskStore = create<TaskStore>()(
         // v15 (2026-10-30): no shape change. The bump makes the "Before an app update" copy
         // (services/upgradeSnapshot.ts) keep every routine's rhythm streams from before they are
         // converted to repeating calendar items (services/streamConversion.ts).
+        // v16 (2026-11-06): a tag's icon, archive date and timestamps (one set of tags for the suite).
+        if (fromVersion < 16 && state.tags) {
+          const ts = now();
+          const patched: AppData['tags'] = {} as AppData['tags'];
+          for (const [id, tag] of Object.entries(state.tags)) {
+            const t = tag as Partial<Tag> & Pick<Tag, 'id' | 'name'>;
+            patched[id as TagId] = { color: null, notes: null, ...t, icon: t.icon ?? null, archivedAt: t.archivedAt ?? null, createdAt: t.createdAt ?? ts, updatedAt: t.updatedAt ?? ts } as Tag;
+          }
+          state = { ...state, tags: patched };
+        }
         return state;
       },
     }

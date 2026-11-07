@@ -29,6 +29,9 @@ interface Props {
   // "+ New note": make a note (in a notebook, or as a tab of a note) titled this, and link it.
   // Offered only where it's passed (the calendar panes).
   newNoteTitle?: string;
+  // More "+ …" buttons in the same row and look (a task's "+ Calendar item…", whose links are task
+  // links, not cross-app references: components/TaskLinks/TaskCalendarLinks).
+  extraAdds?: { label: string; onClick: () => void }[];
 }
 
 // Notes and lists are the wired targets. The other planned ones (List item, Tracker entry — see
@@ -39,7 +42,7 @@ const ICON_BY_TYPE: Record<string, string> = { note: '📝', list: '📋', event
 // The picker is a dialog portaled to document.body (see NotePickerModal), not a popover rendered
 // in place: this widget is embedded in forms that scroll, and an in-place dropdown there changes
 // the scroll height as it opens/closes, which once made a click land on the wrong button.
-export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom, types = ['note', 'list'], newNoteTitle }: Props) {
+export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom, types = ['note', 'list'], newNoteTitle, extraAdds }: Props) {
   const [open, setOpen] = useState<CrossAppRefType | 'newNote' | null>(null);
   const lists = useListViews();
   // Views: an encrypted note's title is blank in the store (see services/noteSecrets.ts).
@@ -103,6 +106,9 @@ export function CrossAppRefPicker({ value, onChange, onNavigate, suggestFrom, ty
         {types.includes('list') && (
           <button type="button" className={styles.addBtn} onClick={() => setOpen('list')}>{LABELS.listLinks.linkList}</button>
         )}
+        {extraAdds?.map((a) => (
+          <button key={a.label} type="button" className={styles.addBtn} onClick={a.onClick}>{a.label}</button>
+        ))}
       </div>
 
       {open === 'note' && <NotePickerModal excludeIds={linkedNoteIds} suggestFrom={suggestFrom} onPick={addNote} onClose={() => setOpen(null)} />}

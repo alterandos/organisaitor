@@ -4,7 +4,7 @@ import type {
 import { isDealtWith, isRhythm, rhythmOccurrences, tickIndex } from '@/utils/rhythms';
 import { formatTime, addDaysToIso } from '@/utils/date';
 import { zonedTimeToUtc, utcToZonedTime } from '@/utils/timezone';
-import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
+import { expandRepeat, isOccurrenceSkipped, occurrenceTime } from '@/utils/recurrence';
 import { datedRule, eventRule, leadDays, notifyMoment } from '@/utils/notifyRule';
 import type { ClockFormat } from '@/utils/date';
 
@@ -109,11 +109,12 @@ export function planNotifications(snap: NotificationSnapshot, opts: PlanOptions)
     const [start, end] = range(leadDays(rule));
     for (const date of occurrences(ev.date, ev.repeat, start, end)) {
       if (seen(date)) continue;
-      const at = notifyMoment(rule, date, ev.startTime, zone)!;
+      const time = occurrenceTime(ev.repeat, date, ev.startTime);
+      const at = notifyMoment(rule, date, time, zone)!;
       if (!inWindow(at) || snoozedAway(snoozed, date, at)) continue;
       // Imported events arrive with their history; don't announce what passed before they existed.
       if (ev.source && at.getTime() < Date.parse(ev.createdAt)) continue;
-      const body = ev.startTime ? `Starting at ${formatTime(ev.startTime, clockFormat)}` : `All day ${whenFrom(at, date, zone)}`;
+      const body = time ? `Starting at ${formatTime(time, clockFormat)}` : `All day ${whenFrom(at, date, zone)}`;
       out.push({ key: `event:${ev.id}:${date}`, kind: 'event', itemId: ev.id, occurrence: date, at, title: ev.title, body, important: ev.important, taskId: null });
     }
   }
@@ -130,11 +131,12 @@ export function planNotifications(snap: NotificationSnapshot, opts: PlanOptions)
     const [start, end] = range(leadDays(rule));
     for (const date of occurrences(rem.date, rem.repeat, start, end)) {
       if (remDone(date)) continue;
-      const at = notifyMoment(rule, date, rem.time, zone)!;
+      const time = occurrenceTime(rem.repeat, date, rem.time);
+      const at = notifyMoment(rule, date, time, zone)!;
       if (!inWindow(at) || snoozedAway(snoozed, date, at)) continue;
       // A lead-time moment that passed before the reminder existed isn't worth announcing.
       if (rule.kind !== 'atTime' && at.getTime() < Date.parse(rem.createdAt)) continue;
-      const body = rem.time ? `${label} at ${formatTime(rem.time, clockFormat)}` : `${label} ${whenFrom(at, date, zone)}`;
+      const body = time ? `${label} at ${formatTime(time, clockFormat)}` : `${label} ${whenFrom(at, date, zone)}`;
       out.push({ key: `reminder:${rem.id}:${date}`, kind: 'reminder', itemId: rem.id, occurrence: date, at, title: rem.title, body, important: rem.important, taskId: linkedTask?.id ?? null });
     }
   }
@@ -150,10 +152,11 @@ export function planNotifications(snap: NotificationSnapshot, opts: PlanOptions)
     const [start, end] = range(leadDays(rule));
     for (const date of occurrences(dl.date, dl.repeat, start, end)) {
       if (settled(date)) continue;
-      const at = notifyMoment(rule, date, dl.time, zone)!;
+      const time = occurrenceTime(dl.repeat, date, dl.time);
+      const at = notifyMoment(rule, date, time, zone)!;
       if (!inWindow(at) || snoozedAway(snoozed, date, at)) continue;
       if (at.getTime() < Date.parse(dl.createdAt)) continue;
-      const body = `Due ${whenFrom(at, date, zone)}${dl.time ? ` at ${formatTime(dl.time, clockFormat)}` : ''}`;
+      const body = `Due ${whenFrom(at, date, zone)}${time ? ` at ${formatTime(time, clockFormat)}` : ''}`;
       out.push({ key: `deadline:${dl.id}:${date}`, kind: 'deadline', itemId: dl.id, occurrence: date, at, title: dl.title, body, important: dl.important, taskId: linkedTask?.id ?? null });
     }
   }

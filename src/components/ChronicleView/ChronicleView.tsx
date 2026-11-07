@@ -8,6 +8,8 @@ import type { RefObject } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useEndeavourScope } from '@/hooks/useEndeavourScope';
+import { useTagFilter } from '@/hooks/useTagFilter';
+import { noteItem, tagTest, type TagTest } from '@/utils/tagScope';
 import { endeavourSubtree, inEndeavourScope } from '@/utils/endeavourGraph';
 import { useUIStore, selectActiveCollectionId, type NotesColumn } from '@/store/uiStore';
 import { getVisibleNoteTagIds, getNoteEffectiveCollectionId, getNotebookIcon, byNotebookOrder, isPinnedNotebook, takesNotes } from '@/utils/notes';
@@ -69,10 +71,11 @@ function getTopLevelNotes(
   noteTags: Record<string, NoteTag>,
   tagId: string,
   scope: ReadonlySet<string> | null,
+  tags: TagTest | null = null,
 ) {
   return Object.values(notesRecord)
     .filter((n) => n.tagIds.includes(tagId) && !n.archivedAt && !n.parentId)
-    .filter((n) => inEndeavourScope(scope, getNoteEffectiveCollectionId(n, noteTags)))
+    .filter((n) => inEndeavourScope(scope, getNoteEffectiveCollectionId(n, noteTags)) && (!tags || tags(noteItem(n, noteTags))))
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
@@ -454,6 +457,7 @@ export function ChronicleView() {
   // When an Endeavour is focused (header dropdown), only show notebooks that belong to
   // it — plus their ancestors, so the tree stays navigable down to them.
   const endeavourScope = useEndeavourScope(activeCollectionId);
+  const tagFilter = useTagFilter();
   const visibleTagIds = useMemo(
     () => (endeavourScope ? getVisibleNoteTagIds(noteTags, endeavourScope) : null),
     [noteTags, endeavourScope]
@@ -477,6 +481,7 @@ export function ChronicleView() {
       const activeCollection = selectActiveCollectionId(uiState) as CollectionId | null;
       const scopeNow = activeCollection ? endeavourSubtree(activeCollection, useTaskStore.getState().collections) : null;
       const visible = scopeNow ? getVisibleNoteTagIds(noteState.noteTags, scopeNow) : null;
+      const tagsNow = tagTest(uiState.activeTagIds, useTaskStore.getState().collections, noteState.noteTags);
 
       // ── Ctrl+`: hand keyboard focus to the editor column (previously Ctrl+Tab — moved so
       // Ctrl+Tab/Ctrl+Shift+Tab could become NoteEditor's tab-cycle shortcut instead) ──────
@@ -510,7 +515,7 @@ export function ChronicleView() {
           e.preventDefault();
           const tagId = uiState.selectedNoteTagId;
           if (!tagId) return;
-          const ns = getTopLevelNotes(noteState.notes, noteState.noteTags, tagId, scopeNow);
+          const ns = getTopLevelNotes(noteState.notes, noteState.noteTags, tagId, scopeNow, tagsNow);
           if (ns.length === 0) return;
           const idx = ns.findIndex((n) => n.id === uiState.editingNoteId);
           // If nothing is selected yet, start at the appropriate end
@@ -541,7 +546,7 @@ export function ChronicleView() {
             return; // expand first, don't advance column yet
           }
           // Seed the list with the first note if nothing is open
-          const ns = getTopLevelNotes(noteState.notes, noteState.noteTags, tagId, scopeNow);
+          const ns = getTopLevelNotes(noteState.notes, noteState.noteTags, tagId, scopeNow, tagsNow);
           if (ns.length > 0 && !uiState.editingNoteId) openNoteFromKeyboardRef.current(ns[0].id);
         }
 
@@ -682,7 +687,7 @@ export function ChronicleView() {
         ) : selectedNoteTagId && noteTags[selectedNoteTagId] ? (
           <NotebookLocationView
             tagId={selectedNoteTagId}
-            noteIds={getTopLevelNotes(notes, noteTags, selectedNoteTagId, endeavourScope).map((n) => n.id)}
+            noteIds={getTopLevelNotes(notes, noteTags, selectedNoteTagId, endeavourScope, tagFilter).map((n) => n.id)}
             visibleTagIds={visibleTagIds}
           />
         ) : (

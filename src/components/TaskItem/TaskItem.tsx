@@ -1,3 +1,4 @@
+import { endeavourColor } from '@/utils/endeavourLook';
 import { TYPES_ENABLED } from '@/config/features';
 import { createElement, useEffect, useRef } from 'react';
 import { checklistProgress, linkedListIds } from '@/services/taskListLinks';
@@ -16,7 +17,7 @@ import { formatDeadline, isOverdue } from '@/utils/date';
 import { hexToRgba } from '@/utils/color';
 import { openBlockers } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
-import { ITEM_FLAG_ICON } from '@/config/itemIcons';
+import { ITEM_FLAG_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { repeatSummary } from '@/services/recurringTasks';
 import { useContextMenuScope } from '@/contextMenu/useContextMenuScope';
 import { ArchiveIcon, CheckCircleIcon, RestoreIcon, TrashIcon } from '@/components/Icons';
@@ -28,10 +29,13 @@ import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 // Two 80px actions (Archive, Delete) behind the row on a left swipe.
 const SWIPE_LEFT_REVEAL = 160;
 
+// The row's priority shading, in the suite's low / medium / high scale (--color-level-*, the same
+// three as the priority and time-needed pickers; 2026-11-07).
+const levelShade = (level: 'low' | 'medium' | 'high') => `linear-gradient(to left, color-mix(in srgb, var(--color-level-${level}) 40%, transparent), transparent 24%)`;
 const PRIORITY_GRADIENT: Partial<Record<Priority, string>> = {
-  low:    'linear-gradient(to left, rgba(34,197,94,0.4),    transparent 24%)',
-  medium: 'linear-gradient(to left, rgba(245,158,11,0.4),   transparent 24%)',
-  high:   'linear-gradient(to left, rgba(239,68,68,0.4),    transparent 24%)',
+  low:    levelShade('low'),
+  medium: levelShade('medium'),
+  high:   levelShade('high'),
 };
 
 interface Props {
@@ -171,7 +175,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
             style={showDueDate ? { opacity: 1 } : undefined}
             title="Due date"
           >
-            ❗{formatDeadline(task.deadline, task.deadlineTime, clockFormat)}
+            {ITEM_TYPE_ICON.deadline}{formatDeadline(task.deadline, task.deadlineTime, clockFormat)}
           </span>
         )}
 
@@ -234,7 +238,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
                 {showCollection && (
                   <span
                     className={styles.hoverCollection}
-                    style={collection!.color ? { color: collection!.color } : undefined}
+                    style={endeavourColor(collection!.id, collectionsRecord) ? { color: endeavourColor(collection!.id, collectionsRecord)! } : undefined}
                   >
                     {collection!.name}
                   </span>

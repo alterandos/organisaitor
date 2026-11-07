@@ -9,7 +9,10 @@ import { cutScratchpad, ensureScratchpad, scratchpadNote, scratchpadText } from 
 import { simpleNoteExtensions, useSimpleNoteEditor } from '@/components/StickyNotes/useSimpleNoteEditor';
 import { showToast } from '@/components/Toast/showToast';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
-import { CloseIcon, DesignIcon, OpenIcon, ScratchpadIcon } from '@/components/Icons';
+import { CalendarIcon, CloseIcon, DesignIcon, NotebookIcon, OpenIcon, ScratchpadIcon } from '@/components/Icons';
+import { NoteEditor } from '@/components/NoteEditor/NoteEditor';
+import { CalendarPad } from '@/components/CalendarPad/CalendarPad';
+import { noteView } from '@/services/noteSecrets';
 import { LABELS } from '@/config/labels';
 import { usePlatform } from '@/hooks/usePlatform';
 import { errorMessage } from '@/utils/log';
@@ -19,22 +22,27 @@ import styles from './ScratchpadPanel.module.css';
 const L = LABELS.scratchpad;
 const EXTENSIONS = simpleNoteExtensions(L.placeholder);
 
-// The scratchpad (Alt+P, services/scratchpad.ts): a panel over whatever is open, for jotting
-// something down for a moment. Copy all / Cut all take its whole text; Escape or Alt+P closes it.
-// No Ctrl+Enter: it has no primary action. Its note is made the first time it's opened.
+// The pad (uiStore.pad): a panel over whatever is open, holding the scratchpad (Alt+P,
+// services/scratchpad.ts; for jotting something down for a moment), a note opened in it (Quick
+// Access, Shift+Enter) or the calendar pad (Alt+C). Shown only in the section it was opened in, and
+// docked to the Escape stack (useEscapeClose `docked`), so moving around and the page's keys still
+// work while it's open (2026-11-07). Escape or its ✕ closes it: a note or the calendar opened over the
+// scratchpad goes back to it. No Ctrl+Enter: it has no primary action. The scratchpad's note is made
+// the first time it's opened.
 export function ScratchpadPanel() {
+  const pad = useUIStore((s) => s.pad);
   const notes = useNoteStore((s) => s.notes);
   const tags = useNoteStore((s) => s.noteTags);
-  const note = scratchpadNote(notes, tags);
-  const close = useUIStore((s) => s.closeScratchpad);
-  useEscapeClose(close);
+  const note = pad?.kind === 'scratchpad' ? scratchpadNote(notes, tags) : null;
+  const close = useUIStore((s) => s.closePad);
+  useEscapeClose(close, true, { docked: true });
   const { isAndroid } = usePlatform();
   const saved = useSettingsStore((s) => s.scratchpadPos);
   const setSaved = useSettingsStore((s) => s.setScratchpadPos);
   const panelRef = useRef<HTMLDivElement>(null);
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
 
-  useEffect(() => { if (!note) ensureScratchpad(); }, [note]);
+  useEffect(() => { if (pad?.kind === 'scratchpad' && !note) ensureScratchpad(); }, [pad?.kind, note]);
 
   // Dragged by its header (not on a button) to anywhere in the window; double-click puts it back.
   // Desktop only: on a phone it sits above the bottom bar.
@@ -59,13 +67,65 @@ export function ScratchpadPanel() {
     head.addEventListener('pointerup', up);
     head.addEventListener('pointercancel', up);
   };
-  const at = dragPos ?? (saved && !isAndroid ? clampToWindow(saved.x, saved.y, Math.min(380, window.innerWidth - 32), Math.min(460, window.innerHeight - 96)) : null);
+  const wide = pad?.kind === 'note';
+  const at = dragPos ?? (saved && !isAndroid ? clampToWindow(saved.x, saved.y, Math.min(wide ? 560 : 380, window.innerWidth - 32), Math.min(wide ? window.innerHeight * 0.75 : 460, window.innerHeight - 96)) : null);
+  const head = { onMoveStart: startMove, onMoveReset: () => setSaved(null), movable: !isAndroid };
 
   return createPortal(
-    <div ref={panelRef} className={`${styles.panel} ${at ? styles.moved : ''}`} style={at ? { left: at.x, top: at.y } : undefined} role="dialog" aria-label={L.region}>
-      {note ? <ScratchpadBody key={note.id} note={note} onClose={close} onMoveStart={startMove} onMoveReset={() => setSaved(null)} movable={!isAndroid} /> : null}
+    <div ref={panelRef} className={`${styles.panel} ${at ? styles.moved : ''}`} data-pad={pad?.kind} style={at ? { left: at.x, top: at.y } : undefined}
+      role="dialog" aria-label={pad?.kind === 'calendar' ? LABELS.calendarPad.region : L.region}>
+      {pad?.kind === 'scratchpad' && note && <ScratchpadBody key={note.id} note={note} onClose={close} {...head} />}
+      {pad?.kind === 'note' && <NoteInPad key={pad.noteId} noteId={pad.noteId} onClose={close} {...head} />}
+      {pad?.kind === 'calendar' && (
+        <div className={styles.pad} data-design="simple">
+          <PadHead icon={<CalendarIcon />} title={LABELS.calendarPad.title} onClose={close} {...head} />
+          <CalendarPad />
+        </div>
+      )}
     </div>,
     document.body,
+  );
+}
+
+interface HeadProps { onMoveStart: (e: React.PointerEvent<HTMLDivElement>) => void; onMoveReset: () => void; movable: boolean }
+
+// The pad's header for a note or the calendar: what it holds, then its buttons. Dragged to move.
+function PadHead({ icon, title, children, onClose, onMoveStart, onMoveReset, movable }: HeadProps & { icon: React.ReactNode; title: string; children?: React.ReactNode; onClose: () => void }) {
+  const back = useUIStore((s) => s.padBack);
+  return (
+    <div className={styles.head} onPointerDown={onMoveStart} onDoubleClick={(e) => { if (!(e.target as Element).closest('button')) onMoveReset(); }} title={movable ? L.move : undefined}>
+      <span className={styles.name}>{icon} {title}</span>
+      <span className={styles.spacer} />
+      {children}
+      <button type="button" className={styles.iconBtn} onClick={onClose} title={back ? L.back : L.close} aria-label={back ? L.back : L.close}>
+        {back?.kind === 'scratchpad' ? <ScratchpadIcon /> : <CloseIcon />}
+      </button>
+    </div>
+  );
+}
+
+// Any note, in the pad: its editor (the full one, without the ribbon), to look something up or add
+// to it without leaving what's open.
+function NoteInPad({ noteId, onClose, ...head }: HeadProps & { noteId: string; onClose: () => void }) {
+  const note = useNoteStore((s) => s.notes[noteId as never]);
+  const openInNotes = useUIStore((s) => s.activeView === 'notes' && (s.editingNoteId === noteId || s.notePanes.includes(noteId)));
+  if (!note) return null;
+  const title = noteView(note).title || L.untitled;
+  const open = () => {
+    onClose();
+    const ui = useUIStore.getState();
+    ui.setActiveView('notes');
+    ui.openNote(noteId);
+  };
+  return (
+    <div className={`${styles.pad} ${styles.notePad}`} data-design="simple">
+      <PadHead icon={<NotebookIcon />} title={title} onClose={onClose} {...head}>
+        <button type="button" className={styles.iconBtn} onClick={open} title={L.open} aria-label={L.open}><OpenIcon /></button>
+      </PadHead>
+      {openInNotes
+        ? <p className={styles.message}>{L.noteOpenInNotes}</p>
+        : <div className={styles.noteHost}><NoteEditor pane={{ index: -1, noteId, focused: false, ribbon: null, onClose }} /></div>}
+    </div>
   );
 }
 

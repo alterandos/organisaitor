@@ -250,9 +250,10 @@ export const addSubjectItem = defineCommand({
     void _s;
     const draft = applyInput(blankDraft(kind, input.date), fields);
     if (inClass && inClass !== 'both') {
-      const clash = clashingClasses({ date: draft.date, start: draft.start, end: draft.end, collectionId: subject.id }, Object.fromEntries(read.events().map((e) => [e.id, e])))[0];
+      // The subject's own class it falls in (clashes are with any event; the agent's inClass means its classes).
+      const clash = clashingClasses({ date: draft.date, start: draft.start, end: draft.end }, Object.fromEntries(read.events().filter((e) => e.collectionId === subject.id && e.repeat).map((e) => [e.id, e])))[0];
       if (!clash) throw new AgentError('invalid', 'It doesn\'t fall in any repeating class of this subject; leave inClass out.');
-      draft.onClass = { eventId: clash.event.id, date: clash.date, mode: inClass === 'instead' ? 'replaces' : 'during' };
+      draft.onClass = { eventId: clash.event.id, date: clash.dates[0], mode: inClass === 'instead' ? 'replaces' : 'during' };
     }
     const id = save(subject, draft);
     ctx.seen(kind === 'work' ? 'deadline' : 'event', id);

@@ -80,91 +80,6 @@
   color: var(--color-muted);
 }
 
-.tagList {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--color-bg);
-  max-height: 180px;
-  overflow-y: auto;
-}
-
-.tagRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  cursor: pointer;
-  font-size: 0.83rem;
-  color: var(--color-text);
-  transition: background 0.1s;
-}
-.tagRow:hover { background: var(--color-surface-alt); }
-
-.checkbox {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  cursor: pointer;
-  accent-color: var(--color-primary);
-}
-
-.tagIcon {
-  font-size: 0.85rem;
-  flex-shrink: 0;
-}
-
-.tagName {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.emptyHint {
-  font-size: 0.8rem;
-  color: var(--color-muted);
-  padding: 0.25rem 0;
-}
-
-/* Accent colour */
-.colorRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.colorSwatch {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-  transition: transform 0.12s, border-color 0.12s;
-  font-size: 0.65rem;
-  color: var(--color-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-.colorSwatch:hover { transform: scale(1.15); }
-.colorSwatchActive { border-color: var(--color-text) !important; transform: scale(1.15); }
-
-/* Pinned */
-.pinnedRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.83rem;
-  color: var(--color-text);
-  cursor: pointer;
-}
-
 /* Dates */
 .dateGrid {
   display: grid;
@@ -221,7 +136,3 @@
   transition: opacity 0.15s;
 }
 .saveBtn:hover { opacity: 0.85; }
-
-.colorSwatchNone {
-  background: var(--color-surface-alt);
-}

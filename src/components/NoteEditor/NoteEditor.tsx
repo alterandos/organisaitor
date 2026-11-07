@@ -283,8 +283,9 @@ interface NoteEditorProps {
   // One pane of notes side by side (components/NoteSplitView): the note shown here, whether it's
   // the pane in front (its toolbar goes in the shared ribbon; the others show none) and where the
   // ribbon is. Without it the editor shows uiStore's open note, with its own toolbar.
-  // onReplace: put another note in this pane (the ⇄ beside its ✕).
-  pane?: { index: number; noteId: string | null; focused: boolean; ribbon: HTMLElement | null; onReplace?: () => void };
+  // onReplace: put another note in this pane (the ⇄ beside its ✕). onClose: closing it does this
+  // instead of closing a pane of notes side by side (a note in the pad, index -1).
+  pane?: { index: number; noteId: string | null; focused: boolean; ribbon: HTMLElement | null; onReplace?: () => void; onClose?: () => void };
 }
 
 // Scrolls the editor's scroll host so the text at pos sits `fraction` of the way down the view:
@@ -304,7 +305,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
   const openNoteId          = useUIStore((s) => s.editingNoteId);
   const editingNoteId       = pane ? pane.noteId : openNoteId;
   const closeOpenNote       = useUIStore((s) => s.closeNote);
-  const closeNote           = pane ? () => useUIStore.getState().closeNotePane(pane.index) : closeOpenNote;
+  const closeNote           = pane ? (pane.onClose ?? (() => useUIStore.getState().closeNotePane(pane.index))) : closeOpenNote;
   // Only the editor in front writes the "last open" memory (the note and tab Notes reopens on).
   const inFront             = !pane || pane.focused;
   const noteTagViewReturn   = useUIStore((s) => s.noteTagViewReturn);

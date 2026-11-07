@@ -1,3 +1,5 @@
+import { endeavourColor } from '@/utils/endeavourLook';
+import { useTaskStore } from '@/store/taskStore';
 import { useState, useRef, useEffect } from 'react';
 import type { Collection, CollectionId } from '@/types';
 import styles from './CollectionPicker.module.css';
@@ -25,6 +27,8 @@ export function CollectionPicker({ collections, value, onChange, noneLabel = 'No
 
   useEscapeClose(() => setOpen(false), open);
 
+  // Colours as shown everywhere: its own, else what it's part of (utils/endeavourLook.ts).
+  const all = useTaskStore((st) => st.collections);
   const selected = value ? collections.find((c) => c.id === value) ?? null : null;
 
   // Archived Endeavours are sunset — don't offer them for new selections, but keep
@@ -44,7 +48,7 @@ export function CollectionPicker({ collections, value, onChange, noneLabel = 'No
       >
         <span
           className={styles.swatch}
-          style={{ background: selected?.color ?? 'var(--color-border)' }}
+          style={{ background: endeavourColor(selected?.id, all) ?? 'var(--color-border)' }}
         />
         <span className={styles.triggerLabel}>
           {selected ? selected.name : noneLabel}
@@ -68,7 +72,7 @@ export function CollectionPicker({ collections, value, onChange, noneLabel = 'No
                   className={`${styles.option} ${value === c.id ? styles.optionActive : ''}`}
                   onClick={() => select(c.id as CollectionId)}
                 >
-                  <span className={styles.swatch} style={{ background: c.color ?? 'var(--color-border)' }} />
+                  <span className={styles.swatch} style={{ background: endeavourColor(c.id, all) ?? 'var(--color-border)' }} />
                   <span>{c.name}</span>
                 </button>
               ))}
@@ -84,7 +88,7 @@ export function CollectionPicker({ collections, value, onChange, noneLabel = 'No
                   className={`${styles.option} ${value === c.id ? styles.optionActive : ''}`}
                   onClick={() => select(c.id as CollectionId)}
                 >
-                  <span className={styles.swatch} style={{ background: c.color ?? 'var(--color-border)' }} />
+                  <span className={styles.swatch} style={{ background: endeavourColor(c.id, all) ?? 'var(--color-border)' }} />
                   <span>{c.name}</span>
                 </button>
               ))}

@@ -6,7 +6,7 @@ import { focusNextAfter } from '@/utils/focusNext';
 import { useFloatingPlacement, type AnchorBox } from '@/utils/floatingPlacement';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useWheelSteps } from '@/hooks/useWheelSteps';
-import { CloseIcon } from '@/components/Icons';
+import { CalendarIcon, CloseIcon } from '@/components/Icons';
 import { MiniDatePicker } from '@/components/MiniDatePicker/MiniDatePicker';
 import { SegmentStepper } from '@/components/TimeInput/SegmentStepper';
 import segStyles from '@/components/TimeInput/TimeInput.module.css';
@@ -20,6 +20,9 @@ interface Props {
   min?:        string;                 // YYYY-MM-DD: a date before it becomes it
   required?:   boolean;
   id?:         string;                 // on the first segment, so a <label htmlFor> still finds the field
+  // Filled in when the field takes focus empty (raised to `min`), its segment selected so typing
+  // replaces it: a "from" suggests today, a "to" the day after its "from" (`dateRangeSuggest`).
+  suggest?:    string;
 }
 
 type Part = 'day' | 'month' | 'year';
@@ -39,6 +42,13 @@ function localeOrder(): { order: Part[]; sep: string } {
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const daysIn = (year: number, month: number) => new Date(year || 2000, month, 0).getDate();
+
+// The year a day and month typed without one take: this year, or with a `min`, the first on or after it.
+function yearToFill(month: string, day: string, min?: string): string {
+  if (!min) return todayIso().slice(0, 4);
+  const y = Number(min.slice(0, 4));
+  return String(`${min.slice(0, 4)}-${month}-${day}` >= min ? y : y + 1);
+}
 const parse = (v: string) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
   return m ? { year: m[1], month: m[2], day: m[3] } : { year: '', month: '', day: '' };
@@ -53,8 +63,9 @@ const parse = (v: string) => {
 //     day; 13 → 12); a complete segment moves on by itself (a digit nothing can follow, "4" in a
 //     day, at once), and after the year, on to the next control;
 //   • Tab / Shift+Tab and ← → between segments; ↑↓, the wheel and the hover ▲▼ step a segment;
-//   • ▾ opens the go-to-date picker (MiniDatePicker), Delete clears.
-export function DateInput({ value, onChange, className, min, required, id, 'aria-label': ariaLabel }: Props) {
+//   • the calendar button opens the go-to-date picker (MiniDatePicker; a ▾ until 2026-11-07, which
+//     didn't read as a calendar), Delete clears.
+export function DateInput({ value, onChange, className, min, required, id, suggest, 'aria-label': ariaLabel }: Props) {
   const [{ order, sep }] = useState(localeOrder);
   const [seg, setSeg] = useState(() => parse(value));
   const [emitted, setEmitted] = useState(value);
@@ -75,8 +86,10 @@ export function DateInput({ value, onChange, className, min, required, id, 'aria
   // Once the day and month are in and the year isn't, it's this year (2026-10-30, the user: typing
   // "2026" every time is four keys for nothing). It's selected when the year is reached, so typing
   // replaces it and Tab goes past it. Never while the year itself is being edited, so it can be cleared.
+  // With a `min` (a "to" after a "from"), it's the first year that comes on or after it: from
+  // 1/9/2026, a "to" of 1/2 is 2027 (2026-11-06; it was this year, then raised to the "from").
   const commit = (input: typeof seg, fillYear = true) => {
-    const next = fillYear && !input.year && input.day.length === 2 && input.month.length === 2 ? { ...input, year: todayIso().slice(0, 4) } : input;
+    const next = fillYear && !input.year && input.day.length === 2 && input.month.length === 2 ? { ...input, year: yearToFill(input.month, input.day, min) } : input;
     setSeg(next);
     const y = Number(next.year); const m = Number(next.month); const d = Number(next.day);
     if (next.year.length === 4 && next.month.length === 2 && next.day.length === 2 && m >= 1 && m <= 12 && d >= 1) {
@@ -186,7 +199,12 @@ export function DateInput({ value, onChange, className, min, required, id, 'aria
               placeholder={placeholder[p]}
               aria-label={label[p]}
               aria-required={required || undefined}
-              onFocus={(e) => { e.currentTarget.select(); fresh.current = p; }}
+              onFocus={(e) => {
+                e.currentTarget.select(); fresh.current = p;
+                if (!suggest || value || seg.day || seg.month || seg.year) return;
+                commit(parse(min && suggest < min ? min : suggest));
+                requestAnimationFrame(() => refs[p].current?.select());
+              }}
               onKeyDown={onKey(p)}
               onBlur={onBlur(p)}
               onChange={() => {}}
@@ -198,8 +216,8 @@ export function DateInput({ value, onChange, className, min, required, id, 'aria
       {value && (
         <button type="button" tabIndex={-1} className={segStyles.clearBtn} aria-label={L.clear} onClick={clear}><CloseIcon /></button>
       )}
-      <button type="button" tabIndex={-1} className={segStyles.dropdownToggle} aria-label={L.choose} aria-expanded={!!picker}
-        onMouseDown={(e) => e.preventDefault()} onClick={openPicker}>▾</button>
+      <button type="button" tabIndex={-1} className={`${segStyles.dropdownToggle} ${styles.calendarBtn}`} aria-label={L.choose} title={L.choose} aria-expanded={!!picker}
+        onMouseDown={(e) => e.preventDefault()} onClick={openPicker}><CalendarIcon width="1em" height="1em" aria-hidden /></button>
       {picker && (
         <DatePopover anchor={picker} value={value || todayIso()} onPick={(d) => { emit(min && d < min ? min : d); setSeg(parse(min && d < min ? min : d)); }} onClose={() => setPicker(null)} wrapper={wrapperRef} />
       )}
@@ -207,7 +225,7 @@ export function DateInput({ value, onChange, className, min, required, id, 'aria
   );
 }
 
-// The calendar under the field (▾): browsing by month or year doesn't change the field; picking a day does, and closes it.
+// The calendar under the field (its calendar button): browsing by month or year doesn't change the field; picking a day does, and closes it.
 function DatePopover({ anchor, value, onPick, onClose, wrapper }: {
   anchor: AnchorBox; value: string; onPick: (d: string) => void; onClose: () => void; wrapper: React.RefObject<HTMLDivElement | null>;
 }) {

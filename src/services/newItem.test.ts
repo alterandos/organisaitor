@@ -46,7 +46,7 @@ describe('openNewItem (N / Space / Ctrl+N)', () => {
     expect(Object.values(useNoteStore.getState().notes).filter((n) => n.tagIds.includes(stickies))).toHaveLength(before + 1);
     useUIStore.setState({ selectedNoteTagId: pad });
     openNewItem('notes');
-    expect(useUIStore.getState().scratchpadOpen).toBe(true);
+    expect(useUIStore.getState().pad?.kind).toBe('scratchpad');
     expect(useUIStore.getState().openModal).toBeNull();
     useUIStore.setState({ notesFocusedColumn: 'tree' });
     openNewItem('notes');

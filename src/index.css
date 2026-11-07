@@ -84,6 +84,11 @@
   --color-danger-muted: rgba(239, 68, 68, 0.08);
   --color-warning: #f59e0b;
   --color-warning-muted: rgba(245, 158, 11, 0.12);
+  /* A low / medium / high scale (priority, time needed, and any later one): green, orange, red, the
+     same three wherever a level is shown, each 3:1 or more on the page. */
+  --color-level-low: #16a34a;
+  --color-level-medium: #ea580c;
+  --color-level-high: #dc2626;
 
   /* ── Calendar cell shading ── */
   --color-cal-past: rgba(0,0,0,0.05);
@@ -125,6 +130,9 @@
   --space-3: 0.5rem;
   --space-4: 0.75rem;
   --space-5: 1rem;
+  /* The space between one field and the next in every creation pane, modal form and item pane
+     (2026-11-06: the calendar create form had none). Never a field spacing of its own. */
+  --form-field-gap: var(--space-5);
   --space-6: 1.5rem;
   --space-7: 2rem;
 
@@ -274,6 +282,9 @@
   --color-danger-muted: rgba(248, 113, 113, 0.10);
   --color-warning: #fbbf24;
   --color-warning-muted: rgba(251, 191, 36, 0.12);
+  --color-level-low: #4ade80;
+  --color-level-medium: #fb923c;
+  --color-level-high: #f87171;
 
   /* ── Calendar cell shading ── */
   --color-cal-past: rgba(0,0,0,0.28);

@@ -1,9 +1,9 @@
-import { foldRuleTasks } from '@/utils/eventTaskRules';
+import { quietRuleTasks, ruleLinkOf } from '@/utils/eventTaskRules';
 import { LABELS } from '@/config/labels';
 import { INBOX_ICON, QUESTION_ICON, REVIEW_ICON, RHYTHM_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import { BEHIND_DAYS, rhythmOccurrences, tickIndex, isRhythm, isDealtWith } from '@/utils/rhythms';
 import { addDaysToIso } from '@/utils/date';
-import { expandRepeat } from '@/utils/recurrence';
+import { expandRepeat, occurrenceTime, seriesDatesAhead } from '@/utils/recurrence';
 import { behindDates } from '@/utils/itemOccurrences';
 import { getNoteEffectiveCollectionId, getNoteNotebookPath } from '@/utils/notes';
 import { collectQuestions } from '@/utils/noteQuestions';
@@ -15,6 +15,7 @@ import type { List, ListItem } from '@/types/lists';
 import type { Note, NoteTag } from '@/types/notes';
 import type { OverviewPlan, OverviewRow, OverviewSourceKey, OverviewStatus } from '@/types/overview';
 import { collectReviewPassages } from '@/utils/noteContent';
+import { noteItem, type TaggedItem } from '@/utils/tagScope';
 import { eventLinksOf } from '@/utils/eventTaskLinks';
 
 // Every app's contribution to Overview: how its items map onto the common row shape
@@ -51,7 +52,16 @@ export interface OverviewSourceDef {
   icon:  string;
   label: string;
   rows:  (snap: OverviewSnapshot, today: string) => SourceResult;
+  // What a row is for the tag condition (its own tags, its notebooks); absent = its Endeavour only.
+  // The Endeavour's tags count either way (utils/tagScope.ts).
+  tagged?: (row: OverviewRow, snap: OverviewSnapshot) => TaggedItem;
 }
+
+// The note a note-borne row (a question, an inbox item, a review passage) is in: its id's first part.
+const noteTagged = (noteId: string, snap: OverviewSnapshot): TaggedItem => {
+  const n = snap.notes[noteId];
+  return n ? noteItem(n, snap.noteTags) : {};
+};
 
 const row = (source: OverviewSourceKey, id: string, r: Omit<OverviewRow, 'key' | 'source' | 'id'>): OverviewRow =>
   ({ key: `${source}:${id}`, source, id, ...r });
@@ -89,6 +99,15 @@ const underEvent = (t: Task): string | undefined => {
 const occurrenceRow = (source: OverviewSourceKey, id: string, date: string, r: Omit<OverviewRow, 'key' | 'source' | 'id'>): OverviewRow =>
   ({ ...row(source, id, r), key: `${source}:${id}@${date}`, occurrence: date });
 
+// A repeating event's, Reminder's or Deadline's later dates, after the one its main row stands for, to the
+// series' end or 90 days ahead (seriesDatesAhead): each a quiet row of its own (the user,
+// 2026-11-07: Overview showed only the next date of a Schedule's classes).
+function laterDates(date: string, repeat: RepeatConfig | null, w: { when: string; status: OverviewStatus }, today: string, archived: boolean, doneDates: string[] = []): string[] {
+  if (!repeat || archived || w.status !== 'open') return [];
+  const done = new Set(doneDates);
+  return seriesDatesAhead(date, repeat, today).filter((d) => d > w.when && !done.has(d));
+}
+
 // A repeating item's main row stands for its next date, so it opens there, not at the series' first.
 const nextOf = (repeat: RepeatConfig | null, w: { when: string; status: OverviewStatus }) =>
   repeat && w.status === 'open' ? { occurrence: w.when } : {};
@@ -96,14 +115,24 @@ const nextOf = (repeat: RepeatConfig | null, w: { when: string; status: Overview
 export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   {
     key: 'task', icon: ITEM_TYPE_ICON.task, label: LABELS.overview.sources.task,
+    tagged: (r, snap) => ({ tagIds: snap.tasks[r.id]?.tagIds, collectionId: r.endeavourId }),
     rows: (snap) => {
-      // A rule's open tasks are one row, the one due first (utils/eventTaskRules.ts).
-      const { folded } = foldRuleTasks(Object.values(snap.tasks).filter((t) => !t.completed && !t.archived));
-      const hidden = new Set([...folded.values()].flat().map((t) => t.id));
+      // A rule's open tasks (utils/eventTaskRules.ts): each a row of the set (`series`), folded under
+      // the one due first where rows are listed (overview/series.ts), the rest quiet when shown.
+      const quiet = quietRuleTasks(Object.values(snap.tasks));
+      const seriesOf = (t: Task) => {
+        const l = ruleLinkOf(t);
+        if (!l) return {};
+        const event = snap.events[l.targetId as never];
+        const rule = event?.taskRules?.find((r) => r.id === l.ruleId);
+        return { series: { key: `${l.targetId}|${l.ruleId}`, label: LABELS.eventTaskRules.seriesLabel(rule?.title ?? t.title, event?.title ?? '') } };
+      };
       return {
       locked: [],
-      rows: Object.values(snap.tasks).filter((t) => !hidden.has(t.id)).map((t) => row('task', t.id, {
-        title:       folded.get(t.id)?.length ? LABELS.eventTaskRules.foldedTitle(t.title, folded.get(t.id)!.length) : t.title,
+      rows: Object.values(snap.tasks).map((t) => row('task', t.id, {
+        title:       t.title,
+        ...(quiet.has(t.id) ? { quiet: true } : {}),
+        ...seriesOf(t),
         when:        t.deadline ?? t.scheduledAt,
         time:        t.deadline ? t.deadlineTime : t.scheduledTime,
         status:      t.archived ? 'archived' : t.completed ? 'done' : 'open',
@@ -122,21 +151,25 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   {
     // A task's own scheduled/deadline shadows are left out — the task row already stands for them.
     key: 'event', icon: ITEM_TYPE_ICON.event, label: LABELS.overview.sources.event,
+    tagged: (r, snap) => ({ tagIds: snap.events[r.id]?.tagIds, collectionId: r.endeavourId }),
     rows: (snap, today) => ({
       locked: [],
-      rows: Object.values(snap.events).filter((e) => e.eventType !== 'task').map((e) => {
+      rows: Object.values(snap.events).filter((e) => e.eventType !== 'task').flatMap((e) => {
         const w = calendarWhen(e.date, e.endDate, e.repeat, today);
-        return row('event', e.id, {
-          title: e.title, when: w.when, time: e.startTime,
-          status: e.archivedAt ? 'archived' : w.status, ...nextOf(e.repeat, w),
-          endeavourId: e.collectionId, context: e.location,
+        const base = {
+          title: e.title, time: e.startTime, endeavourId: e.collectionId, context: e.location,
           plan: plan('block', { endDate: e.repeat ? null : e.endDate, endTime: e.endTime, important: e.important, movable: !e.repeat && !e.archivedAt }),
-        });
+        };
+        return [
+          row('event', e.id, { ...base, when: w.when, time: occurrenceTime(e.repeat, w.when, e.startTime), status: e.archivedAt ? 'archived' : w.status, ...nextOf(e.repeat, w) }),
+          ...laterDates(e.date, e.repeat, w, today, !!e.archivedAt).map((date) => occurrenceRow('event', e.id, date, { ...base, when: date, time: occurrenceTime(e.repeat, date, e.startTime), status: 'open', quiet: true })),
+        ];
       }),
     }),
   },
   {
     key: 'reminder', icon: ITEM_TYPE_ICON.reminder, label: LABELS.overview.sources.reminder,
+    tagged: (r, snap) => ({ tagIds: snap.reminders[r.id]?.tagIds, collectionId: r.endeavourId }),
     rows: (snap, today) => ({
       locked: [],
       rows: Object.values(snap.reminders).filter((r) => r.reminderType !== 'task').flatMap((r) => {
@@ -145,12 +178,14 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
         return [
           row('reminder', r.id, { ...base, when: w.when, status: r.archivedAt ? 'archived' : w.status, ...nextOf(r.repeat, w) }),
           ...doneOccurrences(r.repeat, r.doneDates).map((date) => occurrenceRow('reminder', r.id, date, { ...base, when: date, status: r.archivedAt ? 'archived' : 'done' })),
+          ...laterDates(r.date, r.repeat, w, today, !!r.archivedAt, r.doneDates).map((date) => occurrenceRow('reminder', r.id, date, { ...base, when: date, time: occurrenceTime(r.repeat, date, r.time), status: 'open', quiet: true })),
         ];
       }),
     }),
   },
   {
     key: 'deadline', icon: ITEM_TYPE_ICON.deadline, label: LABELS.overview.sources.deadline,
+    tagged: (r, snap) => ({ tagIds: snap.deadlines[r.id]?.tagIds, collectionId: r.endeavourId }),
     rows: (snap, today) => ({
       locked: [],
       rows: Object.values(snap.deadlines).filter((d) => d.deadlineType !== 'task').flatMap((d) => {
@@ -162,6 +197,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
           // Repeating work's missed dates (phase 7 (e)): each its own open row, so it's Behind (for
           // BEHIND_DAYS) and can be ticked done from there.
           ...behindDates(d, today).map((date) => occurrenceRow('deadline', d.id, date, { ...base, when: date, status: 'open' })),
+          ...laterDates(d.date, d.repeat, w, today, !!d.archivedAt, d.doneDates).map((date) => occurrenceRow('deadline', d.id, date, { ...base, when: date, time: occurrenceTime(d.repeat, date, d.time), status: 'open', quiet: true })),
         ];
       }),
     }),
@@ -169,6 +205,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   {
     // Reference material rather than something to finish: undated, and "open" while it exists.
     key: 'note', icon: ITEM_TYPE_ICON.note, label: LABELS.overview.sources.note,
+    tagged: (r, snap) => noteTagged(r.id, snap),
     rows: (snap) => {
       const notes = Object.values(snap.notes);
       return {
@@ -184,6 +221,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   },
   {
     key: 'list', icon: ITEM_TYPE_ICON.list, label: LABELS.overview.sources.list,
+    tagged: (r, snap) => ({ tagIds: snap.lists[r.id]?.tagIds, collectionId: r.endeavourId }),
     rows: (snap) => {
       const lists = Object.values(snap.lists);
       return {
@@ -199,6 +237,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     // An item's date is its list's first date field (or its tab's, if the tab has its own fields);
     // its Endeavour is its list's.
     key: 'listItem', icon: ITEM_TYPE_ICON.listItem, label: LABELS.overview.sources.listItem,
+    tagged: (r, snap) => ({ tagIds: snap.lists[snap.listItems[r.id]?.listId]?.tagIds, collectionId: r.endeavourId }),
     rows: (snap) => {
       const items = Object.values(snap.listItems);
       const visible = items.filter((i) => snap.lists[i.listId] && !snap.lockedListIds.has(i.listId));
@@ -226,6 +265,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
   },
   {
     key: 'trackerEntry', icon: ITEM_TYPE_ICON.trackerEntry, label: LABELS.overview.sources.trackerEntry,
+    tagged: (r, snap) => ({ tagIds: snap.collections[snap.entries[r.id]?.trackerId]?.tagIds, collectionId: r.endeavourId }),
     rows: (snap) => ({
       locked: [],
       // A rhythm's ticks are its own rows (the rhythm source), so they aren't listed twice.
@@ -242,6 +282,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     // Questions in notes (`\question`): open until answered; dropped ones are left out like archived
     // items. Dated by their follow-up, if they have one. Their Endeavour is their note's.
     key: 'question', icon: QUESTION_ICON, label: LABELS.overview.sources.question,
+    tagged: (r, snap) => noteTagged(r.id.split(':')[0], snap),
     rows: (snap) => {
       const readable = Object.values(snap.notes).filter((n) => !snap.lockedNoteIds.has(n.id));
       return {
@@ -264,6 +305,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     // What's waiting in every inbox (the `\inbox` note block): an item's first line, the day it
     // arrived, its status (Built counts as done), the note and inbox it's in. Its Endeavour is its note's.
     key: 'inboxItem', icon: INBOX_ICON, label: LABELS.overview.sources.inboxItem,
+    tagged: (r, snap) => noteTagged(r.id.split(':')[0], snap),
     rows: (snap) => {
       const readable = Object.values(snap.notes).filter((n) => !snap.lockedNoteIds.has(n.id));
       return {
@@ -290,6 +332,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     // Passages and blocks on the review list (Review later): due on their next review day. Their
     // Endeavour is their note's. Rescheduling is the Review view's spaced repetition, so not draggable.
     key: 'review', icon: REVIEW_ICON, label: LABELS.overview.sources.review,
+    tagged: (r, snap) => noteTagged(r.id.split(':')[0], snap),
     rows: (snap) => {
       const readable = Object.values(snap.notes).filter((n) => !snap.lockedNoteIds.has(n.id));
       return {
@@ -312,6 +355,7 @@ export const OVERVIEW_SOURCES: OverviewSourceDef[] = [
     // and the week ahead. Only rhythms given streams: a routine never given any shows nowhere new.
     // Filed under the rhythm, which is part of its Endeavour, so an Endeavour's home rolls them up.
     key: 'rhythm', icon: RHYTHM_ICON, label: LABELS.overview.sources.rhythm,
+    tagged: (r, snap) => ({ tagIds: snap.collections[r.endeavourId ?? '']?.tagIds, collectionId: r.endeavourId }),
     rows: (snap, today) => {
       const ticks = tickIndex(snap.entries, snap.collections);
       const from = addDaysToIso(today, -BEHIND_DAYS);

@@ -44,13 +44,15 @@ export interface MiniDatePickerProps {
   // calendar currently is when you open it, rather than always resetting to today.
   anchorDate: string;
   onSelect: (date: string) => void;
+  // Days with something on (the calendar pad): a dot under the number.
+  marked?: ReadonlySet<string>;
 }
 
 // A compact visual date picker built specifically to make large jumps easy — the year row's
 // «/» step by 10, ‹/› by 1, and the year itself is a plain number input you can type directly
 // into (e.g. to jump to 2040 in one edit) — rather than relying on a native date input,
 // whose browser-native dropdown calendar has no fast way to move more than one month at a time.
-export function MiniDatePicker({ anchorDate, onSelect }: MiniDatePickerProps) {
+export function MiniDatePicker({ anchorDate, onSelect, marked }: MiniDatePickerProps) {
   const anchor = new Date(`${anchorDate}T00:00:00`);
   const [viewYear, setViewYear]   = useState(anchor.getFullYear());
   const [viewMonth, setViewMonth] = useState(anchor.getMonth());
@@ -142,6 +144,7 @@ export function MiniDatePicker({ anchorDate, onSelect }: MiniDatePickerProps) {
                 !inMonth ? styles.pickerDayOther : '',
                 isToday ? styles.pickerDayToday : '',
                 isAnchor ? styles.pickerDaySelected : '',
+                marked?.has(ds) ? styles.pickerDayMarked : '',
               ].filter(Boolean).join(' ')}
               onClick={() => onSelect(ds)}
             >

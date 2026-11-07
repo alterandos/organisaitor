@@ -90,3 +90,11 @@ export function computeLinkedEndTime(startTime: string, currentEndTime: string):
   if (sameHourTotal > startMin) return wrapMinutes(sameHourTotal);
   return wrapMinutes((sh + 1) * 60 + em);
 }
+
+// What a date range's fields suggest (DateInput's `suggest`; the user, 2026-11-06): the "from"
+// today, the "to" the day after the "from" (or after today, while the "from" is empty). Every
+// from/to pair of date fields uses it.
+export const dateRangeSuggest = {
+  from: (): string => todayIso(),
+  to:   (from: string | null | undefined): string => addDaysToIso(from || todayIso(), 1),
+};

@@ -9,7 +9,7 @@ import { log } from '@/utils/log';
 import type { CalendarEventId, EventTaskRule, TaskId } from '@/types';
 
 // Tasks for each date of an event (the rules are utils/eventTaskRules.ts): ONE watcher makes each
-// task a week before it's due, moves it with its date, and takes an open one away (to the
+// date's task (to the series' end, or 90 days ahead), moves it with its date, and takes an open one away (to the
 // Recycling Bin) when its date is cancelled. Never make or remove these tasks anywhere else; a new
 // way of changing an event needs nothing. Runs on any calendar or task change, once a day, and not
 // while sync is merging (the merged state is applied once it's done).
@@ -47,7 +47,7 @@ export function initEventTaskRules(): () => void {
   applyRuleTasks();
   const offCal = useCalendarStore.subscribe((s, prev) => { if (s.events !== prev.events && !isHydrating()) applyRuleTasks(); });
   const offTasks = useTaskStore.subscribe((s, prev) => { if (s.tasks !== prev.tasks && !isHydrating()) applyRuleTasks(); });
-  // A new day brings the next dates into the week ahead.
+  // A new day brings the next dates into the 90 days ahead of a series that never ends.
   let day = todayIso();
   const timer = window.setInterval(() => { if (todayIso() !== day) { day = todayIso(); applyRuleTasks(); } }, 10 * 60_000);
   return () => { offCal(); offTasks(); window.clearInterval(timer); };

@@ -1,3 +1,6 @@
+import { TagField } from '@/components/TagField/TagField';
+import { commitTags } from '@/services/tags';
+import { tagsFromParents } from '@/utils/tagScope';
 import { Fragment, useState, useEffect, useRef } from 'react';
 import { IconField } from '@/components/IconPicker/IconField';
 import type { FormEvent } from 'react';
@@ -45,7 +48,7 @@ export function AddListModal() {
   const formRef = useRef<HTMLFormElement>(null);
 
   // ── Form state ──────────────────────────────────────────────────────────────
-  const [name,        setName]        = useState(() => existing?.name ?? '');
+  const [name,        setName]        = useState(() => existing?.name ?? useUIStore.getState().createDraft ?? '');
   const [description, setDescription] = useState(() => existing?.description ?? '');
   const [selectedTypeId, setSelectedTypeId] = useState<ListTypeId | null>(() => existing?.typeId ?? null);
   const [color,       setColor]       = useState<string | null>(() => existing?.color ?? null);
@@ -62,6 +65,7 @@ export function AddListModal() {
   const [reusable, setReusable] = useState(() => existing?.resetOnTaskComplete ?? false);
   // A new list starts filed under the Endeavour chosen where it's made (an Endeavour's home, a filter).
   const [collectionId, setCollectionId] = useState<CollectionId | null>(() => (existing ? existing.collectionId ?? null : selectActiveCollectionId(useUIStore.getState()) as CollectionId | null));
+  const [tagIds, setTagIds] = useState<string[]>(() => existing?.tagIds ?? []);
   const collections = useTaskStore((s) => s.collections);
   const endeavourOptions = Object.values(collections).filter((c) => c.kind === 'project' || c.kind === 'list');
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
@@ -198,7 +202,7 @@ export function AddListModal() {
         fieldSchema: validFields,
         tabs: validTabs,
       });
-      updateListLinks(editingListId as ListId, { resetOnTaskComplete: isChecklist && reusable, collectionId });
+      updateListLinks(editingListId as ListId, { resetOnTaskComplete: isChecklist && reusable, collectionId, ...(tagIds.length || existing?.tagIds ? { tagIds: commitTags(tagIds) } : {}) });
     } else {
       const newId = addList({
         name: name.trim(),
@@ -211,6 +215,8 @@ export function AddListModal() {
         resetOnTaskComplete: isChecklist && reusable,
         collectionId,
       });
+      const madeTags = commitTags(tagIds);
+      if (madeTags.length) updateListLinks(newId, { tagIds: madeTags });
       if (encryptOnCreate && vaultUnlocked) {
         encryptList(newId).catch((err) => {
           log.error('AddListModal', 'could not encrypt the new list', err);
@@ -391,6 +397,12 @@ export function AddListModal() {
               />
             </div>
           )}
+
+          <div className={styles.field}>
+            <TagField value={tagIds} onChange={setTagIds} labelClassName={styles.fieldLabel}
+              inherited={collectionId ? tagsFromParents([collectionId], collections) : []}
+              fromName={(id) => collections[id as CollectionId]?.name ?? ''} />
+          </div>
 
           {/* Color */}
           <div className={styles.field}>

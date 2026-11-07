@@ -4,6 +4,8 @@ import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
 import { BUILTIN_TAGS, type BuiltinTag } from '../NoteEditor/builtinTags';
 import { markDigit } from '../NoteEditor/textMarks';
+import { annotationTags } from '@/utils/notes';
+import { ANNOTATION_ICON } from '@/config/itemIcons';
 import { dueReviews } from '@/services/noteReview';
 import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -21,7 +23,7 @@ export function TagFAB() {
   const openNoteTagView      = useUIStore((s) => s.openNoteTagView);
   const closeNoteTagView     = useUIStore((s) => s.closeNoteTagView);
 
-  const userTags = Object.values(noteTagsRecord);
+  const userTags = annotationTags(noteTagsRecord);
   // The Ctrl+digit each tag answers to in the editor (textMarks.ts), shown beside it.
   const hotkeyOf = (id: string) => markDigit(noteTagsRecord, id) ?? '';
   const setNotesView      = useUIStore((s) => s.setNotesView);
@@ -77,7 +79,7 @@ export function TagFAB() {
             </button>
           </div>
           <div className={styles.panelHeader}>
-            <span>Filter by tag</span>
+            <span>{LABELS.annotations.filter}</span>
             {allTagIds.length > 0 && (
               <button className={styles.toggleAllBtn} onClick={handleToggleAll}>
                 {allSelected ? 'Deselect all' : 'Select all'}
@@ -87,7 +89,7 @@ export function TagFAB() {
 
           {BUILTIN_TAGS.length > 0 && (
             <>
-              <div className={styles.sectionLabel}>Tag types</div>
+              <div className={styles.sectionLabel}>{LABELS.annotations.types}</div>
               {BUILTIN_TAGS.map((t: BuiltinTag) => (
                 <button
                   key={t.id}
@@ -106,7 +108,7 @@ export function TagFAB() {
 
           {userTags.length > 0 && (
             <>
-              <div className={styles.sectionLabel}>Your notebooks</div>
+              <div className={styles.sectionLabel}>{LABELS.annotations.yours}</div>
               {userTags.map((t) => (
                 <button
                   key={t.id}
@@ -115,7 +117,7 @@ export function TagFAB() {
                   style={isSelected(t.id) && t.color ? { borderLeft: `3px solid ${t.color}` } : undefined}
                 >
                   <span className={styles.tagHotkey}>{hotkeyOf(t.id)}</span>
-                  <ItemIcon icon={t.icon} fallback="📁" />
+                  <ItemIcon icon={t.icon} fallback={ANNOTATION_ICON} />
                   <span className={styles.tagName}>{t.name}</span>
                   {isSelected(t.id) && <span className={styles.check}>✓</span>}
                 </button>
@@ -124,7 +126,7 @@ export function TagFAB() {
           )}
 
           {BUILTIN_TAGS.length === 0 && userTags.length === 0 && (
-            <div className={styles.empty}>No tags yet</div>
+            <div className={styles.empty}>{LABELS.annotations.none}</div>
           )}
         </div>
       )}

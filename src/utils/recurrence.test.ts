@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endedBefore, expandRepeat, isOccurrenceSkipped, tailOf, withException } from '@/utils/recurrence';
+import { endedBefore, expandRepeat, isOccurrenceSkipped, occurrenceEndTime, occurrenceTime, seriesDatesAhead, seriesHorizon, tailOf, withException } from '@/utils/recurrence';
 import type { RepeatConfig } from '@/types';
 
 function repeat(overrides: Partial<RepeatConfig>): RepeatConfig {
@@ -145,5 +145,24 @@ describe('tailOf', () => {
     const r = repeat({ exceptions: ['2026-01-02', '2026-01-06'] });
     const out = tailOf('2026-01-01', r, '2026-01-04');
     expect(out.exceptions).toEqual(['2026-01-06']);
+  });
+});
+
+describe('a series laid out ahead, and a date with its own time (2026-11-07)', () => {
+  const weekly: RepeatConfig = { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null };
+  it('seriesHorizon: its end, or 90 days ahead for one that never ends', () => {
+    expect(seriesHorizon('2026-09-02', weekly, '2026-09-07')).toBe('2026-12-06');
+    expect(seriesHorizon('2026-09-02', { ...weekly, endKind: 'until', until: '2026-10-01' }, '2026-09-07')).toBe('2026-10-01');
+    expect(seriesHorizon('2026-09-02', { ...weekly, endKind: 'count', count: 3 }, '2026-09-07')).toBe('2026-09-16');
+  });
+  it('seriesDatesAhead: from today to the horizon, its own date when ahead', () => {
+    expect(seriesDatesAhead('2026-09-09', { ...weekly, endKind: 'until', until: '2026-09-23' }, '2026-09-07')).toEqual(['2026-09-09', '2026-09-16', '2026-09-23']);
+  });
+  it('occurrenceTime / occurrenceEndTime: a date’s own time on a list of dates, keeping the length', () => {
+    const dates: RepeatConfig = { ...weekly, freq: 'dates', dates: ['2026-09-09', '2026-09-12'], dateTimes: { '2026-09-12': '14:00' } };
+    expect(occurrenceTime(dates, '2026-09-09', '10:00')).toBe('10:00');
+    expect(occurrenceTime(dates, '2026-09-12', '10:00')).toBe('14:00');
+    expect(occurrenceTime(weekly, '2026-09-12', '10:00')).toBe('10:00');
+    expect(occurrenceEndTime('10:00', '11:30', '14:00')).toBe('15:30');
   });
 });

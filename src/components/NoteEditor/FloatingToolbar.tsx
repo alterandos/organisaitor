@@ -12,7 +12,7 @@ import { normalizeLinkUrl } from '@/utils/links';
 import { inferTaskFromSelection, inferCalendarItemFromSelection } from '@/utils/textToTask';
 import type { NoteId } from '@/types/notes';
 import type { CrossAppRefType } from '@/types';
-import { applyTextMark, textMarks, type TextMark } from './textMarks';
+import { applyTextMark, markChoices, markForDigit, markRange, type MarkChoice } from './textMarks';
 import { deleteGlossaryEntryAsked } from '@/services/glossaryDelete';
 import styles from './FloatingToolbar.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -299,22 +299,20 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, actionsRef }: Pr
 
   if (!pos) return null;
 
-  // The marks in their one order (textMarks.ts): the statuses, then the tags, numbered as Ctrl+1…9
-  // applies them. A number is the mark's own, so it stays the same while searching.
+  // The annotations in their one order (textMarks.ts markChoices, the list right-click and `\` show
+  // too), numbered as Ctrl+1…9 applies them. A number is the mark's own, so it stays while searching.
   const q = search.toLowerCase();
-  const allMarks = textMarks(noteTagsRecord);
-  const numberOf = (m: TextMark) => { const n = allMarks.indexOf(m) + 1; return n <= 9 ? n : null; };
-  const allFiltered = allMarks.filter((t) => t.name.toLowerCase().includes(q));
+  const markOn = markRange(editor.state);
+  const allFiltered = markOn ? markChoices(noteTagsRecord, editor.state, markOn.from, markOn.to).filter((t) => t.label.toLowerCase().includes(q)) : [];
   const filteredStatus = allFiltered.filter((t) => t.family === 'status');
   const filteredTags = allFiltered.filter((t) => t.family === 'tag');
-  const { from: selFrom, to: selTo } = editor.state.selection;
 
   const grip = (e: React.MouseEvent) => e.preventDefault();
 
-  const applyTagItem = (item: TextMark) => {
+  const applyTagItem = (item: MarkChoice) => {
     setShowTags(false);
     setSearch('');
-    applyTextMark(editor, item);
+    item.run(editor.view);
     editor.commands.focus();
   };
 
@@ -338,8 +336,12 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, actionsRef }: Pr
     const num = parseInt(e.key);
     if (!isNaN(num) && num >= 1 && num <= 9) {
       e.preventDefault();
-      const item = allMarks[num - 1];
-      if (item) applyTagItem(item);
+      const mark = markForDigit(noteTagsRecord, num);
+      if (!mark) return;
+      setShowTags(false);
+      setSearch('');
+      applyTextMark(editor, mark);
+      editor.commands.focus();
     }
   };
 
@@ -468,27 +470,24 @@ export function FloatingToolbar({ editor, noteId, getLinkTabId, actionsRef }: Pr
               <div className={styles.tagEmpty}>{LABELS.textMarks.none}</div>
             ) : (
               <>
-                {[[filteredStatus, LABELS.textMarks.statuses], [filteredTags, LABELS.textMarks.tags]].map(([list, heading]) => (list as TextMark[]).length > 0 && (
+                {[[filteredStatus, LABELS.textMarks.statuses], [filteredTags, LABELS.textMarks.tags]].map(([list, heading]) => (list as MarkChoice[]).length > 0 && (
                   <Fragment key={heading as string}>
                     <div className={styles.tagSeparator}>{heading as string}</div>
-                    {(list as TextMark[]).map((mark) => {
-                      const on = mark.on(editor.state, selFrom, selTo);
-                      return (
+                    {(list as MarkChoice[]).map((mark) => (
                         <button
-                          key={mark.id}
+                          key={mark.key}
                           type="button"
                           className={`${styles.tagOption} ${mark.family === 'status' ? styles.tagOptionBuiltin : ''}`}
                           onClick={() => applyTagItem(mark)}
-                          aria-pressed={on}
+                          aria-pressed={mark.on}
                           style={{ borderLeft: `3px solid ${mark.color}` }}
                         >
-                          <span className={styles.tagShortcut}>{numberOf(mark) ?? ''}</span>
+                          <span className={styles.tagShortcut}>{mark.digit ?? ''}</span>
                           <span className={styles.tagIcon}>{mark.icon}</span>
-                          <span>{mark.name}</span>
-                          {on && <span className={styles.tagOn} aria-hidden="true">✓</span>}
+                          <span>{mark.label}</span>
+                          {mark.on && <span className={styles.tagOn} aria-hidden="true">✓</span>}
                         </button>
-                      );
-                    })}
+                    ))}
                   </Fragment>
                 ))}
               </>

@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';
-import { TextSelection, type EditorState } from '@tiptap/pm/state';
+import { TextSelection } from '@tiptap/pm/state';
 import { LABELS } from '@/config/labels';
 import { HUB_ICON, INBOX_ICON, NOTE_LINK_ICON } from '@/config/itemIcons';
 import { ListIcon, ScratchpadIcon, StickyIcon } from '@/components/Icons';
@@ -14,15 +14,13 @@ import { addWordFromSelection } from '@/services/dictionaryActions';
 import { cleanWord } from '@/services/dictionary';
 import { rankSearch, rankSuggestions } from '@/utils/suggestRank';
 import { BUILTIN_TAGS } from '../builtinTags';
-import { IMPORTANCE_LEVELS } from '../extensions/importanceLevels';
-import { collectImportantPassages, setImportance } from '../extensions/Importance';
 import { cardFromSelection } from '../extensions/GlossaryCard';
 import { linkConceptRef } from '../extensions/ConceptRef';
 import { quoteFromSelection } from '../extensions/Quote';
 import { conclusionFromSelection } from '../extensions/Conclusion';
 import { mathsFromSelection } from '../extensions/Maths';
 import { objectTriggerStorage } from './NoteObjectTrigger';
-import { textMarks } from '../textMarks';
+import { markChoices } from '../textMarks';
 import { useNoteStore } from '@/store/noteStore';
 
 // What can be done with selected note text: THE list (CLAUDE.md "Selected text: one list of
@@ -54,11 +52,6 @@ export interface SelectionRange { from: number; to: number }
 
 // A Dictionary word is a word or a short phrase.
 const DICTIONARY_MAX_WORDS = 3;
-
-// The level of Important already on the range (0: none).
-function importanceIn(state: EditorState, range: SelectionRange): number {
-  return collectImportantPassages(state.doc).find((p) => p.from < range.to && p.to > range.from)?.level ?? 0;
-}
 
 export function selectionActions(editor: Editor, range: SelectionRange): SelectionAction[] {
   const view = editor.view;
@@ -100,21 +93,9 @@ export function selectionActions(editor: Editor, range: SelectionRange): Selecti
       { key: 'conclusion', group: 'turn', icon: '∴', label: LABELS.noteBlocks.conclusion.turnInto, run: () => conclusionFromSelection(view, range.from, range.to) },
       { key: 'maths', group: 'turn', icon: '∑', label: LABELS.noteBlocks.maths.turnInto, run: () => mathsFromSelection(view, range.from, range.to) },
     );
-    // The marks (textMarks.ts), each ✓ while on (choosing it again takes it off). Important offers
-    // its two levels here rather than stepping through them.
-    const level = importanceIn(state, range);
-    for (const m of textMarks(useNoteStore.getState().noteTags)) {
-      if (m.id === 'important') {
-        out.push(...IMPORTANCE_LEVELS.map((lv): SelectionAction => ({
-          key: `important-${lv.level}`, group: 'mark', set: 'important', icon: level === lv.level ? '✓' : lv.icon, label: lv.label, color: lv.color,
-          run: () => setImportance(view, range.from, range.to, level === lv.level ? null : lv.level),
-        })));
-        continue;
-      }
-      out.push({ key: m.family === 'status' ? m.id : `tag-${m.id}`, group: 'mark', set: m.family === 'status' ? 'status' : 'tags',
-        icon: m.on(state, range.from, range.to) ? '✓' : m.icon, label: m.name, color: m.color,
-        run: () => m.toggle(view, range.from, range.to) });
-    }
+    // The annotations (textMarks.ts markChoices, the list Ctrl+Space shows too), each ✓ while on
+    // (choosing it again takes it off).
+    out.push(...annotationActions(editor, range));
     out.push(
       { key: 'link-to-note', group: 'link', icon: NOTE_LINK_ICON, label: LABELS.noteLinks.menu,
         run: () => storage.openNoteLinkPicker?.({ purpose: 'link', from: range.from, to: range.to }) },
@@ -139,6 +120,14 @@ export function selectionActions(editor: Editor, range: SelectionRange): Selecti
     out.push({ key: 'dictionary', group: 'send', set: 'lists', icon: '📕', label: LABELS.dictionary.add, run: () => { void addWordFromSelection(words); } });
   }
   return out;
+}
+
+// The annotations for a range as selection actions: the selected text, or a right-clicked line.
+export function annotationActions(editor: Editor, range: SelectionRange): SelectionAction[] {
+  const view = editor.view;
+  return markChoices(useNoteStore.getState().noteTags, view.state, range.from, range.to).map((c) => ({
+    key: c.key, group: 'mark', set: c.set, icon: c.on ? '✓' : c.icon, label: c.label, color: c.color, run: () => c.run(view),
+  }));
 }
 
 const termFields = (e: GlossaryEntry) => [

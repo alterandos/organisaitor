@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   background: var(--color-scrim);
-  z-index: 30;
+  z-index: var(--z-pane-modal);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -70,96 +70,6 @@
   gap: 1rem;
 }
 
-.row {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-.select {
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 0.65rem 0.75rem;
-  font-size: 0.95rem;
-  font-family: inherit;
-  background: var(--color-surface);
-  color: var(--color-text);
-  cursor: pointer;
-  transition: border-color 0.2s;
-  outline: none;
-}
-
-.select:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-subtle);
-}
-
-.label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--color-text);
-}
-
-.optional {
-  font-weight: 400;
-  color: var(--color-muted);
-  font-size: 0.85rem;
-}
-
-.input {
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 0.75rem;
-  font-size: 0.95rem;
-  font-family: inherit;
-  background: var(--color-surface);
-  color: var(--color-text);
-  transition: border-color 0.2s;
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-subtle);
-}
-
-.iconInput {
-  max-width: 100px;
-  font-size: 1.25rem;
-  text-align: center;
-}
-
-.swatches {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.swatch {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-  transition: transform 0.15s, border-color 0.15s;
-}
-
-.swatch:hover {
-  transform: scale(1.15);
-}
-
-.swatchActive {
-  border-color: var(--color-text);
-  transform: scale(1.15);
-}
-
 .footer {
   display: flex;
   gap: 0.75rem;
@@ -202,93 +112,4 @@
 
 .btnSecondary:hover {
   background: var(--color-surface-alt);
-}
-
-/* The "Inside" picker: where a new notebook goes. */
-.parentRow {
-  display: flex;
-  gap: 0.35rem;
-}
-
-.parentBtn {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: inherit;
-  font-size: 0.875rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.parentBtn:hover {
-  border-color: var(--color-primary-border);
-}
-
-.parentName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.parentClear {
-  flex-shrink: 0;
-  width: 2.1rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  color: var(--color-muted);
-  cursor: pointer;
-}
-
-.parentClear:hover {
-  color: var(--color-danger);
-  border-color: var(--color-danger);
-}
-
-.parentList {
-  display: flex;
-  flex-direction: column;
-  max-height: 220px;
-  overflow-y: auto;
-  margin-top: 0.35rem;
-  padding: 0.25rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-}
-
-.parentOption {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.6rem;
-  border: none;
-  border-radius: 4px;
-  background: none;
-  color: var(--color-text);
-  font-family: inherit;
-  font-size: 0.85rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.parentOption:hover {
-  background: var(--color-surface-alt);
-}
-
-.parentOptionActive {
-  background: var(--color-primary-subtle);
-  color: var(--color-primary);
-}
-
-.parentOptionIcon {
-  flex-shrink: 0;
 }

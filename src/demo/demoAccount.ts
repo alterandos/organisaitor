@@ -92,9 +92,12 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   const uniTag = tag('uni', 'blue');
   const readingTag = tag('reading', 'teal', 'Papers and chapters to get through.');
   const errandTag = tag('errand', 'orange');
+  // Tags pass down (2026-11-06): the semester is tagged uni, so its parts are too without holding it.
+  const subjectTag = tag('subject', 'cyan', 'A unit of study.');
+  const examsTag = tag('exam', 'red');
 
-  const fieldReport = tasks.addCollection({ kind: 'project', name: 'Field trip report', description: 'GEOS201: a 2,000-word report on the Kiama coast field trip.', color: colour('teal'), deadline: day(18), purposeIds: [honours], tagIds: [uniTag] });
-  const essay = tasks.addCollection({ kind: 'project', name: 'Climate essay', description: 'GEOS215: Is solar geoengineering a responsible response to climate change? 2,500 words.', color: colour('indigo'), deadline: day(25), purposeIds: [honours], tagIds: [uniTag] });
+  const fieldReport = tasks.addCollection({ kind: 'project', name: 'Field trip report', description: 'GEOS201: a 2,000-word report on the Kiama coast field trip.', color: colour('teal'), deadline: day(18), purposeIds: [honours] });
+  const essay = tasks.addCollection({ kind: 'project', name: 'Climate essay', description: 'GEOS215: Is solar geoengineering a responsible response to climate change? 2,500 words.', color: colour('indigo'), deadline: day(25), purposeIds: [honours] });
   const admin = tasks.addCollection({ kind: 'list', name: 'Uni admin', description: 'Fees, forms and the library.', color: colour('grey') });
   // The semester the two assignments and the admin are part of (Endeavour links, 2026-10-28): choose
   // it in the Endeavour filter and everything in all three shows.
@@ -216,6 +219,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
   const fieldTrip = cal.addEvent({ title: 'Field trip: Kiama coast', date: day(4), startTime: '07:00', endTime: '17:30', location: 'Kiama Blowhole, NSW', collectionId: fieldReport, important: true, notifyBeforeValue: 1, notifyBeforeUnit: 'days', crossAppRefs: [noteRef(trip)], notes: 'Bus leaves from the Earth Sciences car park. Bring lunch.' });
   const consult = cal.addEvent({ title: 'Consult with my tutor about the essay', date: day(9), startTime: '11:00', endTime: '11:30', location: 'Room 4.12, Madsen Building', status: 'tentative', collectionId: essay, crossAppRefs: [noteRef(essayNote)] });
   const midsem = cal.addEvent({ title: 'Climate Systems mid-semester exam', date: day(12), startTime: '09:00', endTime: '11:00', location: 'Exam Hall B', important: true, crossAppRefs: [noteRef(carbon)] });
+  cal.updateEvent(midsem, { tagIds: [examsTag] });
   // Tasks linked to the exam (utils/eventTaskLinks.ts): revision due when it starts, a follow-up after.
   const revise = T({ title: 'Revise the carbon cycle lectures', scheduledAt: day(5), crossAppRefs: [noteRef(carbon)] });
   linkTaskToEvent(revise, 'prepFor', 'event', midsem);
@@ -253,13 +257,13 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     block('geos215t', 'GEOS215 tutorial', [5], '09:00', '10:00', 'Madsen 4.12'),
   ]);
   const geos215Lecture = classes.get('geos215l')!;
-  // Tasks for each date (services/eventTaskRules.ts): a review after each lecture, made a week ahead.
+  // Tasks for each date (services/eventTaskRules.ts): a review after each lecture, made for the whole series.
   setEventTaskRules(geos215Lecture as CalendarEventId, [{ id: 'review', title: 'Review the slides', side: 'after', days: 0 }]);
 
   // ── Semester 2 as a semester, with a subject (docs/features/endeavours.md phase 7 (d)): their
   // homes show what's in them, and the subject takes the semester's period and break, live.
   tasks.updateCollection(semester, { templateId: 'semester', period: { start: day(-56), end: day(42), breaks: [{ id: 'midsem', label: 'Mid-semester break', from: day(14), to: day(18) }], exams: { from: day(49), to: day(63) } } });
-  const geosSubject = tasks.addCollection({ kind: 'project', name: 'GEOS215 Climate Systems', color: colour('cyan'), purposeIds: [honours], tagIds: [uniTag] });
+  const geosSubject = tasks.addCollection({ kind: 'project', name: 'GEOS215 Climate Systems', color: colour('cyan'), purposeIds: [honours], tagIds: [subjectTag] });
   tasks.updateCollection(geosSubject, { templateId: 'subject' });
   tasks.addEndeavourLink(geosSubject, 'partOf', semester);
   saveSubjectItem(geosSubject, { ...blankDraft('schedule', day(10)), title: 'GEOS215 field excursion', start: '08:00', end: '17:00', place: 'Royal National Park' });

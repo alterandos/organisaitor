@@ -1,11 +1,14 @@
 import type { Collection, EndeavourPeriod } from '@/types';
 import { addDaysToIso } from '@/utils/date';
 import { parentsOf } from '@/utils/endeavourGraph';
+import { periodFromUse, periodsFor } from '@/utils/datePeriods';
 
 // An Endeavour's period and breaks (docs/features/endeavours.md phase 7), pure: its own, or the
 // nearest Endeavour's above it that has one (a subject takes its semester's, live), nearest first
 // and then in the order its parents are listed. Its own replaces the inherited one whole (a summer
-// subject sets its own dates and breaks).
+// subject sets its own dates and breaks). Since 2026-11-07 an Endeavour says which named periods it
+// runs during and pauses during (`dateUse`, utils/datePeriods.ts), read here into the same shape;
+// an old single `period` is still read until it's converted.
 
 export interface EffectivePeriod { period: EndeavourPeriod; from: string; inherited: boolean }
 
@@ -19,6 +22,10 @@ export function effectivePeriod(id: string, collections: Record<string, Collecti
       seen.add(cid);
       const c = collections[cid];
       if (!c) continue;
+      if (c.dateUse && (c.dateUse.runs.length || c.dateUse.pauses.length)) {
+        const p = periodFromUse(c.dateUse, periodsFor(cid, collections));
+        if (p) return { period: p, from: cid, inherited: cid !== id };
+      }
       if (c.period) return { period: c.period, from: cid, inherited: cid !== id };
       next.push(...parentsOf(c, collections));
     }
@@ -32,7 +39,9 @@ export function breakDates(period: EndeavourPeriod | null | undefined): string[]
   if (!period) return [];
   const out: string[] = [];
   for (const b of period.breaks) {
-    for (let d = b.from; d <= b.to && out.length < 4000; d = addDaysToIso(d, 1)) out.push(d);
+    // A break with no end yet is its one day (2026-11-06: the end waits empty for its suggestion).
+    const to = b.to || b.from;
+    for (let d = b.from; d && d <= to && out.length < 4000; d = addDaysToIso(d, 1)) out.push(d);
   }
   return [...new Set(out)].sort();
 }

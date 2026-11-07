@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { LABELS } from '@/config/labels';
 import { DateInput } from '@/components/DateInput/DateInput';
 import type { RepeatConfig, RepeatFreq } from '@/types';
-import { firstNthWeekdayFrom, weekOfMonth } from '@/utils/recurrence';
-import { formatDate } from '@/utils/date';
+import { expandRepeat, firstNthWeekdayFrom, weekOfMonth } from '@/utils/recurrence';
+import { addDaysToIso, formatDate, todayIso } from '@/utils/date';
+import { DisclosureIcon } from '@/components/Icons';
 import { useCalendarStore } from '@/store/calendarStore';
 import { CloseIcon } from '@/components/Icons';
+import { TimeInput } from '@/components/TimeInput/TimeInput';
+import { DateChecklist } from '@/components/DateChecklist/DateChecklist';
 import styles from './RepeatField.module.css';
 import { FlagIcon } from '@/components/FlagCheck/FlagCheck';
 
@@ -19,9 +22,17 @@ interface Props {
   date?: string | null;
   // Moves the item's date onto a chosen nth weekday ("third Sunday") when it isn't on it already.
   onDateChange?: (date: string) => void;
+  // Offers "Leave out dates" (calendar items): its dates, each unticked to skip it. `changed` are
+  // dates taken out of the series as items of their own, shown but not to be ticked back here.
+  skippable?: { changed?: ReadonlySet<string> };
+  // The item's own time (an event's start, a reminder's or deadline's time): on a list of dates,
+  // each date can have its own instead (`dateTimes`). Undefined: no times offered.
+  itemTime?: string | null;
+  // Turning Repeat on ends it on this date (its Endeavour's end), changeable (2026-11-07).
+  defaultUntil?: string | null;
 }
 
-const FREQS: RepeatFreq[] = ['daily', 'weekly', 'monthly', 'yearly', 'dates'];
+const FREQS: RepeatFreq[] = ['daily', 'weekly', 'monthly', 'yearly'];
 const MONTHS = Array.from({ length: 12 }, (_, m) => new Date(2001, m, 1).toLocaleDateString(undefined, { month: 'long' }));
 
 // The same year with this day and month (0-based), the day kept within the month (31 → 30 April).
@@ -37,12 +48,14 @@ const NTH_ORDER = [1, 2, 3, 4, -1];
 // Drops the parts of a rule that don't apply to its frequency (weekdays only on weekly, the nth
 // weekday only on monthly/yearly), so switching frequency never leaves a hidden setting behind.
 function tidy(r: RepeatConfig): RepeatConfig {
-  const { daysOfWeek, monthWeekday, dates, follows, ...rest } = r;
+  const { daysOfWeek, monthWeekday, dates, follows, dateTimes, ...rest } = r;
+  // A date's own time is kept only while the date is on the list.
+  const times = dateTimes ? Object.fromEntries(Object.entries(dateTimes).filter(([d, t]) => t && (dates ?? []).includes(d))) : {};
   return {
     ...rest,
     ...(r.freq === 'weekly' && daysOfWeek?.length ? { daysOfWeek } : {}),
     ...((r.freq === 'monthly' || r.freq === 'yearly') && monthWeekday ? { monthWeekday } : {}),
-    ...(r.freq === 'dates' ? { dates: dates ?? [], ...(follows ? { follows } : {}) } : {}),
+    ...(r.freq === 'dates' ? { dates: dates ?? [], ...(follows ? { follows } : {}), ...(Object.keys(times).length ? { dateTimes: times } : {}) } : {}),
   };
 }
 
@@ -50,7 +63,7 @@ function tidy(r: RepeatConfig): RepeatConfig {
 // date. Controlled: every change hands back the whole rule (null = doesn't repeat). Used by the
 // task pane, the add-task modal, the add-calendar-item modal and the event, reminder and deadline
 // panes: THE repeat editor (pattern test "one repeat-rule editor"). Routines pick weekdays instead.
-export function RepeatField({ value, onChange, hint, labelClassName, date, onDateChange }: Props) {
+export function RepeatField({ value, onChange, hint, labelClassName, date, onDateChange, skippable, itemTime, defaultUntil }: Props) {
   const L = LABELS.recurring;
   const set = (patch: Partial<RepeatConfig>) => onChange(tidy({ ...(value ?? DEFAULT), ...patch }));
   const start = date ? new Date(date + 'T00:00:00') : null;
@@ -73,35 +86,45 @@ export function RepeatField({ value, onChange, hint, labelClassName, date, onDat
   return (
     <div className={styles.field}>
       <label className={labelClassName ?? styles.toggle}>
-        <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked ? { ...DEFAULT } : null)} />
+        <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked
+          ? { ...DEFAULT, ...(defaultUntil && (!date || defaultUntil >= date) ? { endKind: 'until' as const, until: defaultUntil } : {}) }
+          : null)} />
         <FlagIcon flag="repeats" />
         {L.repeat}
       </label>
       {value && (
         <div className={styles.config}>
-          <div className={styles.row}>
+          <div className={styles.pills} role="radiogroup" aria-label={L.howLabel}>
+            {([['regular', L.regularly], ['dates', L.onDates]] as const).map(([how, label]) => {
+              const on = (value.freq === 'dates') === (how === 'dates');
+              return (
+                <button key={how} type="button" role="radio" aria-checked={on} className={`${styles.pill} ${on ? styles.pillOn : ''}`}
+                  onClick={() => { if (on) return; set(how === 'dates'
+                    ? { freq: 'dates', interval: 1, endKind: 'forever', count: null, until: null, dates: value.dates?.length ? value.dates : date ? [date] : [] }
+                    : { freq: 'weekly', ...(defaultUntil && (!date || defaultUntil >= date) ? { endKind: 'until' as const, until: defaultUntil } : {}) }); }}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {value.freq !== 'dates' && <div className={styles.row}>
             <span className={styles.small}>{L.every}</span>
-            {value.freq !== 'dates' && (
-              <input
-                type="number"
-                className={styles.num}
-                min={1}
-                value={value.interval}
-                onChange={(e) => set({ interval: Math.max(1, Number(e.target.value) || 1) })}
-              />
-            )}
+            <input
+              type="number"
+              className={styles.num}
+              min={1}
+              value={value.interval}
+              onChange={(e) => set({ interval: Math.max(1, Number(e.target.value) || 1) })}
+            />
             <select
               className={styles.select}
               value={value.freq}
-              onChange={(e) => {
-                const freq = e.target.value as RepeatFreq;
-                set(freq === 'dates' ? { freq, interval: 1, endKind: 'forever', count: null, until: null, dates: value.dates?.length ? value.dates : date ? [date] : [] } : { freq });
-              }}
+              onChange={(e) => set({ freq: e.target.value as RepeatFreq })}
             >
-              {FREQS.map((f) => <option key={f} value={f}>{f === 'dates' ? L.onDates : L.units[f][value.interval === 1 ? 0 : 1]}</option>)}
+              {FREQS.map((f) => <option key={f} value={f}>{L.units[f][value.interval === 1 ? 0 : 1]}</option>)}
             </select>
-          </div>
-          {value.freq === 'dates' && <DatesList value={value} onChange={(r) => { set(r); if (r.dates?.[0] && r.dates[0] !== date) onDateChange?.(r.dates[0]); }} />}
+          </div>}
+          {value.freq === 'dates' && <DatesList value={value} itemTime={itemTime} onChange={(r) => { set(r); if (r.dates?.[0] && r.dates[0] !== date) onDateChange?.(r.dates[0]); }} />}
           {value.freq === 'weekly' && (
             <div className={styles.row} role="group" aria-label={L.onDays}>
               <span className={styles.small}>{L.onDays}</span>
@@ -193,11 +216,54 @@ export function RepeatField({ value, onChange, hint, labelClassName, date, onDat
               />
             )}
             {value.endKind === 'until' && (
-              <DateInput className={styles.date} value={value.until ?? ''} onChange={(v) => set({ until: v || null })} />
+              <DateInput className={styles.date} value={value.until ?? ''} min={date ?? undefined} onChange={(v) => set({ until: v || null })} />
             )}
           </div>}
+          {skippable && value.freq !== 'dates' && date && <SkipDates value={value} date={date} changed={skippable.changed} onChange={(exceptions) => set({ exceptions })} />}
           {hint && <p className={styles.hint}>{hint}</p>}
         </div>
+      )}
+    </div>
+  );
+}
+
+const SKIP_PAGE = 20;
+const SKIP_AHEAD_DAYS = 730;
+
+// The dates a repeat falls on, from its first (or today, for one already under way), each ticked
+// while it happens: unticking puts it in the rule's `exceptions` (as the calendar's "delete only
+// this one" does, and a Schedule's skip list). A date skipped by a break or by an item in the
+// class's place, or taken out as an item of its own, shows but stays as it is (2026-11-07).
+function SkipDates({ value, date, changed, onChange }: { value: RepeatConfig; date: string; changed?: ReadonlySet<string>; onChange: (exceptions: string[]) => void }) {
+  const L = LABELS.recurring;
+  const [open, setOpen] = useState(false);
+  const exceptions = useMemo(() => value.exceptions ?? [], [value.exceptions]);
+  const locked = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const d of value.breakSkips ?? []) out.set(d, L.skipLocked.breaks);
+    for (const d of value.replacedSkips ?? []) out.set(d, L.skipLocked.replaced);
+    for (const d of changed ?? []) out.set(d, L.skipLocked.changed);
+    return out;
+  }, [value.breakSkips, value.replacedSkips, changed, L]);
+  const dates = useMemo(() => {
+    const today = todayIso();
+    const from = date > today ? date : today;
+    const all = expandRepeat(date, { ...value, exceptions: [] }, from, addDaysToIso(from, SKIP_AHEAD_DAYS));
+    return date >= from ? [date, ...all] : all;
+  }, [value, date]);
+  const own = exceptions.filter((d) => !locked.has(d));
+  const toggle = (d: string) => onChange(exceptions.includes(d) ? exceptions.filter((x) => x !== d) : [...exceptions, d].sort());
+  return (
+    <div className={styles.skip}>
+      <button type="button" className={styles.linkBtn} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <DisclosureIcon open={open} /> {L.skipDates}{own.length ? ` · ${L.skipCount(own.length)}` : ''}
+      </button>
+      {open && (
+        <>
+          <p className={styles.hint}>{L.skipHint}</p>
+          <DateChecklist dates={dates} label={L.skipDates} pageSize={SKIP_PAGE} locked={locked} onToggle={toggle}
+            checked={(d) => !exceptions.includes(d) || changed?.has(d) === true} />
+        </>
       )}
     </div>
   );
@@ -206,11 +272,15 @@ export function RepeatField({ value, onChange, hint, labelClassName, date, onDat
 // A repeat on a list of dates: each date with a way to take it off, and a field to add one. When
 // the dates follow other events ("1 day before each lecture"), it says so and offers to stop; the
 // dates then stay as they are and can be changed by hand (services/repeatFollow.ts keeps them in step).
-function DatesList({ value, onChange }: { value: RepeatConfig; onChange: (r: Partial<RepeatConfig>) => void }) {
+function DatesList({ value, onChange, itemTime }: { value: RepeatConfig; onChange: (r: Partial<RepeatConfig>) => void; itemTime?: string | null }) {
   const L = LABELS.recurring;
   const events = useCalendarStore((s) => s.events);
   const [adding, setAdding] = useState('');
   const dates = value.dates ?? [];
+  // With times (a calendar item): one line per date, its own time beside it (2026-11-07).
+  const timed = itemTime !== undefined;
+  const times = value.dateTimes ?? {};
+  const setTime = (d: string, t: string) => onChange({ dateTimes: { ...times, [d]: t } });
   const followed = value.follows ? [...new Set(value.follows.ids.map((id) => events[id as never]?.title).filter(Boolean))].join(', ') : '';
   return (
     <div className={styles.dates}>
@@ -220,10 +290,14 @@ function DatesList({ value, onChange }: { value: RepeatConfig; onChange: (r: Par
           <button type="button" className={styles.linkBtn} onClick={() => onChange({ follows: undefined })}>{L.stopFollowing}</button>
         </div>
       )}
-      <ul className={styles.dateList}>
+      {timed && dates.length > 0 && <p className={styles.hint}>{L.dateTimeHint}</p>}
+      <ul className={timed ? styles.dateRows : styles.dateList}>
         {dates.map((d) => (
-          <li key={d} className={styles.dateChip}>
+          <li key={d} className={timed ? styles.dateRow : styles.dateChip}>
             {formatDate(d + 'T00:00:00')}
+            {timed && !value.follows && (
+              <TimeInput className={styles.dateTime} value={times[d] ?? ''} placeholder={itemTime ?? undefined} onChange={(t) => setTime(d, t)} />
+            )}
             {!value.follows && (
               <button type="button" className={styles.chipX} aria-label={L.removeDate(formatDate(d + 'T00:00:00'))} onClick={() => onChange({ dates: dates.filter((x) => x !== d) })}>
                 <CloseIcon />

@@ -177,9 +177,9 @@ describe('pattern: floating panels are placed by utils/floatingPlacement.ts', ()
   // works out its own place from the window's height can open with its bottom off the screen
   // (the backdrop picker did). Every older site moved to the helper on 2026-10-17; NOT_YET is
   // kept for a site found later, listed in BACKLOG.md's Pattern retrofit backlog. Not panels:
-  // StickyNotes and the scratchpad (dragged on screen) and TaskPane (a textarea's height).
+  // StickyNotes and the scratchpad (dragged on screen) and TaskFields (a task's notes' height).
   const NOT_YET = new Set<string>([]);
-  const NOT_PANELS = new Set(['src/components/StickyNotes/StickyNotes.tsx', 'src/components/ScratchpadPanel/ScratchpadPanel.tsx', 'src/components/TaskPane/TaskPane.tsx', 'src/utils/floatingPlacement.ts']);
+  const NOT_PANELS = new Set(['src/components/StickyNotes/StickyNotes.tsx', 'src/components/ScratchpadPanel/ScratchpadPanel.tsx', 'src/components/TaskFields/TaskFields.tsx', 'src/utils/floatingPlacement.ts']);
 
   it('no new file places a panel from window.innerHeight itself', () => {
     const bad = SOURCE_FILES.map(rel)
@@ -740,7 +740,7 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
     const more = findMatches(files.filter((f) => !glyphAllowed.test(f)), /[⊘↺↗↳↰◐◫▦◎▤✦◉]/, { skipComments: true });
     expect(more, describeHits(more)).toEqual([]);
     // config/emojiSet.ts: 🔗 is one of the emoji a person can pick as an icon, not a control.
-    const linkAllowed = /itemIcons\.ts$|itemLinkKinds\.ts$|artifactTypes\.ts$|CrossAppRefPicker\.tsx$|EditActivityTypeModal\.tsx$|EditTrackerPane\.tsx$|emojiSet\.ts$/;
+    const linkAllowed = /itemIcons\.ts$|itemLinkKinds\.ts$|artifactTypes\.ts$|CrossAppRefPicker\.tsx$|EditActivityTypeModal\.tsx$|RecordFields\.tsx$|emojiSet\.ts$/;
     const links = findMatches(files.filter((f) => !linkAllowed.test(f)), /🔗/, { skipComments: true });
     expect(links, describeHits(links)).toEqual([]);
   });
@@ -1465,7 +1465,7 @@ describe('pattern: a formula is worked out only by utils/formula.ts (CLAUDE.md "
 
 describe('pattern: an icon a person picks comes from the icon field (CLAUDE.md "Icon picker")', () => {
   it('the places that give something an icon use IconField, and no emoji list is kept anywhere but config/emojiSet.ts', () => {
-    const editors = ['AddNoteTagModal/AddNoteTagModal.tsx', 'EditNoteTagModal/EditNoteTagModal.tsx', 'AddListModal/AddListModal.tsx', 'AddOverviewModal/AddOverviewModal.tsx', 'EditActivityTypeModal/EditActivityTypeModal.tsx', 'ConverterPane/ConverterEditor.tsx'];
+    const editors = ['NoteTagFields/NoteTagFields.tsx', 'AddListModal/AddListModal.tsx', 'AddOverviewModal/AddOverviewModal.tsx', 'EditActivityTypeModal/EditActivityTypeModal.tsx', 'ConverterPane/ConverterEditor.tsx'];
     const missing = editors.filter((f) => !fs.readFileSync(path.join(SRC, 'components', f), 'utf8').includes('<IconField'));
     expect(missing).toEqual([]);
     const lists = SOURCE_FILES.filter((f) => !rel(f).endsWith('config/emojiSet.ts') && /const \w*(EMOJI|ICON_CHOICES)\w* = \[/.test(fs.readFileSync(f, 'utf8')));
@@ -1625,7 +1625,7 @@ describe('pattern: one form for a calendar item, created or edited (2026-11-05)'
       const src = read(f);
       expect(src, f).toContain('<CalendarItemFields');
       // The fields are the shared component's; a host adds only what's around them.
-      expect(src, f).not.toMatch(/<(DateInput|TimeInput|RepeatField|NotifyRuleField|LinksField|PicturesField|CollectionPicker|CrossAppRefPicker|EventTasksField|FlagCheck)/);
+      expect(src, f).not.toMatch(/<(DateInput|TimeInput|RepeatField|NotifyRuleField|LinksField|PicturesField|CollectionPicker|CrossAppRefPicker|EventTasksField|FlagCheck)\b/);
     }
   });
 });
@@ -1731,5 +1731,163 @@ describe('pattern: templates are data, read and changed through services/templat
       .map((f) => path.relative(ROOT, f).split(path.sep).join('/'))
       .filter((f) => !ALLOWED.includes(f));
     expect(hits).toEqual([]);
+  });
+});
+
+describe('pattern: one set of tags, passed down (CLAUDE.md "Tags across the suite")', () => {
+  // Adopted 2026-11-06: the suite's tags are chosen only with components/TagField (drafts made on
+  // save, services/tags.ts), and every tag filter asks utils/tagScope.ts (through hooks/useTagFilter
+  // or tagTest), so a tag passed down from an Endeavour or notebook counts.
+  it('only the tag filter, its hook, the Sidebar and the sign-out wipe read activeTagIds', () => {
+    const ALLOWED = ['src/store/uiStore.ts', 'src/hooks/useTagFilter.ts', 'src/components/TagFilterPicker/TagFilterPicker.tsx', 'src/components/Sidebar/Sidebar.tsx', 'src/services/clearLocalData.ts', 'src/components/ChronicleView/ChronicleView.tsx'];
+    const hits = SOURCE_FILES.filter((f) => !/\.test\.tsx?$/.test(f) && !/WatchlistView/.test(f))
+      .filter((f) => /\bactiveTagIds\b/.test(fs.readFileSync(f, 'utf8')))
+      .map(rel).filter((f) => !ALLOWED.includes(f));
+    expect(hits).toEqual([]);
+  });
+  it('a tag is made only through services/tags.ts or the tag modal (never a form’s own addTag)', () => {
+    const ALLOWED = ['src/services/tags.ts', 'src/components/AddTagModal/AddTagModal.tsx', 'src/store/taskStore.ts', 'src/agent/access.ts', 'src/demo/demoAccount.ts'];
+    const hits = SOURCE_FILES.filter((f) => !/\.test\.tsx?$/.test(f))
+      .filter((f) => /\baddTag\(/.test(fs.readFileSync(f, 'utf8')))
+      .map(rel).filter((f) => !ALLOWED.includes(f));
+    expect(hits).toEqual([]);
+  });
+  it('each section the registry gives a tag filter reads it', () => {
+    for (const f of ['TaskList/TaskList.tsx', 'CalendarView/CalendarView.tsx', 'RecordsView/RecordsView.tsx', 'ListsSection/ListsSection.tsx', 'ChronicleView/NoteList.tsx']) {
+      expect(fs.readFileSync(path.join(SRC, 'components', f), 'utf8'), f).toContain('useTagFilter()');
+    }
+  });
+});
+
+describe('pattern: an Endeavour’s colour and icon come from utils/endeavourLook.ts', () => {
+  // Adopted 2026-11-06: an Endeavour with no colour (or icon) of its own shows the one of what it's
+  // part of, so a component never reads an Endeavour's `.color` itself.
+  it('no component reads an Endeavour’s .color directly', () => {
+    const files = SOURCE_FILES.filter((f) => /[\\/](components|hooks)[\\/]|App\.tsx$/.test(f) && !/\.test\.tsx?$/.test(f));
+    const hits = findMatches(files, /\b(collection|col|endeavour|owner|part|activeCollection|parent)\??!?\.color\b/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: a template only fills in the form (CLAUDE.md "Templates are data")', () => {
+  // Adopted 2026-11-06 (the user: nothing bulky made silently): a template makes the Endeavour and,
+  // if ticked, its notebook; everything else is added on its home. What a template is (types/
+  // templates.ts) has no place for anything more; services/templates.test.ts checks every built-in
+  // one plans nothing else.
+  it('a template has no lists, tasks, classes, deadlines, goals or notebooks of its own', () => {
+    const t = fs.readFileSync(path.join(SRC, 'types', 'templates.ts'), 'utf8');
+    for (const k of ['lists:', 'tasks:', 'classes:', 'deadlines:', 'goals:', 'notebooks:']) expect(t, k).not.toContain(`  ${k}`);
+  });
+});
+
+describe('pattern: annotation tags are listed through annotationTags (utils/notes.ts)', () => {
+  // Adopted 2026-11-06: the annotations filter listed every notebook (Stickies included), left over
+  // from when notebooks and annotation tags were one list. A list of annotation tags reads
+  // annotationTags(noteTags); nothing else filters note tags by kind 'tag' itself.
+  it('no list of note tags filtered by kind "tag" outside utils/notes.ts', () => {
+    const files = SOURCE_FILES.filter((f) => !f.endsWith(path.join('utils', 'notes.ts')));
+    const hits = findMatches(files, /Object\.values\([^)]*noteTags[^)]*\)[\s\S]{0,40}?\.filter\(\(\w+\) => \w+\.kind (===|!==) '(tag|area)'\)/, { skipComments: true })
+      .filter((h) => /'tag'|!== 'area'/.test(h.text));
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+  it('the annotations filter and the mark list read it', () => {
+    for (const f of ['components/NotesSection/TagFAB.tsx', 'components/NoteEditor/textMarks.ts', 'hooks/useNotesBrowse.ts']) {
+      expect(fs.readFileSync(path.join(SRC, f), 'utf8'), f).toContain('annotationTags(');
+    }
+  });
+});
+
+describe('pattern: creating and editing a thing is one form', () => {
+  // Adopted 2026-11-07: a Schedule block's add form had drifted from its edit row (no skip list, no
+  // clash question). Each pair's fields are one component, rendered by both sides.
+  it('a Schedule block is added and edited in ScheduleBlockFields', () => {
+    const src = fs.readFileSync(path.join(SRC, 'components/AddScheduleModal/AddScheduleModal.tsx'), 'utf8');
+    expect(src.match(/<ScheduleBlockFields\b/g)?.length).toBe(2);
+  });
+  it('tasks, notes, notebooks and annotations, trackers and routines: each pair renders its shared fields', () => {
+    const pairs: [string, string[]][] = [
+      ['<TaskFields', ['AddTaskModal/AddTaskModal.tsx', 'TaskPane/TaskPane.tsx']],
+      ['<NoteFields', ['AddNoteModal/AddNoteModal.tsx', 'EditNoteMetaModal/EditNoteMetaModal.tsx']],
+      ['<NoteTagFields', ['AddNoteTagModal/AddNoteTagModal.tsx', 'EditNoteTagModal/EditNoteTagModal.tsx']],
+      ['<TrackerFields', ['AddTrackerModal/AddTrackerModal.tsx', 'EditTrackerPane/EditTrackerPane.tsx']],
+      ['<RoutineFields', ['AddRoutineModal/AddRoutineModal.tsx', 'EditRoutinePane/EditRoutinePane.tsx']],
+      ['<RecordCommonFields', ['AddTrackerModal/AddTrackerModal.tsx', 'EditTrackerPane/EditTrackerPane.tsx', 'AddRoutineModal/AddRoutineModal.tsx', 'EditRoutinePane/EditRoutinePane.tsx']],
+    ];
+    for (const [tag, files] of pairs) for (const f of files) expect(fs.readFileSync(path.join(SRC, 'components', f), 'utf8'), f).toContain(tag);
+  });
+  it('a calendar item is made and edited in CalendarItemFields', () => {
+    for (const f of ['AddCalendarItemModal/AddCalendarItemModal.tsx', 'CalendarEventPane/CalendarEventPane.tsx', 'CalendarReminderPane/CalendarReminderPane.tsx', 'CalendarDeadlinePane/CalendarDeadlinePane.tsx']) {
+      expect(fs.readFileSync(path.join(SRC, 'components', f), 'utf8'), f).toContain('<CalendarItemFields');
+    }
+  });
+});
+
+describe('pattern: a list of dates with a box each is components/DateChecklist', () => {
+  // Adopted 2026-11-07: three had been built (a Schedule's skip list, the dates a task links to, a
+  // repeat's Leave out dates). A checkbox with a formatted date beside it is the checklist's.
+  it('no checkbox beside a formatted date outside DateChecklist', () => {
+    const files = SOURCE_FILES.filter((f) => f.endsWith('.tsx') && !f.includes(`${path.sep}DateChecklist${path.sep}`));
+    const hits: string[] = [];
+    for (const f of files) {
+      const lines = fs.readFileSync(f, 'utf8').split(/\r?\n/);
+      lines.forEach((l, i) => {
+        if (l.includes('type="checkbox"') && lines.slice(i, i + 4).some((n) => n.includes('formatDate('))) hits.push(`${path.relative(SRC, f)}:${i + 1}`);
+      });
+    }
+    expect(hits).toEqual([]);
+  });
+  it('the three that had their own use it', () => {
+    for (const f of ['components/AddScheduleModal/ScheduleBlockFields.tsx', 'components/CalendarItemPickerModal/CalendarItemPickerModal.tsx', 'components/RepeatField/RepeatField.tsx']) {
+      expect(fs.readFileSync(path.join(SRC, f), 'utf8'), f).toContain('<DateChecklist');
+    }
+  });
+});
+
+describe('pattern: a calendar item’s line is drawn by CalendarView/CalItemLine.tsx', () => {
+  // Adopted 2026-11-06: each view laid out an item's time, flags, icon and title by hand, and the
+  // month view drew ❗/🔁 twice. Only CalItemLine draws an item's flags.
+  it('no file but CalItemLine draws an item’s flags or icon (the multi-day bars too)', () => {
+    const hits = findMatches(SOURCE_FILES.filter((f) => !f.endsWith('CalItemLine.tsx')), /styles\.calItem(Flags|Icon)\b/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+});
+
+describe('pattern: a date range’s "to" field is held to its "from"', () => {
+  // Adopted 2026-11-06 (the user): a "to" date passes its "from" as `min`, so it can't go before it
+  // and a day and month typed without a year land after it; a range's fields suggest today and the
+  // day after the "from" (`dateRangeSuggest`, utils/date.ts). Exceptions: the date calculator (a
+  // difference can run either way, so no min); an event's Ends and a repeat's Until take no
+  // suggestion (filling one in by tabbing past it would make the event run on, or the repeat stop).
+  it('every "to" DateInput passes min', () => {
+    const files = TSX_FILES.filter((f) => !f.endsWith('DateCalculator.tsx'));
+    const hits = findMatches(files, /<DateInput\b[^>]*(aria-label=\{L\.(end|to|examsTo|endDate)\}|value=\{[^}]*\.until\b)/)
+      .filter((h) => !/\bmin=/.test(h.text));
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+  it('the period editor’s ranges suggest their dates', () => {
+    const src = fs.readFileSync(path.join(SRC, 'components', 'PeriodField', 'PeriodEditor.tsx'), 'utf8');
+    expect(src.match(/suggest=\{dateRangeSuggest\.(from|to)\(/g)?.length).toBe(6);
+  });
+});
+
+describe('pattern: fields are spaced by --form-field-gap', () => {
+  // Adopted 2026-11-06 (the user: visual consistency is a pattern): the space between one field and
+  // the next in a creation pane, modal form or item pane is the token, never a value of its own
+  // (the calendar create form had none). A ratchet: forms move to it as they're touched; lower the
+  // baseline when you do. The list is in BACKLOG.md's Pattern retrofit backlog.
+  const BASELINE = 15;
+  it('no more `.field` rules spaced by a literal than the baseline', () => {
+    let n = 0;
+    for (const f of walk(path.join(SRC, 'components'), ['.css'])) {
+      for (const m of fs.readFileSync(f, 'utf8').matchAll(/(^|\n)\.field\s*\{([^}]*)\}/g)) {
+        if (/margin-bottom:\s*(?!\s|var\(--form-field-gap\))/.test(m[2])) n++;
+      }
+    }
+    expect(n).toBeLessThanOrEqual(BASELINE);
+  });
+  it('the calendar item form and panes use it', () => {
+    for (const f of ['AddCalendarItemModal/AddCalendarItemModal.module.css', 'CalendarEventPane/CalendarEventPane.module.css', 'CalendarReminderPane/CalendarReminderPane.module.css', 'CalendarDeadlinePane/CalendarDeadlinePane.module.css']) {
+      expect(fs.readFileSync(path.join(SRC, 'components', f), 'utf8'), f).toContain('var(--form-field-gap)');
+    }
   });
 });

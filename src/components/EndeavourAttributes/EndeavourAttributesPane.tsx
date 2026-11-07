@@ -14,7 +14,7 @@ import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { iconText } from '@/components/IconPicker/iconValue';
 import { showToast } from '@/components/Toast/showToast';
 import { addBuiltInType } from '@/services/itemTypes';
-import { addOwnField, periodImpact, removeOwnField, saveFieldsAsType, setAttributeValue, setEndeavourType, updateOwnField } from '@/services/endeavourAttributes';
+import { addOwnField, periodImpact, removeOwnField, saveFieldsAsType, setAttributeValue, setEndeavourType } from '@/services/endeavourAttributes';
 import { attributeFields, attributeValue, hasPeriodField, inheritedAttributes } from '@/utils/endeavourAttributes';
 import { effectivePeriod } from '@/utils/endeavourPeriod';
 import { formatFieldValue, hasFieldValue, pickableTypes } from '@/utils/itemTypes';
@@ -108,11 +108,6 @@ export function EndeavourAttributesPane() {
                 <div className={styles.fieldHead}>
                   <span className={styles.fieldName}>{field.name}</span>
                   {fromType && TYPES_ENABLED && <span className={styles.badge}>{L.fromType}</span>}
-                  {!fromType && field.type !== 'period' && (
-                    <label className={styles.inherit}>
-                      <input type="checkbox" checked={!!field.inherit} onChange={(e) => updateOwnField(id, field.id, { inherit: e.target.checked })} /> {L.inherit}
-                    </label>
-                  )}
                   {!fromType && (
                     <button type="button" className={styles.iconBtn} aria-label={`${L.remove}: ${field.name}`} title={L.remove} onClick={() => void removeField(field.id, field.name, field.type === 'period')}>
                       <TrashIcon width="1em" height="1em" />
@@ -179,6 +174,8 @@ export function AttributesSummary({ id }: { id: CollectionId }) {
     return hasFieldValue(v) ? [`${field.name} ${formatFieldValue(field, v)}`] : [];
   });
   if (eff?.inherited && (eff.period.start || eff.period.end) && !hasPeriodField(attributeFields(c, types))) parts.unshift(L.periodFrom(collections[eff.from as CollectionId]?.name ?? '', `${day(eff.period.start)} – ${day(eff.period.end)}`));
+  // What it takes from what it's part of, saying where from.
+  for (const { field, value, fromId } of inheritedAttributes(id, collections, types)) parts.push(`${field.name} ${formatFieldValue(field, value)} (${LABELS.endeavourCreator.from(collections[fromId as CollectionId]?.name ?? '')})`);
   return (
     <div className={styles.summary} role="group" aria-label={L.summary}>
       <span className={styles.label}>{L.summary}</span>

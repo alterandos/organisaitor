@@ -1,60 +1,95 @@
 import { useRef, useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
+import { useNoteStore } from '@/store/noteStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { IconField } from '@/components/IconPicker/IconField';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
+import { TagField } from '@/components/TagField/TagField';
 import { EndeavourLinksField } from '@/components/EndeavourLinksField/EndeavourLinksField';
 import { EncryptContentsField } from '@/components/EncryptContentsField/EncryptContentsField';
-import { AttributesSummary } from '@/components/EndeavourAttributes/EndeavourAttributesPane';
-import { PeriodEditor } from '@/components/PeriodField/PeriodEditor';
-import { CloseIcon, TrashIcon } from '@/components/Icons';
+import { PeriodsField } from '@/components/PeriodsField/PeriodsField';
+import { CloseIcon, NotebookIcon } from '@/components/Icons';
 import { FieldError } from '@/components/FieldError/FieldError';
 import { showToast } from '@/components/Toast/showToast';
-import { applyTemplate, discardEndeavour } from '@/services/endeavourTemplates';
+import { applyTemplate, discardEndeavour, parentNotebook } from '@/services/endeavourTemplates';
+import { archiveEndeavourAsked } from '@/services/endeavourArchive';
+import { askToMoveNotebooks } from '@/services/endeavourNotebooks';
+import { commitTags, isDraftTag, tagByName } from '@/services/tags';
+import { tagInUse } from '@/services/inUse';
+import { deleteForever, trashedBy } from '@/services/trash';
 import { blankPlan, type TemplatePlan } from '@/config/endeavourTemplates';
-import { planFromTemplate } from '@/utils/templatePlan';
+import { codeFromName, planFromTemplate } from '@/utils/templatePlan';
 import { useTemplates } from '@/services/templates';
 import { iconText } from '@/components/IconPicker/iconValue';
+import { inheritedEndeavourTags, tagsFromParents } from '@/utils/tagScope';
+import { parentsOf } from '@/utils/endeavourGraph';
+import { endeavourColorFrom, endeavourIconFrom, lookFromParents } from '@/utils/endeavourLook';
+import { detailsFromParents } from '@/utils/endeavourAttributes';
+import { rangeOf } from '@/utils/datePeriods';
+import { dateUseOf, periodFromUse, periodsFor, periodsFromParents } from '@/utils/datePeriods';
+import { formatFieldValue } from '@/utils/itemTypes';
+import { byNotebookOrder, takesNotes } from '@/utils/notes';
 import { nanoid } from 'nanoid';
 import { LABELS } from '@/config/labels';
-import { now } from '@/utils/date';
-import type { Collection, CollectionId, EndeavourPeriod, PurposeId } from '@/types';
+import type { Collection, CollectionId, DateUse, FieldSchema, PurposeId, TagId } from '@/types';
+import type { NoteTag } from '@/types/notes';
+import type { EndeavourTemplateDef } from '@/types/templates';
 import { DetailsSection, type DetailsValue } from './DetailsSection';
 import { planErrors } from './planErrors';
 import styles from './EndeavourCreator.module.css';
 
 // THE form for an Endeavour itself (docs/features/endeavours.md "Creating an Endeavour", agreed
-// with the user 2026-11-04), for making one and for editing it: what to start from (a template only
-// fills in defaults), its name, description, whether it ends, its dates, details, colour and
-// connections. Create makes it and opens its home, where what's in it is added (EndeavourPieces);
-// the toast's Undo takes it away again. Editing (`editing`) saves on Save; its dates and details
-// are its attributes there (the attributes pane), its links and encryption apply at once.
+// with the user 2026-11-04, and 2026-11-06: nothing bulky made silently), for making one and for
+// editing it: what to start from (a template only fills in the form), its name, description,
+// whether it ends, its dates, details, tags, colour, icon, connections, and whether to make a
+// notebook. What it takes from what it's part of (tags, details, dates, colour, icon) shows greyed,
+// "from Semester 1", and its own replaces it. Create makes it (and its notebook, if ticked) and opens
+// its home, where what's in it is added (EndeavourPieces); the toast's Undo takes it away again.
+// Editing (`editing`) saves on Save; its dates and details are its attributes there (the
+// attributes pane), its links and encryption apply at once.
 
 const L = LABELS.endeavourCreator;
-const EMPTY_PERIOD: EndeavourPeriod = { start: null, end: null, breaks: [], exams: null };
+const DEFAULT_INSIDE = '__default__';
 
 interface Props {
-  editing?: Collection;
-  partOf?:  CollectionId | null;
+  editing?:  Collection;
+  partOf?:   CollectionId | null;
+  template?: string | null;   // start from this template (a home's parts tile: a semester's Subject)
+  name?:     string;          // and this name
 }
 
-export function EndeavourCreator({ editing, partOf: startPartOf = null }: Props) {
+export function EndeavourCreator({ editing, partOf: startPartOf = null, template: startTemplate = null, name: startName = '' }: Props) {
   const closeCreator = useUIStore((s) => s.closeCreator);
   const closeEdit = useUIStore((s) => s.closeEditCollection);
   const close = editing ? closeEdit : closeCreator;
   const live = useTaskStore((s) => (editing ? s.collections[editing.id] : undefined));
   const collections = useTaskStore((s) => s.collections);
   const purposes = useTaskStore((s) => s.purposes);
+  const noteTags = useNoteStore((s) => s.noteTags);
+  const types = useItemTypeStore((s) => s.types);
 
-  const [startFrom, setStartFrom] = useState<string | null>(null);
-  const [name, setName] = useState(() => editing?.name ?? '');
+  const templates = useTemplates();
+  // What a template fills in, for the one it starts from (lazy initial state, so nothing is copied
+  // in an effect; CLAUDE.md "Form state that starts from an item").
+  const [initial] = useState(() => (editing ? null : startFill(startTemplate ? templates.find((t) => t.id === startTemplate || t.builtIn === startTemplate) ?? null : null)));
+  const [startFrom, setStartFrom] = useState<string | null>(() => initial?.id ?? null);
+  const [name, setName] = useState(() => editing?.name ?? startName);
   const [description, setDescription] = useState(() => editing?.description ?? '');
   const [color, setColor] = useState<string | null>(() => editing?.color ?? null);
-  const [kind, setKind] = useState<'project' | 'list'>(() => (editing?.kind === 'list' ? 'list' : 'project'));
-  const [period, setPeriod] = useState<EndeavourPeriod | null>(null);
-  const [details, setDetails] = useState<DetailsValue>({});
+  const [icon, setIcon] = useState<string | null>(() => editing?.icon ?? null);
+  const [tagIds, setTagIds] = useState<string[]>(() => editing?.tagIds ?? initial?.tagIds ?? []);
+  // Editing, the form holds its own dates and details too (the user, 2026-11-07: anything set when
+  // it's made can be changed here), saved on Save.
+  // Which named periods it runs and pauses during (null: as what it's part of). Its periods are
+  // among its details (`details`), as date ranges.
+  const [use, setUse] = useState<DateUse | null>(() => (editing ? editing.dateUse ?? null : initial?.use ?? null));
+  const [details, setDetails] = useState<DetailsValue>(() => (editing ? ownDetails(editing) : initial?.details ?? {}));
+  const [makeNotebook, setMakeNotebook] = useState(() => initial?.notebook ?? false);
+  const [inside, setInside] = useState<string>(DEFAULT_INSIDE);
   const [purposeIds, setPurposeIds] = useState<PurposeId[]>(() => editing?.purposeIds ?? []);
   // Made from an Endeavour's home (or "From a template" there), it starts as part of that Endeavour.
   const [partOf, setPartOf] = useState<CollectionId[]>(() => {
@@ -65,26 +100,50 @@ export function EndeavourCreator({ editing, partOf: startPartOf = null }: Props)
   const [related, setRelated] = useState<CollectionId[]>([]);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
-  // The Types there were when it opened: discarding it (the toast's Undo) takes away any added since.
-  const [typesBefore] = useState(() => new Set(Object.keys(useItemTypeStore.getState().types)));
   const nameRef = useRef<HTMLInputElement>(null);
 
-  const errors = planErrors(name, details.fields ?? [], period);
+  const errors = planErrors(name, details.fields ?? [], null, details.values);
   const shownErrors = showErrors ? errors : {};
-  const templates = useTemplates();
   const template = startFrom ? templates.find((t) => t.id === startFrom) ?? null : null;
 
   useEscapeClose(close);
   useCtrlEnterSubmit(() => submit());
 
-  // A template only fills in the form (the user, 2026-11-03): whether it ends, its details (as
-  // details of its own, values to fill in), and its dates with the time off it starts with.
+  // What it takes from what it's part of.
+  const nameOf = (id: string | null) => (id ? collections[id as CollectionId]?.name ?? '' : '');
+  const parents: string[] = live ? parentsOf(live, collections) : partOf;
+  const inheritedTags = live ? inheritedEndeavourTags(live.id, collections) : tagsFromParents(partOf, collections);
+  const look = live
+    ? { color: endeavourColorFrom(live.id, collections), icon: endeavourIconFrom(live.id, collections) }
+    : lookFromParents(partOf, collections);
+  const inheritedColor = color ? null : look.color;
+  const inheritedIcon = icon ? null : look.icon;
+  const inheritedDetails = detailsFromParents(parents, details.fields ?? [], collections, types);
+  // Dates it takes: only once they say something (a semester made without its dates yet has none).
+  const inheritedPeriods = live ? periodsFor(live.id, collections).filter((p) => p.endeavourId !== live.id) : periodsFromParents(parents, collections);
+  const aboveUse = parents.map((p) => dateUseOf(p, collections)).find(Boolean) ?? null;
+  const ownPeriods = (details.fields ?? []).filter((f) => f.type === 'dateRange')
+    .map((f) => ({ id: f.id, name: f.name, ...rangeOf(details.values?.[f.id]), endeavourId: live?.id ?? '' }));
+  const resolved = periodFromUse(use ?? aboveUse?.use ?? { runs: [], pauses: [] }, [...ownPeriods, ...inheritedPeriods]);
+  // Whether it ends is its dates (the user, 2026-11-07: "if I add dates, I know it has an end"): a
+  // finishable project with an end date, else ongoing. Not asked.
+  const kind: 'project' | 'list' = resolved?.end ? 'project' : 'list';
+  // A template's tag it takes anyway isn't shown twice (it's left off its own on Create too).
+  const inheritedIds = new Set(inheritedTags.map((t) => t.id as string));
+  const ownTags = tagIds.filter((t) => !inheritedIds.has(t));
+  // What the template reads from the name (a subject's code), shown until a value is typed.
+  const fromName = template?.codeFromName ? codeFromName(name) : null;
+
+  // A template only fills in the form (the user, 2026-11-03 and 2026-11-06): whether it ends, its
+  // details (as details of its own, values to fill in), its dates with the time off it starts with,
+  // its tags, and whether a notebook is ticked.
   function chooseStart(id: string | null) {
     setStartFrom(id);
-    const t = id ? templates.find((x) => x.id === id) ?? null : null;
-    setKind(t?.kind ?? 'project');
-    setDetails({ fields: (t?.details ?? []).map((f) => ({ ...f })), values: {} });
-    setPeriod(t?.dates.show ? { ...EMPTY_PERIOD, breaks: t.dates.timeOff.map((label) => ({ id: nanoid(8), label, from: '', to: '' })) } : t ? null : period);
+    const f = startFill(id ? templates.find((x) => x.id === id) ?? null : null);
+    setDetails(f.details);
+    setUse(f.use);
+    setTagIds(f.tagIds);
+    setMakeNotebook(f.notebook);
   }
 
   function ok(): boolean {
@@ -100,42 +159,59 @@ export function EndeavourCreator({ editing, partOf: startPartOf = null }: Props)
   }
 
   // The template's plan, made with the real name, and what the form says about the Endeavour.
-  function finalPlan(): TemplatePlan {
+  function finalPlan(madeTagIds: TagId[]): TemplatePlan {
     const full = name.trim();
     // What the template reads from the name (a subject's code) fills in what wasn't typed.
     const typed = Object.fromEntries(Object.entries(details.values ?? {}).filter(([, v]) => v !== null && v !== ''));
-    const base = template ? planFromTemplate(template, { name: full, period }) : blankPlan(full);
+    const base = template ? planFromTemplate(template, { name: full, notebook: false }) : blankPlan(full);
     return {
       ...base,
       endeavour: {
-        ...base.endeavour, name: full, kind, deadline: null, description: description.trim() || null, color, purposeIds, related,
-        period: period ?? undefined, fields: details.fields ?? [], values: { ...(base.endeavour.values ?? {}), ...typed },
+        ...base.endeavour, name: full, kind, deadline: null, description: description.trim() || null, color, icon, purposeIds, related,
+        fields: details.fields ?? [], values: { ...(base.endeavour.values ?? {}), ...typed }, ...(use ? { dateUse: use } : {}),
+        tagIds: madeTagIds, tagNames: [],
       },
+      notebooks: makeNotebook ? [{ name: full, ...(inside === DEFAULT_INSIDE ? {} : { inside: inside || null }) }] : [],
     };
   }
 
   function create() {
-    const { id } = applyTemplate(finalPlan(), partOf, typesBefore);
+    const newTags = tagIds.filter(isDraftTag);
+    const madeTagIds = commitTags(tagIds);
+    const { id } = applyTemplate(finalPlan(madeTagIds), partOf);
     const ui = useUIStore.getState();
     closeCreator();
     ui.setActiveView('endeavours');
     ui.openEndeavourHome(id);
     showToast({ message: L.made(name.trim()), actions: [{ label: L.undo, onClick: () => {
-      // Everything made since, from its home too, goes with it (for good).
-      discardEndeavour(id, typesBefore);
+      // Everything made since, from its home too, goes with it (for good), and the tags it made.
+      discardEndeavour(id, new Set(Object.keys(useItemTypeStore.getState().types)));
+      for (const t of newTags) {
+        if (!tagInUse(t as TagId)) for (const entry of trashedBy(() => useTaskStore.getState().deleteTag(t as TagId))) deleteForever(entry);
+      }
       if (useUIStore.getState().endeavourHomeId === id) useUIStore.getState().openEndeavourHome(null);
     } }] });
   }
 
   function save(id: CollectionId) {
-    useTaskStore.getState().updateCollection(id, { name: name.trim(), description: description.trim() || null, color, purposeIds });
+    const c = useTaskStore.getState().collections[id];
+    const fields = details.fields ?? [];
+    const keep = new Set(fields.map((f) => f.id));
+    // Its own details as the form holds them; a period field (the attributes pane's) stays as it was.
+    const periodFields = (c?.attributes?.fields ?? []).filter((f) => f.type === 'period');
+    const values = Object.fromEntries(Object.entries({ ...(c?.attributes?.values ?? {}), ...(details.values ?? {}) }).filter(([k]) => keep.has(k) || periodFields.some((f) => f.id === k)));
+    useTaskStore.getState().updateCollection(id, {
+      name: name.trim(), description: description.trim() || null, color, icon, purposeIds, tagIds: commitTags(tagIds), kind,
+      period: null, dateUse: use,
+      attributes: { typeId: c?.attributes?.typeId ?? null, fields: [...periodFields, ...fields], values },
+    });
     closeEdit();
   }
 
   function toggleArchive() {
     if (!live) return;
-    useTaskStore.getState().updateCollection(live.id, { archivedAt: live.archivedAt ? null : now() });
     closeEdit();
+    void archiveEndeavourAsked(live.id, !live.archivedAt);
   }
 
   const purposeList = Object.values(purposes).filter((p) => !p.archivedAt || purposeIds.includes(p.id));
@@ -149,6 +225,8 @@ export function EndeavourCreator({ editing, partOf: startPartOf = null }: Props)
     purposeIds.length ? L.servesSummary(purposeIds.map((p) => purposes[p]?.name).filter(Boolean).join(', ')) : '',
   ].filter(Boolean).join(' · ');
   const hasErrors = showErrors && Object.keys(errors).length > 0;
+  const defaultInside = parentNotebook((partOf[0] ?? null) as CollectionId | null);
+  const notebooks = Object.values(noteTags).filter((t) => t.kind === 'area' && takesNotes(t));
 
   return (
     <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
@@ -174,56 +252,88 @@ export function EndeavourCreator({ editing, partOf: startPartOf = null }: Props)
             </div>
           )}
 
-          <div className={styles.field}>
-            <label htmlFor="creator-name" className={styles.label}>{L.name}</label>
-            <input id="creator-name" ref={nameRef} className={styles.input} value={name} placeholder={L.namePlaceholder} autoFocus
-              aria-invalid={!!shownErrors.name || undefined} aria-describedby={shownErrors.name ? 'creator-name-error' : undefined}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); submit(); } }} />
-            <FieldError id="creator-name-error">{shownErrors.name}</FieldError>
+          <div className={styles.nameLine}>
+            <IconField value={icon} onChange={setIcon} fallback={inheritedIcon?.value ? iconText(inheritedIcon.value, '🎯') : '🎯'} label={L.icon} />
+            <div className={styles.field}>
+              <label htmlFor="creator-name" className={styles.label}>{L.name}</label>
+              <input id="creator-name" ref={nameRef} className={styles.input} value={name} placeholder={L.namePlaceholder} autoFocus
+                aria-invalid={!!shownErrors.name || undefined} aria-describedby={shownErrors.name ? 'creator-name-error' : undefined}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); submit(); } }} />
+              <FieldError id="creator-name-error">{shownErrors.name}</FieldError>
+            </div>
           </div>
+          {inheritedIcon?.value && <p className={styles.small}><ItemIcon icon={inheritedIcon.value} className={styles.inlineIcon} /> {L.iconFrom(nameOf(inheritedIcon.from))}</p>}
 
           <label className={styles.field}>
             <span className={styles.label}>{L.description}</span>
             <input className={styles.input} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={L.descriptionPlaceholder} />
           </label>
 
-          {/* Whether it ends is settled once it's made */}
-          {!editing && <div className={styles.field} role="group" aria-label={L.ends}>
-            <span className={styles.label}>{L.ends}</span>
-            <div className={styles.segmented}>
-              {(['project', 'list'] as const).map((k) => (
-                <button key={k} type="button" aria-pressed={kind === k} className={`${styles.segment} ${kind === k ? styles.segmentOn : ''}`} onClick={() => setKind(k)}>
-                  {k === 'project' ? L.endsProject : L.endsList}
-                </button>
-              ))}
-            </div>
-            <p className={styles.small}>{L.endsHint[kind]}</p>
-          </div>}
-
-          {editing ? (
-            live && <AttributesSummary id={live.id} />
-          ) : (
+          {(
             <>
               <div className={styles.field} role="group" aria-label={L.dates}>
-                <div className={styles.labelRow}>
-                  <span className={styles.label}>{L.dates}</span>
-                  {period && !template?.dates.show && (
-                    <button type="button" className={styles.iconBtn} aria-label={L.removeDates} title={L.removeDates} onClick={() => setPeriod(null)}><TrashIcon width="1em" height="1em" /></button>
-                  )}
-                </div>
-                {period
-                  ? <PeriodEditor period={period} exams={!!template?.dates.exams} errors={shownErrors} onChange={setPeriod} />
-                  : <button type="button" className={styles.linkBtn} onClick={() => setPeriod(EMPTY_PERIOD)}>{L.addDates}</button>}
+                <span className={styles.label} title={LABELS.periods.hint}>{L.dates} <span className={styles.hintMark} aria-hidden>?</span></span>
+                <PeriodsField
+                  fields={details.fields} values={details.values}
+                  onFields={(fields: FieldSchema[], values) => setDetails((d) => ({ ...d, fields, values }))}
+                  inherited={inheritedPeriods} use={use} onUse={setUse}
+                  above={aboveUse ? { use: aboveUse.use, name: nameOf(aboveUse.from) } : null}
+                  fromName={nameOf} errors={shownErrors} />
               </div>
-              <DetailsSection value={details} errors={shownErrors} onChange={(patch) => setDetails((d) => ({ ...d, ...patch }))} />
+              {inheritedDetails.length > 0 && (
+                <div className={styles.field} role="group" aria-label={L.inheritedDetails}>
+                  <span className={styles.label}>{L.inheritedDetails}</span>
+                  {inheritedDetails.map(({ field, value, fromId }) => (
+                    <div key={field.id} className={styles.inheritedLine}>
+                      <span className={styles.detailFixed}>{field.name}</span>
+                      <span>{formatFieldValue(field, value)}</span>
+                      <span className={styles.from}>{L.from(nameOf(fromId))}</span>
+                      <button type="button" className={styles.linkBtn}
+                        onClick={() => setDetails((d) => ({ ...d, fields: [...(d.fields ?? []), { ...field }], values: { ...(d.values ?? {}), [field.id]: value } }))}>
+                        {L.setOwn}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <DetailsSection value={details} errors={shownErrors} fallback={fromName ? { code: fromName } : undefined} onChange={(patch) => setDetails((d) => ({ ...d, ...patch }))} />
             </>
           )}
+
+          <TagField value={ownTags} onChange={setTagIds} inherited={inheritedTags} fromName={nameOf} labelClassName={styles.label} />
 
           <div className={styles.field}>
             <span className={styles.label}>{L.colour}</span>
             <ColorPicker palette="standard" value={color} onChange={setColor} />
+            {inheritedColor?.value && (
+              <p className={styles.small}><span className={styles.dot} style={{ background: inheritedColor.value }} aria-hidden /> {L.colourFrom(nameOf(inheritedColor.from))}</p>
+            )}
           </div>
+
+          {!editing && (
+            <div className={styles.field}>
+              <label className={`${styles.optionCard} ${makeNotebook ? styles.optionCardOn : ''}`}>
+                <input type="checkbox" className={styles.optionCheck} aria-label={L.notebook} checked={makeNotebook} onChange={(e) => setMakeNotebook(e.target.checked)} />
+                <NotebookIcon className={styles.optionIcon} aria-hidden />
+                <span className={styles.optionText}>
+                  <span className={styles.optionTitle}>{L.notebook}</span>
+                  <span className={styles.small}>{L.notebookHint}</span>
+                </span>
+              </label>
+              {makeNotebook && (
+                <label className={styles.insideLine}>
+                  <span className={styles.small}>{L.inside}</span>
+                  <select className={styles.input} value={inside} onChange={(e) => setInside(e.target.value)} aria-label={L.inside}>
+                    <option value={DEFAULT_INSIDE}>{defaultInside ? notebookPath(defaultInside, noteTags) : L.topLevel}</option>
+                    {defaultInside && <option value="">{L.topLevel}</option>}
+                    {notebooks.filter((n) => n.id !== defaultInside).sort(byNotebookOrder).map((n) => <option key={n.id} value={n.id}>{notebookPath(n.id, noteTags)}</option>)}
+                  </select>
+                </label>
+              )}
+              <p className={styles.small}>{L.afterCreate}</p>
+            </div>
+          )}
 
           <div className={styles.field} role="group" aria-label={L.connections}>
             <div className={styles.labelRow}>
@@ -235,7 +345,7 @@ export function EndeavourCreator({ editing, partOf: startPartOf = null }: Props)
               <div className={styles.connections}>
                 {live ? (
                   <>
-                    <EndeavourLinksField kind="partOf" selfId={live.id} />
+                    <EndeavourLinksField kind="partOf" selfId={live.id} onLinked={() => void askToMoveNotebooks(live.id)} />
                     <EndeavourLinksField kind="related" selfId={live.id} />
                   </>
                 ) : (
@@ -282,6 +392,52 @@ export function EndeavourCreator({ editing, partOf: startPartOf = null }: Props)
       </div>
     </div>
   );
+}
+
+// Its own details, as the form edits them (a period field stays the attributes pane's).
+function ownDetails(c: Collection): DetailsValue {
+  return { fields: (c.attributes?.fields ?? []).filter((f) => f.type !== 'period').map((f) => ({ ...f })), values: { ...(c.attributes?.values ?? {}) } };
+}
+
+// A template's dates as named periods (2026-11-07): its dates one it runs during ("Teaching" for a
+// semester), an exam period one of its own, each piece of time off one it pauses during.
+function templatePeriods(t: EndeavourTemplateDef | null): { details: DetailsValue; use: DateUse | null } {
+  const fields: FieldSchema[] = (t?.details ?? []).map((f) => ({ ...f }));
+  const values: Record<string, unknown> = {};
+  const use: DateUse = { runs: [], pauses: [] };
+  const add = (name: string, role: 'runs' | 'pauses' | null) => {
+    const id = nanoid(8);
+    fields.push({ id, name, type: 'dateRange' });
+    values[id] = { from: '', to: '' };
+    if (role) use[role].push(id);
+  };
+  if (t?.dates.show) {
+    add(t.id === 'semester' || t.builtIn === 'semester' ? LABELS.periods.teaching : LABELS.periods.dates, 'runs');
+    if (t.dates.exams) add(LABELS.periods.exams, null);
+    for (const name of t.dates.timeOff) add(name, 'pauses');
+  }
+  return { details: { fields, values }, use: use.runs.length || use.pauses.length ? use : null };
+}
+
+// What a template fills in on the form (none: blank).
+function startFill(t: EndeavourTemplateDef | null) {
+  return {
+    id: t?.id ?? null,
+    ...templatePeriods(t),
+    tagIds: t ? t.tags.map(tagByName) : [],
+    notebook: t?.notebook ?? false,
+  };
+}
+
+// A notebook's place, as "University › Biology".
+function notebookPath(id: string, noteTags: Record<string, NoteTag>): string {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (let t: NoteTag | undefined = noteTags[id]; t && !seen.has(t.id); t = t.parentTagId ? noteTags[t.parentTagId] : undefined) {
+    seen.add(t.id);
+    names.unshift(t.name);
+  }
+  return names.join(' › ');
 }
 
 function StartCard({ on, icon, label, detail, onClick }: { on: boolean; icon: string; label: string; detail: string; onClick: () => void }) {

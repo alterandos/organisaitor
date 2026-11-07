@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 //
-// The template editor (components/TemplateEditor): a new template with a class and its task for
-// each date; red notes for what's missing; a built-in one saved as the person's copy.
+// The template editor (components/TemplateEditor): a new template's tags and notebook; red notes
+// for what's missing; a built-in one saved as the person's copy, or as a new one.
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TemplateEditor } from './TemplateEditor';
 import { useTemplateStore } from '@/store/templateStore';
 import { useUIStore } from '@/store/uiStore';
+import { useTaskStore } from '@/store/taskStore';
 import { DEFAULT_TEMPLATE_BY_ID } from '@/config/defaultTemplates';
 import { blankTemplate } from '@/services/templates';
 import { LABELS } from '@/config/labels';
@@ -17,33 +18,31 @@ const L = LABELS.templates;
 beforeEach(() => {
   useTemplateStore.setState(useTemplateStore.getInitialState(), true);
   useUIStore.setState(useUIStore.getInitialState(), true);
+  useTaskStore.setState(useTaskStore.getInitialState(), true);
 });
 afterEach(cleanup);
 
 describe('TemplateEditor', () => {
-  it('makes a template with a class on its days and a task for each date', () => {
+  it('makes a template from what the form holds: its tags (by name) and whether it makes a notebook', () => {
     useUIStore.getState().openTemplateEditor(blankTemplate());
     render(<TemplateEditor def={blankTemplate()} />);
     fireEvent.change(screen.getByLabelText(L.name), { target: { value: 'Course' } });
-    const classes = screen.getByRole('group', { name: L.classes });
-    fireEvent.click(within(classes).getByRole('button', { name: L.add }));
-    fireEvent.change(within(classes).getByLabelText(L.classTitle), { target: { value: '{name} lecture' } });
-    fireEvent.click(within(classes).getByRole('button', { name: L.dayShort[3] }));
-    fireEvent.click(within(classes).getByRole('button', { name: /Prepare/ }));
+    const tags = screen.getByLabelText(LABELS.tagField.label);
+    fireEvent.change(tags, { target: { value: 'Study' } });
+    fireEvent.keyDown(tags, { key: 'Enter' });
+    fireEvent.click(screen.getByLabelText(L.notebook));
     fireEvent.click(screen.getByRole('button', { name: L.save }));
     const [t] = Object.values(useTemplateStore.getState().templates);
-    expect(t).toMatchObject({ name: 'Course', classes: [{ title: '{name} lecture', weekdays: [3], taskRules: [{ title: 'Prepare', side: 'before', days: 1 }] }] });
+    expect(t).toMatchObject({ name: 'Course', tags: ['Study'], notebook: true });
+    // A tag named in a template isn't made until an Endeavour is made from it.
+    expect(Object.keys(useTaskStore.getState().tags)).toHaveLength(0);
     expect(useUIStore.getState().templateEditor).toBeNull();
   });
 
   it('says what’s missing, under the field, and saves nothing', () => {
     render(<TemplateEditor def={blankTemplate()} />);
-    const classes = screen.getByRole('group', { name: L.classes });
-    fireEvent.click(within(classes).getByRole('button', { name: L.add }));
-    fireEvent.change(within(classes).getByLabelText(L.classTitle), { target: { value: 'Lecture' } });
     fireEvent.click(screen.getByRole('button', { name: L.save }));
     expect(screen.getByText(L.nameNeeded)).toBeInTheDocument();
-    expect(screen.getByText(L.daysNeeded)).toBeInTheDocument();
     expect(Object.keys(useTemplateStore.getState().templates)).toHaveLength(0);
   });
 

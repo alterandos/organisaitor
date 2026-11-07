@@ -1,5 +1,5 @@
 // ── Branded ID types ───────────────────────────────────────────────────────────
-import type { CollectionId } from './index';
+import type { CollectionId, TagId } from './index';
 import type { PictureId } from './pictures';
 
 export type NoteId = string & { readonly _brand: 'NoteId' };
@@ -59,6 +59,9 @@ export interface Note {
   // What fills the room below the note; absent or null = as its notebook (then the app-wide
   // setting). See utils/noteBackdrop.ts.
   backdrop?: NoteBackdropChoice | null;
+  // The suite's tags on it (types/index.ts Tag, 2026-11-06; `tagIds` above are its notebooks).
+  // Plaintext like tagIds; absent = none. Sent once set (migration 073).
+  suiteTagIds?: TagId[];
 }
 
 // A note's or notebook's own backdrop (config/noteBackdrops.ts lists the presets; a picture is
@@ -83,6 +86,7 @@ export interface NoteTag {
   presetKey?: string;                 // Set when created from a preset pack (e.g. 'academic'); undefined = fully user-created
   collectionId: CollectionId | null;  // Endeavour this notebook belongs to (meaningful for kind='area'); notes tagged with this notebook inherit it on create
   backdrop?: NoteBackdropChoice | null; // Notebooks only: the backdrop its notes (and sub-notebooks) take unless they choose their own; absent/null = as its parent
+  suiteTagIds?: TagId[];              // Notebooks only: the suite's tags on it, which its notes take (utils/tagScope.ts); absent = none
   encryptContents?: boolean;          // Notebooks only: every note in it (and in the notebooks inside it) is kept encrypted (utils/encryptionScopes.ts); absent = never set, off
   createdAt: string;                  // ISO 8601
   updatedAt: string;

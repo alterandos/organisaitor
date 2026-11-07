@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatDate } from '@/utils/date';
 import { nanoid } from 'nanoid';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
@@ -47,9 +48,15 @@ export function EventTasksField({ type, id, title, repeats = false, occurrence =
   const series = repeats && type === 'event';
   const [scope, setScope] = useState<'all' | 'this'>('all');
   const onlyThis = series && scope === 'this' && !!occurrence;
-  const occurrenceOf = (taskId: TaskId) => eventLinksOf(tasks[taskId]).find((l) => l.targetType === type && l.targetId === id)?.occurrence ?? null;
+  const linksOf = (taskId: TaskId) => eventLinksOf(tasks[taskId]).filter((l) => l.targetType === type && l.targetId === id);
+  const linkOf = (taskId: TaskId) => linksOf(taskId)[0];
+  // The dates of the series a task is linked to (a task can be linked to several).
+  const datesOf = (taskId: TaskId) => linksOf(taskId).flatMap((l) => (l.occurrence ? [l.occurrence] : [])).sort();
+  // All dates: every linked task, one linked to a single date marked with it (2026-11-07: a task
+  // linked from its own side to a series' next date didn't show here), except those a rule makes
+  // for each date (the rule stands for them). Only this date: that date's.
   const linked = (id ? tasksLinkedTo(type, id, tasks) : [])
-    .filter(({ task }) => (!series ? true : onlyThis ? occurrenceOf(task.id) === occurrence : !occurrenceOf(task.id)))
+    .filter(({ task }) => (!series ? true : onlyThis ? datesOf(task.id).includes(occurrence!) : !linkOf(task.id)?.ruleId))
     .sort((a, b) => EVENT_LINK_KINDS.indexOf(a.kind) - EVENT_LINK_KINDS.indexOf(b.kind));
   const rules = draft ? draft.rules : event?.taskRules ?? [];
   const setRules = (next: EventTaskRule[]) => (draft ? draft.onRules(next) : event && setEventTaskRules(event.id, next));
@@ -101,16 +108,17 @@ export function EventTasksField({ type, id, title, repeats = false, occurrence =
               <button type="button" className={`${styles.other} ${isResolved(task) ? styles.otherDone : ''}`} onClick={() => openTaskPane(task.id)}>
                 {task.completed && <span className={styles.check}>✓</span>}
                 {task.title}
+                {series && !onlyThis && datesOf(task.id).length > 0 && <span className={styles.dateTag}> · {datesOf(task.id).map((d) => formatDate(d)).join(', ')}</span>}
               </button>
               <select
                 className={styles.kindSelect}
                 value={kind}
                 aria-label={L.kindLabel}
-                onChange={(e) => id && linkTaskToEvent(task.id, e.target.value as EventLinkKind, type, id)}
+                onChange={(e) => { if (!id) return; for (const d of onlyThis ? [occurrence] : datesOf(task.id).length ? datesOf(task.id) : [null]) linkTaskToEvent(task.id, e.target.value as EventLinkKind, type, id, d); }}
               >
                 {EVENT_LINK_KINDS.map((k) => <option key={k} value={k}>{L.kinds[k]}</option>)}
               </select>
-              <button type="button" className={styles.remove} onClick={() => id && unlinkTaskFromEvent(task.id, type, id)} aria-label={LABELS.taskLinks.removeLink} title={LABELS.taskLinks.removeLink}>
+              <button type="button" className={styles.remove} onClick={() => id && unlinkTaskFromEvent(task.id, type, id, onlyThis ? occurrence : undefined)} aria-label={LABELS.taskLinks.removeLink} title={LABELS.taskLinks.removeLink}>
                 <UnlinkIcon />
               </button>
             </li>

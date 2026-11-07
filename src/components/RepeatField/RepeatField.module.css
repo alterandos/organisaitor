@@ -100,3 +100,17 @@
 .linkBtn { border: none; background: none; padding: 0; font: inherit; font-size: var(--text-sm); color: var(--color-primary); cursor: pointer; }
 .linkBtn:hover { text-decoration: underline; }
 .chipX:focus-visible, .linkBtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* Leave out dates (SkipDates): the repeat's dates, each ticked while it happens. */
+.skip { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+
+/* How it repeats: Regularly / On these dates. */
+.pills { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); align-self: flex-start; }
+.pill { border: none; background: none; padding: 2px var(--space-3); border-radius: var(--radius-pill); font: inherit; font-size: var(--text-sm); color: var(--color-muted); cursor: pointer; }
+.pill:hover { color: var(--color-text); }
+.pillOn { background: var(--color-primary-subtle); color: var(--color-primary); font-weight: 600; }
+.pill:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+/* On these dates, with a time for each. */
+.dateRows { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.dateRow { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.dateTime { font-size: var(--text-sm); }

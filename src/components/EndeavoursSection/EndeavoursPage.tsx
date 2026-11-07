@@ -1,3 +1,5 @@
+import { endeavourColor, endeavourIcon } from '@/utils/endeavourLook';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useMemo, useState } from 'react';
 import { TodayCard } from '@/components/TodayCard/TodayCard';
 import { useTaskStore } from '@/store/taskStore';
@@ -14,10 +16,17 @@ import { rowsOfEndeavour, summarizeRows, type EndeavourSummary } from '@/utils/e
 import { DisclosureIcon, EndeavourIcon } from '@/components/Icons';
 import type { Collection, CollectionId } from '@/types';
 import { useEndeavourRows } from './useEndeavourRows';
+import { useEndeavourMenu } from './endeavourMenu';
 import styles from './EndeavoursSection.module.css';
 
 const L = LABELS.endeavourHome;
 type Grouping = 'tree' | 'purpose';
+
+// A row of the tree: right-click it for the Endeavour's menu (endeavourMenu.ts).
+function EndeavourRow({ id, depth, children }: { id: CollectionId; depth: number; children: React.ReactNode }) {
+  const ref = useEndeavourMenu<HTMLDivElement>(id);
+  return <div ref={ref} className={styles.treeRow} style={{ paddingLeft: `calc(${depth} * var(--space-6))` }}>{children}</div>;
+}
 
 const isEndeavour = (c: Collection | undefined): c is Collection => !!c && (c.kind === 'project' || c.kind === 'list') && !c.archivedAt;
 
@@ -83,7 +92,7 @@ export function EndeavoursPage() {
     const s = summaries.get(id);
     return (
       <li key={key}>
-        <div className={styles.treeRow} style={{ paddingLeft: `calc(${depth} * var(--space-6))` }}>
+        <EndeavourRow id={id} depth={depth}>
           <span className={styles.treeToggle}>
             {children.length > 0 && (
               <button type="button" className={styles.iconBtn} onClick={() => toggle(key)} aria-expanded={open} aria-label={open ? L.collapse(c.name) : L.expand(c.name)}>
@@ -92,7 +101,9 @@ export function EndeavoursPage() {
             )}
           </span>
           <button type="button" className={styles.treeName} onClick={() => openHome(id)}>
-            <span className={styles.dot} style={c.color ? { background: c.color } : undefined} aria-hidden />
+            {endeavourIcon(c.id, collections)
+              ? <ItemIcon icon={endeavourIcon(c.id, collections)} className={styles.treeIcon} />
+              : <span className={styles.dot} style={endeavourColor(c.id, collections) ? { background: endeavourColor(c.id, collections)! } : undefined} aria-hidden />}
             <span className={styles.nameText}>{c.name}</span>
             {others.length > 0 && <span className={styles.also}>{L.alsoIn(others.join(', '))}</span>}
             {goalLines.get(id) && (
@@ -107,7 +118,7 @@ export function EndeavoursPage() {
           <span className={styles.treeNext}>
             {s?.next ? <>{s.next.title} <span className={styles.muted}>· {formatDate(`${s.next.when}T00:00:00`)}</span></> : <span className={styles.muted}>{L.nothingNext}</span>}
           </span>
-        </div>
+        </EndeavourRow>
         {open && children.length > 0 && <ul className={styles.tree}>{children.map((k) => renderNode(k, depth + 1, [...path, id], id))}</ul>}
       </li>
     );

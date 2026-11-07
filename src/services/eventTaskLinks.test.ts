@@ -113,3 +113,19 @@ describe('on the Runway, linked tasks sit under their event', () => {
     expect(runwayBands(taskRows).due.map((r) => r.title)).toEqual(['Revise']);
   });
 });
+
+describe('a task linked to several dates of one series (2026-11-07)', () => {
+  it('each date is its own link; the first sets the dates; unlinking one leaves the rest', () => {
+    const id = useCalendarStore.getState().addEvent({ title: 'Lecture', date: '2026-10-26', startTime: '10:00', repeat: { freq: 'weekly', interval: 1, endKind: 'forever', count: null, until: null } });
+    const taskId = useTaskStore.getState().addTask({ title: 'Read ahead' }) as TaskId;
+    linkTaskToEvent(taskId, 'prepFor', 'event', id, '2026-11-02');
+    linkTaskToEvent(taskId, 'prepFor', 'event', id, '2026-11-09');
+    const dates = () => (useTaskStore.getState().tasks[taskId].itemLinks ?? []).map((l) => l.occurrence);
+    expect(dates()).toEqual(['2026-11-02', '2026-11-09']);
+    expect(useTaskStore.getState().tasks[taskId]).toMatchObject({ deadline: '2026-11-02' });
+    unlinkTaskFromEvent(taskId, 'event', id, '2026-11-02');
+    expect(dates()).toEqual(['2026-11-09']);
+    unlinkTaskFromEvent(taskId, 'event', id);
+    expect(dates()).toEqual([]);
+  });
+});

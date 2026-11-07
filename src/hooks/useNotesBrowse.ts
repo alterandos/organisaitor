@@ -1,10 +1,12 @@
+import { endeavourColor } from '@/utils/endeavourLook';
+import { useTagFilter } from '@/hooks/useTagFilter';
 import { useMemo } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews } from '@/store/noteViews';
 import { useTaskStore } from '@/store/taskStore';
 import { notesFocusOf, selectActiveCollectionId, useUIStore } from '@/store/uiStore';
 import { getOrderedEndeavours } from '@/utils/collections';
-import { getNotePrimaryNotebookId, isPinnedNotebook, noteName, type NoteName } from '@/utils/notes';
+import { annotationTags, getNotePrimaryNotebookId, isPinnedNotebook, noteName, type NoteName } from '@/utils/notes';
 import { LABELS } from '@/config/labels';
 import { browseNotes, groupPath, type NoteGroup, type NoteGroupingId, type NotesBrowse, type NotesFilter } from '@/utils/notesBrowse';
 
@@ -45,17 +47,18 @@ export function useNotesBrowse(): NotesBrowseView {
   const lastNoteId  = useUIStore((s) => s.editingNoteId ?? s.notesLastEditingNoteId);
   const split       = useUIStore((s) => s.noteLayout !== 'single');
   const headerEndeavourId = useUIStore(selectActiveCollectionId);
+  const tags        = useTagFilter();
 
   const browse = useMemo(() => {
     const applied = headerEndeavourId ? { ...filter, collectionIds: [headerEndeavourId] } : filter;
-    return browseNotes({ notes: Object.values(notes), noteTags, collections, purposes, filter: applied }, grouping);
-  }, [notes, noteTags, collections, purposes, filter, grouping, headerEndeavourId]);
+    return browseNotes({ notes: Object.values(notes), noteTags, collections, purposes, filter: applied, tags }, grouping);
+  }, [notes, noteTags, collections, purposes, filter, grouping, headerEndeavourId, tags]);
   const focusId = notesFocusOf({ notesGrouping: grouping, notesFocusGroupId: focusGroup, selectedNoteTagId: notebook });
   const focusPath = useMemo(() => groupPath(browse.roots, focusId), [browse.roots, focusId]);
   const options = useMemo(() => ({
-    endeavours: getOrderedEndeavours(collections).map((c) => ({ id: c.id, label: c.name, color: c.color })),
+    endeavours: getOrderedEndeavours(collections).map((c) => ({ id: c.id, label: c.name, color: endeavourColor(c.id, collections) })),
     purposes: Object.values(purposes).filter((p) => !p.archivedAt).sort((a, b) => a.name.localeCompare(b.name)).map((p) => ({ id: p.id, label: p.name, color: p.color })),
-    tags: Object.values(noteTags).filter((t) => t.kind === 'tag').sort((a, b) => a.name.localeCompare(b.name)).map((t) => ({ id: t.id, label: t.name, color: t.color })),
+    tags: annotationTags(noteTags).sort((a, b) => a.name.localeCompare(b.name)).map((t) => ({ id: t.id, label: t.name, color: t.color })),
   }), [collections, purposes, noteTags]);
   const nameOf = useMemo(() => (noteId: string, here?: string | null) =>
     noteName(notes[noteId as never] ?? { title: '', tagIds: [] }, noteTags, { untitled: LABELS.notesViews.untitled, here }), [notes, noteTags]);

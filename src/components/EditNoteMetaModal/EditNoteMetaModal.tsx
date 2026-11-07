@@ -1,37 +1,22 @@
 import { useState } from 'react';
-import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { useUIStore } from '@/store/uiStore';
 import { isPinned, togglePin } from '@/services/quickAccessPins';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteView } from '@/store/noteViews';
-import { useTaskStore } from '@/store/taskStore';
-import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { LABELS } from '@/config/labels';
-import type { NoteTagId, CollectionId } from '@/types';
+import type { NoteTagId } from '@/types';
 import type { Note } from '@/types/notes';
 import { formatDate } from '@/utils/date';
 import styles from './EditNoteMetaModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
-import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 import { BackdropField } from '@/components/NoteEditor/NoteBackdrop';
 import { CloseIcon } from '@/components/Icons';
-import { takesNotes } from '@/utils/notes';
+import { resolveNoteInheritedCollectionId } from '@/utils/notes';
+import { commitTags } from '@/services/tags';
+import { NoteFields, type NoteDraft } from '@/components/NoteFields/NoteFields';
 
-// Render a flat list of tags in depth-first tree order with indentation
-function buildTagList(
-  noteTags: Record<string, import('@/types/notes').NoteTag>,
-  parentId: NoteTagId | null,
-  depth: number,
-): { tag: import('@/types/notes').NoteTag; depth: number }[] {
-  return Object.values(noteTags)
-    .filter((t) => t.parentTagId === parentId)
-    .sort((a, b) => a.order - b.order)
-    .flatMap((tag) => [
-      { tag, depth },
-      ...buildTagList(noteTags, tag.id as NoteTagId, depth + 1),
-    ]);
-}
+const L = LABELS.noteFields;
 
 // The note can be briefly unavailable (an encrypted note whose plaintext isn't decrypted yet), so
 // the form only mounts once it exists, keyed by note, and initialises its state from it.
@@ -43,168 +28,54 @@ export function EditNoteMetaModal() {
 }
 
 function EditNoteMetaForm({ note }: { note: Note }) {
-  const closeModal       = useUIStore((s) => s.closeModal);
-  const noteTags         = useNoteStore((s) => s.noteTags);
-  const updateNote       = useNoteStore((s) => s.updateNote);
-  const collectionsRecord = useTaskStore((s) => s.collections);
-  const allCollections   = Object.values(collectionsRecord);
+  const closeModal = useUIStore((s) => s.closeModal);
+  const noteTags   = useNoteStore((s) => s.noteTags);
+  const updateNote = useNoteStore((s) => s.updateNote);
 
-  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(() => new Set(note.tagIds));
-  const [color, setColor]   = useState<string | null>(note.color);
-  const [pinned, setPinned] = useState(() => isPinned('note', note.id));
-  const [collectionId, setCollectionId] = useState<CollectionId | null>(note.collectionId);
+  const [draft, setDraft] = useState<NoteDraft>(() => ({
+    tagIds: [...note.tagIds], collectionId: note.collectionId, suiteTagIds: note.suiteTagIds ?? [], color: note.color, pinned: isPinned('note', note.id),
+  }));
+  const inherited = resolveNoteInheritedCollectionId(draft.tagIds as NoteTagId[], noteTags);
 
   useEscapeClose(closeModal);
   useCtrlEnterSubmit(() => handleSave());
 
   function handleSave() {
     updateNote(note.id, {
-      tagIds: Array.from(selectedTagIds) as NoteTagId[],
-      color,
-      collectionId,
+      tagIds: draft.tagIds as NoteTagId[],
+      color: draft.color,
+      collectionId: draft.collectionId ?? inherited,
+      ...(draft.suiteTagIds.length || note.suiteTagIds ? { suiteTagIds: commitTags(draft.suiteTagIds) } : {}),
     });
-    if (pinned !== isPinned('note', note.id)) togglePin('note', note.id);
+    if (draft.pinned !== isPinned('note', note.id)) togglePin('note', note.id);
     closeModal();
   }
-
-  const toggleTag = (tagId: string) => {
-    setSelectedTagIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(tagId)) next.delete(tagId);
-      else next.add(tagId);
-      return next;
-    });
-  };
-
-  const areaItems = buildTagList(noteTags as Record<string, import('@/types/notes').NoteTag>, null, 0)
-    // Stickies and the Scratchpad take no notes: not offered (a sticky stays in its own, unticked or not).
-    .filter((i) => i.tag.kind === 'area' && takesNotes(i.tag));
-  const tagItems  = Object.values(noteTags)
-    .filter((t) => t.kind === 'tag')
-    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className={styles.overlay} onClick={closeModal}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
-          <span className={styles.title}>Edit note details</span>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
+          <span className={styles.title}>{L.editTitle}</span>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label={L.close}><CloseIcon /></button>
         </div>
 
-        <div className={styles.noteTitle}>{note.isEncrypted ? '🔒 ' : ''}{note.title || '(Untitled)'}</div>
+        <div className={styles.noteTitle}>{note.isEncrypted ? '🔒 ' : ''}{note.title || L.untitled}</div>
 
         <div className={styles.body}>
+          <NoteFields value={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} inheritedCollectionId={inherited} />
 
-          {/* ── Notebooks ─────────────────────────────────────────────────── */}
-          <section className={styles.section}>
-            <div className={styles.sectionLabel}>Notebooks</div>
-            {areaItems.length === 0 ? (
-              <div className={styles.emptyHint}>No notebooks yet</div>
-            ) : (
-              <div className={styles.tagList}>
-                {areaItems.map(({ tag, depth }) => (
-                  <label key={tag.id} className={styles.tagRow} style={{ paddingLeft: `${0.5 + depth * 1}rem` }}>
-                    <input
-                      type="checkbox"
-                      className={styles.checkbox}
-                      checked={selectedTagIds.has(tag.id)}
-                      onChange={() => toggleTag(tag.id)}
-                    />
-                    <span className={styles.tagIcon}><ItemIcon icon={tag.icon} fallback="📁" /></span>
-                    <span className={styles.tagName} style={tag.color ? { color: tag.color } : undefined}>
-                      {tag.name}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* ── Annotation tags ───────────────────────────────────────────── */}
-          {tagItems.length > 0 && (
-            <section className={styles.section}>
-              <div className={styles.sectionLabel}>Tags</div>
-              <div className={styles.tagList}>
-                {tagItems.map((tag) => (
-                  <label key={tag.id} className={styles.tagRow}>
-                    <input
-                      type="checkbox"
-                      className={styles.checkbox}
-                      checked={selectedTagIds.has(tag.id)}
-                      onChange={() => toggleTag(tag.id)}
-                    />
-                    <span className={styles.tagIcon}><ItemIcon icon={tag.icon} fallback="🏷️" /></span>
-                    <span className={styles.tagName} style={tag.color ? { color: tag.color } : undefined}>
-                      {tag.name}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* ── Endeavour ─────────────────────────────────────────────────── */}
-          {allCollections.length > 0 && (
-            <section className={styles.section}>
-              <div className={styles.sectionLabel}>{LABELS.collection}</div>
-              <CollectionPicker
-                collections={allCollections}
-                value={collectionId}
-                onChange={(id) => setCollectionId(id)}
-                noneLabel={`No ${LABELS.collection}`}
-              />
-            </section>
-          )}
-
-          {/* ── Accent color ──────────────────────────────────────────────── */}
-          <section className={styles.section}>
-            <div className={styles.sectionLabel}>Accent colour</div>
-            <div className={styles.colorRow}>
-              <button
-                className={`${styles.colorSwatch} ${styles.colorSwatchNone} ${color === null ? styles.colorSwatchActive : ''}`}
-                onClick={() => setColor(null)}
-                title="No colour"
-              >—</button>
-              {SWATCH_HEXES.map((c) => (
-                <button
-                  key={c}
-                  className={`${styles.colorSwatch} ${color === c ? styles.colorSwatchActive : ''}`}
-                  style={{ background: c }}
-                  onClick={() => setColor(c)}
-                  title={swatchLabel(c)}
-                  aria-label={swatchLabel(c)}
-                />
-              ))}
-            </div>
-          </section>
-
-          {/* ── Backdrop (applies at once) ────────────────────────────────── */}
+          {/* What needs a saved note: its backdrop (applies at once) and its dates. */}
           <section className={styles.section}>
             <BackdropField note={note} />
           </section>
-
-          {/* ── Pinned ────────────────────────────────────────────────────── */}
           <section className={styles.section}>
-            <label className={styles.pinnedRow}>
-              <input
-                type="checkbox"
-                className={styles.checkbox}
-                checked={pinned}
-                onChange={(e) => setPinned(e.target.checked)}
-              />
-              <span>{LABELS.quickAccess.pin}</span>
-            </label>
-          </section>
-
-          {/* ── Dates ─────────────────────────────────────────────────────── */}
-          <section className={styles.section}>
-            <div className={styles.sectionLabel}>Dates</div>
+            <div className={styles.sectionLabel}>{L.dates}</div>
             <div className={styles.dateGrid}>
-              <span className={styles.dateLabel}>Created</span>
+              <span className={styles.dateLabel}>{L.created}</span>
               <span className={styles.dateValue}>{formatDate(note.createdAt)}</span>
               {note.lastViewedAt && (
                 <>
-                  <span className={styles.dateLabel}>Last viewed</span>
+                  <span className={styles.dateLabel}>{L.lastViewed}</span>
                   <span className={styles.dateValue}>{formatDate(note.lastViewedAt)}</span>
                 </>
               )}
@@ -213,8 +84,8 @@ function EditNoteMetaForm({ note }: { note: Note }) {
         </div>
 
         <div className={styles.footer}>
-          <button className={styles.cancelBtn} onClick={closeModal}>Cancel</button>
-          <button className={styles.saveBtn} onClick={handleSave}>Save</button>
+          <button className={styles.cancelBtn} onClick={closeModal}>{L.cancel}</button>
+          <button className={styles.saveBtn} onClick={handleSave}>{L.save}</button>
         </div>
       </div>
     </div>

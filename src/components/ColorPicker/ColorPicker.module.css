@@ -22,3 +22,17 @@
   border-color: var(--color-text);
   transform: scale(1.1);
 }
+
+/* Custom…: any colour, through the system's colour chooser (the input is invisible over the swatch). */
+.custom {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+  box-sizing: border-box;
+}
+.customInput { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: none; padding: 0; }
+.wheel { width: 1.1rem; height: 1.1rem; pointer-events: none; }

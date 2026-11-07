@@ -1,3 +1,4 @@
+import { endeavourColor } from '@/utils/endeavourLook';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
@@ -121,7 +122,7 @@ export function ObjectBody({ heading, onToggle, notes, links, collectionId, onNo
           <button
             type="button"
             className={styles.endeavour}
-            style={endeavour.color ? { '--chip-color': endeavour.color } as React.CSSProperties : undefined}
+            style={endeavourColor(endeavour.id, collections) ? { '--chip-color': endeavourColor(endeavour.id, collections) } as React.CSSProperties : undefined}
             title={L.changeEndeavour}
             onClick={() => toggleMenu({ kind: 'endeavour' })}
           >{endeavour.name}</button>
@@ -207,7 +208,7 @@ export function ObjectBody({ heading, onToggle, notes, links, collectionId, onNo
                   className={`${styles.menuItem} ${c.id === collectionId ? styles.menuItemOn : ''}`}
                   onClick={() => { onCollection(c.id); setMenu(null); }}
                 >
-                  <span className={styles.menuDot} style={c.color ? { background: c.color } : undefined} />
+                  <span className={styles.menuDot} style={endeavourColor(c.id, collections) ? { background: endeavourColor(c.id, collections)! } : undefined} />
                   {c.name}
                 </button>
               ))}

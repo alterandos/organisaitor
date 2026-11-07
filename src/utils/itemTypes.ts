@@ -1,5 +1,5 @@
 import type { FieldSchema, ItemType, ItemTypeDefaults, ItemTypeId, RepeatConfig, TypePart, TypeUse } from '@/types';
-import { addDaysToIso } from '@/utils/date';
+import { addDaysToIso, formatDate } from '@/utils/date';
 
 // The rules for Types (docs/features/endeavours.md phase 3), pure. A Type can extend another; what
 // it adds sits after what it inherits, and its own defaults win. A Type extending a missing or
@@ -104,6 +104,11 @@ export function formatFieldValue(f: FieldSchema, v: unknown): string {
     return h ? `${h}h ${m}m` : `${m}m`;
   }
   if (f.type === 'number' && f.unit) return `${v}${f.unit === '%' ? '' : ' '}${f.unit}`;
+  if (f.type === 'dateRange') {
+    const r = (v ?? {}) as { from?: string; to?: string };
+    const d = (iso?: string) => (iso ? formatDate(`${iso}T00:00:00`) : '…');
+    return `${d(r.from)} – ${d(r.to)}`;
+  }
   return String(v);
 }
 

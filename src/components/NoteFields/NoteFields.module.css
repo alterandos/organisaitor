@@ -1,0 +1,66 @@
+/* A note's details, new or edited (NoteFields.tsx): moved from EditNoteMetaModal.module.css, 2026-11-07. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.sectionLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+}
+.emptyHint {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  padding: 0.25rem 0;
+}
+.tagList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--color-bg);
+  max-height: 180px;
+  overflow-y: auto;
+}
+.tagRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.83rem;
+  color: var(--color-text);
+  transition: background 0.1s;
+}
+.tagRow:hover { background: var(--color-surface-alt); }
+.checkbox {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+.tagIcon {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.tagName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pinnedRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.83rem;
+  color: var(--color-text);
+  cursor: pointer;
+}

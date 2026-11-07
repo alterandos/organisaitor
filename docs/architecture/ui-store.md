@@ -132,7 +132,7 @@ pendingItemTypeId: ItemTypeId | null, showAddTyped(typeId, kind)   // sets it, t
 editingGoalId: GoalId | null, pendingGoalEndeavourId: CollectionId | null, showAddGoal(endeavourId?), openEditGoal(id)
 
 // The Endeavour creator has a slot of its own (not openModal), so it stays open under the panes its tiles open:
-creator: { partOf } | null, showAddCollection(), showTemplates(partOf?), closeCreator() — the one Endeavour form; editing is openEditCollection(collection) (openModal 'add-collection', the same form). dismissedSuggestions: Record<endeavourId, suggestionId[]>, dismissSuggestion(id, sid) — a template's suggestions passed over on a home (persisted, read with a default). templateEditor: EndeavourTemplateDef | null, openTemplateEditor(def), closeTemplateEditor() — the template editor (not persisted). ManageSection gains 'templates'.
+creator: { partOf, template?, name? } | null, showAddCollection(), showTemplates(partOf?, template?, name?), closeCreator() — the one Endeavour form (a home's parts tile opens it filled in); editing is openEditCollection(collection) (openModal 'add-collection', the same form). (dismissedSuggestions / dismissSuggestion removed 2026-11-06: templates suggest nothing.) tagPickerOpen / toggleTagPicker / closeTagPicker / clearTagFilter — the header's tag filter (activeTagIds). templateEditor: EndeavourTemplateDef | null, openTemplateEditor(def), closeTemplateEditor() — the template editor (not persisted). ManageSection gains 'templates'.
 // Restructuring: modal 'restructure'.
 restructureId: CollectionId | null, restructureMode: 'copy' | 'split' | 'merge', showRestructure(id, mode?)
 

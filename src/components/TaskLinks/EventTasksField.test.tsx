@@ -33,14 +33,31 @@ describe('a repeating event’s tasks', () => {
     expect(useUIStore.getState().pendingEventLink).toEqual({ kind: 'prepFor', targetType: 'event', targetId: id, occurrence: '2026-11-16' });
   });
 
-  it('a task linked to one date shows under that date, not under All dates, and is due on it', () => {
+  it('a task linked to one date shows under that date, and under All dates marked with it (2026-11-07); it is due on it', () => {
     const id = useCalendarStore.getState().addEvent({ title: 'Lecture', date: '2026-11-02', startTime: '10:00', repeat: WEEKLY });
     const taskId = useTaskStore.getState().addTask({ title: 'Read chapter 3' }) as TaskId;
     linkTaskToEvent(taskId, 'prepFor', 'event', id, '2026-11-16');
     expect(useTaskStore.getState().tasks[taskId]).toMatchObject({ deadline: '2026-11-16', deadlineTime: '10:00' });
-    render(<EventTasksField type="event" id={id} title="Lecture" repeats occurrence="2026-11-16" />);
-    expect(screen.queryByText('Read chapter 3')).toBeNull();
+    render(<EventTasksField type="event" id={id} title="Lecture" repeats occurrence="2026-11-23" />);
+    expect(screen.getByRole('button', { name: /Read chapter 3/ })).toHaveTextContent('16');
     fireEvent.click(screen.getByRole('radio', { name: 'Just this one' }));
-    expect(screen.getByText('Read chapter 3')).toBeInTheDocument();
+    expect(screen.queryByText(/Read chapter 3/)).toBeNull();
+  });
+
+  it('under All dates, the tasks a rule makes for each date are not listed (the rule stands for them)', () => {
+    const id = useCalendarStore.getState().addEvent({ title: 'Lecture', date: '2026-11-02', startTime: '10:00', repeat: WEEKLY });
+    const taskId = useTaskStore.getState().addTask({ title: 'Prepare for Lecture' }) as TaskId;
+    useTaskStore.getState().updateTask(taskId, { itemLinks: [{ kind: 'prepFor', targetType: 'event', targetId: id, reason: null, createdAt: '2026-11-01T00:00:00Z', occurrence: '2026-11-09', ruleId: 'r1' }] as never });
+    render(<EventTasksField type="event" id={id} title="Lecture" repeats occurrence="2026-11-09" />);
+    expect(screen.queryByText(/Prepare for Lecture/)).toBeNull();
+  });
+
+  it('a Reminder takes linked tasks too, due when it is', () => {
+    const rid = useCalendarStore.getState().addReminder({ title: 'Call the bank', date: '2026-11-20', time: '09:30' });
+    const taskId = useTaskStore.getState().addTask({ title: 'Find the account number' }) as TaskId;
+    linkTaskToEvent(taskId, 'prepFor', 'reminder', rid);
+    expect(useTaskStore.getState().tasks[taskId]).toMatchObject({ deadline: '2026-11-20', deadlineTime: '09:30' });
+    render(<EventTasksField type="reminder" id={rid} title="Call the bank" />);
+    expect(screen.getByText('Find the account number')).toBeInTheDocument();
   });
 });

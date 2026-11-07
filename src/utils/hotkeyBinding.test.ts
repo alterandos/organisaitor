@@ -7,6 +7,7 @@ describe('altDigitSection: Alt+0–7 goes to a section, from a text field too', 
     ({ altKey: true, ctrlKey: false, metaKey: false, shiftKey: false, code, ...mods }) as KeyboardEvent;
   it('maps the top-row digits to the sections in nav order', () => {
     expect(altDigitSection(key('Digit0'))).toBe('overview');
+    expect(altDigitSection(key('Backquote'))).toBe('endeavours');
     expect(altDigitSection(key('Digit5'))).toBe('notes');
     expect(altDigitSection(key('Digit7'))).toBe('fitness');
     expect(altDigitSection(key('Digit8'))).toBeNull();

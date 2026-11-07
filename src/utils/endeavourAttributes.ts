@@ -5,8 +5,9 @@ import { endeavourAncestors } from '@/utils/endeavourGraph';
 // An Endeavour's attributes (docs/features/endeavours.md "Attributes and Types for Endeavours"),
 // pure: its Type's fields, then its own, each with its value. A period field's value is the
 // Endeavour's period (Collection.period, read by utils/endeavourPeriod.ts); every other value is in
-// `attributes.values`. A field marked "parts take this" is shown on the Endeavours part of it that
-// don't have it themselves, live. Changing them is services/endeavourAttributes.ts.
+// `attributes.values`. Every field passes down (the user, 2026-11-06; a "don't pass down" switch may
+// come later): an Endeavour part of it shows it, marked where it's from, until it has its own.
+// Changing them is services/endeavourAttributes.ts.
 
 export const EMPTY_ATTRIBUTES: EndeavourAttributes = { typeId: null, fields: [], values: {} };
 export const attributesOf = (c: Collection | undefined): EndeavourAttributes => c?.attributes ?? EMPTY_ATTRIBUTES;
@@ -35,17 +36,33 @@ export function attributeValue(c: Collection, field: FieldSchema): unknown {
 
 const filled = (v: unknown) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0);
 
-// The fields it takes from above: an Endeavour it's part of (nearest first) marks a field "parts
-// take this", and it doesn't have that field itself. The period isn't listed here: it's read the
+// The fields it takes from above: those of the Endeavours it's part of (nearest first), filled in
+// there, that it doesn't have itself (by id, or by name). The period isn't listed here: it's read the
 // same way by utils/endeavourPeriod.ts.
 export function inheritedAttributes(id: string, collections: Record<string, Collection>, types: Record<string, ItemType>): { field: FieldSchema; value: unknown; fromId: string }[] {
-  const own = new Set(attributeFields(collections[id], types).map((f) => f.field.id));
-  const out: { field: FieldSchema; value: unknown; fromId: string }[] = [];
-  for (const up of endeavourAncestors(id, collections)) {
+  return detailsFrom([...endeavourAncestors(id, collections)], attributeFields(collections[id], types).map((f) => f.field), collections, types);
+}
+
+export interface InheritedDetail { field: FieldSchema; value: unknown; fromId: string }
+
+// The details a new Endeavour part of `parents` takes, less those of its own (`own`): the creator,
+// before it exists.
+export function detailsFromParents(parents: readonly string[], own: readonly FieldSchema[], collections: Record<string, Collection>, types: Record<string, ItemType>): InheritedDetail[] {
+  const ups: string[] = [];
+  for (const p of parents) for (const u of [p, ...endeavourAncestors(p, collections)]) if (!ups.includes(u)) ups.push(u);
+  return detailsFrom(ups, own, collections, types);
+}
+
+function detailsFrom(ups: readonly string[], own: readonly FieldSchema[], collections: Record<string, Collection>, types: Record<string, ItemType>): InheritedDetail[] {
+  const key = (f: FieldSchema) => f.name.trim().toLowerCase();
+  const ownIds = new Set(own.map((f) => f.id));
+  const ownNames = new Set(own.map(key));
+  const out: InheritedDetail[] = [];
+  for (const up of ups) {
     const c = collections[up];
     if (!c) continue;
     for (const { field } of attributeFields(c, types)) {
-      if (!field.inherit || field.type === 'period' || own.has(field.id) || out.some((o) => o.field.id === field.id)) continue;
+      if (field.type === 'period' || ownIds.has(field.id) || ownNames.has(key(field)) || out.some((o) => o.field.id === field.id || key(o.field) === key(field))) continue;
       const value = attributeValue(c, field);
       if (filled(value)) out.push({ field, value, fromId: up });
     }

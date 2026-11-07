@@ -52,3 +52,6 @@
 .cardTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .flag { flex: none; }
 .cardMeta { color: var(--color-muted); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A later date of a series, or a later task of a rule (OverviewRow.quiet). */
+.cardQuiet { opacity: 0.6; }

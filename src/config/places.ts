@@ -2,7 +2,7 @@ import type { ComponentType, SVGProps } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
 import { dueReviews } from '@/services/noteReview';
-import { BlockGuideIcon, ClarifyIcon, ConverterIcon, DateCalcIcon, AccountIcon, GlossaryIcon, HistoryIcon, HubIcon, IntegrationsIcon, LibraryIcon, LookUpIcon, MapIcon, ReviewIcon, ScratchpadIcon, SettingsIcon, TrashIcon } from '@/components/Icons';
+import { BlockGuideIcon, CalendarIcon, ClarifyIcon, ConverterIcon, DateCalcIcon, AccountIcon, GlossaryIcon, HistoryIcon, HubIcon, IntegrationsIcon, LibraryIcon, LookUpIcon, MapIcon, ReviewIcon, ScratchpadIcon, SettingsIcon, TrashIcon } from '@/components/Icons';
 
 // Places: destinations that aren't items — a section's tools (Glossary, Review) and the suite's
 // own panes (Settings, Account, …). Quick Access shows them as its Places row, ordered by use
@@ -10,7 +10,7 @@ import { BlockGuideIcon, ClarifyIcon, ConverterIcon, DateCalcIcon, AccountIcon, 
 // name. A new tool or pane worth jumping to is one entry here, plus `recordVisit('place', id)` in
 // its open action. Sections aren't places: they have the 0–7 hotkeys and the nav rail.
 
-export type PlaceId = 'glossary' | 'review' | 'clarify' | 'hubs' | 'map' | 'history' | 'manage' | 'settings' | 'account' | 'integrations' | 'recycling-bin' | 'scratchpad' | 'date-calculator' | 'converters' | 'block-guide' | 'look-up';
+export type PlaceId = 'glossary' | 'review' | 'clarify' | 'hubs' | 'map' | 'history' | 'manage' | 'settings' | 'account' | 'integrations' | 'recycling-bin' | 'scratchpad' | 'calendar-pad' | 'date-calculator' | 'converters' | 'block-guide' | 'look-up';
 
 export interface Place {
   id:    PlaceId;
@@ -38,6 +38,7 @@ export const PLACES: Place[] = [
   { id: 'converters',    label: LABELS.converters.title,    Icon: ConverterIcon,    open: () => useUIStore.getState().openConverters() },
   { id: 'block-guide',   label: LABELS.blockGuide.title,    Icon: BlockGuideIcon,   open: () => useUIStore.getState().openBlockGuide() },
   { id: 'scratchpad',    label: LABELS.scratchpad.title,    Icon: ScratchpadIcon,   open: () => useUIStore.getState().openScratchpad() },
+  { id: 'calendar-pad',  label: LABELS.calendarPad.title,   Icon: CalendarIcon,     open: () => useUIStore.getState().openCalendarPad() },
   { id: 'look-up',       label: LABELS.lookUp.title,        Icon: LookUpIcon,       open: () => useUIStore.getState().openLookUp() },
 ];
 

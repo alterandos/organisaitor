@@ -83,20 +83,24 @@ src/
   components/RecurrenceScopeBar/SeriesScope.tsx — a repeating item's slim line (how it repeats, its Schedule, Editing: All dates ▾); useSeriesScope.ts beside it (copies made at the first change; Delete follows the choice)
   services/repeatFollow.ts — the one watcher keeping following repeats in step (initRepeatFollow)
   services/eventTaskRules.ts — tasks for each date of an event: the one watcher (initEventTaskRules, applyRuleTasks), setEventTaskRules; rules in utils/eventTaskRules.ts (planRuleTasks, foldRuleTasks)
-  services/templates.ts — THE way to read and change Endeavour templates (useTemplates, templateFor, saveTemplate, duplicateTemplate, restoreDefault, deleteTemplate, captureTemplate); utils/templatePlan.ts makes a template into a plan (planFromTemplate, templateSuggestions)
+  services/templates.ts — THE way to read and change Endeavour templates (useTemplates, templateFor, saveTemplate, duplicateTemplate, restoreDefault, deleteTemplate, captureTemplate); utils/templatePlan.ts makes a template into a plan (planFromTemplate, normaliseTemplate)
+  services/tags.ts — tag drafts made on save (tagByName, commitTags); services/endeavourArchive.ts (archive asks about parts), services/endeavourNotebooks.ts (moving asks about notebooks); utils/tagScope.ts tags passing down and tagTest; utils/endeavourLook.ts an Endeavour's colour and icon; utils/scheduleTree.ts Schedules by Endeavour; hooks/useTagFilter.ts
+  services/endeavourNames.ts — a notebook, list or Schedule made from an Endeavour's home starts with its name, numbered when taken
+  utils/datePeriods.ts — named periods: which an Endeavour or Schedule can use, what its runs and pauses come to (periodFromUse), the old period converted (periodToNamed); services/periodConversion.ts the watcher; components/PeriodsField/ their editor
   utils/endeavourPeriod.ts — an Endeavour's period and breaks, inherited (effectivePeriod), breakDates, teachingWeek
   utils/scheduleItems.ts — a Schedule's items (calendar events): bounds, rows read back (itemToBlock, withItemRows), hiddenBySchedule (pure)
   services/schedules.ts — making, changing, deleting a Schedule's items; bounds watcher, commitment, converting old Schedules (initSchedules)
   services/endeavourFiling.ts — FILED_KINDS: everything that can be filed under an Endeavour, in every app (filedUnder, moveFiled); restructures go through it
   services/endeavourRestructure.ts — mergeEndeavour, splitEndeavour, copyShape, each with its Undo
   config/endeavourTemplates.ts — ENDEAVOUR_TEMPLATES: each template's inputs and pure plan (Semester, Subject, Training plan, Project); semesterSuggestions
-  services/endeavourTemplates.ts — applyTemplate (makes a plan and its parts, with Undo), addToEndeavour, addSubject, planLines (its preview)
+  services/endeavourTemplates.ts — applyTemplate (makes a plan and its parts, with Undo), parentNotebook (where a new notebook goes), discardEndeavour, planLines (its preview)
   config/currencies.ts — the currencies the Currency converter offers (the ECB's list)
   services/currencyRates.ts — the Currency converter's rates: ensureCurrencyRates, useCurrencyRates (cached on the device, refreshed after 12 h)
   config/builtInTypes.ts — the default Types (Semester, Subject, the University item set): read-only, copied on use
   utils/endeavourAttributes.ts — an Endeavour's attribute fields and values, the loose period, what it takes from above (pure)
   services/endeavourAttributes.ts — its Type, own fields, values, saving its fields as a Type, periodImpact
   utils/classClashes.ts — items in a class's time: clashingClasses, replacedIndex, duringIndex, withReplaced (pure)
+  utils/calendarItems.ts — what the calendar shows on each date (calendarItemsByDate), for the Calendar and the calendar pad (pure)
   services/classClashes.ts — keeps a class's dates in step with what's done instead of it (one watcher)
   utils/itemOccurrences.ts — an Endeavour's repeating classes and Work, date by date: states, behindDates (pure)
   services/itemOccurrences.ts — marking a date: toggleOccurrence, setAttended, skipOccurrence, openOccurrence
@@ -284,7 +288,13 @@ src/
     NavFlash/                — what a keyboard back/forward (Alt+←/→, Backspace) shows: the compact history carousel (HistoryCarousel) centred on where you went, a small arrow at its side; stays while Alt is held, fades after (uiStore.navFlash, set by App.tsx).
     StickyNotes/             — the sticky notes over Notes (desktop): paper that stays where it's dragged, four designs, its text written in place; right-click: open, design, remove; mounted by NotesSection
       useSimpleNoteEditor.ts — the small editor over a simple-text note (a sticky, the scratchpad): debounced save, takes up outside changes; simpleNoteExtensions(placeholder)
-    ScratchpadPanel/         — the scratchpad panel (Alt+P, over any section): Copy all / Cut all, Open in Notes, Scratchpad paper or Simple design; mounted by App.tsx
+    ScratchpadPanel/         — the pad (uiStore.pad, over any section): the scratchpad (Alt+P; Copy all / Cut all, Open in Notes, paper or Simple design), a note opened in it, or the calendar pad; mounted by App.tsx
+    CalendarPad/             — the calendar pad (Alt+C), inside the pad: a month with busy days, the next seven days, the date calculator
+    DateChecklist/           — THE list of a series' dates with a box each (skip dates, link dates)
+    TaskFields/              — THE fields of a task, new (AddTaskModal) or edited (TaskPane)
+    NoteFields/              — THE details of a note, new (AddNoteModal) or edited (EditNoteMetaModal)
+    NoteTagFields/           — THE fields of a notebook or annotation label, new or edited
+    RecordFields/            — THE fields of a tracker and a routine, new or edited (RecordCommonFields, TrackerFields, RoutineFields)
     ItemTypeField/           — an item's Type and its fields: ItemTypeField in a creation form (also the parts to make), ItemTypePaneField in a task/event/Deadline pane
     ItemTypeModal/           — making or editing a Type (Manage → Types)
     RhythmBoard/             — a rhythm's board on an Endeavour's home (weeks by streams), and RhythmDueList (its occurrences in Tasks)
@@ -301,7 +311,8 @@ src/
     EndeavourLinksField/     — "Part of" / "Related to" in the Endeavour form (EndeavourCreator)
     EventTaskRulesField/     — an event's "Tasks for each one" (Prepare · 1 day before …), in its pane
     TemplateEditor/          — a template's editor (structure only: the Endeavour, what it starts with, its parts), opened from Manage → Templates or Save as template
-    EndeavoursSection/       — the Endeavours section: EndeavoursPage (every Endeavour, tree or by Purpose), EndeavourHome (where one stands, its parts, its things, the add row), useEndeavourRows
+    TagField/                — THE way to choose the suite's tags (chips, find or make, tags passed down shown dashed); TagFilterPicker/ the header's tag filter
+    EndeavoursSection/       — the Endeavours section: EndeavoursPage (every Endeavour, tree or by Purpose), EndeavourHome (where one stands, its parts, its things, the add row), useEndeavourRows, endeavourMenu.ts (right-click on an Endeavour)
     WelcomePage/             — what a signed-out visitor sees instead of the app: suite name, tagline (LABELS.welcome), logo (public/brand/logo.png → /brand/logo.png), Sign in / Create an account / Continue without an account; App.tsx decides when
     HistoryBrowser/          — Alt+N: the history carousel (portaled, z-index 410); describePlace.ts reads a place's title, path, detail and preview live from the stores; PlaceCard.tsx is THE card for a place, shared with the phone's recent notes (MobileNotes)
       HistoryCarousel.tsx    — THE history carousel (cards fanned either side of the centred one), drawn full size by the history browser and compact by NavFlash.
@@ -345,7 +356,7 @@ src/
     ConverterPane/           — the converters panel (Alt+=, a Place): built-in units and the person's own; ConverterEditor makes and edits one (Settings → Converters opens it too); ConvertWidget is one conversion as hosted by the `\convert` note block (extensions/Convert.ts), its pure parts in convertValue.ts; SizeLike is "≈ like…" (an amount pictured by something of a known size: utils/sizeComparison.ts over config/referenceSizes.ts)
     DateCalculator/          — the date calculator (a Place; the Calendar header's button): count from a date, or between two dates, with the magic wand; rules utils/dateCalc.ts
     MagicWand/               — MagicWandButton + MagicWandPanel: a form filled in from words, through the form's own reader
-    DateInput/               — the suite's date field (day/month/year segments, the time field's rules, ▾ calendar)
+    DateInput/               — the suite's date field (day/month/year segments, the time field's rules, a calendar button)
     MiniDatePicker/          — the go-to-date calendar (the Calendar side pane, the header's period picker as MiniDatePickerPopover, DateInput's ▾)
     (NoteEditor/extensions/partAdders.ts — "+" buttons beside a block's hovered part, and a part's trash button; blockWidth.ts — the shared block width: attribute, drag handle, snap, Width ▸; BlockImportance.ts — Important blocks and cards (★ / ▾ in every pill, margin icon, Importance ▸); TextAlign.ts — paragraph alignment; NumberNotation.module.css — the number pill's ▾ and menu; cardImageLayout.ts — a Glossary card's picture width and place; objects/TaskBody.tsx — a task's pane body in a note)
     (NoteEditor/extensions/AutoBrackets.ts — brackets close themselves; EscapePassThrough.ts — lets an Escape no editor handler uses reach the Escape stack; CardTermLinks.tsx + CardTermLinkParts.tsx — Glossary term links in a card's fields; objects/selectionActions.ts — everything that can be done with selected text, for the `\` menu and right-click; cardFieldText.ts — text a card field puts in itself (never into a term link); cardFieldPairs.ts — brackets and quotes close themselves in card fields; NoteSplitView/EmptyPane.tsx — a side-by-side pane with no note yet)

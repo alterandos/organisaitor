@@ -1,13 +1,13 @@
+import { endeavourColor } from '@/utils/endeavourLook';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTrackerStore } from '@/store/trackerStore';
-import { isDealtWith, isRhythm, rhythmOccurrences, tickIndex } from '@/utils/rhythms';
 import { toggleDone } from '@/services/rhythms';
-import { STREAM_KINDS } from '@/config/streamKinds';
 import { useEndeavourScope } from '@/hooks/useEndeavourScope';
+import { useTagFilter } from '@/hooks/useTagFilter';
 import { inEndeavourScope } from '@/utils/endeavourGraph';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { pageKeyBlocked } from '@/utils/pageKeys';
-import type { TaskId, CalendarEventId, CalendarReminderId, CalendarDeadlineId, CollectionId, CalendarEvent, ScheduleId, EventStatus } from '@/types';
+import type { CalendarDeadlineId, CalendarEventId, CalendarReminderId, CollectionId, CalendarEvent, EventStatus } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { useScheduleStore } from '@/store/scheduleStore';
@@ -16,9 +16,6 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { usePlatform } from '@/hooks/usePlatform';
 import { formatTime, timeAddMinutes } from '@/utils/date';
 import { resolveTimezone, todayIsoInZone, utcToZonedTime } from '@/utils/timezone';
-import { hiddenBySchedule } from '@/utils/scheduleItems';
-import { duringIndex, isDrawnOnClass } from '@/utils/classClashes';
-import { expandRepeat, isOccurrenceSkipped } from '@/utils/recurrence';
 import {
   buildHourLayout, minutesToY, layoutDayTimeGrid, timeToMinutes,
   yToMinutes, snapMinutes,
@@ -26,31 +23,24 @@ import {
   type TimeGridEntry as TimeGridEntryG,
   type HourLayout,
 } from '@/utils/timeGrid';
-import { eventKind, eventTypeIcon, occurrenceTitle } from '@/config/calendarEventTypes';
+import { eventTypeIcon } from '@/config/calendarEventTypes';
 import { LABELS } from '@/config/labels';
 import { MiniDatePickerPopover } from '@/components/MiniDatePicker/MiniDatePicker';
 import { CalendarSidePane } from '@/components/CalendarSidePane/CalendarSidePane';
 import { useTimeGridDrag } from '@/hooks/useTimeGridDrag';
-import { ITEM_FLAG_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
 import styles from './CalendarView.module.css';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { CloseIcon, DateCalcIcon } from '@/components/Icons';
 import { CalendarItemHoverCard, type HoverCardItem } from './CalendarItemHoverCard';
 import type { AnchorBox } from '@/utils/floatingPlacement';
-import { ItemIcon } from '@/components/IconPicker/ItemIcon';
+import { CalItemBlock, CalItemIcon, CalItemLine } from './CalItemLine';
+import { isOpenCalendarItem } from '@/utils/openCalendarItem';
 import { isPictureIcon } from '@/components/IconPicker/iconValue';
+import { occurrenceEndTime } from '@/utils/recurrence';
+import { calendarItemsByDate, type CalDisplayItem, type DuringItem } from '@/utils/calendarItems';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-
-type CalDisplayItem =
-  | { kind: 'task';     id: TaskId;             title: string; time: string | null; isMilestone: boolean; collectionId: CollectionId | null; completed: boolean; notes: string | null; typeIcon: string }
-  | { kind: 'event';    id: CalendarEventId;    title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; flags?: string; status: EventStatus; important: boolean; occurrenceDate: string; travel: boolean; travelIcon: string; pictureIcon: string | null; color: string | null; scheduleId: ScheduleId | null }
-  | { kind: 'reminder'; id: CalendarReminderId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; flags?: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
-  | { kind: 'deadline'; id: CalendarDeadlineId; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; links: string[]; typeIcon: string; flags?: string; status: EventStatus; important: boolean; occurrenceDate: string; done: boolean }
-  // A rhythm stream's occurrence whose stream shows on the calendar (docs/features/endeavours.md
-  // phase 4): `marker` draws it small; a click ticks it done. id is its tickKey.
-  | { kind: 'rhythm';   id: string; rhythmId: string; streamId: string; occurrenceDate: string; title: string; time: string | null; collectionId: CollectionId | null; notes: string | null; typeIcon: string; done: boolean; marker: boolean; behind: boolean };
 
 interface SpanSlot {
   eventId:      CalendarEventId;
@@ -66,6 +56,7 @@ interface SpanSlot {
   background:   boolean;
   travel:       boolean;
   icon:         string;   // its own or its kind's (eventTypeIcon)
+  pictureIcon:  string | null;   // its own icon when that's a picture
   color:        string | null;
 }
 
@@ -99,17 +90,6 @@ function buildCalendarDays(year: number, month: number): { date: Date; isCurrent
     cur.setDate(cur.getDate() + 1);
   }
   return days;
-}
-
-function sortItems(items: CalDisplayItem[]): CalDisplayItem[] {
-  const kindOrder = { event: 0, task: 2, deadline: 3, reminder: 4, rhythm: 5 } as const;
-  return [...items].sort((a, b) => {
-    if (a.kind !== b.kind) return kindOrder[a.kind] - kindOrder[b.kind];
-    if (!a.time && b.time) return 1;
-    if (a.time && !b.time) return -1;
-    if (a.time && b.time) return a.time.localeCompare(b.time);
-    return 0;
-  });
 }
 
 function getWeekSpanSlots(weekDateStrs: string[], spanEvents: CalendarEvent[]): SpanSlot[] {
@@ -154,6 +134,7 @@ function getWeekSpanSlots(weekDateStrs: string[], spanEvents: CalendarEvent[]): 
       background:   ev.background ?? false,
       travel:       !!ev.quiet,
       icon:         eventTypeIcon(ev),
+      pictureIcon:  isPictureIcon(ev.icon) ? ev.icon ?? null : null,
       color:        ev.color ?? null,
     });
   }
@@ -177,32 +158,29 @@ const MAX_VISIBLE = 3;
 interface TooltipState {
   item:   HoverCardItem;
   anchor: AnchorBox;
+  // A class with items during it: shown side by side, each to be clicked (2026-11-07).
+  during?: DuringItem[];
+  classTitle?: string;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-// The icon before an item's title, in every view (2026-11-05: timed blocks in the week and day
-// views showed only a journey's): its own or its kind's; a picture icon drawn as itself.
-function CalItemIcon({ item }: { item: CalDisplayItem }) {
-  const pic = item.kind === 'event' ? item.pictureIcon : null;
-  if (!item.typeIcon && !pic) return null;
-  return (
-    <span className={styles.calItemIcon} aria-hidden="true">
-      {pic && <ItemIcon icon={pic} className={styles.calItemPicture} />}{item.typeIcon}
-    </span>
-  );
-}
-
-// What the app adds about an item (❗ important, 🔁 repeats), small and quiet after its time (or
-// its title, with no time), so they don't crowd the icon and title (the user, 2026-11-06).
-function CalItemFlags({ item }: { item: CalDisplayItem }) {
-  const flags = 'flags' in item ? item.flags : '';
-  return flags ? <span className={styles.calItemFlags} aria-hidden="true">{flags}</span> : null;
-}
-
 export function CalendarView() {
   const paneResize = usePaneWidth('calendar-day', { edge: 'left', min: 280, max: 720 });
   const timezone     = useSettingsStore((s) => s.timezone);
+  // The item whose pane is open is outlined wherever it shows (2026-11-07, the user: which one am I
+  // looking at?); one date of a series, just that date.
+  const openEventId     = useUIStore((s) => s.editingCalendarEventId);
+  const openEventOcc    = useUIStore((s) => s.editingCalendarEventOccurrence);
+  const openReminderId  = useUIStore((s) => s.editingCalendarReminderId);
+  const openReminderOcc = useUIStore((s) => s.editingCalendarReminderOccurrence);
+  const openDeadlineId  = useUIStore((s) => s.editingCalendarDeadlineId);
+  const openDeadlineOcc = useUIStore((s) => s.editingCalendarDeadlineOccurrence);
+  const openTaskId      = useUIStore((s) => s.editingTaskId);
+  const isOpenItem = (item: CalDisplayItem): boolean => isOpenCalendarItem(item, {
+    event: { id: openEventId, occurrence: openEventOcc }, reminder: { id: openReminderId, occurrence: openReminderOcc },
+    deadline: { id: openDeadlineId, occurrence: openDeadlineOcc }, taskId: openTaskId,
+  });
   const effectiveZone = resolveTimezone(timezone);
   const todayIsoStr  = todayIsoInZone(effectiveZone);
 
@@ -220,6 +198,11 @@ export function CalendarView() {
   const setSelectedDate = useUIStore((s) => s.setCalendarSelectedDate);
   const openDateCalculator = useUIStore((s) => s.openDateCalculator);
   const [tooltip,     setTooltip]     = useState<TooltipState | null>(null);
+  // Leaving an item closes its card a moment later, so the pointer can reach a card that can be
+  // clicked (a class with items during it); entering the card keeps it.
+  const closeTimer = useRef<number | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { window.clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const leaveItem = () => { cancelClose(); closeTimer.current = window.setTimeout(() => setTooltip(null), 200); };
   const [hoveredHour, setHoveredHour] = useState<number | null>(null);
   const [dayPaneDate, setDayPaneDate] = useState<string | null>(null);
   // The month view's day pane closes on an outside click, so Escape closes it too (it didn't, 2026-10-17).
@@ -246,6 +229,7 @@ export function CalendarView() {
   const toggleSchedules          = useUIStore((s) => s.toggleSchedules);
   const activeCollectionId       = useUIStore(selectActiveCollectionId) as CollectionId | null;
   const endeavourScope           = useEndeavourScope(activeCollectionId);
+  const tagFilter                = useTagFilter();
 
   const shadePastDays         = useSettingsStore((s) => s.shadePastDays);
   const shadeWeekends         = useSettingsStore((s) => s.shadeWeekends);
@@ -257,8 +241,9 @@ export function CalendarView() {
   const days = useMemo(() => buildCalendarDays(year, month), [year, month]);
 
   const spanEventsArray = useMemo(
-    () => Object.values(events).filter(ev => !ev.archivedAt && ev.endDate != null && ev.endDate > ev.date),
-    [events]
+    () => Object.values(events).filter(ev => !ev.archivedAt && ev.endDate != null && ev.endDate > ev.date
+      && inEndeavourScope(endeavourScope, ev.collectionId) && (!tagFilter || tagFilter(ev))),
+    [events, endeavourScope, tagFilter]
   );
 
   const spanEventIds = useMemo(
@@ -272,202 +257,11 @@ export function CalendarView() {
     return blocks;
   }, [days]);
 
-  const itemsByDate = useMemo(() => {
-    const map = new Map<string, CalDisplayItem[]>();
-    const push = (date: string, item: CalDisplayItem) => {
-      const list = map.get(date) ?? [];
-      list.push(item);
-      map.set(date, list);
-    };
-
-    const rangeStart = days.length > 0 ? toDateStr(days[0].date) : '';
-    const rangeEnd   = days.length > 0 ? toDateStr(days[days.length - 1].date) : '';
-
-    Object.values(tasks).forEach((task) => {
-      if (task.archived) return;
-      if (task.deadline) {
-        if (!layerVisibility.taskDeadlines) return;
-        if (!inEndeavourScope(endeavourScope, task.collectionId)) return;
-        push(task.deadline, {
-          kind: 'task',
-          id: task.id,
-          title: task.title,
-          time: task.deadlineTime,
-          isMilestone: task.kind === 'milestone',
-          collectionId: task.collectionId,
-          completed: task.completed,
-          notes: task.notes,
-          // Matches TaskItem.tsx's own ❗ deadline pill, shown regardless of milestone status there too.
-          typeIcon: '❗',
-        });
-      }
-    });
-
-    const taskLinkedEventIds = new Set(
-      Object.values(tasks).map((t) => t.calendarEventId).filter((id): id is CalendarEventId => !!id)
-    );
-
-    // An archived task's shadow event is kept (restoring the task brings it back) but hidden.
-    const archivedTaskEventIds = new Set(
-      Object.values(tasks).filter((t) => t.archived && t.calendarEventId).map((t) => t.calendarEventId)
-    );
-
-    Object.values(events).forEach((ev) => {
-      if (ev.archivedAt || archivedTaskEventIds.has(ev.id)) return;
-      const isTaskEvent = (ev.eventType ?? 'default') === 'task';
-      if (isTaskEvent ? !layerVisibility.taskScheduled : !layerVisibility.events) return;
-      // Tentative is a filter on top of the 'events' layer, not a separate one — a task-linked
-      // shadow event is never user-marked tentative, so this only ever applies to plain events.
-      if (!isTaskEvent && (ev.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
-      if (!inEndeavourScope(endeavourScope, ev.collectionId)) return;
-      // One of a Schedule's items: hidden while the Schedule is off; 🗓, or ✅ for a date taken out
-      // of a commitment-mode item and confirmed (services/schedules.ts).
-      if (hiddenBySchedule(ev, schedules)) return;
-      const series = ev.seriesId ? events[ev.seriesId as CalendarEventId] : undefined;
-      const scheduleIcon = !ev.scheduleId ? '' : !ev.repeat && ev.status === 'confirmed' && series?.status === 'tentative' ? '✅' : '🗓';
-      const item: CalDisplayItem = {
-        kind: 'event',
-        id: ev.id,
-        title: ev.title,
-        time: ev.startTime,
-        collectionId: ev.collectionId,
-        notes: ev.notes,
-        links: ev.links,
-        // The event's own icon takes priority in the vanishingly rare case both apply; otherwise 🕐 marks an
-        // event auto-created from a task's scheduledAt (see Task.calendarEventId) so the calendar
-        // reads as task-linked without changing the event's click/edit behaviour.
-        // 🔁 on anything that repeats, or a date taken out of a series (2026-11-05: the user couldn't
-        // tell a Schedule's items or a repeating event from a one-off).
-        // What it is before its title (its own or its kind's icon); what the app adds about it (❗, 🔁)
-        // small after its time, so a few at once don't crowd the title (2026-11-06). A kind that
-        // repeats by its nature (a birthday) doesn't say so.
-        typeIcon: eventTypeIcon(ev) || scheduleIcon || (taskLinkedEventIds.has(ev.id) ? '🕐' : ''),
-        flags: `${ev.important ? ITEM_FLAG_ICON.important : ''}${(ev.repeat || ev.seriesId) && !eventKind(ev.eventType).presets.repeat ? ITEM_FLAG_ICON.repeats : ''}`,
-        status: ev.status ?? 'confirmed',
-        important: ev.important ?? false,
-        occurrenceDate: ev.date,
-        travel: !!ev.quiet,
-        travelIcon: eventTypeIcon(ev),
-        pictureIcon: isPictureIcon(ev.icon) ? ev.icon ?? null : null,
-        color: ev.color ?? null,
-        scheduleId: ev.scheduleId ?? null,
-      };
-
-      if (ev.endDate && ev.endDate > ev.date) {
-        // Multi-day event: push to all covered dates within view range
-        let cur = ev.date;
-        while (cur <= ev.endDate) {
-          if (cur >= rangeStart && cur <= rangeEnd) push(cur, { ...item, occurrenceDate: cur });
-          const d = new Date(cur + 'T00:00:00');
-          d.setDate(d.getDate() + 1);
-          cur = toDateStr(d);
-        }
-      } else {
-        // What a date of it says (a birthday: the age it turns: config/calendarEventTypes.ts).
-        const titled = (d: string) => occurrenceTitle(ev, d);
-        if (!isOccurrenceSkipped(ev.repeat, ev.date)) push(ev.date, item);
-        if (ev.repeat) {
-          for (const d of expandRepeat(ev.date, ev.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d, title: titled(d) });
-        }
-      }
-    });
-
-    Object.values(reminders).forEach((rem) => {
-      if (rem.archivedAt) return;
-      // Task-deadline-derived reminders (reminderType: 'task') are excluded here — the
-      // deadline already rendered above as its own dedicated kind:'task' pill (synthesized
-      // directly from the Task, so it gets live completion styling and opens TaskPane in
-      // one click). This row exists only for sync + notification purposes; rendering it
-      // here too would duplicate the pill.
-      if (rem.reminderType === 'task') return;
-      if (!layerVisibility.reminders) return;
-      // Tentative is a filter on top of the 'reminders' layer, not a separate one — same
-      // convention as events (see above).
-      if ((rem.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
-      if (!inEndeavourScope(endeavourScope, rem.collectionId)) return;
-      const item: CalDisplayItem = {
-        kind: 'reminder',
-        id: rem.id,
-        title: rem.title,
-        time: rem.time,
-        collectionId: rem.collectionId,
-        notes: rem.notes,
-        links: rem.links,
-        typeIcon: '',
-        flags: `${rem.important ? ITEM_FLAG_ICON.important : ''}${rem.repeat || rem.seriesId ? ITEM_FLAG_ICON.repeats : ''}`,
-        status: rem.status ?? 'confirmed',
-        important: rem.important ?? false,
-        occurrenceDate: rem.date,
-        done: (rem.doneDates ?? []).includes(rem.date),
-      };
-      if (!isOccurrenceSkipped(rem.repeat, rem.date)) push(rem.date, item);
-      if (rem.repeat) {
-        for (const d of expandRepeat(rem.date, rem.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d, done: (rem.doneDates ?? []).includes(d) });
-      }
-    });
-
-    Object.values(deadlines).forEach((dl) => {
-      if (dl.archivedAt) return;
-      // Same exclusion as task-deadline-derived reminders above, now for deadlineType:'task' —
-      // the task's own deadline still renders as its dedicated kind:'task' pill; this row
-      // exists only for sync + notification purposes.
-      if (dl.deadlineType === 'task') return;
-      if (!layerVisibility.deadlines) return;
-      if ((dl.status ?? 'confirmed') === 'tentative' && !layerVisibility.tentative) return;
-      if (!inEndeavourScope(endeavourScope, dl.collectionId)) return;
-      const item: CalDisplayItem = {
-        kind: 'deadline',
-        id: dl.id,
-        title: dl.title,
-        time: dl.time,
-        collectionId: dl.collectionId,
-        notes: dl.notes,
-        links: dl.links,
-        typeIcon: ITEM_TYPE_ICON.deadline,
-        flags: `${dl.important ? ITEM_FLAG_ICON.important : ''}${dl.repeat || dl.seriesId ? ITEM_FLAG_ICON.repeats : ''}`,
-        status: dl.status ?? 'confirmed',
-        important: dl.important ?? false,
-        occurrenceDate: dl.date,
-        done: (dl.doneDates ?? []).includes(dl.date),
-      };
-      if (!isOccurrenceSkipped(dl.repeat, dl.date)) push(dl.date, item);
-      if (dl.repeat) {
-        for (const d of expandRepeat(dl.date, dl.repeat, rangeStart, rangeEnd)) push(d, { ...item, occurrenceDate: d, done: (dl.doneDates ?? []).includes(d) });
-      }
-    });
-
-    // Rhythm occurrences whose stream shows on the calendar (a mark or an item).
-    const ticks = tickIndex(trackerEntries, collectionsRecord);
-    for (const rhythm of Object.values(collectionsRecord)) {
-      if (!isRhythm(rhythm) || rhythm.archivedAt || !inEndeavourScope(endeavourScope, rhythm.id)) continue;
-      for (const o of rhythmOccurrences(rhythm, schedules, ticks, rangeStart, rangeEnd, todayIsoStr, events)) {
-        if (o.stream.show.calendar === 'none') continue;
-        push(o.date, {
-          kind: 'rhythm', id: o.key, rhythmId: rhythm.id, streamId: o.stream.id, occurrenceDate: o.date,
-          title: o.stream.label, time: o.time, collectionId: rhythm.collectionId, notes: rhythm.name,
-          typeIcon: STREAM_KINDS[o.stream.kind].icon, done: isDealtWith(o.state),
-          marker: o.stream.show.calendar === 'marker', behind: o.state === 'behind',
-        });
-      }
-    }
-
-    // Items during a class (an in-class quiz: utils/classClashes.ts) are drawn on the class that
-    // day, not on their own: the class's title says what's in it, and 📌 marks it.
-    const during = duringIndex(events, deadlines);
-    if (during.size) {
-      map.forEach((list, date) => map.set(date, list.flatMap((i): CalDisplayItem[] => {
-        if (i.kind === 'deadline' && deadlines[i.id] && isDrawnOnClass(deadlines[i.id])) return [];
-        if (i.kind !== 'event') return [i];
-        const ev = events[i.id];
-        if (ev && isDrawnOnClass(ev)) return [];
-        const on = during.get(`${i.id}|${i.occurrenceDate}`) ?? (ev?.seriesId ? during.get(`${ev.seriesId}|${ev.seriesDate}`) : undefined);
-        return on ? [{ ...i, title: `${i.title} · ${on.map((x) => x.title).join(', ')}`, typeIcon: `📌${i.typeIcon}` }] : [i];
-      })));
-    }
-
-    map.forEach((list, date) => map.set(date, sortItems(list)));
-    return map;
-  }, [tasks, events, reminders, deadlines, schedules, endeavourScope, days, layerVisibility, trackerEntries, collectionsRecord, todayIsoStr]);
+  const itemsByDate = useMemo(() => calendarItemsByDate(
+    { tasks, events, reminders, deadlines, schedules, collections: collectionsRecord, trackerEntries },
+    days.length > 0 ? toDateStr(days[0].date) : '', days.length > 0 ? toDateStr(days[days.length - 1].date) : '',
+    { layers: layerVisibility, endeavourScope, tagFilter, today: todayIsoStr },
+  ), [tasks, events, reminders, deadlines, schedules, endeavourScope, tagFilter, days, layerVisibility, trackerEntries, collectionsRecord, todayIsoStr]);
 
   // ── Mobile week strip & desktop week view ─────────────────────────────────
   const weekDays = useMemo(() => {
@@ -494,7 +288,9 @@ export function CalendarView() {
   const getItemEndMinutes = (item: CalDisplayItem, startMin: number): number => {
     if (item.kind === 'event') {
       const full = events[item.id];
-      const explicitEnd = full?.endTime ? timeToMinutes(full.endTime) : null;
+      // A date with its own start (a list of dates, each with its time) keeps the event's length.
+      const end = full ? occurrenceEndTime(full.startTime, full.endTime, item.time) : null;
+      const explicitEnd = end ? timeToMinutes(end) : null;
       return explicitEnd !== null && explicitEnd > startMin ? explicitEnd : startMin + DEFAULT_EVENT_DURATION_MIN;
     }
     // Reminders reserve a full REMINDER_MAX_HEIGHT_MIN slot for column-overlap purposes even
@@ -518,6 +314,16 @@ export function CalendarView() {
     isPointInTimeKind(item.kind)
       ? formatTime(item.time!, clockFormat)
       : `${formatTime(item.time!, clockFormat)}–${formatTime(minutesToTimeStr(endMin), clockFormat)}`;
+  // A timed block's time: the end in its own span, which a narrow block leaves out rather than
+  // cutting "09:00–10:" off mid-way (CSS container query on .weekTimeBlock; 2026-11-06).
+  const renderItemTime = (item: CalDisplayItem, endMin: number) => (
+    <>
+      {formatTime(item.time!, clockFormat)}
+      {!isPointInTimeKind(item.kind) && <span className={styles.weekTimeBlockEnd}>–{formatTime(minutesToTimeStr(endMin), clockFormat)}</span>}
+    </>
+  );
+  // Too short for the time and the title on lines of their own: one line, the title after the time.
+  const SHORT_BLOCK_PX = 34;
 
   // Hour labels for a time grid's gutter (week and day views). The collapsed night band gets one
   // two-line label, centred, instead of its hours' own.
@@ -736,11 +542,16 @@ export function CalendarView() {
   // event). Also runs on mount, since navigating here from another section mounts this view
   // with the request already pending.
   const pendingCalendarDate = useUIStore((s) => s.pendingCalendarDate);
+  // The jump is written out rather than calling jumpToDate, which is new each render: the effect
+  // only needs the store's setters, which never change.
   useEffect(() => {
     if (!pendingCalendarDate) return;
-    jumpToDate(pendingCalendarDate);
+    const d = new Date(pendingCalendarDate + 'T00:00:00');
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+    setSelectedDate(pendingCalendarDate);
     useUIStore.getState().clearPendingCalendarDate();
-  }, [pendingCalendarDate]);
+  }, [pendingCalendarDate, setYear, setMonth, setSelectedDate]);
 
   const shiftWeek = (delta: number) => {
     const d = new Date(selectedDate + 'T00:00:00');
@@ -914,19 +725,29 @@ export function CalendarView() {
   // Hovering an entry shows it whole (CalendarItemHoverCard) when the cell cuts any of it off, or
   // when it has more than the cell shows (notes, a place, links, an Endeavour, an end time).
   const handleItemMouseEnter = (e: React.MouseEvent<HTMLButtonElement>, item: CalDisplayItem) => {
+    cancelClose();
     const el = e.currentTarget;
+    const during = item.kind === 'event' && item.during?.length ? item.during : undefined;
     const clipped = [el, ...Array.from(el.children)].some((c) => c.scrollWidth > c.clientWidth + 1 || c.scrollHeight > c.clientHeight + 1);
     const links = item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline' ? item.links : [];
     const event = item.kind === 'event' ? events[item.id] : undefined;
     const location = event?.location ?? null;
     const endTime = event?.endTime ?? null;
-    if (!clipped && !item.notes && !links.length && !item.collectionId && !location && !endTime) { setTooltip(null); return; }
+    if (!during && !clipped && !item.notes && !links.length && !item.collectionId && !location && !endTime) { setTooltip(null); return; }
     const date = item.kind === 'task' ? null : item.occurrenceDate;
     const rect = el.getBoundingClientRect();
     setTooltip({
       item: { kind: item.kind, id: item.id, title: item.title, typeIcon: item.typeIcon, flags: 'flags' in item ? item.flags : undefined, time: item.time, endTime, location, date, notes: item.notes, links, collectionId: item.collectionId },
       anchor: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+      ...(during ? { during, classTitle: event?.title ?? item.title } : {}),
     });
+  };
+
+  // From the side-by-side card: the class, or one of the items during it.
+  const openFromCard = (kind: 'event' | 'deadline', id: string, date: string | null) => {
+    setTooltip(null);
+    if (kind === 'event') openCalendarEventPane(id as CalendarEventId, date ?? undefined);
+    else openCalendarDeadlinePane(id as CalendarDeadlineId, date ?? undefined);
   };
 
   // ── Style helpers ─────────────────────────────────────────────────────────
@@ -956,7 +777,8 @@ export function CalendarView() {
   const isTentativeItem = (item: CalDisplayItem): boolean =>
     ((item.kind === 'event' || item.kind === 'reminder' || item.kind === 'deadline') && item.status === 'tentative');
 
-  const isTravelItem = (item: CalDisplayItem): boolean => item.kind === 'event' && item.travel;
+  // Shown quietly: an event shown as Quiet, or a rule's later task (utils/eventTaskRules.ts).
+  const isTravelItem = (item: CalDisplayItem): boolean => (item.kind === 'event' && item.travel) || (item.kind === 'task' && !!item.quiet);
 
   // A rhythm's occurrence: small when its stream shows as a mark; flagged once it's behind.
   const rhythmClass = (item: CalDisplayItem): string =>
@@ -975,16 +797,16 @@ export function CalendarView() {
     // An event's own colour (an imported event takes its calendar's) comes before its Endeavour's.
     if (item.kind === 'event' && item.color) return { borderLeft: `3px solid ${item.color}` };
     if (!item.collectionId) return {};
-    const col = collectionsRecord[item.collectionId];
-    if (!col?.color) return {};
-    return { borderLeft: `3px solid ${col.color}` };
+    const colour = endeavourColor(item.collectionId, collectionsRecord);
+    if (!colour) return {};
+    return { borderLeft: `3px solid ${colour}` };
   };
 
   const getSpanPillStyle = (slot: SpanSlot): React.CSSProperties => {
     if (slot.color) return { background: slot.color, color: '#fff' };
     if (slot.collectionId) {
-      const col = collectionsRecord[slot.collectionId];
-      if (col?.color) return { background: col.color, color: '#fff' };
+      const colour = endeavourColor(slot.collectionId, collectionsRecord);
+      if (colour) return { background: colour, color: '#fff' };
     }
     return {};
   };
@@ -994,7 +816,7 @@ export function CalendarView() {
   // colour swap — an explicit `color` on the event wins, falling back to its Endeavour's
   // colour, then the same default tint every other span pill uses.
   const resolveSpanColor = (slot: SpanSlot): string =>
-    slot.color ?? (slot.collectionId ? collectionsRecord[slot.collectionId]?.color : null) ?? 'var(--color-primary)';
+    slot.color ?? endeavourColor(slot.collectionId, collectionsRecord) ?? 'var(--color-primary)';
 
   const isPastItem = (dateStr: string, time: string | null): boolean => {
     if (dateStr < todayStr) return true;
@@ -1008,7 +830,7 @@ export function CalendarView() {
   };
 
   return (
-    <div className={styles.wrapper} onMouseLeave={() => setTooltip(null)}>
+    <div className={styles.wrapper} onMouseLeave={leaveItem}>
 
       {/* ── Mobile: week strip + day list ── */}
       <div className={styles.mobileView}>
@@ -1057,14 +879,11 @@ export function CalendarView() {
               return (
                 <button
                   key={`${item.kind}-${item.id}`}
-                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
+                  className={`${styles.dayListItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${isOpenItem(item) ? styles.calItemOpen : ''} ${rhythmClass(item)}`}
                   style={getPillStyle(item)}
                   onClick={(e) => handleItemClick(e, item)}
                 >
-                  {item.time && <span className={styles.calItemTime}>{formatTime(item.time, clockFormat)}</span>}
-                  <CalItemFlags item={item} />
-                  <CalItemIcon item={item} />
-                  <span className={styles.dayListItemTitle}>{item.title}</span>
+                  <CalItemLine item={item} time={item.time && formatTime(item.time, clockFormat)} titleClassName={styles.dayListItemTitle} />
                 </button>
               );
             })
@@ -1173,7 +992,7 @@ export function CalendarView() {
                         {slots.map(slot => (
                           <button
                             key={slot.eventId}
-                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.background ? styles.spanPillBackground : ''} ${slot.travel && !slot.background ? styles.calItemTravel : ''}`}
+                            className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.eventId === openEventId ? styles.calItemOpen : ''} ${slot.background ? styles.spanPillBackground : ''} ${slot.travel && !slot.background ? styles.calItemTravel : ''}`}
                             style={{
                               gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                               gridRow: slot.row + 1,
@@ -1189,11 +1008,11 @@ export function CalendarView() {
                                   className={styles.spanPillBackgroundLabel}
                                   style={{ background: `color-mix(in srgb, ${resolveSpanColor(slot)} 18%, var(--color-surface))`, color: resolveSpanColor(slot) }}
                                 >
-                                  {slot.icon && <span className={styles.calItemIcon} aria-hidden="true">{slot.icon}</span>}{slot.title}
+                                  <CalItemIcon item={{ typeIcon: slot.icon, pictureIcon: slot.pictureIcon }} />{slot.title}
                                 </span>
                               </>
                             ) : (
-                              slot.isStart && <span className={styles.spanPillTitle}>{slot.icon && <span className={styles.calItemIcon} aria-hidden="true">{slot.icon}</span>}{slot.title}</span>
+                              slot.isStart && <span className={styles.spanPillTitle}><CalItemIcon item={{ typeIcon: slot.icon, pictureIcon: slot.pictureIcon }} />{slot.title}</span>
                             )}
                           </button>
                         ))}
@@ -1220,18 +1039,14 @@ export function CalendarView() {
                               return (
                                 <button
                                   key={`${item.kind}-${item.id}`}
-                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
+                                  className={`${styles.calItem} ${styles[`calItem_${item.kind === 'task' && item.isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${isOpenItem(item) ? styles.calItemOpen : ''} ${rhythmClass(item)}`}
                                   style={getPillStyle(item)}
                                   onClick={(e) => handleItemClick(e, item)}
                                   onMouseEnter={(e) => handleItemMouseEnter(e, item)}
-                                  onMouseLeave={() => setTooltip(null)}
+                                  onMouseLeave={leaveItem}
                                   title=""
                                 >
-                                  {item.time    && <span className={styles.calItemTime}>{formatTime(item.time, clockFormat)}</span>}
-                                  <CalItemFlags item={item} />
-                                  <CalItemIcon item={item} />
-                                  <span className={styles.calItemTitle}>{item.title}</span>
-                                  <CalItemFlags item={item} />
+                                  <CalItemLine item={item} time={item.time && formatTime(item.time, clockFormat)} titleClassName={styles.calItemTitle} />
                                 </button>
                               );
                             })}
@@ -1284,7 +1099,7 @@ export function CalendarView() {
                     {weekViewSpanSlots.map(slot => (
                       <button
                         key={slot.eventId}
-                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.background ? styles.spanPillBackground : ''} ${slot.travel && !slot.background ? styles.calItemTravel : ''}`}
+                        className={`${styles.spanPill} ${slot.isStart ? styles.spanPillStart : ''} ${slot.isEnd ? styles.spanPillEnd : ''} ${slot.status === 'tentative' ? styles.calItemTentative : ''} ${slot.important ? styles.calItemImportant : ''} ${slot.eventId === openEventId ? styles.calItemOpen : ''} ${slot.background ? styles.spanPillBackground : ''} ${slot.travel && !slot.background ? styles.calItemTravel : ''}`}
                         style={{
                           gridColumn: `${slot.startCol} / span ${slot.colSpan}`,
                           gridRow: slot.row + 1,
@@ -1300,11 +1115,11 @@ export function CalendarView() {
                               className={styles.spanPillBackgroundLabel}
                               style={{ background: `color-mix(in srgb, ${resolveSpanColor(slot)} 18%, var(--color-surface))`, color: resolveSpanColor(slot) }}
                             >
-                              {slot.icon && <span className={styles.calItemIcon} aria-hidden="true">{slot.icon}</span>}{slot.title}
+                              <CalItemIcon item={{ typeIcon: slot.icon, pictureIcon: slot.pictureIcon }} />{slot.title}
                             </span>
                           </>
                         ) : (
-                          slot.isStart && <span className={styles.spanPillTitle}>{slot.icon && <span className={styles.calItemIcon} aria-hidden="true">{slot.icon}</span>}{slot.title}</span>
+                          slot.isStart && <span className={styles.spanPillTitle}><CalItemIcon item={{ typeIcon: slot.icon, pictureIcon: slot.pictureIcon }} />{slot.title}</span>
                         )}
                       </button>
                     ))}
@@ -1322,16 +1137,14 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
+                              className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${isOpenItem(item) ? styles.calItemOpen : ''} ${rhythmClass(item)}`}
                               style={getPillStyle(item)}
                               onClick={(e) => handleItemClick(e, item)}
                               onMouseEnter={(e) => handleItemMouseEnter(e, item)}
-                              onMouseLeave={() => setTooltip(null)}
+                              onMouseLeave={leaveItem}
                               title=""
                             >
-                              <CalItemIcon item={item} />
-                              <span className={styles.calItemTitle}>{item.title}</span>
-                              <CalItemFlags item={item} />
+                              <CalItemLine item={item} time={null} titleClassName={styles.calItemTitle} />
                             </button>
                           );
                         })}
@@ -1402,7 +1215,7 @@ export function CalendarView() {
                             return (
                               <button
                                 key={`${item.kind}-${item.id}`}
-                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
+                                className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${isOpenItem(item) ? styles.calItemOpen : ''} ${rhythmClass(item)} ${draggable ? styles.weekTimeBlockDraggable : ''} ${!isReminder && liveHeight < SHORT_BLOCK_PX ? styles.weekTimeBlockShort : ''}`}
                                 style={{
                                   top: liveTop,
                                   height: isReminder ? 'auto' : liveHeight,
@@ -1417,13 +1230,10 @@ export function CalendarView() {
                                 }) : undefined}
                                 onClick={(e) => { if (dragKey && consumeSuppressedClick(dragKey)) return; handleItemClick(e, item); }}
                                 onMouseEnter={(e) => handleItemMouseEnter(e, item)}
-                                onMouseLeave={() => setTooltip(null)}
+                                onMouseLeave={leaveItem}
                                 title=""
                               >
-                                <span className={styles.weekTimeBlockTime}>
-                                  {formatItemTimeLabel(item, resizing ? dragPreview!.endMin : endMin)}<CalItemFlags item={item} />
-                                </span>
-                                <span className={styles.weekTimeBlockTitle}><CalItemIcon item={item} />{item.title}</span>
+                                <CalItemBlock item={item} time={renderItemTime(item, resizing ? dragPreview!.endMin : endMin)} />
                                 {getItemLocation(item) && (
                                   <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                                 )}
@@ -1493,15 +1303,13 @@ export function CalendarView() {
                         return (
                           <button
                             key={`${item.kind}-${item.id}`}
-                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
+                            className={`${styles.weekViewItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${isOpenItem(item) ? styles.calItemOpen : ''} ${rhythmClass(item)}`}
                             style={getPillStyle(item)}
                             onClick={(e) => handleItemClick(e, item)}
                             onMouseEnter={(e) => handleItemMouseEnter(e, item)}
-                            onMouseLeave={() => setTooltip(null)}
+                            onMouseLeave={leaveItem}
                           >
-                            <CalItemIcon item={item} />
-                            <span className={styles.calItemTitle}>{item.title}</span>
-                            <CalItemFlags item={item} />
+                            <CalItemLine item={item} time={null} titleClassName={styles.calItemTitle} />
                           </button>
                         );
                       })}
@@ -1564,7 +1372,7 @@ export function CalendarView() {
                           return (
                             <button
                               key={`${item.kind}-${item.id}`}
-                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)} ${draggable ? styles.weekTimeBlockDraggable : ''}`}
+                              className={`${styles.weekTimeBlock} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${isOpenItem(item) ? styles.calItemOpen : ''} ${rhythmClass(item)} ${draggable ? styles.weekTimeBlockDraggable : ''} ${!isReminder && liveHeight < SHORT_BLOCK_PX ? styles.weekTimeBlockShort : ''}`}
                               style={{
                                 top: liveTop,
                                 height: isReminder ? 'auto' : liveHeight,
@@ -1579,12 +1387,9 @@ export function CalendarView() {
                               }) : undefined}
                               onClick={(e) => { if (dragKey && consumeSuppressedClick(dragKey)) return; handleItemClick(e, item); }}
                               onMouseEnter={(e) => handleItemMouseEnter(e, item)}
-                              onMouseLeave={() => setTooltip(null)}
+                              onMouseLeave={leaveItem}
                             >
-                              <span className={styles.weekTimeBlockTime}>
-                                {formatItemTimeLabel(item, liveEndMin)}<CalItemFlags item={item} />
-                              </span>
-                              <span className={styles.weekTimeBlockTitle}><CalItemIcon item={item} />{item.title}</span>
+                              <CalItemBlock item={item} time={renderItemTime(item, liveEndMin)} />
                               {getItemLocation(item) && (
                                 <span className={styles.weekTimeBlockLocation}>📍 {getItemLocation(item)}</span>
                               )}
@@ -1642,14 +1447,11 @@ export function CalendarView() {
                   return (
                     <button
                       key={`${item.kind}-${item.id}`}
-                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${rhythmClass(item)}`}
+                      className={`${styles.dayPaneItem} ${styles[`calItem_${item.kind === 'task' && (item as { isMilestone: boolean }).isMilestone ? 'milestone' : item.kind}`]} ${completed ? styles.calItemCompleted : ''} ${past && !completed ? styles.calItemPast : ''} ${isTentativeItem(item) ? styles.calItemTentative : ''} ${isTravelItem(item) ? styles.calItemTravel : ''} ${isImportantItem(item) ? styles.calItemImportant : ''} ${isOpenItem(item) ? styles.calItemOpen : ''} ${rhythmClass(item)}`}
                       style={getPillStyle(item)}
                       onClick={(e) => { handleItemClick(e, item); setDayPaneDate(null); }}
                     >
-                      {item.time    && <span className={styles.calItemTime}>{formatTime(item.time, clockFormat)}</span>}
-                      <CalItemFlags item={item} />
-                      <CalItemIcon item={item} />
-                      <span>{item.title}</span>
+                      <CalItemLine item={item} time={item.time && formatTime(item.time, clockFormat)} />
                     </button>
                   );
                 })}
@@ -1663,7 +1465,10 @@ export function CalendarView() {
       </div>{/* end desktopView */}
 
       {/* ── Hover card: an entry shown whole (not while dragging one) ── */}
-      {tooltip && !dragPreview && !isAndroid && <CalendarItemHoverCard item={tooltip.item} anchor={tooltip.anchor} />}
+      {tooltip && !dragPreview && !isAndroid && (
+        <CalendarItemHoverCard item={tooltip.item} anchor={tooltip.anchor}
+          during={tooltip.during ? { items: tooltip.during, classTitle: tooltip.classTitle ?? tooltip.item.title, onOpen: openFromCard, onEnter: cancelClose, onLeave: leaveItem } : undefined} />
+      )}
 
     </div>
   );

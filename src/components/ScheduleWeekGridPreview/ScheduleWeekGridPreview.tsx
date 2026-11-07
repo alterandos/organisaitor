@@ -1,7 +1,7 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   buildHourLayout, layoutDayTimeGrid, timeToMinutes, markActiveHours,
-  yToMinutes, snapMinutes, minutesToY, MIN_BLOCK_HEIGHT, type TimeGridEntry,
+  yToMinutes, minutesToY, MIN_BLOCK_HEIGHT, type TimeGridEntry,
 } from '@/utils/timeGrid';
 import { formatTime } from '@/utils/date';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -9,6 +9,11 @@ import { useTimeGridDrag } from '@/hooks/useTimeGridDrag';
 import styles from './ScheduleWeekGridPreview.module.css';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const CELL_MINUTES = 30;
+
+// What the pointer is over (the user, 2026-11-07, in place of a crosshair cursor): a half-hour cell,
+// or a block. Its day's column and its time's row are shaded lightly, the cell or block itself more.
+interface Hover { day: number; start: number; end: number; block: boolean }
 
 export interface PreviewEntry {
   key:        string;
@@ -45,6 +50,8 @@ interface Props {
 // it's active on, and a drag needs to know *which* rendered occurrence (i.e. which origin day)
 // was grabbed, not just which block — see onBlockChange's doc above.
 function dragKeyFor(blockKey: string, day: number): string { return `${blockKey}__${day}`; }
+const minutesToTimeStr = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
 function parseDragKey(key: string): { blockKey: string; originDay: number } | null {
   const match = /^(.+)__(\d)$/.exec(key);
   if (!match) return null;
@@ -85,7 +92,6 @@ export function ScheduleWeekGridPreview({ entries, onCellClick, onEntryClick, on
       days.add(result.colIndex);
       patch.daysOfWeek = [...days].sort((a, b) => a - b);
     }
-    const minutesToTimeStr = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
     if (result.startMin !== timeToMinutes(entry.startTime)) patch.startTime = minutesToTimeStr(result.startMin);
     if (result.endMin !== timeToMinutes(entry.endTime)) patch.endTime = minutesToTimeStr(result.endMin);
     onBlockChange(parsed.blockKey, patch);
@@ -93,11 +99,29 @@ export function ScheduleWeekGridPreview({ entries, onCellClick, onEntryClick, on
 
   const { preview: dragPreview, startMove, startResize, consumeSuppressedClick } = useTimeGridDrag(handleDragCommit);
 
+  const [hover, setHover] = useState<Hover | null>(null);
+  // The half-hour cell under the pointer: the one shaded, and the one a click starts a block in.
+  const cellAt = (e: React.MouseEvent<HTMLDivElement>) => {
+    const y = e.clientY - e.currentTarget.getBoundingClientRect().top;
+    return Math.min(24 * 60 - CELL_MINUTES, Math.max(0, Math.floor(yToMinutes(y, grid.layout) / CELL_MINUTES) * CELL_MINUTES));
+  };
+
   const handleClick = (day: number, e: React.MouseEvent<HTMLDivElement>) => {
     if (!onCellClick) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    onCellClick(day, snapMinutes(yToMinutes(y, grid.layout)));
+    onCellClick(day, cellAt(e));
+  };
+
+  const handleMove = (day: number, e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onCellClick || (e.target as HTMLElement).closest('[data-preview-block]')) return;
+    const start = cellAt(e);
+    if (hover && !hover.block && hover.day === day && hover.start === start) return;
+    setHover({ day, start, end: start + CELL_MINUTES, block: false });
+  };
+
+  const shownHover = dragPreview ? null : hover;
+  const band = (h: Hover) => {
+    const top = minutesToY(h.start, grid.layout);
+    return { top, height: Math.max(minutesToY(h.end, grid.layout) - top, 2) };
   };
 
   const draggedEntry = dragPreview ? entries.find((e) => e.key === parseDragKey(dragPreview.key)?.blockKey) ?? null : null;
@@ -108,6 +132,11 @@ export function ScheduleWeekGridPreview({ entries, onCellClick, onEntryClick, on
         <div className={styles.gutter}>
           <div className={styles.dayHeader} />
           <div className={styles.gutterBody} style={{ height: grid.layout.total }}>
+            {shownHover && (
+              <div className={styles.gutterHover} style={band(shownHover)}>
+                {formatTime(minutesToTimeStr(shownHover.start), clockFormat)}
+              </div>
+            )}
             {grid.layout.offsets.map((top, h) => (
               <div key={h} className={styles.gutterLabel} style={{ top }}>
                 {formatTime(`${String(h).padStart(2, '0')}:00`, clockFormat)}
@@ -115,15 +144,19 @@ export function ScheduleWeekGridPreview({ entries, onCellClick, onEntryClick, on
             ))}
           </div>
         </div>
-        <div className={styles.daysRow} ref={daysRowRef}>
+        <div className={styles.daysRow} ref={daysRowRef} onMouseLeave={() => setHover(null)}>
           {DAY_NAMES.map((dayName, day) => (
-            <div key={day} className={styles.dayCol}>
-              <div className={styles.dayHeader}>{dayName}</div>
+            <div key={day} className={`${styles.dayCol} ${shownHover?.day === day ? styles.dayColHover : ''}`}>
+              <div className={`${styles.dayHeader} ${shownHover?.day === day ? styles.dayHeaderHover : ''}`}>{dayName}</div>
               <div
                 className={`${styles.dayBody} ${onCellClick ? styles.dayBodyClickable : ''}`}
                 style={{ height: grid.layout.total }}
                 onClick={(e) => handleClick(day, e)}
+                onMouseMove={(e) => handleMove(day, e)}
               >
+                {shownHover && (
+                  <div className={shownHover.day === day && !shownHover.block ? styles.cellHover : styles.rowHover} style={band(shownHover)} />
+                )}
                 {grid.layout.offsets.slice(1).map((top, h) => (
                   <div key={h} className={styles.hourLine} style={{ top }} />
                 ))}
@@ -138,7 +171,10 @@ export function ScheduleWeekGridPreview({ entries, onCellClick, onEntryClick, on
                   return (
                     <div
                       key={i}
-                      className={`${styles.block} ${dragKey ? styles.blockDraggable : ''}`}
+                      data-preview-block
+                      className={`${styles.block} ${dragKey ? styles.blockDraggable : ''} ${shownHover?.block && shownHover.day === day && shownHover.start === timeToMinutes(item.startTime) && shownHover.end === timeToMinutes(item.endTime) ? styles.blockHover : ''}`}
+                      onMouseEnter={() => setHover({ day, start: timeToMinutes(item.startTime), end: timeToMinutes(item.endTime), block: true })}
+                      onMouseLeave={() => setHover(null)}
                       style={{
                         top: liveTop, height: liveHeight,
                         left: `${col * widthPct}%`,

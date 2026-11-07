@@ -26,7 +26,8 @@ describe('a repeating reminder or deadline in an Overview', () => {
     const { SOURCE_BY_KEY } = await import('./sources');
     const reminder = { id: 'r1', title: 'Hash run', date: '2026-10-06', time: null, repeat: weekly, doneDates: ['2026-10-13'], reminderType: 'default', archivedAt: null, collectionId: null };
     const snap = { reminders: { r1: reminder } } as never;
-    const rows = SOURCE_BY_KEY.reminder.rows(snap, '2026-10-13').rows;
+    // Its later dates follow quietly (2026-11-07); here, the next and the done ones.
+    const rows = SOURCE_BY_KEY.reminder.rows(snap, '2026-10-13').rows.filter((r) => !r.quiet);
     expect(rows.map((r) => [r.key, r.when, r.status])).toEqual([
       ['reminder:r1', '2026-10-20', 'open'],
       ['reminder:r1@2026-10-13', '2026-10-13', 'done'],
@@ -36,7 +37,10 @@ describe('a repeating reminder or deadline in an Overview', () => {
   it('each row of a repeating item opens at the date it stands for, not the series’ first (found 2026-11-01)', async () => {
     const { SOURCE_BY_KEY } = await import('./sources');
     const reminder = { id: 'r1', title: 'Hash run', date: '2026-10-06', time: null, repeat: weekly, doneDates: ['2026-10-06', '2026-10-13'], reminderType: 'default', archivedAt: null, collectionId: null };
-    const rows = SOURCE_BY_KEY.reminder.rows({ reminders: { r1: reminder } } as never, '2026-10-13').rows;
+    const all = SOURCE_BY_KEY.reminder.rows({ reminders: { r1: reminder } } as never, '2026-10-13').rows;
+    // Its later dates, each a quiet row of its own, opening at its date (2026-11-07).
+    expect(all.find((r) => r.quiet)).toMatchObject({ key: 'reminder:r1@2026-10-27', occurrence: '2026-10-27' });
+    const rows = all.filter((r) => !r.quiet);
     expect(rows.map((r) => [r.key, r.occurrence])).toEqual([
       ['reminder:r1', '2026-10-20'],
       ['reminder:r1@2026-10-06', '2026-10-06'],

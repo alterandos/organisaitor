@@ -29,7 +29,17 @@ export function purposeInUse(id: PurposeId): boolean {
     || Object.values(useFitnessStore.getState().activities).some((a) => a.purposeIds.includes(id));
 }
 
-export function tagInUse(id: TagId): boolean {
+// What a tag is on is worked out here, never stored on the tag (2026-11-06).
+export function tagUses(id: TagId): number {
+  const count = <T,>(rec: Record<string, T>, ids: (x: T) => readonly string[] | undefined) => Object.values(rec).filter((x) => ids(x)?.includes(id)).length;
   const { tasks, collections } = useTaskStore.getState();
-  return Object.values(tasks).some((t) => t.tagIds.includes(id)) || Object.values(collections).some((c) => c.tagIds.includes(id));
+  const { events, reminders, deadlines } = useCalendarStore.getState();
+  const { notes, noteTags } = useNoteStore.getState();
+  return count(tasks, (t) => t.tagIds) + count(collections, (c) => c.tagIds)
+    + count(events, (e) => e.tagIds) + count(reminders, (r) => r.tagIds) + count(deadlines, (d) => d.tagIds)
+    + count(notes, (n) => n.suiteTagIds) + count(noteTags, (t) => t.suiteTagIds) + count(useListStore.getState().lists, (l) => l.tagIds);
+}
+
+export function tagInUse(id: TagId): boolean {
+  return tagUses(id) > 0;
 }

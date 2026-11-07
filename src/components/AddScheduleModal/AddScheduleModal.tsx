@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { DateInput } from '@/components/DateInput/DateInput';
 import { PeriodEditor } from '@/components/PeriodField/PeriodEditor';
 import { useTaskStore } from '@/store/taskStore';
 import { useScheduleStore } from '@/store/scheduleStore';
@@ -7,48 +6,26 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
-import { TimeInput } from '@/components/TimeInput/TimeInput';
 import { ScheduleWeekGridPreview, type PreviewEntry } from '@/components/ScheduleWeekGridPreview/ScheduleWeekGridPreview';
-import { todayIso, formatDate, computeLinkedEndTime } from '@/utils/date';
-import { expandScheduleBlock } from '@/utils/scheduleOccurrences';
+import { todayIso } from '@/utils/date';
 import { createScheduleBlock } from '@/utils/scheduleBlocks';
 import { scheduleItems, withItemRows } from '@/utils/scheduleItems';
 import { effectivePeriod } from '@/utils/endeavourPeriod';
+import { dateUseOf, periodsFor } from '@/utils/datePeriods';
+import { PeriodsField } from '@/components/PeriodsField/PeriodsField';
 import { createScheduleWithItems, deleteScheduleWithItems, saveScheduleRows } from '@/services/schedules';
-import type { CollectionId, PeriodBreak, ScheduleBlock } from '@/types';
+import type { CollectionId, DateUse, PeriodBreak, ScheduleBlock } from '@/types';
 import styles from './AddScheduleModal.module.css';
 
 const EMPTY_BREAKS: PeriodBreak[] = [];
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
 import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
-import { CloseIcon, TrashIcon } from '@/components/Icons';
+import { CloseIcon, EditIcon, TrashIcon } from '@/components/Icons';
+import { ScheduleBlockFields } from './ScheduleBlockFields';
 
-const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-// When a schedule has no end date, the "skip occurrences" checklist would otherwise try to list
-// occurrences forever — capped to a manageable window; the checklist itself notes when it's capped.
-const OCCURRENCE_LIST_CAP_DAYS = 120;
-
-function addDaysToDateStr(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-// All occurrence dates for one block within the schedule's timeframe, ignoring its own
-// exceptions (so the checklist can show every date and let exceptions drive the checked state)
-// — reuses expandScheduleBlock by feeding it a copy of the block with exceptions cleared.
-function computeAllOccurrenceDates(block: ScheduleBlock, scheduleStartDate: string, scheduleEndDate: string): string[] {
-  const rangeStart = scheduleStartDate || block.intervalAnchor || todayIso();
-  const rangeEnd = scheduleEndDate || addDaysToDateStr(rangeStart, OCCURRENCE_LIST_CAP_DAYS);
-  return expandScheduleBlock(
-    { ...block, exceptions: [] },
-    { startDate: rangeStart, endDate: rangeEnd },
-    rangeStart,
-    rangeEnd
-  );
-}
-
+const S = LABELS.scheduleEditor;
+const DAY_LETTERS = LABELS.recurring.dayLetter;
 interface BlockRow extends ScheduleBlock { expanded: boolean }
 
 function blockToRow(b: ScheduleBlock): BlockRow {
@@ -56,8 +33,8 @@ function blockToRow(b: ScheduleBlock): BlockRow {
 }
 
 function summarizeDays(days: number[]): string {
-  if (days.length === 0) return 'No days selected';
-  if (days.length === 7) return 'Every day';
+  if (days.length === 0) return S.noDays;
+  if (days.length === 7) return S.everyDay;
   return [...days].sort((a, b) => a - b).map((d) => DAY_LETTERS[d]).join('');
 }
 
@@ -90,12 +67,26 @@ export function AddScheduleModal() {
   const updateSchedule    = useScheduleStore((s) => s.updateSchedule);
   const events            = useCalendarStore((s) => s.events);
 
-  const [name,         setName]         = useState(() => editingSchedule?.name ?? '');
+  const [name,         setName]         = useState(() => editingSchedule?.name ?? useUIStore.getState().createDraft ?? '');
   const [color,        setColor]        = useState<string | null>(() => editingSchedule?.color ?? null);
-  const [startDate,    setStartDate]    = useState(() => editingSchedule?.startDate ?? '');
-  const [endDate,      setEndDate]      = useState(() => editingSchedule?.endDate ?? '');
+  // A new one's dates are its Endeavour's until changed (the user, 2026-11-07: its time off came
+  // from the Endeavour but not its dates); null = not touched, shown and saved as the Endeavour's.
+  const [ownStart,     setStartDate]    = useState<string | null>(() => (editingSchedule ? editingSchedule.startDate ?? '' : null));
+  const [ownEnd,       setEndDate]      = useState<string | null>(() => (editingSchedule ? editingSchedule.endDate ?? '' : null));
   // A new timetable starts filed under the Endeavour chosen where it's made (an Endeavour's home, a filter).
   const [collectionId, setCollectionId] = useState<CollectionId | null>(() => (editingSchedule ? editingSchedule.collectionId ?? null : selectActiveCollectionId(useUIStore.getState()) as CollectionId | null));
+  const inherited = collectionId ? effectivePeriod(collectionId, collectionsRecord) : null;
+  // Under an Endeavour with named periods it chooses among them (utils/datePeriods.ts), followed
+  // live: moving the semester's dates moves it. null = as its Endeavour.
+  const periods = periodsFor(collectionId, collectionsRecord);
+  const aboveUse = collectionId ? dateUseOf(collectionId, collectionsRecord) : null;
+  const [periodUse, setPeriodUse] = useState<DateUse | null>(() => editingSchedule?.periodUse ?? null);
+  // Its own dates even where there are periods to follow (the user, 2026-11-07): scheduleBounds
+  // reads its own start and end whenever it follows no periods.
+  const [ownDates, setOwnDates] = useState(() => !!editingSchedule && !editingSchedule.periodUse && !!(editingSchedule.startDate || editingSchedule.endDate));
+  const byPeriods = periods.length > 0 && !ownDates;
+  const startDate = ownStart ?? inherited?.period.start ?? '';
+  const endDate = ownEnd ?? inherited?.period.end ?? '';
   // Its rows are its items, calendar events (docs/features/endeavours.md phase 7 (c)): read in as
   // rows when it opens, and written back on Save (services/schedules.ts).
   const [itemIds]                       = useState(() => new Set(editingSchedule ? scheduleItems(editingSchedule.id, useCalendarStore.getState().events).map((e) => e.id as string) : []));
@@ -103,7 +94,7 @@ export function AddScheduleModal() {
   const [breaks,       setBreaks]       = useState<PeriodBreak[] | undefined>(() => editingSchedule?.breaks);
   const [showErrors,   setShowErrors]   = useState(false);
   const [addingBlock,  setAddingBlock]  = useState(false);
-  // Scrolls a block's row into view right after it expands — both the ⚙ button and clicking
+  // Scrolls a block's row into view right after it expands — both the edit button and clicking
   // a block in the grid preview go through this, so the edit panel is never left off-screen
   // requiring a manual scroll. A ref map (not a single ref) since there's one row per block.
   // requestAnimationFrame (rather than an effect keyed on some "just expanded" state) defers
@@ -114,15 +105,10 @@ export function AddScheduleModal() {
     requestAnimationFrame(() => blockRowRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
   };
 
-  // New-block form
-  const [newTitle,     setNewTitle]     = useState('');
-  const [newDays,      setNewDays]      = useState<number[]>([]);
-  const [newStart,     setNewStart]     = useState('09:00');
-  const [newEnd,       setNewEnd]       = useState('10:00');
-  const [newInterval,  setNewInterval]  = useState(1);
-  const [newAnchor,    setNewAnchor]    = useState(todayIso());
-  const [newLocation,  setNewLocation]  = useState('');
-  const [newRequiresCommitment, setNewRequiresCommitment] = useState(false);
+  // The block being added: a row like the others, in the same fields (ScheduleBlockFields), so
+  // adding and editing a block can't drift apart again (2026-11-07).
+  const blankRow = (anchor: string): ScheduleBlock => createScheduleBlock({ title: '', daysOfWeek: [], startTime: '09:00', endTime: '10:00', intervalAnchor: anchor });
+  const [newRow, setNewRow] = useState<ScheduleBlock>(() => blankRow(todayIso()));
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -140,10 +126,6 @@ export function AddScheduleModal() {
   const previewEntries = useMemo(() => blocksToPreviewEntries(blocks, color), [blocks, color]);
 
   if (!isVisible) return null;
-
-  const toggleDay = (setter: (fn: (prev: number[]) => number[]) => void, day: number) => {
-    setter((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)));
-  };
 
   const toggleExpand = (idx: number) => {
     const row = blocks[idx];
@@ -176,27 +158,14 @@ export function AddScheduleModal() {
     setBlocks((prev) => prev.filter((_, i) => i !== idx));
 
   const commitAddBlock = () => {
-    const title = newTitle.trim();
-    if (!title || newDays.length === 0) return;
-    const block = createScheduleBlock({
-      title,
-      daysOfWeek: newDays,
-      startTime: newStart,
-      endTime: newEnd,
-      location: newLocation,
-      interval: newInterval,
-      intervalAnchor: newAnchor || startDate || todayIso(),
-      requiresCommitment: newRequiresCommitment,
-    });
-    setBlocks((prev) => [...prev, { ...block, expanded: false }]);
-    setNewTitle(''); setNewDays([]); setNewStart('09:00'); setNewEnd('10:00');
-    setNewInterval(1); setNewAnchor(startDate || todayIso()); setNewLocation('');
-    setNewRequiresCommitment(false);
+    if (!newRow.title.trim() || newRow.daysOfWeek.length === 0) return;
+    setBlocks((prev) => [...prev, { ...newRow, title: newRow.title.trim(), intervalAnchor: newRow.intervalAnchor || startDate || todayIso(), expanded: false }]);
+    setNewRow(blankRow(startDate || todayIso()));
     setAddingBlock(false);
   };
 
   const openAddBlockForm = () => {
-    setNewAnchor(startDate || todayIso());
+    setNewRow((r) => ({ ...r, intervalAnchor: startDate || todayIso() }));
     setAddingBlock(true);
   };
 
@@ -204,10 +173,8 @@ export function AddScheduleModal() {
   // half-hour) and opens it, instead of requiring the day toggles + TimeInputs to be set by hand —
   // the "far more efficient" entry point requested alongside the existing manual form.
   const handleGridClick = (day: number, startMinutes: number) => {
-    setNewDays([day]);
-    setNewStart(minutesToTimeStr(startMinutes));
-    setNewEnd(minutesToTimeStr(Math.min(23 * 60 + 59, startMinutes + 60)));
-    setNewAnchor(startDate || todayIso());
+    setNewRow((r) => ({ ...r, daysOfWeek: [day], startTime: minutesToTimeStr(startMinutes),
+      endTime: minutesToTimeStr(Math.min(23 * 60 + 59, startMinutes + 60)), intervalAnchor: startDate || todayIso() }));
     setAddingBlock(true);
   };
 
@@ -215,15 +182,19 @@ export function AddScheduleModal() {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    if (Object.keys(breakErrors).length) { setShowErrors(true); return; }
-    const payload = { name: trimmed, color, startDate: startDate || null, endDate: endDate || null, collectionId };
+    if (!byPeriods && Object.keys(breakErrors).length) { setShowErrors(true); return; }
+    // By named periods, its dates are theirs, live: none of its own kept.
+    const payload = byPeriods
+      ? { name: trimmed, color, startDate: null, endDate: null, collectionId }
+      : { name: trimmed, color, startDate: startDate || null, endDate: endDate || null, collectionId };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- `expanded` is the editor's own, left off the row
     const rows = blocks.map(({ expanded, ...b }) => b);
     if (editingSchedule) {
-      updateSchedule(editingSchedule.id, { ...payload, breaks });
+      updateSchedule(editingSchedule.id, { ...payload, ...(byPeriods ? { breaks: undefined, periodUse } : { breaks, periodUse: null }) });
       saveScheduleRows(editingSchedule.id, rows);
     } else {
       const { id } = createScheduleWithItems(payload, []);
-      if (breaks) updateSchedule(id, { breaks });
+      if (byPeriods) { if (periodUse) updateSchedule(id, { periodUse }); } else if (breaks) updateSchedule(id, { breaks });
       saveScheduleRows(id, rows);
     }
     closeEditSchedule();
@@ -231,18 +202,20 @@ export function AddScheduleModal() {
 
   const handleDelete = async () => {
     if (!editingSchedule) return;
-    if (!(await confirmDelete('schedule', editingSchedule.name, 'Its items go from the calendar too (to the Recycling Bin).', { empty: itemIds.size === 0 }))) return;
+    if (!(await confirmDelete(S.noun, editingSchedule.name, S.deleteDetail, { empty: itemIds.size === 0 }))) return;
     deleteScheduleWithItems(editingSchedule.id);
     closeEditSchedule();
   };
 
   const allCollections = Object.values(collectionsRecord);
-  const inherited = collectionId ? effectivePeriod(collectionId, collectionsRecord) : null;
-  const inheritedFrom = inherited?.period.breaks.length ? collectionsRecord[inherited.from as CollectionId]?.name ?? null : null;
+  const inheritedFrom = (inherited?.period.breaks.length || (ownStart === null && inherited?.period.start)) ? collectionsRecord[inherited!.from as CollectionId]?.name ?? null : null;
   const shownBreaks = breaks ?? inherited?.period.breaks ?? EMPTY_BREAKS;
   // A piece of time off with no name or dates gets a red note under it (CLAUDE.md "A form says what's missing").
-  const breakErrors: Record<string, string> = Object.fromEntries((breaks ?? []).flatMap((b, i): [string, string][] =>
-    !b.label.trim() ? [[`break-${i}`, LABELS.period.breakNeeded]] : !b.from ? [[`break-${i}`, LABELS.period.breakDates]] : []));
+  const breakErrors: Record<string, string> = Object.fromEntries([
+    ...(startDate && endDate && endDate < startDate ? [['dates', LABELS.period.endBeforeStart] as [string, string]] : []),
+    ...(breaks ?? []).flatMap((b, i): [string, string][] =>
+      !b.label.trim() ? [[`break-${i}`, LABELS.period.breakNeeded]] : !b.from ? [[`break-${i}`, LABELS.period.breakDates]] : b.to && b.to < b.from ? [[`break-${i}`, LABELS.period.endBeforeStart]] : []),
+  ]);
   // Dates taken out of an item ("only this one") show as changed in its skip list, not as skips.
   const changedDates = (itemId: string) => new Set(Object.values(events).filter((e) => e.seriesId === itemId && e.seriesDate).map((e) => e.seriesDate as string));
 
@@ -251,16 +224,16 @@ export function AddScheduleModal() {
       <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) closeEditSchedule(); }}>
         <div className={styles.modal}>
           <div className={styles.header}>
-            <span className={styles.title}>{isEditMode ? 'Edit Schedule' : 'New Schedule'}</span>
-            <button className={styles.closeBtn} onClick={closeEditSchedule} aria-label="Close"><CloseIcon /></button>
+            <span className={styles.title}>{isEditMode ? S.editTitle : S.newTitle}</span>
+            <button className={styles.closeBtn} onClick={closeEditSchedule} aria-label={S.close}><CloseIcon /></button>
           </div>
 
           <form ref={formRef} onSubmit={handleSubmit} className={styles.body}>
             <div className={styles.field}>
-              <label className={styles.label}>Name</label>
+              <label className={styles.label}>{S.name}</label>
               <input
                 className={styles.input}
-                placeholder="e.g. Semester 1 Timetable"
+                placeholder={S.namePlaceholder}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
@@ -268,7 +241,7 @@ export function AddScheduleModal() {
             </div>
 
             <div className={styles.field}>
-              <span className={styles.label}>Colour</span>
+              <span className={styles.label}>{S.colour}</span>
               <ColorPicker palette="standard" value={color} onChange={setColor} />
             </div>
 
@@ -277,42 +250,58 @@ export function AddScheduleModal() {
                 Schedule its own, and "Take …'s instead" goes back. */}
             <div className={styles.field} role="group" aria-label={LABELS.period.title}>
               <span className={styles.label}>{LABELS.period.title}</span>
-              <p className={styles.hint}>Its classes only appear on the calendar within these dates — e.g. a semester's start and end. {LABELS.period.scheduleDates}</p>
-              {breaks === undefined && inheritedFrom && <p className={styles.hint}>{LABELS.period.scheduleInherited(inheritedFrom)}</p>}
-              <PeriodEditor
-                period={{ start: startDate || null, end: endDate || null, breaks: shownBreaks }}
-                errors={showErrors ? breakErrors : {}}
-                onChange={(p) => {
-                  setStartDate(p.start ?? '');
-                  setEndDate(p.end ?? '');
-                  if (p.breaks !== shownBreaks) setBreaks(p.breaks);
-                }}
-              />
-              {breaks !== undefined && collectionId && inherited && (
-                <button type="button" className={styles.addFieldBtn} onClick={() => setBreaks(undefined)}>{LABELS.period.scheduleTakeBreaks}</button>
+              <p className={styles.hint}>{byPeriods ? LABELS.periods.scheduleHint : <>{S.datesHint} {LABELS.period.scheduleDates}</>}</p>
+              {!byPeriods && (breaks === undefined || ownStart === null) && inheritedFrom && <p className={styles.hint}>{LABELS.period.scheduleInherited(inheritedFrom)}</p>}
+              {byPeriods ? (
+                <PeriodsField editable={false} inherited={periods} use={periodUse} onUse={setPeriodUse}
+                  above={aboveUse ? { use: aboveUse.use, name: collectionsRecord[aboveUse.from as CollectionId]?.name ?? '' } : null}
+                  fromName={(id) => collectionsRecord[id as CollectionId]?.name ?? ''} />
+              ) : null}
+              {byPeriods && (
+                <button type="button" className={styles.addFieldBtn} onClick={() => { setOwnDates(true); setPeriodUse(null); }}>{LABELS.periods.scheduleOwnDates}</button>
+              )}
+              {!byPeriods && (
+                <>
+                <PeriodEditor
+                  period={{ start: startDate || null, end: endDate || null, breaks: shownBreaks }}
+                  errors={showErrors ? breakErrors : {}}
+                  onChange={(p) => {
+                    setStartDate(p.start ?? '');
+                    setEndDate(p.end ?? '');
+                    if (p.breaks !== shownBreaks) setBreaks(p.breaks);
+                  }}
+                />
+                {ownDates && periods.length > 0 ? (
+                  <button type="button" className={styles.addFieldBtn} onClick={() => { setOwnDates(false); setBreaks(undefined); setStartDate(null); setEndDate(null); }}>
+                    {LABELS.periods.scheduleFollowPeriods(collectionsRecord[collectionId as CollectionId]?.name ?? LABELS.collection)}
+                  </button>
+                ) : (breaks !== undefined || ownStart !== null) && collectionId && inherited && (
+                  <button type="button" className={styles.addFieldBtn} onClick={() => { setBreaks(undefined); setStartDate(null); setEndDate(null); }}>{LABELS.period.scheduleTakeBreaks}</button>
+                )}
+                </>
               )}
             </div>
 
             {allCollections.length > 0 && (
               <div className={styles.field}>
                 <span className={styles.label}>{LABELS.collection}</span>
-                <CollectionPicker collections={allCollections} value={collectionId} onChange={setCollectionId} noneLabel="None" />
+                <CollectionPicker collections={allCollections} value={collectionId} onChange={setCollectionId} noneLabel={S.none} />
               </div>
             )}
 
             {/* ── Block editor ── */}
             <div className={styles.schemaSection}>
               <div className={styles.schemaHeader}>
-                <span className={styles.label}>Blocks</span>
-                <span className={styles.schemaMeta}>{blocks.length} block{blocks.length !== 1 ? 's' : ''}</span>
+                <span className={styles.label}>{S.blocks}</span>
+                <span className={styles.schemaMeta}>{S.blockCount(blocks.length)}</span>
               </div>
 
               {blocks.length === 0 && !addingBlock && (
-                <p className={styles.noFields}>No blocks yet. Click the grid below to add one — e.g. "Algorithms Lecture", Mon/Wed/Fri, 10:00–11:00 — or use "+ Add block" for manual entry.</p>
+                <p className={styles.noFields}>{S.empty}</p>
               )}
 
               <ScheduleWeekGridPreview entries={previewEntries} onCellClick={handleGridClick} onEntryClick={expandBlockAndScroll} onBlockChange={handleBlockChange} />
-              <p className={styles.hint}>Click anywhere on the grid to start a new block at that day and time — click an existing block to jump to editing it.</p>
+              <p className={styles.hint}>{S.gridHint}</p>
 
               {blocks.map((row, idx) => (
                 <div key={row.id} ref={(el) => { blockRowRefs.current[row.id] = el; }} className={styles.fieldRow}>
@@ -321,123 +310,17 @@ export function AddScheduleModal() {
                       <span className={styles.fieldName}>{row.title}</span>
                       <span className={styles.fieldTypeBadge}>{summarizeDays(row.daysOfWeek)}</span>
                       <span className={styles.fieldTypeBadge}>{row.startTime}–{row.endTime}</span>
-                      {row.interval > 1 && <span className={styles.fieldTypeBadge}>every {row.interval}wk</span>}
+                      {row.interval > 1 && <span className={styles.fieldTypeBadge}>{S.everyWeeks(row.interval)}</span>}
                     </div>
                     <div className={styles.fieldRowActions}>
-                      <button type="button" className={styles.fieldActionBtn} onClick={() => toggleExpand(idx)} title="Configure">⚙</button>
-                      <button type="button" className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} onClick={() => removeBlockRow(idx)} title="Remove"><TrashIcon width="1em" height="1em" /></button>
+                      <button type="button" className={styles.fieldActionBtn} onClick={() => toggleExpand(idx)} title={S.edit} aria-label={S.edit} aria-expanded={row.expanded}><EditIcon width="1em" height="1em" /></button>
+                      <button type="button" className={`${styles.fieldActionBtn} ${styles.fieldActionBtnDelete}`} onClick={() => removeBlockRow(idx)} title={S.remove} aria-label={S.remove}><TrashIcon width="1em" height="1em" /></button>
                     </div>
                   </div>
 
                   {row.expanded && (
                     <div className={styles.fieldExpanded}>
-                      <div className={styles.fieldMini}>
-                        <label className={styles.miniLabel}>Title</label>
-                        <input className={styles.miniInput} value={row.title} onChange={(e) => updateBlockRow(idx, { title: e.target.value })} />
-                      </div>
-                      <div className={styles.fieldMini}>
-                        <label className={styles.miniLabel}>Days</label>
-                        <div className={styles.dayToggleRow}>
-                          {DAY_LETTERS.map((letter, d) => (
-                            <button
-                              key={d}
-                              type="button"
-                              className={`${styles.dayToggle} ${row.daysOfWeek.includes(d) ? styles.dayToggleActive : ''}`}
-                              onClick={() => updateBlockRow(idx, {
-                                daysOfWeek: row.daysOfWeek.includes(d) ? row.daysOfWeek.filter((x) => x !== d) : [...row.daysOfWeek, d].sort((a, b) => a - b),
-                              })}
-                            >
-                              {letter}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className={styles.timeRow}>
-                        <TimeInput
-                          className={styles.miniTimeInput}
-                          value={row.startTime}
-                          onChange={(v) => updateBlockRow(idx, { startTime: v, endTime: computeLinkedEndTime(v, row.endTime).time })}
-                        />
-                        <span className={styles.timeSep}>→</span>
-                        <TimeInput className={styles.miniTimeInput} value={row.endTime} onChange={(v) => updateBlockRow(idx, { endTime: v })} />
-                      </div>
-                      <div className={styles.fieldMini}>
-                        <label className={styles.miniLabel}>Repeats every</label>
-                        <div className={styles.intervalRow}>
-                          <input
-                            className={styles.miniIntervalInput}
-                            type="number" min={1} max={8}
-                            value={row.interval}
-                            onChange={(e) => updateBlockRow(idx, { interval: Math.max(1, Number(e.target.value) || 1) })}
-                          />
-                          <span>week{row.interval !== 1 ? 's' : ''}</span>
-                        </div>
-                      </div>
-                      <div className={styles.fieldMini}>
-                        <label className={styles.miniLabel}>First occurrence</label>
-                        <DateInput className={styles.dateInput} value={row.intervalAnchor} onChange={(v) => updateBlockRow(idx, { intervalAnchor: v })} />
-                        <p className={styles.miniHint}>
-                          {row.interval > 1
-                            ? 'The week containing this date counts as week 1 — e.g. set this to the second week of term for a block that starts every-other-week from week 2.'
-                            : "Occurrences before this date are excluded — e.g. set this to week 3 of term for a class that doesn't start until then."}
-                        </p>
-                      </div>
-                      <div className={styles.fieldMini}>
-                        <label className={styles.miniLabel}>Location (optional)</label>
-                        <input className={styles.miniInput} value={row.location ?? ''} onChange={(e) => updateBlockRow(idx, { location: e.target.value || null })} />
-                      </div>
-                      <div className={styles.fieldMini}>
-                        <label className={styles.miniLabelCheckbox}>
-                          <input
-                            type="checkbox"
-                            checked={row.requiresCommitment ?? false}
-                            onChange={(e) => updateBlockRow(idx, { requiresCommitment: e.target.checked })}
-                          />
-                          Requires weekly commitment
-                        </label>
-                        <p className={styles.miniHint}>
-                          For a schedule you can't always attend (e.g. a gym class) — occurrences show muted on the calendar
-                          until you click one and commit to it, instead of counting as attended by default.
-                        </p>
-                      </div>
-                      <div className={styles.fieldMini}>
-                        <label className={styles.miniLabel}>Skip occurrences</label>
-                        {(() => {
-                          const occurrenceDates = computeAllOccurrenceDates(row, startDate, endDate);
-                          const exceptionSet = new Set(row.exceptions);
-                          const changed = changedDates(row.id);
-                          if (occurrenceDates.length === 0) {
-                            return <p className={styles.miniHint}>No occurrences in range yet — set days and a date range first.</p>;
-                          }
-                          return (
-                            <>
-                              <div className={styles.occurrenceList}>
-                                {occurrenceDates.map((date) => {
-                                  const checked = !exceptionSet.has(date);
-                                  return (
-                                    <label key={date} className={styles.occurrenceRow}>
-                                      <input
-                                        type="checkbox"
-                                        disabled={changed.has(date)}
-                                        checked={checked || changed.has(date)}
-                                        onChange={() => updateBlockRow(idx, {
-                                          exceptions: checked
-                                            ? [...row.exceptions, date]
-                                            : row.exceptions.filter((d) => d !== date),
-                                        })}
-                                      />
-                                      <span>{formatDate(date)}{changed.has(date) ? ` (${LABELS.period.changedDate})` : ''}</span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                              {!endDate && (
-                                <p className={styles.miniHint}>Showing the next {OCCURRENCE_LIST_CAP_DAYS} days — add an end date above to see further ahead.</p>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
+                      <ScheduleBlockFields row={row} onChange={(patch) => updateBlockRow(idx, patch)} startDate={startDate} endDate={endDate} changed={changedDates(row.id)} />
                     </div>
                   )}
                 </div>
@@ -445,88 +328,24 @@ export function AddScheduleModal() {
 
               {addingBlock ? (
                 <div className={styles.addFieldForm}>
-                  <input
-                    className={styles.miniInput}
-                    placeholder="Block title, e.g. Algorithms Lecture"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    autoFocus
-                  />
-                  <div className={styles.fieldMini}>
-                    <label className={styles.miniLabel}>Days</label>
-                    <div className={styles.dayToggleRow}>
-                      {DAY_LETTERS.map((letter, d) => (
-                        <button
-                          key={d}
-                          type="button"
-                          className={`${styles.dayToggle} ${newDays.includes(d) ? styles.dayToggleActive : ''}`}
-                          onClick={() => toggleDay(setNewDays, d)}
-                        >
-                          {letter}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className={styles.timeRow}>
-                    <TimeInput
-                      className={styles.miniTimeInput}
-                      value={newStart}
-                      onChange={(v) => { setNewStart(v); setNewEnd(computeLinkedEndTime(v, newEnd).time); }}
-                    />
-                    <span className={styles.timeSep}>→</span>
-                    <TimeInput className={styles.miniTimeInput} value={newEnd} onChange={setNewEnd} />
-                  </div>
-                  <div className={styles.fieldMini}>
-                    <label className={styles.miniLabel}>Repeats every</label>
-                    <div className={styles.intervalRow}>
-                      <input className={styles.miniIntervalInput} type="number" min={1} max={8} value={newInterval} onChange={(e) => setNewInterval(Math.max(1, Number(e.target.value) || 1))} />
-                      <span>week{newInterval !== 1 ? 's' : ''}</span>
-                    </div>
-                  </div>
-                  <div className={styles.fieldMini}>
-                    <label className={styles.miniLabel}>First occurrence</label>
-                    <DateInput className={styles.dateInput} value={newAnchor} onChange={(v) => setNewAnchor(v)} />
-                    <p className={styles.hint}>
-                      {newInterval > 1
-                        ? 'The week containing this date counts as week 1 — e.g. set this to the second week of term for a block that starts every-other-week from week 2.'
-                        : "Occurrences before this date are excluded — e.g. set this to week 3 of term for a class that doesn't start until then."}
-                    </p>
-                  </div>
-                  <div className={styles.fieldMini}>
-                    <label className={styles.miniLabel}>Location (optional)</label>
-                    <input className={styles.miniInput} placeholder="Room / building" value={newLocation} onChange={(e) => setNewLocation(e.target.value)} />
-                  </div>
-                  <div className={styles.fieldMini}>
-                    <label className={styles.miniLabelCheckbox}>
-                      <input
-                        type="checkbox"
-                        checked={newRequiresCommitment}
-                        onChange={(e) => setNewRequiresCommitment(e.target.checked)}
-                      />
-                      Requires weekly commitment
-                    </label>
-                    <p className={styles.miniHint}>
-                      For a schedule you can't always attend (e.g. a gym class) — occurrences show muted on the calendar
-                      until you click one and commit to it, instead of counting as attended by default.
-                    </p>
-                  </div>
+                  <ScheduleBlockFields row={newRow} onChange={(patch) => setNewRow((r) => ({ ...r, ...patch }))} startDate={startDate} endDate={endDate} changed={new Set()} autoFocus />
                   <div className={styles.addFieldBtns}>
-                    <button type="button" className={styles.addFieldCancelBtn} onClick={() => setAddingBlock(false)}>Cancel</button>
-                    <button type="button" className={styles.addFieldConfirmBtn} onClick={commitAddBlock} disabled={!newTitle.trim() || newDays.length === 0}>Add block</button>
+                    <button type="button" className={styles.addFieldCancelBtn} onClick={() => setAddingBlock(false)}>{S.cancel}</button>
+                    <button type="button" className={styles.addFieldConfirmBtn} onClick={commitAddBlock} disabled={!newRow.title.trim() || newRow.daysOfWeek.length === 0}>{S.addBlock}</button>
                   </div>
                 </div>
               ) : (
-                <button type="button" className={styles.addFieldBtn} onClick={openAddBlockForm}>+ Add block</button>
+                <button type="button" className={styles.addFieldBtn} onClick={openAddBlockForm}>{S.addBlockLink}</button>
               )}
             </div>
           </form>
 
           <div className={styles.footer}>
-            {isEditMode && <button type="button" className={styles.deleteBtn} onClick={handleDelete}>Delete</button>}
+            {isEditMode && <button type="button" className={styles.deleteBtn} onClick={handleDelete}>{S.delete}</button>}
             <div className={styles.footerRight}>
-              <button type="button" className={styles.cancelBtn} onClick={closeEditSchedule}>Cancel</button>
+              <button type="button" className={styles.cancelBtn} onClick={closeEditSchedule}>{S.cancel}</button>
               <button type="button" className={styles.saveBtn} onClick={() => formRef.current?.requestSubmit()} disabled={!name.trim()}>
-                {isEditMode ? 'Save changes' : 'Create schedule'}
+                {isEditMode ? S.save : S.create}
               </button>
             </div>
           </div>

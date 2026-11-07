@@ -7,6 +7,7 @@ import { useUIStore } from '@/store/uiStore';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
+import { TagField } from '@/components/TagField/TagField';
 import { OVERVIEW_SOURCES } from '@/overview/sources';
 import { DEFAULT_QUERY } from '@/overview/engine';
 import { LABELS } from '@/config/labels';
@@ -35,6 +36,7 @@ export function AddOverviewModal() {
   const [icon, setIcon]         = useState(() => editing?.icon ?? '');
   const [sources, setSources]   = useState<OverviewSourceKey[]>(() => start.sources);
   const [collectionId, setCollectionId] = useState<CollectionId | null>(() => start.collectionId);
+  const [tagIds, setTagIds]     = useState<string[]>(() => start.tagIds ?? []);
   const [status, setStatus]     = useState<OverviewStatusFilter>(() => start.status);
   const [when, setWhen]         = useState<OverviewWhenFilter>(() => start.when);
   const [windowDays, setWindowDays] = useState(() => (start.windowDays == null ? '' : String(start.windowDays)));
@@ -57,6 +59,7 @@ export function AddOverviewModal() {
       sources, collectionId, status, when,
       windowDays: when === 'upcoming' || when === 'past' ? (Number.isFinite(days) ? days : null) : null,
       search: search.trim(), sort, groupBy,
+      ...(tagIds.length ? { tagIds } : {}),
     };
     if (editing) {
       updateOverview(editing.id, { ...query, name: name.trim(), icon: icon.trim() || null });
@@ -119,6 +122,10 @@ export function AddOverviewModal() {
               onChange={setCollectionId}
               noneLabel={L.anyEndeavour}
             />
+          </div>
+
+          <div className={styles.field}>
+            <TagField value={tagIds} onChange={setTagIds} allowNew={false} label={L.tagsLabel} hint={LABELS.tagFilter.hint} labelClassName={styles.fieldLabel} />
           </div>
 
           <div className={`${styles.field} ${styles.row2}`}>

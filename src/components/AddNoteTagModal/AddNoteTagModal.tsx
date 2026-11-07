@@ -1,20 +1,16 @@
+import { commitTags } from '@/services/tags';
 import { useState } from 'react';
-import { ItemIcon } from '@/components/IconPicker/ItemIcon';
-import { IconField } from '@/components/IconPicker/IconField';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
-import { useTaskStore } from '@/store/taskStore';
-import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { LABELS } from '@/config/labels';
 import type { CollectionId } from '@/types';
-import type { NoteTag, NoteTagId } from '@/types/notes';
-import { BUILTIN_TAGS } from '../NoteEditor/builtinTags';
+import type { NoteTagId } from '@/types/notes';
 import styles from './AddNoteTagModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
 import { CreateKindSwitcher } from '@/components/CreateKindSwitcher/CreateKindSwitcher';
-import { SWATCH_HEXES, swatchLabel } from '@/config/swatches';
 import { CloseIcon } from '@/components/Icons';
+import { NoteTagFields, type NoteTagDraft } from '@/components/NoteTagFields/NoteTagFields';
 
 function getDepth(tagId: string | null, noteTags: Record<string, { parentTagId: string | null }>): number {
   if (!tagId) return 0;
@@ -29,21 +25,8 @@ function getDepth(tagId: string | null, noteTags: Record<string, { parentTagId: 
 
 const LEVEL_LABELS = ['Notebook', 'Page', 'Sub-page', 'Section'];
 
-// Every notebook, in tree order, with its depth: the "Inside" picker's list.
-function flattenNotebooks(noteTags: Record<string, NoteTag>, parentId: string | null = null, depth = 0): { tag: NoteTag; depth: number }[] {
-  return Object.values(noteTags)
-    .filter((t) => t.kind === 'area' && t.parentTagId === parentId)
-    .sort((a, b) => a.order - b.order)
-    .flatMap((t) => [{ tag: t, depth }, ...flattenNotebooks(noteTags, t.id, depth + 1)]);
-}
-
-// "University › Biology": where the new notebook will sit.
-function notebookPath(id: string, noteTags: Record<string, NoteTag>): string {
-  const names: string[] = [];
-  for (let t: NoteTag | undefined = noteTags[id]; t; t = t.parentTagId ? noteTags[t.parentTagId] : undefined) names.unshift(t.name);
-  return names.join(' › ');
-}
-
+// A new notebook or annotation label: the same fields as its edit form (components/NoteTagFields,
+// "Creating and editing a thing is one form").
 export function AddNoteTagModal() {
   const closeModal             = useUIStore((s) => s.closeModal);
   const pendingNoteTagParentId = useUIStore((s) => s.pendingNoteTagParentId);
@@ -51,53 +34,35 @@ export function AddNoteTagModal() {
   const noteTags               = useNoteStore((s) => s.noteTags);
   const addNoteTag             = useNoteStore((s) => s.addNoteTag);
 
-  const collectionsRecord = useTaskStore((s) => s.collections);
-  const allCollections    = Object.values(collectionsRecord);
-
-  const [name, setName]         = useState(() => useUIStore.getState().createDraft ?? '');
-  // Starts as wherever the pane was opened from (the selected notebook, or a row's "+"); the
-  // "Inside" picker changes it, or clears it for a top-level notebook.
-  const [parentId, setParentId] = useState<NoteTagId | null>(pendingNoteTagParentId);
-  const [parentPickerOpen, setParentPickerOpen] = useState(false);
-  const [icon, setIcon]         = useState('');
-  const [color, setColor]       = useState<string | null>(null);
-  const [typeKey, setTypeKey]   = useState<string>('');
-
-  const isTag     = pendingNoteTagKind === 'tag';
-  const parentTag = parentId ? noteTags[parentId] : null;
-  const depth     = getDepth(parentId, noteTags);
-  const levelLabel = isTag ? 'Tag' : LEVEL_LABELS[Math.min(depth, LEVEL_LABELS.length - 1)];
-
+  const isTag = pendingNoteTagKind === 'tag';
+  const [draft, setDraft] = useState<NoteTagDraft>(() => ({
+    name: useUIStore.getState().createDraft ?? '', icon: '', color: null, parentId: pendingNoteTagParentId,
+    collectionId: null, suiteTagIds: [], fieldSchema: [],
+  }));
   // undefined = follow the parent notebook's Endeavour (also after the parent changes), or, for a
   // top-level notebook, the Endeavour chosen where it's being made (an Endeavour's home, a filter);
   // anything else is the user's own pick.
-  const [pickedCollectionId, setCollectionId] = useState<CollectionId | null | undefined>(undefined);
+  const [pickedCollection, setPickedCollection] = useState<CollectionId | null | undefined>(undefined);
   const [activeAtOpen] = useState(() => selectActiveCollectionId(useUIStore.getState()) as CollectionId | null);
-  const collectionId = pickedCollectionId !== undefined ? pickedCollectionId : parentTag ? (parentTag.collectionId ?? null) : activeAtOpen;
-
-  // Pre-fill icon/color when type is chosen
-  const handleTypeChange = (key: string) => {
-    setTypeKey(key);
-    if (!key) return;
-    const builtin = BUILTIN_TAGS.find((t) => t.typeKey === key);
-    if (!builtin) return;
-    if (!icon) setIcon(builtin.icon);
-    if (!color) setColor(builtin.color);
-  };
+  const parentTag = draft.parentId ? noteTags[draft.parentId] : null;
+  const collectionId = pickedCollection !== undefined ? pickedCollection : parentTag ? (parentTag.collectionId ?? null) : activeAtOpen;
+  const levelLabel = isTag ? LABELS.annotations.one : LEVEL_LABELS[Math.min(getDepth(draft.parentId, noteTags), LEVEL_LABELS.length - 1)];
 
   useEscapeClose(() => { closeModal(); });
 
   function handleCreate() {
-    if (!name.trim()) return;
-    addNoteTag({
-      name: name.trim(),
+    if (!draft.name.trim()) return;
+    const id = addNoteTag({
+      name: draft.name.trim(),
       kind: pendingNoteTagKind,
-      icon: icon.trim() || null,
-      color,
-      parentTagId: isTag ? null : parentId,
-      tagTypeId: typeKey || null,
+      icon: draft.icon.trim() || null,
+      color: draft.color,
+      parentTagId: isTag ? null : draft.parentId,
+      tagTypeId: null,
       collectionId: isTag ? null : collectionId,
     });
+    const tagIds = isTag ? [] : commitTags(draft.suiteTagIds);
+    useNoteStore.getState().updateNoteTag(id as NoteTagId, { ...(tagIds.length ? { suiteTagIds: tagIds } : {}), ...(isTag && draft.fieldSchema.length ? { fieldSchema: draft.fieldSchema } : {}) });
     closeModal();
   }
 
@@ -106,139 +71,22 @@ export function AddNoteTagModal() {
   return (
     <div className={styles.overlay} onClick={closeModal}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <CreateKindSwitcher current={isTag ? 'note-tag' : 'notebook'} draft={name} />
+        <CreateKindSwitcher current={isTag ? 'note-tag' : 'notebook'} draft={draft.name} />
         <div className={styles.header}>
-          <h2>New {levelLabel}</h2>
-          <button className={styles.closeBtn} onClick={closeModal} aria-label="Close"><CloseIcon /></button>
+          <h2>{LABELS.noteTagFields.newTitle(levelLabel)}</h2>
+          <button className={styles.closeBtn} onClick={closeModal} aria-label={LABELS.noteTagFields.close}><CloseIcon /></button>
         </div>
-
         <div className={styles.body}>
-          {!isTag && (
-            <div
-              className={styles.field}
-              onKeyDown={(e) => { if (e.key === 'Escape' && parentPickerOpen) { e.stopPropagation(); setParentPickerOpen(false); } }}
-            >
-              <span className={styles.label}>{LABELS.notebookParent.label}</span>
-              <div className={styles.parentRow}>
-                <button
-                  type="button"
-                  className={styles.parentBtn}
-                  onClick={() => setParentPickerOpen((o) => !o)}
-                  title={LABELS.notebookParent.change}
-                  aria-expanded={parentPickerOpen}
-                >
-                  <span className={styles.parentName}>{parentId ? notebookPath(parentId, noteTags) : LABELS.notebookParent.topLevel}</span>
-                  <span aria-hidden="true">▾</span>
-                </button>
-                {parentId && (
-                  <button
-                    type="button"
-                    className={styles.parentClear}
-                    onClick={() => { setParentId(null); setParentPickerOpen(false); }}
-                    title={LABELS.notebookParent.makeTopLevel}
-                    aria-label={LABELS.notebookParent.makeTopLevel}
-                  ><CloseIcon /></button>
-                )}
-              </div>
-              {parentPickerOpen && (
-                <div className={styles.parentList}>
-                  <button
-                    type="button"
-                    className={`${styles.parentOption} ${parentId === null ? styles.parentOptionActive : ''}`}
-                    onClick={() => { setParentId(null); setParentPickerOpen(false); }}
-                  >{LABELS.notebookParent.topLevel}</button>
-                  {flattenNotebooks(noteTags).map(({ tag, depth: d }) => (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      className={`${styles.parentOption} ${parentId === tag.id ? styles.parentOptionActive : ''}`}
-                      style={{ paddingLeft: `${0.6 + d}rem` }}
-                      onClick={() => { setParentId(tag.id as NoteTagId); setParentPickerOpen(false); }}
-                    >
-                      <span className={styles.parentOptionIcon}><ItemIcon icon={tag.icon} fallback="📁" /></span>
-                      {tag.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className={styles.field}>
-            <label htmlFor="nb-name" className={styles.label}>Name</label>
-            <input
-              id="nb-name"
-              autoFocus
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
-              placeholder={`${levelLabel} name…`}
-              className={styles.input}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="nb-type" className={styles.label}>
-              Type <span className={styles.optional}>(optional)</span>
-            </label>
-            <select
-              id="nb-type"
-              className={styles.select}
-              value={typeKey}
-              onChange={(e) => handleTypeChange(e.target.value)}
-            >
-              <option value="">None</option>
-              {BUILTIN_TAGS.map((t) => (
-                <option key={t.typeKey} value={t.typeKey}>
-                  {t.icon} {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className={styles.row}>
-            <div className={styles.field}>
-              <span className={styles.label}>{LABELS.iconPicker.label}</span>
-              <IconField value={icon || null} onChange={(v) => setIcon(v ?? '')} fallback="📓" />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>
-                Color <span className={styles.optional}>(optional)</span>
-              </label>
-              <div className={styles.swatches}>
-                {SWATCH_HEXES.map((c) => (
-                  <button
-                    key={c}
-                    className={`${styles.swatch} ${color === c ? styles.swatchActive : ''}`}
-                    style={{ background: c }}
-                    onClick={() => setColor(color === c ? null : c)}
-                    aria-label={swatchLabel(c)}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {!isTag && allCollections.length > 0 && (
-            <div className={styles.field}>
-              <label className={styles.label}>{LABELS.collection} <span className={styles.optional}>(optional)</span></label>
-              <CollectionPicker
-                collections={allCollections}
-                value={collectionId}
-                onChange={(id) => setCollectionId(id)}
-                noneLabel={`No ${LABELS.collection}`}
-              />
-            </div>
-          )}
+          <NoteTagFields kind={pendingNoteTagKind} levelLabel={levelLabel} onEnter={handleCreate}
+            value={{ ...draft, collectionId }}
+            onChange={(patch) => {
+              if ('collectionId' in patch) setPickedCollection(patch.collectionId ?? null);
+              setDraft((d) => ({ ...d, ...patch }));
+            }} />
         </div>
-
         <div className={styles.footer}>
-          <button className={styles.btnSecondary} onClick={closeModal}>Cancel</button>
-          <button className={styles.btnPrimary} onClick={handleCreate} disabled={!name.trim()}>
-            Create
-          </button>
+          <button className={styles.btnSecondary} onClick={closeModal}>{LABELS.noteTagFields.cancel}</button>
+          <button className={styles.btnPrimary} onClick={handleCreate} disabled={!draft.name.trim()}>{LABELS.noteTagFields.create}</button>
         </div>
       </div>
     </div>

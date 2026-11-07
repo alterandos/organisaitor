@@ -1,3 +1,4 @@
+import { LABELS } from '@/config/labels';
 import { useState } from 'react';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { TERM_RICH } from '@/config/structuredTagTypes';
@@ -217,7 +218,7 @@ export function TagView() {
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           <span className={styles.title}>Tagged view</span>
-          <span className={styles.subtitle}>{totalUnique} note{totalUnique !== 1 ? 's' : ''} · {groups.length} tag{groups.length !== 1 ? 's' : ''}</span>
+          <span className={styles.subtitle}>{totalUnique} note{totalUnique !== 1 ? 's' : ''} · {groups.length} {groups.length !== 1 ? LABELS.annotations.plural.toLowerCase() : LABELS.annotations.one.toLowerCase()}</span>
         </div>
         <div className={styles.headerRight}>
           <select className={styles.sortSelect} value={sort} onChange={(e) => setSort(e.target.value as SortMode)}>
@@ -231,7 +232,7 @@ export function TagView() {
 
       <div className={styles.body}>
         {sorted.length === 0 ? (
-          <div className={styles.empty}>No tagged content found. Tag text with Ctrl+Space in the editor.</div>
+          <div className={styles.empty}>Nothing marked yet. Mark text with Ctrl+Space in the editor.</div>
         ) : (
           sorted.map((group) => {
             const isCollapsed = collapsed.has(group.id);

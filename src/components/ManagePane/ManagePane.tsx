@@ -1,4 +1,10 @@
+import { endeavourColor } from '@/utils/endeavourLook';
+import { archiveEndeavourAsked, deleteEndeavourAsked } from '@/services/endeavourArchive';
 import { TYPES_ENABLED } from '@/config/features';
+import { useNoteStore } from '@/store/noteStore';
+import { annotationTags } from '@/utils/notes';
+import { ANNOTATION_ICON } from '@/config/itemIcons';
+import type { NoteTag, NoteTagId } from '@/types/notes';
 import { useRef, useState } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import { usePinAction } from '@/hooks/usePinAction';
@@ -12,11 +18,11 @@ import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { confirmDelete, confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { blankTemplate, deleteTemplate, duplicateTemplate, isBuiltIn, isChangedBuiltIn, restoreDefault, useTemplates } from '@/services/templates';
 import type { EndeavourTemplateDef } from '@/types/templates';
-import { endeavourInUse, purposeInUse, tagInUse } from '@/services/inUse';
+import { purposeInUse, tagInUse } from '@/services/inUse';
 import { TruncatedText } from '@/components/TruncatedText/TruncatedText';
 import { RowOptionsMenu } from '@/components/RowHoverActions/RowOptionsMenu';
 import { RowAction } from '@/components/RowHoverActions/RowAction';
-import { ArchiveIcon, CloseIcon, DisclosureIcon, EditIcon, EndeavourIcon, PresetIcon, PurposeIcon, ResetIcon, RestoreIcon, TagIcon, TrashIcon, TypeIcon } from '@/components/Icons';
+import { ArchiveIcon, CloseIcon, DisclosureIcon, EditIcon, EndeavourIcon, PresetIcon, PurposeIcon, ResetIcon, RestoreIcon, AnnotationIcon, TagIcon, TrashIcon, TypeIcon } from '@/components/Icons';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { addBuiltInType, addStarterSet, itemsOfType, makeTagAType } from '@/services/itemTypes';
 import { BUILT_IN_TYPES } from '@/config/builtInTypes';
@@ -33,6 +39,7 @@ const ALL_SECTIONS: { id: ManageSection; label: string; Icon: typeof TagIcon }[]
   { id: 'endeavours', label: LABELS.collectionPlural, Icon: EndeavourIcon },
   { id: 'purposes',   label: 'Purposes',              Icon: PurposeIcon },
   { id: 'tags',       label: 'Tags',                  Icon: TagIcon },
+  { id: 'annotations', label: LABELS.annotations.plural, Icon: AnnotationIcon },
   { id: 'types',      label: LABELS.itemTypes.title,  Icon: TypeIcon },
   { id: 'templates',  label: LABELS.templates.title,  Icon: PresetIcon },
 ];
@@ -45,6 +52,7 @@ const NEW_ACTIONS: Record<ManageSection, () => void> = {
   endeavours: () => useUIStore.getState().showAddCollection(),
   purposes:   () => useUIStore.getState().showAddPurpose(),
   tags:       () => useUIStore.getState().showAddTag(),
+  annotations: () => useUIStore.getState().showAddNoteTag(null, 'tag'),
   types:      () => useUIStore.getState().showAddItemType(),
   templates:  () => useUIStore.getState().openTemplateEditor(blankTemplate()),
 };
@@ -99,8 +107,6 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
 
 function EndeavoursSection() {
   const collectionsRecord = useTaskStore((s) => s.collections);
-  const updateCollection  = useTaskStore((s) => s.updateCollection);
-  const deleteCollection  = useTaskStore((s) => s.deleteCollection);
   const openEditCollection = useUIStore((s) => s.openEditCollection);
 
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -111,12 +117,9 @@ function EndeavoursSection() {
   const projects  = active.filter((c) => c.kind === 'project');
   const lists     = active.filter((c) => c.kind === 'list');
 
-  const toggleArchive = (c: Collection) => updateCollection(c.id as CollectionId, { archivedAt: c.archivedAt ? null : now() });
-  const handleDelete = async (c: Collection) => {
-    if (await confirmDelete(LABELS.collection.toLowerCase(), c.name, 'Tasks will be detached but not deleted.', { empty: !endeavourInUse(c.id as CollectionId) })) {
-      deleteCollection(c.id as CollectionId);
-    }
-  };
+  // Asks about its parts, if it has any (services/endeavourArchive.ts).
+  const toggleArchive = (c: Collection) => void archiveEndeavourAsked(c.id as CollectionId, !c.archivedAt);
+  const handleDelete = (c: Collection) => void deleteEndeavourAsked(c.id as CollectionId);
 
   return (
     <>
@@ -130,7 +133,7 @@ function EndeavoursSection() {
           {projects.map((c) => (
             <ManageRow
               key={c.id}
-              color={c.color}
+              color={endeavourColor(c.id, collectionsRecord)}
               name={c.name}
               onEdit={() => openEditCollection(c)}
               onArchive={() => toggleArchive(c)}
@@ -147,7 +150,7 @@ function EndeavoursSection() {
           {lists.map((c) => (
             <ManageRow
               key={c.id}
-              color={c.color}
+              color={endeavourColor(c.id, collectionsRecord)}
               name={c.name}
               onEdit={() => openEditCollection(c)}
               onArchive={() => toggleArchive(c)}
@@ -167,7 +170,7 @@ function EndeavoursSection() {
           {archivedOpen && archived.map((c) => (
             <ManageRow
               key={c.id}
-              color={c.color}
+              color={endeavourColor(c.id, collectionsRecord)}
               name={c.name}
               archived
               onEdit={() => openEditCollection(c)}
@@ -250,12 +253,14 @@ function PurposesSection() {
 function TagsSection() {
   const tagsRecord = useTaskStore((s) => s.tags);
   const deleteTag  = useTaskStore((s) => s.deleteTag);
+  const updateTag  = useTaskStore((s) => s.updateTag);
   const openEditTag = useUIStore((s) => s.openEditTag);
 
-  const tags = Object.values(tagsRecord);
+  // Archived ones last, each by name.
+  const tags = Object.values(tagsRecord).sort((a, b) => Number(!!a.archivedAt) - Number(!!b.archivedAt) || a.name.localeCompare(b.name));
 
   const handleDelete = async (t: Tag) => {
-    if (await confirmDelete('tag', t.name, 'It will be removed from all tasks.', { empty: !tagInUse(t.id as TagId) })) {
+    if (await confirmDelete('tag', t.name, LABELS.tagModal.deleteDetail, { empty: !tagInUse(t.id as TagId) })) {
       deleteTag(t.id as TagId);
     }
   };
@@ -268,13 +273,56 @@ function TagsSection() {
         <ManageRow
           key={t.id}
           color={t.color}
+          icon={t.icon ? <ItemIcon icon={t.icon} /> : undefined}
           name={t.name}
+          archived={!!t.archivedAt}
           onEdit={() => openEditTag(t)}
+          onArchive={() => updateTag(t.id, { archivedAt: t.archivedAt ? null : new Date().toISOString() })}
           onDelete={() => handleDelete(t)}
-          extra={<RowAction className={styles.iconBtn} icon={<TypeIcon width="1em" height="1em" />} label={LABELS.itemTypes.fromTag} onClick={() => makeTagAType(t.id as TagId)} />}
+          extra={TYPES_ENABLED ? <RowAction className={styles.iconBtn} icon={<TypeIcon width="1em" height="1em" />} label={LABELS.itemTypes.fromTag} onClick={() => makeTagAType(t.id as TagId)} /> : undefined}
         />
       ))}
     </div>
+  );
+}
+
+// ── Annotations (the person's own labels for passages: NoteTag kind 'tag') ─
+// Made in Notes (+ › Annotation, or a tag preset); listed, edited and deleted here (2026-11-07:
+// they could be made but not found anywhere). Edit opens EditNoteTagModal, as in Notes.
+
+function AnnotationsSection() {
+  const noteTags = useNoteStore((s) => s.noteTags);
+  const notes    = useNoteStore((s) => s.notes);
+  const openEdit = useUIStore((s) => s.openEditNoteTag);
+  const labels = annotationTags(noteTags).sort((a, b) => a.name.localeCompare(b.name));
+  // How many notes use each: a note filed under it, or a passage in it marked with it. A locked
+  // (encrypted) note can't be read, so a label might be in one.
+  const lockedNotes = Object.values(notes).some((n) => n.isEncrypted);
+  const usedIn = (id: string) => Object.values(notes).filter((n) => !n.isEncrypted && (n.tagIds.includes(id as NoteTagId) || JSON.stringify(n).includes(`"tagId":"${id}"`))).length;
+  const handleDelete = async (t: NoteTag) => {
+    if (await confirmDelete(LABELS.annotations.one.toLowerCase(), t.name, LABELS.annotations.deleteDetail, { empty: !lockedNotes && usedIn(t.id) === 0 })) {
+      useNoteStore.getState().deleteNoteTag(t.id as NoteTagId);
+    }
+  };
+  return (
+    <>
+      <EmptyHint>{LABELS.annotations.manageHint}</EmptyHint>
+      {labels.length === 0 ? <EmptyHint>{LABELS.annotations.none}</EmptyHint> : (
+        <div className={styles.group}>
+          {labels.map((t) => (
+            <ManageRow
+              key={t.id}
+              color={t.color}
+              icon={<ItemIcon icon={t.icon} fallback={ANNOTATION_ICON} />}
+              name={t.name}
+              detail={LABELS.annotations.usedIn(usedIn(t.id))}
+              onEdit={() => openEdit(t.id)}
+              onDelete={() => handleDelete(t)}
+            />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -446,6 +494,7 @@ export function ManagePane() {
             {manageSection === 'endeavours' && <EndeavoursSection />}
             {manageSection === 'purposes'   && <PurposesSection />}
             {manageSection === 'tags'       && <TagsSection />}
+            {manageSection === 'annotations' && <AnnotationsSection />}
             {manageSection === 'types'      && <TypesSection />}
             {manageSection === 'templates'  && <TemplatesSection />}
           </div>
