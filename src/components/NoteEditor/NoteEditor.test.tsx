@@ -300,6 +300,17 @@ describe('NoteEditor keys added 2026-10-07', () => {
     expect(ed.isFocused).toBe(true);
   });
 
+  it('Ctrl+W closes the note in front (one note alone: back to no note open)', () => {
+    useNoteStore.setState((s) => ({ notes: { ...s.notes, ['note-c' as NoteId]: makeNote('note-c', twoLines) } }));
+    useUIStore.setState({ activeView: 'notes' });
+    act(() => { useUIStore.getState().openNote('note-c'); });
+    render(<NoteEditor />);
+    const ed = liveEditor();
+    act(() => { ed.view.dom.focus(); });
+    act(() => { ed.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', ctrlKey: true, bubbles: true, cancelable: true })); });
+    expect(useUIStore.getState().editingNoteId).toBeNull();
+  });
+
   it('Ctrl+H then Ctrl+A makes the line the Author (not everything, though Ctrl+A also means Select all)', () => {
     useNoteStore.setState((s) => ({ notes: { ...s.notes, ['note-c' as NoteId]: makeNote('note-c', twoLines) } }));
     useUIStore.setState({ activeView: 'notes' });

@@ -82,7 +82,8 @@ export function findCharTrigger(before: string): { start: number; query: string 
   return { start: m.index + m[1].length, query: m[2] };
 }
 
-export interface CharMatch { entry: SpecialChar; char: string; label: string }
+// `entry` only for a character (an emoji from specialChars/emoji.ts has none).
+export interface CharMatch { entry?: SpecialChar; char: string; label: string }
 
 // A capital first letter asks for a Greek capital; the other sets have no case, so it's ignored.
 const asTyped = (entry: SpecialChar, capital: boolean): CharMatch | null => {
@@ -187,7 +188,9 @@ export function findShortcut(before: string): { start: number; char: string; typ
 // typed after it), so `tech` doesn't fire halfway through "technical". A shortcut written in lower
 // case also matches it capitalised (`Govt` → Government) or in capitals (`GOVT` → GOVERNMENT), as
 // word processors' autocorrect does. Backspace or Ctrl+Z straight after puts the typed text back.
-export interface TextShortcut { id: string; typed: string; text: string }
+// `instant` (2026-11-11): replaced as soon as its last character is typed, even inside a word
+// (`:o` → ö in "hören"), for letters and symbols; never set = at the word's end, as above.
+export interface TextShortcut { id: string; typed: string; text: string; instant?: boolean }
 
 // The starter set, everyone's from the start (the user's list, 2026-10-17; they vetoed asap, imo,
 // tbc, diff and prob). Installed once: a new install starts with them, an existing one got them in
@@ -230,13 +233,27 @@ export function findUserShortcut(before: string, list: readonly TextShortcut[]):
   const body = before.slice(0, -1);
   let best: { start: number; char: string; typed: string } | null = null;
   for (const s of list) {
-    if (!s.typed || body.length < s.typed.length || (best && best.typed.length > s.typed.length)) continue;
+    if (s.instant || !s.typed || body.length < s.typed.length || (best && best.typed.length > s.typed.length)) continue;
     const start = body.length - s.typed.length;
     if (start > 0 && NOT_BEFORE.test(body[start - 1])) continue;
     const word = body.slice(start);
     const text = inCase(word, s.typed, s.text);
     // Ending in the punctuation just typed already (`eg.` → e.g.), it doesn't get it twice.
     if (text !== null) best = { start, char: /\s/.test(end) || !text.endsWith(end) ? text + end : text, typed: word + end };
+  }
+  return best;
+}
+
+// An instant shortcut `before` has just been typed (it ends with it, wherever it is): what to
+// replace from `start` to the end, and with what. The longest match wins; case as above.
+export function findInstantShortcut(before: string, list: readonly TextShortcut[]): { start: number; char: string; typed: string } | null {
+  let best: { start: number; char: string; typed: string } | null = null;
+  for (const s of list) {
+    if (!s.instant || !s.typed || before.length < s.typed.length || (best && best.typed.length >= s.typed.length)) continue;
+    const start = before.length - s.typed.length;
+    const word = before.slice(start);
+    const text = inCase(word, s.typed, s.text);
+    if (text !== null) best = { start, char: text, typed: word };
   }
   return best;
 }

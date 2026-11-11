@@ -24,7 +24,9 @@ import { blockFrameAttributes, blockPill, designButtons, frameButtons, replaceTy
 
 export const PROSCONS_VARIANTS = ['tchart', 'scales', 'ledger'] as const;
 export type ProsConsVariant = typeof PROSCONS_VARIANTS[number];
-export type Side = 'pro' | 'con';
+// 'neutral': evidence that bears on an argument without clearly pushing either way (only an
+// argument has one, 2026-11-11); it never counts towards which way it leans.
+export type Side = 'pro' | 'con' | 'neutral';
 const MAX_WEIGHT = 3;
 
 const oneOf = <T extends string>(values: readonly T[], v: string | null, fallback: T): T =>
@@ -64,7 +66,7 @@ export const ProsConsList = Node.create({
   content: 'prosConsPoint+',
   defining: true,
   addAttributes() {
-    return { side: { default: 'pro', parseHTML: (el) => oneOf(['pro', 'con'] as const, el.getAttribute('data-side'), 'pro'), renderHTML: (a) => ({ 'data-side': a.side }) } };
+    return { side: { default: 'pro', parseHTML: (el) => oneOf(['pro', 'con', 'neutral'] as const, el.getAttribute('data-side'), 'pro'), renderHTML: (a) => ({ 'data-side': a.side }) } };
   },
   parseHTML() { return [{ tag: 'div[data-type="proscons-list"]' }]; },
   renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'proscons-list' }), 0]; },
@@ -161,21 +163,21 @@ export function pointAt($pos: ResolvedPos): { point: PMNode; pos: number; list: 
 
 // What a list is called, and its points' placeholders: Pros / Cons here; the argument block
 // (extensions/Argument.ts) calls the same lists its evidence for and against.
-export interface ListWords { pros: string; cons: string; proPlaceholder: string; conPlaceholder: string }
+export interface ListWords { pros: string; cons: string; proPlaceholder: string; conPlaceholder: string; neutral?: string; neutralPlaceholder?: string }
 
 // Decorations for one list (the side's heading lives in CSS, from data-side): each point's weight
 // dots, its placeholder, and a running total for the ledger.
 export function listDecorations(decos: Decoration[], list: PMNode, listPos: number, key: string, words: ListWords = LABELS.noteBlocks.prosCons): void {
   const L = words;
   const side = list.attrs.side as Side;
-  decos.push(Decoration.node(listPos, listPos + list.nodeSize, { 'data-pc-label': side === 'pro' ? L.pros : L.cons }));
+  decos.push(Decoration.node(listPos, listPos + list.nodeSize, { 'data-pc-label': side === 'pro' ? L.pros : side === 'neutral' ? L.neutral ?? '' : L.cons }));
   let p = listPos + 1;
   list.forEach((point, _o, i) => {
     const end = p + point.nodeSize;
     const weight = point.attrs.weight as number;
     decos.push(Decoration.widget(p + 1, (view, getPos) => weightWidget(view, getPos, weight),
       { side: -1, key: `${key}-w-${i}-${weight}`, ignoreSelection: true, stopEvent: () => true }));
-    if (point.content.size === 0) decos.push(Decoration.node(p, end, { 'data-pc-empty': '', 'data-pc-placeholder': side === 'pro' ? L.proPlaceholder : L.conPlaceholder }));
+    if (point.content.size === 0) decos.push(Decoration.node(p, end, { 'data-pc-empty': '', 'data-pc-placeholder': side === 'pro' ? L.proPlaceholder : side === 'neutral' ? L.neutralPlaceholder ?? '' : L.conPlaceholder }));
     p = end;
   });
 }
@@ -250,10 +252,11 @@ function caretTo(state: EditorState, pos: number, dispatch?: (tr: Transaction) =
   return true;
 }
 
-// Moves the cursor to the field after (dir 1) or before (dir -1) the one it's in, within `block`.
-export function stepField(state: EditorState, block: PcAt, dir: 1 | -1, dispatch?: (tr: Transaction) => void): boolean {
+// Moves the cursor to the field after (dir 1) or before (dir -1) the one it's in, within `block`
+// (or the one at `from`: a long part's last or first line, so Tab moves by part, not by line).
+export function stepField(state: EditorState, block: PcAt, dir: 1 | -1, dispatch?: (tr: Transaction) => void, from?: number): boolean {
   const fields = textFieldsIn(block.node, block.pos);
-  const here = state.selection.from;
+  const here = from ?? state.selection.from;
   const i = fields.findIndex((f) => here > f.pos && here <= fieldEnd(f));
   const next = fields[i + dir];
   return next ? caretTo(state, fieldEnd(next), dispatch) : true;

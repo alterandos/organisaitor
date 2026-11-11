@@ -6,7 +6,7 @@ vi.mock('@/components/ConfirmDialog/dialogs', () => ({ choiceDialog: choice, con
 import { useTaskStore } from '@/store/taskStore';
 import { useToastStore } from '@/store/toastStore';
 import { useUIStore } from '@/store/uiStore';
-import { toggleTaskCompletion, taskCompletionOptions } from './taskCompletion';
+import { onTaskCompleted, toggleTaskCompletion, taskCompletionOptions } from './taskCompletion';
 import type { TaskId } from '@/types';
 
 const add = (title: string) => useTaskStore.getState().addTask({ title });
@@ -123,5 +123,15 @@ describe('toggleTaskCompletion', () => {
     await toggleTaskCompletion(a);
     expect(task(a).completed).toBe(false);
     expect(useToastStore.getState().current).toBeNull();
+  });
+
+  it('tells its listeners of each task completed (the row celebrates), never of one reopened', async () => {
+    const heard: TaskId[] = [];
+    const stop = onTaskCompleted((id) => heard.push(id));
+    const a = add('A');
+    await toggleTaskCompletion(a);
+    await toggleTaskCompletion(a);
+    stop();
+    expect(heard).toEqual([a]);
   });
 });

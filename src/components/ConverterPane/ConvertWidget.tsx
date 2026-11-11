@@ -10,6 +10,8 @@ import { toBaseValue } from '@/utils/sizeComparison';
 import { categoriesInOrder, defaultUnits, unitsInOrder, type ConvertDesign, type ConvertValue } from './convertValue';
 import { LABELS } from '@/config/labels';
 import type { ConverterId } from '@/types/converters';
+import { ItemIcon } from '@/components/IconPicker/ItemIcon';
+import { CardIcon } from '@/components/CardLook/CardIcon';
 import styles from './ConvertWidget.module.css';
 
 const L = LABELS.converters;
@@ -17,16 +19,19 @@ const L = LABELS.converters;
 // One conversion, shown and worked out where it's put (the note block `\convert`, and any later
 // host): which converter, its units and the amount typed. Only those are stored; the answer is
 // worked out each time it's drawn, so it's always right, and a custom converter edited later is
-// followed. A host stores what `onChange` gives it. Two designs: Card (a heading with the
-// converter's name, the conversion below) and Compact (one row).
+// followed. A host stores what `onChange` gives it. Two designs, in the shared card look
+// (components/CardLook, CLAUDE.md "Cards share one look"): Card (the converter's icon, the kind
+// line, the converter as its title, the conversion below) and Compact (one row).
 
-export function ConvertWidget({ value, design, editable, onChange, focusSignal, onEscape }: {
+export function ConvertWidget({ value, design, editable, onChange, focusSignal, onEscape, showIcon = true, onShowIcon }: {
   value: ConvertValue;
   design: ConvertDesign;
   editable: boolean;
   onChange: (v: ConvertValue) => void;
   focusSignal?: { n: number; text: string };
   onEscape?: () => void;
+  showIcon?: boolean;
+  onShowIcon?: (show: boolean) => void;
 }) {
   const customs = useConverterStore((s) => s.converters);
   const firstInput = useRef<HTMLInputElement>(null);
@@ -54,8 +59,10 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
 
   const keys = (e: React.KeyboardEvent) => { if (e.key === 'Escape' && onEscape) { e.preventDefault(); e.stopPropagation(); onEscape(); } };
 
+  // The converter's own icon (a custom one's, from the icon picker), else the converters' icon.
+  const icon = custom?.icon ? <ItemIcon icon={custom.icon} /> : <ConverterIcon />;
   const picker = (
-    <select className={styles.picker} value={value.converter} disabled={!editable} aria-label={L.title} title={L.title}
+    <select className={styles.picker} data-card-part="title" value={value.converter} disabled={!editable} aria-label={L.title} title={L.title}
       onChange={(e) => {
         const id = e.target.value;
         const units = unitCategory(id);
@@ -140,19 +147,23 @@ export function ConvertWidget({ value, design, editable, onChange, focusSignal, 
   );
 
   return design === 'card' ? (
-    <div className={styles.card} data-like-host="">
-      <div className={styles.head}>
-        <span className={styles.kind}>{L.noteKind}</span>
+    <div className={styles.card} data-card-look="card" data-like-host="">
+      <div data-card-head="">
+        <CardIcon icon={icon} shown={showIcon} onToggle={editable ? onShowIcon : undefined} />
+        <span data-card-part="kind">{L.noteKind}</span>
         {picker}
       </div>
+      <div data-card-part="rule" aria-hidden="true" />
       <div className={styles.row}>{body}</div>
       {ratesLine}
       {like}
     </div>
   ) : (
-    <div className={styles.compact} data-like-host="">
-      {picker}
-      <span className={styles.rule} aria-hidden="true" />
+    <div className={styles.compact} data-card-look="compact" data-like-host="">
+      <div data-card-part="lead">
+        <CardIcon icon={icon} shown />
+        {picker}
+      </div>
       <div className={styles.row}>{body}</div>
       {ratesLine}
       {like}

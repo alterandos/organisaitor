@@ -10,7 +10,7 @@ import { sendDraftsToList } from '@/services/sendToList';
 import { DICTIONARY_TYPE_ID } from '@/services/dictionary';
 import { BOOKS_TYPE_ID } from '@/services/readingList';
 import { draftsFromText, textLines, type ListItemDraft } from '@/utils/listDrafts';
-import { ListPickerModal } from '@/components/ListPickerModal/ListPickerModal';
+import { LinkPickerModal } from '@/components/ItemPickerModal/LinkPickerModal';
 import { FieldInput } from '@/components/FieldInput/FieldInput';
 import { CloseIcon } from '@/components/Icons';
 import { LABELS } from '@/config/labels';
@@ -19,6 +19,7 @@ import type { ListId } from '@/types/lists';
 import styles from './SendToList.module.css';
 
 const L = LABELS.sendToList;
+const NO_EXCLUSIONS: ReadonlySet<string> = new Set();
 
 // Send to ▸ A list… (services/sendToList.ts): which list (the list picker, suggested from the
 // text), then the items it would make, filled in where the text says (utils/listDrafts.ts), for the
@@ -26,8 +27,12 @@ const L = LABELS.sendToList;
 export function SendToListFlow({ request }: { request: SendToListRequest }) {
   const [listId, setListId] = useState<ListId | null>(null);
   const done = () => useUIStore.getState().requestSendToList(null);
+  // The picker closes itself after a pick; that close moves on to the items step instead of ending
+  // the flow (2026-11-10: it ended it, so a list could be picked but nothing sent).
+  const picked = useRef(false);
   if (!listId) {
-    return <ListPickerModal excludeIds={new Set()} suggestFrom={request.text.slice(0, 200)} onPick={(id) => setListId(id as ListId)} onClose={done} />;
+    return <LinkPickerModal kinds={['list']} excludeIds={NO_EXCLUSIONS} suggestFrom={request.text.slice(0, 200)}
+      onPick={([p]) => { if (p) { picked.current = true; setListId(p.id as ListId); } }} onClose={() => { if (!picked.current) done(); }} />;
   }
   return <SendToListModal key={listId} listId={listId} request={request} onClose={done} />;
 }

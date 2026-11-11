@@ -1,7 +1,7 @@
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
-import { ARGUMENT_DESIGNS, ARGUMENT_FIELDS, ARGUMENT_SIDES, argumentPosAt, fieldsOf, setArgumentSides, setArgumentVariant, toggleArgumentField } from './Argument';
+import { ARGUMENT_DESIGNS, ARGUMENT_FIELDS, ARGUMENT_SIDES, argumentPosAt, fieldsOf, setArgumentSides, setArgumentVariant, toggleArgumentField, toggleArgumentNeutral } from './Argument';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
 
 // Right-click in an argument: Sides ▸ (for, against, both), Parts ▸ (each optional part, ticked
@@ -22,7 +22,10 @@ registerContextMenuProvider({
     return [
       {
         id: 'arg-sides', label: L.sidesMenu, icon: '⇄',
-        submenu: [ARGUMENT_SIDES.map((s) => ({ id: `arg-sides-${s}`, label: L.sides[s], icon: node.attrs.sides === s ? '✓' : undefined, run: () => setArgumentSides(view, pos, s) }))],
+        submenu: [
+          ARGUMENT_SIDES.map((s) => ({ id: `arg-sides-${s}`, label: L.sides[s], icon: node.attrs.sides === s ? '✓' : undefined, run: () => setArgumentSides(view, pos, s) })),
+          [{ id: 'arg-neutral', label: L.neutral, icon: node.attrs.neutral ? '✓' : undefined, run: () => toggleArgumentNeutral(view, pos) }],
+        ],
       },
       {
         id: 'arg-parts', label: L.partsMenu, icon: '☰',

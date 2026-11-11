@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
+import { LABELS } from '@/config/labels';
 import { Editor, type Extensions } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
@@ -9,6 +10,8 @@ import { ConceptRefMark } from './ConceptRef';
 import { moveFromBlock } from './blockDesigns';
 import { GlossaryCardExtensions, cardFromSelection, cardWidth, insertCardAfter, morePillSide } from './GlossaryCard';
 import { GlossaryChipExtensions } from './GlossaryChip';
+import { CaseStudyExtensions } from './CaseStudy';
+import { recordFromFieldSelection, selectionInCardField } from './cardFieldRecord';
 import { useSettingsStore } from '@/store/settingsStore';
 import { setBlockWidth, snapBlockWidth } from './blockWidth';
 import { useTrashStore } from '@/store/trashStore';
@@ -122,13 +125,34 @@ describe('Glossary cards', () => {
     expect([...card.querySelectorAll<HTMLInputElement>('[data-field="where"] input')].map((i) => i.value)).toEqual(['Sample size', '']);
   });
 
-  it('a card’s own fields are each a field, named by their label, with no box around them (2026-11-01)', async () => {
+  it('a card’s own fields are a table of their own, apart from its built-in fields: each name beside its value (2026-11-10)', async () => {
     const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'profile', tagId: 'builtin-profile', term: 'Golden eagle', fields: { summary: 'A large bird of prey', facts: [{ label: 'Family', value: 'Accipitridae' }, { label: 'Wingspan', value: '1.8–2.3 m' }] }, noteId, collectionId: null });
     await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
     await flush();
     const rows = [...editor.view.dom.querySelectorAll<HTMLElement>('[data-type="glossary-card"] [data-field="facts"]')];
     expect(rows.map((r) => [r.querySelector('input')!.value, r.querySelector('[data-card-input]')!.textContent])).toEqual([['Family', 'Accipitridae'], ['Wingspan', '1.8–2.3 m']]);
     expect(editor.view.dom.textContent).not.toContain('Your fields');
+    const table = editor.view.dom.querySelector<HTMLElement>('[data-type="glossary-card"] [data-own-fields]')!;
+    expect(table.querySelectorAll('[data-field="facts"]')).toHaveLength(2);
+    expect(table.contains(editor.view.dom.querySelector('[data-field="summary"]'))).toBe(false);
+  });
+
+  it('the Card design shows its kind’s icon beside the term; hidden on one card, kept on the card and brought back from its corner', async () => {
+    const id = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'concept', tagId: 'builtin-concept', term: 'Entropy', fields: { summary: 'Disorder' }, noteId, collectionId: null });
+    await make(`<div data-type="glossary-card" data-entry-id="${id}"></div>`);
+    await flush();
+    const card = () => editor.view.dom.querySelector<HTMLElement>('[data-type="glossary-card"]')!;
+    const btn = (label: string) => card().querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    expect(btn(LABELS.cardLook.hideIcon)).not.toBeNull();
+    act(() => btn(LABELS.cardLook.hideIcon)!.click());
+    await flush();
+    expect(editor.state.doc.nodeAt(cards()[0].pos)!.attrs.hideIcon).toBe(true);
+    expect(editor.getHTML()).toContain('data-hide-icon');
+    expect(btn(LABELS.cardLook.hideIcon)).toBeNull();
+    act(() => btn(LABELS.cardLook.showIcon)!.click());
+    await flush();
+    expect(editor.state.doc.nodeAt(cards()[0].pos)!.attrs.hideIcon).toBe(false);
+    expect(editor.getHTML()).not.toContain('data-hide-icon');
   });
 
   it('no "+ Fields" button: a card’s own fields are made by typing', async () => {
@@ -231,8 +255,7 @@ describe('Glossary cards', () => {
     await make(`<div data-type="glossary-card" data-entry-id="${id}" data-variant="split"></div>`);
     const card = () => editor.view.dom.querySelector('[data-type="glossary-card"]')!;
     expect(editor.state.doc.nodeAt(cards()[0].pos)!.attrs.variant).toBe('compact');
-    expect(card().querySelector('[class*="compactIcon"]')?.textContent).toBe('📖');
-    expect(card().querySelector('[class*="compactLead"] [class*="compactIcon"]')).not.toBeNull();
+    expect(card().querySelector('[data-card-look="compact"] [data-card-part="lead"] [data-card-part="icon"]')?.textContent).toBe('📖');
     expect(fieldsIn(card()).map(textOf)).toEqual(['Osmosis', 'Water moving across a membrane']);
     editor.view.dispatch(editor.state.tr.setNodeMarkup(cards()[0].pos, undefined, { ...editor.state.doc.nodeAt(cards()[0].pos)!.attrs, variant: 'card' }));
     await flush();
@@ -648,6 +671,45 @@ describe('making and deleting definitions', () => {
     expect(chips).toEqual([id]);
     expect(cards()).toHaveLength(0);
     expect(editor.state.doc.textContent).toBe('Plants make sugar by  every day.');
+  });
+
+  it('in a block’s part, selected words become a chip right there, even the whole line (2026-11-12)', async () => {
+    await make('<div data-type="case-study"><div data-cs-title>Feed-in tariffs</div><div data-cs-field="shows"><p>Europe’s solar boom</p></div></div>', [...GlossaryChipExtensions, ...CaseStudyExtensions]);
+    let from = -1;
+    editor.state.doc.descendants((n, pos) => { if (n.isText && n.text === 'Europe’s solar boom') from = pos; });
+    cardFromSelection(editor.view, from, from + 'Europe’s solar boom'.length, 'instance', { noteId, collectionId: null, now: new Date() });
+    await flush();
+    const made = entries();
+    expect(made[0]).toMatchObject({ typeKey: 'instance', term: 'Europe’s solar boom' });
+    let chipIn = '';
+    editor.state.doc.descendants((n, pos) => { if (n.type.name === 'glossaryChip') chipIn = editor.state.doc.resolve(pos).node(-1).type.name; });
+    expect(chipIn).toBe('caseField');
+    expect(cards()).toHaveLength(0);
+  });
+
+  it('words selected in a card’s field become a record of their own, linked from the field', () => {
+    const card = document.createElement('div');
+    card.setAttribute('data-type', 'glossary-card');
+    const field = document.createElement('div');
+    field.setAttribute('contenteditable', 'true');
+    field.textContent = 'For instance Germany’s Energiewende';
+    card.append(field);
+    document.body.append(card);
+    const text = field.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, 'For instance '.length);
+    range.setEnd(text, text.length);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    let saved = 0;
+    field.addEventListener('input', () => saved++);
+    const at = selectionInCardField(field)!;
+    expect(at.words).toBe('Germany’s Energiewende');
+    const id = recordFromFieldSelection(at, 'instance', { noteId, collectionId: null, now: new Date() })!;
+    expect(useNoteStore.getState().structuredTagEntries[id as StructuredTagEntryId]).toMatchObject({ typeKey: 'instance', term: 'Germany’s Energiewende' });
+    expect(field.innerHTML).toBe(`For instance <a data-term="${id}">Germany’s Energiewende</a>`);
+    expect(saved).toBe(1);
+    card.remove();
   });
 
   it('taking out a card linked from another note asks nothing: the card goes, the record stays (2026-11-03)', async () => {

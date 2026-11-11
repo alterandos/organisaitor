@@ -106,3 +106,29 @@
   opacity: 0.75;
   margin-left: var(--space-1);
 }
+
+/* A quote kept from a `\quote` block: read-only here, edited in its note. */
+.kept {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.kept > :first-child { flex: 1; min-width: 12rem; }
+
+.editInNote {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  cursor: pointer;
+}
+
+.editInNote:hover,
+.editInNote:focus-visible { border-color: var(--gc-accent, var(--color-primary)); }

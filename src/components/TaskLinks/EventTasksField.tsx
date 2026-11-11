@@ -6,7 +6,8 @@ import { useUIStore } from '@/store/uiStore';
 import { useCalendarStore } from '@/store/calendarStore';
 import { ITEM_LINK_KINDS } from '@/config/itemLinkKinds';
 import { LABELS } from '@/config/labels';
-import { TaskPickerModal } from '@/components/TaskPickerModal/TaskPickerModal';
+import { LinkPickerModal } from '@/components/ItemPickerModal/LinkPickerModal';
+import { openItem } from '@/services/openItem';
 import { TaskRulesEditor } from '@/components/EventTaskRulesField/EventTaskRulesField';
 import { linkTaskToEvent, unlinkTaskFromEvent } from '@/services/eventTaskLinks';
 import { setEventTaskRules } from '@/services/eventTaskRules';
@@ -42,7 +43,6 @@ export function EventTasksField({ type, id, title, repeats = false, occurrence =
 }) {
   const tasks        = useTaskStore((s) => s.tasks);
   const event        = useCalendarStore((s) => (type === 'event' && id ? s.events[id as CalendarEventId] : undefined));
-  const openTaskPane = useUIStore((s) => s.openTaskPane);
   const showAddTaskForEvent = useUIStore((s) => s.showAddTaskForEvent);
   const [picking, setPicking] = useState(false);
   const series = repeats && type === 'event';
@@ -105,7 +105,7 @@ export function EventTasksField({ type, id, title, repeats = false, occurrence =
           {linked.map(({ task, kind }) => (
             <li key={task.id} className={styles.row}>
               <span aria-hidden="true">{ITEM_LINK_KINDS[kind].icon}</span>
-              <button type="button" className={`${styles.other} ${isResolved(task) ? styles.otherDone : ''}`} onClick={() => openTaskPane(task.id)}>
+              <button type="button" className={`${styles.other} ${isResolved(task) ? styles.otherDone : ''}`} onClick={() => openItem('task', task.id)}>
                 {task.completed && <span className={styles.check}>✓</span>}
                 {task.title}
                 {series && !onlyThis && datesOf(task.id).length > 0 && <span className={styles.dateTag}> · {datesOf(task.id).map((d) => formatDate(d)).join(', ')}</span>}
@@ -131,11 +131,11 @@ export function EventTasksField({ type, id, title, repeats = false, occurrence =
         <button type="button" className={styles.addBtn} onClick={() => setPicking(true)}>{L.linkExisting}</button>
       </div>
       {picking && (
-        <TaskPickerModal
+        <LinkPickerModal
+          kinds={['task']}
           suggestFrom={title}
           excludeIds={new Set([...linked.map((l) => l.task.id), ...(draft?.pending.flatMap((p) => (p.taskId ? [p.taskId] : [])) ?? [])])}
-          onPick={(taskId) => (draft ? draft.onPending([...draft.pending, { key: nanoid(6), kind: 'related', taskId: taskId as TaskId }])
-            : id && linkTaskToEvent(taskId as TaskId, 'related', type, id, onlyThis ? occurrence : null))}
+          onPick={([p]) => { if (!p) return; const taskId = p.id as TaskId; if (draft) draft.onPending([...draft.pending, { key: nanoid(6), kind: 'related', taskId }]); else if (id) linkTaskToEvent(taskId, 'related', type, id, onlyThis ? occurrence : null); }}
           onClose={() => setPicking(false)}
         />
       )}

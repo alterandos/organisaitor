@@ -5,7 +5,8 @@ import StarterKit from '@tiptap/starter-kit';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { GlossaryCardExtensions } from './GlossaryCard';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
-import { HubExtensions } from './Hub';
+import { HubExtensions, setHubDesign } from './Hub';
+import { movePart, partAround } from './blockParts';
 import { NoteBlockSelect } from './blockDesigns';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { noteClipboardText } from '../noteClipboardText';
@@ -88,6 +89,30 @@ describe('hub block', () => {
     expect(links().map((l) => [l.attrs.relation, l.attrs.label])).toEqual([['causes', 'Money supply'], ['causes', 'Some note'], ['exampleOf', 'Oil shocks']]);
     // A heading is drawn before each group.
     expect([...editor.view.dom.querySelectorAll('[data-hub-heading]')].map((h) => h.getAttribute('data-hub-heading'))).toEqual(['causes', 'exampleOf']);
+  });
+
+  it('Fact sheet: the links in their own order (moved by hand, ↑ ↓ too), a term with its meaning; List still groups them, keeping that order inside', () => {
+    const entryId = useNoteStore.getState().addStructuredTagEntry({ typeKey: 'definition', tagId: 'builtin-definition', term: 'Money supply', fields: { meaning: 'All the money in an economy' }, noteId: 'n1' as NoteId, collectionId: null });
+    make(HUB);
+    addLinkToHub(editor.view, hubPos(), { kind: 'note', noteId: 'n9', label: 'Some note' }, 'related');
+    addLinkToHub(editor.view, hubPos(), { kind: 'glossary', entryId, label: 'Money supply' }, 'causes');
+    const at = () => partAround(editor.state.doc, links()[0].pos)!;
+    expect(movePart(editor.view, at(), 1)).toBe(false);   // List: not by hand
+    setHubDesign(editor.view, hubPos(), 'sheet');
+    expect(editor.view.dom.querySelectorAll('[data-hub-heading]')).toHaveLength(0);
+    expect(editor.view.dom.querySelector('[data-hub-link-body]')?.textContent).toBe('All the money in an economy');
+    expect(movePart(editor.view, at(), 1)).toBe(true);
+    expect(links().map((l) => l.attrs.label)).toEqual(['Some note', 'Money supply']);
+    (editor.view.dom.querySelectorAll<HTMLButtonElement>('[data-hub-link-move="up"]')[1]).click();
+    expect(links().map((l) => l.attrs.label)).toEqual(['Money supply', 'Some note']);
+    (editor.view.dom.querySelectorAll<HTMLButtonElement>('[data-hub-link-move="up"]')[1]).click();
+    setHubDesign(editor.view, hubPos(), 'list');
+    // Back in List: the order underneath is the sheet's; each group drawn in the relations' order.
+    expect(links().map((l) => l.attrs.label)).toEqual(['Some note', 'Money supply']);
+    const order = (el: Element | null) => Number((el as HTMLElement).style.order);
+    const [first, second] = editor.view.dom.querySelectorAll('[data-type="hub-link"]');
+    expect(order(second)).toBeLessThan(order(first));   // causes before related
+    expect(order(editor.view.dom.querySelector('[data-hub-heading="causes"]'))).toBeLessThan(order(second));
   });
 
   it('design, links and frame round-trip through JSON and HTML; copy lists the links', () => {

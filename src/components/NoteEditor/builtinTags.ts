@@ -27,6 +27,8 @@ export const BUILTIN_TAGS: BuiltinTag[] = [
   { id: 'builtin-fact', name: 'Fact', icon: '✨', color: '#8a6500', typeKey: 'fact' },
   { id: 'builtin-quote', name: 'Quote', icon: '❞', color: '#9a3412', typeKey: 'quote' },
   { id: 'builtin-formula', name: 'Formula', icon: 'ƒ', color: '#1e40af', typeKey: 'formula' },
+  // The Example Glossary kind (key `instance`, 2026-11-12), apart from the Example annotation above.
+  { id: 'builtin-instance', name: 'Example', icon: '👉', color: '#5b21b6', typeKey: 'instance' },
 ];
 
 // The tags Ctrl+Space and Ctrl+1…9 put on text (2026-11-03, the user's call: marking text is apart
@@ -36,7 +38,7 @@ export const BUILTIN_TAGS: BuiltinTag[] = [
 const TEXT_TAG_IDS = ['builtin-important', 'builtin-example', 'builtin-reference'];
 export const TEXT_TAGS: BuiltinTag[] = TEXT_TAG_IDS.map((id) => BUILTIN_TAGS.find((t) => t.id === id)!);
 
-const KIND_TOKENS = ['definition', 'concept', 'acronym', 'profile', 'fact', 'quote', 'formula'];
+const KIND_TOKENS = ['definition', 'concept', 'acronym', 'profile', 'fact', 'quote', 'formula', 'instance'];
 
 // The colour the app draws a Glossary kind in: its theme token (index.css --color-kind-*), so it
 // reads in both themes; any other built-in tag's own colour.

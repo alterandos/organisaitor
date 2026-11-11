@@ -135,3 +135,24 @@ describe('the person’s own typing shortcuts in the note editor (govt → gover
     expect(editor.getText()).not.toContain('government');
   });
 });
+
+describe('a shortcut that replaces as soon as typed (:o → ö), in the note editor', () => {
+  afterEach(() => { useSettingsStore.setState({ textShortcuts: [] }); });
+  it('fires inside a word, and Ctrl+Z straight after puts it back', () => {
+    useSettingsStore.setState({ textShortcuts: [{ id: 'o', typed: ':o', text: 'ö', instant: true }] });
+    make();
+    type('h:oren');
+    expect(editor.getText()).toBe('hören');
+    type(' sch:o');
+    expect(ctrlZ()).toBe(true);
+    expect(editor.getText()).toBe('hören sch:o');
+  });
+});
+
+describe(':name: emoji in the note editor', () => {
+  it('the closing colon puts the emoji in; a time is left alone', () => {
+    make();
+    type('ha :joy: at 10:30 ');
+    expect(editor.getText()).toBe('ha 😂 at 10:30 ');
+  });
+});

@@ -1,6 +1,6 @@
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import type { ContextMenuContext, ContextMenuScope } from '@/contextMenu/types';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { LABELS } from '@/config/labels';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { ARTIFACT_TYPES } from './artifactTypes';
@@ -40,7 +40,7 @@ registerContextMenuProvider({
     const summary = def?.summarize(group.targetId) ?? null;
     const expanded = group.display === 'expanded';
     return [
-      { id: 'open', label: L.open, icon: createElement(OpenIcon), disabled: !summary, run: () => { openArtifactTarget(group.targetType, group.targetId); } },
+      { id: 'open', label: L.open, icon: createElement(OpenIcon), disabled: !summary, run: () => { openItem(group.targetType, group.targetId); } },
       { id: 'display', label: expanded ? L.hideDetails : L.showDetails, icon: createElement(DisclosureIcon, { open: expanded }), run: () => setArtifactDisplay(view, group.key, pos, expanded ? 'basic' : 'expanded') },
       ...(summary && summary.done !== null && def?.toggleDone
         ? [{ id: 'done', label: summary.done ? L.markNotDone : L.markDone, icon: summary.done ? '☐' : '☑', run: () => def.toggleDone!(group.targetId) }]

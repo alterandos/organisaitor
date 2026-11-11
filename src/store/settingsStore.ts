@@ -74,8 +74,8 @@ interface SettingsState {
   // The person's own typing shortcuts (`govt` → government), in every text field and the note
   // editor (specialChars/charSets.ts findUserShortcut). Managed in Settings → Typing shortcuts.
   textShortcuts:      TextShortcut[];
-  addTextShortcut:    (typed: string, text: string) => void;
-  updateTextShortcut: (id: string, patch: Partial<Pick<TextShortcut, 'typed' | 'text'>>) => void;
+  addTextShortcut:    (typed: string, text: string, instant?: boolean) => void;
+  updateTextShortcut: (id: string, patch: Partial<Pick<TextShortcut, 'typed' | 'text' | 'instant'>>) => void;
   removeTextShortcut: (id: string) => void;
 
   // ── Portfolio — chart view ────────────────────────────────────────────────────
@@ -218,7 +218,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSpeechLanguage: (lang) => set({ speechLanguage: lang }),
 
       textShortcuts:      [...DEFAULT_TEXT_SHORTCUTS],
-      addTextShortcut:    (typed, text) => set((s) => ({ textShortcuts: [...s.textShortcuts, { id: nanoid(8), typed, text }] })),
+      addTextShortcut:    (typed, text, instant) => set((s) => ({ textShortcuts: [...s.textShortcuts, { id: nanoid(8), typed, text, ...(instant ? { instant: true } : {}) }] })),
       updateTextShortcut: (id, patch) => set((s) => ({ textShortcuts: s.textShortcuts.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
       removeTextShortcut: (id) => set((s) => ({ textShortcuts: s.textShortcuts.filter((t) => t.id !== id) })),
 

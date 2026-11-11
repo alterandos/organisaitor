@@ -6,7 +6,7 @@ import { createElement, lazy, Suspense } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { LABELS } from '@/config/labels';
 import { DIAGRAM_KINDS, emptyDiagram, normalizeDiagram, type DiagramKind, type DiagramSpec } from '@/diagrams/diagramSpec';
-import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
+import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, nodeViewBlockBehaviour, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 
 // A diagram in a note (`\diagram`): boxes and arrows, for a process, a mind map or a flowchart
 // (agreed with the user 2026-10-13). One atom node holding a library-neutral DiagramSpec (`spec`)
@@ -109,6 +109,8 @@ class DiagramView {
     this.body.setAttribute('data-diagram-body', '');
     this.dom.append(this.pill, this.body);
     this.root = createRoot(this.body);
+    // Keys only: the diagram's whole surface is panned and dragged in, so a press there is its own.
+    nodeViewBlockBehaviour(this.dom, () => this.editor.view, this.getPos);
     this.dom.addEventListener('diagram-focus', () => { this.focusSignal++; this.render(); });
     this.render();
   }

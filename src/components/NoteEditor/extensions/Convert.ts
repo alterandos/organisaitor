@@ -10,7 +10,8 @@ import { ConvertWidget } from '@/components/ConverterPane/ConvertWidget';
 import type { ConvertDesign, ConvertValue } from '@/components/ConverterPane/convertValue';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { blockResizeHandle, blockWidth, blockWidthAttributes, showBlockWidth, widthMenuItem } from './blockWidth';
-import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, designMenuItem, frameButtons, frameMenuItem, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
+import { cardIconAttributes, cardIconMenuItem, setCardIcon } from './cardLook';
+import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, designMenuItem, frameButtons, frameMenuItem, nodeViewBlockBehaviour, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 
 // A conversion in a note (`\convert`, asked for by the user 2026-10-23): one converter, built-in
 // units or the person's own (components/ConverterPane), with the amount on the left and the
@@ -40,6 +41,7 @@ export const ConvertBlock = Node.create({
     return {
       ...blockFrameAttributes(),
       ...blockWidthAttributes(),
+      ...cardIconAttributes(),
       variant:   { default: 'card', parseHTML: (el) => (CONVERT_VARIANTS as readonly string[]).includes(el.getAttribute('data-variant') ?? '') ? el.getAttribute('data-variant') : 'card', renderHTML: (a) => ({ 'data-variant': a.variant }) },
       converter: { default: 'length', parseHTML: (el) => el.getAttribute('data-converter') || 'length', renderHTML: (a) => ({ 'data-converter': a.converter }) },
       from:      { default: null, parseHTML: (el) => el.getAttribute('data-from'), renderHTML: (a) => (a.from ? { 'data-from': a.from } : {}) },
@@ -116,6 +118,7 @@ class ConvertView {
     this.handle = blockResizeHandle(() => this.editor.view, () => this.getPos(), () => 'auto', (w) => this.showWidth(w));
     this.dom.append(this.pill, this.body, this.handle);
     this.root = createRoot(this.body);
+    nodeViewBlockBehaviour(this.dom, () => this.editor.view, this.getPos, this.body);
     this.dom.addEventListener('convert-focus', (e) => { this.focus = { n: this.focus.n + 1, text: (e as CustomEvent<string>).detail ?? '' }; this.render(); });
     this.render();
   }
@@ -126,6 +129,11 @@ class ConvertView {
     const view = this.editor.view;
     view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
     view.focus();
+  };
+
+  private setShowIcon = (show: boolean) => {
+    const pos = this.getPos();
+    if (pos !== undefined) setCardIcon(this.editor.view, pos, show);
   };
 
   private change = (v: ConvertValue) => {
@@ -154,6 +162,7 @@ class ConvertView {
     this.root.render(createElement(ConvertWidget, {
       value: valueOf(a), design: a.variant as ConvertDesign, editable: this.editor.isEditable,
       onChange: this.change, focusSignal: this.focus, onEscape: this.selectSelf,
+      showIcon: !a.hideIcon, onShowIcon: this.setShowIcon,
     }));
   }
 
@@ -211,6 +220,7 @@ registerContextMenuProvider({
     if (pos === null || !node) return [];
     return [
       designMenuItem(CONVERT_DESIGNS, node.attrs.variant as ConvertDesign, (v) => setConvertAttrs(view, pos, { variant: v })),
+      ...cardIconMenuItem(view, pos, node.attrs),
       frameMenuItem(view, pos, node.attrs),
       widthMenuItem(view, pos, node.attrs, 'auto'),
     ];

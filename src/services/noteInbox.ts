@@ -9,7 +9,7 @@ import { entryView, isEntryLocked, isNoteLocked, noteView } from '@/services/not
 import { editNoteText } from '@/services/noteContentEdit';
 import { liveNoteOf } from '@/services/liveNoteEditor';
 import { noteHasPassage, openNotePassage } from '@/services/notePassage';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
 import { deleteForever, trashedBy } from '@/services/trash';
 import { showToast } from '@/components/Toast/showToast';
@@ -273,7 +273,7 @@ export function makeItemTask(view: EditorView, pos: number): void {
   const item = view.state.doc.nodeAt(pos);
   if (item?.type.name !== 'inboxItem') return;
   if (item.attrs.taskId && useTaskStore.getState().tasks[item.attrs.taskId as TaskId]) {
-    openArtifactTarget('task', item.attrs.taskId as string);
+    openItem('task', item.attrs.taskId as string);
     return;
   }
   const here = liveNoteOf(view);
@@ -286,7 +286,7 @@ export function makeItemTask(view: EditorView, pos: number): void {
   showToast({
     message: LABELS.noteBlocks.inbox.taskMade,
     actions: [
-      { label: L.open, onClick: () => openArtifactTarget('task', taskId) },
+      { label: L.open, onClick: () => openItem('task', taskId) },
       { label: L.undo, onClick: () => {
         const at = findNode(view.state.doc, 'inboxItem', 'itemId', item.attrs.itemId as string);
         if (at && !view.isDestroyed) view.dispatch(view.state.tr.setNodeAttribute(at.pos, 'taskId', null));

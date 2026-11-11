@@ -4,6 +4,7 @@ import type { EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import type { NoteTag } from '@/types/notes';
 import { LABELS } from '@/config/labels';
+import { selectionGroup } from './objects/selectionGroups';
 import { ClarifyIcon, ReviewIcon, UnsureIcon } from '@/components/Icons';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { TEXT_TAGS } from './builtinTags';
@@ -213,6 +214,7 @@ registerContextMenuProvider({
       id: `block-mark-${m.id}`, label: m.name, icon: m.block!.on(view.state, pos) ? '✓' : m.icon,
       run: () => m.block!.toggle(view, pos),
     }));
-    return [{ id: 'block-mark-as', label: LABELS.contextMenu.markAs, icon: '⭐', submenu: [levels, rest] }];
+    const g = selectionGroup('mark');
+    return [{ id: 'block-mark-as', label: g.label, icon: g.icon, submenu: [levels, rest] }];
   },
 });

@@ -1,6 +1,6 @@
 # 08 — Linking: one registry, one picker, one field, one way to open
 
-Status: Not started (brief written 2026-11-07; the plan was agreed with the user the same day).
+Status: Done 2026-11-10 — all six tasks built: the registry (services/linkTargets.ts), one picker dialog (components/ItemPickerModal), one Linked items field (components/LinkedItemsField), one opener (services/openItem.ts), one "what links here" (services/linksTo.ts), and the two rules recorded with the user's yes (rows for every link; a deleted item's links stay, hidden, until it's deleted forever). Feature entry: "Linking: one registry, one picker, one field, one opener" in docs/features/implemented-features.md. Not checked in the app yet (brief written 2026-11-07; the plan was agreed with the user the same day).
 
 The app links things to each other in many places: a task to notes, lists, other tasks and
 calendar items; a calendar item to notes, lists and tasks; a list to notes; note text to almost

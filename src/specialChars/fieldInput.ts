@@ -1,4 +1,5 @@
-import { exactChar, findCharTrigger, findShortcut, findUserShortcut, matchChars, TRIGGER, type CharMatch } from './charSets';
+import { findInstantShortcut, findShortcut, findUserShortcut, TRIGGER, type CharMatch } from './charSets';
+import { typedWhole, typingTrigger } from './emoji';
 import { useSettingsStore } from '@/store/settingsStore';
 import { hideCharPicker, showCharPicker, type CaretBox } from './charPicker';
 
@@ -118,7 +119,8 @@ function onInput(e: Event) {
   lastShortcut = null;
   // A shortcut just completed by typing (not by pasting, or our own replace(), which is a plain Event).
   if (e instanceof InputEvent && e.inputType === 'insertText' && spot.shortcuts && !spot.el.closest('[data-no-shortcuts]')) {
-    const s = findShortcut(before) ?? findUserShortcut(before, useSettingsStore.getState().textShortcuts);
+    const mine = useSettingsStore.getState().textShortcuts;
+    const s = findShortcut(before) ?? findInstantShortcut(before, mine) ?? findUserShortcut(before, mine);
     if (s) {
       close();
       spot.replace(s.start, caret, s.char);
@@ -128,14 +130,13 @@ function onInput(e: Event) {
   }
   // The whole name and a space: the character, keeping the space, the cursor after it (replacing
   // only the name left the cursor before the space, so the next letter went in front of it).
-  if (before.endsWith(' ')) {
-    const t = findCharTrigger(before.slice(0, -1));
-    const ch = t && exactChar(t.query);
-    if (t && ch) { close(); spot.replace(t.start, caret, `${ch} `); return; }
-  }
-  const t = findCharTrigger(before);
+  // `:name:` likewise becomes the emoji.
+  const own = useSettingsStore.getState().textShortcuts;
+  const w = typedWhole(before, own);
+  if (w) { close(); spot.replace(w.start, caret, w.char); return; }
+  const t = typingTrigger(before, own);
   if (!t) { if (open?.spot.el === spot.el) close(); return; }
-  const matches = matchChars(t.query);
+  const matches = t.matches;
   open = { spot, start: t.start, end: caret, matches, selected: 0 };
   render();
 }

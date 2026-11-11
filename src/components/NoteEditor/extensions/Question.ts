@@ -10,7 +10,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { buildCalendarReminderInput } from '@/utils/calendarItemInput';
 import { questionSubject, type QuestionStatus } from '@/utils/noteQuestions';
 import { formatDate } from '@/utils/date';
-import { GLOSSARY_TYPES } from '@/config/structuredTagTypes';
+import { GLOSSARY_KINDS, GLOSSARY_TYPES } from '@/config/structuredTagTypes';
 import { useNoteStore } from '@/store/noteStore';
 import { confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { openGlossaryEntry } from '@/services/notePassage';
@@ -20,6 +20,8 @@ import type { NoteObjectContext } from '../objects/types';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, openBlockPopover, pillButton, replaceTypedWithBlock, selectButton, type BlockDesign } from './blockDesigns';
 import { newGlossaryRecord } from './GlossaryCard';
 import { blockResizeHandle, blockWidth, blockWidthAttributes, blockWidthDomAttrs } from './blockWidth';
+import { cardIconAttributes, cardKindKey, createCardKind, setCardIcon } from './cardLook';
+import { createCardIcon } from '@/components/CardLook/cardIconDom';
 
 // A question in a note (`\question`): something not known yet, noted now to answer later. Agreed
 // with the user 2026-10-13. Note-taking structure, like the quote (extensions/Quote.ts):
@@ -63,6 +65,7 @@ export const QuestionBlock = Node.create({
     return {
       ...blockFrameAttributes(),
       ...blockWidthAttributes(),
+      ...cardIconAttributes(),
       qid:        { default: null, parseHTML: (el) => el.getAttribute('data-qid'), renderHTML: (a) => (a.qid ? { 'data-qid': a.qid } : {}) },
       status:     { default: 'open', parseHTML: (el) => oneOf(QUESTION_STATUSES, el.getAttribute('data-status'), 'open'), renderHTML: (a) => ({ 'data-status': a.status }) },
       answeredAt: str('answered-at'),
@@ -80,18 +83,14 @@ export const QuestionBlock = Node.create({
   },
 
   parseHTML() { return [{ tag: 'div[data-type="question"]' }]; },
-  // The Card design's kind line ("Question · Answered") and the Compact design's icon, drawn by CSS
-  // from these, the way a Glossary card shows its kind (the same family of look).
+  // Drawn in the shared card look (components/CardLook) as a flat card: its icon, kind line and
+  // rule are widgets (questionDecorations), the question its title.
   renderHTML({ node, HTMLAttributes }) {
-    const status = node.attrs.status as QuestionStatus;
-    const L = LABELS.noteBlocks.question;
     // A question is drawn as a card, with its own border: no Outline (CARD_BLOCK_NODES).
     const { 'data-outlined': _outlined, ...attrs } = HTMLAttributes as Record<string, unknown>;
     void _outlined;
     return ['div', mergeAttributes(attrs, node.attrs.width ? blockWidthDomAttrs(blockWidth(node.attrs, 'full')) : {}, {
-      'data-type': 'question', 'data-note-block': '',
-      'data-qn-heading': status === 'open' ? L.label : `${L.label} · ${L.statuses[status]}`,
-      'data-qn-icon': QUESTION_STATUS_ICON[status],
+      'data-type': 'question', 'data-note-block': '', 'data-card-look': node.attrs.variant, 'data-card-flat': '',
     }), 0];
   },
 });
@@ -101,7 +100,7 @@ export const QuestionText = Node.create({
   content: 'inline*',
   defining: true,
   parseHTML() { return [{ tag: 'div[data-qn-text]', priority: 60 }]; },
-  renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes, { 'data-qn-text': '' }), 0]; },
+  renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes, { 'data-qn-text': '', 'data-card-part': 'title' }), 0]; },
 });
 
 export const QuestionFieldNode = Node.create({
@@ -150,6 +149,23 @@ export function insertQuestion(state: EditorState, from: number, to: number): Tr
   const made = replaceTypedWithBlock(state, from, to, questionBlock.create({ qid: nanoid(10) }, [questionText.create()]));
   if (!made) return null;
   return made.tr.setSelection(TextSelection.create(made.tr.doc, made.at + 2)).scrollIntoView();
+}
+
+// Selected text turned into a question (the `\` selection menu, right-click's Turn into): a card
+// like the Glossary's (CARD_BLOCK_NODES), so it's made from text the same way and takes the words'
+// place; the cursor at the end of the question. With no inline form yet, part of a line goes after
+// that line, as the quote does.
+export function questionFromSelection(view: EditorView, from: number, to: number): void {
+  const state = view.state;
+  const { questionBlock, questionText } = state.schema.nodes;
+  if (!questionBlock || from >= to) return;
+  const text = state.doc.textBetween(from, to, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return;
+  const node = questionBlock.create({ qid: nanoid(10) }, [questionText.create(null, state.schema.text(text))]);
+  const made = replaceTypedWithBlock(state, from, to, node);
+  if (!made) return;
+  view.dispatch(made.tr.setSelection(TextSelection.create(made.tr.doc, made.at + 1 + node.child(0).nodeSize - 1)).scrollIntoView());
+  view.focus();
 }
 
 // ── Changing one ─────────────────────────────────────────────────────────────
@@ -401,7 +417,7 @@ export function openAnswerPicker(view: EditorView, pos: number, anchor: DOMRect,
   openBlockPopover(anchor, (close) => {
     const box = document.createElement('div');
     box.setAttribute('data-qn-answer-kinds', '');
-    for (const typeKey of Object.keys(GLOSSARY_TYPES)) {
+    for (const typeKey of GLOSSARY_KINDS) {
       const b = document.createElement('button');
       b.type = 'button';
       b.textContent = LABELS.noteBlocks[typeKey as 'definition' | 'acronym' | 'concept'].label;
@@ -476,6 +492,24 @@ function questionDecorations(state: EditorState, ctx: () => NoteObjectContext | 
       side: -1, ignoreSelection: true, stopEvent: () => true, key: `qn-resize-${t}`,
     }));
     if (editing) decos.push(Decoration.node(pos, pos + node.nodeSize, { 'data-qn-current': '' }));
+    // The card look's head, in order before the question: its icon (always in Compact; in Card
+    // unless hidden), then its kind line; its rule after the question.
+    const status = a.status as QuestionStatus;
+    const icon = QUESTION_STATUS_ICON[status];
+    const kind = status === 'open' ? L.label : `${L.label} · ${L.statuses[status]}`;
+    const shown = a.variant === 'compact' || !a.hideIcon;
+    decos.push(Decoration.widget(pos + 1, (view, getPos) => createCardIcon({
+      icon, shown, title: kind,
+      onToggle: a.variant === 'card' && view.editable ? (show) => { const p = getPos(); if (p !== undefined) setCardIcon(view, p - 1, show); } : undefined,
+    }) ?? document.createElement('span'), { side: -3, ignoreSelection: true, stopEvent: () => true, key: `qn-icon-${t}-${status}-${shown ? 1 : 0}-${a.variant}` }));
+    decos.push(Decoration.widget(pos + 1, () => createCardKind(kind, a), { side: -2, ignoreSelection: true, key: `qn-kind-${t}-${status}-${cardKindKey(a)}` }));
+    decos.push(Decoration.widget(pos + 1 + node.child(0).nodeSize, () => {
+      const r = document.createElement('div');
+      r.contentEditable = 'false';
+      r.setAttribute('data-card-part', 'rule');
+      r.setAttribute('aria-hidden', 'true');
+      return r;
+    }, { side: -1, ignoreSelection: true, key: `qn-rule-${t}` }));
     let childPos = pos + 1;
     node.forEach((child, _o, i) => {
       const end = childPos + child.nodeSize;
@@ -484,7 +518,7 @@ function questionDecorations(state: EditorState, ctx: () => NoteObjectContext | 
         if (empty) decos.push(Decoration.node(childPos, end, { 'data-qn-empty': '', 'data-qn-placeholder': L.textPlaceholder }));
       } else {
         const field = child.attrs.field as QuestionField;
-        const attrs: Record<string, string> = { 'data-qn-label': L.fields[field] };
+        const attrs: Record<string, string> = { 'data-card-label': L.fields[field] };
         if (empty) { attrs['data-qn-empty'] = ''; attrs['data-qn-placeholder'] = L.fieldPlaceholders[field]; }
         decos.push(Decoration.node(childPos, end, attrs));
       }

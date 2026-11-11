@@ -5,6 +5,7 @@ import { chartToTable, normalizeChart } from '@/charts/chartSpec';
 import { glossaryEntry } from '@/services/glossary';
 import { diagramToText, normalizeDiagram } from '@/diagrams/diagramSpec';
 import { convertText } from '@/components/ConverterPane/convertValue';
+import { assemblePrompt, promptData } from '@/utils/aiPrompt';
 import { useConverterStore } from '@/store/converterStore';
 import { useCurrencyStore } from '@/store/currencyStore';
 
@@ -42,6 +43,14 @@ function inlineText(node: PMNode): string {
   });
   return out;
 }
+
+// A block's part: one line of text, or (a long part, extensions/richParts.ts) lines and bullets.
+const partText = (part: PMNode): string => {
+  if (part.inlineContent) return inlineText(part);
+  const lines: string[] = [];
+  part.forEach((c) => lines.push(block(c)));
+  return lines.join('\n');
+};
 
 const prefixLines = (text: string, first: string, rest: string) =>
   text.split('\n').map((line, i) => (i === 0 ? first : rest) + line).join('\n');
@@ -144,7 +153,7 @@ function block(node: PMNode): string {
       // "Case: The Montreal Protocol", then each part shown: "Situation: …".
       const L = LABELS.noteBlocks.caseStudy;
       const lines = [`${L.label}: ${inlineText(node.child(0)).trim()}`];
-      node.forEach((child, _o, i) => { if (i > 0 && child.textContent.trim()) lines.push(`${L.fields[child.attrs.field as keyof typeof L.fields] ?? ''}: ${inlineText(child)}`); });
+      node.forEach((child, _o, i) => { if (i > 0 && child.textContent.trim()) lines.push(`${L.fields[child.attrs.field as keyof typeof L.fields] ?? ''}: ${partText(child)}`); });
       return lines.join('\n');
     }
     case 'causeEffect': {
@@ -178,6 +187,11 @@ function block(node: PMNode): string {
     case 'convertBlock':
       // "5 m = 16.4 ft", worked out as it reads now.
       return convertText({ converter: node.attrs.converter, from: node.attrs.from, to: node.attrs.to, values: node.attrs.values ?? {}, reverse: !!node.attrs.reverse, fixed: node.attrs.fixed ?? null }, useConverterStore.getState().converters, useCurrencyStore.getState().rates?.rates);
+    case 'promptBlock': {
+      // Its name, then the prompt as it would be sent (fill-ins put in).
+      const data = promptData(node.attrs);
+      return [data.title.trim(), assemblePrompt(data).text].filter(Boolean).join('\n\n');
+    }
     case 'diagram':
       // Each arrow as "A → B", then any box on its own.
       return diagramToText(normalizeDiagram(node.attrs.spec));

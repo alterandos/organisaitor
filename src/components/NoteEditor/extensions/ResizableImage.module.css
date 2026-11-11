@@ -56,6 +56,9 @@
 
 .selected .handles,
 .resizing .handles { display: block; }
+/* A picture with no selection of its own (a Glossary card's): while hovered, and always on touch. */
+:hover > .handlesOnHover { display: block; }
+@media (hover: none) { .handlesOnHover { display: block; } }
 
 .handle {
   position: absolute;

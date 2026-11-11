@@ -21,6 +21,9 @@ import {
 } from '@/services/listSecrets';
 
 // ── Built-in list type templates ──────────────────────────────────────────────
+// A built-in list type's icon, for a place that sends to that list (the selection menus).
+export const builtInListTypeIcon = (id: string): string => BUILTIN_LIST_TYPES.find((t) => t.id === id)?.icon ?? '';
+
 const BUILTIN_LIST_TYPES: ListType[] = [
   // ── Checklist ──────────────────────────────────────────────────────────────
   {

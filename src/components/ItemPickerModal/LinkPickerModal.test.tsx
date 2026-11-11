@@ -3,7 +3,12 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useCalendarStore } from '@/store/calendarStore';
-import { CalendarItemPickerModal } from './CalendarItemPickerModal';
+import { useTaskStore } from '@/store/taskStore';
+import { useListStore } from '@/store/listStore';
+import { LinkPickerModal } from './LinkPickerModal';
+import type { CrossAppRefType } from '@/types';
+
+const CAL: CrossAppRefType[] = ['event', 'reminder', 'deadline'];
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -26,9 +31,9 @@ beforeEach(() => {
   });
 });
 
-describe('CalendarItemPickerModal: linking a task to a calendar item', () => {
+describe('LinkPickerModal: linking a task to a calendar item', () => {
   it('offers events, Reminders and Deadlines, not archived ones or a task’s own entries; a repeating one says so', () => {
-    render(<CalendarItemPickerModal suggestFrom="" excludeIds={new Set()} onPick={() => {}} onClose={() => {}} />);
+    render(<LinkPickerModal kinds={CAL} relation="prepFor" suggestFrom="" excludeIds={new Set()} onPick={() => {}} onClose={() => {}} />);
     const titles = screen.getAllByRole('button').map((b) => b.textContent ?? '');
     expect(titles.some((t) => t.includes('Exam'))).toBe(true);
     expect(titles.some((t) => t.includes('Essay due'))).toBe(true);
@@ -39,7 +44,7 @@ describe('CalendarItemPickerModal: linking a task to a calendar item', () => {
 
   it('a one-off item: one pick, carrying how it relates (Preparation first)', () => {
     const onPick = vi.fn();
-    render(<CalendarItemPickerModal suggestFrom="" excludeIds={new Set()} onPick={onPick} onClose={() => {}} />);
+    render(<LinkPickerModal kinds={CAL} relation="prepFor" suggestFrom="" excludeIds={new Set()} onPick={onPick} onClose={() => {}} />);
     expect(screen.getByRole('radio', { name: 'Preparation' })).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(screen.getByRole('radio', { name: 'Related' }));
     fireEvent.click(screen.getAllByRole('button').find((b) => b.textContent?.includes('Exam'))!);
@@ -48,7 +53,7 @@ describe('CalendarItemPickerModal: linking a task to a calendar item', () => {
 
   it('a repeating item: its dates, none ticked, 20 at a time; tick several and link them, or link all dates (2026-11-07)', () => {
     const onPick = vi.fn();
-    render(<CalendarItemPickerModal suggestFrom="" excludeIds={new Set()} linked={new Set(['event:e2:2026-11-17'])} onPick={onPick} onClose={() => {}} />);
+    render(<LinkPickerModal kinds={CAL} relation="prepFor" suggestFrom="" excludeIds={new Set()} linked={new Set(['event:e2:2026-11-17'])} onPick={onPick} onClose={() => {}} />);
     fireEvent.click(screen.getAllByRole('button').find((b) => b.textContent?.includes('Lecture'))!);
     expect(onPick).not.toHaveBeenCalled();
     const boxes = () => screen.getAllByRole('checkbox');
@@ -68,7 +73,7 @@ describe('CalendarItemPickerModal: linking a task to a calendar item', () => {
 
   it('a repeating item: Tick all ticks every date (2026-11-07: it used to link at once); Link then links the whole series', () => {
     const onPick = vi.fn();
-    render(<CalendarItemPickerModal suggestFrom="" excludeIds={new Set()} onPick={onPick} onClose={() => {}} />);
+    render(<LinkPickerModal kinds={CAL} relation="prepFor" suggestFrom="" excludeIds={new Set()} onPick={onPick} onClose={() => {}} />);
     fireEvent.click(screen.getAllByRole('button').find((b) => b.textContent?.includes('Lecture'))!);
     fireEvent.click(screen.getByRole('button', { name: 'Tick all' }));
     expect(onPick).not.toHaveBeenCalled();
@@ -81,7 +86,7 @@ describe('CalendarItemPickerModal: linking a task to a calendar item', () => {
 
   it('a repeating item, all ticked then one unticked: each date left is linked on its own', () => {
     const onPick = vi.fn();
-    render(<CalendarItemPickerModal suggestFrom="" excludeIds={new Set()} onPick={onPick} onClose={() => {}} />);
+    render(<LinkPickerModal kinds={CAL} relation="prepFor" suggestFrom="" excludeIds={new Set()} onPick={onPick} onClose={() => {}} />);
     fireEvent.click(screen.getAllByRole('button').find((b) => b.textContent?.includes('Lecture'))!);
     fireEvent.click(screen.getByRole('button', { name: 'Tick all' }));
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
@@ -92,10 +97,40 @@ describe('CalendarItemPickerModal: linking a task to a calendar item', () => {
   });
 
   it('reopened on a series already chosen: its dates start ticked', () => {
-    render(<CalendarItemPickerModal suggestFrom="" excludeIds={new Set()} onPick={() => {}} onClose={() => {}}
+    render(<LinkPickerModal kinds={CAL} relation="prepFor" suggestFrom="" excludeIds={new Set()} onPick={() => {}} onClose={() => {}}
       start={{ type: 'event', id: 'e2', kind: 'followUpOf', dates: ['2026-11-10'] }} />);
     const ticked = screen.getAllByRole('checkbox').filter((b) => (b as HTMLInputElement).checked);
     expect(ticked).toHaveLength(1);
     expect(screen.getByRole('radio', { name: 'Follow-up' })).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+describe('LinkPickerModal: the other kinds from the registry (2026-11-10)', () => {
+  it('tasks: open ones offered, archived and excluded ones not; a pick is one link and closes it', () => {
+    useTaskStore.setState(useTaskStore.getInitialState(), true);
+    const a = useTaskStore.getState().addTask({ title: 'Book the bus' });
+    const b = useTaskStore.getState().addTask({ title: 'Old job' });
+    const c = useTaskStore.getState().addTask({ title: 'This one' });
+    useTaskStore.getState().archiveTask(b, '');
+    const onPick = vi.fn();
+    const onClose = vi.fn();
+    render(<LinkPickerModal kinds={['task']} suggestFrom="" excludeIds={new Set([c])} onPick={onPick} onClose={onClose} />);
+    const titles = screen.getAllByRole('option').map((o) => o.textContent ?? '');
+    expect(titles.some((t) => t.includes('Book the bus'))).toBe(true);
+    expect(titles.some((t) => /Old job|This one/.test(t))).toBe(false);
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith([{ type: 'task', id: a, occurrence: null }]);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('lists: suggested from the linking item’s words, Ctrl+Enter picks the first', () => {
+    useListStore.setState(useListStore.getInitialState(), true);
+    useListStore.getState().addList({ name: 'Groceries' });
+    const packing = useListStore.getState().addList({ name: 'Packing for the trip' });
+    const onPick = vi.fn();
+    render(<LinkPickerModal kinds={['list']} suggestFrom="Trip to Melbourne" excludeIds={new Set()} onPick={onPick} onClose={() => {}} />);
+    expect(screen.getByText(/Suggested from/)).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Enter', ctrlKey: true });
+    expect(onPick).toHaveBeenCalledWith([{ type: 'list', id: packing, occurrence: null }]);
   });
 });

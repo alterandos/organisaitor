@@ -9,7 +9,8 @@ import { useNoteStore } from '@/store/noteStore';
 import { entryView, isEntryLocked, useSecretsVersion } from '@/services/noteSecrets';
 import { openGlossaryEntry } from '@/services/notePassage';
 import { GLOSSARY_TYPES, TERM_RICH, fieldFacts, fieldSymbols, type FormulaSymbol, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, NAMED_FIELD_ID, namedFieldLine, takeNamedLines, type Fact, type GlossaryLink, type StructuredTagFieldDef, glossaryKinds, glossaryNames } from '@/config/structuredTagTypes';
-import { GLOSSARY_RELATIONS, glossaryRelation } from '@/config/glossaryRelations';
+import { glossaryRelation } from '@/config/glossaryRelations';
+import { GlossaryTermPicker } from '@/components/GlossaryTermPicker/GlossaryTermPicker';
 import { LABELS } from '@/config/labels';
 import { entryImportance, glossaryKindLine, headlineTerms } from '@/services/glossary';
 import { importanceLevel } from './importanceLevels';
@@ -23,7 +24,10 @@ import type { StructuredTagEntry, StructuredTagEntryId } from '@/types';
 import type { GlossaryCardVariant } from './GlossaryCard';
 import { BUILTIN_TAGS } from '../builtinTags';
 import { MathsInput } from './MathsInput';
+import { CORNERS } from './imageGeometry';
+import { pictureHandles, resizePicture } from './pictureResize';
 import styles from './GlossaryCard.module.css';
+import { CardIcon } from '@/components/CardLook/CardIcon';
 import { ClarifyIcon, CloseIcon, ReviewIcon, TrashIcon, UnlinkIcon, UnsureIcon } from '@/components/Icons';
 import { recordFlag } from './BlockFlags';
 import { recordReview } from './ReviewMark';
@@ -63,6 +67,8 @@ interface Props {
   // Show another record on this card instead, this one (which held nothing else) going for good:
   // an Acronym card whose long form is already defined, its acronym added there.
   onSwitchTo?: (entryId: string) => void;
+  showIcon?: boolean;   // the Card design's kind icon beside the term (a card can hide it)
+  onShowIcon?: (show: boolean) => void;
 }
 
 const DEFAULT_LAYOUT = DEFAULT_IMAGE_LAYOUT;
@@ -399,13 +405,17 @@ function OwnFields({ facts, onCommit, onTake, placeholder, editable, label, auto
     if (f.value.trim() && !(await confirmRemoveField(f.label || LABELS.glossary.ownFieldName))) return;
     onCommit(facts.filter((_, j) => j !== i));
   }
+  const typing = editable && (adding || facts.length === 0);
+  if (!facts.length && !typing) return null;
+  // A table of their own, apart from the card's built-in fields: each name on the left, its value
+  // on the right (the user, 2026-11-10: the value under its name took room and read poorly).
   return (
-    <>
+    <div className={styles.ownFields} data-own-fields="">
       {facts.map((f, i) => <OwnFieldRow key={i} fact={f} editable={editable} entryId={entryId} onChange={(patch) => change(i, patch)} onRemove={() => void remove(i)} />)}
-      {editable && (adding || facts.length === 0) && (
+      {typing && (
         <NewOwnField placeholder={placeholder} label={label} onTake={onTake} onDone={() => setAdding(false)} />
       )}
-    </>
+    </div>
   );
 }
 
@@ -419,18 +429,20 @@ function OwnFieldRow({ fact, editable, entryId, onChange, onRemove }: { fact: Fa
   );
   if (!editable) {
     return (
-      <div className={styles.field}>
-        {fact.label && <div className={styles.label}>{fact.label}</div>}
-        {value}
+      <div className={styles.ownField}>
+        <div className={styles.ownName}>{fact.label}</div>
+        <div className={styles.ownValue}>{value}</div>
       </div>
     );
   }
   return (
-    <div className={styles.field} data-field={NAMED_FIELD_ID}>
+    <div className={styles.ownField} data-field={NAMED_FIELD_ID}>
+      <div className={styles.ownName}>
+        <input className={styles.ownLabel} value={name.value} aria-label={LABELS.glossary.ownFieldName} placeholder={LABELS.glossary.ownFieldName}
+          onChange={(e) => name.change(e.target.value)} onBlur={name.blur} />
+      </div>
+      <div className={styles.ownValue}>{value}</div>
       <RemoveFieldButton name={fact.label || LABELS.glossary.ownFieldName} onRemove={onRemove} />
-      <input className={`${styles.label} ${styles.ownLabel}`} value={name.value} aria-label={LABELS.glossary.ownFieldName}
-        onChange={(e) => name.change(e.target.value)} onBlur={name.blur} />
-      {value}
     </div>
   );
 }
@@ -444,7 +456,7 @@ function NewOwnField({ placeholder, label, onTake, onDone }: { placeholder?: str
     return !!fact;
   };
   return (
-    <div className={styles.field}>
+    <div className={styles.ownNew}>
       <input className={styles.input} value={text} placeholder={placeholder} aria-label={label} data-card-input="" autoFocus
         onChange={(e) => setText(e.target.value)}
         onBlur={() => { take(); onDone(); }}
@@ -541,28 +553,40 @@ function ImageField({ value, term, encrypted, onCommit, editable, layout, onLayo
     if (file) await choose(file);
     else await alertDialog(L.noClipboardImage);
   }
-  function startResize(e: React.PointerEvent<HTMLSpanElement>) {
-    const img = imgRef.current;
-    if (!img || !onLayout) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const handle = e.currentTarget;
-    handle.setPointerCapture(e.pointerId);
-    const left = img.getBoundingClientRect().left;
-    const max = img.closest('[data-glossary-type]')?.getBoundingClientRect().width ?? 600;
-    let width = img.getBoundingClientRect().width;
-    const move = (ev: PointerEvent) => { width = Math.round(Math.max(MIN_IMAGE_PX, Math.min(max, ev.clientX - left))); setDragWidth(width); };
-    const up = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', up);
-      handle.removeEventListener('pointercancel', up);
-      setDragWidth(null);
-      onLayout({ ...layout, width });
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up);
-    handle.addEventListener('pointercancel', up);
-  }
+  // Resized as a note's picture is (pictureResize.ts): its corners, which keep its shape (a card
+  // keeps only its picture's width), snapping to the note's pictures and the card's width.
+  // Double-clicking a corner puts it back to its own size.
+  const boxRef = useRef<HTMLSpanElement>(null);
+  const latest = useRef({ layout, onLayout });
+  useEffect(() => { latest.current = { layout, onLayout }; });
+  const resizable = !!src && editable && !!onLayout;
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box || !resizable) return;
+    let stop: (() => void) | null = null;
+    const handles = pictureHandles(CORNERS, (e, h) => {
+      const img = imgRef.current;
+      const card = img?.closest<HTMLElement>('[data-glossary-type]');
+      if (!img) return;
+      stop = resizePicture(e, h, {
+        picture: img,
+        within: img.closest('.ProseMirror'),
+        frame: box,
+        column: card?.offsetWidth ?? 600,
+        stretched: false,
+        onMove: (size) => setDragWidth(Math.round(Math.max(MIN_IMAGE_PX, size.width))),
+        onDone: (size) => {
+          stop = null;
+          setDragWidth(null);
+          const { layout: now, onLayout: commit } = latest.current;
+          commit?.({ ...now, width: Math.round(Math.max(MIN_IMAGE_PX, size.width)) });
+        },
+      });
+    }, { showOnHover: true, label: L.resizeImage });
+    handles.addEventListener('dblclick', () => { const { layout: now, onLayout: commit } = latest.current; commit?.({ ...now, width: null }); });
+    box.append(handles);
+    return () => { stop?.(); handles.remove(); };
+  }, [resizable]);
   const width = dragWidth ?? layout.width;
   return (
     <div
@@ -574,12 +598,8 @@ function ImageField({ value, term, encrypted, onCommit, editable, layout, onLayo
       onDrop={(e) => { const f = editable ? imageFileFrom(e.dataTransfer) : null; if (f) { e.preventDefault(); e.stopPropagation(); void choose(f); } }}
     >
       {src && (
-        <span className={styles.imageBox}>
+        <span ref={boxRef} className={styles.imageBox}>
           <img ref={imgRef} className={`${styles.image} ${width ? styles.imageSized : ''}`} src={src} alt={L.imageAlt(term)} style={width ? { width } : undefined} />
-          {editable && onLayout && (
-            <span className={styles.imageResize} role="separator" aria-orientation="vertical" aria-label={L.resizeImage} title={L.resizeImage}
-              onPointerDown={startResize} onDoubleClick={() => onLayout({ ...layout, width: null })} />
-          )}
         </span>
       )}
       {editable && (
@@ -634,23 +654,29 @@ function ParentField({ self, all, editable, onCommit }: { self: StructuredTagEnt
   };
   const options = all.filter((e) => e.typeKey === self.typeKey && e.id !== self.id && e.term && !descends(e.id));
   const parent = byId.get(parentId);
-  if (!editable) return parent ? <EntryLink entry={parent} /> : null;
+  const read = parent ? <EntryLink entry={parent} /> : null;
+  if (!editable) return read;
+  // The choice only while the card is being edited; otherwise what was chosen.
   return (
-    <select className={styles.select} value={parent ? parentId : ''} aria-label={L.choose} onChange={(e) => onCommit(e.target.value)}>
-      <option value="">{L.noParent}</option>
-      {options.map((e) => <option key={e.id} value={e.id}>{e.term}</option>)}
-    </select>
+    <>
+      {read && <span className={styles.whenReading}>{read}</span>}
+      <select className={`${styles.select} ${styles.whenEditing}`} value={parent ? parentId : ''} aria-label={L.choose} onChange={(e) => onCommit(e.target.value)}>
+        <option value="">{L.noParent}</option>
+        {options.map((e) => <option key={e.id} value={e.id}>{e.term}</option>)}
+      </select>
+    </>
   );
 }
 
 // Typed links to other entries, stored on this one; links other entries make to this one are
 // shown from this side (read-only here: they're edited where they're stored).
-function LinksField({ self, all, editable, onCommit }: { self: StructuredTagEntry; all: StructuredTagEntry[]; editable: boolean; onCommit: (v: GlossaryLink[]) => void }) {
+function LinksField({ self, all, editable, onCommit, relation }: { self: StructuredTagEntry; all: StructuredTagEntry[]; editable: boolean; onCommit: (v: GlossaryLink[]) => void; relation?: string }) {
   const links = fieldLinks(self.fields, 'related');
   const byId = new Map(all.map((e) => [e.id as string, e]));
   const incoming = all.flatMap((e) => e.id === self.id ? [] : fieldLinks(e.fields, 'related').filter((l) => l.entryId === self.id).map((l) => ({ kind: l.kind, from: e })));
-  const [kind, setKind] = useState(GLOSSARY_RELATIONS[0].kind);
-  const choices = all.filter((e) => e.id !== self.id && e.term && !links.some((l) => l.entryId === e.id));
+  const [picking, setPicking] = useState(false);
+  const linked = links.map((l) => l.entryId);
+  const choices = all.filter((e) => e.id !== self.id && e.term && !linked.includes(e.id));
   return (
     <div className={styles.links}>
       {links.map((l, i) => {
@@ -668,16 +694,15 @@ function LinksField({ self, all, editable, onCommit }: { self: StructuredTagEntr
           <span className={styles.relation}>{glossaryRelation(k).inverse}</span> <EntryLink entry={from} />
         </div>
       ))}
+      {/* Linking another only while the card is being edited (asked for by the user 2026-11-11). */}
       {editable && choices.length > 0 && (
-        <div className={styles.linkRow}>
-          <select className={styles.select} value={kind} aria-label={L.linkTo} onChange={(e) => setKind(e.target.value)}>
-            {GLOSSARY_RELATIONS.map((r) => <option key={r.kind} value={r.kind}>{r.label}</option>)}
-          </select>
-          <select className={styles.select} value="" aria-label={L.choose} onChange={(e) => e.target.value && onCommit([...links, { kind, entryId: e.target.value }])}>
-            <option value="">{L.linkTo}</option>
-            {choices.map((e) => <option key={e.id} value={e.id}>{e.term}</option>)}
-          </select>
+        <div className={`${styles.linkRow} ${styles.whenEditing}`}>
+          <button type="button" className={styles.linkAdd} onClick={() => setPicking(true)}>{L.linkTo}</button>
         </div>
+      )}
+      {picking && (
+        <GlossaryTermPicker selfId={self.id} exclude={linked} suggestFrom={self.term} relation={relation}
+          onPick={(entryId, kind) => onCommit([...links, { kind, entryId }])} onClose={() => setPicking(false)} />
       )}
     </div>
   );
@@ -689,7 +714,7 @@ function SpelledOut({ term, text }: { term: string; text: string }) {
   return <>{[...text].map((ch, i) => (at.has(i) ? <b key={i} className={styles.spelled}>{ch}</b> : <Fragment key={i}>{ch}</Fragment>))}</>;
 }
 
-export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onEscape, onDone, shown, onShow, onHide, onWaiting, fresh, onTouched, onAddAnother, onDiscard, onLeave, onUndo, imageLayout = DEFAULT_LAYOUT, onImageLayout, onSwitchTo }: Props) {
+export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onEscape, onDone, shown, onShow, onHide, onWaiting, fresh, onTouched, onAddAnother, onDiscard, onLeave, onUndo, imageLayout = DEFAULT_LAYOUT, onImageLayout, onSwitchTo, showIcon = true, onShowIcon }: Props) {
   const entries = useNoteStore((s) => s.structuredTagEntries);
   useSecretsVersion((s) => s.version);
   const [editingExpansion, setEditingExpansion] = useState(false);
@@ -882,9 +907,11 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   ) : null;
   // The term is plain text to the rest of the app; its formatting (H₂O) is kept beside it.
   const termField = (
-    <RichField html={termRich(entry) ?? escapeHtml(entry.term)} editable={editable}
-      onCommit={(html) => saveEntry(id, { term: richToPlain(html).trim(), fields: { [TERM_RICH]: hasFormatting(html) ? html : '' } })}
-      className={`${styles.term} ${isAcronym ? styles.acronymTerm : ''}`} placeholder={L.termPlaceholder[entry.typeKey] ?? typeDef.label} label={typeDef.label} />
+    <div data-card-part="title" className={styles.term}>
+      <RichField html={termRich(entry) ?? escapeHtml(entry.term)} editable={editable}
+        onCommit={(html) => saveEntry(id, { term: richToPlain(html).trim(), fields: { [TERM_RICH]: hasFormatting(html) ? html : '' } })}
+        className={isAcronym ? styles.acronymTerm : undefined} placeholder={L.termPlaceholder[entry.typeKey] ?? typeDef.label} label={typeDef.label} />
+    </div>
   );
 
   function renderField(f: StructuredTagFieldDef, autoFocus: boolean): ReactNode {
@@ -922,7 +949,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
             <ParentField self={entry} all={all} editable={editable} onCommit={(v) => setField(f.id, v)} />
             {parts.length > 0 && (
               <div className={styles.parts}>
-                <span className={styles.label}>{L.subConcepts}</span>
+                <span data-card-part="label">{L.subConcepts}</span>
                 {parts.map((p) => <EntryLink key={p.id} entry={p} />)}
               </div>
             )}
@@ -930,7 +957,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
         );
       }
       case 'links':
-        return <LinksField self={entry} all={all} editable={editable} onCommit={(v) => setField(f.id, v)} />;
+        return <LinksField self={entry} all={all} editable={editable} onCommit={(v) => setField(f.id, v)} relation={f.relation} />;
       case 'urls':
         return <UrlList items={fieldList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} />;
       case 'tags':
@@ -951,9 +978,9 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
     const primary = typeDef.fields.find((f) => f.id === primaryId);
     const icon = BUILTIN_TAGS.find((t) => t.typeKey === entry.typeKey)?.icon;
     return (
-      <div ref={rootRef} className={styles.compact} data-glossary-type={entry.typeKey} onKeyDown={keyDown} onInput={typed}>
-        <div className={styles.compactLead}>
-          {icon && <span className={styles.compactIcon} title={kindLine} aria-hidden="true">{icon}</span>}
+      <div ref={rootRef} className={styles.compact} data-card-look="compact" data-glossary-type={entry.typeKey} onKeyDown={keyDown} onInput={typed}>
+        <div data-card-part="lead">
+          {icon && <CardIcon icon={icon} shown title={kindLine} />}
           {level > 0 && <span className={styles.compactIcon} title={LABELS.importance.kindLevel(level as 1 | 2 | 3, typeDef.label)}>{importanceLevel(level).icon}</span>}
           {flagIcons}
           {termField}
@@ -976,17 +1003,24 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   const fieldBox = (f: StructuredTagFieldDef) => f.type === 'facts' ? <Fragment key={f.id}>{renderField(f, shown.includes(f.id) && !hasValue(f))}</Fragment> : (
     <div key={f.id} className={styles.field} data-field={f.id}>
       {editable && f.id !== primaryId && <RemoveFieldButton name={f.name} onRemove={() => void removeField(f)} />}
-      {f.id !== primaryId && <div className={styles.label}>{f.name}</div>}
+      {f.id !== primaryId && <div data-card-part="label">{f.name}</div>}
       {renderField(f, shown.includes(f.id) && !hasValue(f))}
     </div>
   );
+  // The kind's icon beside the term, as the Compact design has it (2026-11-10). Hovering it offers to
+  // hide it; hidden, the term moves left and a button at the card's top left brings it back (both
+  // also in the card's right-click menu).
+  const kindIcon = BUILTIN_TAGS.find((t) => t.typeKey === entry.typeKey)?.icon;
+  const iconShown = showIcon && !!kindIcon;
+  const canToggleIcon = editable && !!onShowIcon;
   const main = (
     <>
-      <div className={styles.head}>
-        <span className={styles.kind} data-importance={level || undefined}>{kindLine}{flagIcons}</span>
+      <div data-card-head="">
+        {kindIcon && <CardIcon icon={kindIcon} shown={iconShown} onToggle={canToggleIcon ? onShowIcon : undefined} />}
+        <span data-card-part="kind" data-importance={level || undefined}>{kindLine}{flagIcons}</span>
         {termField}
       </div>
-      <div className={styles.rule} aria-hidden="true" />
+      <div data-card-part="rule" aria-hidden="true" />
       {duplicateHint}
       {visible.filter((f) => f !== placed).map(fieldBox)}
     </>
@@ -1004,7 +1038,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
   };
 
   return (
-    <div ref={rootRef} className={styles.card} data-glossary-type={entry.typeKey} onKeyDown={keyDown} onInput={typed} onPasteCapture={pasteImage}>
+    <div ref={rootRef} className={styles.card} data-card-look="card" data-glossary-type={entry.typeKey} onKeyDown={keyDown} onInput={typed} onPasteCapture={pasteImage}>
       {placed && imageLayout.place === 'right'
         ? <div className={styles.withSide}><div className={styles.mainCol}>{main}</div><div className={styles.sideCol}>{fieldBox(placed)}</div></div>
         : main}

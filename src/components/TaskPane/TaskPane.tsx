@@ -5,16 +5,14 @@ import { linkedListIds } from '@/services/taskListLinks';
 import { toggleTaskCompletion, taskCompletionOptions } from '@/services/taskCompletion';
 import { LinkedChecklists } from '@/components/LinkedChecklists/LinkedChecklists';
 import { TaskLinksField } from '@/components/TaskLinks/TaskLinksField';
-import { TaskCalendarLinks } from '@/components/TaskLinks/TaskCalendarLinks';
+import { LinkedItemsField } from '@/components/LinkedItemsField/LinkedItemsField';
 import type { TaskId } from '@/types';
 import { TaskFields, type TaskValues } from '@/components/TaskFields/TaskFields';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
-import { deleteTaskWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
+import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
 import { addTaskWithCalendar, updateTaskLinked } from '@/services/taskCalendarLinks';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
-import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import { todayIso } from '@/utils/date';
 import { ItemActionDialog } from '@/components/ItemActions/ItemActionDialog';
 import { ItemActionFooter } from '@/components/ItemActions/ItemActionFooter';
@@ -22,7 +20,6 @@ import { ArchivedBanner } from '@/components/ItemActions/ArchivedBanner';
 import { DoneBanner } from '@/components/ItemActions/DoneBanner';
 import itemStyles from '@/components/ItemActions/ItemActions.module.css';
 import { useItemActions } from '@/components/ItemActions/useItemActions';
-import type { CrossAppRef } from '@/types';
 import styles from './TaskPane.module.css';
 import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
@@ -44,7 +41,6 @@ export function TaskPane() {
 
   // App.tsx remounts this pane per task (key), so these initialise from the task being edited.
   const [subtaskInput,   setSubtaskInput]   = useState('');
-  const [pickingCalendar, setPickingCalendar] = useState(false);
 
   const { dialog, setDialog, closeDialog } = useItemActions({
     itemKey:   editingTaskId,
@@ -90,21 +86,6 @@ export function TaskPane() {
 
   const handleRestore = () => restoreTask(taskId);
 
-  const navigateToCrossAppRef = (ref: CrossAppRef) => {
-    if (ref.type === 'list') { openArtifactTarget('list', ref.id); return; }
-    if (ref.type !== 'note') return;
-    useUIStore.getState().setActiveView('notes');
-    useUIStore.getState().openNote(ref.id, ref.tabId);
-  };
-
-  const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
-    const removed = (task.crossAppRefs ?? []).filter(
-      (r) => !next.some((n) => n.type === r.type && n.id === r.id)
-    );
-    removed.forEach((ref) => unlinkCrossAppRef('task', taskId, ref));
-    updateTask(taskId, { crossAppRefs: next });
-  };
-
   const subtasks = (task.subtaskIds ?? [])
     .map((id) => tasksRecord[id])
     .filter(Boolean);
@@ -135,9 +116,7 @@ export function TaskPane() {
             linkedItems={<>
               {/* Notes and lists (filled in by Notes' "Create ▸ Task" too), calendar items, and a linked
                   checklist's items as tickable steps (services/taskListLinks.ts). */}
-              <CrossAppRefPicker value={task.crossAppRefs ?? []} suggestFrom={task.title} onChange={handleCrossAppRefsChange} onNavigate={navigateToCrossAppRef}
-                extraAdds={[{ label: LABELS.taskLinks.linkCalendar, onClick: () => setPickingCalendar(true) }]} />
-              <TaskCalendarLinks task={task} suggestFrom={task.title} picking={pickingCalendar} onPicking={setPickingCalendar} />
+              <LinkedItemsField owner={{ type: 'task', id: taskId }} refs={task.crossAppRefs ?? []} suggestFrom={task.title} offers={['note', 'list', 'calendar']} />
               <LinkedChecklists listIds={linkedListIds(task.crossAppRefs)} />
             </>}
             more={<>

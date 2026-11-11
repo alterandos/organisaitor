@@ -7,7 +7,7 @@ import { kids, node, p, code, type J } from './noteContent';
 // arguments, or isn't here (BLOCK_GUIDE_NEEDS in components/BlockGuide/guideData.ts says why).
 
 const point = (text: string, weight = 1) => node('prosConsPoint', { weight }, text);
-const prosCons = (side: 'pro' | 'con', points: J[]) => kids('prosConsList', { side }, points);
+const prosCons = (side: 'pro' | 'con' | 'neutral', points: J[]) => kids('prosConsList', { side }, points);
 
 export const EX = {
   cycle: (): J => kids('cycle', { variant: 'ring', numbered: true, colours: 'spectrum', iconShape: 'circle', iconSize: 'm', blockId: 'rc-cycle' }, [
@@ -115,11 +115,11 @@ export const EX = {
     ]),
   caseStudy: (): J => kids('caseStudy', { variant: 'card' }, [
       node('caseTitle', null, 'The Montreal Protocol'),
-      node('caseField', { field: 'setting' }, '1987; now signed by every UN member'),
-      node('caseField', { field: 'situation' }, 'CFCs from fridges and spray cans were thinning the ozone layer, with a hole over Antarctica each spring.'),
-      node('caseField', { field: 'actions' }, 'Countries agreed to phase CFCs out on a timetable, with money to help poorer countries switch.'),
-      node('caseField', { field: 'outcome' }, 'CFC use fell by over 99%; the ozone layer is expected to recover by about 2066.'),
-      node('caseField', { field: 'shows' }, 'A global agreement with a clear target and help to meet it can fix an atmospheric problem.'),
+      kids('caseField', { field: 'setting' }, [p('1987; now signed by every UN member')]),
+      kids('caseField', { field: 'situation' }, [p('CFCs from fridges and spray cans were thinning the ozone layer, with a hole over Antarctica each spring.')]),
+      kids('caseField', { field: 'actions' }, [p('Countries agreed to phase CFCs out on a timetable, with money to help poorer countries switch.')]),
+      kids('caseField', { field: 'outcome' }, [p('CFC use fell by over 99%; the ozone layer is expected to recover by about 2066.')]),
+      kids('caseField', { field: 'shows' }, [p('A global agreement with a clear target and help to meet it can fix an atmospheric problem.')]),
     ]),
   codeBlock: (): J => code('python', [
       'import pandas as pd',
@@ -128,12 +128,13 @@ export const EX = {
       'annual = co2.groupby("year")["average"].mean()',
       'print(annual.loc[1960:2020:10].round(1))',
     ].join('\n')),
-  argument: (): J => kids('argument', { variant: 'debate', sides: 'both' }, [
+  argument: (): J => kids('argument', { variant: 'debate', sides: 'both', neutral: true }, [
       node('argumentClaim', null, 'Solar geoengineering should be researched, but not deployed.'),
       prosCons('pro', [point('Volcanic eruptions show it would cool the planet quickly (Pinatubo, 1991: about 0.5 °C)', 3), point('Research now means we understand it before anyone is desperate enough to try it', 2)]),
+      prosCons('neutral', [point('Models disagree on how it would change regional rainfall', 2)]),
       prosCons('con', [point('Deployment would mask warming without removing any CO₂', 3), point('Stopping suddenly would cause rapid “termination shock” warming', 3), point('Research itself may weaken the push to cut emissions (moral hazard)', 1)]),
-      node('argumentField', { field: 'why' }, 'The cooling is real but the risks of relying on it are worse than the risks of studying it.'),
-      node('argumentField', { field: 'sources' }, 'IPCC AR6 WG1 ch. 4; Kolbert, Under a White Sky'),
+      kids('argumentField', { field: 'why' }, [p('The cooling is real but the risks of relying on it are worse than the risks of studying it.')]),
+      kids('argumentField', { field: 'sources' }, [kids('bulletList', null, [kids('listItem', null, [p('IPCC AR6 WG1 ch. 4')]), kids('listItem', null, [p('Kolbert, Under a White Sky')])])]),
     ]),
   prosCons: (): J => kids('prosCons', { variant: 'scales' }, [
       node('prosConsSubject', null, 'Stratospheric aerosol injection'),
@@ -165,4 +166,12 @@ export const EX = {
       ['📋', 'Log and label', 'Sample ID on the bag and in the lab book'],
     ] as [string, string, string][]).map(([icon, label, text]) => kids('stepsStep', { icon }, [node('stepsLabel', null, label), node('stepsText', null, text)])),
   ]),
+  promptBlock: (): J => node('promptBlock', {
+    variant: 'tile', title: 'Explain a climate idea', template: true,
+    sections: [
+      { id: 'bg', name: 'About me', perRun: false, text: 'I’m a second-year earth science student revising for {exam}. Explain at that level, with one worked example.' },
+      { id: 'ask', name: 'What I want explained', perRun: true, text: 'Why does {idea} matter for the climate, and how sure are scientists about it?' },
+    ],
+    fills: [{ name: 'exam', value: 'GEOL2001' }, { name: 'idea', value: 'ice–albedo feedback' }],
+  }),
 };

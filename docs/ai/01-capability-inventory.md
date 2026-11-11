@@ -336,4 +336,5 @@ Later: `log_activity`, `add_watchlist_item`, `move_note`.
 2. ~~Run the scheduled-task title test~~ done: verified by the user.
 3. ~~Build the command layer skeleton and the first-slice commands~~ **done 2026-09-22 (Chunk A)** — see `02-command-layer.md`.
 4. **Next (Chunk B):** the headless note-content module, the editor's external-change handling, and the note commands.
-5. Draft the agent manual from the schemas, and start the eval scenarios (the first three come from our discussion: timetable screenshot → schedule, pasted course schedule → update-or-create, dictated fact → append to the right note).
+5. When the chat is built, register the agent as a target for the Notes AI prompt block (`docs/agent-tasks/09-prompt-block-to-agent.md`): one registration, no change to the block.
+6. Draft the agent manual from the schemas, and start the eval scenarios (the first three come from our discussion: timetable screenshot → schedule, pasted course schedule → update-or-create, dictated fact → append to the right note).

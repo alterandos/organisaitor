@@ -14,7 +14,8 @@ import { useSettingsStore } from '@/store/settingsStore';
 import type { CollectionId, NoteId } from '@/types';
 import { BUILTIN_TAGS } from '../builtinTags';
 import type { NoteObjectContext } from '../objects/types';
-import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, moveFromBlock, openBlockPopover, pillButton, placeBlock, registerEnterableBlock, popoverClass as pop, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
+import { NOTE_BLOCK_NODES } from '../blockNodes';
+import { applyFrameAttrs, blockEmptySpaceTarget, blockFrameAttributes, blockPill, designButtons, frameButtons, moveFromBlock, openBlockPopover, pillButton, placeBlock, registerEnterableBlock, popoverClass as pop, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { deleteForever, trashedBy } from '@/services/trash';
 import { entryView, isEntryLocked } from '@/services/noteSecrets';
 import { entryImportance } from '@/services/glossary';
@@ -24,6 +25,7 @@ import { GlossaryCardBody } from './GlossaryCardBody';
 import { IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { cardToChip, insertGlossaryChip, setChipDesigns } from './GlossaryChip';
 import { blockResizeHandle, blockWidth, blockWidthAttributes, showBlockWidth, type BlockNamedWidth, type BlockWidth } from './blockWidth';
+import { cardIconAttributes, setCardIcon } from './cardLook';
 
 // A Glossary card in a note (`\definition`, `\acronym`, `\concept`): one atom node that points at a
 // Glossary record (StructuredTagEntry) by `entryId`, never a copy of it. Marked text in a sentence
@@ -78,6 +80,8 @@ export const GlossaryCard = Node.create({
       // How this card shows its record's picture (GlossaryCardBody ImageField): a width in px, and
       // where it sits (flow: in the fields' order; right; bottom). Presentation, like the width.
       imageWidth: { default: null, parseHTML: (el) => { const n = parseInt(el.getAttribute('data-image-width') ?? '', 10); return Number.isFinite(n) && n > 0 ? n : null; }, renderHTML: (a) => (a.imageWidth ? { 'data-image-width': String(a.imageWidth) } : {}) },
+      // The Card design's kind icon beside the term (2026-11-10), hidden on this card when set.
+      ...cardIconAttributes(),
       imagePlace: { default: 'flow', parseHTML: (el) => oneOf(IMAGE_PLACES, el.getAttribute('data-image-place'), 'flow'), renderHTML: (a) => (a.imagePlace !== 'flow' ? { 'data-image-place': a.imagePlace } : {}) },
     };
   },
@@ -100,6 +104,19 @@ export function newGlossaryRecord(typeKey: string, ctx: NoteObjectContext): stri
     typeKey, tagId: tag.id, term: '', fields: {},
     noteId: ctx.noteId as NoteId, collectionId: ctx.collectionId as CollectionId | null,
   });
+}
+
+// A new record from words (selected in note text, a block's part or a card's field): its term and
+// fields worked out from them by its kind's `infer`. The one way words become a record.
+export function recordFromWords(typeKey: string, words: string, context: string, ctx: NoteObjectContext): string | null {
+  const typeDef = getStructuredTagType(typeKey);
+  if (!typeDef) return null;
+  const inferred = typeDef.infer?.(words, context) ?? { term: words.trim(), fields: {} };
+  const entryId = newGlossaryRecord(typeKey, ctx);
+  if (!entryId) return null;
+  const fields = Object.fromEntries(Object.entries(inferred.fields).filter(([, v]) => v));
+  useNoteStore.getState().updateStructuredTagEntry(entryId as never, { term: inferred.term, fields });
+  return entryId;
 }
 
 // `\definition` (and the others): a new record and its card in place of what was typed, the
@@ -129,7 +146,8 @@ export function goesInline(state: EditorState, from: number, to: number): boolea
   let other = false;   // a chip, maths or other inline thing on the line besides what was typed
   parent.forEach((child, offset) => { const at = $from.start() + offset; if (!child.isText && (at < from || at >= to)) other = true; });
   if (other) return true;
-  for (let d = $from.depth - 1; d > 0; d--) if ($from.node(d).type.name === 'listItem') return true;
+  // On a bullet, or in a block's part: right there (the words stay where they are, as a chip).
+  for (let d = $from.depth - 1; d > 0; d--) if ($from.node(d).type.name === 'listItem' || NOTE_BLOCK_NODES.has($from.node(d).type.name)) return true;
   return false;
 }
 
@@ -144,12 +162,8 @@ export function cardFromSelection(view: EditorView, from: number, to: number, ty
   const state = view.state;
   const cardType = state.schema.nodes.glossaryCard;
   if (!typeDef || !ctx || !cardType || from >= to) return;
-  const words = state.doc.textBetween(from, to, ' ');
-  const inferred = typeDef.infer?.(words, state.doc.resolve(from).parent.textContent) ?? { term: words.trim(), fields: {} };
-  const entryId = newGlossaryRecord(typeKey, ctx);
+  const entryId = recordFromWords(typeKey, state.doc.textBetween(from, to, ' '), state.doc.resolve(from).parent.textContent, ctx);
   if (!entryId) return;
-  const fields = Object.fromEntries(Object.entries(inferred.fields).filter(([, v]) => v));
-  useNoteStore.getState().updateStructuredTagEntry(entryId as never, { term: inferred.term, fields });
   if (state.doc.resolve(from).sameParent(state.doc.resolve(to)) && goesInline(state, from, to)) {
     insertGlossaryChip(view, from, to, entryId);
     return;
@@ -315,6 +329,15 @@ class GlossaryCardView {
       this.render();
     });
     this.dom.addEventListener('mouseenter', this.placePills);
+    // A press on the card's empty space (not a field, a button or its picture) selects the card, as
+    // on every block (blockDesigns.ts "Leaving a block, and selecting it by its empty space").
+    this.dom.addEventListener('mousedown', (e) => {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || !this.editor.isEditable) return;
+      const t = e.target as globalThis.Node | null;
+      if (!t || this.pill.contains(t) || this.handle.contains(t) || !blockEmptySpaceTarget(e.target)) return;
+      e.preventDefault();
+      this.selectSelf();
+    });
     this.render();
     // Its record's importance can change from anywhere (another card of it, the margin column).
     const fromRecord = () => {
@@ -353,6 +376,11 @@ class GlossaryCardView {
   private discard = (how: 'enter' | 'escape') => {
     const pos = this.getPos();
     if (pos !== undefined) discardFreshCard(this.editor.view, pos, how);
+  };
+
+  private setShowIcon = (show: boolean) => {
+    const pos = this.getPos();
+    if (pos !== undefined) setCardIcon(this.editor.view, pos, show);
   };
 
   private setImageLayout = (layout: ImageLayout) => {
@@ -430,7 +458,12 @@ class GlossaryCardView {
     view.focus();
   };
 
+  // Set once ProseMirror lets the card go: the body's effects (a picture that finished loading, the
+  // fields still waiting) can still call back after that, and the root is unmounted by then.
+  private destroyed = false;
+
   private render() {
+    if (this.destroyed) return;
     const a = this.node.attrs;
     this.dom.setAttribute('data-variant', a.variant as string);
     // Its kind, for the block colour (a selected card is outlined in its kind's colour).
@@ -499,6 +532,8 @@ class GlossaryCardView {
       imageLayout: { width: (a.imageWidth as number | null) ?? null, place: (a.imagePlace as ImageLayout['place']) ?? 'flow' },
       onImageLayout: this.setImageLayout,
       onSwitchTo: this.switchTo,
+      showIcon: !a.hideIcon,
+      onShowIcon: this.setShowIcon,
     }));
   }
 
@@ -521,6 +556,7 @@ class GlossaryCardView {
 
   // Unmounting while React may be mid-render isn't allowed synchronously (artifactGroups.ts).
   destroy() {
+    this.destroyed = true;
     this.unsubscribe();
     this.dom.removeEventListener('mouseenter', this.placePills);
     const root = this.root;

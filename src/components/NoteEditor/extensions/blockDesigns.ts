@@ -213,10 +213,10 @@ export function setBlockFrame(view: EditorView, pos: number, settings: FrameSett
   view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...next }));
 }
 
-// Blocks drawn as a card, with a border of their own (a Glossary card, a question): they take a
+// Blocks drawn as a card (or the prompt's tile), with a border of their own (a Glossary card, a question): they take a
 // Shade but no Outline, which drew a second, larger border around theirs (decided with the user
 // 2026-10-13; the bigger blocks, a cycle or a timeline, keep it). A new card-like block joins here.
-export const CARD_BLOCK_NODES = new Set(['glossaryCard', 'questionBlock', 'convertBlock']);
+export const CARD_BLOCK_NODES = new Set(['glossaryCard', 'questionBlock', 'convertBlock', 'promptBlock', 'caseStudy']);
 export const takesOutline = (nodeName: string | undefined): boolean => !nodeName || !CARD_BLOCK_NODES.has(nodeName);
 const framesFor = (nodeName: string | undefined): BlockFrame[] => BLOCK_FRAMES.filter((f) => f !== 'outlined' || takesOutline(nodeName));
 
@@ -517,6 +517,7 @@ export function frameMenuItem(view: EditorView, pos: number, attrs: Record<strin
 
 export { NOTE_BLOCK_NODES } from '../blockNodes';
 import { NOTE_BLOCK_NODES } from '../blockNodes';
+import { RESIZE_HANDLE_SELECTOR } from './blockWidth';
 
 // The note block the selection is inside (the outermost, if blocks were ever nested), or null.
 export function blockAround(state: EditorState): number | null {
@@ -660,7 +661,7 @@ export const NoteBlockSelect = Extension.create({
   priority: 90,
 
   addProseMirrorPlugins() {
-    return [frameFitPlugin(), arrowIntoBlockPlugin()];
+    return [frameFitPlugin(), arrowIntoBlockPlugin(), clickToSelectBlockPlugin()];
   },
 
   addKeyboardShortcuts() {
@@ -851,6 +852,109 @@ function arrowIntoBlockPlugin(): Plugin {
         e.preventDefault();
         into.enter(view, into.pos, ARROWS[e.key].forward ? 'start' : 'end');
         return true;
+      },
+    },
+  });
+}
+
+// ── Leaving a block, and selecting it by its empty space ────────────────────────
+// The same for every block (asked for by the user 2026-11-11, after the case study had drifted
+// from the cards): Ctrl+Enter in any part of a block leaves it as it is, onto a new line below
+// (Tiptap's HardBreak would otherwise put a line break in the part); a click on a block's empty
+// space (its padding, its kind line, the room between its parts) selects the whole block, while a
+// click in a part's text still puts the cursor there. A block drawn by a node view (a Glossary card)
+// does the same from its own events (blockEmptySpaceTarget).
+
+// Leaves the block at `pos` onto the line after it: the empty line already there, else a new one.
+export function leaveBlockBelow(view: EditorView, pos: number): boolean {
+  const node = view.state.doc.nodeAt(pos);
+  const paragraph = view.state.schema.nodes.paragraph;
+  if (!node || !paragraph) return false;
+  const after = pos + node.nodeSize;
+  const $after = view.state.doc.resolve(after);
+  const next = $after.nodeAfter;
+  let tr = view.state.tr;
+  if (next?.type === paragraph && next.content.size === 0) tr = tr.setSelection(TextSelection.create(tr.doc, after + 1));
+  else if ($after.parent.canReplaceWith($after.index(), $after.index(), paragraph)) tr = tr.insert(after, paragraph.create()).setSelection(TextSelection.create(tr.doc, after + 1));
+  else return false;
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+  return true;
+}
+
+export const NoteBlockKeys = Extension.create({
+  name: 'noteBlockKeys',
+  priority: 110,   // above HardBreak's Mod-Enter
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Enter': () => {
+        const pos = blockUnderCursor(this.editor.state);
+        return pos === null ? false : leaveBlockBelow(this.editor.view, pos);
+      },
+    };
+  },
+});
+
+// What isn't empty space: anything that does something when pressed, and a part's own input.
+const NOT_EMPTY_SPACE = `a, button, input, textarea, select, img, svg, [role="button"], [contenteditable="true"], [draggable="true"], [data-block-tools], [data-part-grip], [data-handle], ${RESIZE_HANDLE_SELECTOR}`;
+
+// The element a press landed on, if it's a block's empty space in a node view's own drawing.
+// Only what's inside the block counts: the editor around it is itself contenteditable, which
+// matched every press before (found 2026-11-11).
+export function blockEmptySpaceTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const hit = target.closest(NOT_EMPTY_SPACE);
+  if (!hit) return true;
+  const root = target.closest('[data-note-block]');
+  return root ? !root.contains(hit) : hit.classList.contains('ProseMirror');
+}
+
+// A node view that draws its own inputs (the chart, the diagram, maths, the conversion) gives them
+// the keys and clicks every block has: Ctrl+Enter in any of its inputs leaves the block onto a new
+// line below, unless the input used it first (the chart's paste box); with `emptySpace`, a press
+// on the drawing's empty space selects the whole block. ProseMirror never sees events a node view
+// stops (`stopEvent`), so the shared plugins can't do this for them.
+export function nodeViewBlockBehaviour(dom: HTMLElement, view: () => EditorView, getPos: () => number | undefined, emptySpace?: HTMLElement): void {
+  dom.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented || e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+    const pos = getPos();
+    if (pos === undefined || !view().editable) return;
+    if (leaveBlockBelow(view(), pos)) { e.preventDefault(); e.stopPropagation(); }
+  });
+  emptySpace?.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || !blockEmptySpaceTarget(e.target)) return;
+    const pos = getPos();
+    if (pos === undefined) return;
+    e.preventDefault();
+    const v = view();
+    v.dispatch(v.state.tr.setSelection(NodeSelection.create(v.state.doc, pos)));
+    v.focus();
+  });
+}
+
+function blockAtEmptySpace(view: EditorView, e: MouseEvent): number | null {
+  const target = e.target instanceof Element ? e.target : null;
+  const root = target?.closest('[data-note-block]');
+  if (!target || !root || !view.dom.contains(root) || !blockEmptySpaceTarget(target)) return null;
+  const hit = view.posAtCoords({ left: e.clientX, top: e.clientY });
+  const inside = hit && hit.inside >= 0 ? view.state.doc.nodeAt(hit.inside) : null;
+  if (!inside || inside.isTextblock || inside.isInline) return null;
+  return blockPosAt(view, root);
+}
+
+function clickToSelectBlockPlugin(): Plugin {
+  return new Plugin({
+    key: new PluginKey('clickToSelectBlock'),
+    props: {
+      handleDOMEvents: {
+        mousedown(view, e) {
+          if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || !view.editable) return false;
+          const pos = blockAtEmptySpace(view, e);
+          if (pos === null) return false;
+          e.preventDefault();
+          selectBlock(view, pos);
+          return true;
+        },
       },
     },
   });

@@ -1,18 +1,16 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { useMemo, useState } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews } from '@/store/noteViews';
 import { LABELS } from '@/config/labels';
 import { HUB_ICON, ITEM_TYPE_ICON } from '@/config/itemIcons';
-import { CloseIcon, HubIcon } from '@/components/Icons';
+import { HubIcon } from '@/components/Icons';
+import { ItemPickerModal, PickerChoices } from '@/components/ItemPickerModal/ItemPickerModal';
+import { rankPicker } from '@/components/ItemPickerModal/rankPicker';
 import { listHubs, type HubTarget, type LinkChoice } from '@/services/noteHubs';
 import { glossaryEntries, type GlossaryEntry } from '@/services/glossary';
-import { rankSearch, rankSuggestions, type RankField } from '@/utils/suggestRank';
+import type { RankField } from '@/utils/suggestRank';
 import { RELATIONS, type HubRef, type HubRelation } from '@/utils/noteHubs';
 import { noteName } from '@/utils/notes';
-// Same look as the note, task, list and inbox pickers.
-import styles from '@/components/NotePickerModal/NotePickerModal.module.css';
 import own from './HubPickerModal.module.css';
 
 type Props =
@@ -37,9 +35,10 @@ const fieldsOf = (r: Row): RankField[] => {
 };
 const recencyOf = (r: Row) => (r.kind === 'glossary' ? Date.parse(r.entry.updatedAt) || 0 : r.kind === 'note' ? Date.parse(r.updatedAt) || 0 : 0);
 
-// Add to hub, and a hub's + Link…: ordered like every picker (utils/suggestRank.ts) by the words of
-// what's being linked (the selected text, or the hub's name and take), then the most recent. Below
-// the search, how it relates (Related unless chosen). Portaled, like the other pickers.
+// Add to hub, and a hub's + Link…: the picker dialog (components/ItemPickerModal), ordered like
+// every picker (utils/suggestRank.ts) by the words of what's being linked (the selected text, or
+// the hub's name and take), then the most recent. Above the list, how it relates (Related unless
+// chosen).
 export function HubPickerModal(props: Props) {
   const { mode, suggestFrom, onClose } = props;
   const notesRaw = useNoteStore((s) => s.notes);
@@ -47,15 +46,11 @@ export function HubPickerModal(props: Props) {
   const notes = useNoteViews();
   const noteTags = useNoteStore((s) => s.noteTags);
   const [query, setQuery] = useState('');
-  const [highlight, setHighlight] = useState(0);
   const [relation, setRelation] = useState<HubRelation>('related');
-  const listRef = useRef<HTMLDivElement>(null);
   const L = LABELS.hubs;
   const excludeNoteId = props.mode === 'link' ? props.excludeNoteId : null;
 
-  useEscapeClose(onClose);
-
-  const { rows, suggested, keywords } = useMemo(() => {
+  const { rows, sections } = useMemo(() => {
     void notesRaw; void entriesRaw;
     let candidates: Row[];
     if (mode === 'hub') {
@@ -67,20 +62,12 @@ export function HubPickerModal(props: Props) {
         .map((n) => ({ key: `note:${n.id}`, kind: 'note', noteId: n.id, title: noteName(n, noteTags, { untitled: LABELS.mobileNotes.untitled }).full, text: n.abstract ?? '', updatedAt: n.updatedAt }));
       candidates = [...terms, ...noteRows];
     }
-    const ranked = query.trim()
-      ? { items: rankSearch(candidates, fieldsOf, recencyOf, query), suggested: 0, keywords: [] as string[] }
-      : rankSuggestions(candidates, fieldsOf, recencyOf, suggestFrom);
-    const list = ranked.items.slice(0, 60);
+    const ranked = rankPicker(candidates, fieldsOf, recencyOf, query, suggestFrom);
+    const list = ranked.rows.slice(0, 60);
+    const kept = ranked.sections.filter((s) => s.at < list.length);
     if (mode === 'hub') list.push({ key: 'new', kind: 'new' });
-    return { rows: list, suggested: Math.min(ranked.suggested, list.length), keywords: ranked.keywords };
+    return { rows: list, sections: kept };
   }, [mode, notes, notesRaw, entriesRaw, excludeNoteId, query, suggestFrom, noteTags]);
-
-  const last = Math.max(0, rows.length - 1);
-  if (highlight > last) setHighlight(last);
-
-  useEffect(() => {
-    listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
-  }, [highlight, rows]);
 
   const choose = (r: Row) => {
     onClose();
@@ -89,28 +76,6 @@ export function HubPickerModal(props: Props) {
       else if (r.kind === 'hub') props.onPick(r.hub, relation);
     } else if (r.kind === 'glossary') props.onPick({ kind: 'glossary', entryId: r.entry.id, label: r.entry.term }, relation);
     else if (r.kind === 'note') props.onPick({ kind: 'note', noteId: r.noteId, label: r.title }, relation);
-  };
-
-  // Capture phase + stopImmediatePropagation, as in the other pickers: the pane underneath binds
-  // Ctrl+Enter to its own action and must not also answer while this is on top.
-  const chooseRef = useRef(() => {});
-  useEffect(() => { chooseRef.current = () => { const r = rows[highlight]; if (r) choose(r); }; });
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        chooseRef.current();
-      }
-    };
-    document.addEventListener('keydown', handler, true);
-    return () => document.removeEventListener('keydown', handler, true);
-  }, []);
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight((i) => Math.min(i + 1, last)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight((i) => Math.max(i - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); chooseRef.current(); }
   };
 
   const title = mode === 'hub' ? L.pickerTitle : L.linkPickerTitle;
@@ -124,72 +89,25 @@ export function HubPickerModal(props: Props) {
   };
   const empty = mode === 'hub' ? (rows.length === 1 ? L.noHubs : null) : rows.length === 0 ? L.noMatches : null;
 
-  return createPortal(
-    <div
-      className={styles.overlay}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      onKeyDown={(e) => { if (e.key !== 'Escape' && !e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
-    >
-      <div className={styles.modal} role="dialog" aria-label={title}>
-        <div className={styles.header}>
-          <span className={`${styles.title} ${own.title}`}><HubIcon className={own.icon} /> {title}</span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
-        </div>
-
-        <input
-          autoFocus
-          className={styles.search}
-          placeholder={mode === 'hub' ? L.search : L.linkSearch}
-          aria-label={mode === 'hub' ? L.search : L.linkSearch}
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setHighlight(0); }}
-          onKeyDown={onKeyDown}
-        />
-        <div className={own.relations} role="radiogroup" aria-label={L.relation}>
-          <span className={own.relationsLabel}>{L.relation}</span>
-          {RELATIONS.map((r) => (
-            <button
-              key={r}
-              type="button"
-              role="radio"
-              aria-checked={relation === r}
-              className={`${own.relation} ${relation === r ? own.relationOn : ''}`}
-              onClick={() => setRelation(r)}
-            >
-              {L.relations[r].label}
-            </button>
-          ))}
-        </div>
-
-        <div className={styles.results} ref={listRef} role="listbox" aria-label={title}>
-          {empty && <div className={styles.empty}>{empty}</div>}
-          {rows.map((r, i) => {
-            const active = i === highlight;
-            const { top, path } = describe(r);
-            return (
-              <Fragment key={r.key}>
-                {suggested > 0 && i === 0 && <div className={styles.sectionLabel}>{LABELS.pickers.suggestedFrom(keywords)}</div>}
-                {suggested > 0 && i === suggested && r.kind !== 'new' && <div className={styles.sectionLabel}>{LABELS.pickers.recent}</div>}
-                <div
-                  data-active={active || undefined}
-                  className={`${styles.result} ${active ? styles.resultActive : ''}`}
-                  onMouseEnter={() => setHighlight(i)}
-                  role="option"
-                  aria-selected={active}
-                >
-                  <button type="button" className={styles.resultMain} onClick={() => choose(r)}>
-                    <span className={styles.resultTop}><span className={styles.resultTitle}>{top}</span></span>
-                    {path && <span className={styles.resultPath}>{path}</span>}
-                  </button>
-                </div>
-              </Fragment>
-            );
-          })}
-        </div>
-
-        <div className={styles.footer}>{L.footer}</div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <ItemPickerModal
+      label={title}
+      heading={<span className={own.title}><HubIcon className={own.icon} /> {title}</span>}
+      query={query}
+      onQuery={setQuery}
+      search={mode === 'hub' ? L.search : L.linkSearch}
+      rows={rows}
+      sections={sections}
+      keyOf={(r) => r.key}
+      render={(r) => { const d = describe(r); return { title: d.top, meta: d.path ?? undefined }; }}
+      onPick={choose}
+      onClose={onClose}
+      above={<>
+        {empty && mode === 'hub' && <p className={own.empty}>{empty}</p>}
+        <PickerChoices label={L.relation} value={relation} onChange={setRelation} options={RELATIONS.map((r) => ({ value: r, label: L.relations[r].label }))} />
+      </>}
+      empty={mode === 'link' ? empty : null}
+      footer={L.footer}
+    />
   );
 }

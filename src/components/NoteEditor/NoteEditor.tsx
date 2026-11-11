@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { richTextIsEmpty } from '@/utils/emptyContent';
 import { createPortal } from 'react-dom';
-import { useEditor, useEditorState, EditorContent, getMarkRange } from '@tiptap/react';
+import { useEditor, useEditorState, EditorContent, getMarkRange, type Editor } from '@tiptap/react';
 import { Selection, TextSelection } from '@tiptap/pm/state';
 import { MAX_SECTION_COLUMNS } from './extensions/Section';
 import { useNoteStore } from '@/store/noteStore';
@@ -40,6 +40,7 @@ import { FONT_SIZES, currentFontSize, setFontSize, stepFontSize } from './extens
 import { noteClipboardText } from './noteClipboardText';
 import { SelectionMenu } from './objects/SelectionMenu';
 import './extensions/annotationMenu';
+import './extensions/cardFieldRecord';
 import { liveNote, registerLiveNoteEditor, registerOpenNoteEditor } from '@/services/liveNoteEditor';
 import { LABELS } from '@/config/labels';
 import { addPicture } from '@/services/pictures';
@@ -98,7 +99,7 @@ import { onVaultStatus, registerBeforeLock } from '@/services/vault';
 import { noteView, isNoteLocked } from '@/services/noteSecrets';
 import { useNoteView } from '@/store/noteViews';
 import styles from './NoteEditor.module.css';
-import { useEscapeClose } from '@/hooks/useEscapeClose';
+import { hasOpenOverlay, useEscapeClose } from '@/hooks/useEscapeClose';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 import { log } from '@/utils/log';
 import { parseNoteContent } from '@/utils/noteContent';
@@ -298,6 +299,14 @@ function scrollPosTo(view: import('@tiptap/pm/view').EditorView, pos: number, fr
     const offset = view.coordsAtPos(pos).top - host.getBoundingClientRect().top;
     host.scrollTo({ top: Math.max(0, host.scrollTop + offset - host.clientHeight * fraction), behavior });
   } catch { /* not laid out */ }
+}
+
+// A list, where one can go. A block's parts hold text only, and Tiptap's toggle there first turns
+// the part into the block's default part (a case study's "Situation") before failing to wrap it.
+function toggleNoteList(editor: Editor, kind: 'bullet' | 'ordered'): void {
+  if (!(kind === 'bullet' ? editor.can().toggleBulletList() : editor.can().toggleOrderedList())) return;
+  const chain = editor.chain().focus();
+  (kind === 'bullet' ? chain.toggleBulletList() : chain.toggleOrderedList()).run();
 }
 
 export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) {
@@ -1066,16 +1075,19 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     return () => dom.removeEventListener('hub-link-picker', onRequest);
   }, [editor]);
 
+  // A web link from a menu: on the selection, or the New link pane with nothing selected.
+  function openLinkFromMenu() {
+    if (!editor) return;
+    if (editor.state.selection.empty) openNewLinkPane(editor);
+    else toolbarActionsRef.current?.openLinkInput();
+  }
+
   useContextMenuScope(editorContentRef, () => ({
     kind: 'note-editor',
     data: {
       editor: editor!,
       paste: pasteFromClipboard,
-      openLink: () => {
-        if (!editor) return;
-        if (editor.state.selection.empty) openNewLinkPane(editor);
-        else toolbarActionsRef.current?.openLinkInput();
-      },
+      openLink: openLinkFromMenu,
       openCreate: () => toolbarActionsRef.current?.openCreateMenu(),
       insertTitle,
     } satisfies NoteEditorMenuApi,
@@ -1404,6 +1416,28 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     return () => document.removeEventListener('keydown', handler, true);
   }, [editor]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Ctrl+W (Cmd+W): close the note in front, as its ✕ does (side by side, its pane goes; one note
+  // alone, back to no note open). Asked for by the user 2026-11-10. A plain browser tab keeps
+  // Ctrl+W for itself; the desktop app and an installed PWA hand it to us.
+  const closeNoteRef = useRef(closeNote);
+  useEffect(() => { closeNoteRef.current = closeNote; });
+  useEffect(() => {
+    if (isAndroid || !editingNoteId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'w') return;
+      const root = containerRef.current;
+      const active = document.activeElement;
+      const inside = !!root && !!active && root.contains(active);
+      const nothingFocused = !active || active === document.body;
+      if (!inside && !(nothingFocused && inFront && (!pane || pane.index >= 0) && !hasOpenOverlay())) return;
+      e.preventDefault();
+      e.stopPropagation();
+      closeNoteRef.current();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isAndroid, editingNoteId, inFront, pane]);
+
   // No ESC handler here — the inline editor stays open while in the notes section.
   // ESC is handled by individual modals (AddNoteTagModal, EditNoteTagModal, etc.).
 
@@ -1485,14 +1519,14 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
       // Ctrl+. → collapse/expand the heading the cursor is in; anywhere else, bullet list
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === '.') {
         e.preventDefault();
-        if (!toggleHeadingFoldAtCursor(editor.view)) editor.chain().focus().toggleBulletList().run();
+        if (!toggleHeadingFoldAtCursor(editor.view)) toggleNoteList(editor, 'bullet');
         return;
       }
 
       // Ctrl+/ → ordered list
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === '/') {
         e.preventDefault();
-        editor.chain().focus().toggleOrderedList().run();
+        toggleNoteList(editor, 'ordered');
         return;
       }
 
@@ -1560,6 +1594,8 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     objectTriggerStorage(editor).openSendToInbox = openSendToInbox;
     objectTriggerStorage(editor).openAddToHub = openAddToHub;
     objectTriggerStorage(editor).openNoteLinkPicker = openNoteLinkPicker;
+    objectTriggerStorage(editor).openWebLink = openLinkFromMenu;
+    objectTriggerStorage(editor).openCreateFrom = () => toolbarActionsRef.current?.openCreateMenu();
   });
 
   const pendingArtifactLink = useUIStore((s) => s.pendingArtifactLink);
@@ -1729,9 +1765,9 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
               openNoteTagView(noteTagViewReturn);
               setNoteTagViewReturn(null);
             }}
-            title="Back to tag view"
+            title={LABELS.noteEditor.backToTags}
           >
-            ← Tags
+            ← {LABELS.noteEditor.tags}
           </button>
         )}
         {note?.isEncrypted && (
@@ -1817,7 +1853,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
             <button
               className={`${styles.toolbarBtn} ${editor?.isActive('bulletList') ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => editor?.chain().focus().toggleBulletList().run()}
+              onClick={() => editor && toggleNoteList(editor, 'bullet')}
               title="Bullet list"
             >
               <BulletIcon />
@@ -1827,7 +1863,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
             <button
               className={`${styles.toolbarBtn} ${editor?.isActive('orderedList') ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+              onClick={() => editor && toggleNoteList(editor, 'ordered')}
               title="Numbered list"
             >
               <OrderedIcon />
@@ -2036,7 +2072,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
               className={`${styles.toolbarBtn} ${tocOpen ? styles.toolbarBtnActive : ''}`}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => setTocOpen((o) => !o)}
-              title="Toggle navigation pane"
+              title={LABELS.noteEditor.toggleNav}
             >
               <TocIcon />
             </button>
@@ -2140,7 +2176,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
         )}
 
         {!isAndroid && pane?.onReplace && <button className={styles.closeBtn} onClick={pane.onReplace} title={LABELS.noteViews.replace} aria-label={LABELS.noteViews.replace}><SwapIcon /></button>}
-        {!isAndroid && <button className={styles.closeBtn} onClick={closeNote} title="Close (Esc)" aria-label="Close"><CloseIcon /></button>}
+        {!isAndroid && <button className={styles.closeBtn} onClick={closeNote} title={LABELS.noteViews.closeNote} aria-label={LABELS.noteViews.closeNote}><CloseIcon /></button>}
       </div>
 
       {!isAndroid && <NoteBacklinks note={note} activeTabId={activeTabId} editor={editor} canInsert={!noteLocked} onSwitchTab={switchTab} />}

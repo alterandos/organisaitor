@@ -1,5 +1,6 @@
 import { expandRepeat } from '@/utils/recurrence';
 import { addDaysToIso } from '@/utils/date';
+import { linksToIn } from '@/utils/linksTo';
 import type { CalendarDeadline, CalendarEvent, CalendarReminder, ItemLink, Task } from '@/types';
 
 // Tasks linked to an event, a Reminder or a standalone Deadline (agreed with the user 2026-10-23;
@@ -21,12 +22,15 @@ export const EVENT_LINK_KINDS: EventLinkKind[] = ['prepFor', 'followUpOf', 'rela
 export const isEventLink = (l: ItemLink): boolean => l.targetType === 'event' || l.targetType === 'reminder' || l.targetType === 'deadline';
 export const eventLinksOf = (t: Task): ItemLink[] => (t.itemLinks ?? []).filter(isEventLink);
 
-// The tasks linked to one event or Deadline, with how each relates.
+// The tasks linked to one event or Deadline, with how each relates (its first link to it), read
+// through utils/linksTo.ts, the one "what links here".
 export function tasksLinkedTo(targetType: EventTargetType, targetId: string, tasks: Record<string, Task>): { task: Task; kind: EventLinkKind }[] {
   const out: { task: Task; kind: EventLinkKind }[] = [];
-  for (const t of Object.values(tasks)) {
-    const l = eventLinksOf(t).find((x) => x.targetType === targetType && x.targetId === targetId);
-    if (l) out.push({ task: t, kind: l.kind as EventLinkKind });
+  const seen = new Set<string>();
+  for (const l of linksToIn({ tasks, events: {}, reminders: {}, deadlines: {}, lists: {} }, targetType, targetId)) {
+    if (l.via !== 'taskLink' || !l.task || seen.has(l.id)) continue;
+    seen.add(l.id);
+    out.push({ task: l.task, kind: l.kind as EventLinkKind });
   }
   return out;
 }

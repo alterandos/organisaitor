@@ -61,6 +61,14 @@ export function skipOccurrenceWithUndo(taskId: TaskId): void {
   });
 }
 
+// Told of every task completed through here (the task, and any it was waiting on that were
+// completed with it), so the row can celebrate (TaskItem → animations/completionBurst.ts).
+const completedListeners = new Set<(id: TaskId) => void>();
+export function onTaskCompleted(fn: (id: TaskId) => void): () => void {
+  completedListeners.add(fn);
+  return () => { completedListeners.delete(fn); };
+}
+
 export async function toggleTaskCompletion(taskId: TaskId, opts: CompletionOptions = {}): Promise<void> {
   const tasks = useTaskStore.getState().tasks;
   const task = tasks[taskId];
@@ -94,6 +102,7 @@ export async function toggleTaskCompletion(taskId: TaskId, opts: CompletionOptio
     if (next) spawned.push(next);
   }
   if (!completed.includes(taskId)) return;
+  for (const id of completed) completedListeners.forEach((fn) => fn(id));
 
   const after = useTaskStore.getState().tasks;
   const unlocked = [...new Map(completed.flatMap((id) => unlockedBy(id, after)).map((t) => [t.id, t])).values()];

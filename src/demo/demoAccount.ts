@@ -155,6 +155,12 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     related: [{ kind: 'dependsOn', entryId: albedo }],
     importance: 1,   // a Key concept (BlockImportance.ts): shows in its card, hover card and the Glossary filter
   });
+  // An Example (2026-11-12): what it's an example of is a link, so the concept's card lists it.
+  const seaIce = entry('instance', 'Arctic sea ice loss', carbon, {
+    example: 'Summer sea ice has shrunk by about 40% since 1979; the darker open water absorbs more sunlight and warms the Arctic further.',
+    related: [{ kind: 'exampleOf', entryId: feedback }],
+    source: 'NSIDC, 2024',
+  });
   const forcing = entry('formula', 'CO₂ radiative forcing', carbon, {
     summary: 'How much extra energy a rise in CO₂ traps, in watts per square metre.',
     formula: '\\Delta F = 5.35 \\ln\\frac{C}{C_0}',
@@ -564,6 +570,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     pId('cc-ice', hubPassage('As sea ice melts, darker ocean is exposed, the albedo falls and more sunlight is absorbed, which melts more ice.', hub, 'demo-hl-ice'), ' This is the textbook positive feedback.'),
     EX.diagram(),
     card(feedback),
+    card(seaIce),
     card(forcing),
     p('Anthropogenic CO₂ is a forcing, not a feedback. ', node('movedStub', { noteId: essayNote, inboxId, itemId: 'demo-ib-sinks', title: 'Essay ideas' })),
     p('Burning a tonne of coal releases about 2.4 t of CO₂. How much carbon is that?'),
@@ -574,6 +581,8 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     EX.vennBlock(),
     h(1, 'A case that worked'),
     EX.caseStudy(),
+    p('The prompt I reuse when a feedback doesn’t click (Copy fills in the {idea}):'),
+    EX.promptBlock(),
     h(1, 'Working with the data'),
     p('The tutorial’s script for the annual means (data from ', weblink('NOAA GML', 'https://gml.noaa.gov/ccgg/trends/data.html'), '):'),
     EX.codeBlock(),

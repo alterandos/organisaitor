@@ -4,10 +4,12 @@ import { LABELS } from '@/config/labels';
 import { importanceLevel } from '@/components/NoteEditor/extensions/importanceLevels';
 import { entryView, isEntryLocked, noteView } from '@/services/noteSecrets';
 import { BUILTIN_TAGS } from '@/components/NoteEditor/builtinTags';
-import { GLOSSARY_TYPES, HEADLINED_KINDS, glossaryKinds, glossaryMeaning, glossaryNames } from '@/config/structuredTagTypes';
+import { GLOSSARY_TYPES, HEADLINED_KINDS, OUTSIDE_GLOSSARY, glossaryKinds, glossaryMeaning, glossaryNames } from '@/config/structuredTagTypes';
 import { countConceptRefs } from '@/utils/noteContent';
 import { getNoteNotebookPath } from '@/utils/notes';
 import { useTrashStore } from '@/store/trashStore';
+import { changeKind } from '@/utils/glossaryKindChange';
+import { showToast } from '@/components/Toast/showToast';
 import type { NoteTag } from '@/types/notes';
 import type { Note, StructuredTagEntry } from '@/types/notes';
 import type { NoteId, StructuredTagEntryId } from '@/types';
@@ -92,6 +94,26 @@ export function glossaryKindLine(e: Pick<GlossaryEntry, 'kindLabel' | 'importanc
   return also.length ? `${base} · ${LABELS.glossary.alsoKinds(also)}` : base;
 }
 
+// Changes a record's kind (a Concept into a Definition: utils/glossaryKindChange.ts says what moves
+// where), with Undo in the toast. Every card and chip of it then shows the new kind. Not while locked.
+export function changeGlossaryKind(id: string, toKey: string): boolean {
+  const store = useNoteStore.getState();
+  const raw = store.structuredTagEntries[id as StructuredTagEntryId];
+  const tag = BUILTIN_TAGS.find((t) => t.typeKey === toKey);
+  if (!raw || isEntryLocked(raw) || !tag) return false;
+  const view = entryView(raw);
+  const next = changeKind(view, toKey);
+  if (!next) return false;
+  const before = { typeKey: view.typeKey, tagId: view.tagId, term: view.term, fields: view.fields };
+  store.updateStructuredTagEntry(raw.id, { ...next, tagId: tag.id as StructuredTagEntry['tagId'] });
+  const L = LABELS.glossaryCard;
+  showToast({
+    message: L.kindChanged(next.term || L.untitledTerm, tag.name),
+    actions: [{ label: L.undoKind, onClick: () => useNoteStore.getState().updateStructuredTagEntry(raw.id, before) }],
+  });
+  return true;
+}
+
 export function setEntryImportance(id: string, level: 0 | 1 | 2 | 3): void {
   const store = useNoteStore.getState();
   const raw = store.structuredTagEntries[id as StructuredTagEntryId];
@@ -107,6 +129,8 @@ export function glossaryEntries(): GlossaryEntry[] {
     .map((e) => toGlossaryEntry(e, notes, noteTags))
     // A card's record has no term until one is typed (`\definition`); it isn't listed until then.
     .filter((e): e is GlossaryEntry => !!e && (e.locked || e.term.trim() !== ''))
+    // A quote is kept in Quotes, not the Glossary (OUTSIDE_GLOSSARY): read one with glossaryEntry.
+    .filter((e) => !OUTSIDE_GLOSSARY.has(e.typeKey))
     .sort((a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: 'base' }));
 }
 

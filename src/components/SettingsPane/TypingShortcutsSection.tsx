@@ -16,6 +16,7 @@ export function TypingShortcutsSection() {
   const add = useSettingsStore((s) => s.addTextShortcut);
   const [typed, setTyped] = useState('');
   const [text, setText] = useState('');
+  const [instant, setInstant] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
 
@@ -24,9 +25,10 @@ export function TypingShortcutsSection() {
     const t = typed.trim();
     const p = textShortcutProblem(t, text, shortcuts);
     if (p) { setProblem(L.problems[p]); return; }
-    add(t, text.trim());
+    add(t, text.trim(), instant);
     setTyped('');
     setText('');
+    setInstant(false);
     setProblem(null);
   }
 
@@ -52,6 +54,7 @@ export function TypingShortcutsSection() {
           aria-label={L.text}
           onChange={(e) => { setText(e.target.value); setProblem(null); }}
         />
+        <InstantBox checked={instant} onChange={setInstant} />
         <button type="submit" className={styles.shortcutAdd}>{L.add}</button>
       </form>
       {problem && <p className={styles.shortcutProblem} role="alert">{problem}</p>}
@@ -129,6 +132,7 @@ function ShortcutRow({ shortcut, all }: { shortcut: TextShortcut; all: TextShort
           onBlur={commit}
           onKeyDown={onKeyDown}
         />
+        <InstantBox checked={!!shortcut.instant} onChange={(on) => update(shortcut.id, { instant: on })} />
         <button
           type="button"
           className={styles.shortcutRemove}
@@ -139,5 +143,16 @@ function ShortcutRow({ shortcut, all }: { shortcut: TextShortcut; all: TextShort
       </div>
       {problem && <p className={styles.shortcutProblem} role="alert">{problem}</p>}
     </li>
+  );
+}
+
+// Whether a shortcut replaces as soon as it's typed, inside a word too (findInstantShortcut).
+function InstantBox({ checked, onChange }: { checked: boolean; onChange: (on: boolean) => void }) {
+  const L = LABELS.typingShortcuts;
+  return (
+    <label className={styles.shortcutInstant} title={L.instantHint}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {L.instant}
+    </label>
   );
 }

@@ -55,7 +55,7 @@ describe('right-click on selected note text', () => {
     editor.commands.setTextSelection({ from: 8, to: 22 });
     const sections = menu();
     expect(sections.map(ids)).toEqual([
-      ['mark-as', 'turn-into', 'link', 'send-selection'],
+      ['turn-into', 'send-selection', 'mark-as', 'link'],
       ['cut', 'copy', 'paste', 'paste-plain', 'select-all'],
       ['style', 'headings'],
     ]);
@@ -81,6 +81,15 @@ describe('right-click on selected note text', () => {
     make('<p>coefficients of determination, and bananas</p>');
     expect(selectionActions(editor as never, { from: 2, to: 31 }).some((a) => a.key === `link-term-${id}`)).toBe(true);
     expect(selectionActions(editor as never, { from: 37, to: 44 }).some((a) => a.key === `link-term-${id}`)).toBe(false);
+  });
+
+  it('turn into, send, annotate, link; a question is offered, first when the words end in "?"', () => {
+    make('<p>photosynthesis</p>');
+    const groups = selectionActions(editor as never, { from: 2, to: 16 }).map((a) => a.group);
+    expect([...new Set(groups)]).toEqual(['turn', 'send', 'mark', 'link']);
+    expect(selectionActions(editor as never, { from: 2, to: 16 })[0].key).not.toBe('question');
+    make('<p>What is osmosis?</p>');
+    expect(selectionActions(editor as never, { from: 2, to: 18 })[0].key).toBe('question');
   });
 
   it('every selection action has a key of its own (2026-11-03: Mark as ▸ Quote and Turn into ▸ Quote once shared one)', () => {

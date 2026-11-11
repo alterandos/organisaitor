@@ -50,7 +50,7 @@ export function showCharPicker(at: CaretBox, matches: CharMatch[], selected: num
   });
   const hint = document.createElement('div');
   hint.className = styles.hint;
-  hint.textContent = LABELS.specialChars.hint;
+  hint.textContent = matches.length && !matches[0].entry ? LABELS.specialChars.emojiHint : LABELS.specialChars.hint;
   el.append(hint);
   // Below the cursor, or above it when there's no room.
   placeElement(el, { left: at.left, right: at.left, top: at.top, bottom: at.bottom }, { gap: 6 });

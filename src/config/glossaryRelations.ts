@@ -17,6 +17,7 @@ export const GLOSSARY_RELATIONS: GlossaryRelation[] = [
   { kind: 'typeOf',        label: R.typeOf,        inverse: R.typeOfInverse },
   { kind: 'dependsOn',     label: R.dependsOn,     inverse: R.dependsOnInverse },
   { kind: 'contrastsWith', label: R.contrastsWith, inverse: R.contrastsWith },
+  { kind: 'exampleOf',     label: R.exampleOf,     inverse: R.exampleOfInverse },
   { kind: 'related',       label: R.related,       inverse: R.related },
 ];
 

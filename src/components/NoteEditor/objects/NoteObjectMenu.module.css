@@ -243,6 +243,15 @@
 }
 
 /* The colour of the term's kind, or the importance level. */
+.shortcut {
+  flex: none;
+  margin-left: auto;
+  padding-left: var(--space-2);
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: var(--text-2xs);
+}
+
 .swatch {
   width: 8px;
   height: 8px;

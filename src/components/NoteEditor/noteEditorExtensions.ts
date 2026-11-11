@@ -43,10 +43,11 @@ import { QuestionExtensions } from './extensions/Question';
 import { CompareExtensions } from './extensions/Compare';
 import { DiagramExtensions } from './extensions/Diagram';
 import { ConvertExtensions } from './extensions/Convert';
+import { PromptExtensions } from './extensions/Prompt';
 import { CaseStudyExtensions } from './extensions/CaseStudy';
 import { CauseEffectExtensions } from './extensions/CauseEffect';
 import { VennExtensions } from './extensions/Venn';
-import { NoteBlockDelete, NoteBlockSelect } from './extensions/blockDesigns';
+import { NoteBlockDelete, NoteBlockKeys, NoteBlockSelect } from './extensions/blockDesigns';
 import { AutoBrackets } from './extensions/AutoBrackets';
 import { EscapePassThrough } from './extensions/EscapePassThrough';
 import { NoteBlockPicks } from './extensions/blockPicks';
@@ -140,6 +141,7 @@ export function noteEditorExtensions({ noteEncrypted, linkClass }: { noteEncrypt
       ...CompareExtensions,
       ...DiagramExtensions,
       ...ConvertExtensions,
+      ...PromptExtensions,
       ...CaseStudyExtensions,
       ...CauseEffectExtensions,
       ...VennExtensions,
@@ -149,6 +151,7 @@ export function noteEditorExtensions({ noteEncrypted, linkClass }: { noteEncrypt
       ...NoteEmbedExtensions,
       NoteBlockSelect,
       NoteBlockDelete,
+      NoteBlockKeys,
       NoteBlockPicks,
       BlockParts,
       GlossaryAutolink,

@@ -13,6 +13,10 @@ import { vennLayout, regionOf } from './vennLayout';
 import { DesignCycle } from './designCycle';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { noteClipboardText } from '../noteClipboardText';
+import { NoteBlockKeys } from './blockDesigns';
+import { BlockImportance } from './BlockImportance';
+import { BlockFlags } from './BlockFlags';
+import { parseNoteContent } from '@/utils/noteContent';
 
 // The case study, cause and effect, and Venn blocks (2026-10-23): made through `\`, their keys,
 // their links and sets, designs, copying, and a round trip through HTML; and the pure rules
@@ -29,7 +33,7 @@ afterEach(() => editor?.destroy());
 function make(content = '<p></p>') {
   editor = new Editor({
     element: document.createElement('div'),
-    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, ...CaseStudyExtensions, ...CauseEffectExtensions, ...VennExtensions, DesignCycle],
+    extensions: [StarterKit.configure({ document: false }), SectionDocument, Section, ColumnBlock, Column, NoteObjectTrigger, ...CaseStudyExtensions, ...CauseEffectExtensions, ...VennExtensions, DesignCycle, NoteBlockKeys, BlockImportance, BlockFlags],
     content,
   });
   objectTriggerStorage(editor).getContext = () => ({ noteId: 'n', collectionId: null, now: new Date() });
@@ -100,6 +104,7 @@ describe('case study', () => {
     type('The Montreal Protocol');
     press('Enter');
     type('1987, 46 countries');
+    press('Enter');   // a new line in the part, then Enter on it moves on
     press('Enter');
     type('CFCs were thinning the ozone layer');
     const { node, pos } = find('caseStudy');
@@ -118,6 +123,88 @@ describe('case study', () => {
     editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, title + 3)));
     press(']', { ctrlKey: true });
     expect(find('caseStudy').node.attrs.variant).toBe('report');
+  });
+
+  // The shared block keys and card look (2026-11-11: the case study had drifted from the cards).
+  it('Ctrl+Enter in a part leaves it as it is onto a new line below; a list never turns a part into another', () => {
+    make();
+    type('\\case ');
+    type('The Montreal Protocol');
+    for (let i = 0; i < 5; i++) press('Enter');
+    type('Global bans can work');
+    const shows = () => find('caseStudy').node.lastChild!;
+    expect(shows().attrs.field).toBe('shows');
+    // A long part holds bullets (2026-11-11): the line becomes one, and the part stays what it was.
+    expect(editor.commands.toggleBulletList()).toBe(true);
+    expect(shows().attrs.field).toBe('shows');
+    expect(shows().firstChild!.type.name).toBe('bulletList');
+    expect(press('Enter', { ctrlKey: true })).toBe(true);
+    expect(shows().textContent).toBe('Global bans can work');
+    expect(shows().childCount).toBe(1);   // no line break put in
+    const $sel = editor.state.selection.$from;
+    expect($sel.parent.type.name).toBe('paragraph');
+    expect($sel.pos).toBe(find('caseStudy').pos + find('caseStudy').node.nodeSize + 1);
+  });
+
+  it('a long part’s keys: Enter a new line or bullet, on an empty last line the next part; Tab indents a bullet; Backspace steps back', () => {
+    make();
+    type('\\case ');
+    type('Feed-in tariffs');
+    press('Enter');                     // the title, then Setting
+    type('Germany, 2000');
+    press('Enter');
+    type('Then Spain');
+    const setting = () => find('caseStudy').node.child(1);
+    expect(setting().childCount).toBe(2);
+    expect(setting().textContent).toBe('Germany, 2000Then Spain');
+    press('Enter');
+    press('Enter');                     // the empty last line goes, and on to Situation
+    expect(setting().childCount).toBe(2);
+    expect(editor.state.selection.$from.node(-1).attrs.field).toBe('situation');
+    type('- ');                         // Markdown's bullet
+    type('Prices fell');
+    press('Enter');
+    type('Panels spread');
+    const situation = () => find('caseStudy').node.child(2);
+    expect(situation().firstChild!.type.name).toBe('bulletList');
+    expect(situation().firstChild!.childCount).toBe(2);
+    expect(press('Tab')).toBe(true);    // the second bullet goes under the first
+    expect(situation().firstChild!.childCount).toBe(1);
+    press('Enter');
+    press('Enter');                     // an empty bullet: out of the list, then on
+    press('Enter');
+    press('Enter');
+    expect(editor.state.selection.$from.node(-1).attrs.field).toBe('actions');
+    press('Backspace');                 // at the start of an empty part: back to the one before
+    expect(editor.state.selection.$from.node(-1).type.name).not.toBe('caseField');
+  });
+
+  it('a case study stored before parts held lines is read with each part’s text in a line', () => {
+    const old = JSON.stringify({ type: 'doc', content: [{ type: 'section', content: [{ type: 'caseStudy', content: [
+      { type: 'caseTitle', content: [{ type: 'text', text: 'Old' }] },
+      { type: 'caseField', attrs: { field: 'shows' }, content: [{ type: 'text', text: 'It still reads' }] },
+    ] }] }] });
+    make();
+    editor.commands.setContent(parseNoteContent(old));
+    const shows = find('caseStudy').node.child(1);
+    expect(shows.firstChild!.type.name).toBe('paragraph');
+    expect(shows.textContent).toBe('It still reads');
+  });
+
+  it('is drawn in the shared card look, its kind line saying its level of Important and showing Clarify later', () => {
+    make();
+    type('\\case ');
+    type('Feed-in tariffs');
+    const { pos, node } = find('caseStudy');
+    const dom = () => editor.view.nodeDOM(find('caseStudy').pos) as HTMLElement;
+    expect(dom().getAttribute('data-card-look')).toBe('card');
+    expect(dom().querySelector('[data-card-part="kind"]')!.textContent).toBe('Case study');
+    editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, importance: 1, clarify: 'c1' }));
+    const kind = dom().querySelector('[data-card-part="kind"]')!;
+    expect(kind.textContent).toContain('⭐');
+    expect(kind.querySelector('[data-card-flag="clarify"]')).not.toBeNull();
+    editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, { ...find('caseStudy').node.attrs, variant: 'report' }));
+    expect(dom().hasAttribute('data-card-look')).toBe(false);
   });
 });
 

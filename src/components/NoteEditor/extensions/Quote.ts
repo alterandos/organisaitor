@@ -3,13 +3,17 @@ import { Plugin, PluginKey, Selection, TextSelection, type EditorState, type Tra
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
+import { objectTriggerStorage } from '../objects/NoteObjectTrigger';
+import { keptRecordExists, quoteCardsToBlocks, sendQuoteBlock, syncKeptQuotes } from '@/services/keptQuotes';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, selectButton, pillButton, type BlockDesign, placeBlock, replaceTypedWithBlock } from './blockDesigns';
 
 // A quote in a note (`\quote`, or Quote on selected text): the words, and who said them, where
 // and when. Note-taking structure only, like the timeline (extensions/Timeline.ts).
 //
 //   quoteBlock   variant attr: how it's drawn ('classic', 'card', 'pull'); hidden attr: what a
-//                hidden field held, so showing it again brings the text back
+//                hidden field held, so showing it again brings the text back; keptId attr: the
+//                quote record it's kept as in Quotes ("Send to Quotes", services/keptQuotes.ts),
+//                which then follows the block
 //   quoteText    the quote itself
 //   quoteField   one attribution field (field attr: QUOTE_FIELDS key), in QUOTE_FIELDS order;
 //                only the fields being shown are in the document
@@ -41,6 +45,11 @@ export const QuoteBlock = Node.create({
         default: 'classic' satisfies QuoteVariant,
         parseHTML: (el) => oneOf(QUOTE_VARIANTS, el.getAttribute('data-variant'), 'classic'),
         renderHTML: (attrs) => ({ 'data-variant': attrs.variant }),
+      },
+      keptId: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-kept-id') || null,
+        renderHTML: (attrs) => (attrs.keptId ? { 'data-kept-id': attrs.keptId } : {}),
       },
       hidden: {
         default: {},
@@ -310,7 +319,7 @@ function quoteDecorations(state: EditorState): DecorationSet | null {
     const variant = node.attrs.variant as QuoteVariant;
     const shown = fieldsOf(node);
     decos.push(Decoration.widget(pos + 1, (view, getPos) => toolsWidget(view, getPos, variant, shown, node.attrs),
-      { side: -1, key: `quote-tools-${t}-${variant}-${shown.join(',')}-${node.attrs.outlined ? 'o' : ''}${node.attrs.shaded ? 's' : ''}`, ignoreSelection: true, stopEvent: () => true }));
+      { side: -1, key: `quote-tools-${t}-${variant}-${shown.join(',')}-${node.attrs.outlined ? 'o' : ''}${node.attrs.shaded ? 's' : ''}-${node.attrs.keptId ?? ''}`, ignoreSelection: true, stopEvent: () => true }));
     if (editing) decos.push(Decoration.node(pos, pos + node.nodeSize, { 'data-qb-current': '' }));
     let childPos = pos + 1;
     let lead = true;
@@ -360,9 +369,23 @@ function toolsWidget(view: EditorView, getPos: () => number | undefined, variant
     b.setAttribute('aria-pressed', String(on));
     fields.append(b);
   }
-  bar.append(designButtons(QUOTE_DESIGNS, variant, (v) => { const p = pos(); if (p !== null) setQuoteVariant(view, p, v); }), fields, frameButtons(view, getPos, attrs), selectButton(view, getPos));
+  // Send to Quotes, pressed while kept (a second press opens the list).
+  const kept = keptRecordExists(attrs.keptId as string | null);
+  const K = LABELS.keptQuotes;
+  const keep = pillButton(kept ? K.keptHint : K.keepHint, () => {
+    const p = getPos();
+    if (p !== undefined) sendQuoteBlock(view, p - 1, quoteNoteId(view));
+  }, kept ? K.kept : K.keep);
+  keep.setAttribute('aria-label', kept ? K.kept : K.keep);
+  keep.setAttribute('data-qb-keep', '');
+  keep.setAttribute('aria-pressed', String(kept));
+  bar.append(designButtons(QUOTE_DESIGNS, variant, (v) => { const p = pos(); if (p !== null) setQuoteVariant(view, p, v); }), fields, keep, frameButtons(view, getPos, attrs), selectButton(view, getPos));
   return bar;
 }
+
+// The note a view shows (its editor's context), for keeping a quote with it.
+const viewNotes = new WeakMap<EditorView, () => string | null>();
+export const quoteNoteId = (view: EditorView): string | null => viewNotes.get(view)?.() ?? null;
 
 const quoteKey = new PluginKey('quoteBlock');
 
@@ -384,7 +407,33 @@ export const QuoteBehaviour = Extension.create({
   },
 
   addProseMirrorPlugins() {
-    return [new Plugin({ key: quoteKey, props: { decorations: quoteDecorations } })];
+    const editor = this.editor;
+    const noteId = () => objectTriggerStorage(editor)?.getContext()?.noteId ?? null;
+    return [new Plugin({
+      key: quoteKey,
+      props: { decorations: quoteDecorations },
+      // A kept quote's record follows the block (half a second after typing stops); a quote card
+      // from before 2026-11-11 becomes a kept quote block when its note is opened.
+      view: (view) => {
+        viewNotes.set(view, noteId);
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const flush = () => { timer = null; if (!view.isDestroyed) syncKeptQuotes(view.state.doc, noteId()); };
+        const convert = () => {
+          if (!view.editable || view.isDestroyed) return;
+          const tr = quoteCardsToBlocks(view.state.doc, view.state.schema, view.state.tr);
+          if (tr) view.dispatch(tr.setMeta('addToHistory', false));
+        };
+        setTimeout(convert, 0);
+        return {
+          update: (v, prev) => {
+            if (v.state.doc.eq(prev.doc)) return;
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(flush, 500);
+          },
+          destroy: () => { if (timer) { clearTimeout(timer); syncKeptQuotes(view.state.doc, noteId()); } },
+        };
+      },
+    })];
   },
 });
 

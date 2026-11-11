@@ -19,7 +19,7 @@ import { applyResolvedArtifactLink, insertObjectTrigger, setOverride } from './a
 import { ARTIFACT_TYPES } from './artifactTypes';
 import { getNoteBacklinks } from '@/store/noteBacklinks';
 import { useDialogStore } from '@/store/dialogStore';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { flagMenuItems } from './flags';
 import { expandShortWeekdays, readWhenInput, tidyObjectTitle } from './whenInput';
 import { addDaysToIso, todayIso } from '@/utils/date';
@@ -803,7 +803,7 @@ describe('repeating items', () => {
     const later = list.items[list.items.length - 1];
     ARTIFACT_TYPES.reminder!.toggleOccurrenceDone!(id, later.date);
     expect(useCalendarStore.getState().reminders[id as CalendarReminderId].doneDates).toEqual([later.date]);
-    openArtifactTarget('reminder', id, later.date);
+    openItem('reminder', id, { occurrence: later.date });
     expect(useUIStore.getState()).toMatchObject({ editingCalendarReminderId: id, editingCalendarReminderOccurrence: later.date });
     expect(ARTIFACT_TYPES.reminder!.occurrences!(useCalendarStore.getState().addReminder({ title: 'Once', date: today }))).toBeNull();
   });
@@ -845,7 +845,7 @@ describe('repeating items', () => {
     expect(changed.date).toBe(replaced);
     expect(changed.label).toContain('09:00');
     expect(items.filter((o) => o.date === replaced)).toHaveLength(1);   // the series' own date is gone (an exception)
-    openArtifactTarget('reminder', changed.changedId!);
+    openItem('reminder', changed.changedId!);
     expect(useUIStore.getState().editingCalendarReminderId).toBe(copy);
   });
 

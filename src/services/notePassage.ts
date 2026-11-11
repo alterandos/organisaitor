@@ -46,6 +46,8 @@ export function openNotePassage(noteId: string, findOrFinds: PassageFind | Passa
 // (`\definition`, extensions/GlossaryCard.ts), else its chip (extensions/GlossaryChip.ts), else (a
 // record sent to the Glossary) the term linked where its card was, in the note it came from.
 export const definitionPassage = (entryId: string): PassageFind[] => [
+  // A kept quote: its `\quote` block (services/keptQuotes.ts), the one place it's written.
+  { node: 'quoteBlock', attr: 'keptId', value: entryId },
   { mark: 'noteTag', attr: 'structuredEntryId', value: entryId },
   { node: 'glossaryCard', attr: 'entryId', value: entryId },
   { node: 'glossaryChip', attr: 'entryId', value: entryId },
@@ -59,7 +61,7 @@ export const definitionPassage = (entryId: string): PassageFind[] => [
 export function openGlossaryEntry(entryId: string): boolean {
   const raw = useNoteStore.getState().structuredTagEntries[entryId as never] as { noteId: string | null } | undefined;
   if (!raw) return false;
-  const inNote = raw.noteId && definitionPassage(entryId).slice(0, 3).some((f) => noteHasPassage(raw.noteId!, f));
+  const inNote = raw.noteId && definitionPassage(entryId).slice(0, 4).some((f) => noteHasPassage(raw.noteId!, f));
   if (inNote && openNotePassage(raw.noteId!, definitionPassage(entryId))) return true;
   useUIStore.getState().openGlossaryRecord(entryId);
   return true;

@@ -2,7 +2,8 @@ import { endeavourColor } from '@/utils/endeavourLook';
 import { TYPES_ENABLED } from '@/config/features';
 import { createElement, useEffect, useRef } from 'react';
 import { checklistProgress, linkedListIds } from '@/services/taskListLinks';
-import { toggleTaskCompletion, taskCompletionOptions, skipOption } from '@/services/taskCompletion';
+import { toggleTaskCompletion, taskCompletionOptions, skipOption, onTaskCompleted } from '@/services/taskCompletion';
+import { completionBurst } from '@/animations/completionBurst';
 import { HoverOptions } from '@/components/HoverOptions/HoverOptions';
 import { useListStore } from '@/store/listStore';
 import type { Priority, Task } from '@/types';
@@ -68,6 +69,8 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   // Android swipes (docs/android/11 §9): right completes; left slides the row open on Archive
   // and Delete, which act at once with an Undo toast (decision D2).
   const rowRef = useRef<HTMLDivElement>(null);
+  const checkRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => onTaskCompleted((id) => { if (id === task.id) void completionBurst(checkRef.current); }), [task.id]);
   const swipe = useSwipeRow(rowRef, {
     enabled:      isAndroid,
     onSwipeRight: () => { hapticLight(); void toggleTaskCompletion(task.id); },
@@ -157,6 +160,7 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
       <div className={styles.itemRow}>
         <HoverOptions options={taskCompletionOptions(task.id)}>
           <button
+            ref={checkRef}
             className={`${styles.checkbox} ${task.completed ? styles.checkboxDone : ''}`}
             onClick={(e) => { e.stopPropagation(); void toggleTaskCompletion(task.id); }}
             aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}

@@ -1,11 +1,12 @@
 import { Extension, InputRule } from '@tiptap/core';
 import { Plugin, PluginKey, TextSelection, type EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { exactChar, findCharTrigger, findShortcut, findUserShortcut, matchChars, SHORTCUTS, type CharMatch } from '@/specialChars/charSets';
+import { findInstantShortcut, findShortcut, findUserShortcut, SHORTCUTS, type CharMatch } from '@/specialChars/charSets';
+import { typedWhole, typingTrigger } from '@/specialChars/emoji';
 import { useSettingsStore } from '@/store/settingsStore';
 import { hideCharPicker, showCharPicker } from '@/specialChars/charPicker';
 
-// `//name` in the note editor: the same characters, list and keys as every other text field
+// `//name` (and `:name:` for emoji, specialChars/emoji.ts) in the note editor: the same characters, list and keys as every other text field
 // (src/specialChars/fieldInput.ts), through ProseMirror, since the editor owns its text. Not in
 // code, where `//` is a comment.
 //
@@ -17,6 +18,8 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // The person's own shortcuts (`govt` → government) fire as the word ends: a run of text, then the
 // space or punctuation just typed (findUserShortcut decides). Undone the same way.
 const USER_SHORTCUT_FIND = /\S+[\s.,;:!?)\]}"'”’…]$/u;
+// Those marked to replace as soon as typed (`:o` → ö), inside a word too.
+const INSTANT_SHORTCUT_FIND = /\S+$/u;
 const SHORTCUT_FIND = new RegExp(`(?:${SHORTCUTS.map((s) => escapeRe(s.typed)).join('|')}|(?:\\^|[⁰¹²³⁴⁵⁶⁷⁸⁹])[0-9]|(?:^|[^\\p{L}\\p{N}])[A-Z][A-Za-z0-9₀-₉]*)$`, 'u');
 
 interface Typing { from: number; to: number; matches: CharMatch[] }
@@ -27,9 +30,9 @@ function typingAt(state: EditorState): Typing | null {
   const $pos = sel.$from;
   if (!$pos.parent.isTextblock || $pos.parent.type.spec.code || $pos.marks().some((m) => m.type.name === 'code')) return null;
   const before = $pos.parent.textBetween(0, $pos.parentOffset, undefined, '￼');
-  const t = findCharTrigger(before);
+  const t = typingTrigger(before, useSettingsStore.getState().textShortcuts);
   if (!t) return null;
-  return { from: $pos.start() + t.start, to: sel.from, matches: matchChars(t.query) };
+  return { from: $pos.start() + t.start, to: sel.from, matches: t.matches };
 }
 
 const key = new PluginKey('specialCharInput');
@@ -48,6 +51,13 @@ export const SpecialCharInput = Extension.create({
       find: SHORTCUT_FIND,
       handler: ({ state, range, match }) => {
         const s = findShortcut(match[0]);
+        if (!s) return null;
+        state.tr.insertText(s.char, range.from + s.start, range.to);
+      },
+    }), new InputRule({
+      find: INSTANT_SHORTCUT_FIND,
+      handler: ({ state, range, match }) => {
+        const s = findInstantShortcut(match[0], useSettingsStore.getState().textShortcuts);
         if (!s) return null;
         state.tr.insertText(s.char, range.from + s.start, range.to);
       },
@@ -111,16 +121,15 @@ export const SpecialCharInput = Extension.create({
           }
           return false;
         },
-        // The whole name and a space: the character, keeping the space.
+        // The whole name and a space: the character, keeping the space; `:name:` the emoji.
         handleTextInput(view, from, to, text) {
-          if (text !== ' ' || from !== to) return false;
+          if ((text !== ' ' && text !== ':') || from !== to) return false;
           const $pos = view.state.doc.resolve(from);
-          if (!$pos.parent.isTextblock || $pos.parent.type.spec.code) return false;
-          const before = $pos.parent.textBetween(0, $pos.parentOffset, undefined, '￼');
-          const t = findCharTrigger(before);
-          const ch = t && exactChar(t.query);
-          if (!t || !ch) return false;
-          view.dispatch(view.state.tr.insertText(`${ch} `, $pos.start() + t.start, from));
+          if (!$pos.parent.isTextblock || $pos.parent.type.spec.code || $pos.marks().some((m) => m.type.name === 'code')) return false;
+          const before = $pos.parent.textBetween(0, $pos.parentOffset, undefined, '￼') + text;
+          const w = typedWhole(before, useSettingsStore.getState().textShortcuts);
+          if (!w) return false;
+          view.dispatch(view.state.tr.insertText(w.char, $pos.start() + w.start, from));
           return true;
         },
         handleDOMEvents: {

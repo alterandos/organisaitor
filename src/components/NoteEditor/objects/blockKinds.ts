@@ -21,11 +21,13 @@ import { acronymBlock } from './acronymBlock';
 import { conceptBlock } from './conceptBlock';
 import { profileBlock } from './profileBlock';
 import { factBlock } from './factBlock';
+import { exampleBlock } from './exampleBlock';
 import { formulaBlock } from './formulaBlock';
 import { questionBlock } from './questionBlock';
 import { compareBlock } from './compareBlock';
 import { diagramBlock } from './diagramBlock';
 import { convertBlock } from './convertBlock';
+import { promptBlock } from './promptBlock';
 import { caseStudyBlock } from './caseStudyBlock';
 import { causeEffectBlock } from './causeEffectBlock';
 import { vennBlock } from './vennBlock';
@@ -38,4 +40,4 @@ import { clarifyTrigger } from './clarifyTrigger';
 // THE registry of note blocks `\` can insert (CLAUDE.md "Inline objects in notes" → note blocks).
 // A new block is its node in extensions/ (registered in NoteEditor), a `*Block.ts` here, and one
 // entry below — a pattern test checks the entry.
-export const NOTE_BLOCK_KINDS: NoteBlockKind[] = [timelineBlock, quoteBlock, conclusionBlock, cycleBlock, breakdownBlock, typesBlock, idKeyBlock, hierarchyBlock, pyramidBlock, stepsBlock, chartBlock, codeBlock, mathsBlock, inboxBlock, definitionBlock, acronymBlock, conceptBlock, profileBlock, formulaBlock, factBlock, questionBlock, compareBlock, prosConsBlock, argumentBlock, optionsBlock, diagramBlock, convertBlock, caseStudyBlock, causeEffectBlock, vennBlock, hubBlock, embedBlock, noteRefTrigger, unsureTrigger, clarifyTrigger];
+export const NOTE_BLOCK_KINDS: NoteBlockKind[] = [timelineBlock, quoteBlock, conclusionBlock, cycleBlock, breakdownBlock, typesBlock, idKeyBlock, hierarchyBlock, pyramidBlock, stepsBlock, chartBlock, codeBlock, mathsBlock, inboxBlock, definitionBlock, acronymBlock, conceptBlock, profileBlock, formulaBlock, factBlock, exampleBlock, questionBlock, compareBlock, prosConsBlock, argumentBlock, optionsBlock, diagramBlock, convertBlock, promptBlock, caseStudyBlock, causeEffectBlock, vennBlock, hubBlock, embedBlock, noteRefTrigger, unsureTrigger, clarifyTrigger];

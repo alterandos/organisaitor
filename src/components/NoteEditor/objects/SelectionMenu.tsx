@@ -1,18 +1,15 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditorState, type Editor } from '@tiptap/react';
-import { TextSelection } from '@tiptap/pm/state';
 import { LABELS } from '@/config/labels';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useNoteStore } from '@/store/noteStore';
 import { useSecretsVersion } from '@/services/noteSecrets';
 import { closeSelectionMenu, getSelectionMenu } from './selectionMenuState';
 import { objectTriggerStorage } from './NoteObjectTrigger';
-import { linkToTerm, selectionActions, termsFor, type SelectionActionGroup } from './selectionActions';
+import { selectionActions, selectionGroup, termsFor } from './selectionActions';
 import { useFloatingPlacement } from '@/utils/floatingPlacement';
 import styles from './NoteObjectMenu.module.css';
-
-const MAX_TERMS = 7;
 
 interface Props {
   editor: Editor;
@@ -20,7 +17,8 @@ interface Props {
 
 interface Item {
   key:      string;
-  group:    'suggested' | 'terms' | SelectionActionGroup;
+  heading:  string;
+  shortcut?: string;
   icon:     ReactNode;
   label:    string;
   detail?:  string;
@@ -28,10 +26,11 @@ interface Item {
   run:      () => void;
 }
 
-// The menu `\` opens on selected text (objects/selectionMenu.ts): link it to a Glossary term
-// (suggested from the selected words, the "link a …" picker pattern of utils/suggestRank.ts), or
-// mark it as a new Definition or Concept, Important at a level, or Review later. Typing filters
-// both; ↑/↓ and Enter choose; Esc goes back to the text with the selection as it was.
+// The menu `\` opens on selected text (objects/selectionMenu.ts): everything in
+// objects/selectionActions.ts, in its groups' order (turn into, send, annotate, link), then the
+// Glossary terms to link it to (suggested from the selected words, the "link a …" picker pattern
+// of utils/suggestRank.ts), last because they're the least often wanted (the user, 2026-11-10).
+// Typing filters both; ↑/↓ and Enter choose; Esc goes back to the text with the selection as it was.
 export function SelectionMenu({ editor }: Props) {
   const range = useEditorState({ editor, selector: ({ editor: ed }) => (ed ? getSelectionMenu(ed.state) : null) });
   const open = !!range && !editor.view.isDestroyed;
@@ -71,28 +70,17 @@ function SelectionMenuPanel({ editor, range }: Props & { range: { from: number; 
 
   const selected = view.state.doc.textBetween(range.from, range.to, ' ');
 
-  // The terms to link to, then everything else that can be done with the selection
-  // (objects/selectionActions.ts, the list right-click reads too).
+  // Everything that can be done with the selection, the Glossary terms last (objects/
+  // selectionActions.ts: the list, order and groups right-click reads too), filtered by the query.
   const items = useMemo(() => {
     void entriesVersion; void secretsVersion;
-    const { terms, suggested, any } = termsFor(selected, query);
-    const after = (run: () => void) => () => { close(); run(); };
-    const linkItems: Item[] = terms.slice(0, MAX_TERMS).map((e, i) => ({
-      key: `term-${e.id}`, group: i < suggested ? 'suggested' : 'terms', icon: e.icon, label: e.term,
-      detail: e.meaning || e.noteTitle, color: e.color,
-      run: after(() => {
-        linkToTerm(editor, range, e);
-        view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, range.to)));
-      }),
-    }));
-    // Marks are made with the cursor back in the text; the rest open something of their own.
-    const actions: Item[] = selectionActions(editor, range).map((a) => ({
+    const all: Item[] = selectionActions(editor, range, query).map((a) => ({
       ...a,
-      run: a.group === 'mark' && a.set !== 'glossary' ? after(a.run) : () => { closeSelectionMenu(view); a.run(); },
+      heading: a.heading ?? selectionGroup(a.group).label,
+      // Marks are made with the cursor back in the text; the rest open something of their own.
+      run: a.group === 'mark' && a.set !== 'glossary' ? () => { close(); a.run(); } : () => { closeSelectionMenu(view); a.run(); },
     }));
-    const q = query.trim().toLowerCase();
-    const shown = q ? actions.filter((m) => m.label.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) || m.label.toLowerCase().includes(q)) : actions;
-    return { all: [...linkItems, ...shown], hasTerms: any };
+    return { all, hasTerms: termsFor(selected).any };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- close is a per-render closure over stable things
   }, [query, selected, entriesVersion, secretsVersion]);
 
@@ -128,7 +116,6 @@ function SelectionMenuPanel({ editor, range }: Props & { range: { from: number; 
   if (!anchorBox) return null;
 
   const L = LABELS.selectionMenu;
-  const groupLabel: Record<Item['group'], string> = { suggested: L.suggested, terms: L.linkGroup, mark: L.markGroup, turn: L.turnGroup, link: L.linkOther, send: L.sendGroup };
   return createPortal(
     <div ref={menuRef} className={styles.menu} style={position} onMouseDown={(e) => { if (e.target !== inputRef.current) e.preventDefault(); }}>
       <input
@@ -140,11 +127,10 @@ function SelectionMenuPanel({ editor, range }: Props & { range: { from: number; 
         onKeyDown={(e) => { if (navigate(e.key)) { e.preventDefault(); e.stopPropagation(); } }}
       />
       <ul className={styles.kinds} role="listbox">
-        {!items.hasTerms && !query && <li role="presentation" className={styles.emptyNote}>{L.noTerms}</li>}
         {items.all.map((item, i) => (
           <Fragment key={item.key}>
-            {(i === 0 || item.group !== items.all[i - 1].group) && (
-              <li role="presentation" className={styles.group}>{groupLabel[item.group]}</li>
+            {(i === 0 || item.heading !== items.all[i - 1].heading) && (
+              <li role="presentation" className={styles.group}>{item.heading}</li>
             )}
             <li
               role="option"
@@ -158,10 +144,12 @@ function SelectionMenuPanel({ editor, range }: Props & { range: { from: number; 
                 <span className={styles.kindLabel}>{item.label}</span>
                 {item.detail && <span className={styles.kindHint}>{item.detail}</span>}
               </span>
+              {item.shortcut && <kbd className={styles.shortcut}>{item.shortcut}</kbd>}
               {item.color && <span className={styles.swatch} style={{ background: item.color }} aria-hidden="true" />}
             </li>
           </Fragment>
         ))}
+        {!items.hasTerms && !query && <li role="presentation" className={styles.emptyNote}>{L.noTerms}</li>}
       </ul>
       <div className={styles.footer}>{L.hint}</div>
     </div>,

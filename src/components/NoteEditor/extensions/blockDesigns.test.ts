@@ -7,7 +7,7 @@ import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { TimelineExtensions } from './Timeline';
 import { QuoteExtensions } from './Quote';
 import { CycleExtensions, canDeleteStage, deleteStage, ringArcEnds } from './Cycle';
-import { NoteBlockSelect, NOTE_BLOCK_NODES, applyFrameAttrs, blockAround, frameButtons, frameMenuItem, frameOverflow, setBlockFrame } from './blockDesigns';
+import { NoteBlockSelect, NOTE_BLOCK_NODES, applyFrameAttrs, blockAround, blockEmptySpaceTarget, frameButtons, frameMenuItem, frameOverflow, setBlockFrame } from './blockDesigns';
 import { noteClipboardText } from '../noteClipboardText';
 
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
@@ -175,5 +175,19 @@ describe('frame colours, shapes and lines', () => {
     } finally {
       Element.prototype.getBoundingClientRect = original;
     }
+  });
+});
+
+describe('a block’s empty space (blockEmptySpaceTarget)', () => {
+  it('is what’s inside the block and does nothing when pressed; the editor around it never counts against it', () => {
+    const editorRoot = document.createElement('div');
+    editorRoot.className = 'ProseMirror';
+    editorRoot.setAttribute('contenteditable', 'true');
+    editorRoot.innerHTML = '<div data-note-block><div class="pad"><span class="kind">Case study</span><button>x</button><div contenteditable="true"><b>t</b></div></div></div>';
+    const q = (s: string) => editorRoot.querySelector(s)!;
+    expect(blockEmptySpaceTarget(q('.pad'))).toBe(true);
+    expect(blockEmptySpaceTarget(q('.kind'))).toBe(true);
+    expect(blockEmptySpaceTarget(q('button'))).toBe(false);
+    expect(blockEmptySpaceTarget(q('b'))).toBe(false);
   });
 });

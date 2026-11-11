@@ -7,7 +7,7 @@ import type { MathfieldElement } from 'mathlive';
 import { LABELS } from '@/config/labels';
 import { useSettingsStore, type MathSlash } from '@/store/settingsStore';
 import { log, errorMessage } from '@/utils/log';
-import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, registerEnterableBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
+import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, nodeViewBlockBehaviour, registerEnterableBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 
 // Maths in a note (`\maths`): typed the way Word's equation editor works — `x^2` gives a
 // superscript, `h_0` a subscript, `/` a fraction, `alpha` or `\alpha` gives α, `\int`, `\sum`,
@@ -268,7 +268,7 @@ class MathView {
     this.holder = document.createElement('span');
     this.holder.setAttribute('data-math-holder', '');
     this.holder.textContent = node.attrs.latex as string;
-    if (block) { this.pill = document.createElement('div'); this.dom.append(this.pill); }
+    if (block) { this.pill = document.createElement('div'); this.dom.append(this.pill); nodeViewBlockBehaviour(this.dom, () => this.editor.view, this.getPos); }
     this.dom.append(this.holder);
     this.dom.addEventListener('math-edit', (e) => {
       const detail = (e as CustomEvent<{ text?: string; edge?: 'start' | 'end' }>).detail;

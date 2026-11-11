@@ -5,7 +5,7 @@ import type { EditorView } from '@tiptap/pm/view';
 import { LABELS } from '@/config/labels';
 import { CHART_KINDS, STACKABLE, type ChartKind, type ChartSpec, type ChartStacking, emptyChart, normalizeChart } from '@/charts/chartSpec';
 import { ChartWidget, isEmptyChart } from '@/charts/ChartWidget';
-import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, selectButton, typeIntoBlockPlugin, type BlockDesign, replaceTypedWithBlock } from './blockDesigns';
+import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, frameButtons, nodeViewBlockBehaviour, pillButton, selectButton, typeIntoBlockPlugin, type BlockDesign, replaceTypedWithBlock } from './blockDesigns';
 
 // A chart in a note (`\chart`): one atom node holding a library-neutral ChartSpec (`spec`) and the
 // chart type (`variant`, the block's design). Everything about charts that isn't about notes (the
@@ -142,6 +142,7 @@ class ChartView {
       onEscape: () => this.selectSelf(),
     });
     this.dom.append(this.pill, this.widget.dom);
+    nodeViewBlockBehaviour(this.dom, () => this.editor.view, this.getPos, this.widget.dom);
     this.dom.addEventListener('chart-edit', () => this.widget.setEditing(true));
     this.dom.addEventListener('chart-paste', () => this.widget.openPaste());
     this.renderChrome();

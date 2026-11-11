@@ -48,6 +48,7 @@
   --color-kind-fact: #8a6500;
   --color-kind-quote: #9a3412;
   --color-kind-formula: #1e40af;
+  --color-kind-instance: #5b21b6;
   /* Clarify later (NoteEditor/extensions/ClarifyMark.ts, BlockFlags.ts): something to come back and learn. */
   --color-clarify: #0e7490;
   /* The Important levels (NoteEditor/extensions/importanceLevels.ts): accent colours, the same in both themes. */
@@ -68,6 +69,7 @@
   --color-block-quote: #57534e;
   --color-block-hub: #334155;
   --color-block-convert: #6f7d16;
+  --color-block-prompt: #3730a3;
   --color-block-case: #166534;
   --color-block-cause: #b91c1c;
   --color-block-venn: #a16207;
@@ -167,6 +169,7 @@
   --z-picker:        1000;   /* pickers that open over a modal (NotePickerModal…) */
   --z-sheet:         1020;   /* BottomSheet */
   --z-toast:         1050;
+  --z-celebrate:     1060;   /* a moment's animation over everything (src/animations/), never in the way */
   --z-context-menu:  1080;
   --z-confirm:       1100;   /* ConfirmDialog: above everything a person can act in */
   --z-link-preview:  10000;  /* the hovered-link URL, never covered */
@@ -251,6 +254,7 @@
   --color-kind-fact: #fde047;
   --color-kind-quote: #fdba74;
   --color-kind-formula: #bfdbfe;
+  --color-kind-instance: #ddd6fe;
   --color-clarify: #67e8f9;
   --color-block-timeline: #7dd3fc;
   --color-block-cycle: #6ee7b7;
@@ -266,6 +270,7 @@
   --color-block-quote: #d6d3d1;
   --color-block-hub: #cbd5e1;
   --color-block-convert: #c3d34a;
+  --color-block-prompt: #c7d2fe;
   --color-block-case: #4ade80;
   --color-block-cause: #f87171;
   --color-block-venn: #facc15;

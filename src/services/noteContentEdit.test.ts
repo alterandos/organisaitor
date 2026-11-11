@@ -6,6 +6,7 @@ import { ArtifactLinkMark } from '@/components/NoteEditor/extensions/ArtifactLin
 import { editNoteContent, editNoteText } from './noteContentEdit';
 import { registerLiveNoteEditor } from './liveNoteEditor';
 import { deleteTaskWithCleanup } from './crossAppLinkCleanup';
+import { deleteForever, trashedBy } from './trash';
 import { useNoteStore } from '@/store/noteStore';
 import { useTaskStore } from '@/store/taskStore';
 import type { NoteId } from '@/types';
@@ -84,7 +85,7 @@ describe('editNoteContent: changing a note from outside its editor', () => {
   });
 });
 
-describe('a deleted task’s link leaves an open note through its editor', () => {
+describe('a task deleted forever: its link leaves an open note through its editor', () => {
   it('the mark goes from the editor’s text, so its next save can’t put it back', () => {
     const noteId = useNoteStore.getState().addNote({ title: 'N' });
     const taskId = useTaskStore.getState().addTask({ title: 'T', crossAppRefs: [{ type: 'note', id: noteId }] });
@@ -93,7 +94,8 @@ describe('a deleted task’s link leaves an open note through its editor', () =>
     ] }] });
     useNoteStore.getState().updateNote(noteId as NoteId, { content: linked });
     const ed = open(noteId, null, linked);
-    deleteTaskWithCleanup(taskId);
+    // Deleting keeps the link (a restore brings it back, 2026-11-10); deleting forever takes it out.
+    for (const entry of trashedBy(() => deleteTaskWithCleanup(taskId))) deleteForever(entry);
     let marked = false;
     ed.state.doc.descendants((n) => { if (n.marks.some((m) => m.type.name === 'artifactLink')) marked = true; });
     expect(marked).toBe(false);

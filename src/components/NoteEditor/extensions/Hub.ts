@@ -13,6 +13,7 @@ import {
   replaceTypedWithBlock, selectButton, type BlockDesign,
 } from './blockDesigns';
 import { createGlyph } from '@/components/Icons';
+import { movePart, partAround } from './blockParts';
 
 // An idea hub in a note (`\hub`): one bigger idea and what bears on it. A name, your own take on
 // it, then links, each saying how it relates (causes, supports, contradicts, an example of…) and
@@ -20,14 +21,20 @@ import { createGlyph } from '@/components/Icons';
 // passage stays where it is, marked, with a small marker after it), a Glossary term or a whole
 // note (the hub's + Link…). What links do is services/noteHubs.ts.
 //
-//   hub       hubId, variant (list / compact; a canvas is to come as another design), frames
+//   hub       hubId, variant (list / compact / sheet; a canvas is to come as another design), frames
+//
+// Fact sheet (2026-11-10, the user: compiling the points for a talk from across notes): the links
+// in the person's own order (drag the part handle, the ↑ ↓ on hover, Alt+↑ / Alt+↓), each showing
+// what it says (a term with its meaning, a passage's text), what kind it is only as a quiet icon.
+// List groups them under their relation by CSS order (decorations), so the sheet's order is kept
+// underneath it and switching designs loses nothing.
 //   hubTitle  the idea's name           hubTake   your own take on it (one line)
 //   hubLink   linkId, relation, kind (passage / glossary / note), noteId + tabId (a passage's
 //             note, or the linked note), entryId (a term), label (a passage's preview)
 //   hubRef    the mark on a linked passage: hubId, linkId, hubNoteId, hubTitle (data only; its
 //             marker is drawn once per passage, never per mark element)
 
-export const HUB_VARIANTS = ['list', 'compact'] as const;
+export const HUB_VARIANTS = ['list', 'compact', 'sheet'] as const;
 export type HubVariant = typeof HUB_VARIANTS[number];
 
 const oneOf = <T extends string>(values: readonly T[], v: string | null, fallback: T): T =>
@@ -241,6 +248,38 @@ class HubLinkView {
     whereEl.setAttribute('data-hub-link-where', '');
     whereEl.textContent = where;
 
+    // What it says, for the Fact sheet: a term's meaning (a passage's text is its name already).
+    const main = document.createElement('span');
+    main.setAttribute('data-hub-link-main', '');
+    main.append(open);
+    if (entry?.meaning) {
+      const body = document.createElement('span');
+      body.setAttribute('data-hub-link-body', '');
+      body.textContent = entry.meaning;
+      main.append(body);
+    }
+
+    // ↑ ↓ on hover, for the Fact sheet's own order (the part handle drags it too).
+    const mover = (dir: -1 | 1) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('data-hub-link-move', dir < 0 ? 'up' : 'down');
+      b.textContent = dir < 0 ? '↑' : '↓';
+      const label = dir < 0 ? L.moveUp : L.moveDown;
+      b.title = label;
+      b.setAttribute('aria-label', label);
+      b.hidden = !this.editor.isEditable;
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        const p = this.getPos();
+        const at = p === undefined ? null : partAround(this.editor.view.state.doc, p);
+        if (at) movePart(this.editor.view, at, dir);
+      });
+      return b;
+    };
+    const up = mover(-1);
+    const down = mover(1);
+
     const rel = document.createElement('button');
     rel.type = 'button';
     rel.setAttribute('data-hub-link-relation', '');
@@ -266,8 +305,8 @@ class HubLinkView {
       if (p !== undefined) removeLink(this.editor.view, p);
     });
 
-    for (const b of [open, rel, remove]) b.addEventListener('mousedown', (e) => e.preventDefault());
-    this.dom.replaceChildren(iconEl, open, whereEl, rel, remove);
+    for (const b of [open, rel, up, down, remove]) b.addEventListener('mousedown', (e) => e.preventDefault());
+    this.dom.replaceChildren(iconEl, main, whereEl, rel, up, down, remove);
   }
 
   update(node: PMNode) {
@@ -343,6 +382,7 @@ export const hubDelete: Command = (state) => {
 const DESIGN_ICONS: Record<HubVariant, string> = {
   list:    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h6M4 6h9M4 8.5h7M2 11.5h6M4 14h9"/></svg>',
   compact: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3" width="5.5" height="3.5" rx="1.5"/><rect x="8.5" y="3" width="6" height="3.5" rx="1.5"/><rect x="1.5" y="9.5" width="8" height="3.5" rx="1.5"/></svg>',
+  sheet:   '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="1.5" width="11" height="13" rx="1.5"/><path d="M5 5h6M5 8h6M5 11h4"/></svg>',
 };
 
 export const HUB_DESIGNS: BlockDesign<HubVariant>[] = HUB_VARIANTS.map((id) => ({ id, label: LABELS.hubs.designs[id], icon: DESIGN_ICONS[id] }));
@@ -360,10 +400,11 @@ function toolsWidget(view: EditorView, getPos: () => number | undefined, attrs: 
   return bar;
 }
 
-function headingWidget(relation: HubRelation): HTMLElement {
+function headingWidget(relation: HubRelation, order: number): HTMLElement {
   const h = document.createElement('div');
   h.contentEditable = 'false';
   h.setAttribute('data-hub-heading', relation);
+  h.style.order = String(order);
   h.textContent = LABELS.hubs.relations[relation].heading;
   return h;
 }
@@ -434,13 +475,21 @@ function hubDecorations(state: EditorState): DecorationSet | null {
     if (take.content.size === 0) decos.push(Decoration.node(takePos, takePos + take.nodeSize, { 'data-hub-placeholder': L.takePlaceholder }));
     const afterTake = takePos + take.nodeSize;
     if (node.childCount === 2) decos.push(Decoration.widget(afterTake, () => emptyWidget(), { side: -1, key: `hub-empty-${i}`, ignoreSelection: true }));
-    let previous: string | null = null;
-    node.forEach((child, offset) => {
-      if (child.type.name !== 'hubLink') return;
-      const relation = child.attrs.relation as HubRelation;
-      if (relation !== previous) decos.push(Decoration.widget(pos + 1 + offset, () => headingWidget(relation), { side: -1, key: `hub-heading-${i}-${relation}`, ignoreSelection: true }));
-      previous = relation;
-    });
+    if (a.variant === 'list') {
+      // Grouped under their relation, in the relations' order, by CSS order: a heading before each
+      // group, the links in their own order within it.
+      const headed = new Set<HubRelation>();
+      node.forEach((child, offset) => {
+        if (child.type.name !== 'hubLink') return;
+        const relation: HubRelation = isRelation(child.attrs.relation) ? child.attrs.relation : 'related';
+        const order = 2 * RELATIONS.indexOf(relation) + 2;
+        const at = pos + 1 + offset;
+        decos.push(Decoration.node(at, at + child.nodeSize, { style: `order: ${order + 1}` }));
+        if (headed.has(relation)) return;
+        headed.add(relation);
+        decos.push(Decoration.widget(at, () => headingWidget(relation, order), { side: -1, key: `hub-heading-${i}-${relation}`, ignoreSelection: true }));
+      });
+    }
     decos.push(Decoration.widget(pos + node.nodeSize - 1, (view, getPos) => linkWidget(view, getPos), { side: 1, key: `hub-add-${i}`, ignoreSelection: true, stopEvent: () => true }));
     return false;
   });

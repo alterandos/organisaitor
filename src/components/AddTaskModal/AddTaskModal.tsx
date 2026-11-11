@@ -6,8 +6,8 @@ import { useUIStore, selectActiveCollectionId } from '@/store/uiStore';
 import { commitTags } from '@/services/tags';
 import { makeItemLink } from '@/utils/taskLinks';
 import { eventTarget, linkTaskToEvent, linkedTaskDates } from '@/services/eventTaskLinks';
-import { type CalendarItemPick } from '@/components/CalendarItemPickerModal/CalendarItemPickerModal';
-import { TaskCalendarLinks } from '@/components/TaskLinks/TaskCalendarLinks';
+import { type CalendarItemPick } from '@/components/ItemPickerModal/LinkPickerModal';
+import { LinkedItemsField } from '@/components/LinkedItemsField/LinkedItemsField';
 import { now, todayIso } from '@/utils/date';
 import { LABELS } from '@/config/labels';
 import type { CollectionId, TaskId, CrossAppRef, ItemTypeId, PurposeId } from '@/types';
@@ -15,7 +15,6 @@ import { ItemTypeField } from '@/components/ItemTypeField/ItemTypeField';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { resolveItemType } from '@/utils/itemTypes';
 import { applyItemType } from '@/services/itemTypes';
-import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
 import styles from './AddTaskModal.module.css';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useCtrlEnterSubmit } from '@/hooks/useCtrlEnterSubmit';
@@ -95,7 +94,6 @@ export function AddTaskModal() {
   // "created from this note" link is added at submit), and calendar items.
   const [manualCrossAppRefs, setManualCrossAppRefs] = useState<CrossAppRef[]>([]);
   const [calendarLinks, setCalendarLinks] = useState<CalendarItemPick[]>([]);
-  const [pickingCalendar, setPickingCalendar] = useState(false);
 
   const topLevelTasks = Object.values(tasksRecord).filter((t) => !t.parentId && !t.completed && !t.archived);
 
@@ -186,10 +184,9 @@ export function AddTaskModal() {
               onValueChange={(fieldId, v) => setTypeValues((prev) => ({ ...prev, [fieldId]: v }))}
               parts={{ chosen: typeParts, onChange: setTypeParts, date: draft.deadline || draft.scheduledAt || null }} />}
             linkedItems={<>
-              <CrossAppRefPicker value={manualCrossAppRefs} onChange={setManualCrossAppRefs} suggestFrom={draft.title}
-                extraAdds={[{ label: LABELS.taskLinks.linkCalendar, onClick: () => setPickingCalendar(true) }]} />
-              {/* Calendar items, linked when the task is made; the first date chosen fills its dates. */}
-              <TaskCalendarLinks pending={calendarLinks} suggestFrom={draft.title} picking={pickingCalendar} onPicking={setPickingCalendar} onPending={(next, added) => {
+              {/* Held until the task is made; the first calendar item chosen fills its dates. */}
+              <LinkedItemsField owner={null} refs={manualCrossAppRefs} onRefsChange={setManualCrossAppRefs} suggestFrom={draft.title}
+                offers={['note', 'list', 'calendar']} calendar={{ pending: calendarLinks, onPending: (next, added) => {
                 setCalendarLinks(next);
                 if (!added?.length) return;
                 const dates = linkedTaskDates(added[0].kind, added[0].type, added[0].id, added[0].occurrence);
@@ -198,7 +195,7 @@ export function AddTaskModal() {
                   ...(dates.deadline && !d.deadline ? { deadline: dates.deadline, deadlineTime: dates.deadlineTime ?? null } : {}),
                   ...(dates.scheduledAt && !d.scheduledAt ? { scheduledAt: dates.scheduledAt } : {}),
                 }));
-              }} />
+              } }} />
             </>}
             more={topLevelTasks.length > 0 && (
               <div className={styles.field}>

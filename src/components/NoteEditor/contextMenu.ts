@@ -1,12 +1,11 @@
 import { createElement } from 'react';
 import type { Editor } from '@tiptap/react';
-import { TextSelection } from '@tiptap/pm/state';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import type { ContextMenuItem, ContextMenuScope, ContextMenuSection } from '@/contextMenu/types';
 import { LABELS } from '@/config/labels';
 import { setNormalText } from './extensions/normalText';
-import { LinkIcon, TagIcon } from '@/components/Icons';
-import { annotationActions, linkToTerm, selectionActions, termsFor, type SelectionAction, type SelectionActionGroup } from './objects/selectionActions';
+import { LinkIcon } from '@/components/Icons';
+import { SELECTION_SUBMENU_SETS, annotationActions, selectionActions, selectionGroup, selectionGroups, type SelectionAction } from './objects/selectionActions';
 import { markRange } from './textMarks';
 
 // The Notes editor's right-click menu. NoteEditor declares a `note-editor` scope on the editing
@@ -17,7 +16,7 @@ import { markRange } from './textMarks';
 // Laid out by "clicked thing first, families fold" (CLAUDE.md "Right-click menus"; tidied
 // 2026-11-02, when it had grown to a dozen sections): whatever the click landed on (a heading, a
 // block, a link: their own providers, orders 4–7) first; then, on selected text, its four families
-// (Annotate, Turn into, Link, Send to: objects/selectionActions.ts, the list the `\` menu reads);
+// (Turn into, Send to, Annotate, Link: objects/selectionActions.ts, the list and groups the `\` menu reads);
 // then the clipboard; then formatting (section 'format'); then the note itself (section 'note').
 export interface NoteEditorMenuApi {
   editor:      Editor;
@@ -50,26 +49,29 @@ registerContextMenuProvider({
   },
 });
 
-// The actions in one family, drawn as the submenu's sections (by their set).
+// The actions in one family, drawn as the submenu's sections (by their set); a set listed in
+// SELECTION_SUBMENU_SETS (the Glossary terms) is one item with its own submenu.
 function bySet(actions: SelectionAction[]): ContextMenuSection[] {
   const sets = new Map<string, ContextMenuItem[]>();
   for (const a of actions) {
     const key = a.set ?? '';
     if (!sets.has(key)) sets.set(key, []);
-    sets.get(key)!.push({ id: a.key, label: a.label, icon: a.icon, run: a.run });
+    sets.get(key)!.push({ id: a.key, label: a.label, icon: a.icon, shortcut: a.shortcut, run: a.run });
   }
-  return [...sets.values()];
+  return [...sets.entries()].map(([key, items]) => {
+    const sub = SELECTION_SUBMENU_SETS[key];
+    return sub ? [{ id: `set-${key}`, label: sub.label(), icon: sub.icon, submenu: [items] }] : items;
+  });
 }
 
-const MENU_TERMS = 6;
-
-// On selected text: Mark as ▸, Turn into ▸, Link ▸, Send to ▸.
+// On selected text: a family per selection group, in its order, named as the `\` menu names it
+// (objects/selectionActions.ts selectionGroups): Turn into ▸, Send to ▸, Annotate ▸, Link ▸.
 registerContextMenuProvider({
   id: 'note-editor.selection',
   kind: 'note-editor',
   order: 8,
   items: (ctx, scope) => {
-    const { editor, openLink, openCreate } = api(scope);
+    const { editor } = api(scope);
     const { from, to, empty } = editor.state.selection;
     if (empty) {
       // Nothing selected: Annotate ▸ for the whole line clicked (the user, 2026-11-06). A block's
@@ -78,34 +80,14 @@ registerContextMenuProvider({
       // A click outside the document's text (the editor's padding) has no position: nothing to annotate.
       const at = (() => { try { return editor.view.posAtDOM(ctx.target, 0); } catch { return null; } })();
       const line = at === null ? null : markRange(editor.state, at);
-      return line ? [{ id: 'mark-as', label: LABELS.contextMenu.markAs, icon: createElement(TagIcon), submenu: bySet(annotationActions(editor, line)) }] : [];
+      const g = selectionGroup('mark');
+      return line ? [{ id: g.menuId, label: g.label, icon: g.icon, submenu: bySet(annotationActions(editor, line)) }] : [];
     }
-    const range = { from, to };
-    const actions = selectionActions(editor, range);
-    const of = (g: SelectionActionGroup) => actions.filter((a) => a.group === g);
-    const C = LABELS.contextMenu;
-    const items: ContextMenuItem[] = [];
-    if (of('mark').length) items.push({ id: 'mark-as', label: C.markAs, icon: createElement(TagIcon), submenu: bySet(of('mark')) });
-    if (editor.isEditable) {
-      items.push({ id: 'turn-into', label: C.turnInto, icon: '⇢', submenu: [
-        bySet(of('turn')).flat(),
-        [{ id: 'create', label: C.createFrom, icon: '🧩', shortcut: 'Ctrl+Q', run: openCreate }],
-      ] });
-      const { terms } = termsFor(editor.state.doc.textBetween(from, to, ' '));
-      const termItems: ContextMenuItem[] = terms.slice(0, MENU_TERMS).map((e) => ({
-        id: `term-${e.id}`, label: e.term, icon: e.icon,
-        run: () => {
-          linkToTerm(editor, range, e);
-          editor.view.dispatch(editor.view.state.tr.setSelection(TextSelection.create(editor.view.state.doc, to)));
-        },
-      }));
-      items.push({ id: 'link', label: C.linkFamily, icon: createElement(LinkIcon), submenu: [
-        [{ id: 'web-link', label: C.webLink, shortcut: 'Ctrl+L', run: openLink }, ...bySet(of('link')).flat()],
-        ...(termItems.length ? [[{ id: 'glossary-term', label: C.glossaryTerm, icon: '📖', submenu: [termItems] }]] : []),
-      ] });
-    }
-    if (of('send').length) items.push({ id: 'send-selection', label: LABELS.sendSelection.menu, icon: '➦', submenu: bySet(of('send')) });
-    return items;
+    const actions = selectionActions(editor, { from, to });
+    return selectionGroups().flatMap((g): ContextMenuItem[] => {
+      const of = actions.filter((a) => a.group === g.id);
+      return of.length ? [{ id: g.menuId, label: g.label, icon: g.icon, submenu: bySet(of) }] : [];
+    });
   },
 });
 

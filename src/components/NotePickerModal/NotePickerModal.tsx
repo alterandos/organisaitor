@@ -1,19 +1,17 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useNoteStore } from '@/store/noteStore';
 import { useNoteViews } from '@/store/noteViews';
 import { usePinnedItemsStore } from '@/store/pinnedItemsStore';
 import { useRecentItemsStore } from '@/store/recentItemsStore';
 import { notesToOffer } from '@/utils/quickAccess';
-import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { getNoteBreadcrumb } from '@/utils/notes';
 import { getNoteTabTexts } from '@/utils/noteSearchText';
 import { extractKeywords, stemForMatch } from '@/utils/keywords';
 import { MAIN_TAB_ID } from '@/utils/noteTabs';
 import { LABELS } from '@/config/labels';
 import type { NotePlace } from '@/services/noteFromItem';
+import { ItemPickerModal, type PickerSection } from '@/components/ItemPickerModal/ItemPickerModal';
 import styles from './NotePickerModal.module.css';
-import { CloseIcon } from '@/components/Icons';
 
 interface Props {
   excludeIds: ReadonlySet<string>;
@@ -118,10 +116,10 @@ function combine(stats: TermStat[], weights: number[], tabCount: number): { scor
   return { score, bestTab };
 }
 
-// Also where a new note goes (mode 'place', "+ New note" in CrossAppRefPicker): the notebooks join
+// Also where a new note goes (mode 'place', "+ New note" in LinkedItemsField): the notebooks join
 // the results, ranked the same way, and picking a note adds a tab to it instead of linking it.
 //
-// The "link to a note" search used by CrossAppRefPicker (Task / Calendar item panes and the Add
+// The note kind's picker (components/ItemPickerModal is the dialog), used by LinkedItemsField (Task / Calendar item panes, the Add
 // Task modal). Two notes in different notebooks can share a title, so every result shows where
 // the note lives (its notebook path), a preview of its content and when it was last edited, and
 // the search covers all three — typing "exchanges lecture" finds a note titled "Lecture 3" inside
@@ -146,12 +144,8 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
 
   const L = LABELS.newNoteFromItem;
   const [query, setQuery]               = useState('');
-  const [highlightIndex, setHighlight]  = useState(0);
   // Tabs the user picked by hand for a row (note id → tab id), overriding the pre-selected best one.
   const [tabOverride, setTabOverride]   = useState<Record<string, string>>({});
-  const listRef = useRef<HTMLDivElement>(null);
-
-  useEscapeClose(onClose);
 
   const candidates = useMemo<Candidate[]>(
     () => [
@@ -251,145 +245,84 @@ export function NotePickerModal({ excludeIds, suggestFrom, onPick, onClose, mode
     return at >= 0 ? at : row.bestTab;
   };
 
-  const lastIndex = Math.max(0, results.length - 1);
-  if (highlightIndex > lastIndex) setHighlight(lastIndex);
-
-  useEffect(() => {
-    listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
-  }, [highlightIndex, results]);
-
   const pick = (row: Row, tabIndex = tabIndexFor(row)) => {
     if (placing) onPlace?.({ kind: row.c.kind, id: row.c.id });
     else onPick(row.c.id, row.c.hasTabs ? row.c.tabs[tabIndex].id : undefined);
     onClose();
   };
   const placeOutside = () => { onPlace?.({ kind: 'notebook', id: null }); onClose(); };
-  const pickHighlighted = () => { const r = results[highlightIndex]; if (r) pick(r); };
-
   const cycleTab = (row: Row, step: number) => {
     const n = row.c.tabs.length;
     setTabOverride((prev) => ({ ...prev, [row.c.id]: row.c.tabs[(tabIndexFor(row) + step + n) % n].id }));
   };
 
-  // Capture phase + stopImmediatePropagation: the pane or modal underneath binds Ctrl+Enter to
-  // its own save, and must not also answer while this picker is on top.
-  const pickRef = useRef(pickHighlighted);
-  useEffect(() => { pickRef.current = pickHighlighted; });
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+  const sections: PickerSection[] = [];
+  if (pinnedCount > 0) sections.push({ at: 0, label: LABELS.quickAccess.pinned });
+  if (suggesting) sections.push({ at: pinnedCount, label: P.suggestedFrom(keywords.join(', ')) });
+  if (suggesting || pinnedCount > 0) {
+    const at = pinnedCount + (suggesting ? suggested.length : 0);
+    if (at < results.length) sections.push({ at, label: LABELS.quickAccess.recent });
+  }
+
+  return (
+    <ItemPickerModal
+      label={placing ? L.placeTitle : title ?? P.title}
+      heading={placing ? `📝 ${L.placeTitle}` : `📝 ${title ?? P.title}`}
+      query={query}
+      onQuery={(q) => { setQuery(q); setTabOverride({}); }}
+      search={placing ? L.placeSearch : P.search}
+      rows={results}
+      sections={sections}
+      keyOf={(row) => row.c.id}
+      onPick={(row) => pick(row)}
+      onClose={onClose}
+      empty={terms.length ? P.noMatches : placing ? L.placeEmpty : P.noNotes}
+      footer={placing ? L.placeFooter : P.footer}
+      onSearchKey={(e, row) => {
+        if (e.key !== 'Tab' || !row?.c.hasTabs || placing) return false;
         e.preventDefault();
-        e.stopImmediatePropagation();
-        pickRef.current();
-      }
-    };
-    document.addEventListener('keydown', handler, true);
-    return () => document.removeEventListener('keydown', handler, true);
-  }, []);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight((i) => Math.min(i + 1, lastIndex)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight((i) => Math.max(i - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); pickHighlighted(); }
-    else if (e.key === 'Tab') {
-      const row = results[highlightIndex];
-      if (row?.c.hasTabs && !placing) { e.preventDefault(); cycleTab(row, e.shiftKey ? -1 : 1); }
-    }
-  };
-
-  return createPortal(
-    <div
-      className={styles.overlay}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      // Keeps App's global single-key hotkeys from firing behind the picker when a result has focus.
-      onKeyDown={(e) => { if (e.key !== 'Escape' && !e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
-    >
-      <div className={styles.modal} role="dialog" aria-label={placing ? L.placeTitle : title ?? P.title}>
-        <div className={styles.header}>
-          <span className={styles.title}>{placing ? `📝 ${L.placeTitle}` : `📝 ${title ?? P.title}`}</span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label={P.close}><CloseIcon /></button>
-        </div>
-
-        <input
-          autoFocus
-          className={styles.search}
-          placeholder={placing ? L.placeSearch : P.search}
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setHighlight(0); setTabOverride({}); }}
-          onKeyDown={handleKeyDown}
-        />
-
-        <div className={styles.results} ref={listRef}>
-          {results.length === 0 && (
-            <div className={styles.empty}>{terms.length ? P.noMatches : placing ? L.placeEmpty : P.noNotes}</div>
-          )}
-          {results.map((row, i) => {
-            const { c } = row;
-            const active = i === highlightIndex;
-            const tabIndex = tabIndexFor(row);
-            const tab = c.tabs[tabIndex];
-            const hasHits = activeTerms.length > 0 && (terms.length > 0 || (i >= pinnedCount && i < pinnedCount + suggested.length));
-            const snippet = hasHits ? snippetFor(tab.text, activeTerms) : tab.text.slice(0, SNIPPET_LENGTH);
-            const marks = hasHits ? activeTerms : [];
-            return (
-              <Fragment key={c.id}>
-                {pinnedCount > 0 && i === 0 && (
-                  <div className={styles.sectionLabel}>{LABELS.quickAccess.pinned}</div>
-                )}
-                {suggesting && i === pinnedCount && (
-                  <div className={styles.sectionLabel}>{P.suggestedFrom(keywords.join(', '))}</div>
-                )}
-                {(suggesting || pinnedCount > 0) && i === pinnedCount + (suggesting ? suggested.length : 0) && (
-                  <div className={styles.sectionLabel}>{LABELS.quickAccess.recent}</div>
-                )}
-                <div
-                  data-active={active || undefined}
-                  className={`${styles.result} ${active ? styles.resultActive : ''}`}
-                  onMouseEnter={() => setHighlight(i)}
+        cycleTab(row, e.shiftKey ? -1 : 1);
+        return true;
+      }}
+      render={(row) => {
+        const { c } = row;
+        const i = results.indexOf(row);
+        const tabIndex = tabIndexFor(row);
+        const tab = c.tabs[tabIndex];
+        const hasHits = activeTerms.length > 0 && (terms.length > 0 || (i >= pinnedCount && i < pinnedCount + suggested.length));
+        const snippet = hasHits ? snippetFor(tab.text, activeTerms) : tab.text.slice(0, SNIPPET_LENGTH);
+        const marks = hasHits ? activeTerms : [];
+        return {
+          title: <>
+            {placing && <span className={styles.placeKind}>{c.kind === 'notebook' ? L.placeInNotebook : L.placeAsTab}</span>}
+            {placing && c.kind === 'notebook' ? '📓 ' : ''}
+            {c.encrypted ? '🔒 ' : ''}{highlight(c.title, marks)}
+          </>,
+          aside: new Date(c.updatedAt).toLocaleDateString(),
+          meta: c.kind === 'note' || c.path ? <>📓 {highlight(c.path, marks)}</> : undefined,
+          extra: snippet ? highlight(snippet, marks) : undefined,
+          after: c.hasTabs && !placing ? (
+            <span className={styles.tabChips} role="group" aria-label={P.tabGroup}>
+              {c.tabs.map((t, ti) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`${styles.tabChip} ${ti === tabIndex ? styles.tabChipActive : ''}`}
+                  onClick={() => pick(row, ti)}
+                  title={P.linkTab(t.name)}
                 >
-                  <button type="button" className={styles.resultMain} onClick={() => pick(row)}>
-                    <span className={styles.resultTop}>
-                      <span className={styles.resultTitle}>
-                        {placing && <span className={styles.placeKind}>{c.kind === 'notebook' ? L.placeInNotebook : L.placeAsTab}</span>}
-                        {placing && c.kind === 'notebook' ? '📓 ' : ''}
-                        {c.encrypted ? '🔒 ' : ''}{highlight(c.title, marks)}
-                      </span>
-                      <span className={styles.resultDate}>
-                        {new Date(c.updatedAt).toLocaleDateString()}
-                      </span>
-                    </span>
-                    {(c.kind === 'note' || c.path) && <span className={styles.resultPath}>📓 {highlight(c.path, marks)}</span>}
-                    {snippet && <span className={styles.resultSnippet}>{highlight(snippet, marks)}</span>}
-                  </button>
-                  {c.hasTabs && !placing && (
-                    <span className={styles.tabChips} role="group" aria-label={P.tabGroup}>
-                      {c.tabs.map((t, ti) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          className={`${styles.tabChip} ${ti === tabIndex ? styles.tabChipActive : ''}`}
-                          onClick={() => pick(row, ti)}
-                          title={P.linkTab(t.name)}
-                        >
-                          {highlight(t.name, marks)}
-                        </button>
-                      ))}
-                    </span>
-                  )}
-                </div>
-              </Fragment>
-            );
-          })}
-          {placing && (
-            <button type="button" className={`${styles.result} ${styles.placeOutside}`} onClick={placeOutside}>
-              {L.placeOutside}
-            </button>
-          )}
-        </div>
-
-        <div className={styles.footer}>{placing ? L.placeFooter : P.footer}</div>
-      </div>
-    </div>,
-    document.body,
+                  {highlight(t.name, marks)}
+                </button>
+              ))}
+            </span>
+          ) : undefined,
+        };
+      }}
+      afterList={placing ? (
+        <button type="button" className={styles.placeOutside} onClick={placeOutside}>
+          {L.placeOutside}
+        </button>
+      ) : undefined}
+    />
   );
 }

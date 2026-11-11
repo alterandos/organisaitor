@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { ITEM_FLAG_ICON } from '@/config/itemIcons';
 import { takeOccurrenceListRequest } from './occurrenceRequests';
 import { usePaneState } from './paneState';
@@ -86,7 +86,7 @@ function OccurrenceList({ def, id, targetType, onClose }: { def: ArtifactTypeDef
             type="button"
             className={styles.occurrenceDate}
             title={L.openThisOne}
-            onClick={() => { openArtifactTarget(targetType, o.changedId ?? id, o.changedId ? undefined : o.date); onClose(); }}
+            onClick={() => { openItem(targetType, o.changedId ?? id, { occurrence: o.changedId ? undefined : o.date }); onClose(); }}
           >
             {o.label}
           </button>
@@ -94,7 +94,7 @@ function OccurrenceList({ def, id, targetType, onClose }: { def: ArtifactTypeDef
           {o.current && <span className={styles.occurrenceNext}>{L.nextOne}</span>}
         </div>
       ))}
-      <button type="button" className={styles.occurrencesSeries} onClick={() => { openArtifactTarget(targetType, id); onClose(); }}>{L.openSeries} <OpenIcon /></button>
+      <button type="button" className={styles.occurrencesSeries} onClick={() => { openItem(targetType, id); onClose(); }}>{L.openSeries} <OpenIcon /></button>
     </div>
   );
 }

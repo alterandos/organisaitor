@@ -3,7 +3,7 @@ import type { EditorView } from '@tiptap/pm/view';
 import type { Mark } from '@tiptap/pm/model';
 import { useUIStore, type PendingArtifactLink } from '@/store/uiStore';
 import { showToast } from '@/components/Toast/showToast';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { LABELS } from '@/config/labels';
 import type { CrossAppRef } from '@/types';
 import type { AnyNoteObjectKind, NoteObjectContext, PickableKind } from './types';
@@ -112,7 +112,7 @@ export function commitSession(view: EditorView, mode: 'quick' | 'full', ctx: Not
     message: LABELS.noteObjects.created(kind.label),
     detail:  kind.describe(draft),
     actions: [
-      { label: LABELS.noteObjects.open, onClick: () => { openArtifactTarget(kind.targetType, targetId); } },
+      { label: LABELS.noteObjects.open, onClick: () => { openItem(kind.targetType, targetId); } },
       { label: LABELS.noteObjects.undo, onClick: () => { kind.discard(targetId); unlinkArtifact(view, kind.targetType, targetId, typed); } },
     ],
   });

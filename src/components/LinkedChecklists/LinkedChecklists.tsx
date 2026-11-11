@@ -1,7 +1,7 @@
 import { useListItemViews, useListViews } from '@/store/listViews';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import { toggleChecklistItemWithTasks } from '@/services/taskListLinks';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { LABELS } from '@/config/labels';
 import type { ListId, ListItemId } from '@/types/lists';
 import styles from './LinkedChecklists.module.css';
@@ -9,7 +9,7 @@ import styles from './LinkedChecklists.module.css';
 // A task's linked checklists, shown inside the task as tickable steps. Nothing is copied: each row
 // IS the list item, so ticking here ticks it in Lists too, and ticking the last one goes through
 // toggleChecklistItemWithTasks (which offers to complete the task). Non-checklist lists stay plain
-// links in CrossAppRefPicker's chips.
+// links in the Linked items field (LinkedItemsField).
 export function LinkedChecklists({ listIds }: { listIds: ListId[] }) {
   const lists = useListViews();
   const items = useListItemViews();
@@ -26,7 +26,7 @@ export function LinkedChecklists({ listIds }: { listIds: ListId[] }) {
         const complete = own.length > 0 && done === own.length;
         return (
           <div key={list.id} className={styles.list}>
-            <button type="button" className={styles.header} onClick={() => openArtifactTarget('list', list.id)} title="Open list">
+            <button type="button" className={styles.header} onClick={() => openItem('list', list.id)} title="Open list">
               <span>{list.isEncrypted ? '🔒' : <ItemIcon icon={list.icon} fallback="📋" />}</span>
               <span className={styles.name}>{list.name}</span>
               {list.resetOnTaskComplete && <span className={styles.reusable} title={LABELS.checklist.reusableHint}>↻ {LABELS.checklist.reusable}</span>}

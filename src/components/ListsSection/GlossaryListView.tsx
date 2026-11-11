@@ -17,7 +17,7 @@ const L = LABELS.glossaryLists;
 // A Glossary list in Lists (services/glossaryLists.ts, 2026-11-03): its rows are Glossary records,
 // shown as cards in their kind's colour: the headline, the fact (or meaning), its source and where
 // it came from, why it was kept (its reasons, as chips). A card opens its record (the one copy) to
-// edit; × takes it out of the list, the record staying in the Glossary; + makes a new record in the
+// edit (a quote kept from a `\quote` block read-only, with Edit in its note: GlossaryRecordModal); × takes it out of the list, the record staying in the Glossary; + makes a new record in the
 // list. The reasons used in the list filter it (any of those picked; none picked is all).
 const fieldsOf = (raw: unknown) => ((raw as { fields?: Record<string, unknown> } | undefined)?.fields ?? {});
 export function GlossaryListView({ list }: { list: List }) {

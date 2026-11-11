@@ -39,6 +39,7 @@ export interface StructuredTagFieldDef {
   placeholder?: string;
   offered?:     false;    // not among the "+ field" buttons (a card's own fields: made by typing "Name: value")
   always?:      true;     // shown on every card, empty or not (a Formula's formula)
+  relation?:    string;   // a links field: how a link made from it relates, at first (config/glossaryRelations.ts)
 }
 
 export interface GlossaryLink { kind: string; entryId: string }
@@ -227,6 +228,31 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       { id: 'facts',       name: 'Fields',         type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER, offered: false },
     ],
   },
+  // An example (2026-11-12, the user's idea): a real instance of something in the Glossary, kept as
+  // a record so any card or block can link it ("an example is Europe's feed-in tariffs"). Its key is
+  // `instance`: `example` is the Example annotation (builtinTags.ts TEXT_TAGS), a label on text.
+  // What it's an example of are its links (relation exampleOf), so a concept's card lists it as
+  // "has the example". Its own fields ("Name: value") fill any gap, as on every card.
+  {
+    key:   'instance',
+    label: 'Example',
+    fields: [
+      { id: 'example',  name: 'The example', type: 'textarea', placeholder: 'What it is, or what happened' },
+      { id: 'related',  name: 'Example of',  type: 'links',    relation: 'exampleOf' },
+      { id: 'image',    name: 'Picture',     type: 'image' },
+      { id: 'source',   name: 'Source',      type: 'text',     placeholder: 'Where it comes from, and when' },
+      { id: 'weblinks', name: 'Links',       type: 'urls',     placeholder: 'A web address, one per line' },
+      { id: 'facts',    name: 'Fields',      type: 'facts',    placeholder: OWN_FIELDS_PLACEHOLDER, offered: false },
+    ],
+    // A few words name it; more are the example itself, named by a headline from them.
+    infer: (selectedText) => {
+      const words = selectedText.trim().replace(/\s+/g, ' ');
+      const fields: Record<string, string> = {};
+      if (words.split(' ').length <= 8) return { term: words, fields };
+      fields.example = words;
+      return { term: factHeadline(words), fields };
+    },
+  },
   // A fact worth keeping (2026-11-03): standalone, and often what a concept or an idea hub is built
   // from. Its term is a short headline, worked out from the fact (utils/factHeadline.ts) and
   // editable; the fact itself is the main field.
@@ -248,10 +274,12 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       return { term: factHeadline(statement), fields: { statement } };
     },
   },
-  // A quote worth keeping (2026-11-03), in the Glossary like a fact and kept in the Quotes list.
-  // Its term is a headline (who said it and its opening words: utils/factHeadline.ts quoteHeadline).
-  // A `\quote` block in a note is a note block, not this; sending one to Quotes turns it into a card
-  // of a Quote record (extensions/Quote.ts quoteBlockToRecord).
+  // A quote worth keeping (2026-11-03), kept in the Quotes list. Not in the Glossary (the user,
+  // 2026-11-11: the Glossary is what you've learnt and look up; OUTSIDE_GLOSSARY): stored as a record
+  // so it syncs, encrypts and sits in a Glossary list like a fact. Its term is a headline (who said
+  // it and its opening words: utils/factHeadline.ts quoteHeadline). In a note a quote is the `\quote`
+  // block; "Send to Quotes" on one keeps it here and the block stays, feeding this record
+  // (services/keptQuotes.ts).
   {
     key:   'quote',
     label: 'Quote',
@@ -276,7 +304,13 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
 ];
 
 // The types that make up the Glossary, and the field each one's meaning is in.
-export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', concept: 'summary', acronym: 'expansion', profile: 'summary', fact: 'statement', quote: 'text', formula: 'summary' };
+export const GLOSSARY_TYPES: Record<string, string> = { definition: 'meaning', concept: 'summary', acronym: 'expansion', profile: 'summary', fact: 'statement', quote: 'text', formula: 'summary', instance: 'example' };
+
+// Record kinds read like the Glossary's (a card, a Glossary list) but not in it: not listed in the
+// Glossary, linked, looked up, or offered as a card or a kind to change to (2026-11-11: quotes).
+export const OUTSIDE_GLOSSARY: ReadonlySet<string> = new Set(['quote']);
+// The kinds the Glossary offers: as cards, as answers to a question, to change a card to.
+export const GLOSSARY_KINDS: string[] = Object.keys(GLOSSARY_TYPES).filter((k) => !OUTSIDE_GLOSSARY.has(k));
 
 // Kinds whose term is a headline worked out from the record, not a name used in writing (a Fact's,
 // a Quote's): never offered as a link while typing, and not a term another headline is built from.

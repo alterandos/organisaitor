@@ -20,6 +20,8 @@ An AI agent that can administer the whole app on the user's behalf. Examples the
 
 **Built (Chunk A):** `src/agent/` — 22 commands (8 read, 6 create, 6 modify, 2 archive) behind `runCommand(name, input, opts)`; the boundary module `access.ts`; risk tiers; an approval policy (`create_schedule` always returns a proposal; `update_schedule` when it removes blocks or adds more than 3); snapshot-based batches with `revertBatch`; an audit log; `toolDefinitions()` emitting JSON Schema; a dev-only `window.__agent` handle; 128 Vitest tests. Extracted shared rules: `utils/calendarItemInput.ts`, `utils/scheduleBlocks.ts`, `services/taskCalendarLinks.ts` (task ⇄ calendar shadow entries, sub-task inheritance).
 
+**Waiting on the chat:** the Notes AI prompt block sends to the agent by one registration once there's a chat to send to: `09-prompt-block-to-agent.md`. Do it in the same piece of work as the chat.
+
 **Not built:** anything that touches notes, lists, records, fitness or portfolio; a model, chat UI, review screen, agent manual, evals; provider abstraction; cross-device attribution; the phone widget.
 
 **Verified vs not:** `tsc -b`, `npm run build`, `npm test` all pass. **Never verified in a running app:** the three modals changed by the extraction (Add calendar item for event/reminder/birthday, Add schedule, TaskPane's quick sub-task), the dev handle, real-browser persistence of the two agent stores, and the generated JSON Schemas against a real model provider. Ask the user whether they have spot-checked the modals before building on them.

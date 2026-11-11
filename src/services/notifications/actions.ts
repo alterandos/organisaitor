@@ -5,7 +5,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { useNotificationStore, type NotificationKind } from '@/store/notificationStore';
 import { toggleTaskCompletion } from '@/services/taskCompletion';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { updateCalendarEventLinked, updateTaskLinked } from '@/services/taskCalendarLinks';
 import { utcToZonedTime, zonedTimeToUtc } from '@/utils/timezone';
 import { addDaysToIso, timeAddMinutes } from '@/utils/date';
@@ -188,7 +188,7 @@ export function openNotificationTarget(kind: NotificationKind, itemId: string, o
     if (occurrence) ui.requestCalendarDate(occurrence);
     return;
   }
-  if (kind === 'task-timed' || kind === 'task-untimed') { openArtifactTarget('task', itemId); return; }
+  if (kind === 'task-timed' || kind === 'task-untimed') { openItem('task', itemId); return; }
   if (kind === 'rhythm') {
     const ui = useUIStore.getState();
     ui.setActiveView('records');
@@ -196,7 +196,7 @@ export function openNotificationTarget(kind: NotificationKind, itemId: string, o
     return;
   }
   const item = itemOf(kind, itemId);
-  openArtifactTarget(kind, itemId, item?.repeat ? occurrence : undefined);
+  openItem(kind, itemId, { occurrence: item?.repeat ? occurrence : undefined });
 }
 
 // Once acted on from anywhere, the matching bell card goes too.

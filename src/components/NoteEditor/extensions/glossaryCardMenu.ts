@@ -1,18 +1,32 @@
 import { createElement } from 'react';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
 import { LABELS } from '@/config/labels';
-import { GLOSSARY_TYPES } from '@/config/structuredTagTypes';
-import { glossaryEntry } from '@/services/glossary';
+import { GLOSSARY_KINDS, GLOSSARY_TYPES } from '@/config/structuredTagTypes';
+import { changeGlossaryKind, glossaryEntry } from '@/services/glossary';
+import { BUILTIN_TAGS } from '../builtinTags';
+import type { ContextMenuItem } from '@/contextMenu/types';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { designMenuItem, frameMenuItem } from './blockDesigns';
 import { GLOSSARY_CARD_DESIGNS_WITH_INLINE, focusGlossaryCard, glossaryCardPosAt, insertCardAfter, setGlossaryCardVariant, type GlossaryCardDesign } from './GlossaryCard';
 import { widthMenuItem } from './blockWidth';
 import { cardToChip, chipToCard, glossaryChipPosAt, openChip } from './GlossaryChip';
 import { EditIcon } from '@/components/Icons';
+import { cardIconMenuItem } from './cardLook';
 
 // Right-click on a Glossary card: edit it, its design (Inline makes it a chip) and frame. On a chip:
 // open its card, or show it as a card block. On marked text that has a
-// Glossary record (a Definition, Concept or Acronym in a sentence): show it as a card too.
+// Glossary record (a Definition, Concept or Acronym in a sentence): show it as a card too. On a card
+// or a chip, Change kind ▸ (utils/glossaryKindChange.ts says what moves where).
+
+function changeKindItem(entryId: string | null): ContextMenuItem[] {
+  const entry = entryId ? glossaryEntry(entryId) : null;
+  if (!entry || entry.locked) return [];
+  const kinds = GLOSSARY_KINDS.filter((k) => k !== entry.typeKey).map((k) => BUILTIN_TAGS.find((t) => t.typeKey === k)).filter((t) => !!t);
+  return [{
+    id: 'glossary-change-kind', label: LABELS.glossaryCard.changeKind,
+    submenu: [kinds.map((t) => ({ id: `kind-${t.typeKey}`, label: t.name, icon: t.icon, run: () => { changeGlossaryKind(entry.id, t.typeKey); } }))],
+  }];
+}
 
 registerContextMenuProvider({
   id: 'note-editor.glossary-card',
@@ -27,6 +41,8 @@ registerContextMenuProvider({
     return [
       { id: 'glossary-card-edit', label: LABELS.glossaryCard.edit, icon: createElement(EditIcon), shortcut: 'Enter', run: () => focusGlossaryCard(view, pos) },
       designMenuItem(GLOSSARY_CARD_DESIGNS_WITH_INLINE, node.attrs.variant as GlossaryCardDesign, (v) => (v === 'inline' ? cardToChip(view, pos) : setGlossaryCardVariant(view, pos, v))),
+      ...changeKindItem(node.attrs.entryId as string | null),
+      ...cardIconMenuItem(view, pos, node.attrs),
       widthMenuItem(view, pos, node.attrs, node.attrs.variant === 'card' ? 'auto' : 'full'),
       frameMenuItem(view, pos, node.attrs),
     ];
@@ -68,6 +84,7 @@ registerContextMenuProvider({
       { id: 'glossary-chip-open', label: LABELS.glossaryCard.edit, icon: createElement(EditIcon), shortcut: 'Enter', run: () => openChip(view, pos) },
       { id: 'glossary-chip-card', label: LABELS.glossaryCard.showAsCard, icon: '▭', run: () => chipToCard(view, pos) },
       designMenuItem(GLOSSARY_CARD_DESIGNS_WITH_INLINE, 'inline', (v) => { if (v !== 'inline') chipToCard(view, pos, v); }),
+      ...changeKindItem((view.state.doc.nodeAt(pos)?.attrs.entryId as string | null) ?? null),
     ];
   },
 });

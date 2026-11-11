@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/react';
 import type { Note } from '@/types/notes';
 import { useNoteBacklinks, type NoteBacklink } from '@/store/noteBacklinks';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { LABELS } from '@/config/labels';
@@ -111,7 +111,7 @@ export function NoteBacklinks({ note, activeTabId, editor, canInsert, onSwitchTa
         }}
         onDragEnd={() => { setDragging(false); setOpen(false); }}
       >
-        <button type="button" className={styles.pillOpen} onClick={() => openArtifactTarget(l.type, l.id)} title={LABELS.noteBacklinks.open}>
+        <button type="button" className={styles.pillOpen} onClick={() => openItem(l.type, l.id)} title={LABELS.noteBacklinks.open}>
           <span aria-hidden="true">{ICON[l.type]}</span>
           <span className={l.done ? styles.done : undefined}>{l.title}</span>
         </button>

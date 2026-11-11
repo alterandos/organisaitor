@@ -4,7 +4,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { frameButtons, frameMenuItem, setBlockFrame } from './blockDesigns';
-import { QuestionExtensions, answerWithCard, setQuestionFollowUp, setQuestionStatus, toggleQuestionField } from './Question';
+import { QuestionExtensions, answerWithCard, questionFromSelection, setQuestionAttrs, setQuestionFollowUp, setQuestionStatus, toggleQuestionField } from './Question';
 import { GlossaryCardExtensions } from './GlossaryCard';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { noteClipboardText } from '../noteClipboardText';
@@ -69,6 +69,19 @@ describe('question block', () => {
     expect(editor.state.selection.$from.parent.type.name).toBe('paragraph');
   });
 
+  it('selected text becomes a question in its place: a whole line takes the line, part of a line goes after it', () => {
+    make('<p>What is osmosis?</p>');
+    questionFromSelection(editor.view, 2, 2 + 'What is osmosis?'.length);
+    expect(parts()).toEqual(['Q:What is osmosis?']);
+    expect(editor.state.doc.textContent).toBe('What is osmosis?');
+    expect(editor.state.selection.$from.parent.type.name).toBe('questionText');
+    make('<p>Water moves. Why does it move?</p>');
+    const start = 2 + 'Water moves. '.length;
+    questionFromSelection(editor.view, start, start + 'Why does it move?'.length);
+    expect(parts()).toEqual(['Q:Why does it move?']);
+    expect(editor.state.doc.firstChild!.firstChild!.textContent).toBe('Water moves.');
+  });
+
   it('parts: Why and Answer shown and hidden (keeping their text); leads added, Enter makes another, an empty one goes', () => {
     make();
     type('\\question What is osmosis?');
@@ -117,11 +130,28 @@ describe('question block', () => {
     make('<div data-type="question" data-qid="Q1" data-variant="note"><div data-qn-text>Why?</div></div>');
     expect(q().attrs.variant).toBe('compact');
     const dom = () => editor.view.dom.querySelector('[data-type="question"]')!;
-    expect(dom().getAttribute('data-qn-heading')).toBe('Question');
-    expect(dom().getAttribute('data-qn-icon')).toBe('❓');
+    const part = (name: string) => dom().querySelector(`:scope > [data-card-part="${name}"]`)?.textContent;
+    expect(dom().getAttribute('data-card-look')).toBe('compact');
+    expect(part('kind')).toBe('Question');
+    expect(part('icon')).toBe('❓');
     setQuestionStatus(editor.view, qPos(), 'answered');
-    expect(dom().getAttribute('data-qn-heading')).toBe('Question · Answered');
-    expect(dom().getAttribute('data-qn-icon')).toBe('✅');
+    expect(part('kind')).toBe('Question · Answered');
+    expect(part('icon')).toBe('✅');
+  });
+
+  it('is drawn in the shared card look: its icon, kind line, question and rule; the icon hides and comes back', () => {
+    make('<div data-type="question" data-qid="Q1"><div data-qn-text>Why?</div></div>');
+    const dom = () => editor.view.dom.querySelector('[data-type="question"]')!;
+    expect(dom().getAttribute('data-card-look')).toBe('card');
+    expect([...dom().children].map((c) => c.getAttribute('data-card-part')).filter(Boolean)).toEqual(['icon', 'kind', 'title', 'rule']);
+    (dom().querySelector('[data-card-icon-hide]') as HTMLButtonElement).click();
+    expect(q().attrs.hideIcon).toBe(true);
+    expect(dom().querySelector(':scope > [data-card-part="icon"]')).toBeNull();
+    (dom().querySelector('[data-card-icon-show]') as HTMLButtonElement).click();
+    expect(q().attrs.hideIcon).toBe(false);
+    // Compact always shows it.
+    setQuestionAttrs(editor.view, qPos(), { variant: 'compact', hideIcon: true });
+    expect(dom().querySelector(':scope > [data-card-part="icon"]')?.textContent).toBe('❓');
   });
 
   it('a question is a card with its own border: no Outline, and an old outline stops drawing', () => {

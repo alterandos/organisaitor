@@ -1,57 +1,24 @@
-/* The Glossary card (GlossaryCardBody.tsx). Its block chrome (pill, frames, selection) is the
-   shared block styling in NoteEditor.module.css; this is the card inside it. Its Card and Compact
-   designs match the question block's (NoteEditor.module.css "Questions"): keep them in step. */
+/* The Glossary card (GlossaryCardBody.tsx), all seven kinds. Its box, head, icon, kind line, term,
+   rule, labels and Compact row are the shared card look (components/CardLook/CardLook.module.css,
+   CLAUDE.md "Cards share one look"); this is only what a Glossary card has of its own. Its block
+   chrome (pill, frames, selection) is the shared block styling in NoteEditor.module.css. */
 
-.card,
-.compact { --gc-accent: var(--color-primary); }
-
-.card {
-  margin: var(--space-2) 0;
-  padding: var(--space-5) var(--space-6) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
+/* --gc-accent: the kind's colour, for what only a Glossary card or chip draws (GlossaryChip too). */
+[data-glossary-type] { --gc-accent: var(--card-accent); }
 
 /* Each kind's own colour (index.css --color-kind-*; the same one its chips and linked text use). */
-[data-glossary-type="definition"] { --gc-accent: var(--color-kind-definition); }
-[data-glossary-type="concept"]    { --gc-accent: var(--color-kind-concept); }
-[data-glossary-type="acronym"]    { --gc-accent: var(--color-kind-acronym); }
-[data-glossary-type="profile"]    { --gc-accent: var(--color-kind-profile); }
-[data-glossary-type="fact"]       { --gc-accent: var(--color-kind-fact); }
-[data-glossary-type="quote"]      { --gc-accent: var(--color-kind-quote); }
-[data-glossary-type="formula"]    { --gc-accent: var(--color-kind-formula); }
+[data-glossary-type="definition"] { --card-accent: var(--color-kind-definition); }
+[data-glossary-type="concept"]    { --card-accent: var(--color-kind-concept); }
+[data-glossary-type="acronym"]    { --card-accent: var(--color-kind-acronym); }
+[data-glossary-type="profile"]    { --card-accent: var(--color-kind-profile); }
+[data-glossary-type="fact"]       { --card-accent: var(--color-kind-fact); }
+[data-glossary-type="quote"]      { --card-accent: var(--color-kind-quote); }
+[data-glossary-type="formula"]    { --card-accent: var(--color-kind-formula); }
+[data-glossary-type="instance"]   { --card-accent: var(--color-kind-instance); }
 
-.head { display: flex; flex-direction: column; gap: var(--space-1); }
-
-.kind {
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--gc-accent);
-}
-
-.head .term {
-  font-size: var(--text-lg);   /* as a question's (NoteEditor.module.css "Questions"): one family */
-  font-weight: 650;
-  line-height: 1.3;
-  color: var(--color-text);
-}
-
-.head .acronymTerm {
+.acronymTerm {
   font-size: var(--text-2xl);
   letter-spacing: 0.12em;
-}
-
-/* The separator between the term and what it means. */
-.rule {
-  width: 3rem;
-  height: 3px;
-  margin: var(--space-3) 0 var(--space-4);
-  border-radius: var(--radius-pill);
-  background: var(--gc-accent);
 }
 
 .field + .field { margin-top: var(--space-3); }
@@ -80,25 +47,19 @@
 .removeField:focus-visible { opacity: 1; color: var(--color-danger); }
 @media (hover: none) { .removeField { opacity: 1; } }
 
-.label {
-  margin-bottom: var(--space-1);
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-muted);
-}
-
 .primary {
   font-size: var(--text-base);
   line-height: 1.55;
   color: var(--color-text);
 }
 
-/* Fields are edited in place: an input that reads as text until hovered or focused. */
+/* Fields are edited in place: an input that reads as text until hovered or focused. Its padding
+   pokes out to the left (the negative margin) so its text lines up with the labels; its width
+   makes up for that, or a card that fits its text (Fit text) is a little narrower than the field's
+   text and the last word wraps (found 2026-11-11). */
 .input {
   display: block;
-  width: 100%;
+  width: calc(100% + var(--space-2));
   box-sizing: border-box;
   margin: 0;
   padding: var(--space-1) var(--space-2);
@@ -188,22 +149,7 @@
 /* The picture and its corner, dragged to resize (a set width overrides the usual cap). */
 .imageBox { position: relative; display: inline-block; align-self: flex-start; max-width: 100%; }
 .imageSized { max-height: none; height: auto; }
-.imageResize {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--color-surface);
-  border-radius: 50%;
-  background: var(--gc-accent);
-  cursor: nwse-resize;
-  touch-action: none;
-  opacity: 0;
-}
-.imageBox:hover .imageResize,
-.imageResize:focus-visible { opacity: 1; }
-@media (hover: none) { .imageResize { opacity: 1; } }
+/* Its resize handles are a note picture's (pictureResize.ts). */
 
 .placeChoice { display: inline-flex; gap: 2px; }
 .smallBtnOn { color: var(--gc-accent); border-color: var(--gc-accent); }
@@ -280,13 +226,27 @@
 }
 
 .links { display: flex; flex-direction: column; gap: var(--space-2); }
+/* What's chosen in a field (its parent, a link to another entry) is changed only while the card is
+   being edited, i.e. holds the focus; otherwise the field reads as what was chosen. */
+[data-card-look]:not(:focus-within) .whenEditing { display: none; }
+[data-card-look]:focus-within .whenReading { display: none; }
+.linkAdd {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.linkAdd:hover { text-decoration: underline; }
 
 .linkRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
 
 .relation { color: var(--color-muted); }
 
 .parts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
-.parts .label { margin: 0; }
+.parts [data-card-part="label"] { margin: 0; }
 
 .entryLink {
   padding: 0;
@@ -310,33 +270,6 @@
 
 .remove:hover { color: var(--color-danger); }
 
-/* Compact: one line. The kind's icon and the term on a light shade of the kind's colour, ruled off
-   in that colour from the card's top edge to its bottom (asked for by the user 2026-10-27), then
-   the meaning. */
-.compact {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-3);
-  margin: var(--space-1) 0;
-  padding: 0 var(--space-4) 0 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.compactLead {
-  flex: 0 1 auto;
-  max-width: 45%;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-1) var(--space-3);
-  border-right: 2px solid color-mix(in srgb, var(--gc-accent) 70%, transparent);
-  border-radius: calc(var(--radius-md) - 1px) 0 0 calc(var(--radius-md) - 1px);
-  background: color-mix(in srgb, var(--gc-accent) 10%, var(--color-surface));
-}
-
 /* Clarify later and Not sure of this on a card, beside the kind line or the term, as Important's icon. */
 .flagIcon { display: inline-flex; align-items: center; vertical-align: -0.15em; margin-left: var(--space-1); }
 .flagIcon svg { width: 1.25em; height: 1.25em; }
@@ -344,23 +277,11 @@
 .flagIcon[data-flag="clarify"] { color: var(--color-clarify); }
 .flagIcon[data-flag="unsure"] { color: var(--color-muted); }
 .flagIcon[data-flag="review"] { color: var(--color-primary); }
-.compactLead .flagIcon { margin-left: 0; font-size: var(--text-md); }
 
-.compactIcon {
-  flex: none;
-  font-size: var(--text-md);
-  line-height: 1;
-}
-
-.compact .term {
-  flex: 0 1 auto;
-  width: auto;
-  min-width: 7.5rem;   /* so the rules of Compact cards in a run line up */
-  font-size: var(--text-base);
-  font-weight: 650;
-  field-sizing: content;
-}
-
+/* Compact: the shared row (CardLook); the term fits its text, the meaning takes the rest. */
+[data-card-part="lead"] .flagIcon { margin-left: 0; font-size: var(--text-md); }
+.compactIcon { flex: none; font-size: var(--text-md); line-height: 1; }
+.compact .term { flex: 0 1 auto; width: auto; field-sizing: content; }
 .compactMeaning { flex: 1; min-width: 0; align-self: center; padding: var(--space-1) 0; }
 .compactMeaning .primary { color: var(--color-text); }
 
@@ -380,15 +301,63 @@
 
 .webLink:hover { text-decoration: underline; }
 
-/* A card's own field's name, edited in place: reads as the other fields' labels. */
+/* A card's own fields (GlossaryCardBody OwnFields, 2026-11-10): a table apart from the built-in
+   fields, each name on the left and its value on the right, lined up in one column of names. */
+.ownFields {
+  display: grid;
+  grid-template-columns: fit-content(min(12rem, 40%)) minmax(0, 1fr);
+  margin-top: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--gc-accent) 4%, var(--color-surface));
+}
+
+.ownField {
+  position: relative;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+}
+.ownField + .ownField,
+.ownField + .ownNew { border-top: 1px solid var(--color-border); }
+
+.ownName {
+  padding: var(--space-2) var(--space-3);
+  border-right: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.ownValue {
+  min-width: 0;
+  padding: var(--space-2) calc(var(--space-3) + 1.5rem) var(--space-2) var(--space-3);   /* room for its trash */
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.ownField > .removeField { top: var(--space-1); right: var(--space-1); }
+.ownField:hover > .removeField,
+.ownField:focus-within > .removeField { opacity: 1; }
+
+.ownNew { grid-column: 1 / -1; padding: var(--space-1) var(--space-2); }
+.ownNew .input { margin-left: 0; }
+
+/* A card's own field's name, edited in place: as wide as it is, within the names' column. */
 .ownLabel {
   display: block;
-  width: 100%;
+  field-sizing: content;
+  min-width: 4ch;
+  max-width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
-  font-family: inherit;
+  color: inherit;
+  font: inherit;
 }
+.ownLabel::placeholder { color: var(--color-muted); font-weight: 400; }
 .ownLabel:focus { outline: none; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-primary-border); }
 
 

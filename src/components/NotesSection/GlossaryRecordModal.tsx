@@ -10,6 +10,7 @@ import { deleteGlossaryEntryAsked } from '@/services/glossaryDelete';
 import { deleteForever, trashedBy } from '@/services/trash';
 import { noteSchema } from '@/services/lookUp';
 import { forgetEntryInLists } from '@/services/glossaryLists';
+import { isKeptFromBlock, openKeptBlock } from '@/services/keptQuotes';
 import { GlossaryCardBody } from '@/components/NoteEditor/extensions/GlossaryCardBody';
 import { GlossaryOrigin } from './GlossaryOrigin';
 import { kindColor } from '@/components/NoteEditor/builtinTags';
@@ -33,7 +34,7 @@ function isBlank(id: string): boolean {
 // and edited there, from a Glossary list, or from a link to it, not only in a note). Mounted once
 // in App.tsx while uiStore.glossaryRecordId is set. The record is shown as its real card, full size: the same
 // card a note shows, so it's written in exactly as it will look. Where it came from below it; Esc,
-// Ctrl+Enter or Done closes it. A new record (from "+ New") left empty goes for good on closing.
+// Ctrl+Enter or Done closes it. A quote kept from a `\quote` block is read-only here, with Edit in its note. A new record (from "+ New") left empty goes for good on closing.
 export function GlossaryRecordModal({ entryId, fresh }: { entryId: string; fresh: boolean }) {
   const close = () => {
     if (fresh && isBlank(entryId)) {
@@ -48,6 +49,10 @@ export function GlossaryRecordModal({ entryId, fresh }: { entryId: string; fresh
   const [waiting, setWaiting] = useState<{ id: string; name: string }[]>([]);
   useNoteStore((s) => s.structuredTagEntries[entryId as StructuredTagEntryId]);
   const entry = glossaryEntry(entryId);
+  // A quote kept from a `\quote` block is written in its block (services/keptQuotes.ts): shown
+  // read-only here, with a button to its block.
+  const kept = isKeptFromBlock(entryId);
+  const editInNote = () => { useUIStore.getState().openGlossaryRecord(null); openKeptBlock(entryId); };
 
   async function remove() {
     if (await deleteGlossaryEntryAsked(entryId, noteSchema())) useUIStore.getState().openGlossaryRecord(null);
@@ -65,7 +70,7 @@ export function GlossaryRecordModal({ entryId, fresh }: { entryId: string; fresh
           <GlossaryCardBody
             entryId={entryId}
             variant="card"
-            editable
+            editable={!kept}
             focusRequest={{ n: fresh ? 1 : 0, text: '' }}
             onEscape={close}
             onDone={close}
@@ -81,7 +86,13 @@ export function GlossaryRecordModal({ entryId, fresh }: { entryId: string; fresh
             onUndo={() => {}}
           />
         </div>
-        {waiting.length > 0 && (
+        {kept && (
+          <div className={styles.kept}>
+            <span>{LABELS.keptQuotes.readOnly}</span>
+            <button type="button" className={styles.editInNote} onClick={editInNote}>{LABELS.keptQuotes.editInNote}</button>
+          </div>
+        )}
+        {!kept && waiting.length > 0 && (
           <div className={styles.more} role="group" aria-label={L.addField}>
             {waiting.map((f) => (
               <button key={f.id} type="button" className={styles.morePill} onClick={() => setShown((s) => [...s, f.id])}>+ {f.name}</button>

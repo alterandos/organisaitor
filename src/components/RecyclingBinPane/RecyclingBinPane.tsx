@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useTrashStore } from '@/store/trashStore';
-import { restoreFromTrash, deleteForever } from '@/services/trash';
+import { restoreFromTrash, deleteForever, emptyTrash } from '@/services/trash';
 import { confirmDelete, confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { formatRelativeTime } from '@/utils/date';
 import { LABELS } from '@/config/labels';
@@ -69,7 +69,7 @@ export function RecyclingBinPane() {
       destructive:  true,
       confirmLabel: LABELS.recyclingBin.emptyBinConfirm,
     });
-    if (ok) useTrashStore.getState().clear();
+    if (ok) emptyTrash();
   };
 
   return (

@@ -103,6 +103,7 @@ __agent.tools()   // the JSON Schemas a model would be given
 ## Not built / known limits
 
 - **No model, chat UI, review screen or agent manual yet** (later phases in the inventory). No provider has seen the generated JSON Schemas.
+- **The Notes AI prompt block is waiting for the chat**: it sends through `services/aiPromptTargets.ts`, and the agent plugs in there with one `registerPromptTarget` (`docs/agent-tasks/09-prompt-block-to-agent.md`).
 - **Notes, Lists, Records, Fitness, Portfolio** have no commands. Notes is Chunk B (headless content module, editor reload on external change, note commands, encrypted content excluded at `access.ts`); nothing encrypted exists in the current commands' reach, so the planted-secrets test arrives with Chunk B.
 - **Undo covers only the tracked stores** (tasks, Endeavours, Purposes, Tags, events, reminders, deadlines, schedules, and since phase 7 (d) notebooks, lists, goals and Types, which a semester or subject also makes). Restoring/removing goes straight to the stores, without `crossAppLinkCleanup`; fine while agent-made items carry no cross-app links, but revisit when notes arrive.
 - **Snapshots live in localStorage** (`agent-batches`, capped at 50 batches of full "before" records). If storage gets tight, this store and `agent-log` are the ones to shrink or move to IndexedDB. Both are cleared on sign-out (`clearLocalData.ts`) since they hold copies of the account's records.

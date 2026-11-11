@@ -14,9 +14,10 @@ import { useOverviewStore } from '@/store/overviewStore';
 import { useConverterStore } from '@/store/converterStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
 import { useGoalStore } from '@/store/goalStore';
+import { forgetLinksTo } from '@/services/crossAppLinkCleanup';
 import type { CustomConverter } from '@/types/converters';
 import type { Overview } from '@/types/overview';
-import type { TrashEntryId, TrashableKind } from '@/types/trash';
+import type { TrashEntry, TrashEntryId, TrashableKind } from '@/types/trash';
 import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, CalendarDeadline, ScheduleTemplate, TrackerEntry, ItemType, Goal } from '@/types';
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
@@ -189,8 +190,32 @@ export function restoreAllFromTrash(entryIds: TrashEntryId[]): void {
   for (const id of [...entryIds].reverse()) restoreFromTrash(id);
 }
 
-// The entity is already gone from its domain store (it was removed at delete time) — this
-// only forgets the trash record itself.
+// The entity is already gone from its domain store (it was removed at delete time), so this
+// forgets the trash record and, since nothing can bring the item back now, every link to it
+// (references, task links, linked text in notes: crossAppLinkCleanup.forgetLinksTo). Until then
+// those links stayed, hidden, so a restore brought them back (agreed with the user 2026-11-10).
 export function deleteForever(entryId: TrashEntryId): void {
+  const entry = useTrashStore.getState().entries[entryId];
+  if (!entry) return;
   useTrashStore.getState().removeEntry(entryId);
+  forgetLinksTo(entry.kind, entry.snapshot);
+}
+
+// "Empty recycling bin": every entry deleted forever.
+export function emptyTrash(): void {
+  const entries = Object.values(useTrashStore.getState().entries);
+  useTrashStore.getState().clear();
+  for (const e of entries) forgetLinksTo(e.kind, e.snapshot);
+}
+
+// Bin entries another device took away (its soft-delete arrived in a sync load). That device
+// either restored the item (it's back in its store after the same load) or deleted it forever,
+// and then its links go here too: the other device's own cleanup can lose to a later edit made
+// here, or couldn't reach a note that was locked there. Called by sync after it merges.
+export function forgetLinksOfEntriesRemovedElsewhere(removed: TrashEntry[]): void {
+  for (const e of removed) {
+    const id = (e.snapshot as { id?: string } | null)?.id;
+    if (!id || RESTORE_TARGETS[e.kind]?.has(id)) continue;
+    forgetLinksTo(e.kind, e.snapshot);
+  }
 }

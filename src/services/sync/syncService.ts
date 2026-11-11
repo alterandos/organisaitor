@@ -8,6 +8,7 @@ import { useListStore } from '@/store/listStore';
 import { useNoteStore } from '@/store/noteStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useTrashStore } from '@/store/trashStore';
+import { forgetLinksOfEntriesRemovedElsewhere } from '@/services/trash';
 import { useOverviewStore } from '@/store/overviewStore';
 import { useConverterStore } from '@/store/converterStore';
 import { useItemTypeStore } from '@/store/itemTypeStore';
@@ -25,7 +26,7 @@ import type { Task, Collection, Tag, Purpose, CalendarEvent, CalendarReminder, C
 import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
-import type { TrashEntry } from '@/types/trash';
+import type { TrashEntry, TrashEntryId } from '@/types/trash';
 import { log } from '@/utils/log';
 import { heldFromSync, scopeContext } from '@/services/encryption/kinds';
 import { importKeyOf } from '@/services/calendarImport/draft';
@@ -669,6 +670,13 @@ function hydrateStores(remote: RemoteRows) {
     investmentPurposes: mergeRecords(local.investmentPurposes, remote.investment_purposes, rowToInvestmentPurpose, 'investment_purposes'),
   }) as Parameters<typeof usePortfolioStore.setState>[0]);
 
+  // Bin entries this device holds that another device took away: worked out before the merge
+  // drops them, and acted on once every store is merged (a restore puts its item back first).
+  const trashBefore = useTrashStore.getState().entries;
+  const trashRemovedElsewhere = (remote.trash_items ?? [])
+    .filter((r) => r.deleted_at && trashBefore[r.id as TrashEntryId])
+    .map((r) => trashBefore[r.id as TrashEntryId]);
+
   // @ts-expect-error — setState updater param typed loosely against the full store shape
   useTrashStore.setState((local) => ({
     entries: mergeRecords(local.entries, remote.trash_items, rowToTrashEntry, 'trash_items'),
@@ -726,6 +734,8 @@ function hydrateStores(remote: RemoteRows) {
       activityTypes: mergeRecords(local.activityTypes, remote.fitness_activity_types, rowToActivityType, 'fitness_activity_types'),
     } as Partial<ReturnType<typeof useFitnessStore.getState>>;
   });
+
+  if (trashRemovedElsewhere.length) forgetLinksOfEntriesRemovedElsewhere(trashRemovedElsewhere);
 }
 
 // ── Upload ──────────────────────────────────────────────────────

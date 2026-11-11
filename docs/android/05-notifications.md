@@ -163,7 +163,7 @@ Server push (FCM), so completing on one device clears the other's alarms. A home
 - **N4:**
   - Buttons on the notification (`actions.ts` shared with the bell).
   - "Done" = `doneDates` per occurrence: `calendarStore` v15, `setOccurrenceDone`, migration `043`, strikethrough on the calendar, "Mark done / Not done" in the Reminder and Deadline pane footers, the bell's Done.
-- **N6:** tapping a notification opens its item (`openNotificationTarget` → `openArtifactTarget`).
+- **N6:** tapping a notification opens its item (`openNotificationTarget` → `openItem`).
 - **N8:** the bell stays as the history on every platform; on Android the checker fills it but doesn't fire OS notifications (the scheduler does).
 - **N9:** `SettingsPane/NotificationsSection.tsx`, Android only:
   - permission status and Turn on;

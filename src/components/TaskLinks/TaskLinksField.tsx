@@ -4,7 +4,8 @@ import { useUIStore } from '@/store/uiStore';
 import { ITEM_LINK_KINDS } from '@/config/itemLinkKinds';
 import { LABELS } from '@/config/labels';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
-import { TaskPickerModal } from '@/components/TaskPickerModal/TaskPickerModal';
+import { LinkPickerModal } from '@/components/ItemPickerModal/LinkPickerModal';
+import { openItem } from '@/services/openItem';
 import { taskRelations, isResolved, hierarchyIds, type TaskRelation } from '@/utils/taskLinks';
 import type { ItemLinkKind, Task, TaskId } from '@/types';
 import styles from './TaskLinks.module.css';
@@ -22,7 +23,6 @@ export function TaskLinksField({ task }: { task: Task }) {
   const addItemLink    = useTaskStore((s) => s.addItemLink);
   const removeItemLink = useTaskStore((s) => s.removeItemLink);
   const updateReason   = useTaskStore((s) => s.updateItemLinkReason);
-  const openTaskPane   = useUIStore((s) => s.openTaskPane);
   const showAddFollowUp = useUIStore((s) => s.showAddFollowUp);
   const [picking, setPicking] = useState<ItemLinkKind | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function TaskLinksField({ task }: { task: Task }) {
                 <button
                   type="button"
                   className={`${styles.other} ${isResolved(r.other) ? styles.otherDone : ''}`}
-                  onClick={() => openTaskPane(r.other.id)}
+                  onClick={() => openItem('task', r.other.id)}
                   title="Open this task"
                 >
                   {r.other.completed && <span className={styles.check}>✓</span>}
@@ -95,11 +95,12 @@ export function TaskLinksField({ task }: { task: Task }) {
       </div>
 
       {picking && (
-        <TaskPickerModal
+        <LinkPickerModal
+          kinds={['task']}
           title={`${ITEM_LINK_KINDS[picking].icon} ${ITEM_LINK_KINDS[picking].out}`}
           suggestFrom={task.title}
           excludeIds={excludeFor(picking)}
-          onPick={(id) => void handlePick(picking, id)}
+          onPick={([p]) => { if (p) void handlePick(picking, p.id); }}
           onClose={() => setPicking(null)}
         />
       )}

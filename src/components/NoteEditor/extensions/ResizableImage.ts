@@ -7,8 +7,9 @@ import type { Editor } from '@tiptap/core';
 import { LABELS } from '@/config/labels';
 import { registerEscapeClose } from '@/hooks/useEscapeClose';
 import {
-  type Crop, type Handle, NO_CROP, CORNERS, EDGES, cropDrag, isCropped, parseCrop, resizeDrag, snapSize, serializeCrop,
+  type Crop, type Handle, NO_CROP, CORNERS, EDGES, cropDrag, isCropped, parseCrop, serializeCrop,
 } from './imageGeometry';
+import { PICTURE_RESIZING_CLASS, pictureHandles, resizePicture } from './pictureResize';
 import styles from './ResizableImage.module.css';
 
 // A note's picture, sized and cropped the way a word processor does it. Selecting it shows eight
@@ -159,13 +160,7 @@ class ImageView {
     this.frame.appendChild(this.clip);
     this.dom.appendChild(this.frame);
 
-    this.handles = el('span', styles.handles);
-    for (const h of HANDLES) {
-      const knob = el('span', `${styles.handle} ${styles[`h_${h}`]}`);
-      knob.dataset.handle = h;
-      knob.addEventListener('pointerdown', (e) => this.startResize(e, h));
-      this.handles.appendChild(knob);
-    }
+    this.handles = pictureHandles(HANDLES, (e, h) => this.startResize(e, h));
     this.frame.appendChild(this.handles);
 
     this.bar = el('span', styles.bar);
@@ -219,48 +214,28 @@ class ImageView {
 
   // ── Resizing ──────────────────────────────────────────────────────────────
 
+  // The shared resize (pictureResize.ts), drawn here as it goes.
   private startResize(e: PointerEvent, handle: Handle) {
-    e.preventDefault();
-    e.stopPropagation();
-    // The editor can be zoomed (CSS zoom): the screen measures zoomed pixels, while a picture's
-    // size is stored and drawn in CSS pixels. Everything here is worked in CSS pixels.
-    const rect = this.clip.getBoundingClientRect();
-    const zoom = rect.width / (this.clip.offsetWidth || rect.width) || 1;
-    const css = (px: number) => px / zoom;
-    const start = { x: e.clientX, y: e.clientY, w: css(rect.width), h: css(rect.height) };
-    const stretched = !!this.attrs.height;
-    let result = { width: start.w, height: start.h, stretched };
-    this.dom.classList.add(styles.resizing);
-    // The sizes it can snap to: the note's other pictures (width and height), and the column's width.
-    const others = Array.from(this.editor.view.dom.querySelectorAll<HTMLElement>(`.${styles.frame}`)).filter((f) => f !== this.frame);
-    const sizeOf = (f: HTMLElement) => { const r = f.getBoundingClientRect(); return { w: Math.round(css(r.width)), h: Math.round(css(r.height)) }; };
-    const sizes = others.map(sizeOf);
-    const column = Math.round(css(this.dom.getBoundingClientRect().width));
-    const targets = { widths: [...sizes.map((s) => s.w), column].filter((w) => w > 0), heights: sizes.map((s) => s.h).filter((h) => h > 0) };
-    const clearMatches = () => { for (const f of [...others, this.frame]) f.classList.remove(styles.sizeMatch); };
-    this.follow(e, (ev) => {
-      const dragged = resizeDrag(handle, start, css(ev.clientX - start.x), css(ev.clientY - start.y), stretched);
-      const snap = snapSize(handle, dragged, targets);
-      result = { ...dragged, width: snap.width, height: snap.height };
-      clearMatches();
-      if (snap.snapped) {
-        // The pictures it now matches are outlined with it, as a design tool's guides show.
-        this.frame.classList.add(styles.sizeMatch);
-        others.forEach((f, i) => {
-          const v = snap.snapped === 'width' ? sizes[i].w : sizes[i].h;
-          if (Math.abs(v - (snap.snapped === 'width' ? snap.width : snap.height)) <= 1) f.classList.add(styles.sizeMatch);
-        });
-      }
-      this.frame.style.width = `${result.width}px`;
-      const framed = isCropped(this.attrs.crop) || result.stretched;
-      this.frame.classList.toggle(styles.framed, framed);
-      this.clip.style.aspectRatio = framed ? String(result.width / result.height) : '';
-      if (framed) this.positionImage();
-      else this.img.style.width = '100%';
-    }, () => {
-      clearMatches();
-      this.dom.classList.remove(styles.resizing);
-      this.commit({ width: result.width, height: result.stretched ? result.height : null });
+    this.dom.classList.add(PICTURE_RESIZING_CLASS);
+    this.drag = resizePicture(e, handle, {
+      picture: this.clip,
+      within: this.editor.view.dom,
+      frame: this.frame,
+      column: this.dom.offsetWidth,   // CSS pixels, as the picture's size is kept
+      stretched: !!this.attrs.height,
+      onMove: (result) => {
+        this.frame.style.width = `${result.width}px`;
+        const framed = isCropped(this.attrs.crop) || result.stretched;
+        this.frame.classList.toggle(styles.framed, framed);
+        this.clip.style.aspectRatio = framed ? String(result.width / result.height) : '';
+        if (framed) this.positionImage();
+        else this.img.style.width = '100%';
+      },
+      onDone: (result) => {
+        this.drag = null;
+        this.dom.classList.remove(PICTURE_RESIZING_CLASS);
+        this.commit({ width: result.width, height: result.stretched ? result.height : null });
+      },
     });
   }
 

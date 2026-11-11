@@ -4,7 +4,7 @@ import '@xyflow/react/dist/style.css';
 import { useNotesBrowse } from '@/hooks/useNotesBrowse';
 import { useNoteMapLinks } from '@/hooks/useNoteMapLinks';
 import { notesNav } from '@/services/notesNav';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { LABELS } from '@/config/labels';
 import { withViewTransition } from '@/utils/viewTransition';
 import type { NoteGroup } from '@/utils/notesBrowse';
@@ -116,7 +116,7 @@ function MapCanvas() {
       nodes.push({
         id: it.id, type: 'item', position: { x: at.x + Math.cos(angle) * dist - ITEM_R, y: at.y + Math.sin(angle) * dist - ITEM_R }, zIndex: 110,
         draggable: false, selectable: false, focusable: false, style: { width: 2 * ITEM_R, height: 2 * ITEM_R },
-        data: { kind: it.kind as MapItemType, label: it.label, done: it.done, dim: !!near && !near.has(it.id), onOpen: () => openArtifactTarget(it.kind as MapItemType, it.refId) } satisfies ItemData,
+        data: { kind: it.kind as MapItemType, label: it.label, done: it.done, dim: !!near && !near.has(it.id), onOpen: () => openItem(it.kind as MapItemType, it.refId) } satisfies ItemData,
       });
     }
     const present = new Set(nodes.map((n) => n.id));

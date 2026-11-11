@@ -124,6 +124,19 @@ describe('the convert block', () => {
     expect(pos()).toBe(-1);   // as `\convert` made it: empty, so no question
   });
 
+  it('behaves as every block: Ctrl+Enter in its amount leaves it onto a new line; a press on its empty space selects it', async () => {
+    await make('<p>a</p><div data-type="convert"></div>');
+    const amount = host.querySelector<HTMLInputElement>('input[aria-label="Amount"]')!;
+    await act(async () => { amount.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true })); });
+    const sel = editor.state.selection;
+    expect(sel.$from.parent.type.name).toBe('paragraph');
+    expect(sel.from).toBeGreaterThan(pos());
+    const body = host.querySelector<HTMLElement>('[data-type="convert"]')!.children[1] as HTMLElement;
+    body.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true, cancelable: true }));
+    expect(editor.state.selection.from).toBe(pos());
+    expect(editor.state.selection.constructor.name).toBe('NodeSelection');
+  });
+
   it('one with an amount typed asks before Alt+Delete deletes it', async () => {
     await make(`<p>a</p><div data-type="convert" data-values='{"amount":"5"}'></div><p>b</p>`);
     const amount = host.querySelector<HTMLInputElement>('input[aria-label="Amount"]')!;

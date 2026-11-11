@@ -1,34 +1,16 @@
-/* One conversion (ConvertWidget.tsx): Card and Compact, in the family look of the Glossary cards
-   (a box, a small coloured kind line, then the content; compact: one bordered row). The accent is
-   the host's --color-primary (the note block sets its own colour). */
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
+/* One conversion (ConvertWidget.tsx). Its box, head, icon, kind line, title (the converter picker),
+   rule and Compact row are the shared card look (components/CardLook/CardLook.module.css, CLAUDE.md
+   "Cards share one look"); this is only what a conversion has of its own. The accent is the host's
+   --color-primary (the note block sets its own colour). */
+.card { display: flex; flex-direction: column; gap: var(--space-2); }
+.card > [data-card-part="rule"] { margin: var(--space-1) 0 var(--space-2); }
 .card, .compact { width: fit-content; max-width: 100%; }
 /* In a note, a conversion given a width (the shared block width) fills it. */
 :global([data-type="convert"][data-block-width-shown]) .card,
 :global([data-type="convert"][data-block-width-shown]) .compact { width: 100%; box-sizing: border-box; }
-.head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.kind { color: var(--color-primary); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 
-.compact {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-}
-.rule { width: 1.2rem; height: 2px; border-radius: var(--radius-pill); background: var(--color-primary); }
+.compact { flex-wrap: wrap; }
+.compact > .row { align-self: center; padding: var(--space-1) 0; }
 
 .row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); }
 .card .row { font-size: var(--text-lg); }

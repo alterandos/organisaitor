@@ -8,6 +8,7 @@ import type { BlockDesign } from './blockDesigns';
 import { BREAKDOWN_DESIGNS } from './Breakdown';
 import { CHART_DESIGNS } from './Chart';
 import { CODE_DESIGNS } from './CodeBlock';
+import { PROMPT_DESIGNS } from './Prompt';
 import { COMPARE_DESIGNS } from './Compare';
 import { CONCLUSION_DESIGNS } from './Conclusion';
 import { CYCLE_DESIGNS } from './Cycle';
@@ -65,6 +66,7 @@ export const BLOCK_DESIGN_LISTS: Record<string, readonly BlockDesign<string>[]> 
   hub:           HUB_DESIGNS,
   noteEmbed:     EMBED_DESIGNS,
   convertBlock:  CONVERT_DESIGNS,
+  promptBlock:   PROMPT_DESIGNS,
   caseStudy:     CASE_DESIGNS,
   causeEffect:   CE_DESIGNS,
   vennBlock:     VENN_DESIGNS,

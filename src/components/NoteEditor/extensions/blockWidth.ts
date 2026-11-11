@@ -19,7 +19,10 @@ import { NOTE_BLOCK_NODES } from '../blockNodes';
 // data-block-width-shown). While a width is dragged, every block's menus step aside
 // (`:root[data-block-resizing]`), so the width shown above the handle can be read.
 
-export const WIDTH_BLOCK_NODES = new Set(['glossaryCard', 'questionBlock', 'convertBlock']);
+// The width handle, for code that must leave presses on it alone (a click on a block's empty space).
+export const RESIZE_HANDLE_SELECTOR = '[data-block-resize]';
+
+export const WIDTH_BLOCK_NODES = new Set(['glossaryCard', 'questionBlock', 'convertBlock', 'caseStudy', 'promptBlock']);
 
 export const BLOCK_WIDTHS = ['auto', 'standard', 'third', 'half', 'full'] as const;
 export type BlockNamedWidth = typeof BLOCK_WIDTHS[number];

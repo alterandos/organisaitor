@@ -69,7 +69,8 @@ export const PART_SPECS: Record<string, PartSpec> = {
   ceItem:           {},
   vennItem:         { keep: ['sets'] },
   inboxItem:        { move: never, duplicate: false, add: false, ownMenu: true, remove: (v, at) => deleteInboxItem(v, at.pos) },
-  hubLink:          { move: never, duplicate: false, add: false, ownMenu: true, remove: (v, at) => removeLink(v, at.pos) },
+  // A hub's links are put in order by hand only in its Fact sheet design (List groups them by relation).
+  hubLink:          { move: (b) => b.attrs.variant === 'sheet', duplicate: false, add: false, ownMenu: true, remove: (v, at) => removeLink(v, at.pos) },
 };
 
 export interface PartAt {
@@ -213,7 +214,8 @@ export function groupNames(doc: PMNode, at: PartAt, groups: { pos: number; node:
     if (n.type.name === 'prosConsList') {
       const argument = at.block.type.name === 'argument';
       const con = n.attrs.side === 'con';
-      const side = argument ? (con ? LABELS.noteBlocks.argument.against : LABELS.noteBlocks.argument.for) : (con ? LABELS.noteBlocks.prosCons.cons : LABELS.noteBlocks.prosCons.pros);
+      const side = n.attrs.side === 'neutral' ? LABELS.noteBlocks.argument.neutral
+        : argument ? (con ? LABELS.noteBlocks.argument.against : LABELS.noteBlocks.argument.for) : (con ? LABELS.noteBlocks.prosCons.cons : LABELS.noteBlocks.prosCons.pros);
       const parent = doc.resolve(pos).parent;
       return parent.type.name === 'optionsItem' ? `${parent.child(0).textContent.trim() || LABELS.noteBlocks.parts.untitled}: ${side}` : side;
     }

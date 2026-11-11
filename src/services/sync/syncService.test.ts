@@ -16,9 +16,12 @@ import { useTrackerStore } from '@/store/trackerStore';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useFitnessStore } from '@/store/fitnessStore';
 import { stravaActivityId } from '@/utils/fitnessIds';
-import { activityToRow } from './mappers';
+import { activityToRow, trashEntryToRow, listToRow } from './mappers';
+import { useTrashStore } from '@/store/trashStore';
+import type { TrashEntry } from '@/types/trash';
+import type { List, ListId } from '@/types/lists';
 import type { Activity, ActivityId, ActivityTypeId } from '@/types/fitness';
-import type { TaskId, TagId } from '@/types';
+import type { TaskId, TagId, Task } from '@/types';
 
 const fake = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -144,6 +147,7 @@ beforeEach(async () => {
   // rather than worked around, since none of these tests are about Portfolio.
   usePortfolioStore.setState({ investmentPurposes: {}, watchlistItems: {}, portfolioTags: {} });
   useFitnessStore.setState(useFitnessStore.getInitialState(), true);
+  useTrashStore.setState({ entries: {} });
   fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] } });
 });
 
@@ -647,5 +651,37 @@ describe('encryption by scope — a covered record is held on the device until i
     expect(rows.filter((r) => r.name === 'Plain' || r.name === 'Secret')).toHaveLength(3);
     expect(rows.every((r) => typeof r.encrypt_contents === 'boolean')).toBe(true);
     expect(rows.find((r) => r.name === 'Secret')?.encrypt_contents).toBe(true);
+  });
+});
+
+describe('a Recycling Bin entry taken away on another device (Delete forever there)', () => {
+  const entry = {
+    id: 'bin-1', kind: 'list', sourceApp: 'organizer', sourceSection: 'Lists', title: 'Groceries', contextLine: '',
+    snapshot: { id: 'l1', name: 'Groceries', crossAppRefs: [] }, deletedAt: '2030-01-01T00:00:00.000Z', deletedBy: { type: 'user' },
+  } as unknown as TrashEntry;
+  const binRow = { ...trashEntryToRow(entry, USER), deleted_at: '2030-02-01T00:00:00.000Z' };
+
+  function taskLinkedToList() {
+    const id = useTaskStore.getState().addTask({ title: 'Shop' }) as TaskId;
+    useTaskStore.setState((s) => ({ tasks: { ...s.tasks, [id]: { ...s.tasks[id], crossAppRefs: [{ type: 'list', id: 'l1' }] as Task['crossAppRefs'], updatedAt: '2030-03-01T00:00:00.000Z' } } }));
+    useTrashStore.setState({ entries: { [entry.id]: entry } });
+    return id;
+  }
+
+  it('deleted forever there: the links to it go here too', async () => {
+    const id = taskLinkedToList();
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, trash_items: { rows: [binRow] } });
+    await initSync(USER);
+    expect(useTrashStore.getState().entries[entry.id]).toBeUndefined();
+    expect(useTaskStore.getState().tasks[id].crossAppRefs).toEqual([]);
+  });
+
+  it('restored there: it is back, and the links stay', async () => {
+    const id = taskLinkedToList();
+    const list = { id: 'l1', name: 'Groceries', kind: 'checklist', crossAppRefs: [], createdAt: '2030-01-01T00:00:00.000Z', updatedAt: '2030-02-01T00:00:00.000Z' } as unknown as List;
+    fake.reset({ collections: { rows: [KEEP_ALIVE_COLLECTION] }, trash_items: { rows: [binRow] }, lists: { rows: [listToRow(list, USER)] } });
+    await initSync(USER);
+    expect(useListStore.getState().lists['l1' as ListId]).toBeDefined();
+    expect(useTaskStore.getState().tasks[id].crossAppRefs).toEqual([{ type: 'list', id: 'l1' }]);
   });
 });

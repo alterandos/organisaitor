@@ -67,7 +67,7 @@ export interface NoteActions {
     typeKey: string; tagId: string; term: string; fields: Record<string, unknown>;
     noteId: NoteId | null; collectionId: CollectionId | null;
   }) => StructuredTagEntryId;
-  updateStructuredTagEntry: (id: StructuredTagEntryId, changes: Partial<Pick<StructuredTagEntry, 'term' | 'fields' | 'collectionId'>>) => void;
+  updateStructuredTagEntry: (id: StructuredTagEntryId, changes: Partial<Pick<StructuredTagEntry, 'term' | 'fields' | 'collectionId' | 'typeKey' | 'tagId'>>) => void;
   deleteStructuredTagEntry: (id: StructuredTagEntryId) => void;
 
   // Queries

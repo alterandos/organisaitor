@@ -24,6 +24,9 @@ export interface NoteObjectTriggerStorage {
   // Set by NoteEditor: opens the note picker to link from..to to a note (`[[`, `\ref`, Link to a
   // note…; an empty range inserts the target's name) or to embed a passage there (`\embed`).
   openNoteLinkPicker: ((request: NoteLinkRequest) => void) | null;
+  // Set by NoteEditor: a web link on the selection (Ctrl+L), Create from selection (Ctrl+Q).
+  openWebLink: (() => void) | null;
+  openCreateFrom: (() => void) | null;
 }
 
 export interface NoteLinkRequest { purpose: 'link' | 'embed'; from: number; to: number }
@@ -86,7 +89,7 @@ export const NoteObjectTrigger = Extension.create<Record<string, never>, NoteObj
   name: 'noteObjectTrigger',
 
   addStorage() {
-    return { getContext: () => null, focusFields: null, selectionMenuKey: null, openSendToInbox: null, openAddToHub: null, openNoteLinkPicker: null };
+    return { getContext: () => null, focusFields: null, selectionMenuKey: null, openSendToInbox: null, openAddToHub: null, openNoteLinkPicker: null, openWebLink: null, openCreateFrom: null };
   },
 
   addProseMirrorPlugins() {

@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useMemo, useRef, useState } from 'react';
 import type { Schema } from '@tiptap/pm/model';
 import { NotePickerModal } from '@/components/NotePickerModal/NotePickerModal';
-import { useEscapeClose } from '@/hooks/useEscapeClose';
 import { useNoteStore } from '@/store/noteStore';
 import { noteView } from '@/services/noteSecrets';
 import { ensureBlockId, noteDocFor } from '@/services/noteLinkTargets';
@@ -11,9 +9,8 @@ import { MAIN_TAB_ID } from '@/utils/noteTabs';
 import { LABELS } from '@/config/labels';
 import { EMBED_ICON, NOTE_LINK_ICON } from '@/config/itemIcons';
 import type { NoteId } from '@/types';
-import styles from '@/components/NotePickerModal/NotePickerModal.module.css';
+import { ItemPickerModal } from '@/components/ItemPickerModal/ItemPickerModal';
 import own from './NoteLinkPicker.module.css';
-import { CloseIcon } from '@/components/Icons';
 
 export interface PickedLink {
   noteId:  string;
@@ -71,10 +68,6 @@ function PassageStep({ purpose, schema, noteId, tabId, onPick, onBack, onClose }
   const raw = useNoteStore((s) => s.notes[noteId as NoteId]);
   const title = raw ? noteView(raw).title || LABELS.mobileNotes.untitled : '';
   const [query, setQuery] = useState('');
-  const [highlight, setHighlight] = useState(0);
-  const listRef = useRef<HTMLDivElement>(null);
-
-  useEscapeClose(onBack);
 
   const passages = useMemo(() => {
     void raw;
@@ -88,13 +81,6 @@ function PassageStep({ purpose, schema, noteId, tabId, onPick, onBack, onClose }
     return [...(words.length ? [] : [{ kind: 'whole' } as Choice]), ...hits.map((passage) => ({ kind: 'passage', passage }) as Choice)];
   }, [passages, query]);
 
-  const last = choices.length - 1;
-  if (highlight > Math.max(0, last)) setHighlight(Math.max(0, last));
-
-  useEffect(() => {
-    listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
-  }, [highlight, choices]);
-
   const pick = (c: Choice) => {
     if (c.kind === 'whole') { onClose(); onPick({ noteId, tabId, blockId: null, name: title }); return; }
     const blockId = c.passage.blockId ?? ensureBlockId(noteId, tabId, c.passage.pos, schema);
@@ -102,77 +88,37 @@ function PassageStep({ purpose, schema, noteId, tabId, onPick, onBack, onClose }
     onPick({ noteId, tabId, blockId, name: c.passage.kind === 'paragraph' ? title : c.passage.kind === 'block' ? (c.passage.text || c.passage.label || title) : c.passage.text });
   };
 
-  // Capture phase, as in the other pickers: the pane underneath binds Ctrl+Enter to its own action.
-  const pickRef = useRef(() => {});
-  useEffect(() => { pickRef.current = () => { const c = choices[highlight]; if (c) pick(c); }; });
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); pickRef.current(); }
-    };
-    document.addEventListener('keydown', handler, true);
-    return () => document.removeEventListener('keydown', handler, true);
-  }, []);
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight((i) => Math.min(i + 1, last)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight((i) => Math.max(i - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); pickRef.current(); }
-  };
-
   const heading = purpose === 'embed' ? L.pickEmbed : L.pickPassage;
-  return createPortal(
-    <div
-      className={styles.overlay}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      onKeyDown={(e) => { if (e.key !== 'Escape' && !e.ctrlKey && !e.metaKey) e.stopPropagation(); }}
-    >
-      <div className={styles.modal} role="dialog" aria-label={heading}>
-        <div className={styles.header}>
-          <button type="button" className={own.back} onClick={onBack} aria-label={LABELS.mobileNotes.back}>‹</button>
-          <span className={styles.title}>{purpose === 'embed' ? EMBED_ICON : NOTE_LINK_ICON} {heading} <span className={own.noteName}>{title}</span></span>
-          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close"><CloseIcon /></button>
-        </div>
-        <input
-          autoFocus
-          className={styles.search}
-          placeholder={L.searchPassages}
-          aria-label={L.searchPassages}
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setHighlight(0); }}
-          onKeyDown={onKeyDown}
-        />
-        <div className={styles.results} ref={listRef} role="listbox" aria-label={heading}>
-          {choices.length === 0 && <div className={styles.empty}>{L.noPassages}</div>}
-          {choices.map((c, i) => {
-            const active = i === highlight;
-            const text = c.kind === 'whole' ? L.wholeNote : c.passage.text.length > SNIPPET ? `${c.passage.text.slice(0, SNIPPET)}…` : c.passage.text;
-            const level = c.kind === 'passage' && (c.passage.kind === 'heading' || c.passage.kind === 'part') ? c.passage.level : 0;
-            const kind = c.kind === 'passage' ? c.passage.kind : null;
-            return (
-              <div
-                key={c.kind === 'whole' ? 'whole' : c.passage.pos}
-                data-active={active || undefined}
-                className={`${styles.result} ${active ? styles.resultActive : ''}`}
-                onMouseEnter={() => setHighlight(i)}
-                role="option"
-                aria-selected={active}
-              >
-                <button type="button" className={styles.resultMain} onClick={() => pick(c)}>
-                  <span
-                    className={c.kind === 'whole' ? own.whole : kind === 'heading' ? own.heading : kind === 'block' ? own.block : kind === 'part' ? own.part : own.paragraph}
-                    style={kind === 'heading' ? { paddingLeft: `${(level - 1) * 0.75}rem` } : undefined}
-                  >
-                    {kind === 'block' && c.kind === 'passage' && <span className={own.blockKind}>{c.passage.label}</span>}
-                    {text}
-                  </span>
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        <div className={styles.footer}>{L.passageFooter}</div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <ItemPickerModal
+      label={heading}
+      heading={<>{purpose === 'embed' ? EMBED_ICON : NOTE_LINK_ICON} {heading} <span className={own.noteName}>{title}</span></>}
+      onBack={onBack}
+      query={query}
+      onQuery={setQuery}
+      search={L.searchPassages}
+      rows={choices}
+      keyOf={(c) => (c.kind === 'whole' ? 'whole' : String(c.passage.pos))}
+      render={(c) => {
+        const text = c.kind === 'whole' ? L.wholeNote : c.passage.text.length > SNIPPET ? `${c.passage.text.slice(0, SNIPPET)}…` : c.passage.text;
+        const level = c.kind === 'passage' && (c.passage.kind === 'heading' || c.passage.kind === 'part') ? c.passage.level : 0;
+        const kind = c.kind === 'passage' ? c.passage.kind : null;
+        return {
+          title: (
+            <span
+              className={c.kind === 'whole' ? own.whole : kind === 'heading' ? own.heading : kind === 'block' ? own.block : kind === 'part' ? own.part : own.paragraph}
+              style={kind === 'heading' ? { paddingLeft: `${(level - 1) * 0.75}rem` } : undefined}
+            >
+              {kind === 'block' && c.kind === 'passage' && <span className={own.blockKind}>{c.passage.label}</span>}
+              {text}
+            </span>
+          ),
+        };
+      }}
+      onPick={pick}
+      onClose={onClose}
+      empty={L.noPassages}
+      footer={L.passageFooter}
+    />
   );
 }

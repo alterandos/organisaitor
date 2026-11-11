@@ -170,7 +170,25 @@ export const EMOJI_SET: Record<EmojiGroup, EmojiChoice[]> = {
     🍽️ meal dinner restaurant
   `),
   people: g(`
-    😀 happy smile
+    😀 happy smile grin
+    😂 joy laughing tears lol
+    🤣 rofl laughing
+    😅 sweat_smile phew
+    😉 wink
+    😍 heart_eyes love
+    😢 cry sad
+    😭 sob crying
+    😡 angry rage
+    😱 scream shock
+    🙄 eyeroll
+    😬 grimace awkward
+    🤯 mindblown exploding
+    😮 open_mouth wow surprised
+    🙏 pray thanks please
+    👏 clap applause
+    👀 eyes look
+    🎉 tada party celebrate
+    💯 hundred perfect
     😊 blush smile
     🙂 slight smile
     😎 cool sunglasses

@@ -2241,6 +2241,9 @@
 }
 .editorContent [data-side="pro"] > [data-pc-point]::before { content: '+'; color: var(--color-success); }
 .editorContent [data-side="con"] > [data-pc-point]::before { content: '−'; color: var(--color-danger); }
+.editorContent [data-side="neutral"] > [data-pc-point]::before { content: '~'; color: var(--color-muted); }
+.editorContent [data-type="proscons-list"][data-side="neutral"]::before { color: var(--color-muted); }
+.editorContent [data-side="neutral"] [data-pc-weight] i[data-on] { background: var(--color-muted); }
 
 .editorContent [data-pc-weight] {
   position: absolute;
@@ -2453,6 +2456,11 @@
 }
 .editorContent [data-variant="tree"] > [data-side="pro"] > [data-pc-point] { border-left-color: var(--pc-pro); }
 .editorContent [data-variant="tree"] > [data-side="con"] > [data-pc-point] { border-left-color: var(--pc-con); }
+/* With the neutral evidence: three columns, for · neutral · against (the lists' own order). */
+.editorContent [data-type="argument"][data-variant="tree"][data-arg-lists="3"],
+.editorContent [data-type="argument"][data-variant="debate"][data-arg-lists="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.editorContent [data-type="argument"][data-variant="tree"][data-arg-lists="2"]:not([data-sides="both"]),
+.editorContent [data-type="argument"][data-variant="debate"][data-arg-lists="2"]:not([data-sides="both"]) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .editorContent [data-variant="tree"] [data-pc-point]::before { left: 0.3rem; top: var(--space-2); }
 .editorContent [data-variant="tree"] [data-pc-weight] { left: 1.3rem; top: calc(var(--space-2) + 0.78em); }
 
@@ -2475,8 +2483,10 @@
 /* Who's on each side sits under that side. */
 .editorContent [data-variant="debate"][data-sides="both"] > [data-arg-field="supporters"] { grid-column: 1; text-align: left; }
 .editorContent [data-variant="debate"][data-sides="both"] > [data-arg-field="opponents"] { grid-column: 2; text-align: left; }
+.editorContent [data-variant="debate"][data-sides="both"][data-arg-lists="3"] > [data-arg-field="opponents"] { grid-column: 3; }
 .editorContent [data-variant="debate"] > [data-type="proscons-list"]::before { font-size: var(--text-sm); }
-.editorContent [data-variant="debate"][data-sides="both"] > [data-type="proscons-list"][data-side="con"] {
+.editorContent [data-variant="debate"][data-sides="both"] > [data-type="proscons-list"][data-side="con"],
+.editorContent [data-variant="debate"] > [data-type="proscons-list"][data-side="neutral"] {
   padding-left: var(--space-5);
   margin-left: calc(-1 * var(--space-3));
   border-left: 2px solid var(--arg-line);
@@ -4467,6 +4477,38 @@
   .editorContent [data-hub-link-remove] { opacity: 1; }
 }
 
+/* The ↑ ↓ for a Fact sheet's own order: only there, on hover (always on touch). */
+.editorContent [data-hub-link-move] { display: none; flex: none; color: var(--color-muted); opacity: 0; }
+.editorContent [data-hub-link-move]:hover { color: var(--color-primary); }
+.editorContent [data-hub-link-main] { display: flex; flex-direction: column; min-width: 0; }
+.editorContent [data-hub-link-body] { display: none; }
+
+/* ·· List: grouped under their relation by CSS order (Hub.ts), so the links' own order, which a
+   Fact sheet sets, is kept underneath ·· */
+.editorContent [data-type="hub"][data-variant="list"] { display: flex; flex-direction: column; }
+.editorContent [data-type="hub"][data-variant="list"] > [data-hub-empty],
+.editorContent [data-type="hub"][data-variant="list"] > [data-hub-add] { order: 9999; align-self: flex-start; }
+
+/* ·· Fact sheet: the links in their own order, each saying what it says; its kind only an icon ·· */
+.editorContent [data-type="hub"][data-variant="sheet"] [data-hub-heading],
+.editorContent [data-type="hub"][data-variant="sheet"] [data-hub-link-where],
+.editorContent [data-type="hub"][data-variant="sheet"] [data-hub-link-relation] { display: none; }
+.editorContent [data-type="hub"][data-variant="sheet"] > [data-type="hub-link"] {
+  align-items: flex-start;
+  padding: var(--space-2);
+  font-size: var(--text-base);
+}
+.editorContent [data-type="hub"][data-variant="sheet"] > [data-type="hub-link"] + [data-type="hub-link"] { border-top: 1px solid var(--color-border); }
+.editorContent [data-type="hub"][data-variant="sheet"] [data-hub-link-icon] { font-size: var(--text-xs); line-height: 1.9; opacity: 0.55; }
+.editorContent [data-type="hub"][data-variant="sheet"] [data-hub-link-open] { white-space: normal; font-weight: 600; }
+.editorContent [data-type="hub"][data-variant="sheet"] [data-kind="passage"] [data-hub-link-open] { font-weight: 400; }
+.editorContent [data-type="hub"][data-variant="sheet"] [data-hub-link-body] { display: block; color: var(--color-text); font-size: var(--text-sm); line-height: 1.5; }
+.editorContent [data-type="hub"][data-variant="sheet"] [data-hub-link-move] { display: inline; }
+.editorContent [data-type="hub"][data-variant="sheet"] [data-hub-link-move]:first-of-type { margin-left: auto; }
+.editorContent [data-type="hub"][data-variant="sheet"] [data-type="hub-link"]:hover [data-hub-link-move],
+.editorContent [data-type="hub"][data-variant="sheet"] [data-type="hub-link"]:global(.ProseMirror-selectednode) [data-hub-link-move] { opacity: 1; }
+@media (hover: none) { .editorContent [data-type="hub"][data-variant="sheet"] [data-hub-link-move] { opacity: 1; } }
+
 /* ·· Compact: chips that flow, each saying how it relates ·· */
 .editorContent [data-type="hub"][data-variant="compact"] {
   display: flex;
@@ -5652,17 +5694,17 @@
 .editorContent [data-type="glossary-card"]:global(.ProseMirror-selectednode) > [data-glossary-tools] { opacity: 1; }
 
 /* ── Questions (extensions/Question.ts) ─────────────────────────────────────── */
-/* Drawn as the Glossary cards are (GlossaryCard.module.css), so the two read as one family: Card is
-   a box with a small coloured kind line, the question large, a short accent rule, then the parts
-   with small labels; Compact is one bordered line, an icon, the question, a thin accent rule, the
-   answer. The question itself is italic, not bold (the user's ask, 2026-10-17): it reads as a
-   question rather than a term. The accent stays orange whatever the status, so a question is always
-   easy to spot in a note (the user's ask, 2026-10-22); an answered one adds green where the answer
-   is: the answer tinted with a green bar and label, and green joining the orange rule. Dropped greys it. */
+/* Drawn in the shared card look (components/CardLook/CardLook.module.css, CLAUDE.md "Cards share
+   one look"), as a flat card: its icon, kind line and rule are widgets, the question is the title.
+   What's here is a question's own: the question italic, not bold (the user's ask, 2026-10-17: it
+   reads as a question rather than a term); the accent stays orange whatever the status, so a
+   question is always easy to spot (2026-10-22); an answered one adds green where the answer is
+   (the answer tinted with a green bar and label, green joining the orange rule); dropped greys it. */
 
-.editorContent [data-type="question"] { --qn-accent: var(--color-kind-question); --qn-done: var(--color-success); position: relative; }
-.editorContent [data-type="question"][data-status="answered"] > [data-qn-text]::after {
-  background: linear-gradient(90deg, var(--qn-accent) 0 55%, var(--qn-done) 55% 100%);
+.editorContent [data-type="question"] { --card-accent: var(--color-kind-question); --qn-done: var(--color-success); }
+.editorContent [data-type="question"] [data-card-part="title"] { font-style: italic; font-weight: 400; }
+.editorContent [data-type="question"][data-status="answered"] > [data-card-part="rule"] {
+  background: linear-gradient(90deg, var(--card-accent) 0 55%, var(--qn-done) 55% 100%);
 }
 .editorContent [data-type="question"][data-status="answered"] > [data-qn-field="answer"] {
   padding: var(--space-1) var(--space-3);
@@ -5671,60 +5713,15 @@
   background: color-mix(in srgb, var(--qn-done) 10%, transparent);
 }
 .editorContent [data-type="question"][data-status="answered"] > [data-qn-field="answer"]::before {
-  content: '✓ ' attr(data-qn-label);
+  content: '✓ ' attr(data-card-label);
   color: var(--qn-done);
 }
-.editorContent [data-type="question"][data-status="dropped"]  { --qn-accent: var(--color-swatch-grey); }
+.editorContent [data-type="question"][data-status="dropped"]  { --card-accent: var(--color-swatch-grey); }
 .editorContent [data-type="question"][data-status="dropped"] > [data-qn-text] { color: var(--color-muted); text-decoration: line-through; }
 
-/* Card */
-.editorContent [data-type="question"][data-variant="card"] {
-  margin: var(--space-2) 0;
-  padding: var(--space-5) var(--space-6) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-.editorContent [data-type="question"][data-variant="card"]::before {
-  content: attr(data-qn-heading);
-  display: block;
-  margin-bottom: var(--space-1);
-  color: var(--qn-accent);
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.editorContent [data-type="question"][data-variant="card"] > [data-qn-text] {
-  font-size: var(--text-lg);
-  font-style: italic;
-  font-weight: 400;
-  line-height: 1.3;
-}
-.editorContent [data-type="question"][data-variant="card"] > [data-qn-text]::after {
-  content: '';
-  display: block;
-  width: 3rem;
-  height: 3px;
-  margin: var(--space-3) 0 var(--space-1);
-  border-radius: var(--radius-pill);
-  background: var(--qn-accent);
-}
-
-/* A part: its name small above it. */
-.editorContent [data-qn-field] { margin-top: var(--space-3); }
-.editorContent [data-qn-field]::before {
-  content: attr(data-qn-label);
-  display: block;
-  margin-bottom: 2px;
-  color: var(--color-muted);
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.editorContent [data-qn-field][data-qn-field="lead"] + [data-qn-field="lead"] { margin-top: var(--space-1); }
+/* A part, its name small above it (the card look's data-card-label). */
+.editorContent [data-type="question"][data-variant="card"] > [data-qn-field] + [data-qn-field] { margin-top: var(--space-3); }
+.editorContent [data-qn-field="lead"] + [data-qn-field="lead"] { margin-top: var(--space-1); }
 .editorContent [data-qn-field="lead"] + [data-qn-field="lead"]::before { display: none; }
 .editorContent [data-qn-field="lead"] { padding-left: 1rem; position: relative; }
 
@@ -5737,47 +5734,12 @@
   pointer-events: none;
 }
 
-/* Compact: the question and its answer on one line; why it matters and the leads, if any, on a
-   smaller line beneath (nothing is hidden). The icon and the question sit on a light shade of the
-   block's colour, ruled off from the top edge to the bottom (2026-10-27, as the Glossary card's
-   Compact: keep them in step). */
-.editorContent [data-type="question"][data-variant="compact"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  column-gap: 0;
-  row-gap: 2px;
-  margin: var(--space-1) 0;
-  padding: 0 var(--space-4) 0 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-.editorContent [data-type="question"][data-variant="compact"]::before {
-  content: attr(data-qn-icon);
-  flex: none;
-  display: flex;
-  align-items: center;
-  padding: 0 var(--space-3);
-  border-radius: calc(var(--radius-md) - 1px) 0 0 calc(var(--radius-md) - 1px);
-  background: color-mix(in srgb, var(--qn-accent) 10%, var(--color-surface));
-  font-size: var(--text-md);
-  line-height: 1;
-}
-.editorContent [data-type="question"][data-variant="compact"] > [data-qn-text] {
-  flex: 0 1 auto;
-  min-width: 7.5rem;
-  max-width: 45%;
-  padding: var(--space-1) var(--space-3) var(--space-1) 0;
-  border-right: 2px solid color-mix(in srgb, var(--qn-accent) 70%, transparent);
-  background: color-mix(in srgb, var(--qn-accent) 10%, var(--color-surface));
-  font-style: italic;
-}
-.editorContent [data-type="question"][data-variant="compact"][data-status="answered"] > [data-qn-text] {
+/* Compact: the question and its answer on one row; why it matters and the leads, if any, on a
+   smaller line beneath (nothing is hidden). */
+.editorContent [data-type="question"][data-variant="compact"] { flex-wrap: wrap; row-gap: 2px; }
+.editorContent [data-type="question"][data-variant="compact"][data-status="answered"] > [data-card-part="title"] {
   border-right: 3px solid var(--qn-done);
 }
-.editorContent [data-type="question"][data-variant="compact"] > [data-qn-field] { margin-top: 0; }
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="answer"] {
   order: 1;
   flex: 1;
@@ -5795,6 +5757,7 @@
 .editorContent [data-type="question"][data-variant="compact"] > [data-qn-field="lead"] {
   order: 2;
   flex-basis: 100%;
+  margin-top: 0;
   padding-left: calc(var(--text-md) + 2 * var(--space-3));
   color: var(--color-muted);
   font-size: var(--text-sm);
@@ -6042,18 +6005,9 @@
    only while the case is being edited (data-cs-hide otherwise). */
 
 .editorContent [data-type="case-study"] { position: relative; margin: 1rem 0 1.25rem; }
-.editorContent [data-cs-title] { font-size: var(--text-lg); font-weight: 700; line-height: 1.35; }
-.editorContent [data-cs-field] { margin-top: 0.55rem; line-height: 1.55; }
-.editorContent [data-cs-field]::before {
-  content: attr(data-cs-label);
-  display: block;
-  margin-bottom: 1px;
-  color: var(--color-muted);
-  font-size: var(--text-2xs);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
+/* Card and Compact are the shared card look (components/CardLook): its box, icon, kind line, rule,
+   title and part labels. What follows is the case study's own: its parts, and Report. */
+.editorContent [data-cs-field] { margin-top: var(--space-3); line-height: 1.55; }
 .editorContent [data-cs-field="setting"] { color: var(--color-muted); font-style: italic; }
 .editorContent [data-cs-field="shows"] {
   padding: 0.45rem 0.7rem;
@@ -6066,30 +6020,20 @@
 .editorContent [data-cs-field="sources"] { font-size: var(--text-sm); color: var(--color-muted); }
 .editorContent [data-cs-hide] { display: none; }
 .editorContent [data-cs-empty] > br:global(.ProseMirror-trailingBreak) { display: none; }
+/* A block's long part (extensions/richParts.ts): its lines and bullets close together, and the
+   placeholder of an empty one on its line. */
+.editorContent [data-rich-part] > p { margin: 0; }
+.editorContent [data-rich-part] > p + p { margin-top: 0.35em; }
+.editorContent [data-rich-part] > :is(ul, ol) { margin: 0.2em 0; padding-left: 1.3em; }
+.editorContent [data-rich-part] li > p { margin: 0; }
+.editorContent [data-part-placeholder] > br:global(.ProseMirror-trailingBreak) { display: none; }
+.editorContent [data-part-placeholder]::after { content: attr(data-part-placeholder); color: var(--color-muted); opacity: 0.6; font-weight: 400; font-style: normal; pointer-events: none; }
 .editorContent [data-cs-empty]::after { content: attr(data-cs-placeholder); color: var(--color-muted); opacity: 0.6; font-weight: 400; font-style: normal; pointer-events: none; }
-
-.editorContent [data-type="case-study"][data-cs-kind]::before {
-  content: attr(data-cs-kind);
-  display: block;
-  margin-bottom: 0.2rem;
-  color: var(--color-primary);
-  font-size: var(--text-2xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.editorContent [data-type="case-study"][data-variant="card"] {
-  padding: 0.85rem 1.15rem 1rem;
-  border: 1px solid var(--color-border);
-  border-left: 4px solid var(--color-primary);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
 
 .editorContent [data-type="case-study"][data-variant="report"] { padding: 0.25rem 0; }
 .editorContent [data-variant="report"] > [data-cs-title] {
+  font-weight: 700;
+  line-height: 1.35;
   padding-bottom: 0.25rem;
   border-bottom: 2px solid var(--color-primary);
   font-size: var(--text-xl);
@@ -6097,22 +6041,11 @@
 .editorContent [data-variant="report"] > [data-cs-field] { margin-top: 0.8rem; }
 .editorContent [data-variant="report"] > [data-cs-field]::before { color: var(--color-primary); font-size: var(--text-2xs); }
 
-.editorContent [data-type="case-study"][data-variant="compact"] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.2rem 0.6rem;
-  padding: 0.45rem 0.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-}
-.editorContent [data-type="case-study"][data-variant="compact"][data-cs-kind]::before { margin: 0; }
-.editorContent [data-variant="compact"] > [data-cs-title] { font-size: var(--text-base); }
+.editorContent [data-type="case-study"][data-variant="compact"] { flex-wrap: wrap; align-items: center; row-gap: 2px; }
 .editorContent [data-variant="compact"] > [data-cs-field] { margin-top: 0; }
-.editorContent [data-variant="compact"] > [data-cs-field="shows"] { padding: 0; border: none; background: none; color: var(--color-muted); font-weight: 400; }
+.editorContent [data-variant="compact"] > [data-cs-field="shows"] { flex: 1 1 12rem; align-self: center; padding: var(--space-1) 0; border: none; background: none; color: var(--color-muted); font-weight: 400; }
 .editorContent [data-variant="compact"] > [data-cs-field="shows"]::before { display: none; }
-.editorContent [data-type="case-study"][data-variant="compact"][data-cs-current] > [data-cs-field] { flex-basis: 100%; }
+.editorContent [data-type="case-study"][data-variant="compact"][data-cs-current] > [data-cs-field] { flex-basis: 100%; padding: var(--space-1) var(--space-3); }
 .editorContent [data-type="case-study"][data-variant="compact"][data-cs-current] > [data-cs-field]::before { display: block; }
 
 .editorContent [data-case-tools] { top: -14px; right: 0; }
@@ -6413,9 +6346,17 @@
 .editorContent [data-type="convert"]:not([data-block-width-shown]) { width: fit-content; max-width: 100%; }
 .editorContent [data-convert-tools] { top: -14px; right: 0; }
 .editorContent [data-type="convert"]:hover > [data-convert-tools] { opacity: 1; }
+
+/* The AI prompt (extensions/Prompt.ts): a tile, or open to edit; its pill shows on hover. */
+.editorContent [data-type="prompt"] { position: relative; }
+/* A folded tile keeps its own small size: no width to drag. */
+.editorContent [data-type="prompt"]:not([data-prompt-open]) > [data-block-resize] { display: none; }
+.editorContent [data-prompt-tools] { top: -14px; right: 0; }
+.editorContent [data-type="prompt"]:hover > [data-prompt-tools] { opacity: 1; }
 /* An embedded passage's pill (extensions/NoteEmbed.ts), likewise. */
 .editorContent [data-type="note-embed"]:hover > [data-embed-tools] { opacity: 1; }
 .editorContent [data-type="convert"] { --color-primary: var(--color-block-convert); --color-primary-subtle: color-mix(in srgb, var(--color-block-convert) 10%, transparent); }
+.editorContent [data-type="prompt"] { --color-primary: var(--color-block-prompt); --color-primary-subtle: color-mix(in srgb, var(--color-block-prompt) 10%, transparent); }
 .editorContent [data-type="hub"] { --color-primary: var(--color-block-hub); --color-primary-subtle: color-mix(in srgb, var(--color-block-hub) 10%, transparent); }
 .editorContent [data-type="proscons"] { --color-primary: var(--color-block-proscons); --color-primary-subtle: color-mix(in srgb, var(--color-block-proscons) 10%, transparent); }
 .editorContent [data-type="compare"] { --color-primary: var(--color-block-compare); --color-primary-subtle: color-mix(in srgb, var(--color-block-compare) 10%, transparent); }
@@ -6431,4 +6372,5 @@
 .editorContent [data-type="glossary-card"][data-glossary-kind="fact"] { --color-primary: var(--color-kind-fact); --color-primary-subtle: color-mix(in srgb, var(--color-kind-fact) 10%, transparent); }
 .editorContent [data-type="glossary-card"][data-glossary-kind="quote"] { --color-primary: var(--color-kind-quote); --color-primary-subtle: color-mix(in srgb, var(--color-kind-quote) 10%, transparent); }
 .editorContent [data-type="glossary-card"][data-glossary-kind="formula"] { --color-primary: var(--color-kind-formula); --color-primary-subtle: color-mix(in srgb, var(--color-kind-formula) 10%, transparent); }
+.editorContent [data-type="glossary-card"][data-glossary-kind="instance"] { --color-primary: var(--color-kind-instance); --color-primary-subtle: color-mix(in srgb, var(--color-kind-instance) 10%, transparent); }
 .editorContent [data-type="question"] { --color-primary: var(--color-kind-question); --color-primary-subtle: color-mix(in srgb, var(--color-kind-question) 10%, transparent); }

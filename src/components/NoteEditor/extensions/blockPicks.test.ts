@@ -43,8 +43,8 @@ const pick = (pos: number) => togglePick(editor.view, partAt(editor.state.doc, p
 const blocks = () => { const out: string[] = []; editor.state.doc.forEach((s) => s.forEach((b) => out.push(b.type.name))); return out; };
 
 describe('picking parts of a note block', () => {
-  it('every note block names its part type, except the ones with no parts (chart, maths, Glossary card, diagram, convert: one atom; code: one text)', () => {
-    const NO_PARTS = new Set(['chart', 'codeBlock', 'mathBlock', 'glossaryCard', 'diagram', 'convertBlock']);
+  it('every note block names its part type, except the ones with no parts (chart, maths, Glossary card, diagram, convert, prompt: one atom; code: one text)', () => {
+    const NO_PARTS = new Set(['chart', 'codeBlock', 'mathBlock', 'glossaryCard', 'diagram', 'convertBlock', 'promptBlock']);
     const missing = [...NOTE_BLOCK_NODES].filter((b) => !NO_PARTS.has(b) && !BLOCK_PART_NODES[b]);
     expect(missing).toEqual([]);
   });

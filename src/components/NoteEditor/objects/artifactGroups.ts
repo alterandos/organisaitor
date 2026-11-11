@@ -4,7 +4,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
+import { openItem } from '@/services/openItem';
 import { LABELS } from '@/config/labels';
 import { ITEM_FLAG_ICON } from '@/config/itemIcons';
 import { ARTIFACT_TYPES, FALLBACK_ARTIFACT_ICON, type ArtifactSummary } from './artifactTypes';
@@ -281,7 +281,7 @@ function paneTail(group: ArtifactGroup, summary: ArtifactSummary | null, state: 
     const actions = el('span', styles.paneActions);
     const openBtn = el('button', styles.paneBtn);
     openBtn.append(createGlyph('open'));
-    actions.append(control(openBtn, L.open, () => { openArtifactTarget(group.targetType, group.targetId, summary.repeats ? summary.occurrence ?? undefined : undefined); }));
+    actions.append(control(openBtn, L.open, () => { openItem(group.targetType, group.targetId, { occurrence: summary.repeats ? summary.occurrence ?? undefined : undefined }); }));
     const chevron = el('span', styles.paneChevron);
     chevron.append(createDisclosureIcon(expanded));
     chevron.title = expanded ? L.hideDetails : L.showDetails;

@@ -4,9 +4,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
-import { deleteReminderWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
-import type { CrossAppRef } from '@/types';
+import { deleteReminderWithCleanup } from '@/services/crossAppLinkCleanup';
 import { SeriesScopeLine } from '@/components/RecurrenceScopeBar/SeriesScope';
 import { useSeriesScope } from '@/components/RecurrenceScopeBar/useSeriesScope';
 import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
@@ -77,20 +75,6 @@ export function CalendarReminderPane() {
   };
   const handleArchive = (reason: string) => { closeDialog(); archiveReminder(id, reason); closePane(); };
 
-  const navigateToCrossAppRef = (ref: CrossAppRef) => {
-    if (ref.type === 'list') { closePane(); openArtifactTarget('list', ref.id); return; }
-    if (ref.type !== 'note') return;
-    closePane();
-    useUIStore.getState().setActiveView('notes');
-    useUIStore.getState().openNote(ref.id, ref.tabId);
-  };
-
-  const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
-    (reminder.crossAppRefs ?? [])
-      .filter((r) => !next.some((n) => n.type === r.type && n.id === r.id))
-      .forEach((ref) => unlinkCrossAppRef('reminder', id, ref));
-    updateReminder(id, { crossAppRefs: next });
-  };
 
   return (
     <>
@@ -123,8 +107,7 @@ export function CalendarReminderPane() {
           )}
 
           <CalendarItemFields kind="reminder" item={reminder} savedId={id} occurrence={occurrenceDate}
-            update={(patch) => updateReminder(id, patch as Parameters<typeof updateReminder>[1])}
-            onRefsChange={handleCrossAppRefsChange} onNavigate={navigateToCrossAppRef} />
+            update={(patch) => updateReminder(id, patch as Parameters<typeof updateReminder>[1])} />
         </div>
 
         <ItemActionFooter

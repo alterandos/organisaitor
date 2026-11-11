@@ -477,10 +477,10 @@ describe('pattern: nav-column row actions use RowHoverActions, not the old inlin
 
 describe('no pane renders the same field twice', () => {
   // A merge once left CalendarEventPane with two Links fields (found 2026-10-05: every link showed twice).
-  it('each component renders <LinksField> and <CrossAppRefPicker> at most once', () => {
+  it('each component renders <LinksField> and <LinkedItemsField> at most once', () => {
     const bad = TSX_FILES.filter((f) => {
       const src = fs.readFileSync(f, 'utf8');
-      return (src.match(/<LinksField\b/g) ?? []).length > 1 || (src.match(/<CrossAppRefPicker\b/g) ?? []).length > 1;
+      return (src.match(/<LinksField\b/g) ?? []).length > 1 || (src.match(/<LinkedItemsField\b/g) ?? []).length > 1;
     });
     expect(bad.map(rel)).toEqual([]);
   });
@@ -559,20 +559,21 @@ describe('pattern: toasts go through showToast and the one ToastHost', () => {
 
 describe('pattern: "link a …" pickers suggest by keywords', () => {
   // Every picker orders its list the same way — keyword suggestions from the item being linked
-  // from, then recent (utils/suggestRank.ts; NotePickerModal has the tab-aware original).
-  const pickers = SOURCE_FILES.filter((f) => /PickerModal\.tsx$/.test(f));
+  // from, then recent (utils/suggestRank.ts, through components/ItemPickerModal/rankPicker.ts;
+  // NotePickerModal has the tab-aware original). ItemPickerModal is the shell: its callers rank.
+  const pickers = SOURCE_FILES.filter((f) => /PickerModal\.tsx$/.test(f) && !f.endsWith('ItemPickerModal.tsx'));
 
   it('every *PickerModal takes suggestFrom and ranks through utils/suggestRank (NotePickerModal: its own tab-aware ranking)', () => {
     const bad = pickers.filter((f) => {
       const src = fs.readFileSync(f, 'utf8');
       if (!src.includes('suggestFrom')) return true;
-      return !rel(f).endsWith('NotePickerModal.tsx') && !src.includes("from '@/utils/suggestRank'");
+      return !rel(f).endsWith('NotePickerModal.tsx') && !src.includes("from '@/utils/suggestRank'") && !/from '[^']*rankPicker'/.test(src);
     });
     expect(bad.map(rel)).toEqual([]);
   });
 
   it('every place that opens a *PickerModal passes suggestFrom', () => {
-    const hits = findMatches(TSX_FILES, /<\w+PickerModal\b/).filter((h) => {
+    const hits = findMatches(TSX_FILES, /<(?!ItemPickerModal\b)\w+PickerModal\b/).filter((h) => {
       const lines = linesOf(path.join(ROOT, h.file));
       return !lines.slice(h.line - 1, h.line + 6).join('\n').includes('suggestFrom');
     });
@@ -740,7 +741,7 @@ describe('pattern: linked text is drawn by objects/artifactGroups.ts, once per l
     const more = findMatches(files.filter((f) => !glyphAllowed.test(f)), /[⊘↺↗↳↰◐◫▦◎▤✦◉]/, { skipComments: true });
     expect(more, describeHits(more)).toEqual([]);
     // config/emojiSet.ts: 🔗 is one of the emoji a person can pick as an icon, not a control.
-    const linkAllowed = /itemIcons\.ts$|itemLinkKinds\.ts$|artifactTypes\.ts$|CrossAppRefPicker\.tsx$|EditActivityTypeModal\.tsx$|RecordFields\.tsx$|emojiSet\.ts$/;
+    const linkAllowed = /itemIcons\.ts$|itemLinkKinds\.ts$|artifactTypes\.ts$|EditActivityTypeModal\.tsx$|RecordFields\.tsx$|emojiSet\.ts$/;
     const links = findMatches(files.filter((f) => !linkAllowed.test(f)), /🔗/, { skipComments: true });
     expect(links, describeHits(links)).toEqual([]);
   });
@@ -1625,7 +1626,7 @@ describe('pattern: one form for a calendar item, created or edited (2026-11-05)'
       const src = read(f);
       expect(src, f).toContain('<CalendarItemFields');
       // The fields are the shared component's; a host adds only what's around them.
-      expect(src, f).not.toMatch(/<(DateInput|TimeInput|RepeatField|NotifyRuleField|LinksField|PicturesField|CollectionPicker|CrossAppRefPicker|EventTasksField|FlagCheck)\b/);
+      expect(src, f).not.toMatch(/<(DateInput|TimeInput|RepeatField|NotifyRuleField|LinksField|PicturesField|CollectionPicker|LinkedItemsField|EventTasksField|FlagCheck)\b/);
     }
   });
 });
@@ -1678,6 +1679,18 @@ describe('pattern: selected text has one list of actions (2026-11-02)', () => {
     expect(read('components/NoteEditor/contextMenu.ts')).toContain('selectionActions(');
     const editorFiles = SOURCE_FILES.filter((f) => rel(f).startsWith('src/components/NoteEditor/') && rel(f) !== 'src/components/NoteEditor/objects/selectionActions.ts');
     const hits = findMatches(editorFiles, /\b(sendSelectedText|addWordFromSelection)\(/, { skipComments: true });
+    expect(describeHits(hits)).toBe('');
+  });
+
+  it('every menu draws the groups (order, names, icons) from objects/selectionGroups.ts, and the Glossary terms from termActions (2026-11-10)', () => {
+    const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+    for (const p of ['components/NoteEditor/objects/SelectionMenu.tsx', 'components/NoteEditor/contextMenu.ts']) {
+      const src = read(p);
+      expect(src, p).toMatch(/selectionGroups?\(/);
+      expect(src, p).not.toMatch(/\b(termsFor\(.*\)\.terms|linkToTerm\()/);
+    }
+    const editorFiles = SOURCE_FILES.filter((f) => rel(f).startsWith('src/components/NoteEditor/') && !rel(f).endsWith('selectionGroups.ts'));
+    const hits = findMatches(editorFiles, /LABELS\.selectionMenu\.groups|LABELS\.contextMenu\.markAs/, { skipComments: true });
     expect(describeHits(hits)).toBe('');
   });
 });
@@ -1837,7 +1850,7 @@ describe('pattern: a list of dates with a box each is components/DateChecklist',
     expect(hits).toEqual([]);
   });
   it('the three that had their own use it', () => {
-    for (const f of ['components/AddScheduleModal/ScheduleBlockFields.tsx', 'components/CalendarItemPickerModal/CalendarItemPickerModal.tsx', 'components/RepeatField/RepeatField.tsx']) {
+    for (const f of ['components/AddScheduleModal/ScheduleBlockFields.tsx', 'components/ItemPickerModal/LinkPickerModal.tsx', 'components/RepeatField/RepeatField.tsx']) {
       expect(fs.readFileSync(path.join(SRC, f), 'utf8'), f).toContain('<DateChecklist');
     }
   });
@@ -1889,5 +1902,142 @@ describe('pattern: fields are spaced by --form-field-gap', () => {
     for (const f of ['AddCalendarItemModal/AddCalendarItemModal.module.css', 'CalendarEventPane/CalendarEventPane.module.css', 'CalendarReminderPane/CalendarReminderPane.module.css', 'CalendarDeadlinePane/CalendarDeadlinePane.module.css']) {
       expect(fs.readFileSync(path.join(SRC, 'components', f), 'utf8'), f).toContain('var(--form-field-gap)');
     }
+  });
+});
+
+// ── Linking (adopted 2026-11-10, docs/agent-tasks/08-linking-consolidation.md) ─────────────────
+describe('pattern: linking — one registry, one picker, one field, one opener, one "what links here"', () => {
+  const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+  const exists = (p: string) => fs.existsSync(path.join(SRC, p));
+
+  it('one registry: the field, the link picker and the list bar read kinds from services/linkTargets.ts; no local kind→icon map', () => {
+    for (const f of ['components/LinkedItemsField/LinkedItemsField.tsx', 'components/ItemPickerModal/LinkPickerModal.tsx', 'components/ListsSection/ListLinksBar.tsx']) {
+      expect(read(f), f).toContain('LINK_TARGETS');
+    }
+    // A kind's icon spelled out per link type (CrossAppRefPicker's old ICON_BY_TYPE) belongs in the registry.
+    const hits = findMatches(SOURCE_FILES.filter((f) => !/itemIcons\.ts$/.test(f)), /\bnote:\s*'📝'|ICON_BY_TYPE/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  it('one picker: only ItemPickerModal builds the dialog (its CSS, the portal); the old copies are gone', () => {
+    for (const gone of ['components/TaskPickerModal', 'components/ListPickerModal', 'components/CalendarItemPickerModal', 'components/CrossAppRefPicker']) {
+      expect(exists(gone), gone).toBe(false);
+    }
+    const cssUsers = findMatches(SOURCE_FILES.filter((f) => !f.endsWith('ItemPickerModal.tsx')), /ItemPickerModal\.module\.css/);
+    expect(cssUsers, describeHits(cssUsers)).toEqual([]);
+    const noteCss = findMatches(SOURCE_FILES.filter((f) => !f.endsWith('NotePickerModal.tsx')), /NotePickerModal\.module\.css/);
+    expect(noteCss, describeHits(noteCss)).toEqual([]);
+    for (const f of ['components/NotePickerModal/NotePickerModal.tsx', 'components/HubPickerModal/HubPickerModal.tsx', 'components/InboxPickerModal/InboxPickerModal.tsx',
+      'components/ItemPickerModal/LinkPickerModal.tsx', 'components/NoteEditor/NoteLinkPicker.tsx']) {
+      expect(read(f), f).not.toContain('createPortal');
+      expect(read(f), f).toContain('<ItemPickerModal');
+    }
+  });
+
+  it('one field: tasks, the add-task form, calendar items and lists render LinkedItemsField; TaskCalendarLinks is gone', () => {
+    expect(exists('components/TaskLinks/TaskCalendarLinks.tsx')).toBe(false);
+    for (const f of ['components/TaskPane/TaskPane.tsx', 'components/AddTaskModal/AddTaskModal.tsx', 'components/CalendarItemForm/CalendarItemFields.tsx', 'components/ListsSection/ListLinksBar.tsx']) {
+      expect(read(f), f).toContain('<LinkedItemsField');
+    }
+    // References on an existing item are added and removed through the registry (unlinking a note takes its text too).
+    const writes = findMatches(SOURCE_FILES.filter((f) => !/services[/\\](linkTargets|crossAppLinkCleanup)\.ts$/.test(f)), /\b(addCrossAppRef|unlinkOneCrossAppRef)\(/, { skipComments: true });
+    expect(writes, describeHits(writes)).toEqual([]);
+  });
+
+  it('one opener: services/openItem.ts; components outside the calendar and task sections don’t open those panes themselves', () => {
+    expect(exists('services/openCrossAppTarget.ts')).toBe(false);
+    // Opening a pane in its own section from that section's views may stay direct (services/openItem.ts's comment).
+    const ALLOWED = /components[/\\](CalendarView|CalendarSidePane|CalendarEventPane|CalendarReminderPane|CalendarDeadlinePane|RecurrenceScopeBar|TaskItem|TaskList|TaskPane)[/\\]|services[/\\](openItem|endeavourFiling|itemOccurrences)\.ts$|store[/\\]uiStore\.ts$/;
+    const hits = findMatches(SOURCE_FILES.filter((f) => !ALLOWED.test(f)), /\b(openTaskPane|openCalendarEventPane|openCalendarReminderPane|openCalendarDeadlinePane)\(/, { skipComments: true });
+    expect(hits, describeHits(hits)).toEqual([]);
+  });
+
+  it('one "what links here": utils/linksTo.ts; the note bar, a calendar item’s tasks, a list’s bar and task links read it', () => {
+    expect(read('store/noteBacklinks.ts')).toContain('@/services/linksTo');
+    expect(read('components/ListsSection/ListLinksBar.tsx')).toContain('useLinksTo');
+    expect(read('utils/eventTaskLinks.ts')).toContain('linksToIn(');
+    expect(read('utils/taskLinks.ts')).toContain('linksToIn(');
+    // Nothing else scans other items' references to find what links to something.
+    const scans = findMatches(SOURCE_FILES.filter((f) => !/utils[/\\]linksTo\.ts$|services[/\\]crossAppLinkCleanup\.ts$/.test(f)), /crossAppRefs\??\.(some|find)\(/, { skipComments: true });
+    expect(scans, describeHits(scans)).toEqual([]);
+  });
+
+  it('deleting leaves links; only deleting forever takes them (services/trash.ts calls forgetLinksTo)', () => {
+    expect(read('services/trash.ts')).toMatch(/export function deleteForever[\s\S]*?forgetLinksTo\(/);
+    expect(read('services/trash.ts')).toMatch(/export function emptyTrash[\s\S]*?forgetLinksTo\(/);
+    expect(read('components/RecyclingBinPane/RecyclingBinPane.tsx')).not.toContain('useTrashStore.getState().clear()');
+  });
+});
+
+describe('pattern: cards share one look (2026-11-11)', () => {
+  // Every card block draws its Card and Compact designs with components/CardLook (one stylesheet,
+  // one icon control), never its own copy: the Glossary card, the question and the conversion had
+  // each drawn them and had drifted (only the Glossary card had the Card design's icon).
+  const read = (p: string) => fs.readFileSync(path.join(SRC, p), 'utf8');
+  const CARD_FILES: Record<string, string[]> = {
+    glossaryCard:  ['components/NoteEditor/extensions/GlossaryCard.ts', 'components/NoteEditor/extensions/GlossaryCardBody.tsx'],
+    questionBlock: ['components/NoteEditor/extensions/Question.ts'],
+    convertBlock:  ['components/NoteEditor/extensions/Convert.ts', 'components/ConverterPane/ConvertWidget.tsx'],
+    caseStudy:     ['components/NoteEditor/extensions/CaseStudy.ts'],
+  };
+
+  it('every card block is listed, says data-card-look, takes the shared icon attribute and draws the shared icon', () => {
+    const listed = read('components/NoteEditor/extensions/cardLook.ts').match(/CARD_LOOK_NODES = new Set\(\[([^\]]*)\]/)![1];
+    expect(listed.match(/'(\w+)'/g)!.map((s) => s.slice(1, -1)).sort()).toEqual(Object.keys(CARD_FILES).sort());
+    for (const [node, files] of Object.entries(CARD_FILES)) {
+      const src = files.map(read).join('\n');
+      expect(src, node).toContain('data-card-look');
+      expect(src, node).toContain('cardIconAttributes()');
+      expect(src, node).toMatch(/<CardIcon\b|createCardIcon\(/);
+    }
+  });
+
+  it('no card measurements (the box, the kind line, the rule, the icon tile) outside CardLook.module.css', () => {
+    const css = walk(SRC, ['.module.css']).filter((f) => !rel(f).endsWith('CardLook/CardLook.module.css'));
+    const hits = [
+      // The card box. One exception: the argument's Card design (a weighing block, not a card)
+      // borrows the box's look; it has no kind line, icon or rule.
+      ...findMatches(css, /padding:\s*var\(--space-5\)\s+var\(--space-6\)\s+var\(--space-4\)/)
+        .filter((h) => !linesOf(path.join(ROOT, h.file))[h.line - 2].includes('[data-type="argument"][data-variant="card"]')),
+      ...findMatches(css, /\[data-card-look[^\]]*\]\s*\{/),
+      ...findMatches(css, /attr\(data-qn-(heading|icon)\)|--qn-accent|--gc-accent:\s*var\(--color-kind/),
+    ];
+    expect(describeHits(hits)).toBe('');
+  });
+});
+
+describe('pattern: animations live in src/animations and load Motion lazily (CLAUDE.md "Animations")', () => {
+  it('only src/animations/motionLib.ts imports Motion, and only animations load that, lazily', () => {
+    const hits = [
+      ...findMatches(SOURCE_FILES, /from ['"](motion|framer-motion)(\/[a-z-]+)?['"]|import\(['"](motion|framer-motion)/, { skipComments: true })
+        .filter((h) => h.file !== 'src/animations/motionLib.ts'),
+      ...findMatches(SOURCE_FILES, /from ['"][^'"]*motionLib['"]/, { skipComments: true }),
+    ];
+    expect(describeHits(hits)).toBe('');
+  });
+  it('every animation respects reduced motion', () => {
+    const files = SOURCE_FILES.filter((f) => rel(f).startsWith('src/animations/') && /await import\('\.\/motionLib'\)/.test(fs.readFileSync(f, 'utf8')));
+    expect(files.length).toBeGreaterThan(0);
+    for (const f of files) expect(fs.readFileSync(f, 'utf8'), rel(f)).toMatch(/reducedMotion\(\)/);
+  });
+});
+
+describe('pattern: a block’s long parts hold lines and bullets (CLAUDE.md "Block designs")', () => {
+  it('every part in RICH_PART_NODES is defined with RICH_PART_CONTENT, marked data-rich-part, and keyed through richPartAt', () => {
+    const blockNodes = fs.readFileSync(path.join(SRC, 'components/NoteEditor/blockNodes.ts'), 'utf8');
+    const names = [...(blockNodes.match(/RICH_PART_NODES[^=]*= new Set\(\[([^\]]*)\]/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    expect(names.length).toBeGreaterThan(0);
+    const ext = SOURCE_FILES.filter((f) => rel(f).startsWith('src/components/NoteEditor/extensions/'));
+    const problems: string[] = [];
+    for (const name of names) {
+      const file = ext.find((f) => fs.readFileSync(f, 'utf8').includes(`name: '${name}'`));
+      if (!file) { problems.push(`${name}: no node`); continue; }
+      const src = fs.readFileSync(file, 'utf8');
+      const def = src.slice(src.indexOf(`name: '${name}'`), src.indexOf(`name: '${name}'`) + 600);
+      if (!def.includes('content: RICH_PART_CONTENT')) problems.push(`${name}: content`);
+      if (!def.includes("'data-rich-part'")) problems.push(`${name}: data-rich-part`);
+      if (!src.includes(`richPartAt(`) || !src.includes(`'${name}')`)) problems.push(`${name}: keys`);
+    }
+    expect(problems).toEqual([]);
   });
 });

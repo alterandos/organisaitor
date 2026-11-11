@@ -51,7 +51,7 @@ It sits at the top of the left nav, above a divider, with hotkey `0`.
 
 - **A new app or item kind adds a source**: an entry in `OVERVIEW_SOURCES`, its key in `OverviewSourceKey`, its label in `LABELS.overview.sources`, and a case in `overview/open.ts` if it can be opened. Nothing else knows about apps.
 - **Sources are pure** (a snapshot in, rows out). Only `useOverviewSnapshot` subscribes to stores and only `open.ts` touches uiStore, so `engine.test.ts` exercises everything without React.
-- **Opening a row** reuses `openArtifactTarget` (the cross-app-link opener) for tasks, calendar items and lists. Notes open via `openNote`, list items via `setListsLastActive` + `openEditListItem`, and tracker entries via `setActiveTracker` + `openEditEntry`.
+- **Opening a row** reuses `openItem` (`services/openItem.ts`, the one opener of a linked item) for tasks, calendar items, lists, notes, list items and tracker entries (2026-11-10; before, notes, list items and tracker entries were opened by hand here).
 - **The saved definition is one jsonb blob** (`overviews.definition`), so a new query option never needs a migration. The mapper defaults every missing key.
 
 ## UI

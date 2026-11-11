@@ -5,9 +5,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
-import { deleteDeadlineWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
-import type { CrossAppRef } from '@/types';
+import { deleteDeadlineWithCleanup } from '@/services/crossAppLinkCleanup';
 import { SeriesScopeLine } from '@/components/RecurrenceScopeBar/SeriesScope';
 import { useSeriesScope } from '@/components/RecurrenceScopeBar/useSeriesScope';
 import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
@@ -84,20 +82,6 @@ export function CalendarDeadlinePane() {
   };
   const handleArchive = (reason: string) => { closeDialog(); archiveDeadline(id, reason); closePane(); };
 
-  const navigateToCrossAppRef = (ref: CrossAppRef) => {
-    if (ref.type === 'list') { closePane(); openArtifactTarget('list', ref.id); return; }
-    if (ref.type !== 'note') return;
-    closePane();
-    useUIStore.getState().setActiveView('notes');
-    useUIStore.getState().openNote(ref.id, ref.tabId);
-  };
-
-  const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
-    (deadline.crossAppRefs ?? [])
-      .filter((r) => !next.some((n) => n.type === r.type && n.id === r.id))
-      .forEach((ref) => unlinkCrossAppRef('deadline', id, ref));
-    updateDeadline(id, { crossAppRefs: next });
-  };
 
   return (
     <>
@@ -130,8 +114,7 @@ export function CalendarDeadlinePane() {
           )}
 
           <CalendarItemFields kind="deadline" item={deadline} savedId={id} occurrence={occurrenceDate}
-            update={(patch) => updateDeadline(id, patch as Parameters<typeof updateDeadline>[1])}
-            onRefsChange={handleCrossAppRefsChange} onNavigate={navigateToCrossAppRef} hasLinkedTask={!!linkedTask}
+            update={(patch) => updateDeadline(id, patch as Parameters<typeof updateDeadline>[1])} hasLinkedTask={!!linkedTask}
             typeField={deadline.deadlineType !== 'task' ? <ItemTypePaneField target={{ kind: 'deadline', id }} /> : undefined} />
         </div>
 

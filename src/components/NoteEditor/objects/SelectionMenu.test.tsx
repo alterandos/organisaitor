@@ -59,12 +59,14 @@ const keyToEditor = (key: string) => act(() => {
 });
 
 describe('SelectionMenu', () => {
-  it('suggests the term that matches the selected words first; Enter links the text to it', () => {
+  it('turning it into a card comes first, linking to a term last (2026-11-10); the matching term is suggested there and links the text', () => {
     const { entryId } = setup();
+    const options = screen.getAllByRole('option');
+    expect(options[0]).toHaveTextContent('Definition…');
     expect(screen.getByText('Suggested')).toBeInTheDocument();
-    const first = screen.getAllByRole('option')[0];
-    expect(first).toHaveTextContent('Photosynthesis');
-    fireEvent.keyDown(screen.getByPlaceholderText(/Link to a term/), { key: 'Enter' });
+    const term = options.findLastIndex((o) => !!o.textContent?.includes('Photosynthesis'));
+    expect(term).toBe(options.length - 1);
+    fireEvent.click(options[term]);
     const groups = collectRefGroups(editor.state.doc);
     expect(groups.map((g) => [g.entryId, editor.state.doc.textBetween(g.from, g.to)])).toEqual([[entryId, 'photosynthesis']]);
     expect(getSelectionMenu(editor.state)).toBeNull();
@@ -73,7 +75,7 @@ describe('SelectionMenu', () => {
   it('keys typed into the editor before the menu has focus go to the menu, not over the text', () => {
     const { from, to } = setup();
     for (const ch of 'conc') keyToEditor(ch);
-    expect(screen.getByPlaceholderText(/Link to a term/)).toHaveValue('conc');
+    expect(screen.getByPlaceholderText(/Turn into, send/)).toHaveValue('conc');
     expect(editor.state.doc.textContent).toContain('photosynthesis');
     keyToEditor('Enter');
     expect(cardFromSelection).toHaveBeenCalledWith(expect.anything(), from, to, 'concept', null);
@@ -81,17 +83,17 @@ describe('SelectionMenu', () => {
 
   it('offers every Glossary kind to mark it as, Acronym and Profile included', () => {
     setup();
-    fireEvent.change(screen.getByPlaceholderText(/Link to a term/), { target: { value: 'acro' } });
+    fireEvent.change(screen.getByPlaceholderText(/Turn into, send/), { target: { value: 'acro' } });
     expect(screen.getAllByRole('option').some((o) => o.textContent?.endsWith('Acronym…'))).toBe(true);
-    fireEvent.change(screen.getByPlaceholderText(/Link to a term/), { target: { value: 'profile' } });
+    fireEvent.change(screen.getByPlaceholderText(/Turn into, send/), { target: { value: 'profile' } });
     expect(screen.getAllByRole('option').some((o) => o.textContent?.endsWith('Profile…'))).toBe(true);
   });
 
   it('marks it Critical, filtered by typing', () => {
     const { from } = setup();
-    fireEvent.change(screen.getByPlaceholderText(/Link to a term/), { target: { value: 'crit' } });
+    fireEvent.change(screen.getByPlaceholderText(/Turn into, send/), { target: { value: 'crit' } });
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['❗Critical']);
-    fireEvent.keyDown(screen.getByPlaceholderText(/Link to a term/), { key: 'Enter' });
+    fireEvent.keyDown(screen.getByPlaceholderText(/Turn into, send/), { key: 'Enter' });
     expect(collectImportantPassages(editor.state.doc)).toMatchObject([{ level: 3, from }]);
   });
 });

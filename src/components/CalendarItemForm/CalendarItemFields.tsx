@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useCalendarStore } from '@/store/calendarStore';
 import { effectivePeriod } from '@/utils/endeavourPeriod';
-import type { CalendarDeadline, CalendarEvent, CalendarItemKind, CalendarReminder, CollectionId, CrossAppRef, TagId } from '@/types';
+import type { CalendarDeadline, CalendarEvent, CalendarItemKind, CalendarReminder, CollectionId, TagId } from '@/types';
 import { useTaskStore } from '@/store/taskStore';
 import { LABELS } from '@/config/labels';
 import { ITEM_TYPE_ICON } from '@/config/itemIcons';
@@ -26,7 +26,8 @@ import { NotifyRuleField } from '@/components/AllDayNotifyField/NotifyLead';
 import { RepeatField } from '@/components/RepeatField/RepeatField';
 import { LinksField } from '@/components/LinksField/LinksField';
 import { EventTasksField, type PendingTask } from '@/components/TaskLinks/EventTasksField';
-import { CrossAppRefPicker } from '@/components/CrossAppRefPicker/CrossAppRefPicker';
+import { LinkedItemsField } from '@/components/LinkedItemsField/LinkedItemsField';
+import { openItem } from '@/services/openItem';
 import { PicturesField } from '@/components/PictureInput/PicturesField';
 import { CollectionPicker } from '@/components/CollectionPicker/CollectionPicker';
 import { TagField } from '@/components/TagField/TagField';
@@ -54,7 +55,7 @@ type ValueOf<T, K extends PropertyKey> = T extends unknown ? (K extends keyof T 
 export type ItemValues = { [K in KeysOf<AnyItem>]?: ValueOf<AnyItem, K> };
 
 export function CalendarItemFields({ kind, item, update, savedId, occurrence = null, liveText = false, isTaskShadow = false, hasLinkedTask = false,
-  titleLead, afterTitle, typeField, onRefsChange, onNavigate, pending, onPending, autoFocusTitle = false }: {
+  titleLead, afterTitle, typeField, pending, onPending, autoFocusTitle = false }: {
   kind: CalendarItemKind;
   item: ItemValues;
   update: (patch: ItemValues) => void;
@@ -66,8 +67,6 @@ export function CalendarItemFields({ kind, item, update, savedId, occurrence = n
   titleLead?: ReactNode;
   afterTitle?: ReactNode;
   typeField?: ReactNode;           // Types (switched off: config/features.ts)
-  onRefsChange?: (next: CrossAppRef[]) => void;
-  onNavigate?: (ref: CrossAppRef) => void;
   pending?: PendingTask[];
   onPending?: (next: PendingTask[]) => void;
   autoFocusTitle?: boolean;
@@ -161,7 +160,7 @@ export function CalendarItemFields({ kind, item, update, savedId, occurrence = n
         rows={3}
       />
 
-      <LinkedNoteAbstracts refs={item.crossAppRefs ?? []} onOpen={(ref) => onNavigate?.(ref)} />
+      <LinkedNoteAbstracts refs={item.crossAppRefs ?? []} onOpen={(ref) => { if (savedId) openItem('note', ref.id, { tabId: ref.tabId }); }} />
 
       {isEvent ? (
         <div className={styles.field}>
@@ -252,13 +251,10 @@ export function CalendarItemFields({ kind, item, update, savedId, occurrence = n
 
       <div className={styles.field}>
         <span className={styles.label}>{L.linkedItems}</span>
-        <CrossAppRefPicker
-          value={item.crossAppRefs ?? []}
-          suggestFrom={item.title ?? ''}
-          newNoteTitle={newNoteTitleFor(item.title ?? '', date)}
-          onChange={(next) => (onRefsChange ? onRefsChange(next) : update({ crossAppRefs: next }))}
-          onNavigate={(ref) => onNavigate?.(ref)}
-        />
+        {/* An item that exists links at once; the create form holds its links until Create. */}
+        <LinkedItemsField owner={savedId ? { type: kind, id: savedId } : null} refs={item.crossAppRefs ?? []}
+          onRefsChange={(next) => update({ crossAppRefs: next })} suggestFrom={item.title ?? ''}
+          newNoteTitle={newNoteTitleFor(item.title ?? '', date)} offers={['note', 'newNote', 'list']} />
       </div>
 
       {isEvent && (

@@ -25,6 +25,8 @@ export function entriesInDoc(doc: PMNode): Set<string> {
   const out = new Set<string>();
   doc.descendants((n) => {
     if ((n.type.name === 'glossaryCard' || n.type.name === 'glossaryChip') && n.attrs.entryId) out.add(n.attrs.entryId as string);
+    // A kept quote's block shows its record (services/keptQuotes.ts).
+    else if (n.type.name === 'quoteBlock' && n.attrs.keptId) out.add(n.attrs.keptId as string);
     else if (n.isText) {
       for (const m of n.marks) {
         if (m.type.name === 'noteTag' && m.attrs.structuredEntryId) out.add(m.attrs.structuredEntryId as string);

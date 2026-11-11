@@ -1,10 +1,13 @@
 import { Extension, Node, mergeAttributes } from '@tiptap/core';
-import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
+import { Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { Node as PMNode, type ResolvedPos } from '@tiptap/pm/model';
 import { LABELS } from '@/config/labels';
 import { blockFrameAttributes, blockPill, designButtons, frameButtons, pillButton, replaceTypedWithBlock, selectButton, type BlockDesign } from './blockDesigns';
 import { listDecorations, listWeight, pointAt, pointsEnter, stepField, type ListWords } from './ProsCons';
+import { splitBlock } from '@tiptap/pm/commands';
+import { wrapPartContent } from '@/utils/noteContent';
+import { RICH_PART_CONTENT, dropEmptyLast, richPartAt, richPartEmpty, richPartEnd, richPlaceholder } from './richParts';
 
 // An argument (`\argument`, 2026-10-17, agreed with the user): a claim and the case for it, against
 // it, or both. Unlike pros and cons, which weighs one thing (should I?), an argument is a position
@@ -15,10 +18,14 @@ import { listDecorations, listWeight, pointAt, pointsEnter, stepField, type List
 //                  (what a hidden side or part held, so hiding loses nothing), frames
 //   argumentClaim  the claim
 //   prosConsList   the evidence, side 'pro' (for) and 'con' (against): the pros and cons block's own
-//                  lists, so each piece is weighted 1–3 and the keys are the same
+//                  lists, so each piece is weighted 1–3 and the keys are the same; and, with the
+//                  `neutral` switch on (2026-11-11), 'neutral' between them: evidence that bears on
+//                  it without clearly pushing either way (unclear whether it's causal…), which never
+//                  counts towards which way it leans
 //   argumentField  an optional part (field attr): why the evidence supports it, who made it, who
 //                  supports it, who's against it, its sources; only the parts in use are in the
-//                  document, in ARGUMENT_FIELDS order
+//                  document, in ARGUMENT_FIELDS order; each holds lines and bullets
+//                  (extensions/richParts.ts, 2026-11-11: supporters, sources… are often lists)
 //
 // "For only", "Against only" and "For and against" are the Sides setting, not designs: a design
 // never changes the content (CLAUDE.md "Block designs"), and these hide a list.
@@ -46,6 +53,7 @@ export const Argument = Node.create({
       ...blockFrameAttributes(),
       variant: { default: 'card', parseHTML: (el) => oneOf(ARGUMENT_VARIANTS, el.getAttribute('data-variant'), 'card'), renderHTML: (a) => ({ 'data-variant': a.variant }) },
       sides:   { default: 'both', parseHTML: (el) => oneOf(ARGUMENT_SIDES, el.getAttribute('data-sides'), 'both'), renderHTML: (a) => ({ 'data-sides': a.sides }) },
+      neutral: { default: false, parseHTML: (el) => el.hasAttribute('data-neutral'), renderHTML: (a) => (a.neutral ? { 'data-neutral': '' } : {}) },
       hidden: {
         default: {},
         parseHTML: (el) => { try { return JSON.parse(el.getAttribute('data-hidden') || '{}'); } catch { return {}; } },
@@ -68,13 +76,13 @@ export const ArgumentClaim = Node.create({
 
 export const ArgumentFieldNode = Node.create({
   name: 'argumentField',
-  content: 'inline*',
+  content: RICH_PART_CONTENT,
   defining: true,
   addAttributes() {
     return { field: { default: 'why', parseHTML: (el) => oneOf(ARGUMENT_FIELDS, el.getAttribute('data-arg-field'), 'why'), renderHTML: (a) => ({ 'data-arg-field': a.field }) } };
   },
   parseHTML() { return [{ tag: 'div[data-arg-field]', priority: 60 }]; },
-  renderHTML({ HTMLAttributes }) { return ['div', HTMLAttributes, 0]; },
+  renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes, { 'data-rich-part': '' }), 0]; },
 });
 
 // ── Positions ────────────────────────────────────────────────────────────────
@@ -101,7 +109,7 @@ export const fieldsOf = (node: PMNode): ArgumentField[] => {
   return out;
 };
 
-const listOf = (node: PMNode, side: 'pro' | 'con'): PMNode | null => {
+const listOf = (node: PMNode, side: 'pro' | 'con' | 'neutral'): PMNode | null => {
   let found: PMNode | null = null;
   node.forEach((c) => { if (c.type.name === 'prosConsList' && c.attrs.side === side) found = c; });
   return found;
@@ -109,7 +117,7 @@ const listOf = (node: PMNode, side: 'pro' | 'con'): PMNode | null => {
 
 // ── Making and changing ──────────────────────────────────────────────────────
 
-const newList = (state: EditorState, side: 'pro' | 'con') =>
+const newList = (state: EditorState, side: 'pro' | 'con' | 'neutral') =>
   state.schema.nodes.prosConsList.create({ side }, state.schema.nodes.prosConsPoint.create());
 
 export function argumentNode(state: EditorState, claim = ''): PMNode {
@@ -133,21 +141,25 @@ export function setArgumentVariant(view: EditorView, pos: number, variant: Argum
 
 type Hidden = Record<string, unknown>;
 
+// A field hidden before its fields held lines kept its text straight inside it.
+const wrapStored = (json: Record<string, unknown>): Record<string, unknown> =>
+  json.type === 'argumentField' ? { ...json, content: wrapPartContent(json.content as never) } : json;
+
 // Rebuilds the block's children: the claim, the lists for `sides` (a list hidden before comes back
 // as it was; a list hidden now is kept in `hidden`), then `fields` in their order. Pure, so the
 // sides and parts setters share it.
-function rebuild(state: EditorState, node: PMNode, sides: ArgumentSides, fields: ArgumentField[]): { children: PMNode[]; hidden: Hidden } {
+function rebuild(state: EditorState, node: PMNode, sides: ArgumentSides, fields: ArgumentField[], neutral = !!node.attrs.neutral): { children: PMNode[]; hidden: Hidden } {
   const hidden: Hidden = { ...(node.attrs.hidden as Hidden) };
   const { schema } = state;
   const restore = (key: string): PMNode | null => {
     const json = hidden[key];
     delete hidden[key];
     if (!json) return null;
-    try { return PMNode.fromJSON(schema, json as Record<string, unknown>); } catch { return null; }
+    try { return PMNode.fromJSON(schema, wrapStored(json as Record<string, unknown>)); } catch { return null; }
   };
   const stash = (key: string, n: PMNode | null) => { if (n && n.textContent.trim()) hidden[key] = n.toJSON(); };
   const children: PMNode[] = [node.child(0)];
-  for (const [side, key, shown] of [['pro', 'for', sides !== 'against'], ['con', 'against', sides !== 'for']] as const) {
+  for (const [side, key, shown] of [['pro', 'for', sides !== 'against'], ['neutral', 'neutral', neutral], ['con', 'against', sides !== 'for']] as const) {
     const now = listOf(node, side);
     if (shown) children.push(now ?? restore(key) ?? newList(state, side));
     else stash(key, now);
@@ -156,20 +168,20 @@ function rebuild(state: EditorState, node: PMNode, sides: ArgumentSides, fields:
   node.forEach((c) => { if (c.type.name === 'argumentField') present.set(c.attrs.field as string, c); });
   for (const f of ARGUMENT_FIELDS) {
     const now = present.get(f) ?? null;
-    if (fields.includes(f)) children.push(now ?? restore(`field:${f}`) ?? schema.nodes.argumentField.create({ field: f }));
+    if (fields.includes(f)) children.push(now ?? restore(`field:${f}`) ?? schema.nodes.argumentField.createAndFill({ field: f })!);
     else stash(`field:${f}`, now);
   }
   return { children, hidden };
 }
 
-function applyRebuild(view: EditorView, pos: number, node: PMNode, sides: ArgumentSides, fields: ArgumentField[], focusField?: ArgumentField): void {
-  const { children, hidden } = rebuild(view.state, node, sides, fields);
-  const next = node.type.create({ ...node.attrs, sides, hidden }, children);
+function applyRebuild(view: EditorView, pos: number, node: PMNode, sides: ArgumentSides, fields: ArgumentField[], focusField?: ArgumentField, neutral = !!node.attrs.neutral): void {
+  const { children, hidden } = rebuild(view.state, node, sides, fields, neutral);
+  const next = node.type.create({ ...node.attrs, sides, neutral, hidden }, children);
   const tr = view.state.tr.replaceWith(pos, pos + node.nodeSize, next);
   if (focusField) {
     let at: number | null = null;
-    next.forEach((c, offset) => { if (c.type.name === 'argumentField' && c.attrs.field === focusField) at = pos + 1 + offset + 1 + c.content.size; });
-    if (at !== null) tr.setSelection(TextSelection.create(tr.doc, at));
+    next.forEach((c, offset) => { if (c.type.name === 'argumentField' && c.attrs.field === focusField) at = pos + 1 + offset; });
+    if (at !== null) tr.setSelection(richPartEnd(tr.doc, at, tr.doc.nodeAt(at)!));
   }
   view.dispatch(tr.scrollIntoView());
 }
@@ -178,6 +190,13 @@ export function setArgumentSides(view: EditorView, pos: number, sides: ArgumentS
   const node = view.state.doc.nodeAt(pos);
   if (node?.type.name !== 'argument' || node.attrs.sides === sides) return;
   applyRebuild(view, pos, node, sides, fieldsOf(node));
+}
+
+// Shows or hides the neutral evidence (what it held kept while hidden, as a side's is).
+export function toggleArgumentNeutral(view: EditorView, pos: number): void {
+  const node = view.state.doc.nodeAt(pos);
+  if (node?.type.name !== 'argument') return;
+  applyRebuild(view, pos, node, node.attrs.sides as ArgumentSides, fieldsOf(node), undefined, !node.attrs.neutral);
 }
 
 // Shows a part (the cursor in it) or hides it (its text kept, to come back when shown again).
@@ -193,14 +212,6 @@ export function toggleArgumentField(view: EditorView, pos: number, field: Argume
 
 type Command = (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean;
 
-function leaveBlock(state: EditorState, b: ArgAt, dispatch?: (tr: Transaction) => void): boolean {
-  if (!dispatch) return true;
-  const after = b.pos + b.node.nodeSize;
-  const tr = state.tr.insert(after, state.schema.nodes.paragraph.create());
-  dispatch(tr.setSelection(TextSelection.create(tr.doc, after + 1)).scrollIntoView());
-  return true;
-}
-
 // Enter: from the claim on to the evidence; in the evidence a new piece, or (on an empty last one)
 // on to what follows; in a part the next part, and from the last, out of the block.
 export const argumentEnter: Command = (state, dispatch) => {
@@ -214,14 +225,36 @@ export const argumentEnter: Command = (state, dispatch) => {
     dispatch(tr.setSelection(TextSelection.create(tr.doc, after + 1)).scrollIntoView());
   });
   if (viaPoints !== null) return viaPoints;
-  const last = b.node.lastChild;
-  if (last && state.selection.$from.parent === last && last.type.name === 'argumentField') return leaveBlock(state, b, dispatch);
+  // A field's lines: Enter is a new line (a bullet's own Enter in a list); on the empty last line
+  // it moves on, taking that line away if there are lines above it.
+  const r = richPartAt(state.selection.$from, 'argumentField');
+  if (r) {
+    if (r.inList) return false;
+    if (!r.emptyLast) return splitBlock(state, dispatch);
+    const tr = dropEmptyLast(state, r) ?? state.tr;
+    if (b.node.lastChild === r.part) {
+      if (dispatch) {
+        const after = tr.mapping.map(b.pos + b.node.nodeSize);
+        tr.insert(after, state.schema.nodes.paragraph.create());
+        dispatch(tr.setSelection(TextSelection.create(tr.doc, after + 1)).scrollIntoView());
+      }
+      return true;
+    }
+    const next = r.pos + r.part.nodeSize;
+    if (dispatch) dispatch(tr.setSelection(richPartEnd(tr.doc, tr.mapping.map(next), tr.doc.nodeAt(tr.mapping.map(next))!)).scrollIntoView());
+    return true;
+  }
   return stepField(state, b, 1, dispatch);
 };
 
 export const argumentTab = (dir: 1 | -1): Command => (state, dispatch) => {
   const b = argumentAt(state.selection.$from);
-  return b ? stepField(state, b, dir, dispatch) : false;
+  if (!b) return false;
+  const r = richPartAt(state.selection.$from, 'argumentField');
+  if (r?.inList) return false;   // indent / outdent the bullet
+  // Between parts, not lines: from a field's lines to the part before or after it.
+  if (r) return stepField(state, b, dir, dispatch, (dir === 1 ? richPartEnd(state.doc, r.pos, r.part) : Selection.near(state.doc.resolve(r.pos + 1), 1)).from);
+  return stepField(state, b, dir, dispatch);
 };
 
 // Backspace at the start of a field: an empty argument with the cursor in its claim becomes a plain
@@ -239,6 +272,8 @@ export const argumentBackspace: Command = (state, dispatch) => {
     }
     return true;
   }
+  const r = richPartAt($from, 'argumentField');
+  if (r && (r.inList || !r.atStart)) return false;   // a bullet becomes a line; a line joins the one above
   const at = pointAt($from);
   if (at && at.point.content.size === 0 && at.list.childCount > 1) {
     if (dispatch) {
@@ -253,7 +288,9 @@ export const argumentBackspace: Command = (state, dispatch) => {
 export const argumentDelete: Command = (state) => {
   const { $from, empty } = state.selection;
   if (!empty || $from.parentOffset !== $from.parent.content.size) return false;
-  return !!argumentAt($from);
+  if (!argumentAt($from)) return false;
+  const r = richPartAt($from, 'argumentField');
+  return !r || richPartEnd(state.doc, r.pos, r.part).from === $from.pos;
 };
 
 // ── Drawing ──────────────────────────────────────────────────────────────────
@@ -278,6 +315,10 @@ function toolsWidget(view: EditorView, getPos: () => number | undefined, node: P
     b.setAttribute('aria-pressed', String(attrs.sides === s));
     bar.append(b);
   }
+  const neutral = pillButton(L.neutralToggle, () => { const p = pos(); if (p !== null) toggleArgumentNeutral(view, p); }, L.neutralShort);
+  neutral.setAttribute('data-arg-tool', 'neutral');
+  neutral.setAttribute('aria-pressed', String(!!attrs.neutral));
+  bar.append(neutral);
   const shown = fieldsOf(node);
   for (const f of ARGUMENT_FIELDS) {
     const b = pillButton(L.fieldToggle(L.fields[f]), () => { const p = pos(); if (p !== null) toggleArgumentField(view, p, f); }, L.fieldShort[f]);
@@ -291,7 +332,7 @@ function toolsWidget(view: EditorView, getPos: () => number | undefined, node: P
 
 const LIST_WORDS = (): ListWords => {
   const L = LABELS.noteBlocks.argument;
-  return { pros: L.for, cons: L.against, proPlaceholder: L.forPlaceholder, conPlaceholder: L.againstPlaceholder };
+  return { pros: L.for, cons: L.against, proPlaceholder: L.forPlaceholder, conPlaceholder: L.againstPlaceholder, neutral: L.neutral, neutralPlaceholder: L.neutralPlaceholder };
 };
 
 function argumentDecorations(state: EditorState): DecorationSet | null {
@@ -306,12 +347,15 @@ function argumentDecorations(state: EditorState): DecorationSet | null {
     const pro = listOf(node, 'pro');
     const con = listOf(node, 'con');
     const net = (pro ? listWeight(pro) : 0) - (con ? listWeight(con) : 0);
+    let lists = 0;
+    node.forEach((c) => { if (c.type.name === 'prosConsList') lists++; });
     decos.push(Decoration.node(pos, pos + node.nodeSize, {
+      'data-arg-lists': String(lists),
       ...(node.attrs.sides === 'both' ? { 'data-arg-lean': net > 0 ? 'for' : net < 0 ? 'against' : 'even', 'data-arg-net': L.net(net) } : {}),
       ...(editing ? { 'data-arg-current': '' } : {}),
     }));
     const a = node.attrs;
-    const key = `arg-tools-${k}-${a.variant}-${a.sides}-${fieldsOf(node).join('.')}-${a.outlined ? 'o' : ''}${a.shaded ? 's' : ''}-${a.outlineColor}-${a.shadeColor}-${a.frameShape}-${a.outlineStyle}-${a.outlineWidth}`;
+    const key = `arg-tools-${k}-${a.variant}-${a.sides}-${a.neutral ? 'n' : ''}-${fieldsOf(node).join('.')}-${a.outlined ? 'o' : ''}${a.shaded ? 's' : ''}-${a.outlineColor}-${a.shadeColor}-${a.frameShape}-${a.outlineStyle}-${a.outlineWidth}`;
     decos.push(Decoration.widget(pos + 1, (view, getPos) => toolsWidget(view, getPos, node), { side: -1, key, ignoreSelection: true, stopEvent: () => true }));
     node.forEach((child, offset, i) => {
       const p = pos + 1 + offset;
@@ -324,11 +368,11 @@ function argumentDecorations(state: EditorState): DecorationSet | null {
       } else if (child.type.name === 'argumentField') {
         const f = child.attrs.field as ArgumentField;
         const attrs: Record<string, string> = { 'data-arg-label': L.fields[f] };
-        if (child.content.size === 0) {
-          if (editing) Object.assign(attrs, { 'data-arg-empty': '', 'data-arg-placeholder': L.fieldPlaceholders[f] });
-          else attrs['data-arg-hide'] = '';
-        }
+        const empty = richPartEmpty(child);
+        if (empty && !editing) attrs['data-arg-hide'] = '';
         decos.push(Decoration.node(p, end, attrs));
+        const ph = empty && editing ? richPlaceholder(p, child, L.fieldPlaceholders[f]) : null;
+        if (ph) decos.push(ph);
       }
     });
     return false;

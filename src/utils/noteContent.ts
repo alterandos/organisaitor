@@ -3,7 +3,7 @@
 // when the entity it points at is deleted, without needing a live editor instance mounted —
 // the note being cleaned up is very often not the one currently open.
 
-import { NOTE_BLOCK_NODES } from '@/components/NoteEditor/blockNodes';
+import { NOTE_BLOCK_NODES, RICH_PART_NODES } from '@/components/NoteEditor/blockNodes';
 
 interface TiptapNode {
   marks?:   { type: string; attrs?: Record<string, unknown> }[];
@@ -243,6 +243,32 @@ export function updatePassageInContent(contentJson: string, passageId: string, a
 // loading unchanged. Every reader of stored note content goes through this (the editor, Look up,
 // links and embeds, editNoteText), or an old note is an invalid document there (2026-11-05: Look up
 // crashed on one). Content that's already sectioned round-trips as-is.
+// ── A block's long parts, stored before they held lines (extensions/richParts.ts) ──
+
+const BLOCK_CHILDREN = new Set(['paragraph', 'bulletList', 'orderedList']);
+type JsonNode = { type: string; content?: JsonNode[]; [k: string]: unknown };
+
+// A long part whose text sits straight in it (stored before 2026-11-11, or a hidden part kept as
+// it was) gets it wrapped in a paragraph; anything else is left as it is.
+export function wrapPartContent(content: JsonNode[] | undefined): JsonNode[] {
+  const out: JsonNode[] = [];
+  let line: JsonNode[] = [];
+  for (const c of content ?? []) {
+    if (BLOCK_CHILDREN.has(c.type)) {
+      if (line.length) { out.push({ type: 'paragraph', content: line }); line = []; }
+      out.push(c);
+    } else line.push(c);
+  }
+  if (line.length || !out.length) out.push(line.length ? { type: 'paragraph', content: line } : { type: 'paragraph' });
+  return out;
+}
+
+export function normaliseRichParts<T extends JsonNode>(node: T, partNames: ReadonlySet<string>): T {
+  if (!node.content) return partNames.has(node.type) ? { ...node, content: wrapPartContent([]) } : node;
+  const content = node.content.map((c) => normaliseRichParts(c, partNames));
+  return { ...node, content: partNames.has(node.type) ? wrapPartContent(content) : content };
+}
+
 export function parseNoteContent(raw: string): '' | { type: string; content?: Record<string, unknown>[] } {
   if (!raw) return '';
   let parsed: { type: string; content?: Record<string, unknown>[] } | null;
@@ -260,9 +286,9 @@ export function parseNoteContent(raw: string): '' | { type: string; content?: Re
   }
   const content = parsed.content ?? [];
   const alreadySectioned = content.length > 0 && content.every((n) => n.type === 'section');
-  if (alreadySectioned) return parsed;
-  return {
+  if (alreadySectioned) return normaliseRichParts(parsed as unknown as JsonNode, RICH_PART_NODES);
+  return normaliseRichParts({
     type: 'doc',
     content: [{ type: 'section', attrs: { columns: 1 }, content: content.length ? content : [{ type: 'paragraph' }] }],
-  };
+  } as unknown as JsonNode, RICH_PART_NODES);
 }

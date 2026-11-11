@@ -26,6 +26,7 @@ import { noteView } from '@/services/noteSecrets';
 import { listView } from '@/services/listSecrets';
 import { glossaryEntries, glossaryEntry, type GlossaryEntry } from '@/services/glossary';
 import { openGlossaryEntry } from '@/services/notePassage';
+import { openItem } from '@/services/openItem';
 import { PLACES, placeById, type Place } from '@/config/places';
 import type { List } from '@/types/lists';
 import type { Note, NoteId, NoteTagId } from '@/types/notes';
@@ -121,10 +122,7 @@ const taskProvider: QuickAccessProvider = {
     if (!t || t.archived) return null;
     return { key: `task:${t.id}`, type: 'task', entityId: t.id, title: t.title, subtitle: taskSubtitle(t.collectionId), icon: t.completed ? '☑' : '☐' };
   },
-  navigate: (id) => {
-    useUIStore.getState().setActiveView('tasks');
-    useUIStore.getState().openTaskPane(id);
-  },
+  navigate: (id) => { openItem('task', id); },
 };
 
 // Read through listView(): an encrypted list's name is blank in the store. Like notes, an

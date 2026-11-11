@@ -1,4 +1,5 @@
 import { ITEM_LINK_KINDS, ITEM_LINK_KIND_ORDER } from '@/config/itemLinkKinds';
+import { linksToIn } from '@/utils/linksTo';
 import type { ItemLink, ItemLinkKind, ItemLinkTargetType, Task, TaskId } from '@/types';
 
 // The rules for task links (Task.itemLinks), pure so every caller — store, completion flow, list,
@@ -31,11 +32,9 @@ export function taskRelations(task: Task, tasks: Tasks): TaskRelation[] {
     const other = tasks[l.targetId];
     if (other) out.push({ kind: l.kind, direction: 'out', other, reason: l.reason, ownerId: task.id, targetId: other.id });
   }
-  for (const t of Object.values(tasks)) {
-    if (t.id === task.id) continue;
-    for (const l of taskLinksOf(t)) {
-      if (l.targetId === task.id) out.push({ kind: l.kind, direction: 'in', other: t, reason: l.reason, ownerId: t.id, targetId: task.id });
-    }
+  // The other side, read through utils/linksTo.ts (the one "what links here").
+  for (const l of linksToIn({ tasks, events: {}, reminders: {}, deadlines: {}, lists: {} }, 'task', task.id)) {
+    if (l.via === 'taskLink' && l.task) out.push({ kind: l.kind!, direction: 'in', other: l.task, reason: l.reason ?? null, ownerId: l.task.id, targetId: task.id });
   }
   const order = (k: ItemLinkKind) => ITEM_LINK_KIND_ORDER.indexOf(k);
   return out.sort((a, b) => order(a.kind) - order(b.kind) || Number(a.direction === 'in') - Number(b.direction === 'in'));

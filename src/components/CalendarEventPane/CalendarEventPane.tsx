@@ -5,10 +5,8 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { useTaskStore } from '@/store/taskStore';
 import { useUIStore } from '@/store/uiStore';
 import { LABELS } from '@/config/labels';
-import { openArtifactTarget } from '@/services/openCrossAppTarget';
-import { deleteEventWithCleanup, unlinkCrossAppRef } from '@/services/crossAppLinkCleanup';
+import { deleteEventWithCleanup } from '@/services/crossAppLinkCleanup';
 import { updateCalendarEventLinked } from '@/services/taskCalendarLinks';
-import type { CrossAppRef } from '@/types';
 import { SeriesScopeLine } from '@/components/RecurrenceScopeBar/SeriesScope';
 import { useSeriesScope } from '@/components/RecurrenceScopeBar/useSeriesScope';
 import { SeriesLinkBar } from '@/components/RecurrenceScopeBar/SeriesLinkBar';
@@ -76,20 +74,6 @@ export function CalendarEventPane() {
   };
   const handleArchive = (reason: string) => { closeDialog(); archiveEvent(id, reason); closePane(); };
 
-  const navigateToCrossAppRef = (ref: CrossAppRef) => {
-    if (ref.type === 'list') { closePane(); openArtifactTarget('list', ref.id); return; }
-    if (ref.type !== 'note') return;
-    closePane();
-    useUIStore.getState().setActiveView('notes');
-    useUIStore.getState().openNote(ref.id, ref.tabId);
-  };
-
-  const handleCrossAppRefsChange = (next: CrossAppRef[]) => {
-    (event.crossAppRefs ?? [])
-      .filter((r) => !next.some((n) => n.type === r.type && n.id === r.id))
-      .forEach((ref) => unlinkCrossAppRef('event', id, ref));
-    updateEvent(id, { crossAppRefs: next });
-  };
 
 
   return (
@@ -138,7 +122,6 @@ export function CalendarEventPane() {
 
           <CalendarItemFields kind="event" item={event} savedId={id} occurrence={occurrenceDate} isTaskShadow={isTaskShadow}
             update={(patch) => updateEvent(id, patch as Parameters<typeof updateCalendarEventLinked>[1])}
-            onRefsChange={handleCrossAppRefsChange} onNavigate={navigateToCrossAppRef}
             typeField={!isTaskShadow ? <ItemTypePaneField target={{ kind: 'event', id }} /> : undefined} />
         </div>
 

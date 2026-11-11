@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SPECIAL_CHARS, exactChar, findCharTrigger, findShortcut, findUserShortcut, matchChars, textShortcutProblem } from './charSets';
+import { matchEmoji, typedWhole, typingTrigger } from './emoji';
+import { SPECIAL_CHARS, exactChar, findCharTrigger, findInstantShortcut, findShortcut, findUserShortcut, matchChars, textShortcutProblem } from './charSets';
 import { installSpecialCharInput } from './fieldInput';
 
 Element.prototype.scrollIntoView = () => {};   // jsdom has none
@@ -262,5 +263,43 @@ describe('the person’s own shortcuts (findUserShortcut, textShortcutProblem)',
     expect(textShortcutProblem('Govt', 'x', list)).toBe('duplicate');
     expect(textShortcutProblem('govt', 'gov', list, 'a')).toBeNull();
     expect(textShortcutProblem('pls', '  ', list)).toBe('textEmpty');
+  });
+});
+
+describe('shortcuts that replace as soon as typed (findInstantShortcut)', () => {
+  const list = [{ id: 'o', typed: ':o', text: 'ö', instant: true }, { id: 'a', typed: ':a', text: 'ä', instant: true }, { id: 'g', typed: 'govt', text: 'government' }];
+  it('fires inside a word, at once, keeping the case', () => {
+    expect(findInstantShortcut('h:o', list)).toEqual({ start: 1, char: 'ö', typed: ':o' });
+    expect(findInstantShortcut('M:A', list)?.char).toBe('Ä');
+    expect(findInstantShortcut('h:', list)).toBeNull();
+  });
+  it('leaves word-end shortcuts to findUserShortcut, which skips the instant ones', () => {
+    expect(findInstantShortcut('govt', list)).toBeNull();
+    expect(findUserShortcut('the govt ', list)?.char).toBe('government ');
+    expect(findUserShortcut('x :o ', list)).toBeNull();
+  });
+});
+
+describe(':name: for emoji (specialChars/emoji.ts)', () => {
+  const SHRUG = '¯\\_(ツ)_/¯';
+  const own = [{ id: 's', typed: ':shrug:', text: SHRUG }];
+  it('opens after a colon at a word’s start and two letters, never for :o, a time or "Name: value"', () => {
+    expect(typingTrigger('so :jo', [])?.matches).toContainEqual({ char: '😂', label: ':joy:' });
+    expect(typingTrigger('so :joy', [])?.matches[0]).toEqual({ char: '😂', label: ':joy:' });
+    expect(typingTrigger('h:o', [])).toBeNull();
+    expect(typingTrigger(':o', [])).toBeNull();
+    expect(typingTrigger('at 10:30', [])).toBeNull();
+    expect(typingTrigger('Name: va', [])).toBeNull();
+    expect(typingTrigger('so :zzqx', [])).toBeNull();
+  });
+  it('the closing colon puts the emoji in; the person’s own come first', () => {
+    expect(typedWhole('ha :joy:', [])).toEqual({ start: 3, char: '😂' });
+    expect(typedWhole('ha :nothing_here:', [])).toBeNull();
+    expect(matchEmoji('sh', own)[0]).toEqual({ char: SHRUG, label: ':shrug:' });
+    expect(typedWhole(':shrug:', own)?.char).toBe(SHRUG);
+  });
+  it('//name still works through the same functions', () => {
+    expect(typedWhole('x //alpha ', [])).toEqual({ start: 2, char: 'α ' });
+    expect(typingTrigger('x //alp', [])?.matches[0].char).toBe('α');
   });
 });

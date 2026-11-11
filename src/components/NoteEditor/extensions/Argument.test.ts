@@ -5,7 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { SectionDocument, Section, ColumnBlock, Column } from './Section';
 import { ProsConsExtensions } from './ProsCons';
-import { ARGUMENT_VARIANTS, ArgumentExtensions, fieldsOf, setArgumentSides, setArgumentVariant, toggleArgumentField } from './Argument';
+import { ARGUMENT_VARIANTS, ArgumentExtensions, fieldsOf, setArgumentSides, setArgumentVariant, toggleArgumentField, toggleArgumentNeutral } from './Argument';
 import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTrigger';
 import { argumentBlock } from '../objects/argumentBlock';
 
@@ -88,7 +88,7 @@ describe('the argument block', () => {
   it('parts show (the cursor in it) and hide, their text kept, always in the same order', () => {
     insert();
     toggleArgumentField(editor.view, arg().pos, 'sources');
-    expect(editor.state.selection.$from.parent.attrs.field).toBe('sources');
+    expect(editor.state.selection.$from.node(-1).attrs.field).toBe('sources');
     type('Smith 2020');
     toggleArgumentField(editor.view, arg().pos, 'by');
     expect(fieldsOf(arg().node)).toEqual(['by', 'sources']);
@@ -98,6 +98,28 @@ describe('the argument block', () => {
     let sources = '';
     arg().node.forEach((c) => { if (c.attrs.field === 'sources') sources = c.textContent; });
     expect(sources).toBe('Smith 2020');
+  });
+
+  it('a part holds lines and bullets: Enter a new line, on the empty last line out; Tab from a bullet indents it', () => {
+    insert();
+    toggleArgumentField(editor.view, arg().pos, 'supporters');
+    expect(editor.commands.toggleBulletList()).toBe(true);
+    type('Smith');
+    press('Enter');
+    type('Jones');
+    const supporters = () => arg().node.lastChild!;
+    expect(supporters().firstChild!.type.name).toBe('bulletList');
+    expect(supporters().firstChild!.childCount).toBe(2);
+    expect(press('Tab')).toBe(true);
+    expect(supporters().firstChild!.childCount).toBe(1);
+    press('Enter');
+    press('Enter');                       // an empty bullet becomes a plain line
+    press('Enter');
+    press('Enter');                       // the empty last line: out of the block
+    const $sel = editor.state.selection.$from;
+    expect($sel.parent.type.name).toBe('paragraph');
+    expect($sel.pos).toBeGreaterThan(arg().pos + arg().node.nodeSize);
+    expect(supporters().textContent).toBe('SmithJones');
   });
 
   it('every design keeps the content, and it round-trips through HTML', () => {
@@ -128,5 +150,27 @@ describe('the argument block', () => {
     let found = false;
     editor.state.doc.descendants((n) => { if (n.type.name === 'argument') found = true; });
     expect(found).toBe(false);
+  });
+  it('neutral evidence: a list between for and against, kept while hidden, never counted towards the lean', () => {
+    insert();
+    type('Carbon pricing works');
+    toggleArgumentNeutral(editor.view, arg().pos);
+    const sides: string[] = [];
+    arg().node.forEach((c) => { if (c.type.name === 'prosConsList') sides.push(c.attrs.side); });
+    expect(sides).toEqual(['pro', 'neutral', 'con']);
+    let at = -1;
+    editor.state.doc.descendants((n, p) => { if (at < 0 && n.type.name === 'prosConsList' && n.attrs.side === 'neutral') at = p + 2; });
+    editor.commands.setTextSelection(at);
+    type('Lower emissions, but maybe not causal');
+    const dom = editor.view.nodeDOM(arg().pos) as HTMLElement;
+    expect(dom.getAttribute('data-arg-lean')).toBe('even');
+    expect(dom.getAttribute('data-arg-lists')).toBe('3');
+    toggleArgumentNeutral(editor.view, arg().pos);
+    expect(lists()).toEqual({ pro: [''], con: [''] });
+    toggleArgumentNeutral(editor.view, arg().pos);
+    expect(lists().neutral).toEqual(['Lower emissions, but maybe not causal']);
+    editor.commands.setContent(editor.getHTML());
+    expect(arg().node.attrs.neutral).toBe(true);
+    expect(lists().neutral).toEqual(['Lower emissions, but maybe not causal']);
   });
 });
