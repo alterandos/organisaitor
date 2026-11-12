@@ -230,7 +230,8 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
   },
   // An example (2026-11-12, the user's idea): a real instance of something in the Glossary, kept as
   // a record so any card or block can link it ("an example is Europe's feed-in tariffs"). Its key is
-  // `instance`: `example` is the Example annotation (builtinTags.ts TEXT_TAGS), a label on text.
+  // `instance` (the retired Example annotation was `example`; passages marked with it are unmarked
+  // when read, utils/noteContent.ts RETIRED_TAG_IDS).
   // What it's an example of are its links (relation exampleOf), so a concept's card lists it as
   // "has the example". Its own fields ("Name: value") fill any gap, as on every card.
   {

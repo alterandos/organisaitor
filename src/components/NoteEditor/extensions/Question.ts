@@ -22,6 +22,9 @@ import { newGlossaryRecord } from './GlossaryCard';
 import { blockResizeHandle, blockWidth, blockWidthAttributes, blockWidthDomAttrs } from './blockWidth';
 import { cardIconAttributes, cardKindKey, createCardKind, setCardIcon } from './cardLook';
 import { createCardIcon } from '@/components/CardLook/cardIconDom';
+import { splitBlock } from '@tiptap/pm/commands';
+import { wrapPartContent } from '@/utils/noteContent';
+import { RICH_PART_CONTENT, cursorAtPartEnd, dropEmptyLast, richPartAt, richPartEnd, richPlaceholder } from './richParts';
 
 // A question in a note (`\question`): something not known yet, noted now to answer later. Agreed
 // with the user 2026-10-13. Note-taking structure, like the quote (extensions/Quote.ts):
@@ -31,8 +34,12 @@ import { createCardIcon } from '@/components/CardLook/cardIconDom';
 //                  calendar reminder, if one was made), entryId (the Glossary card that answered
 //                  it), variant (design), hidden (what a hidden part held), frames
 //   questionText   the question
-//   questionField  an optional part (field attr): why it matters, a lead (any number), the answer;
-//                  only the parts being used are in the document, in QUESTION_FIELDS order
+//   questionField  an optional part (field attr): why it matters, or the answer; each holds lines
+//                  and bullets (extensions/richParts.ts, 2026-11-12)
+//   questionLead   a lead (any number), one line each; its `field` is always 'lead', so code
+//                  reading a part's field reads both alike. Only the parts being used are in the
+//                  document, in QUESTION_FIELDS order. A lead stored before as a questionField is
+//                  read as one (utils/noteContent.ts PART_RENAMES).
 //
 // "Answer with a card" makes a Definition, Concept or Acronym from the question (its subject as
 // the term, the answer as the meaning), puts the card after it and marks it answered: the
@@ -58,7 +65,7 @@ const toAttr = (name: string) => name.replace(/-([a-z])/g, (_, c: string) => c.t
 export const QuestionBlock = Node.create({
   name: 'questionBlock',
   group: 'block',
-  content: 'questionText questionField*',
+  content: 'questionText (questionField | questionLead)*',
   defining: true,
 
   addAttributes() {
@@ -105,14 +112,33 @@ export const QuestionText = Node.create({
 
 export const QuestionFieldNode = Node.create({
   name: 'questionField',
+  content: RICH_PART_CONTENT,
+  defining: true,
+  addAttributes() {
+    return { field: { default: 'why', parseHTML: (el) => oneOf(['why', 'answer'] as const, el.getAttribute('data-qn-field'), 'why'), renderHTML: (a) => ({ 'data-qn-field': a.field }) } };
+  },
+  parseHTML() { return [{ tag: 'div[data-qn-field]', priority: 60 }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes, { 'data-rich-part': '' }), 0]; },
+});
+
+export const QuestionLeadNode = Node.create({
+  name: 'questionLead',
   content: 'inline*',
   defining: true,
   addAttributes() {
-    return { field: { default: 'why', parseHTML: (el) => oneOf(QUESTION_FIELDS, el.getAttribute('data-qn-field'), 'why'), renderHTML: (a) => ({ 'data-qn-field': a.field }) } };
+    return { field: { default: 'lead', parseHTML: () => 'lead', renderHTML: () => ({ 'data-qn-field': 'lead' }) } };
   },
-  parseHTML() { return [{ tag: 'div[data-qn-field]', priority: 60 }]; },
+  parseHTML() { return [{ tag: 'div[data-qn-field="lead"]', priority: 70 }]; },
   renderHTML({ HTMLAttributes }) { return ['div', HTMLAttributes, 0]; },
 });
+
+// A part of the question by its field: a lead (one line), else Why or Answer (lines).
+const newPart = (schema: EditorState['schema'], field: QuestionField, text = ''): PMNode => field === 'lead'
+  ? schema.nodes.questionLead.create(null, text ? schema.text(text) : null)
+  : schema.nodes.questionField.create({ field }, schema.nodes.paragraph.create(null, text ? schema.text(text) : null));
+
+// A part's text, its lines kept as lines.
+export const partText = (part: PMNode): string => part.textBetween(0, part.content.size, '\n').trim();
 
 // ── Positions ────────────────────────────────────────────────────────────────
 
@@ -185,7 +211,7 @@ export function setQuestionStatus(view: EditorView, pos: number, status: Questio
   const q = questionNodeAt(view.state, pos);
   if (!q) return;
   const tr = view.state.tr.setNodeMarkup(pos, undefined, { ...q.attrs, status, answeredAt: status === 'answered' ? (q.attrs.answeredAt ?? new Date().toISOString()) : null });
-  if (status === 'answered' && !fieldsOf(q).includes('answer')) tr.insert(pos + q.nodeSize - 1, view.state.schema.nodes.questionField.create({ field: 'answer' }));
+  if (status === 'answered' && !fieldsOf(q).includes('answer')) tr.insert(pos + q.nodeSize - 1, newPart(view.state.schema, 'answer'));
   view.dispatch(tr);
 }
 
@@ -194,7 +220,7 @@ export function toggleQuestionField(view: EditorView, pos: number, field: Questi
   const state = view.state;
   const q = questionNodeAt(state, pos);
   if (!q) return;
-  const hidden = { ...(q.attrs.hidden as Record<string, string>) };
+  const hidden = { ...(q.attrs.hidden as Record<string, unknown>) };
   const tr = state.tr;
   const order = QUESTION_FIELDS.indexOf(field);
   let insertAt = pos + 1 + q.child(0).nodeSize;
@@ -207,13 +233,18 @@ export function toggleQuestionField(view: EditorView, pos: number, field: Questi
   });
   if (shownAt >= 0) {
     const child = state.doc.nodeAt(shownAt)!;
-    if (child.textContent) hidden[field] = child.textContent;
+    // Its lines and bullets kept as they were (a part hidden before 2026-11-12 kept only its text).
+    if (child.textContent) hidden[field] = child.content.toJSON();
     tr.delete(shownAt, shownAt + child.nodeSize);
   } else {
-    const text = field === 'lead' ? '' : hidden[field];
+    const kept = field === 'lead' ? null : hidden[field];
     delete hidden[field];
-    tr.insert(insertAt, state.schema.nodes.questionField.create({ field }, text ? state.schema.text(text) : null));
-    tr.setSelection(TextSelection.create(tr.doc, insertAt + 1));
+    let part = newPart(state.schema, field, typeof kept === 'string' ? kept : '');
+    if (Array.isArray(kept)) {
+      try { part = state.schema.nodeFromJSON({ type: 'questionField', attrs: { field }, content: wrapPartContent(kept as never) }); } catch { /* no longer fits: comes back empty */ }
+    }
+    tr.insert(insertAt, part);
+    tr.setSelection(TextSelection.near(tr.doc.resolve(insertAt + 1), 1));
   }
   tr.setNodeAttribute(pos, 'hidden', hidden);
   view.dispatch(tr.scrollIntoView());
@@ -249,7 +280,7 @@ export function answerWithCard(view: EditorView, pos: number, typeKey: string, c
   const entryId = newGlossaryRecord(typeKey, ctx);
   if (!entryId) return;
   let answer = '';
-  q.forEach((child, _o, i) => { if (i > 0 && child.attrs.field === 'answer') answer = child.textContent.trim(); });
+  q.forEach((child, _o, i) => { if (i > 0 && child.attrs.field === 'answer') answer = partText(child); });
   useNoteStore.getState().updateStructuredTagEntry(entryId as StructuredTagEntryId, {
     term: questionSubject(q.child(0).textContent),
     fields: answer ? { [GLOSSARY_TYPES[typeKey]]: answer } : {},
@@ -272,18 +303,15 @@ export function questionPosAt(view: EditorView, el: Element): number | null {
 
 // ── Keys ─────────────────────────────────────────────────────────────────────
 
-function toPart(state: EditorState, at: QuestionAt, index: number, dispatch?: (tr: Transaction) => void): boolean {
-  if (dispatch) {
-    const start = partStart(at, index);
-    dispatch(state.tr.setSelection(TextSelection.create(state.doc, start + 1 + at.q.child(index).content.size)).scrollIntoView());
-  }
+function toPart(state: EditorState, at: QuestionAt, index: number, dispatch?: (tr: Transaction) => void, tr = state.tr): boolean {
+  if (dispatch) dispatch(cursorAtPartEnd(tr, tr.mapping.map(partStart(at, index))).scrollIntoView());
   return true;
 }
 
-function leave(state: EditorState, at: QuestionAt, dispatch?: (tr: Transaction) => void): boolean {
+function leaveAfter(state: EditorState, at: QuestionAt, dispatch: ((tr: Transaction) => void) | undefined, tr: Transaction): boolean {
   if (!dispatch) return true;
-  const after = at.pos + at.q.nodeSize;
-  const tr = state.tr.insert(after, state.schema.nodes.paragraph.create());
+  const after = tr.mapping.map(at.pos + at.q.nodeSize);
+  tr.insert(after, state.schema.nodes.paragraph.create());
   dispatch(tr.setSelection(TextSelection.create(tr.doc, after + 1)).scrollIntoView());
   return true;
 }
@@ -307,7 +335,7 @@ export const questionEnter: Command = (state, dispatch) => {
     if (part.content.size > 0) {
       if (dispatch) {
         const after = start + part.nodeSize;
-        const tr = state.tr.insert(after, state.schema.nodes.questionField.create({ field: 'lead' }));
+        const tr = state.tr.insert(after, state.schema.nodes.questionLead.create());
         dispatch(tr.setSelection(TextSelection.create(tr.doc, after + 1)).scrollIntoView());
       }
       return true;
@@ -316,7 +344,7 @@ export const questionEnter: Command = (state, dispatch) => {
       const tr = state.tr.delete(start, start + part.nodeSize);
       const q = tr.doc.nodeAt(at.pos)!;
       if (at.partIndex < q.childCount) {
-        tr.setSelection(TextSelection.create(tr.doc, start + 1 + q.child(at.partIndex).content.size));
+        tr.setSelection(richPartEnd(tr.doc, start, q.child(at.partIndex)));
       } else {
         const after = at.pos + q.nodeSize;
         tr.insert(after, state.schema.nodes.paragraph.create());
@@ -326,13 +354,25 @@ export const questionEnter: Command = (state, dispatch) => {
     }
     return true;
   }
-  if (at.partIndex + 1 < at.q.childCount) return toPart(state, at, at.partIndex + 1, dispatch);
-  return leave(state, at, dispatch);
+  // Why and Answer hold lines: Enter is a new line (a bullet's own Enter in a list), and on the
+  // empty last line moves on, taking that line away if there are lines above it.
+  let tr = state.tr;
+  if (at.partIndex > 0) {
+    const r = richPartAt($from, 'questionField');
+    if (r) {
+      if (r.inList) return false;
+      if (!r.emptyLast) return splitBlock(state, dispatch);
+      tr = dropEmptyLast(state, r) ?? tr;
+    }
+  }
+  if (at.partIndex + 1 < at.q.childCount) return toPart(state, at, at.partIndex + 1, dispatch, tr);
+  return leaveAfter(state, at, dispatch, tr);
 };
 
 export const questionTab = (dir: 1 | -1): Command => (state, dispatch) => {
   const at = questionAt(state.selection.$from);
   if (!at) return false;
+  if (richPartAt(state.selection.$from, 'questionField')?.inList) return false;   // indent / outdent the bullet
   const next = at.partIndex + dir;
   if (next < 0 || next >= at.q.childCount) return true;
   return toPart(state, at, next, dispatch);
@@ -344,6 +384,8 @@ export const questionBackspace: Command = (state, dispatch) => {
   const at = questionAt($from);
   if (!at) return false;
   if (at.partIndex === 0) return true;
+  const r = richPartAt($from, 'questionField');
+  if (r && (r.inList || !r.atStart)) return false;   // a bullet becomes a line; a line joins the one above
   // An empty lead goes; anything else steps back to the part before.
   const part = at.q.child(at.partIndex);
   if (part.attrs.field === 'lead' && part.content.size === 0 && dispatch) {
@@ -359,7 +401,9 @@ export const questionBackspace: Command = (state, dispatch) => {
 export const questionDelete: Command = (state) => {
   const { $from, empty } = state.selection;
   if (!empty || $from.parentOffset !== $from.parent.content.size) return false;
-  return !!questionAt($from);
+  if (!questionAt($from)) return false;
+  const r = richPartAt($from, 'questionField');
+  return !r || richPartEnd(state.doc, r.pos, r.part).from === $from.pos;
 };
 
 // ── Drawing ──────────────────────────────────────────────────────────────────
@@ -519,8 +563,11 @@ function questionDecorations(state: EditorState, ctx: () => NoteObjectContext | 
       } else {
         const field = child.attrs.field as QuestionField;
         const attrs: Record<string, string> = { 'data-card-label': L.fields[field] };
-        if (empty) { attrs['data-qn-empty'] = ''; attrs['data-qn-placeholder'] = L.fieldPlaceholders[field]; }
+        const lines = child.type.name === 'questionField';
+        if (empty && !lines) { attrs['data-qn-empty'] = ''; attrs['data-qn-placeholder'] = L.fieldPlaceholders[field]; }
         decos.push(Decoration.node(childPos, end, attrs));
+        const ph = lines ? richPlaceholder(childPos, child, L.fieldPlaceholders[field]) : null;
+        if (ph) decos.push(ph);
       }
       childPos = end;
     });
@@ -548,7 +595,7 @@ function answerAt(state: EditorState): { qid: string; text: string } | null {
     const node = $from.node(d);
     if (node.type.name === 'questionField') {
       const q = $from.node(d - 1);
-      return node.attrs.field === 'answer' && q.type.name === 'questionBlock' && q.attrs.qid ? { qid: q.attrs.qid as string, text: node.textContent.trim() } : null;
+      return node.attrs.field === 'answer' && q.type.name === 'questionBlock' && q.attrs.qid ? { qid: q.attrs.qid as string, text: partText(node) } : null;
     }
   }
   return null;
@@ -564,7 +611,7 @@ function questionByQid(doc: PMNode, qid: string): { node: PMNode; pos: number } 
   return found;
 }
 
-const answerOf = (q: PMNode) => { let t = ''; q.forEach((c, _o, i) => { if (i > 0 && c.attrs.field === 'answer') t = c.textContent.trim(); }); return t; };
+const answerOf = (q: PMNode) => { let t = ''; q.forEach((c, _o, i) => { if (i > 0 && c.attrs.field === 'answer') t = partText(c); }); return t; };
 
 const answeredKey = new PluginKey<AnswerVisit>('questionAnswered');
 
@@ -620,4 +667,4 @@ export const QuestionBehaviour = Extension.create({
   },
 });
 
-export const QuestionExtensions = [QuestionBlock, QuestionText, QuestionFieldNode, QuestionBehaviour];
+export const QuestionExtensions = [QuestionBlock, QuestionText, QuestionFieldNode, QuestionLeadNode, QuestionBehaviour];

@@ -4917,7 +4917,6 @@
 .editorContent mark[data-tag-type="important"]::before   { content: none; }
 .editorContent mark[data-tag-type="concept"]::before     { content: "💡"; }
 .editorContent mark[data-tag-type="definition"]::before  { content: "📖"; }
-.editorContent mark[data-tag-type="example"]::before     { content: "📋"; }
 .editorContent mark[data-tag-type="question"]::before    { content: "❓"; }
 .editorContent mark[data-tag-type="reference"]::before   { content: "📚"; }
 .editorContent mark[data-tag-type="learn-later"]::before { content: "🔖"; }

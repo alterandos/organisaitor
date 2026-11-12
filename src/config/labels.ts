@@ -500,7 +500,7 @@ export const LABELS = {
   },
 
   // Annotating text (NoteEditor/textMarks.ts): the picker (Ctrl+Space). Everything that marks text
-  // is an annotation (2026-11-06): a status (Important, Clarify later…) or a label (Example…).
+  // is an annotation (2026-11-06): a status (Important, Clarify later…) or a label (Reference…).
   textMarks: {
     search:   'Annotate… (type to search, 1–9 to pick)',
     none:     'No annotations found',

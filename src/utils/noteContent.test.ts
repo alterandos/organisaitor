@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collectArtifactTargets, noteContentToText, stripArtifactLinksFromContent } from '@/utils/noteContent';
+import { collectArtifactTargets, noteContentToText, parseNoteContent, stripArtifactLinksFromContent } from '@/utils/noteContent';
 
 function doc(content: unknown) {
   return JSON.stringify({ type: 'doc', content });
@@ -111,5 +111,19 @@ describe('stripArtifactLinksFromContent', () => {
   it('returns changed: false for empty or malformed content', () => {
     expect(stripArtifactLinksFromContent('', 'task', 't1')).toEqual({ changed: false, content: '' });
     expect(stripArtifactLinksFromContent('not json', 'task', 't1')).toEqual({ changed: false, content: 'not json' });
+  });
+});
+
+describe('the retired Example annotation (2026-11-12)', () => {
+  it('is taken off text when a note is read; other marks stay', () => {
+    const raw = JSON.stringify({ type: 'doc', content: [{ type: 'section', content: [{ type: 'paragraph', content: [
+      { type: 'text', text: 'feed-in tariffs', marks: [{ type: 'noteTag', attrs: { tagId: 'builtin-example' } }, { type: 'bold' }] },
+      { type: 'text', text: ' and ' , marks: [{ type: 'noteTag', attrs: { tagId: 'builtin-example' } }] },
+      { type: 'text', text: 'IPCC', marks: [{ type: 'noteTag', attrs: { tagId: 'builtin-reference' } }] },
+    ] }] }] });
+    const para = (parseNoteContent(raw) as unknown as { content: { content: { content: Record<string, unknown>[] }[] }[] }).content[0].content[0].content;
+    expect(para[0].marks).toEqual([{ type: 'bold' }]);
+    expect(para[1].marks).toBeUndefined();
+    expect(para[2].marks).toEqual([{ type: 'noteTag', attrs: { tagId: 'builtin-reference' } }]);
   });
 });

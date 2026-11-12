@@ -263,7 +263,26 @@ export function wrapPartContent(content: JsonNode[] | undefined): JsonNode[] {
   return out;
 }
 
-export function normaliseRichParts<T extends JsonNode>(node: T, partNames: ReadonlySet<string>): T {
+// A part that became a type of its own: a question's lead, a questionField before 2026-11-12.
+const renamed = <T extends JsonNode>(node: T): T =>
+  node.type === 'questionField' && (node.attrs as { field?: string } | undefined)?.field === 'lead' ? { ...node, type: 'questionLead' } : node;
+
+// Annotations retired, taken off text when a note is read: the Example annotation (2026-11-12, the
+// user's call: an example is an Example record now, \example).
+export const RETIRED_TAG_IDS: ReadonlySet<string> = new Set(['builtin-example']);
+type Mark = { type: string; attrs?: { tagId?: string } };
+const withoutRetired = <T extends JsonNode>(node: T): T => {
+  const marks = node.marks as Mark[] | undefined;
+  if (!marks?.some((m) => m.type === 'noteTag' && RETIRED_TAG_IDS.has(m.attrs?.tagId ?? ''))) return node;
+  const kept = marks.filter((m) => !(m.type === 'noteTag' && RETIRED_TAG_IDS.has(m.attrs?.tagId ?? '')));
+  const { marks: _m, ...rest } = node;
+  void _m;
+  return (kept.length ? { ...rest, marks: kept } : rest) as T;
+};
+
+// Every note read (parseNoteContent): long parts in lines, parts renamed, retired annotations off.
+export function normaliseRichParts<T extends JsonNode>(input: T, partNames: ReadonlySet<string>): T {
+  const node = withoutRetired(renamed(input));
   if (!node.content) return partNames.has(node.type) ? { ...node, content: wrapPartContent([]) } : node;
   const content = node.content.map((c) => normaliseRichParts(c, partNames));
   return { ...node, content: partNames.has(node.type) ? wrapPartContent(content) : content };

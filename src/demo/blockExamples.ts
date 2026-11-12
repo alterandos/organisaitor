@@ -32,7 +32,7 @@ export const EX = {
       node('quoteField', { field: 'who' }, 'James Hutton'), node('quoteField', { field: 'source' }, 'Theory of the Earth'), node('quoteField', { field: 'when' }, '1788')),
   questionAnswered: (answeredAt: string | null = null): J => node('questionBlock', { qid: 'demo-q-granite', status: 'answered', answeredAt, variant: 'card' },
       node('questionText', null, 'Why does granite have much bigger crystals than basalt?'),
-      node('questionField', { field: 'answer' }, 'Granite cools slowly deep underground, so its crystals have time to grow. Basalt erupts and cools in days.')),
+      kids('questionField', { field: 'answer' }, [p('Granite cools slowly deep underground, so its crystals have time to grow. Basalt erupts and cools in days.')])),
   idKey: (): J => kids('idKey', { variant: 'couplets', blockId: 'min-key' }, [
       node('idKeyTitle', null, 'Common rock-forming minerals'),
       ...([

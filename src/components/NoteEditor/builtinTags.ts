@@ -13,7 +13,6 @@ export const BUILTIN_TAGS: BuiltinTag[] = [
   { id: 'builtin-concept',     name: 'Concept',     icon: '💡', color: '#4338ca', typeKey: 'concept'     },
   { id: 'builtin-definition',  name: 'Definition',  icon: '📖', color: '#0f766e', typeKey: 'definition'  },
   { id: 'builtin-profile',     name: 'Profile',     icon: '🪪', color: '#be185d', typeKey: 'profile'     },
-  { id: 'builtin-example',     name: 'Example',     icon: '📋', color: '#f97316', typeKey: 'example'     },
   { id: 'builtin-question',    name: 'Question',    icon: '❓', color: '#ef4444', typeKey: 'question'    },
   { id: 'builtin-reference',   name: 'Reference',   icon: '📚', color: '#0891b2', typeKey: 'reference'   },
   {
@@ -27,7 +26,8 @@ export const BUILTIN_TAGS: BuiltinTag[] = [
   { id: 'builtin-fact', name: 'Fact', icon: '✨', color: '#8a6500', typeKey: 'fact' },
   { id: 'builtin-quote', name: 'Quote', icon: '❞', color: '#9a3412', typeKey: 'quote' },
   { id: 'builtin-formula', name: 'Formula', icon: 'ƒ', color: '#1e40af', typeKey: 'formula' },
-  // The Example Glossary kind (key `instance`, 2026-11-12), apart from the Example annotation above.
+  // The Example Glossary kind (key `instance`, 2026-11-12; the Example annotation it replaced was
+  // retired the same day: utils/noteContent.ts RETIRED_TAG_IDS).
   { id: 'builtin-instance', name: 'Example', icon: '👉', color: '#5b21b6', typeKey: 'instance' },
 ];
 
@@ -35,7 +35,7 @@ export const BUILTIN_TAGS: BuiltinTag[] = [
 // from making cards, which is `\` and right-click's Turn into). The rest of BUILTIN_TAGS are the
 // Glossary kinds, plus Question, Quote and Learn Later, no longer offered as tags (a question and a
 // quote are blocks, Learn Later is Review later): passages marked with them before still show.
-const TEXT_TAG_IDS = ['builtin-important', 'builtin-example', 'builtin-reference'];
+const TEXT_TAG_IDS = ['builtin-important', 'builtin-reference'];
 export const TEXT_TAGS: BuiltinTag[] = TEXT_TAG_IDS.map((id) => BUILTIN_TAGS.find((t) => t.id === id)!);
 
 const KIND_TOKENS = ['definition', 'concept', 'acronym', 'profile', 'fact', 'quote', 'formula', 'instance'];

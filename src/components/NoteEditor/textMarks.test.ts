@@ -29,14 +29,14 @@ const make = (content: string | object) => {
 };
 
 describe('the marks', () => {
-  it('are the statuses, then Example and Reference, then the person’s own tags; no Glossary kinds, no notebooks', () => {
+  it('are the statuses, then Reference, then the person’s own tags; no Glossary kinds, no notebooks', () => {
     const marks = textMarks({ u1: userTag, n1: notebook, n2: oldNotebook });
     expect(marks.map((m) => [m.id, m.family])).toEqual([
       ['important', 'status'], ['clarify', 'status'], ['unsure', 'status'], ['review', 'status'],
-      ['builtin-example', 'tag'], ['builtin-reference', 'tag'], ['u1', 'tag'],
+      ['builtin-reference', 'tag'], ['u1', 'tag'],
     ]);
     expect(markForDigit({}, 4)?.id).toBe('review');
-    expect(markDigit({ u1: userTag }, 'u1')).toBe(7);
+    expect(markDigit({ u1: userTag }, 'u1')).toBe(6);
     expect(markDigit({}, 'builtin-important')).toBe(1);
   });
 
@@ -72,18 +72,18 @@ describe('the marks', () => {
   it('a tag goes on and off text', () => {
     make('<p>Plants use light</p>');
     editor.commands.setTextSelection({ from: 8, to: 11 });
-    const example = textMarks({}).find((m) => m.id === 'builtin-example')!;
-    applyTextMark(editor, example);
-    expect(editor.getHTML()).toContain('data-tag-id="builtin-example"');
-    applyTextMark(editor, example);
-    expect(editor.getHTML()).not.toContain('builtin-example');
+    const reference = textMarks({}).find((m) => m.id === 'builtin-reference')!;
+    applyTextMark(editor, reference);
+    expect(editor.getHTML()).toContain('data-tag-id="builtin-reference"');
+    applyTextMark(editor, reference);
+    expect(editor.getHTML()).not.toContain('builtin-reference');
   });
 
   it('on selected text, Mark as is the marks and the cards are Turn into', () => {
     make('<p>photosynthesis</p>');
     const actions = selectionActions(editor as never, { from: 2, to: 16 });
     const of = (g: string) => actions.filter((a) => a.group === g).map((a) => a.key);
-    expect(of('mark')).toEqual(['important-1', 'important-3', 'clarify', 'unsure', 'review', 'tag-builtin-example', 'tag-builtin-reference']);
+    expect(of('mark')).toEqual(['important-1', 'important-3', 'clarify', 'unsure', 'review', 'tag-builtin-reference']);
     expect(of('turn')).toEqual(expect.arrayContaining(['definition', 'concept', 'acronym', 'quote']));
   });
 
@@ -92,7 +92,7 @@ describe('the marks', () => {
     const choices = markChoices({ u1: userTag }, editor.state, 2, 16);
     expect(choices.map((c) => [c.key, c.digit])).toEqual([
       ['important-1', 1], ['important-3', null], ['clarify', 2], ['unsure', 3], ['review', 4],
-      ['tag-builtin-example', 5], ['tag-builtin-reference', 6], ['tag-u1', 7],
+      ['tag-builtin-reference', 5], ['tag-u1', 6],
     ]);
     useNoteStore.setState({ noteTags: { u1: userTag } as never });
     expect(annotationActions(editor as never, { from: 2, to: 16 }).map((a) => a.key)).toEqual(choices.map((c) => c.key));

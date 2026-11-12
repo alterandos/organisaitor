@@ -588,7 +588,7 @@ export function buildDemoAccount(base: Date, pictures: DemoPictures = {}): DemoA
     EX.codeBlock(),
     node('questionBlock', { qid: 'demo-q-ocean', status: 'open', variant: 'card' },
       node('questionText', null, 'How quickly does the ocean take up the extra CO₂, and does it slow down as the water warms?'),
-      node('questionField', { field: 'why' }, 'It decides how much of each year’s emissions stays in the air.')),
+      kids('questionField', { field: 'why' }, [p('It decides how much of each year’s emissions stays in the air.')])),
   )));
 
   set(essayNote, doc(section(

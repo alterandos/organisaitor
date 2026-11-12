@@ -210,7 +210,7 @@ function block(node: PMNode): string {
       const L = LABELS.noteBlocks.question;
       const status = node.attrs.status === 'open' ? '' : ` (${L.statuses[node.attrs.status as 'answered' | 'dropped']})`;
       const lines = [`Q: ${inlineText(node.child(0))}${status}`];
-      node.forEach((part, _o, i) => { if (i > 0 && part.textContent.trim()) lines.push(`- ${L.fields[part.attrs.field as 'why' | 'lead' | 'answer']}: ${inlineText(part)}`); });
+      node.forEach((part, _o, i) => { if (i > 0 && part.textContent.trim()) lines.push(`- ${L.fields[part.attrs.field as 'why' | 'lead' | 'answer']}: ${partText(part)}`); });
       return lines.join('\n');
     }
     case 'glossaryCard': {

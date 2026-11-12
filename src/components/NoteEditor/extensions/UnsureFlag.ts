@@ -157,7 +157,7 @@ export function flagToQuestion(view: EditorView, flagId: string): void {
   const qid = nanoid(10);
   const text = asQuestion(state.doc.textBetween(run.from, run.to, ' '));
   const parts = [questionText.create(null, state.schema.text(text))];
-  if (run.reason && questionField) parts.push(questionField.create({ field: 'why' }, state.schema.text(run.reason)));
+  if (run.reason && questionField) parts.push(questionField.create({ field: 'why' }, state.schema.nodes.paragraph.create(null, state.schema.text(run.reason))));
   const tr = state.tr;
   const at = placeBlock(tr, run.to, questionBlock.create({ qid }, parts));
   if (at === null) return;

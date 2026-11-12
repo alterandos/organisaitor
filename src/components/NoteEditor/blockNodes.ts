@@ -32,7 +32,7 @@ export const BLOCK_PART_NODES: Record<string, string> = {
 
 // The parts that are long: they hold paragraphs and bullets, not one line of text
 // (extensions/richParts.ts, 2026-11-11). A new long part is added here, with RICH_PART_CONTENT.
-export const RICH_PART_NODES: ReadonlySet<string> = new Set(['caseField', 'argumentField']);
+export const RICH_PART_NODES: ReadonlySet<string> = new Set(['caseField', 'argumentField', 'questionField']);
 
 // Parts and the blocks around them that a link can point at (a lasting blockId): every block and
 // every block's part.

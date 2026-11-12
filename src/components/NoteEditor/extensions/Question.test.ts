@@ -14,6 +14,7 @@ import { useCalendarStore } from '@/store/calendarStore';
 import { collectQuestions, questionSubject, questionsInContent } from '@/utils/noteQuestions';
 import { OVERVIEW_SOURCES } from '@/overview/sources';
 import type { NoteId } from '@/types';
+import { parseNoteContent } from '@/utils/noteContent';
 
 const confirm = vi.hoisted(() => ({ answer: true, asked: 0 }));
 vi.mock('@/components/ConfirmDialog/dialogs', () => ({ confirmDialog: async () => { confirm.asked++; return confirm.answer; } }));
@@ -106,11 +107,12 @@ describe('question block', () => {
     make();
     type('\\question What is osmosis?');
     toggleQuestionField(editor.view, qPos(), 'answer');
-    expect(editor.state.selection.$from.parent.attrs.field).toBe('answer');
+    expect(editor.state.selection.$from.node(-1).attrs.field).toBe('answer');
     type('Water moving across a membrane');
     await new Promise((r) => setTimeout(r, 0));
     expect(q().attrs.status).toBe('open');            // not while typing
-    press('Enter');                                    // the last part: out of the question
+    press('Enter');                                    // a new line in the answer…
+    press('Enter');                                    // …and on the empty one: out of the question
     await new Promise((r) => setTimeout(r, 0));
     expect(q().attrs).toMatchObject({ status: 'answered' });
     expect(q().attrs.answeredAt).toBeTruthy();
@@ -120,10 +122,48 @@ describe('question block', () => {
     // In and out of an answer that was already there: still open.
     let answerPos = -1;
     editor.state.doc.descendants((n, pos) => { if (n.type.name === 'questionField' && n.attrs.field === 'answer') answerPos = pos; });
-    editor.commands.setTextSelection(answerPos + 2);
+    editor.commands.setTextSelection(answerPos + 3);
     editor.commands.setTextSelection(1);
     await new Promise((r) => setTimeout(r, 0));
     expect(q().attrs.status).toBe('open');
+  });
+
+  it('Why and Answer hold lines and bullets; a lead stays one line, Enter making the next (2026-11-12)', () => {
+    make();
+    type('\\question What is osmosis?');
+    toggleQuestionField(editor.view, qPos(), 'answer');
+    expect(editor.commands.toggleBulletList()).toBe(true);
+    type('Water moves');
+    press('Enter');
+    type('Through a membrane');
+    let answer = q().lastChild!;
+    expect(answer.type.name).toBe('questionField');
+    expect(answer.firstChild!.type.name).toBe('bulletList');
+    expect(answer.firstChild!.childCount).toBe(2);
+    toggleQuestionField(editor.view, qPos(), 'lead');
+    type('Ask the tutor');
+    press('Enter');
+    const leads = () => { let n = 0; q().forEach((c) => { if (c.type.name === 'questionLead') n++; }); return n; };
+    expect(leads()).toBe(2);
+    // Hidden and shown again, the answer comes back with its bullets.
+    toggleQuestionField(editor.view, qPos(), 'answer');
+    toggleQuestionField(editor.view, qPos(), 'answer');
+    answer = q().lastChild!;
+    expect(answer.firstChild!.type.name).toBe('bulletList');
+    expect(noteClipboardText(editor.state.doc.slice(0, editor.state.doc.content.size))).toContain('Water moves');
+  });
+
+  it('a question stored before reads its leads as leads and its answer as a line', () => {
+    const old = JSON.stringify({ type: 'doc', content: [{ type: 'section', content: [{ type: 'questionBlock', attrs: { qid: 'Q9' }, content: [
+      { type: 'questionText', content: [{ type: 'text', text: 'Why?' }] },
+      { type: 'questionField', attrs: { field: 'lead' }, content: [{ type: 'text', text: 'Library' }] },
+      { type: 'questionField', attrs: { field: 'answer' }, content: [{ type: 'text', text: 'Because' }] },
+    ] }] }] });
+    make();
+    editor.commands.setContent(parseNoteContent(old));
+    expect(q().child(1).type.name).toBe('questionLead');
+    expect(q().child(2).firstChild!.type.name).toBe('paragraph');
+    expect(parts()).toEqual(['Q:Why?', 'lead:Library', 'answer:Because']);
   });
 
   it('a question saved in the old Note design reads as Compact; its heading and icon follow its status', () => {
