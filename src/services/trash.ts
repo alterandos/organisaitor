@@ -23,6 +23,7 @@ import type { List, ListItem, ListType } from '@/types/lists';
 import type { Note, NoteTag, StructuredTagEntry } from '@/types/notes';
 import type { WatchlistItem, PortfolioTag, InvestmentPurpose } from '@/types/portfolio';
 import type { Activity, ActivityType } from '@/types/fitness';
+import { signal } from '@/animations/signals';
 
 // The restore half of the suite-wide Recycling Bin (see services/trashCapture.ts for the
 // write half, called from the stores). This file imports every domain store to write a
@@ -146,6 +147,8 @@ export function restoreFromTrash(entryId: TrashEntryId): boolean {
   if (target.has(snapshot.id)) return false;
 
   target.put(entry.snapshot);
+  // Back where it was: it glows there (animations/signals.ts), from Undo and the Recycling Bin alike.
+  signal('arrive', snapshot.id);
 
   // TaskList renders subtasks via the parent's subtaskIds array, not by filtering tasks for
   // parentId — deleteTask already stripped the id out of that array, so a restored task with

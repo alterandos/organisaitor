@@ -32,6 +32,8 @@ import { ResizeHandle } from '@/components/ResizeHandle/ResizeHandle';
 import { usePaneWidth } from '@/components/ResizeHandle/usePaneWidth';
 import { DICTIONARY_TYPE_ID, refreshDictionaryFields } from '@/services/dictionary';
 import { EditIcon, TrashIcon } from '@/components/Icons';
+import { useSignal } from '@/animations/signals';
+import { flashArrival } from '@/animations/flash';
 // Sidebar group order. Anything that isn't a checklist or watchlist (custom types included) is Reference.
 const KIND_GROUPS: ListKind[] = ['checklist', 'watchlist', 'reference'];
 const groupOf = (l: List): ListKind => (l.kind === 'checklist' || l.kind === 'watchlist' ? l.kind : 'reference');
@@ -146,13 +148,16 @@ function ItemCard({
   onDelete: () => void;
   onStatusChange: (status: ListItemStatus) => void;
 }) {
+  // Made, restored or opened: it glows where it is (animations/flash.ts).
+  const cardRef = useRef<HTMLDivElement>(null);
+  useSignal('arrive', item.id, () => flashArrival(cardRef.current));
   const meta = LIST_ITEM_STATUS_META[item.status];
   const previewFields = fieldSchema
     .filter((f) => item.data[f.id] != null && item.data[f.id] !== '')
     .slice(0, 3);
 
   return (
-    <div className={styles.itemCard}>
+    <div ref={cardRef} className={styles.itemCard}>
       <div className={styles.itemCardTop}>
         {editingField === 'title' ? (
           <input

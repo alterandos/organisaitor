@@ -286,3 +286,11 @@
 @media (hover: hover) {
   .places { flex-wrap: wrap; overflow-x: visible; }
 }
+
+/* Opening: a quick zoom in, the dim fading in (2026-11-14). Closing is instant. */
+@media (prefers-reduced-motion: no-preference) {
+  .overlay { animation: qaDim 120ms ease-out; }
+  .panel   { animation: qaZoom 120ms cubic-bezier(0.2, 0.7, 0.3, 1); }
+}
+@keyframes qaDim  { from { background: transparent; } }
+@keyframes qaZoom { from { opacity: 0; transform: scale(0.97); } }

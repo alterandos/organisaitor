@@ -103,6 +103,8 @@ import { hasOpenOverlay, useEscapeClose } from '@/hooks/useEscapeClose';
 import { alertDialog } from '@/components/ConfirmDialog/dialogs';
 import { log } from '@/utils/log';
 import { parseNoteContent } from '@/utils/noteContent';
+import { loadEditorDoc } from './loadDoc';
+import { flashArrival, passageElement } from '@/animations/flash';
 
 // Read a note by id THROUGH noteView() — an encrypted note's title/content/tabs are blanked in
 // the store and only resolve via the plaintext cache (see services/noteSecrets.ts).
@@ -957,7 +959,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     setTabFor(latestNote ? id : null, tabId);
     if (!latestNote || !editor) return;
     isLoadingRef.current = true;
-    editor.commands.setContent(parseNoteContent(content));
+    loadEditorDoc(editor, parseNoteContent(content));
     isLoadingRef.current = false;
     // Switching tabs (click, Ctrl+Tab cycle, or a cross-app "open this tab" request) moves the
     // cursor into the editor, same as opening a note does — a switch always means the user
@@ -1184,7 +1186,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     if (!note) {
       currentNoteIdRef.current = null;
       isLoadingRef.current = true;
-      editor.commands.setContent('');
+      loadEditorDoc(editor, '');
       isLoadingRef.current = false;
       setTitle('');
       setAbstract(null);
@@ -1201,7 +1203,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     isLoadingRef.current = true;
     // A locked note's view has blank content — keep the editor empty (it's hidden behind the
     // lock placeholder anyway) rather than ever parsing anything derived from ciphertext.
-    editor.commands.setContent(noteLocked ? '' : parseNoteContent(nextContent));
+    loadEditorDoc(editor, noteLocked ? '' : parseNoteContent(nextContent));
     isLoadingRef.current = false;
     const focusAsked = useUIStore.getState().requestedNoteFocus === note.id;
     if (focusAsked) useUIStore.getState().setRequestedNoteFocus(null);
@@ -1243,9 +1245,10 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     if (!editor || !note || !requestedNotePassage || requestedNotePassage.noteId !== note.id) return;
     const find = requestedNotePassage;
     useUIStore.getState().setRequestedNotePassage(null);
-    const locate = (): { from: number; to: number } | null => {
+    const locate = (): { from: number; to: number; node?: number } | null => {
       let from = -1;
       let to = -1;
+      let nodeAt: number | undefined;
       let done = false;
       editor.state.doc.descendants((node, pos) => {
         if (done) return false;
@@ -1253,6 +1256,7 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
         if (isNodeFind(find)) {
           if (node.type.name !== find.node || node.attrs[find.attr] !== find.value) return true;
           from = to = Selection.near(editor.state.doc.resolve(node.isInline ? pos : pos + 1)).from;
+          nodeAt = pos;
           done = true;
           return false;
         }
@@ -1265,17 +1269,20 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
         }
         return false;
       });
-      return from < 0 ? null : { from, to };
+      return from < 0 ? null : { from, to, node: nodeAt };
     };
     // Two frames on: opening the note (or its tab) focuses the editor at the end a frame late
     // (Tiptap's delayed focus), which would move the cursor and the scroll to the bottom. Then once
     // more a moment later: blocks drawn by node views (cards, charts) change the note's height after
     // the first scroll, which could leave the passage off screen (2026-11-05: the Clarify tool's
     // Open landed on the note but not the passage).
-    const go = (at: { from: number; to: number }) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    const go = (at: { from: number; to: number; node?: number }) => requestAnimationFrame(() => requestAnimationFrame(() => {
       if (editor.isDestroyed) return;
       editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection(at).run();
       scrollPosTo(editor.view, editor.state.selection.from, 1 / 5);
+      // Gone to: the block or line it's in glows once (animations/flash.ts, 2026-11-14).
+      const shown = at.node !== undefined ? editor.view.nodeDOM(at.node) : null;
+      flashArrival(shown instanceof HTMLElement ? shown : passageElement(editor.view, at.from));
       setTimeout(() => {
         if (editor.isDestroyed) return;
         const host = scrollHostOf(editor.view.dom);
@@ -1311,11 +1318,11 @@ export function NoteEditor({ focusSignal, onNavReturn, pane }: NoteEditorProps) 
     lockedRef.current = noteLocked;
     isLoadingRef.current = true;
     if (noteLocked) {
-      editor.commands.setContent('');
+      loadEditorDoc(editor, '');
     } else {
       const { tabId, content } = resolveNoteTab(note, activeTabIdRef.current);
       if (tabId !== activeTabIdRef.current) setTabFor(note.id, tabId);
-      editor.commands.setContent(parseNoteContent(content));
+      loadEditorDoc(editor, parseNoteContent(content));
       restoreCursor(false);
     }
     isLoadingRef.current = false;

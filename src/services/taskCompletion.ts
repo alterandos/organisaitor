@@ -17,6 +17,7 @@ import { openBlockers, openBlockersDeep, unlockedBy } from '@/utils/taskLinks';
 import { LABELS } from '@/config/labels';
 import type { CollectionId, TaskId } from '@/types';
 import type { HoverOption } from '@/components/HoverOptions/HoverOptions';
+import { signal } from '@/animations/signals';
 
 const L = LABELS.taskLinks;
 
@@ -127,6 +128,7 @@ export async function toggleTaskCompletion(taskId: TaskId, opts: CompletionOptio
         onClick: () => {
           for (const id of completed) {
             if (useTaskStore.getState().tasks[id]?.completed) useTaskStore.getState().toggleTask(id);
+            signal('arrive', id);
           }
           // The next occurrence a recurring task's completion made goes again.
           for (const id of spawned) discardOccurrence(id);

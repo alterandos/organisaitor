@@ -1,4 +1,7 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
+import { useSignal } from '@/animations/signals';
+import { flashArrival } from '@/animations/flash';
+import { useGlide } from '@/animations/glide';
 import { ItemIcon } from '@/components/IconPicker/ItemIcon';
 import styles from './CalendarView.module.css';
 
@@ -12,6 +15,20 @@ export interface CalLineItem {
   typeIcon:     string;
   pictureIcon?: string | null;
   flags?:       string;
+  // Which item and occurrence it is, for its animations (it glows when made, restored or opened, and
+  // glides when given a new time): every calendar item passes them.
+  id?:          string;
+  occurrenceDate?: string;
+  time?:        string | null;
+}
+
+// An empty marker inside the item's line: its parent (the button the view draws) is what glows and
+// glides (animations/flash.ts, glide.ts).
+function CalItemMotion({ item }: { item: CalLineItem }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useSignal('arrive', item.id ?? null, () => flashArrival(ref.current?.parentElement));
+  useGlide(item.id ?? '', `${item.occurrenceDate ?? ''} ${item.time ?? ''}`, { get current() { return ref.current?.parentElement ?? null; } });
+  return <span ref={ref} hidden />;
 }
 
 // Its icon alone: the multi-day and background bars, which have no time or flags of their own.
@@ -32,6 +49,7 @@ function Flags({ item }: { item: CalLineItem }) {
 export function CalItemLine({ item, time, titleClassName }: { item: CalLineItem; time: ReactNode | null; titleClassName?: string }) {
   return (
     <>
+      <CalItemMotion item={item} />
       {time && <span className={styles.calItemTime}>{time}</span>}
       {time && <Flags item={item} />}
       <CalItemIcon item={item} />
@@ -46,6 +64,7 @@ export function CalItemLine({ item, time, titleClassName }: { item: CalLineItem;
 export function CalItemBlock({ item, time }: { item: CalLineItem; time: ReactNode }) {
   return (
     <>
+      <CalItemMotion item={item} />
       <span className={styles.weekTimeBlockTime}>{time}<Flags item={item} /></span>
       <span className={styles.weekTimeBlockTitle}><CalItemIcon item={item} />{item.title}</span>
     </>

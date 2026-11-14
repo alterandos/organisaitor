@@ -4,6 +4,9 @@ import { createElement, useEffect, useRef } from 'react';
 import { checklistProgress, linkedListIds } from '@/services/taskListLinks';
 import { toggleTaskCompletion, taskCompletionOptions, skipOption, onTaskCompleted } from '@/services/taskCompletion';
 import { completionBurst } from '@/animations/completionBurst';
+import { warmAnimations } from '@/animations/settle';
+import { useSignal } from '@/animations/signals';
+import { flashArrival } from '@/animations/flash';
 import { HoverOptions } from '@/components/HoverOptions/HoverOptions';
 import { useListStore } from '@/store/listStore';
 import type { Priority, Task } from '@/types';
@@ -71,6 +74,8 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
   const rowRef = useRef<HTMLDivElement>(null);
   const checkRef = useRef<HTMLButtonElement>(null);
   useEffect(() => onTaskCompleted((id) => { if (id === task.id) void completionBurst(checkRef.current); }), [task.id]);
+  // Made, restored or opened: it glows where it is (animations/flash.ts).
+  useSignal('arrive', task.id, () => flashArrival(rowRef.current));
   const swipe = useSwipeRow(rowRef, {
     enabled:      isAndroid,
     onSwipeRight: () => { hapticLight(); void toggleTaskCompletion(task.id); },
@@ -163,6 +168,8 @@ export function TaskItem({ task, collectionColor, isSubtask, expanded = false, o
             ref={checkRef}
             className={`${styles.checkbox} ${task.completed ? styles.checkboxDone : ''}`}
             onClick={(e) => { e.stopPropagation(); void toggleTaskCompletion(task.id); }}
+            onPointerEnter={warmAnimations}
+            onFocus={warmAnimations}
             aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
           >
             {task.completed && <span className={styles.checkmark}>✓</span>}

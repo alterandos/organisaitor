@@ -13,6 +13,7 @@ import { showToast } from '@/components/Toast/showToast';
 import type { NoteTag } from '@/types/notes';
 import type { Note, StructuredTagEntry } from '@/types/notes';
 import type { NoteId, StructuredTagEntryId } from '@/types';
+import { kindWash } from '@/animations/kindWash';
 
 // The Glossary: every Definition, Concept, Acronym, Profile and Fact record (StructuredTagEntry,
 // config/structuredTagTypes.ts GLOSSARY_TYPES), with where it came from and how often other text
@@ -105,7 +106,7 @@ export function changeGlossaryKind(id: string, toKey: string): boolean {
   const next = changeKind(view, toKey);
   if (!next) return false;
   const before = { typeKey: view.typeKey, tagId: view.tagId, term: view.term, fields: view.fields };
-  store.updateStructuredTagEntry(raw.id, { ...next, tagId: tag.id as StructuredTagEntry['tagId'] });
+  kindWash(raw.id, () => store.updateStructuredTagEntry(raw.id, { ...next, tagId: tag.id as StructuredTagEntry['tagId'] }));   // the cards wash to the new colour
   const L = LABELS.glossaryCard;
   showToast({
     message: L.kindChanged(next.term || L.untitledTerm, tag.name),

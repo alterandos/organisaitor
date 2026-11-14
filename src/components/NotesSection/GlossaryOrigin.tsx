@@ -1,6 +1,6 @@
 import { useUIStore } from '@/store/uiStore';
 import { trashedOriginOf, type GlossaryEntry } from '@/services/glossary';
-import { definitionPassage, openNotePassage } from '@/services/notePassage';
+import { definitionPassage, noteShowsEntry, openNotePassage } from '@/services/notePassage';
 import { restoreFromTrash } from '@/services/trash';
 import { LABELS } from '@/config/labels';
 import styles from './GlossaryView.module.css';
@@ -29,6 +29,20 @@ export function GlossaryOrigin({ entry }: { entry: GlossaryEntry }) {
     useUIStore.getState().openGlossaryRecord(null);
     if (entry.noteId) openNotePassage(entry.noteId, definitionPassage(entry.id));
   };
+  // Its card was taken out of the note (and kept in the Glossary): the note is still where it came
+  // from, but going there wouldn't find it, so say so and open the note itself.
+  if (!entry.locked && !noteShowsEntry(entry.id)) {
+    const openNote = () => {
+      useUIStore.getState().openGlossaryRecord(null);
+      if (entry.noteId) useUIStore.getState().openNote(entry.noteId);
+    };
+    return (
+      <span className={styles.muted}>
+        {L.fromNoLonger(entry.noteTitle || L.untitledNote)}{' · '}
+        <button type="button" className={styles.link} title={L.definedAt([...entry.notebookPath, entry.noteTitle || L.untitledNote])} onClick={openNote}>{L.openThatNote}</button>
+      </span>
+    );
+  }
   return (
     <button type="button" className={styles.link} title={L.definedAt([...entry.notebookPath, entry.noteTitle || L.untitledNote])} onClick={open}>
       {L.definedIn(entry.noteTitle || L.untitledNote, entry.notebookPath.at(-1))}

@@ -7,7 +7,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { nanoid } from 'nanoid';
 import { LABELS } from '@/config/labels';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
-import { freshRun, promptData, type PromptData } from '@/utils/aiPrompt';
+import { freshRun, nextRun, promptData, promptRuns, type PromptData } from '@/utils/aiPrompt';
 import type { NoteEditorMenuApi } from '../contextMenu';
 import { applyFrameAttrs, blockFrameAttributes, blockPill, designButtons, designMenuItem, frameButtons, frameMenuItem, leaveBlockBelow, pillButton, replaceTypedWithBlock, selectButton, typeIntoBlockPlugin, type BlockDesign } from './blockDesigns';
 import { blockResizeHandle, blockWidth, blockWidthAttributes, showBlockWidth, widthMenuItem } from './blockWidth';
@@ -56,6 +56,11 @@ export const PromptBlock = Node.create({
       fills:    jsonAttr('fills', [] as unknown[]),
       template: { default: false, parseHTML: (el) => el.hasAttribute('data-template'), renderHTML: (a) => (a.template ? { 'data-template': '' } : {}) },
       sentAt:   { default: null, parseHTML: (el) => el.getAttribute('data-sent-at'), renderHTML: (a) => (a.sentAt ? { 'data-sent-at': a.sentAt } : {}) },
+      // Which run it's on, and the earlier ones (utils/aiPrompt.ts promptRuns), and whether a tile
+      // was left open (so it's as it was on coming back to the note: 2026-11-13).
+      run:      { default: 1, parseHTML: (el) => Number(el.getAttribute('data-run')) || 1, renderHTML: (a) => ((a.run as number) > 1 ? { 'data-run': String(a.run) } : {}) },
+      runs:     jsonAttr('runs', [] as unknown[]),
+      open:     { default: false, parseHTML: (el) => el.hasAttribute('data-open'), renderHTML: (a) => (a.open ? { 'data-open': '' } : {}) },
     };
   },
 
@@ -87,14 +92,22 @@ export function setPromptAttrs(view: EditorView, pos: number, attrs: Record<stri
   view.dispatch(tr);
 }
 
-// A new run: a fresh copy put after this one (each-run sections and fill-ins emptied), opened at
-// its first each-run section. The one before stays as it was, for reference.
+// A new run, in place (2026-11-13; it used to put a fresh copy after this one, which left this one
+// looking unchanged): this run goes into the run list, the each-run sections and fill-ins are
+// emptied, and it opens at its first each-run section. A template stays as it is: using it makes a
+// fresh prompt after it.
 export function newPromptRun(view: EditorView, pos: number): void {
   const node = view.state.doc.nodeAt(pos);
   if (node?.type.name !== 'promptBlock' || !view.editable) return;
+  if (!node.attrs.template) {
+    const next = nextRun(promptData(node.attrs), promptRuns(node.attrs), new Date().toISOString());
+    view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...next, sentAt: null, open: true }));
+    openPrompt(view, pos, { where: 'run' });
+    return;
+  }
   const fresh = freshRun(promptData(node.attrs));
   const at = pos + node.nodeSize;
-  const copy = node.type.create({ ...node.attrs, ...fresh, sections: fresh.sections.map((s) => ({ ...s, id: nanoid(6) })), sentAt: null });
+  const copy = node.type.create({ ...node.attrs, ...fresh, sections: fresh.sections.map((s) => ({ ...s, id: nanoid(6) })), sentAt: null, run: 1, runs: [], open: true });
   const tr = view.state.tr.insert(at, copy);
   view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, at)).scrollIntoView());
   openPrompt(view, at, { where: 'run' });
@@ -125,13 +138,14 @@ class PromptView {
   private handle: HTMLElement;
   private root: Root;
   private destroyed = false;
-  private open = false;
+  private open: boolean;
   private focus: PromptFocus = { n: 0 };
 
   constructor(node: PMNode, editor: Editor, getPos: () => number | undefined) {
     this.node = node;
     this.editor = editor;
     this.getPos = getPos;
+    this.open = !!node.attrs.open;
     this.dom = document.createElement('div');
     this.dom.setAttribute('data-type', 'prompt');
     this.dom.setAttribute('data-note-block', '');
@@ -142,7 +156,7 @@ class PromptView {
     this.dom.append(this.pill, this.body, this.handle);
     this.root = createRoot(this.body);
     this.dom.addEventListener('prompt-open', (e) => {
-      this.open = true;
+      this.remember(true);
       this.focus = { ...(e as CustomEvent<Omit<PromptFocus, 'n'>>).detail, n: this.focus.n + 1 };
       this.render();
     });
@@ -158,9 +172,16 @@ class PromptView {
     if (p !== null) setPromptAttrs(this.editor.view, p, patch, { history });
   };
 
+  // Open or folded, kept on the block (outside the undo history), so coming back to the note finds it as it was left.
+  private remember(open: boolean) {
+    this.open = open;
+    const p = this.pos();
+    if (p !== null && !!this.node.attrs.open !== open) setPromptAttrs(this.editor.view, p, { open }, { history: false });
+  }
+
   private setOpen = (open: boolean) => {
     if (this.open === open) return;
-    this.open = open;
+    this.remember(open);
     this.render();
     if (!open) this.selectSelf();
   };
@@ -169,7 +190,7 @@ class PromptView {
   private leave = () => {
     const pos = this.getPos();
     if (pos === undefined) return;
-    if (this.open && this.node.attrs.variant === 'tile') { this.open = false; this.render(); }
+    if (this.open && this.node.attrs.variant === 'tile') { this.remember(false); this.render(); }
     leaveBlockBelow(this.editor.view, pos);
   };
 
@@ -207,11 +228,14 @@ class PromptView {
       editable: this.editor.isEditable, focus: this.focus,
       onChange: this.change, onOpen: this.setOpen, onEscape: this.selectSelf, onLeave: this.leave,
       onNewRun: () => { const p = this.pos(); if (p !== null) newPromptRun(view, p); },
+      runs: promptRuns(a),
+      onClearRuns: () => { const p = this.pos(); if (p !== null) setPromptAttrs(view, p, { runs: [] }); },
     }));
   }
 
   update(node: PMNode) {
     if (node.type.name !== 'promptBlock') return false;
+    if (!!node.attrs.open !== !!this.node.attrs.open) this.open = !!node.attrs.open;
     this.node = node;
     this.render();
     return true;

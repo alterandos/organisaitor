@@ -16,6 +16,7 @@ import { mergeNewLinks } from '@/utils/links';
 import { useTrackerStore } from '@/store/trackerStore';
 import { persistStorage } from '@/utils/persistStorage';
 import { moveToTrash } from '@/services/trashCapture';
+import { signal } from '@/animations/signals';
 
 const EMPTY: AppData = {
   version:     2,
@@ -71,6 +72,7 @@ export const useTaskStore = create<TaskStore>()(
 
       addTask: (input) => {
         const task = createTask(input, 0);
+        signal('arrive', task.id);   // it glows where it lands (animations/flash.ts)
         set((state) => {
           const updatedTask = { ...task, sortOrder: Object.keys(state.tasks).length };
           const tasks: AppData['tasks'] = { ...state.tasks, [task.id]: updatedTask };

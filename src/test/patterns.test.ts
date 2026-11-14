@@ -179,7 +179,9 @@ describe('pattern: floating panels are placed by utils/floatingPlacement.ts', ()
   // kept for a site found later, listed in BACKLOG.md's Pattern retrofit backlog. Not panels:
   // StickyNotes and the scratchpad (dragged on screen) and TaskFields (a task's notes' height).
   const NOT_YET = new Set<string>([]);
-  const NOT_PANELS = new Set(['src/components/StickyNotes/StickyNotes.tsx', 'src/components/ScratchpadPanel/ScratchpadPanel.tsx', 'src/components/TaskFields/TaskFields.tsx', 'src/utils/floatingPlacement.ts']);
+  const NOT_PANELS = new Set(['src/components/StickyNotes/StickyNotes.tsx', 'src/components/ScratchpadPanel/ScratchpadPanel.tsx', 'src/components/TaskFields/TaskFields.tsx', 'src/utils/floatingPlacement.ts',
+    // Animations: whether something is on screen (to scroll to it, or skip a crossfade), not a panel's place.
+    'src/animations/flash.ts', 'src/animations/designSwap.ts']);
 
   it('no new file places a panel from window.innerHeight itself', () => {
     const bad = SOURCE_FILES.map(rel)
@@ -887,7 +889,8 @@ describe('pattern: every block shows Delete in its pill (Block designs)', () => 
 
 describe('pattern: formatted text in block fields (utils/richText.ts)', () => {
   it('every dangerouslySetInnerHTML is given sanitized text', () => {
-    const hits = findMatches(SOURCE_FILES, /dangerouslySetInnerHTML=\{\{\s*__html:(?!\s*sanitizeInlineHtml\()/);
+    // cardLongDraw (a card's long field) sanitizes each of its lines.
+    const hits = findMatches(SOURCE_FILES, /dangerouslySetInnerHTML=\{\{\s*__html:(?!\s*(sanitizeInlineHtml\(|long \? cardLongDraw\(html\) : sanitizeInlineHtml\())/);
     expect(hits, describeHits(hits)).toEqual([]);
   });
   it('a field is read with its formatting only by the card that draws it; everything else reads it plain', () => {
@@ -1247,11 +1250,14 @@ describe('pattern: each note block has its own colour (CLAUDE.md "Block colours"
   // A block's root node name, mapped to the data-type its DOM carries, read from its extension file.
   const extDir = path.join(SRC, 'components', 'NoteEditor', 'extensions');
   const extFiles = walk(extDir, ['.ts']).filter((f) => !f.endsWith('.test.ts'));
+  let extCache: [string, string][] | null = null;
+  const extSources = () => (extCache ??= extFiles.map((f) => [f, fs.readFileSync(f, 'utf8')]));
   const dataTypeOf = (node: string) => {
     // A node that extends a library's keeps its name there (codeBlock): found by its file's name.
     const own = extFiles.find((f) => path.basename(f, '.ts').toLowerCase() === node.toLowerCase());
-    for (const src of extFiles.map((f) => fs.readFileSync(f, 'utf8'))) {
-      const at = src.includes(`name: '${node}'`) ? src.indexOf(`name: '${node}'`) : own && src === fs.readFileSync(own, 'utf8') ? 0 : -1;
+    // Each file read once for every block (re-reading them per block timed out under load, 2026-11-14).
+    for (const [file, src] of extSources()) {
+      const at = src.includes(`name: '${node}'`) ? src.indexOf(`name: '${node}'`) : file === own ? 0 : -1;
       if (at < 0) continue;
       const m = /['"]data-type['"](?::|,)\s*['"]([a-z-]+)['"]/.exec(src.slice(at));
       if (m) return m[1];
@@ -1261,9 +1267,12 @@ describe('pattern: each note block has its own colour (CLAUDE.md "Block colours"
   it('every note block sets its own colour, so a selected block is outlined in it', () => {
     const NOTE_BLOCK_NODES = setFrom(path.join(SRC, 'components', 'NoteEditor', 'blockNodes.ts'), 'NOTE_BLOCK_NODES');
     expect(NOTE_BLOCK_NODES.size).toBeGreaterThan(20);
+    // The stylesheet read once into the selectors of rules that set --color-primary (a regex per block
+    // over the whole file took ~0.4 s and timed out under the full suite's load, 2026-11-14).
+    const setting = [...editorCss.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter((m) => m[2].includes('--color-primary:')).map((m) => m[1]);
     const missing = [...NOTE_BLOCK_NODES].filter((node) => {
       const type = dataTypeOf(node);
-      return !type || !new RegExp(`\\[data-type="${type}"\\][^{]*\\{[^}]*--color-primary:`).test(editorCss);
+      return !type || !setting.some((sel) => sel.includes(`[data-type="${type}"]`));
     });
     expect(missing).toEqual([]);
   });
@@ -2039,5 +2048,41 @@ describe('pattern: a block’s long parts hold lines and bullets (CLAUDE.md "Blo
       if (!src.includes(`richPartAt(`) || !src.includes(`'${name}')`)) problems.push(`${name}: keys`);
     }
     expect(problems).toEqual([]);
+  });
+});
+
+describe('pattern: a note editor loads a document only through loadEditorDoc (CLAUDE.md "Notes side by side")', () => {
+  // 2026-11-13: Tiptap's setContent is an undoable step, so Ctrl+Z with nothing newer to undo put
+  // the tab (or note) left back into the one open, and the autosave wrote it over that one.
+  it('no note editor (the note editor, a sticky) calls setContent itself', () => {
+    const file = SOURCE_FILES.filter((f) => ['src/components/NoteEditor/NoteEditor.tsx', 'src/components/StickyNotes/useSimpleNoteEditor.ts'].includes(rel(f)));
+    expect(file).toHaveLength(2);
+    expect(describeHits(findMatches(file, /commands\.setContent\(/, { skipComments: true }))).toBe('');
+  });
+});
+
+describe('pattern: long text outside the note editor comes from components/LongText (CLAUDE.md "A block\'s long parts hold lines and bullets")', () => {
+  // 2026-11-14: a Glossary card's long fields and the AI prompt's sections hold lists through one
+  // module, so their keys and the way lists are stored can't drift apart.
+  it('only longTextDom.ts makes or changes a list in a field', () => {
+    const hits = findMatches(SOURCE_FILES, /execCommand\??\.?\(\s*'(insertUnorderedList|insertOrderedList|indent|outdent)'/, { skipComments: true })
+      .filter((h) => h.file !== 'src/components/LongText/longTextDom.ts');
+    expect(describeHits(hits)).toBe('');
+  });
+  it('the prompt\'s sections are long fields, not textareas', () => {
+    const body = fs.readFileSync(path.join(SRC, 'components/NoteEditor/extensions/PromptBody.tsx'), 'utf8');
+    expect(body).toContain('<LongTextField');
+    expect(body).not.toContain('<textarea');
+  });
+});
+
+describe('pattern: animations that play in a note\'s editor use Web Animations (CLAUDE.md "Animations")', () => {
+  // 2026-11-14: a class or style written on a note block's DOM is read by ProseMirror as an edit.
+  it('the glow, glide, design swap and colour wash write no class or style', () => {
+    for (const name of ['flash', 'glide', 'designSwap', 'kindWash']) {
+      const src = fs.readFileSync(path.join(SRC, 'animations', `${name}.ts`), 'utf8');
+      expect(src, name).toMatch(/\.animate\(/);
+      expect(src, name).not.toMatch(/classList\.|\.style\.|setAttribute\(/);
+    }
   });
 });

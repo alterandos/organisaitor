@@ -15,6 +15,8 @@ import { LABELS } from '@/config/labels';
 import styles from './TaskList.module.css';
 import { DisclosureIcon } from '@/components/Icons';
 import { foldRuleTasks } from '@/utils/eventTaskRules';
+import { onTaskCompleted } from '@/services/taskCompletion';
+import { leavingClass, useLeaving, useSettling } from '@/animations/settle';
 
 function deadlineMs(t: Task): number {
   return t.deadline ? new Date(t.deadline).getTime() : Infinity;
@@ -52,6 +54,10 @@ function buildSorter(
 
 export function TaskList() {
   const [completedOpen, setCompletedOpen] = useState(false);
+  // A task just completed stays in place a moment (animations/settle.ts), then joins Completed.
+  const settling = useSettling(onTaskCompleted as (fn: (id: string) => void) => () => void);
+  // A task swiped away stays a moment, folding (animations/settle.ts).
+  const leaving = useLeaving<Task>();
   const [archivedOpen,  setArchivedOpen]  = useState(false);
   const [blockedOpen,   setBlockedOpen]   = useState(false);
   // Tasks for each date of an event, folded under the one due first (utils/eventTaskRules.ts):
@@ -118,12 +124,14 @@ export function TaskList() {
   const tasks = tagFilter ? byPurpose.filter((t) => tagFilter(t)) : byPurpose;
 
   const sorter    = buildSorter(sortField, sortDir, collectionsRecord);
-  const open      = tasks.filter((t) => !t.archived && !t.completed).sort(sorter);
+  const open      = tasks.filter((t) => !t.archived && (!t.completed || settling.has(t.id)))
+    .concat([...leaving.values()].filter((t) => !tasksRecord[t.id] && !t.parentId && !t.archived))
+    .sort(sorter);
   // Tasks waiting on another task stay in place (greyed out by TaskItem) unless the setting moves
   // them into their own collapsed group.
   const blocked   = hideBlockedTasks ? open.filter((t) => isBlocked(t, tasksRecord)) : [];
   const active    = hideBlockedTasks ? open.filter((t) => !blocked.includes(t)) : open;
-  const completed = tasks.filter((t) => !t.archived &&  t.completed).sort(sorter);
+  const completed = tasks.filter((t) => !t.archived &&  t.completed && !settling.has(t.id)).sort(sorter);
   const archived  = tasks.filter((t) =>  t.archived).sort(sorter);
 
   function getCollectionColor(task: Task): string | null {
@@ -138,7 +146,7 @@ export function TaskList() {
     const expanded = isExpanded(task.id);
 
     return (
-      <div key={task.id} className={styles.taskGroup}>
+      <div key={task.id} className={`${styles.taskGroup} ${settling.has(task.id) || leaving.has(task.id) ? leavingClass : ''}`}>
         <TaskItem
           task={task}
           collectionColor={color}

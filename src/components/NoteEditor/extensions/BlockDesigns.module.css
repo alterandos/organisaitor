@@ -282,3 +282,28 @@
   background: var(--color-primary);
   pointer-events: none;
 }
+
+/* A popover that is a short menu (a card's Add a field): one choice per line, its icon first,
+   moved through with the arrow keys (2026-11-13: a wrap of chips read as tags, not choices). */
+.menuList { display: flex; flex-direction: column; gap: 2px; min-width: 180px; }
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.menuItem > svg { flex: none; color: var(--color-muted); }
+.menuItem:hover,
+.menuItem:focus-visible { outline: none; background: var(--color-primary-subtle); }
+.menuItem:hover > svg,
+.menuItem:focus-visible > svg { color: var(--color-primary); }
+.menuHint { margin-left: auto; padding-left: var(--space-3); color: var(--color-muted); font-size: var(--text-2xs); }

@@ -1,3 +1,5 @@
+import { useNoteStore } from '@/store/noteStore';
+import { entryView } from '@/services/noteSecrets';
 import { LABELS } from '@/config/labels';
 import { GLOSSARY_KINDS, getStructuredTagType } from '@/config/structuredTagTypes';
 import { registerContextMenuProvider } from '@/contextMenu/registry';
@@ -36,6 +38,14 @@ export function selectionInCardField(target: Element): FieldSelection | null {
 export function recordFromFieldSelection(at: FieldSelection, typeKey: string, ctx: NoteObjectContext): string | null {
   const id = recordFromWords(typeKey, at.words, at.field.textContent ?? '', ctx);
   if (!id) return null;
+  // An Example made from a card's words is an example of that card's record (2026-11-14, the user: the
+  // links built as it's made, so study can ask "what is this an example of?").
+  const host = at.field.closest('[data-type="glossary-card"]')?.getAttribute('data-entry-id');
+  if (typeKey === 'instance' && host && host !== id) {
+    const store = useNoteStore.getState();
+    const made = store.structuredTagEntries[id as never];
+    if (made) store.updateStructuredTagEntry(id as never, { fields: { ...entryView(made).fields, related: [{ kind: 'exampleOf', entryId: host }] } });
+  }
   const a = document.createElement('a');
   a.setAttribute('data-term', id);
   a.appendChild(at.range.extractContents());

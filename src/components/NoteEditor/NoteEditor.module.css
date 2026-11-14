@@ -4049,8 +4049,10 @@
    measured by blockDesigns.ts's frame fit), e.g. the ring's side cards.
    One quiet default each: a hairline, and the alternate surface. */
 .editorContent [data-note-block][data-outlined="true"],
-.editorContent [data-note-block][data-shaded="true"] {
-  --frame-pad: calc(1.1rem + var(--frame-overflow, 0px));
+.editorContent [data-note-block][data-shaded="true"],
+.editorContent [data-note-block][data-frame-lift] {
+  --frame-space: 1.1rem;
+  --frame-pad: calc(var(--frame-space) + var(--frame-overflow, 0px));
   --frame-line: 1px;
   border-radius: var(--radius-sm);
   margin-top: calc(1.5rem + var(--frame-pad));
@@ -4071,6 +4073,28 @@
 /* A chosen shade colour, mixed into the surface so text on it stays readable in both themes. */
 .editorContent [data-note-block][data-shaded="true"][data-shade-color] {
   --frame-fill: color-mix(in srgb, var(--frame-shade) 16%, var(--color-surface));
+}
+
+/* Spacing, shade strength and lift (2026-11-13). The shade stays mixed into the surface, so text on
+   it reads in both themes at every strength. */
+.editorContent [data-note-block][data-frame-space="snug"]  { --frame-space: 0.55rem; }
+.editorContent [data-note-block][data-frame-space="roomy"] { --frame-space: 1.9rem; }
+/* A card (CARD_BLOCK_NODES) has a border of its own: its frame hugs it (the user, 2026-11-14: the
+   blocks' spacing drew a card's shade far too big). Snug is the card itself, normal a little more. */
+.editorContent :is([data-type="glossary-card"], [data-type="question"], [data-type="convert"], [data-type="prompt"], [data-type="case-study"])[data-note-block] { --frame-space: 0.35rem; }
+.editorContent :is([data-type="glossary-card"], [data-type="question"], [data-type="convert"], [data-type="prompt"], [data-type="case-study"])[data-note-block][data-frame-space="snug"]  { --frame-space: 2px; }
+.editorContent :is([data-type="glossary-card"], [data-type="question"], [data-type="convert"], [data-type="prompt"], [data-type="case-study"])[data-note-block][data-frame-space="roomy"] { --frame-space: 0.8rem; }
+.editorContent [data-note-block][data-shaded="true"][data-shade-strength="light"] { --frame-fill: color-mix(in srgb, var(--color-surface-alt) 50%, var(--color-surface)); }
+.editorContent [data-note-block][data-shaded="true"][data-shade-strength="strong"] { --frame-fill: color-mix(in srgb, var(--color-text) 8%, var(--color-surface)); }
+.editorContent [data-note-block][data-shaded="true"][data-shade-color][data-shade-strength="light"]  { --frame-fill: color-mix(in srgb, var(--frame-shade) 8%, var(--color-surface)); }
+.editorContent [data-note-block][data-shaded="true"][data-shade-color][data-shade-strength="strong"] { --frame-fill: color-mix(in srgb, var(--frame-shade) 30%, var(--color-surface)); }
+/* Lifted: the frame sits on the page as a card does, its room filled (the page colour, if unshaded)
+   so the shadow falls only outside it. */
+.editorContent [data-note-block][data-frame-lift] {
+  background-color: var(--frame-fill, var(--color-surface));
+  box-shadow:
+    0 0 0 var(--frame-pad) var(--frame-fill, var(--color-surface)),
+    0 6px 20px calc(var(--frame-pad) - 2px) var(--color-frame-lift);
 }
 
 .editorContent [data-note-block][data-outlined="true"] {
@@ -4095,7 +4119,8 @@
 /* The pill sits on the frame's edge rather than inside it — except in designs that scroll
    sideways (they clip what's outside them), where it already sits inside. */
 .editorContent [data-note-block][data-outlined="true"]:not([data-variant="flow"], [data-variant="horizontal"]) > [data-block-tools],
-.editorContent [data-note-block][data-shaded="true"]:not([data-variant="flow"], [data-variant="horizontal"]) > [data-block-tools] {
+.editorContent [data-note-block][data-shaded="true"]:not([data-variant="flow"], [data-variant="horizontal"]) > [data-block-tools],
+.editorContent [data-note-block][data-frame-lift]:not([data-variant="flow"], [data-variant="horizontal"]) > [data-block-tools] {
   transform: translateY(calc(-1 * var(--frame-pad)));
 }
 

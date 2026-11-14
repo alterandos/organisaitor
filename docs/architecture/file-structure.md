@@ -12,7 +12,7 @@ src/
   types/overview.ts          — Overview types (OverviewQuery, Overview, OverviewRow, OverviewSourceKey); not re-exported from index.ts — see "Overview"
   contextMenu/               — right-click menus (see "Right-click menus"): types.ts (item / scope / provider / context), registry.ts (registerContextMenuProvider, scopes by element, resolveContextMenu), useContextMenuScope.ts, open.ts (openContextMenuAt: the same menu opened from code, by a part's handle)
   specialChars/              — `//name` → a character, in every text field (see "Special characters"): charSets.ts (THE table: Greek today; findCharTrigger, matchChars, exactChar; SHORTCUTS/findShortcut; the person's own shortcuts: findUserShortcut, textShortcutProblem), charPicker.ts (the list under the cursor, shared), fieldInput.ts (installSpecialCharInput: one set of document listeners for every input and textarea, installed from App.tsx), emoji.ts (`:name:` emoji: findEmojiTrigger, matchEmoji; typingTrigger / typedWhole serve both triggers)
-  animations/                — small animations (see "Animations"): motionLib.ts (THE one import of Motion, loaded lazily), completionBurst.ts (a completed task's checkbox pops and sparks)
+  animations/                — small animations (see "Animations"): motionLib.ts (THE one import of Motion, loaded lazily), completionBurst.ts (a completed task's checkbox pops and sparks), settle.ts (a row just done or removed stays a moment, then folds away; warmAnimations), signals.ts (what tells an animation something happened), flash.ts (a glow in place), glide.ts (FLIP to a new place), tickPop.ts, ringBell.ts, designSwap.ts, kindWash.ts
   charts/                    — charts for any app (see "Charts"): chartSpec.ts (ChartSpec, THE library-neutral description of a chart, and the pure data helpers: pasted tables, 100% stacking, waterfall steps), chartAdapter.ts (THE only module that knows Chart.js: toChartConfig, drawChart, which loads the library on first use), ChartWidget.ts + .module.css (THE chart-with-data-editor: the drawing, the data table, the paste box; plain DOM so any host can use it)
   diagrams/                  — diagrams for every app: diagramSpec.ts (THE stored description), diagramLayout.ts (dagre: Flow and Flowchart layouts), DiagramWidget.tsx (React Flow; lazy-loaded) — see CLAUDE.md "Diagrams"
   overview/                  — the Overview engine (see "Overview"): sources.ts (OVERVIEW_SOURCES — THE registry, one entry per app/item kind, pure functions over a store snapshot), engine.ts (runOverview: filter/sort/group; endeavourOverviewQuery), useOverviewSnapshot.ts (the React hook that builds the snapshot, encrypted notes/lists resolved through their views), open.ts (openOverviewRow — jump to a row's source), done.ts (the Overview's one edit: ticking a task, reminder or deadline row done)
@@ -80,6 +80,7 @@ src/
   utils/repeatFollow.ts — a repeat that follows other events: followedDates, inStep (pure)
   utils/showAs.ts — how an event shows (Normal / Quiet / Background): showAsOf, showAsPatch, over the event's quiet / background flags (pure)
   components/ShowAsField/ — the Show as choice, in the create form and the event pane
+  components/LongText/ — long text outside the note editor (lines, bullets, numbers): longTextDom.ts (reading edited HTML back, the list keys), LongTextField (a plain long field: an AI prompt's sections)
   components/CalendarItemForm/ — THE fields of a calendar item (CalendarItemFields), rendered by the create form and the event, reminder and deadline panes; makePendingTasks (tasks chosen before Create)
   components/EventKindField/ — the kind of event (Event, Birthday, Travel; config/calendarEventTypes.ts EVENT_KINDS), a journey's mode, a birthday's year born
   components/FlagCheck/ — an item's option checkbox with its flag icon (config/itemIcons.ts ITEM_FLAG_ICON); FlagIcon for a shared field's own label
@@ -189,6 +190,8 @@ src/
   utils/noteMap.ts          — the Map's graph (buildNoteMap, noteTargetsIn), pure
   utils/noteBackdrop.ts     — which backdrop a note shows (resolveNoteBackdrop: its own, its notebook's and those above, the app-wide one), pure
   utils/richText.ts         — a little formatting in a block's own fields: sanitizeInlineHtml, richToPlain, richLines (Glossary cards)
+  utils/longText.ts         — long text outside the note editor: lines with Markdown list marks, drawn as lists (longLine, longToHtml); its DOM half is components/LongText/longTextDom.ts
+  utils/glossaryPlaces.ts   — which blocks a Glossary record's chips and cards sit in (an Example's "Shown in")
   components/NoteEditor/blockFieldFormat.ts — formatFocusedBlockField: the ribbon's formatting buttons on a focused card field
   utils/noteLinks.ts        — links between notes read from stored content: linksToNote, unlinkedMentions, mentionRange, passagesOf, findBlock, passageRange
   src/test/glossaryFixtures.ts — defineInItsNote: puts a test record's card in its note (a record only counts while its note defines it)
@@ -440,6 +443,8 @@ src/
       extensions/OccurrenceHighlight.ts — selecting a word or phrase faintly marks its other mentions in the tab (whole words when the selection is whole words); decorations only
       extensions/GlossaryAutolink.ts — offers to link a Glossary term as it's typed (once per note per term); Enter/Tab, Backspace undoes
       extensions/GlossaryCard.ts — the Glossary card block (`\definition`, `\acronym`, `\concept`): a node pointing at a record by entryId; designs Card / Compact; GlossaryCardBody.tsx draws and edits the record by field kind; glossaryCardMenu.ts (design, frame, "Show as a card" on marked text and on a chip)
+      extensions/cardLongText.ts — a card's long fields: lines and lists (cardLongDraw, cardLongClean)
+      loadDoc.ts — loadEditorDoc, THE way a note editor loads a document (the undo history starts empty)
       extensions/GlossaryChip.ts — the Glossary record inside a line (the card's Inline design): a chip pointing at the record; its card opens below on a click; cardToChip / chipToCard
       extensions/ListItem.ts — the list item, allowed to start with a block
       objects/blockCategories.ts — THE categories of note block (card, structure, weighing, visual, container): placement and the `\` menu's groups

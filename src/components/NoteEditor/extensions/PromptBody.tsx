@@ -5,8 +5,11 @@ import { DisclosureIcon, TrashIcon } from '@/components/Icons';
 import { FieldError } from '@/components/FieldError/FieldError';
 import { useNoteViews } from '@/store/noteViews';
 import { formatDate } from '@/utils/date';
-import { assemblePrompt, collectPromptTemplates, fillUsed, fillsIn, freshRun, hiddenByFolds, pasteMarkdownPrompt, promptIsEmpty, readMarkdownPrompt, sectionLevel, withUsedFills, type PromptData, type PromptSection } from '@/utils/aiPrompt';
+import { assemblePrompt, collectPromptTemplates, fillUsed, fillsIn, freshRun, hiddenByFolds, notSent, pasteMarkdownPrompt, promptIsEmpty, readMarkdownPrompt, sectionLevel, setWithBelow, withUsedFills, type PromptData, type PromptRun, type PromptSection } from '@/utils/aiPrompt';
+import { confirmDelete } from '@/components/ConfirmDialog/dialogs';
 import { promptTargets, sendPrompt } from '@/services/aiPromptTargets';
+import { LongTextField } from '@/components/LongText/LongTextField';
+import { caretInLines, focusEdge, onEdgeLine } from '@/components/LongText/longTextDom';
 import styles from './Prompt.module.css';
 
 // The `\prompt` block's body (extensions/Prompt.ts). Folded, a small tile: its name, what it holds,
@@ -30,7 +33,7 @@ export interface PromptFocus {
 
 const L = LABELS.noteBlocks.prompt;
 
-export function PromptBody({ data, sentAt, open, canFold, editable, focus, onChange, onOpen, onEscape, onLeave, onNewRun }: {
+export function PromptBody({ data: current, sentAt, open, canFold, editable: canEdit, focus, onChange, onOpen, onEscape, onLeave, onNewRun, runs, onClearRuns }: {
   data:     PromptData;
   sentAt:   string | null;
   open:     boolean;
@@ -42,27 +45,44 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
   onEscape: () => void;
   onLeave:  () => void;
   onNewRun: () => void;
+  runs:     { run: number; runs: PromptRun[] };
+  onClearRuns: () => void;
 }) {
+  // An earlier run looked at (read only), or the run it's on.
+  const [viewing, setViewing] = useState<number | null>(null);
+  const past = viewing === null ? null : runs.runs.find((r) => r.n === viewing) ?? null;
+  const data: PromptData = past ? { ...current, sections: past.sections, fills: past.fills } : current;
+  const editable = canEdit && !past;
+  const skipped = notSent(data.sections);
   const rootRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
-  const sectionRefs = useRef(new Map<string, HTMLTextAreaElement>());
-  const lastSection = useRef<{ id: string; at: number } | null>(null);
+  const sectionRefs = useRef(new Map<string, HTMLDivElement>());
+  // Where the cursor was last in a section (its range), for "put {name} where the cursor is".
+  const lastSection = useRef<{ id: string; range: Range } | null>(null);
+  const rememberCaret = (id: string) => {
+    const sel = window.getSelection();
+    const el = sectionRefs.current.get(id);
+    if (sel?.rangeCount && el?.contains(sel.anchorNode)) lastSection.current = { id, range: sel.getRangeAt(0).cloneRange() };
+  };
   const [newFill, setNewFill] = useState('');
   const [error, setError] = useState('');
   const toFill = data.fills.filter((f) => !f.value.trim() && fillUsed(data.sections, f.name)).length;
   const folds = hiddenByFolds(data.sections);
 
+  function setSection(id: string, patch: Partial<PromptSection>) {
+    const sections = data.sections.map((s) => (s.id === id ? { ...s, ...patch } : s));
+    onChange({ sections, fills: withUsedFills({ sections, fills: data.fills }) });
+  }
+
   // A request for the keyboard (just made, typed on while selected, Enter, a new run).
   useEffect(() => {
     if (!focus.n || !open) return;
     const firstRun = data.sections.find((s) => s.perRun) ?? data.sections[0];
-    const target: HTMLInputElement | HTMLTextAreaElement | null | undefined =
+    const target: HTMLElement | null | undefined =
       focus.where === 'title' || (!focus.where && !data.title) ? titleRef.current
         : sectionRefs.current.get((focus.where === 'run' ? firstRun : data.sections[0])?.id ?? '');
     if (!target) return;
-    target.focus();
-    const end = target.value.length;
-    target.setSelectionRange(end, end);
+    focusEdge(target, 'end');
     if (focus.text) {
       if (target === titleRef.current) onChange({ title: data.title + focus.text });
       else {
@@ -73,11 +93,6 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
     // Only a new request moves the focus, not a changed prompt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus.n, open]);
-
-  function setSection(id: string, patch: Partial<PromptSection>) {
-    const sections = data.sections.map((s) => (s.id === id ? { ...s, ...patch } : s));
-    onChange({ sections, fills: withUsedFills({ sections, fills: data.fills }) });
-  }
 
   function moveSection(i: number, dir: -1 | 1) {
     const j = i + dir;
@@ -104,19 +119,22 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
   // Puts {name} where the cursor was last in a section (the end of the first one, else).
   function insertFill(name: string) {
     const at = lastSection.current;
-    const s = data.sections.find((x) => x.id === at?.id) ?? data.sections[0];
-    if (!s) return;
-    const pos = at?.id === s.id ? Math.min(at.at, s.text.length) : s.text.length;
+    const el = at ? sectionRefs.current.get(at.id) : undefined;
     const token = `{${name}}`;
-    const sections = data.sections.map((x) => (x.id === s.id ? { ...x, text: x.text.slice(0, pos) + token + x.text.slice(pos) } : x));
-    onChange({ sections, fills: withUsedFills({ sections, fills: data.fills }) });
-    lastSection.current = { id: s.id, at: pos + token.length };
-    requestAnimationFrame(() => {
-      const el = sectionRefs.current.get(s.id);
-      if (!el) return;
+    if (at && el?.isConnected && el.contains(at.range.startContainer)) {
       el.focus();
-      el.setSelectionRange(pos + token.length, pos + token.length);
-    });
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(at.range);
+      document.execCommand?.('insertText', false, token);
+      rememberCaret(at.id);
+      return;
+    }
+    const s = data.sections[0];
+    if (!s) return;
+    const sections = data.sections.map((x) => (x.id === s.id ? { ...x, text: x.text + token } : x));
+    onChange({ sections, fills: withUsedFills({ sections, fills: data.fills }) });
+    requestAnimationFrame(() => { const box = sectionRefs.current.get(s.id); if (box) focusEdge(box, 'end'); });
   }
 
   async function send(targetId: string) {
@@ -127,13 +145,14 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
   }
 
   // Markdown with # headings pasted into the title or a section fills the prompt in as sections.
-  function pasteMarkdown(e: React.ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>, sectionId: string | null) {
+  function pasteMarkdown(e: React.ClipboardEvent<HTMLElement>, sectionId: string | null) {
     if (!editable) return;
     const md = readMarkdownPrompt(e.clipboardData.getData('text/plain'));
     if (!md) return;
     e.preventDefault();
     const el = e.currentTarget;
-    const at = sectionId ? { sectionId, from: el.selectionStart ?? 0, to: el.selectionEnd ?? 0 } : null;
+    const caret = sectionId ? caretInLines(el) : null;
+    const at = sectionId ? { sectionId, from: caret?.from ?? 0, to: caret?.to ?? 0 } : null;
     const next = pasteMarkdownPrompt(data, at, md, () => nanoid(6));
     onChange({ ...next, fills: withUsedFills({ sections: next.sections, fills: data.fills }) });
   }
@@ -145,9 +164,24 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (canFold) onOpen(false); else onEscape(); return; }
     if (e.key === 'Enter' && mod && e.shiftKey) { e.preventDefault(); e.stopPropagation(); if (targets[0]) void send(targets[0].id); return; }
     if (e.key === 'Enter' && mod) { e.preventDefault(); e.stopPropagation(); onLeave(); return; }
+    // ↑ / ↓ go from field to field (a heading, its text, the next heading…), from a section's text
+    // only at its first or last line (2026-11-13).
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !mod && !e.altKey && !e.shiftKey) {
+      const el = (e.target as HTMLElement).closest?.('[data-prompt-field]') as HTMLElement | null;
+      if (!el) return;
+      const up = e.key === 'ArrowUp';
+      if (!onEdgeLine(el, up)) return;
+      const fields = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('[data-prompt-field]') ?? []);
+      const next = fields[fields.indexOf(el) + (up ? -1 : 1)];
+      if (!next) return;
+      e.preventDefault();
+      e.stopPropagation();
+      focusEdge(next, up ? 'end' : 'start');
+      return;
+    }
     // Enter: on to the next field, and out after the last; Shift+Enter a new line in a section.
     const field = (e.target as HTMLElement).closest?.('[data-prompt-field]');
-    if (e.key !== 'Enter' || e.altKey || !field || (e.shiftKey && field instanceof HTMLTextAreaElement)) return;
+    if (e.key !== 'Enter' || e.altKey || !field || (e.shiftKey && field.hasAttribute('data-multiline'))) return;
     e.preventDefault();
     e.stopPropagation();
     const fields = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('[data-prompt-field]') ?? []);
@@ -163,7 +197,27 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
           {t.icon}{t.label}
         </button>
       ))}
-      {editable && <button type="button" className={styles.button} onClick={onNewRun} title={L.newRunHint}>{data.template ? L.useTemplate : L.newRun}</button>}
+      {editable && <button type="button" className={styles.button} onClick={onNewRun} title={data.template ? L.useTemplateHint : L.newRunHint}>{data.template ? L.useTemplate : L.newRun}</button>}
+      {!data.template && runs.runs.length > 0 && (
+        // Which run: this one, or an earlier one to look back at; Clear in the same list (rarely used).
+        <select className={styles.runSelect} value={viewing ?? 'now'} aria-label={L.runList} title={L.runList}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === 'clear') {
+              e.target.value = String(viewing ?? 'now');
+              void confirmDelete(L.clearRunsNoun, L.clearRunsName(runs.runs.length), undefined, { empty: false /* runs always hold a prompt */ })
+                .then((ok) => { if (ok) { setViewing(null); onClearRuns(); } });
+              return;
+            }
+            setViewing(v === 'now' ? null : Number(v));
+          }}>
+          <option value="now">{L.runNow(runs.run)}</option>
+          <optgroup label={L.runList}>
+            {[...runs.runs].reverse().map((r) => <option key={r.n} value={r.n}>{L.runPast(r.n, r.at ? formatDate(r.at.slice(0, 10)) : '')}</option>)}
+          </optgroup>
+          {canEdit && <option value="clear">{L.clearRuns}</option>}
+        </select>
+      )}
     </div>
   );
 
@@ -203,6 +257,12 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
         {canFold && <button type="button" className={styles.button} onClick={() => onOpen(false)}>{L.close}</button>}
       </div>
       <div className={styles.bar}>{summary}{actions}</div>
+      {past && (
+        <div className={styles.viewing} role="status">
+          {L.viewingRun(past.n)}
+          <button type="button" className={styles.button} onClick={() => setViewing(null)}>{L.backToRun(runs.run)}</button>
+        </div>
+      )}
       <FieldError>{error}</FieldError>
 
       {editable && promptIsEmpty(data) && <StartFromTemplate onPick={(t) => onChange({ ...freshRun(t), sections: freshRun(t).sections.map((s) => ({ ...s, id: nanoid(6) })) })} />}
@@ -239,12 +299,14 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
       <section className={styles.group} aria-label={L.sections}>
         <h4 className={styles.groupName}>{L.sections}</h4>
         {data.sections.map((s, i) => folds.hidden.has(s.id) ? null : (
-          <div key={s.id} className={styles.section} data-per-run={s.perRun ? '' : undefined} data-level={sectionLevel(s)}>
+          <div key={s.id} className={styles.section} data-per-run={s.perRun ? '' : undefined} data-not-sent={skipped.has(s.id) ? '' : undefined} data-level={sectionLevel(s)}>
             <div className={styles.sectionHead}>
               <button type="button" className={styles.fold} aria-expanded={!s.folded} onClick={() => setSection(s.id, { folded: !s.folded })}
                 title={s.folded ? L.unfoldSection : L.foldSection} aria-label={s.folded ? L.unfoldSection : L.foldSection}>
                 <DisclosureIcon open={!s.folded} />
               </button>
+              <input type="checkbox" className={styles.include} checked={!skipped.has(s.id)} disabled={!editable || (skipped.has(s.id) && s.include !== false)}
+                aria-label={L.include} title={L.include} onChange={(e) => onChange({ sections: setWithBelow(data.sections, s.id, { include: e.target.checked }) })} />
               <input className={styles.sectionName} value={s.name} readOnly={!editable} placeholder={`${L.sectionName} ${i + 1}`} aria-label={L.sectionName}
                 data-prompt-field="" onPaste={(e) => pasteMarkdown(e, s.id)} onChange={(e) => setSection(s.id, { name: e.target.value })} />
               <select className={styles.level} value={sectionLevel(s)} disabled={!editable} aria-label={L.level} title={L.level}
@@ -252,7 +314,7 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
                 {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{L.levelOption(n)}</option>)}
               </select>
               <button type="button" className={styles.runToggle} aria-pressed={s.perRun} disabled={!editable}
-                title={s.perRun ? L.eachRunHint : L.keptHint} onClick={() => setSection(s.id, { perRun: !s.perRun })}>
+                title={s.perRun ? L.eachRunAllHint : L.keptAllHint} onClick={() => onChange({ sections: setWithBelow(data.sections, s.id, { perRun: !s.perRun }) })}>
                 {s.perRun ? L.eachRun : L.kept}
               </button>
               {editable && (
@@ -265,11 +327,11 @@ export function PromptBody({ data, sentAt, open, canFold, editable, focus, onCha
               )}
             </div>
             {!folds.textHidden.has(s.id) && <>
-              <textarea ref={(el) => { if (el) sectionRefs.current.set(s.id, el); else sectionRefs.current.delete(s.id); }}
-                className={styles.sectionText} value={s.text} readOnly={!editable} placeholder={L.sectionPlaceholder} aria-label={s.name || `${L.section} ${i + 1}`}
-                data-prompt-field="" onPaste={(e) => pasteMarkdown(e, s.id)}
-                onChange={(e) => { setSection(s.id, { text: e.target.value }); lastSection.current = { id: s.id, at: e.target.selectionStart }; }}
-                onSelect={(e) => { lastSection.current = { id: s.id, at: (e.target as HTMLTextAreaElement).selectionStart }; }} />
+              <LongTextField ref={(h) => { if (h?.el) sectionRefs.current.set(s.id, h.el); else sectionRefs.current.delete(s.id); }}
+                className={styles.sectionText} value={s.text} editable={editable} placeholder={L.sectionPlaceholder} label={s.name || `${L.section} ${i + 1}`}
+                fieldAttrs={{ 'data-prompt-field': '' }} onPaste={(e) => pasteMarkdown(e, s.id)}
+                onChange={(text) => { setSection(s.id, { text }); rememberCaret(s.id); }}
+                onCaret={() => rememberCaret(s.id)} />
               <FillsUsed text={s.text} />
             </>}
           </div>

@@ -17,6 +17,7 @@ import { isListLocked, listView, LOCKED_LIST_NAME } from '@/services/listSecrets
 import { LABELS } from '@/config/labels';
 import type { CrossAppRef, Task, TaskId } from '@/types';
 import type { List, ListId, ListItem, ListItemId } from '@/types/lists';
+import { signal } from '@/animations/signals';
 
 export const linkedListIds = (refs: CrossAppRef[] | undefined): ListId[] =>
   (refs ?? []).filter((r) => r.type === 'list').map((r) => r.id as ListId);
@@ -77,6 +78,7 @@ export async function toggleChecklistItemWithTasks(itemId: ListItemId): Promise<
   const wasDone = item.status === 'done';
   useListStore.getState().toggleListItemChecked(itemId);
   if (wasDone) return;
+  signal('tick', itemId);   // its box pops and its text is struck through (animations/tickPop.ts)
 
   const { lists, listItems } = useListStore.getState();
   const list = lists[item.listId];

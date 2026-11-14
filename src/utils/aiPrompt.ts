@@ -16,11 +16,42 @@ export interface PromptSection {
   // 2026-11-11), and whether it's folded away while being worked on (it and the sections under it).
   level?:  number;
   folded?: boolean;
+  // Unticked: not sent (it and the sections under it), though kept in the prompt (2026-11-13).
+  include?: boolean;
 }
 
 export const DEFAULT_SECTION_LEVEL = 2;
 export const sectionLevel = (s: Pick<PromptSection, 'level'>): number =>
   Number.isInteger(s.level) && s.level! >= 1 && s.level! <= 6 ? s.level! : DEFAULT_SECTION_LEVEL;
+
+// The ids of a section and every section under it (the deeper levels that follow it), as a heading
+// holds the headings under it in a note.
+export function sectionAndBelow(sections: readonly PromptSection[], id: string): Set<string> {
+  const out = new Set<string>();
+  const i = sections.findIndex((s) => s.id === id);
+  if (i < 0) return out;
+  out.add(id);
+  const level = sectionLevel(sections[i]);
+  for (const s of sections.slice(i + 1)) {
+    if (sectionLevel(s) <= level) break;
+    out.add(s.id);
+  }
+  return out;
+}
+
+// A change to a heading's Kept / Each run or its Send tick, given to the sections under it too
+// (asked for by the user 2026-11-13: setting them one by one was tedious).
+export function setWithBelow(sections: readonly PromptSection[], id: string, patch: Pick<PromptSection, 'perRun'> | Pick<PromptSection, 'include'>): PromptSection[] {
+  const ids = sectionAndBelow(sections, id);
+  return sections.map((s) => (ids.has(s.id) ? { ...s, ...patch } : s));
+}
+
+// The sections not sent: unticked, or under one that is.
+export function notSent(sections: readonly PromptSection[]): Set<string> {
+  const out = new Set<string>();
+  for (const s of sections) if (s.include === false) for (const id of sectionAndBelow(sections, s.id)) out.add(id);
+  return out;
+}
 
 // Which sections are out of sight because a section above them is folded: a folded section keeps
 // its heading and hides its text and every section under it (a deeper level), as headings fold
@@ -174,7 +205,9 @@ function hasTextBelow(sections: readonly PromptSection[], s: PromptSection): boo
 
 // The prompt as sent: each section with something in it under its heading (Markdown, its level's
 // `#`s: `## Name` by default), its fill-ins put in. One section with no name is just its text.
-export function assemblePrompt(data: Pick<PromptData, 'sections' | 'fills'>): AssembledPrompt {
+export function assemblePrompt(all: Pick<PromptData, 'sections' | 'fills'>): AssembledPrompt {
+  const skipped = notSent(all.sections);
+  const data = { ...all, sections: all.sections.filter((s) => !skipped.has(s.id)) };
   const values = new Map(data.fills.map((f) => [key(f.name), f.value.trim()]));
   const missing: string[] = [];
   const fill = (text: string) => text.replace(FILL, (whole, name: string) => {
@@ -212,13 +245,44 @@ export function promptData(attrs: Record<string, unknown>): PromptData {
     sections: arr(attrs.sections).map((x: Record<string, unknown>, i) => ({
       id: s(x?.id) || `s${i}`, name: s(x?.name), text: s(x?.text), perRun: !!x?.perRun,
       ...(typeof x?.level === 'number' ? { level: x.level } : {}), ...(x?.folded ? { folded: true } : {}),
+      ...(x?.include === false ? { include: false } : {}),
     })),
     fills:    arr(attrs.fills).map((x: Record<string, unknown>) => ({ name: s(x?.name), value: s(x?.value) })).filter((f) => f.name.trim()),
     template: !!attrs.template,
   };
 }
 
-export const promptIsEmpty = (d: PromptData): boolean => !d.title.trim() && d.sections.every((s) => !s.text.trim() && !s.name.trim());
+// ── Runs: a prompt is used again in place, its earlier runs kept to look back at (2026-11-13) ──
+
+export interface PromptRun {
+  n:        number;          // its number (the first run is 1)
+  at:       string;          // when the next run started (ISO)
+  sections: PromptSection[];
+  fills:    PromptFill[];
+}
+
+export const MAX_KEPT_RUNS = 30;
+
+export function promptRuns(attrs: Record<string, unknown>): { run: number; runs: PromptRun[] } {
+  const run = Number.isInteger(attrs.run) && (attrs.run as number) >= 1 ? attrs.run as number : 1;
+  const runs = (Array.isArray(attrs.runs) ? attrs.runs : []).flatMap((r: Record<string, unknown>) => {
+    if (!r || !Number.isInteger(r.n)) return [];
+    const d = promptData({ sections: r.sections, fills: r.fills });
+    return [{ n: r.n as number, at: typeof r.at === 'string' ? r.at : '', sections: d.sections, fills: d.fills }];
+  });
+  return { run, runs };
+}
+
+// The next run, in place: this one kept in the list (the oldest dropped past MAX_KEPT_RUNS), the
+// each-run sections emptied, the number one up. The fill-ins keep their values (the user, 2026-11-14:
+// they stay, to change when they need to); a template used afresh (freshRun) still empties them.
+export function nextRun(data: PromptData, current: { run: number; runs: PromptRun[] }, at: string): { run: number; runs: PromptRun[]; sections: PromptSection[]; fills: PromptFill[] } {
+  const fresh = freshRun(data);
+  const runs = [...current.runs, { n: current.run, at, sections: data.sections, fills: data.fills }].slice(-MAX_KEPT_RUNS);
+  return { run: current.run + 1, runs, sections: fresh.sections, fills: data.fills };
+}
+
+export const promptIsEmpty =(d: PromptData): boolean => !d.title.trim() && d.sections.every((s) => !s.text.trim() && !s.name.trim());
 
 // ── Templates: prompts marked as one, found in the notes when asked (never stored apart) ────
 

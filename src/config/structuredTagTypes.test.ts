@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GLOSSARY_TYPES, factsFromText, factsToText, getStructuredTagType, glossaryMeaning, glossaryKinds, glossaryNames, namedFieldLine, takeNamedLines, NAMED_FIELD_ID } from './structuredTagTypes';
+import { GLOSSARY_TYPES, fieldLinks, factsFromText, factsToText, getStructuredTagType, glossaryMeaning, glossaryKinds, glossaryNames, namedFieldLine, takeNamedLines, NAMED_FIELD_ID } from './structuredTagTypes';
 
 describe('profile records (2026-10-15)', () => {
   it('are in the Glossary, their meaning the summary', () => {
@@ -63,5 +63,18 @@ describe('a field of your own: a "Name: value" line (2026-10-27)', () => {
     for (const key of Object.keys(GLOSSARY_TYPES)) {
       expect(getStructuredTagType(key)?.fields.some((f) => f.id === NAMED_FIELD_ID && f.type === 'facts')).toBe(true);
     }
+  });
+});
+
+// 2026-11-14: a concept's Part of was folded into Related (the user's call).
+describe('Part of, read as a Related link', () => {
+  it('an old parent reads as a partOf link first, once', () => {
+    expect(fieldLinks({ parentId: 'p', related: [{ kind: 'typeOf', entryId: 'x' }] }, 'related')).toEqual([{ kind: 'partOf', entryId: 'p' }, { kind: 'typeOf', entryId: 'x' }]);
+    expect(fieldLinks({ parentId: 'p', related: [{ kind: 'partOf', entryId: 'p' }] }, 'related')).toEqual([{ kind: 'partOf', entryId: 'p' }]);
+    expect(fieldLinks({ parentId: '' }, 'related')).toEqual([]);
+    expect(fieldLinks({ parentId: 'p' }, 'other')).toEqual([]);
+  });
+  it('no Glossary kind has a Part of field any more', () => {
+    expect(Object.keys(GLOSSARY_TYPES).flatMap((k) => getStructuredTagType(k)?.fields.map((f) => f.id) ?? [])).not.toContain('parentId');
   });
 });

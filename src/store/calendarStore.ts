@@ -19,6 +19,7 @@ import { withException, endedBefore, tailOf } from '@/utils/recurrence';
 import { mergeNewLinks } from '@/utils/links';
 import { persistStorage } from '@/utils/persistStorage';
 import { moveToTrash } from '@/services/trashCapture';
+import { signal } from '@/animations/signals';
 
 interface CalendarState {
   events:    Record<CalendarEventId,    CalendarEvent>;
@@ -175,6 +176,7 @@ export const useCalendarStore = create<CalendarState>()(
 
       addEvent: (input, givenId) => {
         const id  = givenId ?? newCalendarEventId();
+        signal('arrive', id);   // it glows where it lands (animations/flash.ts)
         const event = buildEvent(input, id, now());
         set((s) => ({ events: { ...s.events, [id]: event } }));
         return id;
@@ -225,6 +227,7 @@ export const useCalendarStore = create<CalendarState>()(
 
       addReminder: (input) => {
         const id = newCalendarReminderId();
+        signal('arrive', id);
         const ts = now();
         const reminder: CalendarReminder = {
           id,
@@ -292,6 +295,7 @@ export const useCalendarStore = create<CalendarState>()(
 
       addDeadline: (input) => {
         const id = newCalendarDeadlineId();
+        signal('arrive', id);
         const deadline = buildDeadline(input, id, now());
         set((s) => ({ deadlines: { ...s.deadlines, [id]: deadline } }));
         return id;

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { typeAfterTermLink, useCardTermLinks } from './CardTermLinks';
 import { factHeadline, quoteHeadline } from '@/utils/factHeadline';
 import { pairsBeforeInput, pairsKeyDown } from './cardFieldPairs';
@@ -6,10 +6,14 @@ import { insertAtCaret, lineBreakAfterTermLink, termLinkEndingAtCaret } from './
 import { alertDialog, confirmDialog } from '@/components/ConfirmDialog/dialogs';
 import { DEFAULT_IMAGE_LAYOUT, IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { useNoteStore } from '@/store/noteStore';
-import { entryView, isEntryLocked, useSecretsVersion } from '@/services/noteSecrets';
-import { openGlossaryEntry } from '@/services/notePassage';
+import { entryView, isEntryLocked, isNoteLocked, noteView, useSecretsVersion } from '@/services/noteSecrets';
+import { useUIStore } from '@/store/uiStore';
+import { blocksHolding } from '@/utils/glossaryPlaces';
+import { peekGlossaryEntry } from '@/services/notePassage';
+import { TermCard } from './CardTermLinkParts';
+import type { AnchorBox } from '@/utils/floatingPlacement';
 import { GLOSSARY_TYPES, TERM_RICH, fieldFacts, fieldSymbols, type FormulaSymbol, fieldLinks, fieldList, fieldRich, fieldRichList, fieldText, getStructuredTagType, termRich, NAMED_FIELD_ID, namedFieldLine, takeNamedLines, type Fact, type GlossaryLink, type StructuredTagFieldDef, glossaryKinds, glossaryNames } from '@/config/structuredTagTypes';
-import { glossaryRelation } from '@/config/glossaryRelations';
+import { GLOSSARY_RELATIONS, glossaryRelation } from '@/config/glossaryRelations';
 import { GlossaryTermPicker } from '@/components/GlossaryTermPicker/GlossaryTermPicker';
 import { LABELS } from '@/config/labels';
 import { entryImportance, glossaryKindLine, headlineTerms } from '@/services/glossary';
@@ -19,7 +23,7 @@ import { clipboardImage, imageFileFrom } from '@/components/PictureInput/picture
 import { acronymLetterPositions } from '@/utils/acronymInference';
 import { log, errorMessage } from '@/utils/log';
 import { normalizeLinkUrl, openExternalLink } from '@/utils/links';
-import { escapeHtml, hasFormatting, linesAsBreaks, richLines, richToPlain, sanitizeInlineHtml } from '@/utils/richText';
+import { escapeHtml, hasFormatting, richLines, richToPlain, sanitizeInlineHtml } from '@/utils/richText';
 import type { StructuredTagEntry, StructuredTagEntryId } from '@/types';
 import type { GlossaryCardVariant } from './GlossaryCard';
 import { BUILTIN_TAGS } from '../builtinTags';
@@ -27,6 +31,8 @@ import { MathsInput } from './MathsInput';
 import { CORNERS } from './imageGeometry';
 import { pictureHandles, resizePicture } from './pictureResize';
 import styles from './GlossaryCard.module.css';
+import { cardLongClean, cardLongDraw, cardLongNormal } from './cardLongText';
+import { longTextKeyDown, startAsList } from '@/components/LongText/longTextDom';
 import { CardIcon } from '@/components/CardLook/CardIcon';
 import { ClarifyIcon, CloseIcon, ReviewIcon, TrashIcon, UnlinkIcon, UnsureIcon } from '@/components/Icons';
 import { recordFlag } from './BlockFlags';
@@ -180,21 +186,28 @@ function formatKey(e: KeyboardEvent<HTMLElement>): void {
 // A field of formatted text (utils/richText.ts): editable in place, saved half a second after
 // typing stops and on leaving it, never per keystroke (each save syncs). Shown from the record while
 // it isn't being typed in. Pasting brings in the text only.
-function RichField({ html, onCommit, multiline, items, placeholder, className, editable, label, autoFocus, termLinksFor, takeLines }: {
+function RichField({ html, onCommit, multiline, items, placeholder, className, editable, label, autoFocus, termLinksFor, takeLines, startList }: {
   html: string; onCommit: (html: string) => void; multiline?: boolean; placeholder?: string; className?: string;
   items?: boolean;   // a list: a <div> per item, so each is drawn with its bullet while it's edited
   editable: boolean; label: string; autoFocus?: boolean;
   takeLines?: (html: string) => string;   // on leaving it: "Name: value" lines made into fields, the rest kept
   termLinksFor?: string;   // this card's record: Glossary terms typed here are offered as links (CardTermLinks.tsx)
+  startList?: boolean;      // a long field that starts as a bulleted list (Key points)
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const links = useCardTermLinks(termLinksFor);
   const dirty = useRef(false);
   // A field of several lines keeps its lines as <br>s whatever the browser wrote (linesAsBreaks); a
   // list, as a <div> per item (2026-11-05: as <br>s its bullets weren't drawn).
-  const clean = (h: string) => (items ? richLines(h).map((l) => `<div>${l}</div>`).join('') : sanitizeInlineHtml(multiline ? linesAsBreaks(h) : h));
+  // A long field (multiline, not a list of items) keeps its lines and lists (cardLongText.ts, 2026-11-14).
+  const long = !!multiline && !items;
+  const clean = (h: string) => (items ? richLines(h).map((l) => `<div>${l}</div>`).join('') : long ? cardLongClean(h) : sanitizeInlineHtml(h));
+  // What the field shows while edited, from what's stored.
+  const drawn = (h: string) => (long ? cardLongDraw(h) : clean(h));
   const cleanRef = useRef(clean);
   useEffect(() => { cleanRef.current = clean; });
+  const drawnRef = useRef(drawn);
+  useEffect(() => { drawnRef.current = drawn; });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commit = useRef(onCommit);
   useEffect(() => { commit.current = onCommit; });
@@ -211,8 +224,11 @@ function RichField({ html, onCommit, multiline, items, placeholder, className, e
   useEffect(() => {
     const el = ref.current;
     if (!el || dirty.current) return;
-    const same = (a: string, b: string) => richLines(cleanRef.current(a)).join('<br>') === richLines(cleanRef.current(b)).join('<br>');
-    if (!same(el.innerHTML, html)) el.innerHTML = cleanRef.current(html);
+    const same = long
+      ? cardLongClean(el.innerHTML) === cardLongNormal(html)
+      : richLines(cleanRef.current(el.innerHTML)).join('<br>') === richLines(cleanRef.current(html)).join('<br>');
+    if (!same) el.innerHTML = drawnRef.current(html);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `long` never changes for a field
   }, [html]);
   useEffect(() => { if (autoFocus && ref.current) focusField(ref.current, 'end'); }, [autoFocus]);
   useEffect(() => { const s = save.current; return () => s(); }, []);
@@ -226,7 +242,7 @@ function RichField({ html, onCommit, multiline, items, placeholder, className, e
   if (!editable) {
     return html ? (
       <>
-        <div className={`${styles.richShown} ${className ?? ''}`} dangerouslySetInnerHTML={{ __html: sanitizeInlineHtml(html) }}
+        <div className={`${styles.richShown} ${className ?? ''}`} dangerouslySetInnerHTML={{ __html: long ? cardLongDraw(html) : sanitizeInlineHtml(html) }}
           onMouseOver={links.onMouseOver} onMouseOut={links.onMouseOut} onClick={links.onClick} />
         {links.overlay}
       </>
@@ -261,14 +277,17 @@ function RichField({ html, onCommit, multiline, items, placeholder, className, e
       onBlur={() => {
         const el = ref.current;
         if (el && takeLines) {
-          const rest = takeLines(el.innerHTML);
-          if (rest !== el.innerHTML) { el.innerHTML = rest; dirty.current = true; }
+          const now = long ? cardLongClean(el.innerHTML) : el.innerHTML;
+          const rest = takeLines(now);
+          if (rest !== now) { el.innerHTML = drawn(rest); dirty.current = true; }
         }
         save.current();
         // Left as saved: only the kept formatting (a pasted or browser-added span goes).
-        if (el && el.innerHTML !== clean(el.innerHTML)) el.innerHTML = clean(el.innerHTML);
+        if (el && !long && el.innerHTML !== clean(el.innerHTML)) el.innerHTML = clean(el.innerHTML);
+        if (el && long) { const tidy = cardLongDraw(cardLongClean(el.innerHTML)); if (el.innerHTML !== tidy) el.innerHTML = tidy; }
       }}
-      onKeyDown={(e) => { if (!links.onKeyDown(e, e.currentTarget) && !pairsKeyDown(e.currentTarget, e)) formatKey(e); }}
+      onFocus={() => { if (startList && ref.current) startAsList(ref.current); }}
+      onKeyDown={(e) => { if (links.onKeyDown(e, e.currentTarget) || (long && longTextKeyDown(e, e.currentTarget)) || pairsKeyDown(e.currentTarget, e)) return; formatKey(e); }}
       onPaste={(e) => {
         e.preventDefault();
         const text = e.clipboardData.getData('text/plain');
@@ -634,37 +653,39 @@ function WebLink({ url }: { url: string }) {
   );
 }
 
-// An entry's term as a link to where it's defined.
+// An entry's term as a link to it (2026-11-13, the user's ask): hovering shows its card, a click
+// opens the record over the note (to read or edit it, and go to its note from there), so reading a
+// link never takes you out of the note you're in.
 function EntryLink({ entry }: { entry: StructuredTagEntry }) {
+  const [hover, setHover] = useState<AnchorBox | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stay = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } };
+  const show = (el: HTMLElement) => {
+    stay();
+    timer.current = setTimeout(() => { const r = el.getBoundingClientRect(); setHover({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }); }, 250);
+  };
+  const hide = () => { stay(); timer.current = setTimeout(() => setHover(null), 250); };
+  useEffect(() => stay, []);
   return (
-    <button type="button" className={styles.entryLink} onClick={() => openGlossaryEntry(entry.id)}>
-      {entry.term || '…'}
-    </button>
+    <>
+      <button type="button" className={styles.entryLink} onMouseEnter={(e) => show(e.currentTarget)} onMouseLeave={hide}
+        onClick={() => { stay(); setHover(null); peekGlossaryEntry(entry.id); }}>
+        {entry.term || '…'}
+      </button>
+      {hover && <TermCard entryId={entry.id} anchor={hover} onEnter={stay} onLeave={() => setHover(null)} />}
+    </>
   );
 }
 
-// The broader concept this one is part of (a choice among the other concepts, never one of its
-// own parts), and its parts: the concepts that name it as theirs.
-function ParentField({ self, all, editable, onCommit }: { self: StructuredTagEntry; all: StructuredTagEntry[]; editable: boolean; onCommit: (v: string) => void }) {
-  const parentId = fieldText(self.fields, 'parentId');
-  const byId = new Map(all.map((e) => [e.id as string, e]));
-  const descends = (id: string): boolean => {
-    for (let cur = byId.get(id), seen = 0; cur && seen < 50; cur = byId.get(fieldText(cur.fields, 'parentId')), seen++) if (cur.id === self.id) return true;
-    return false;
-  };
-  const options = all.filter((e) => e.typeKey === self.typeKey && e.id !== self.id && e.term && !descends(e.id));
-  const parent = byId.get(parentId);
-  const read = parent ? <EntryLink entry={parent} /> : null;
-  if (!editable) return read;
-  // The choice only while the card is being edited; otherwise what was chosen.
+// How a link relates, changed by clicking it (2026-11-13: a link made with the wrong relation
+// couldn't be put right). A native select drawn as the relation's words, so it works from the
+// keyboard and on touch.
+function RelationChoice({ kind, onChange }: { kind: string; onChange: (kind: string) => void }) {
   return (
-    <>
-      {read && <span className={styles.whenReading}>{read}</span>}
-      <select className={`${styles.select} ${styles.whenEditing}`} value={parent ? parentId : ''} aria-label={L.choose} onChange={(e) => onCommit(e.target.value)}>
-        <option value="">{L.noParent}</option>
-        {options.map((e) => <option key={e.id} value={e.id}>{e.term}</option>)}
-      </select>
-    </>
+    <select className={styles.relationSelect} value={glossaryRelation(kind).kind} aria-label={L.linkTermRelation} title={L.changeRelation}
+      onChange={(e) => onChange(e.target.value)}>
+      {GLOSSARY_RELATIONS.map((r) => <option key={r.kind} value={r.kind}>{r.label}</option>)}
+    </select>
   );
 }
 
@@ -684,7 +705,10 @@ function LinksField({ self, all, editable, onCommit, relation }: { self: Structu
         if (!target) return null;
         return (
           <div key={`${l.kind}-${l.entryId}`} className={styles.linkRow}>
-            <span className={styles.relation}>{glossaryRelation(l.kind).label}</span> <EntryLink entry={target} />
+            {editable
+              ? <RelationChoice kind={l.kind} onChange={(k) => onCommit(links.map((x, j) => (j === i ? { ...x, kind: k } : x)))} />
+              : <span className={styles.relation}>{glossaryRelation(l.kind).label}</span>}{' '}
+            <EntryLink entry={target} />
             {editable && <button type="button" className={styles.remove} aria-label={L.remove} title={L.remove} onClick={() => onCommit(links.filter((_, j) => j !== i))}><UnlinkIcon /></button>}
           </div>
         );
@@ -694,6 +718,7 @@ function LinksField({ self, all, editable, onCommit, relation }: { self: Structu
           <span className={styles.relation}>{glossaryRelation(k).inverse}</span> <EntryLink entry={from} />
         </div>
       ))}
+      {self.typeKey === 'instance' && <ShownIn entryId={self.id} />}
       {/* Linking another only while the card is being edited (asked for by the user 2026-11-11). */}
       {editable && choices.length > 0 && (
         <div className={`${styles.linkRow} ${styles.whenEditing}`}>
@@ -704,6 +729,30 @@ function LinksField({ self, all, editable, onCommit, relation }: { self: Structu
         <GlossaryTermPicker selfId={self.id} exclude={linked} suggestFrom={self.term} relation={relation}
           onPick={(entryId, kind) => onCommit([...links, { kind, entryId }])} onClose={() => setPicking(false)} />
       )}
+    </div>
+  );
+}
+
+// Where an Example is used (2026-11-14): the blocks its chip or card sits in, in which note,
+// worked out from the notes (utils/glossaryPlaces.ts), so it needs no link made by hand.
+function ShownIn({ entryId }: { entryId: string }) {
+  const notes = useNoteStore((s) => s.notes);
+  useSecretsVersion((s) => s.version);
+  const places = useMemo(() => Object.values(notes).flatMap((n) => {
+    if (isNoteLocked(n) || n.archivedAt) return [];
+    const v = noteView(n);
+    return [v.content, ...v.tabs.map((t) => t.content)].flatMap((c) => blocksHolding(c, entryId)).map((block) => ({ noteId: n.id, title: v.title, block }));
+  }), [notes, entryId]);
+  if (!places.length) return null;
+  const blockName = (node: string) => (LABELS.noteBlocks as unknown as Record<string, { label?: string } | undefined>)[node.replace(/Block$/, '')]?.label ?? L.aBlock;
+  return (
+    <div className={styles.linkRow}>
+      <span className={styles.relation}>{L.shownIn}</span>
+      {places.map((p, i) => (
+        <button key={`${p.noteId}-${i}`} type="button" className={styles.entryLink} onClick={() => useUIStore.getState().openNote(p.noteId)}>
+          {L.blockIn(blockName(p.block), p.title || LABELS.glossary.untitledNote)}
+        </button>
+      ))}
     </div>
   );
 }
@@ -810,9 +859,10 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
       // "Name: value" lines typed so far become fields, whichever key finishes them.
       if (lines) {
         const fieldId = target.closest<HTMLElement>('[data-field]')?.dataset.field;
-        const rest = fieldId ? takeOwnFields(fieldId, target.innerHTML) : target.innerHTML;
-        if (rest !== target.innerHTML) {
-          target.innerHTML = rest;
+        const now = cardLongClean(target.innerHTML);
+        const rest = fieldId ? takeOwnFields(fieldId, now) : now;
+        if (rest !== now) {
+          target.innerHTML = cardLongDraw(rest);
           target.dispatchEvent(new Event('input', { bubbles: true }));
           focusField(target, 'end');
           if (!rest && e.shiftKey) return;
@@ -935,6 +985,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
             <RichField html={fieldRich(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} multiline={f.type === 'textarea'}
               placeholder={f.placeholder} editable={editable} label={f.name} className={f.id === primaryId ? styles.primary : undefined} termLinksFor={id}
               takeLines={f.type === 'textarea' ? (h) => takeOwnFields(f.id, h) : undefined}
+              startList={!!f.bulleted}
               autoFocus={autoFocus || (spelled?.field === f.id && editingExpansion)} />
           </div>
         );
@@ -942,22 +993,9 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
         return <RichList items={fieldRichList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} />;
       case 'image':
         return <ImageField value={fieldText(entry.fields, f.id)} term={entry.term} encrypted={entry.isEncrypted} onCommit={(v) => setField(f.id, v)} editable={editable} layout={imageLayout} onLayout={onImageLayout} />;
-      case 'parent': {
-        const parts = all.filter((e) => e.id !== entry.id && fieldText(e.fields, f.id) === id);
-        return (
-          <>
-            <ParentField self={entry} all={all} editable={editable} onCommit={(v) => setField(f.id, v)} />
-            {parts.length > 0 && (
-              <div className={styles.parts}>
-                <span data-card-part="label">{L.subConcepts}</span>
-                {parts.map((p) => <EntryLink key={p.id} entry={p} />)}
-              </div>
-            )}
-          </>
-        );
-      }
       case 'links':
-        return <LinksField self={entry} all={all} editable={editable} onCommit={(v) => setField(f.id, v)} relation={f.relation} />;
+        // Saving Related also clears an old Part of, now read as one of its links (fieldLinks).
+        return <LinksField self={entry} all={all} editable={editable} onCommit={(v) => saveEntry(id, { fields: f.id === 'related' ? { related: v, parentId: '' } : { [f.id]: v } })} relation={f.relation} />;
       case 'urls':
         return <UrlList items={fieldList(entry.fields, f.id)} onCommit={(v) => setField(f.id, v)} placeholder={f.placeholder} editable={editable} label={f.name} autoFocus={autoFocus} />;
       case 'tags':
@@ -991,9 +1029,7 @@ export function GlossaryCardBody({ entryId, variant, editable, focusRequest, onE
     );
   }
 
-  // A sub-concept's parts show on its parent too, so the parent field shows when it has parts.
-  const hasParts = all.some((e) => e.id !== entry.id && fieldText(e.fields, 'parentId') === id);
-  const visible = typeDef.fields.filter((f) => f.id === primaryId || f.always || hasValue(f) || shown.includes(f.id) || (f.type === 'parent' && hasParts) || (f.type === 'links' && all.some((e) => fieldLinks(e.fields, 'related').some((l) => l.entryId === id))));
+  const visible = typeDef.fields.filter((f) => f.id === primaryId || f.always || hasValue(f) || shown.includes(f.id) || (f.type === 'links' && all.some((e) => fieldLinks(e.fields, 'related').some((l) => l.entryId === id))));
   const waiting = editable ? typeDef.fields.filter((f) => !visible.includes(f) && f.offered !== false) : [];
 
   // The picture out of the fields' order when it's placed to their right or after them.

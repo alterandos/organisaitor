@@ -215,21 +215,28 @@
 
 .addField:hover { color: var(--color-text); border-color: var(--color-primary-border); background: var(--color-primary-subtle); }
 
-.select {
-  max-width: 100%;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--text-sm);
-}
-
 .links { display: flex; flex-direction: column; gap: var(--space-2); }
-/* What's chosen in a field (its parent, a link to another entry) is changed only while the card is
-   being edited, i.e. holds the focus; otherwise the field reads as what was chosen. */
-[data-card-look]:not(:focus-within) .whenEditing { display: none; }
-[data-card-look]:focus-within .whenReading { display: none; }
+/* What's chosen in a field (a link to another entry) is changed only while the card is
+   being edited: it holds the focus, it's selected (outlined), or it's open on its own
+   ([data-card-editing], the record's modal). Otherwise the field reads as what was chosen
+   (2026-11-13: the Link to… row showed only with the cursor in a field). */
+[data-card-look]:not(:focus-within) .whenEditing:not(:global(.ProseMirror-selectednode) *):not([data-card-editing] *) { display: none; }
+[data-card-look]:focus-within .whenReading,
+:global(.ProseMirror-selectednode) .whenReading,
+[data-card-editing] .whenReading { display: none; }
+/* How a link relates, as its words: a click changes it. */
+.relationSelect {
+  appearance: none;
+  padding: 0 var(--space-1);
+  margin: 0 calc(-1 * var(--space-1));
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.relationSelect:hover, .relationSelect:focus-visible { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface-alt); }
 .linkAdd {
   padding: 0;
   border: none;
@@ -244,9 +251,6 @@
 .linkRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
 
 .relation { color: var(--color-muted); }
-
-.parts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
-.parts [data-card-part="label"] { margin: 0; }
 
 .entryLink {
   padding: 0;
@@ -471,3 +475,9 @@
 .symbolRow:not(:has(input)) { grid-template-columns: minmax(3rem, auto) 1fr; }
 .symbolMaths math-field { min-width: 3rem; background: transparent; color: inherit; border: none; }
 .symbolUnit { color: var(--color-muted); }
+
+/* A long field's lists (cardLongText.ts), shown and while edited. */
+.rich :is(ul, ol),
+.richShown :is(ul, ol) { margin: 0; padding-left: 1.3em; }
+.rich li,
+.richShown li { margin: 0.1em 0; }

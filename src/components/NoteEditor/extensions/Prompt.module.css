@@ -190,7 +190,11 @@
 /* A choosing control shows only while the prompt is being edited (the indent shows the level). */
 .full:not(:focus-within) .level { visibility: hidden; }
 .sectionName { flex: 1; min-width: 0; padding: 0 var(--space-1); margin-left: calc(-1 * var(--space-1)); font-weight: 650; }
-.sectionText { width: 100%; min-height: 3.5em; padding: var(--space-2); border-color: var(--color-border); line-height: 1.5; resize: vertical; field-sizing: content; }
+.sectionText { width: 100%; min-height: 3.5em; padding: var(--space-2); border-color: var(--color-border); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+/* A section is a long field (components/LongText): its placeholder, and its lists. */
+.sectionText:empty::before { content: attr(data-placeholder); color: var(--color-muted); pointer-events: none; }
+.sectionText :is(ul, ol) { margin: 0; padding-left: 1.4em; }
+.sectionText li { margin: 0.1em 0; }
 
 /* Kept or Each run: each run is marked in the block's colour, so what a new run empties shows. */
 .runToggle {
@@ -245,3 +249,34 @@
 .addSection:hover { color: var(--color-text); border-color: var(--color-primary-border); }
 
 .templates { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-alt); }
+
+/* Which run (this one, or an earlier one to look back at), beside New run. */
+.runSelect {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.runSelect:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* Looking at an earlier run: said, with the way back. */
+.viewing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-subtle);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+/* Whether a section is sent; one not sent (or under one that isn't) is greyed, never hidden. */
+.include { flex: none; margin: 0; accent-color: var(--color-primary); cursor: pointer; }
+.section[data-not-sent] .sectionName,
+.section[data-not-sent] .sectionText { opacity: 0.5; }

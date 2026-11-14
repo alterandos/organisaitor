@@ -1,0 +1,14 @@
+/* tickPop.ts: the strike-through drawn left to right as an item is ticked; the line-through it
+   ends as takes over when the class goes. */
+.drawStrike {
+  text-decoration-color: transparent !important;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 55%;
+  background-size: 0 1px;
+  animation: drawStrike 220ms ease-out forwards;
+}
+
+@keyframes drawStrike {
+  to { background-size: 100% 1px; }
+}

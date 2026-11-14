@@ -17,6 +17,13 @@ export const GLYPHS = {
     ['line', { x1: '10', y1: '11', x2: '10', y2: '17' }],
     ['line', { x1: '14', y1: '11', x2: '14', y2: '17' }],
   ],
+  // A card growing a new row, a spark at its corner: add a field to a card (2026-11-13).
+  addField: [
+    ['path', { d: 'M13 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7' }],
+    ['path', { d: 'M8 10h4' }],
+    ['path', { d: 'M8 14h8' }],
+    ['path', { d: 'M19 2.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z' }],
+  ],
   // An X: close a pane, dismiss, take a chip off. Not delete (that's the trash).
   close: [
     ['path', { d: 'M18 6 6 18' }],

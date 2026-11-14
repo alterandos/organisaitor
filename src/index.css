@@ -178,6 +178,7 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --color-frame-lift: rgba(15, 23, 42, 0.16);   /* a block lifted off the page (its frame's Lift), drawn by NoteEditor.module.css */
   /* Modals and panes (2026-11-05: every one wrote its own): the dim behind a modal, the lighter dim
      behind a slide-in pane, a modal card's shadow, a phone bottom sheet's (cast upwards), a pane's
      from the right edge (cast left), and one from the left edge (the Sidebar, Calendar's side pane). */
@@ -319,6 +320,7 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.32);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.48);
+  --color-frame-lift: rgba(0, 0, 0, 0.55);
   --color-scrim:       rgba(0, 0, 0, 0.6);
   --color-scrim-light: rgba(0, 0, 0, 0.4);
   --shadow-modal:      0 8px 40px rgba(0, 0, 0, 0.55);

@@ -111,6 +111,12 @@ export const OUTLINE_STYLES = ['solid', 'dashed', 'dotted', 'double'] as const;
 export type OutlineStyle = typeof OUTLINE_STYLES[number];
 export const OUTLINE_WIDTHS = ['thin', 'medium', 'thick'] as const;
 export type OutlineWidth = typeof OUTLINE_WIDTHS[number];
+// How far the frame sits from the block, how strong its shade is, and whether it's lifted off the
+// page by a soft shadow (2026-11-13). Each works on card blocks too (none of them is an outline).
+export const FRAME_SPACES = ['snug', 'normal', 'roomy'] as const;
+export type FrameSpace = typeof FRAME_SPACES[number];
+export const SHADE_STRENGTHS = ['light', 'normal', 'strong'] as const;
+export type ShadeStrength = typeof SHADE_STRENGTHS[number];
 
 // A stored colour, or null when it isn't one we draw (pasted HTML can carry anything).
 export function frameColour(v: unknown): string | null {
@@ -167,9 +173,24 @@ export const blockFrameAttributes = () => ({
     parseHTML: (el: HTMLElement) => oneOfAttr(OUTLINE_WIDTHS, el.getAttribute('data-outline-width'), 'thin'),
     renderHTML: (attrs: Record<string, unknown>) => (attrs.outlineWidth && attrs.outlineWidth !== 'thin' ? { 'data-outline-width': String(attrs.outlineWidth) } : {}),
   },
+  frameSpace: {
+    default: 'normal',
+    parseHTML: (el: HTMLElement) => oneOfAttr(FRAME_SPACES, el.getAttribute('data-frame-space'), 'normal'),
+    renderHTML: (attrs: Record<string, unknown>) => (attrs.frameSpace && attrs.frameSpace !== 'normal' ? { 'data-frame-space': String(attrs.frameSpace) } : {}),
+  },
+  shadeStrength: {
+    default: 'normal',
+    parseHTML: (el: HTMLElement) => oneOfAttr(SHADE_STRENGTHS, el.getAttribute('data-shade-strength'), 'normal'),
+    renderHTML: (attrs: Record<string, unknown>) => (attrs.shadeStrength && attrs.shadeStrength !== 'normal' ? { 'data-shade-strength': String(attrs.shadeStrength) } : {}),
+  },
+  frameLift: {
+    default: false,
+    parseHTML: (el: HTMLElement) => el.hasAttribute('data-frame-lift'),
+    renderHTML: (attrs: Record<string, unknown>) => (attrs.frameLift ? { 'data-frame-lift': '' } : {}),
+  },
 });
 
-const FRAME_DOM_ATTRS = ['data-outlined', 'data-shaded', 'data-outline-color', 'data-shade-color', 'data-frame-shape', 'data-outline-style', 'data-outline-width'];
+const FRAME_DOM_ATTRS = ['data-outlined', 'data-shaded', 'data-outline-color', 'data-shade-color', 'data-frame-shape', 'data-outline-style', 'data-outline-width', 'data-frame-space', 'data-shade-strength', 'data-frame-lift'];
 
 // For a block drawn by its own node view (chart, code, maths): puts the frame attributes on its
 // DOM, as renderHTML does for the others.
@@ -200,6 +221,7 @@ export function applyFrameAttrs(dom: HTMLElement, attrs: Record<string, unknown>
 export type FrameSettings = Partial<{
   outlined: boolean; shaded: boolean; outlineColor: string | null; shadeColor: string | null;
   frameShape: FrameShape; outlineStyle: OutlineStyle; outlineWidth: OutlineWidth;
+  frameSpace: FrameSpace; shadeStrength: ShadeStrength; frameLift: boolean;
 }>;
 
 // Changes a block's frame. Choosing an outline option turns the outline on, a shade colour the shade.
@@ -209,7 +231,7 @@ export function setBlockFrame(view: EditorView, pos: number, settings: FrameSett
   const next: FrameSettings = { ...settings };
   if (!takesOutline(node.type.name)) next.outlined = false;
   if (next.outlined === undefined && ('outlineColor' in next || 'frameShape' in next || 'outlineStyle' in next || 'outlineWidth' in next)) next.outlined = true;
-  if (next.shaded === undefined && 'shadeColor' in next) next.shaded = true;
+  if (next.shaded === undefined && ('shadeColor' in next || 'shadeStrength' in next)) next.shaded = true;
   view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...next }));
 }
 
@@ -292,8 +314,20 @@ export function openFrameOptions(view: EditorView, pos: number, anchor: DOMRect)
         return row;
       };
       const shapes = FRAME_SHAPES.filter((s) => s !== 'circle' || a.frameShape === 'circle' || circleFits(view.nodeDOM(pos) as Element | null));
+      // The shade, its strength, then what applies to any frame: its spacing and the lift.
+      const shade = [
+        toggleRow(L.shade, !!a.shaded, () => set({ shaded: !a.shaded })),
+        swatchRow(frameColour(a.shadeColor), (c) => set({ shadeColor: c })),
+        heading(L.strength),
+        chips(SHADE_STRENGTHS, (a.shadeStrength ?? 'normal') as ShadeStrength, (v) => L.strengths[v], (v) => set({ shadeStrength: v })),
+      ];
+      const around = [
+        heading(L.space),
+        chips(FRAME_SPACES, (a.frameSpace ?? 'normal') as FrameSpace, (v) => L.spaces[v], (v) => set({ frameSpace: v })),
+        toggleRow(L.lift, !!a.frameLift, () => set({ frameLift: !a.frameLift })),
+      ];
       if (!takesOutline(node.type.name)) {
-        box.replaceChildren(toggleRow(L.shade, !!a.shaded, () => set({ shaded: !a.shaded })), swatchRow(frameColour(a.shadeColor), (c) => set({ shadeColor: c })));
+        box.replaceChildren(...shade, ...around);
         return;
       }
       box.replaceChildren(
@@ -304,8 +338,8 @@ export function openFrameOptions(view: EditorView, pos: number, anchor: DOMRect)
         heading(L.line),
         chips(OUTLINE_STYLES, a.outlineStyle as OutlineStyle, (v) => L.styles[v], (v) => set({ outlineStyle: v })),
         chips(OUTLINE_WIDTHS, a.outlineWidth as OutlineWidth, (v) => L.widths[v], (v) => set({ outlineWidth: v })),
-        toggleRow(L.shade, !!a.shaded, () => set({ shaded: !a.shaded })),
-        swatchRow(frameColour(a.shadeColor), (c) => set({ shadeColor: c })),
+        ...shade,
+        ...around,
       );
     };
     render();
@@ -415,7 +449,7 @@ class FrameFit {
     const next = new Map<number, number>();
     view.state.doc.descendants((node, pos) => {
       if (!NOTE_BLOCK_NODES.has(node.type.name)) return true;
-      if (!node.attrs.outlined && !node.attrs.shaded) return false;
+      if (!node.attrs.outlined && !node.attrs.shaded && !node.attrs.frameLift) return false;
       const dom = view.nodeDOM(pos);
       if (!(dom instanceof HTMLElement)) return false;
       const out = frameOverflow(dom.getBoundingClientRect(), visibleParts(dom));
@@ -473,6 +507,11 @@ export function frameMenuItem(view: EditorView, pos: number, attrs: Record<strin
   const dom = view.nodeDOM(pos) as Element | null;
   const shapes = FRAME_SHAPES.filter((s) => s !== 'circle' || attrs.frameShape === 'circle' || circleFits(dom));
   const nodeName = view.state.doc.nodeAt(pos)?.type.name;
+  // What any frame has: its spacing and the lift.
+  const around: ContextMenuItem[] = [
+    { id: 'frame-space', label: L.space, icon: '↔', submenu: [FRAME_SPACES.map((s) => ({ id: `frame-space-${s}`, label: L.spaces[s], icon: tick((attrs.frameSpace ?? 'normal') === s), run: () => setBlockFrame(view, pos, { frameSpace: s }) }))] },
+    { id: 'frame-lift', label: L.lift, icon: tick(!!attrs.frameLift), run: () => setBlockFrame(view, pos, { frameLift: !attrs.frameLift }) },
+  ];
   if (!takesOutline(nodeName)) {
     return {
       id: 'block-frame',
@@ -481,6 +520,7 @@ export function frameMenuItem(view: EditorView, pos: number, attrs: Record<strin
       submenu: [
         [{ id: 'frame-shaded', label: LABELS.noteBlocks.frames.shaded, icon: tick(!!attrs.shaded), run: () => toggleBlockFrame(view, pos, 'shaded') }],
         [{ id: 'frame-shade-colour', label: L.shadeColour, icon: '◍', submenu: colours('shadeColor', frameColour(attrs.shadeColor)) }],
+        around,
       ],
     };
   }
@@ -502,6 +542,7 @@ export function frameMenuItem(view: EditorView, pos: number, attrs: Record<strin
         },
         { id: 'frame-shade-colour', label: L.shadeColour, icon: '◍', submenu: colours('shadeColor', frameColour(attrs.shadeColor)) },
       ],
+      around,
       [{
         id: 'frame-options', label: L.more, icon: '…',
         run: () => { const el = view.nodeDOM(pos) as Element | null; if (el) openFrameOptions(view, pos, el.getBoundingClientRect()); },
@@ -518,6 +559,7 @@ export function frameMenuItem(view: EditorView, pos: number, attrs: Record<strin
 export { NOTE_BLOCK_NODES } from '../blockNodes';
 import { NOTE_BLOCK_NODES } from '../blockNodes';
 import { RESIZE_HANDLE_SELECTOR } from './blockWidth';
+import { designSwap } from '@/animations/designSwap';
 
 // The note block the selection is inside (the outermost, if blocks were ever nested), or null.
 export function blockAround(state: EditorState): number | null {
@@ -1016,7 +1058,7 @@ export function designButtons<V extends string>(designs: readonly BlockDesign<V>
   const group = document.createElement('span');
   group.setAttribute('data-block-designs', '');
   for (const d of designs) {
-    const b = pillButton(d.label, () => pick(d.id));
+    const b = pillButton(d.label, () => { const block = b.closest('[data-note-block]'); pick(d.id); if (d.id !== current) designSwap(block); });
     b.setAttribute('data-block-design', d.id);
     b.setAttribute('aria-pressed', String(d.id === current));
     b.innerHTML = d.icon;

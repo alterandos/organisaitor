@@ -39,8 +39,9 @@ export function LinkedChecklists({ listIds }: { listIds: ListId[] }) {
                 {ordered.map((item) => {
                   const itemDone = item.status === 'done';
                   return (
-                    <li key={item.id} className={`${styles.item} ${itemDone ? styles.itemDone : ''}`}>
+                    <li key={item.id} className={`${styles.item} ${itemDone ? styles.itemDone : ''}`} data-tick-row="">
                       <button
+                        data-tick={item.id}
                         type="button"
                         className={`${styles.check} ${itemDone ? styles.checkDone : ''}`}
                         onClick={() => void toggleChecklistItemWithTasks(item.id as ListItemId)}
@@ -50,7 +51,7 @@ export function LinkedChecklists({ listIds }: { listIds: ListId[] }) {
                       >
                         {itemDone && '✓'}
                       </button>
-                      <span className={styles.title}>{item.title}</span>
+                      <span className={styles.title} data-tick-text="">{item.title}</span>
                     </li>
                   );
                 })}

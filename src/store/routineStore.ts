@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CollectionId, RoutineInstance, TrackerEntryId } from '@/types';
 import { persistStorage } from '@/utils/persistStorage';
+import { signal } from '@/animations/signals';
 
 type InstanceKey = string; // `${routineId}_${date}`
 
@@ -41,6 +42,7 @@ export const useRoutineStore = create<RoutineState>()(
             : [...inst.checked, taskId];
           return { instances: { ...s.instances, [k]: { ...inst, checked } } };
         });
+        if (get().instances[k]?.checked.includes(taskId)) signal('tick', `${routineId}:${date}:${taskId}`);   // animations/tickPop.ts
       },
 
       completeRoutine: (routineId, date, entryId) => {
@@ -49,6 +51,7 @@ export const useRoutineStore = create<RoutineState>()(
           const inst = s.instances[k] ?? { routineId, date, checked: [], completed: false, entryId: null };
           return { instances: { ...s.instances, [k]: { ...inst, completed: true, entryId } } };
         });
+        signal('tick', `routine:${routineId}:${date}`);
       },
 
       reopenRoutine: (routineId, date) => {

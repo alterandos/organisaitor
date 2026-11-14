@@ -8,6 +8,7 @@ import { LABELS } from '@/config/labels';
 import { ITEM_FLAG_ICON } from '@/config/itemIcons';
 import { DisclosureIcon } from '@/components/Icons';
 import type { OverviewRow } from '@/types/overview';
+import { useGlide } from '@/animations/glide';
 import styles from './OverviewRunway.module.css';
 
 const L = LABELS.overview.runway;
@@ -163,7 +164,7 @@ export function OverviewRunway({ rows, today, onOpen }: Props) {
     const isFolded = folded.has(row.key);
     const dated = !!row.when && row.plan!.shape !== 'tray';
     return (
-      <div key={row.key} role="group">
+      <GlideGroup key={row.key} glideKey={`runway:${row.key}`} when={`${row.when ?? ''} ${row.plan?.endDate ?? ''}`}>
         <div className={`${styles.line} ${row.status !== 'open' ? styles.lineDone : ''} ${row.plan?.important ? styles.important : ''} ${parent ? styles.child : ''} ${row.quiet ? styles.lineQuiet : ''}`}>
           <div className={styles.what}>
             {kids.length > 0 && (
@@ -188,7 +189,7 @@ export function OverviewRunway({ rows, today, onOpen }: Props) {
           </div>
         </div>
         {!isFolded && kids.map((k) => line(k, row))}
-      </div>
+      </GlideGroup>
     );
   };
 
@@ -262,3 +263,12 @@ function axisTicks(start: string, days: number, zoom: Zoom): { date: string; lab
   return out;
 }
 
+
+// A row's group, gliding to its new place when its dates change (a drop, an Undo, another device):
+// it may move to another band (animations/glide.ts). The bar itself follows the pointer while
+// dragged, so this is for the row's move.
+function GlideGroup({ glideKey, when, children }: { glideKey: string; when: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGlide(glideKey, when, ref);
+  return <div ref={ref} role="group">{children}</div>;
+}

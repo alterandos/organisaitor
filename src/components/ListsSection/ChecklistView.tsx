@@ -73,8 +73,9 @@ export function ChecklistView({
     const done = item.status === 'done';
     const summary = fieldSummary(item, fieldSchema);
     return (
-      <li key={item.id} className={`${styles.checkRow} ${done ? styles.checkRowDone : ''}`}>
+      <li key={item.id} className={`${styles.checkRow} ${done ? styles.checkRowDone : ''}`} data-tick-row="">
         <button
+          data-tick={item.id}
           className={`${styles.checkBox} ${done ? styles.checkBoxDone : ''}`}
           onClick={() => void toggleChecklistItemWithTasks(item.id)}
           role="checkbox"
@@ -100,7 +101,7 @@ export function ChecklistView({
               }}
             />
           ) : (
-            <span className={styles.checkTitle} onClick={() => setEditingId(item.id)}>{item.title}</span>
+            <span className={styles.checkTitle} data-tick-text="" onClick={() => setEditingId(item.id)}>{item.title}</span>
           )}
           <ListItemSource item={item} />
           {(summary || item.notes) && (

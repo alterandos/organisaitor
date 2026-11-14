@@ -25,7 +25,7 @@ import { factHeadline, quoteHeadline, splitQuote } from '@/utils/factHeadline';
 //   maths           a LaTeX string     (a formula, drawn and edited with MathLive, 2026-11-03)
 //   symbols         FormulaSymbol[]    (what each symbol in a formula stands for, and its unit)
 // A new kind of field is a member here, a reader below, and a renderer in GlossaryCardBody.
-export type StructuredTagFieldType = 'text' | 'textarea' | 'list' | 'image' | 'parent' | 'links' | 'urls' | 'facts' | 'tags' | 'maths' | 'symbols';
+export type StructuredTagFieldType = 'text' | 'textarea' | 'list' | 'image' | 'links' | 'urls' | 'facts' | 'tags' | 'maths' | 'symbols';
 
 // One symbol of a formula: the symbol (LaTeX), what it stands for, its unit.
 export interface FormulaSymbol { symbol: string; meaning: string; unit: string }
@@ -40,6 +40,7 @@ export interface StructuredTagFieldDef {
   offered?:     false;    // not among the "+ field" buttons (a card's own fields: made by typing "Name: value")
   always?:      true;     // shown on every card, empty or not (a Formula's formula)
   relation?:    string;   // a links field: how a link made from it relates, at first (config/glossaryRelations.ts)
+  bulleted?:    true;     // a long field that starts as a bulleted list (a concept's Key points); Ctrl+. takes the bullets off
 }
 
 export interface GlossaryLink { kind: string; entryId: string }
@@ -48,8 +49,10 @@ export interface GlossaryLink { kind: string; entryId: string }
 // something else; it reads as empty).
 // Text fields may hold a little formatting (utils/richText.ts). These read them plain, for
 // everything but the card itself; fieldRich / fieldRichList keep the formatting, for the card.
+// A long field once stored as a list of items (Key points until 2026-11-14) reads as its bullets.
 export const fieldRich = (fields: Record<string, unknown>, id: string): string =>
-  typeof fields[id] === 'string' ? (fields[id] as string) : '';
+  typeof fields[id] === 'string' ? (fields[id] as string)
+    : Array.isArray(fields[id]) ? (fields[id] as unknown[]).filter((v): v is string => typeof v === 'string').map((v) => `- ${v}`).join('<br>') : '';
 export const fieldRichList = (fields: Record<string, unknown>, id: string): string[] =>
   Array.isArray(fields[id]) ? (fields[id] as unknown[]).filter((v): v is string => typeof v === 'string') : [];
 export const fieldText = (fields: Record<string, unknown>, id: string): string => richToPlain(fieldRich(fields, id));
@@ -61,10 +64,15 @@ export const termRich = (entry: { term: string; fields: Record<string, unknown> 
   const rich = fieldRich(entry.fields, TERM_RICH);
   return rich && richToPlain(rich) === entry.term ? rich : null;
 };
-export const fieldLinks = (fields: Record<string, unknown>, id: string): GlossaryLink[] =>
-  Array.isArray(fields[id])
+// A concept's Part of was a field of its own (parentId) until 2026-11-14: read as a partOf link in its
+// Related, and cleared when Related is next saved (GlossaryCardBody), so no migration.
+export const fieldLinks = (fields: Record<string, unknown>, id: string): GlossaryLink[] => {
+  const links = Array.isArray(fields[id])
     ? (fields[id] as unknown[]).filter((v): v is GlossaryLink => !!v && typeof (v as GlossaryLink).kind === 'string' && typeof (v as GlossaryLink).entryId === 'string')
     : [];
+  const parent = id === 'related' && typeof fields.parentId === 'string' ? fields.parentId : '';
+  return parent && !links.some((l) => l.entryId === parent) ? [{ kind: 'partOf', entryId: parent }, ...links] : links;
+};
 
 export const fieldFacts = (fields: Record<string, unknown>, id: string): Fact[] =>
   Array.isArray(fields[id])
@@ -172,11 +180,10 @@ export const STRUCTURED_TAG_TYPES: StructuredTagTypeDef[] = [
       { id: 'acronym',     name: 'Acronym',           type: 'text',     placeholder: 'Its short form, if it has one' },
       { id: 'explanation', name: 'Explanation',       type: 'textarea', placeholder: 'The idea in full' },
       { id: 'formula',     name: 'Formula',           type: 'maths' },
-      { id: 'keyPoints',   name: 'Key points',        type: 'list',     placeholder: 'A key point' },
+      { id: 'keyPoints',   name: 'Key points',        type: 'textarea', placeholder: 'A key point', bulleted: true },
       { id: 'examples',    name: 'Examples',          type: 'list',     placeholder: 'An example' },
       { id: 'nonExamples', name: 'Not to be confused with', type: 'list', placeholder: 'Something that looks like it but isn’t' },
       { id: 'image',       name: 'Picture',           type: 'image' },
-      { id: 'parentId',    name: 'Part of',           type: 'parent' },
       { id: 'related',     name: 'Related',           type: 'links' },
       { id: 'sources',     name: 'Sources',           type: 'list',     placeholder: 'A book, a link…' },
       { id: 'weblinks',    name: 'Links',             type: 'urls',     placeholder: 'A web address, one per line' },

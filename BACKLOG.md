@@ -261,6 +261,15 @@ Selected text can become a Quote, a Conclusion or Maths today (the `\` menu on a
 
 Not built yet: a keyboard way to move a part to another group (Alt+←/→ are Back and Forward; today it's the menu's Move to ▸, which the Menu key opens, or a drag).
 
+### ~~Long text in card fields and prompt sections~~ — built 2026-11-14 (one shared module, components/LongText, for cards and prompts, chosen in the build over a ProseMirror rebuild of the prompt: see the 2026-11-14 session report). The discussion, kept:
+Asked for: a Glossary card's long fields (a Concept's meaning, Key points) and the AI prompt's sections hold bullets and numbered lists, toggled with Ctrl+. / Ctrl+/, with the same keys as a block's long parts (Enter, Shift+Enter, Ctrl+Enter, Tab), and every typing helper (shortcuts, `//`, brackets) shared, not copied. Both are drawn outside ProseMirror today (a card's fields are small contenteditables holding inline HTML; a prompt's sections are textareas), so the rich-parts rules ("A block's long parts hold lines and bullets") don't reach them. Options put to the user: (A) one shared contenteditable "long field" (paragraphs and lists in `utils/richText.ts`, one key handler mirroring `richParts.ts`) for cards and prompts; (B) the prompt becomes a ProseMirror block whose sections are rich parts (everything free), cards take (A); (C) prompt sections stay Markdown text with list keys (Enter continues `- `, Ctrl+. toggles it), since a prompt is sent as Markdown anyway. Recommended: B for the prompt, A for cards.
+
+### ~~A supporting example on any block~~ — built 2026-11-14 (Examples linked as made in a card's field; "Shown in" derived). Still to do: the study question "what is this an example of?" (Study mode for blocks). The discussion, kept:
+An Example record (`\example`) linked from inside a block's part, shown inline as a chip that opens on hover (as cards already are inside parts), so an argument's point, a case study or a concept carries its evidence without growing; links built as the chip is made (the part's block or card becomes what it's an example of, `exampleOf`), so study modes can ask "what is this an example of?". See the session report of 2026-11-13 for the proposal.
+
+### ~~Part of on a concept~~ — folded into Related 2026-11-14. The discussion, kept:
+Part of is a plain select (no search) beside Related, which already has "is a type of". Options: keep it (it nests sub-concepts) but pick through `GlossaryTermPicker`; or fold it into Related as a "part of" relation and read the sub-concept list from those links.
+
 ### Study mode for blocks (agreed 2026-11-02, not built)
 
 From the block review (§1.6, question 3). Testing yourself on a block instead of reading it, **a different interaction for each block** (the user's choice, over one generic hide-and-reveal mode), sharing one Study button in the pill and one look so they feel like a family:
@@ -896,11 +905,17 @@ The person's own variations of an event, as templates of presets only (title, ic
 
 ## Pattern retrofit backlog
 
+### Long text outside the note editor (adopted 2026-11-14) — fully applied 2026-11-14
+Lines and lists in a field drawn outside ProseMirror come from `components/LongText` (`longTextDom.ts`, `LongTextField`) over `utils/longText.ts`: a Glossary card's long fields and an AI prompt's sections. Check: the pattern test "long text outside the note editor comes from components/LongText" (only longTextDom.ts runs the list commands; the prompt's sections are long fields). Not in scope: the app's plain textareas (a task's or event's notes), which hold no lists.
+
+### A note editor loads a document only through loadEditorDoc (adopted 2026-11-13) — fully applied 2026-11-14 (the sticky note joined)
+Check: the pattern test of that name.
+
 ### Blocks behave alike (adopted 2026-11-11) — fully applied 2026-11-11
 Ctrl+Enter leaves any block, a press on a block's empty space selects it, list commands never run in a part (CLAUDE.md "Block designs"). ProseMirror blocks have all three from the shared extensions; node views through `nodeViewBlockBehaviour` (chart, diagram keys only, maths, conversion), the Glossary card and the prompt their own; the embed's preview isn't stopped, so ProseMirror selects it. Check: for each node view in `NOTE_BLOCK_NODES`, `grep -n "nodeViewBlockBehaviour\|leaveBlockBelow\|blockEmptySpaceTarget"` in its file.
 
 ### A card's choosing controls only while it's edited (2026-11-11) — fully applied 2026-11-11
-The Glossary card's Part of and Related, and the prompt's heading level, show their controls only while the block holds the focus. Exception: the conversion's unit and converter choices, which are what it shows. Check: `grep -n "<select" src/components/NoteEditor/extensions/*.tsx src/components/ConverterPane/ConvertWidget.tsx`.
+The Glossary card's Related (Part of was folded into it 2026-11-14) and the prompt's heading level show their controls only while the block holds the focus (a card also while selected or open in its record window, 2026-11-13). Exception: the conversion's unit and converter choices, which are what it shows. Check: `grep -n "<select" src/components/NoteEditor/extensions/*.tsx src/components/ConverterPane/ConvertWidget.tsx`.
 
 ### Cards share one look (found 2026-11-10, adopted 2026-11-11) — fully applied 2026-11-11 (the case study joined the same day)
 The Glossary card, the question and the conversion each drew Card and Compact themselves and had drifted (the Card design's icon was on the Glossary card only). All three now draw through `components/CardLook` (CLAUDE.md "Cards share one look"). Check: the pattern test "cards share one look" (every card block uses the shared attributes and icon; no card box, `[data-card-look]` rule or old question attributes outside `CardLook.module.css`). Deliberate exception: the argument's Card design borrows the box. **Not done, needs a decision:** an Inline (chip) design for the question and the conversion (the Glossary cards have one because a chip can hold just a record's id; a question holds its own text, so it would need a record, or an inline node that holds its text).

@@ -34,6 +34,7 @@ import { CONVERT_DESIGNS } from './Convert';
 import { CASE_DESIGNS } from './CaseStudy';
 import { CE_DESIGNS } from './CauseEffect';
 import { VENN_DESIGNS } from './Venn';
+import { designSwap } from '@/animations/designSwap';
 
 // Ctrl+] / Ctrl+[ (asked for 2026-10-15): the next / previous design of the note block the cursor
 // is in (or the block that's selected), wrapping round, the new design's name shown beside it for
@@ -103,12 +104,14 @@ export function cycleBlockDesign(view: EditorView, dir: 1 | -1): boolean {
   if (!block) return false;
   const design = nextDesign(block.node, dir);
   if (!design) return true;
+  const was = view.nodeDOM(block.pos);
   const tr = view.state.tr.setNodeMarkup(block.pos, undefined, { ...block.node.attrs, variant: design.id });
   // A selected block stays selected.
   if (view.state.selection instanceof NodeSelection) tr.setSelection(NodeSelection.create(tr.doc, block.pos));
   view.dispatch(tr);
   const dom = view.nodeDOM(block.pos);
   if (dom instanceof HTMLElement) flashDesignName(dom.getBoundingClientRect(), design.label);
+  designSwap(was instanceof Element ? was : null);
   return true;
 }
 

@@ -1,0 +1,13 @@
+/* settle.ts: a row just done stays a moment, then fades and folds away. Nothing moves with
+   reduced motion: the row stays still and goes when the moment is up. */
+@media (prefers-reduced-motion: no-preference) {
+  .leaving {
+    overflow: hidden;
+    animation: settleAway 280ms ease-in 600ms both;
+  }
+}
+
+@keyframes settleAway {
+  from { max-height: 6rem; opacity: 1; }
+  to   { max-height: 0; opacity: 0; margin-top: 0; margin-bottom: 0; }
+}

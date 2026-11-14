@@ -66,7 +66,7 @@ export function GlossaryRecordModal({ entryId, fresh }: { entryId: string; fresh
           <button type="button" className={styles.iconBtn} onClick={() => void remove()} title={L.deleteRecord} aria-label={L.deleteRecord}><TrashIcon width="1em" height="1em" /></button>
           <button type="button" className={styles.iconBtn} onClick={close} title={LABELS.dialogs.cancel} aria-label={L.back}><CloseIcon /></button>
         </header>
-        <div className={styles.card}>
+        <div className={styles.card} data-card-editing="">
           <GlossaryCardBody
             entryId={entryId}
             variant="card"

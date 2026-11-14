@@ -7,6 +7,7 @@ import { useUIStore } from '@/store/uiStore';
 import { useListStore } from '@/store/listStore';
 import { useNoteStore } from '@/store/noteStore';
 import { useTrackerStore } from '@/store/trackerStore';
+import { signal } from '@/animations/signals';
 
 // THE way to open a linked item (adopted 2026-11-10, docs/agent-tasks/08-linking-consolidation.md
 // Task 4): a link in note text, a Linked items row, a "Linked from" pill, an Overview row, a
@@ -43,6 +44,8 @@ function goTo(view: AppView) {
 
 export function openItem(type: string | null | undefined, id: string | null | undefined, where: OpenWhere = {}): boolean {
   if (!type || !id) return false;
+  // Gone to: it glows where it is once it's drawn (animations/flash.ts, 2026-11-14).
+  signal('arrive', id);
   const ui = useUIStore.getState();
   switch (type) {
     case 'task': {

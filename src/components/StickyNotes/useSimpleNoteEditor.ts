@@ -4,6 +4,7 @@ import { useEditor, type Extensions } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { SpecialCharInput } from '@/components/NoteEditor/extensions/SpecialCharInput';
+import { loadEditorDoc } from '@/components/NoteEditor/loadDoc';
 import { isNoteLocked, noteView } from '@/services/noteSecrets';
 import { setStickyContent, stickyDocFrom, stickyDocOf, type StickyDoc } from '@/services/stickyNotes';
 import type { Note } from '@/types/notes';
@@ -67,7 +68,7 @@ export function useSimpleNoteEditor(note: Note, extensions: Extensions, attribut
     if (!editor || editor.isDestroyed || storedKey === null || editor.isFocused || pending.current) return;
     const now = stickyDocFrom(editor.getJSON());
     if (now && JSON.stringify(now) === storedKey) return;
-    editor.commands.setContent(JSON.parse(storedKey), { emitUpdate: false });
+    loadEditorDoc(editor, JSON.parse(storedKey), { emitUpdate: false });
   }, [editor, storedKey]);
 
   return { editor, locked, stored, flush };

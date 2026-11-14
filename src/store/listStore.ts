@@ -13,6 +13,7 @@ import { persistStorage } from '@/utils/persistStorage';
 import { moveToTrash } from '@/services/trashCapture';
 import { log } from '@/utils/log';
 import { LABELS } from '@/config/labels';
+import { signal } from '@/animations/signals';
 import {
   extractListSecrets, blankListSecrets, extractItemSecrets, blankItemSecrets,
   putListSecrets, putItemSecrets, dropListSecrets, dropItemSecrets,
@@ -293,6 +294,7 @@ export const useListStore = create<ListState>()(
       addListItem: (input) => {
         const now  = new Date().toISOString();
         const id   = nanoid() as ListItemId;
+        signal('arrive', id);   // it glows where it lands (animations/flash.ts)
         const parent = get().lists[input.listId];
         if (parent?.isEncrypted && isListLocked(parent)) {
           log.warn('listStore', 'refused to add an item to a locked encrypted list', input.listId);

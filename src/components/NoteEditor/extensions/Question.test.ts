@@ -202,7 +202,7 @@ describe('question block', () => {
     setBlockFrame(editor.view, qPos(), { outlined: true, shaded: true });
     expect(q().attrs).toMatchObject({ outlined: false, shaded: true });
     const menu = frameMenuItem(editor.view, qPos(), q().attrs);
-    expect(menu.submenu!.flat().map((i) => i.id)).toEqual(['frame-shaded', 'frame-shade-colour']);
+    expect(menu.submenu!.flat().map((i) => i.id)).toEqual(['frame-shaded', 'frame-shade-colour', 'frame-space', 'frame-lift']);
   });
 
   it('answered: dated, and given an Answer part; dropped is kept', () => {

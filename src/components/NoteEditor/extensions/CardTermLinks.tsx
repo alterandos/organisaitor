@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useSettingsStore } from '@/store/settingsStore';
 import { glossaryEntry } from '@/services/glossary';
-import { openGlossaryEntry } from '@/services/notePassage';
+import { peekGlossaryEntry } from '@/services/notePassage';
 import { useEscapeClose } from '@/hooks/useEscapeClose';
 import type { AnchorBox } from '@/utils/floatingPlacement';
 import { termsEndingAt, type Term } from './GlossaryAutolink';
@@ -162,7 +162,7 @@ export function useCardTermLinks(selfId: string | undefined): {
     if (!link || !(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
     const entry = glossaryEntry(link.getAttribute('data-term')!);
-    if (entry) openGlossaryEntry(entry.id);
+    if (entry) peekGlossaryEntry(entry.id);
   };
 
   const overlay = (

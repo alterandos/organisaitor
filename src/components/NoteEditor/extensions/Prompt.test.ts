@@ -12,6 +12,7 @@ import { NoteObjectTrigger, objectTriggerStorage } from '../objects/NoteObjectTr
 import { LABELS } from '@/config/labels';
 import { promptTargets, registerPromptTarget } from '@/services/aiPromptTargets';
 import { useToastStore } from '@/store/toastStore';
+import { domToLongLines } from '@/components/LongText/longTextDom';
 
 // The AI prompt block (`\prompt`, extensions/Prompt.ts + PromptBody.tsx): made through `\`, written
 // in place, {fill-ins} listed as they're typed, sent through the targets (copy today), a new run,
@@ -60,6 +61,10 @@ const button = (name: string) => [...host.querySelectorAll('button')].find((b) =
 const blockDom = (i = 0) => host.querySelectorAll('[data-type="prompt"]')[i] as HTMLElement;
 const html = (attrs: string) => `<div data-type="prompt" ${attrs}></div>`;
 const sections = (s: unknown[]) => `data-sections='${JSON.stringify(s)}'`;
+// A section is a long field (components/LongText), not a textarea.
+const longField = (i = 0) => host.querySelectorAll<HTMLElement>('[data-long-text]')[i];
+const readLong = (el: HTMLElement) => domToLongLines(el, { html: false }).join('\n');
+function typeLong(el: HTMLElement, text: string) { el.innerHTML = text.split('\n').map((l) => `<div>${l}</div>`).join(''); fireEvent.input(el); }
 
 describe('the AI prompt block', () => {
   it('is made by \\prompt, open, the cursor in its name', async () => {
@@ -75,7 +80,7 @@ describe('the AI prompt block', () => {
 
   it('lists a {fill-in} as it is written, sends the prompt with it put in, and notes when', async () => {
     await make(html(`data-variant="full" data-title="Review" ${sections([{ id: 'a', name: 'Ask', text: '', perRun: true }])}`));
-    fireEvent.change(host.querySelector('textarea')!, { target: { value: 'Review {feature} please' } });
+    typeLong(longField(), 'Review {feature} please');
     expect(prompts()[0].attrs.fills).toEqual([{ name: 'feature', value: '' }]);
     fireEvent.change(host.querySelector(`input[aria-label="${L.fillValue('feature')}"]`)!, { target: { value: 'the tile' } });
     const write = vi.fn(async () => {});
@@ -106,12 +111,55 @@ describe('the AI prompt block', () => {
     expect(blockDom(1).hasAttribute('data-prompt-open')).toBe(true);
   });
 
+  // 2026-11-13: a new run of a prompt (not a template) used to be a copy put after it, so the prompt
+  // you were looking at seemed not to clear. It now runs on in place, the run before kept to look at.
+  it('a new run of a prompt empties it in place, keeps the run before in its run list, and can look back at it', async () => {
+    await make(html(`data-variant="full" data-title="Review" ${sections([{ id: 'a', name: 'Bg', text: 'Keep', perRun: false }, { id: 'b', name: 'Ask', text: 'First ask', perRun: true }])}`));
+    act(() => newPromptRun(editor.view, prompts()[0].pos));
+    await flush();
+    expect(prompts()).toHaveLength(1);
+    const [p] = prompts();
+    expect((p.attrs.sections as { text: string }[]).map((s) => s.text)).toEqual(['Keep', '']);
+    expect(p.attrs.run).toBe(2);
+    expect((p.attrs.runs as { n: number }[]).map((r) => r.n)).toEqual([1]);
+    const runs = host.querySelector(`select[aria-label="${L.runList}"]`) as HTMLSelectElement;
+    fireEvent.change(runs, { target: { value: '1' } });
+    expect(host.textContent).toContain(L.viewingRun(1));
+    expect([...host.querySelectorAll('[data-long-text]')].map((t) => readLong(t as HTMLElement))).toEqual(['Keep', 'First ask']);
+    act(() => button(L.backToRun(2))!.click());
+    expect([...host.querySelectorAll('[data-long-text]')].map((t) => readLong(t as HTMLElement))).toEqual(['Keep', '']);
+  });
+
+  it('a tile left open is open again when the note is opened again', async () => {
+    await make(html(`data-variant="tile" data-title="Review" ${sections([{ id: 'a', name: '', text: 'Hi', perRun: false }])}`));
+    act(() => (host.querySelector(`button[title="${L.open}"]`) as HTMLButtonElement).click());
+    expect(prompts()[0].attrs.open).toBe(true);
+    const saved = editor.getJSON();
+    editor.destroy();
+    host.remove();
+    await make();
+    editor.commands.setContent(saved);
+    await flush();
+    expect(blockDom().hasAttribute('data-prompt-open')).toBe(true);
+  });
+
+  it('a heading unticked is not sent, with the sections under it; Kept / Each run is given to those under it too', async () => {
+    await make(html(`data-variant="full" data-title="R" ${sections([{ id: 'a', name: 'Top', text: 'A', perRun: false, level: 2 }, { id: 'b', name: 'Sub', text: 'B', perRun: false, level: 3 }, { id: 'c', name: 'Next', text: 'C', perRun: false, level: 2 }])}`));
+    fireEvent.click(host.querySelectorAll(`button[title="${L.keptAllHint}"]`)[0]);
+    expect((prompts()[0].attrs.sections as { perRun: boolean }[]).map((s) => s.perRun)).toEqual([true, true, false]);
+    fireEvent.click(host.querySelectorAll(`input[aria-label="${L.include}"]`)[0]);
+    const write = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+    await act(async () => { button(L.copy)!.click(); });
+    expect(write).toHaveBeenCalledWith('## Next\n\nC');
+  });
+
   it('a tile opens on a click and folds back on Escape; the Template switch is in its pill', async () => {
     await make(html(`data-variant="tile" data-title="Review" ${sections([{ id: 'a', name: '', text: 'Hi', perRun: false }])}`));
     expect(blockDom().hasAttribute('data-prompt-open')).toBe(false);
     act(() => (host.querySelector(`button[title="${L.open}"]`) as HTMLButtonElement).click());
     expect(blockDom().hasAttribute('data-prompt-open')).toBe(true);
-    fireEvent.keyDown(host.querySelector('textarea')!, { key: 'Escape' });
+    fireEvent.keyDown(longField(), { key: 'Escape' });
     expect(blockDom().hasAttribute('data-prompt-open')).toBe(false);
     act(() => setPromptAttrs(editor.view, prompts()[0].pos, { template: true }));
     expect(blockDom().querySelector('[data-prompt-tools] [data-prompt-template]')?.getAttribute('aria-pressed')).toBe('true');
@@ -145,9 +193,9 @@ describe('the AI prompt block', () => {
     fireEvent.keyDown(title, { key: 'Enter' });
     expect(document.activeElement).toBe(host.querySelector(`input[aria-label="${L.sectionName}"]`));
     fireEvent.keyDown(document.activeElement!, { key: 'Enter' });
-    const text = host.querySelector('textarea')!;
+    const text = longField();
     expect(document.activeElement).toBe(text);
-    // Shift+Enter is a new line in a section: left to the textarea.
+    // Shift+Enter is a new line in a section: left to the field.
     expect(fireEvent.keyDown(text, { key: 'Enter', shiftKey: true })).toBe(true);
     fireEvent.keyDown(text, { key: 'Enter', ctrlKey: true });
     const sel = editor.state.selection.$from;
@@ -157,14 +205,14 @@ describe('the AI prompt block', () => {
 
   it('Markdown pasted in becomes sections at their levels; a section folds away with those under it, and sends as written', async () => {
     await make(html(`data-variant="full" ${sections([{ id: 'a', name: '', text: '', perRun: false }])}`));
-    const text = host.querySelector('textarea')!;
+    const text = longField();
     fireEvent.paste(text, { clipboardData: { getData: () => '# Instructions\n\n## Orient first\nRead it.\n\n### Detail\n- one' } });
     const s = prompts()[0].attrs.sections as { name: string; level: number }[];
     expect(prompts()[0].attrs.title).toBe('Instructions');
     expect(s.map((x) => [x.level, x.name])).toEqual([[2, 'Orient first'], [3, 'Detail']]);
     const fold = host.querySelector(`button[aria-label="${L.foldSection}"]`) as HTMLButtonElement;
     act(() => fold.click());
-    expect(host.querySelectorAll('textarea')).toHaveLength(0);
+    expect(host.querySelectorAll('[data-long-text]')).toHaveLength(0);
     expect(host.querySelectorAll(`input[aria-label="${L.sectionName}"]`)).toHaveLength(1);
     const write = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });

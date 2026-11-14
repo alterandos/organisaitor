@@ -54,7 +54,7 @@ export function RoutineChecklist({ routine }: RoutineChecklistProps) {
           <span className={styles.routineName}>{routine.name}</span>
         </div>
         {total > 0 && (
-          <span className={`${styles.progress} ${done ? styles.progressDone : ''}`}>
+          <span className={`${styles.progress} ${done ? styles.progressDone : ''}`} data-tick={`routine:${routine.id}:${today}`} data-tick-burst="">
             {done ? '✓' : `${progress}/${total}`}
           </span>
         )}
@@ -65,16 +65,17 @@ export function RoutineChecklist({ routine }: RoutineChecklistProps) {
           {tasks.map((t) => {
             const isChecked = checked.includes(t.id);
             return (
-              <li key={t.id} className={styles.taskRow}>
+              <li key={t.id} className={styles.taskRow} data-tick-row="">
                 <label className={`${styles.taskLabel} ${done ? styles.taskLabelDone : ''}`}>
                   <input
                     type="checkbox"
+                    data-tick={`${routine.id}:${today}:${t.id}`}
                     className={styles.checkbox}
                     checked={isChecked || done}
                     onChange={() => handleToggle(t.id)}
                     disabled={done}
                   />
-                  <span className={`${styles.taskTitle} ${(isChecked || done) ? styles.taskTitleDone : ''}`}>
+                  <span data-tick-text="" className={`${styles.taskTitle} ${(isChecked || done) ? styles.taskTitleDone : ''}`}>
                     {t.title}
                   </span>
                 </label>

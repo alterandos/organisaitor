@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { DateInput } from '@/components/DateInput/DateInput';
 import { toggleTaskCompletion } from '@/services/taskCompletion';
+import { ringBell } from '@/animations/ringBell';
 import { useNotificationStore, type PendingNotification } from '@/store/notificationStore';
 import { useTaskStore } from '@/store/taskStore';
 import type { TaskId } from '@/types';
@@ -228,10 +229,20 @@ export function NotificationCenter() {
   }, [open, hoverClose]);
 
   const count = pending.length;
+  // Something new arrived: the bell rocks and its badge pops (2026-11-14), only when the count goes
+  // up, never on load (CLAUDE.md "An effect that reacts to a change skips the first run").
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const prevCount = useRef(count);
+  useEffect(() => {
+    const before = prevCount.current;
+    prevCount.current = count;
+    if (count > before) ringBell(bellRef.current);
+  }, [count]);
 
   return (
     <div className={styles.wrapper} ref={ref} {...hover.handlers}>
       <button
+        ref={bellRef}
         className={`${styles.bellBtn} ${count > 0 ? styles.bellActive : ''}`}
         onClick={() => { if (pinned) close(); else setPinned(true); }}
         aria-expanded={open}

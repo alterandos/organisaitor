@@ -26,6 +26,7 @@ import { IMAGE_PLACES, type ImageLayout } from './cardImageLayout';
 import { cardToChip, insertGlossaryChip, setChipDesigns } from './GlossaryChip';
 import { blockResizeHandle, blockWidth, blockWidthAttributes, showBlockWidth, type BlockNamedWidth, type BlockWidth } from './blockWidth';
 import { cardIconAttributes, setCardIcon } from './cardLook';
+import { createGlyph } from '@/components/Icons/glyphDom';
 
 // A Glossary card in a note (`\definition`, `\acronym`, `\concept`): one atom node that points at a
 // Glossary record (StructuredTagEntry) by `entryId`, never a copy of it. Marked text in a sentence
@@ -469,6 +470,8 @@ class GlossaryCardView {
     // Its kind, for the block colour (a selected card is outlined in its kind's colour).
     const kind = a.entryId ? useNoteStore.getState().structuredTagEntries[a.entryId as never]?.typeKey : undefined;
     if (kind) this.dom.setAttribute('data-glossary-kind', kind); else this.dom.removeAttribute('data-glossary-kind');
+    // Its record, for what's made inside its fields (cardFieldRecord.ts: an Example made there is an example of it).
+    if (a.entryId) this.dom.setAttribute('data-entry-id', a.entryId as string); else this.dom.removeAttribute('data-entry-id');
     showBlockWidth(this.dom, cardWidth(a));
     const record = a.entryId ? useNoteStore.getState().structuredTagEntries[a.entryId as never] : undefined;
     applyFrameAttrs(this.dom, { ...a, outlined: false, importance: record && !isEntryLocked(record) ? entryImportance(entryView(record)) : 0 });   // a card has its own border: no Outline (CARD_BLOCK_NODES)
@@ -486,26 +489,44 @@ class GlossaryCardView {
     const W = LABELS.glossaryCard;
     const parts: HTMLElement[] = [];
     if (this.waiting.length && view.editable) {
+      // An icon (a card growing a row), opening a short menu: one field per line, ↑ ↓ to move,
+      // Enter to add (2026-11-13: "+ Add" and a wrap of chips, which read as tags).
       const add = pillButton(W.addFieldTitle, () => {
         openBlockPopover(add.getBoundingClientRect(), (close) => {
           const box = document.createElement('div');
           const heading = document.createElement('div');
           heading.className = pop.heading;
           heading.textContent = W.addFieldHeading;
-          const row = document.createElement('div');
-          row.className = pop.row;
+          const list = document.createElement('div');
+          list.className = pop.menuList;
+          list.setAttribute('role', 'menu');
+          list.setAttribute('aria-label', W.addFieldHeading);
           for (const f of this.waiting) {
             const b = document.createElement('button');
             b.type = 'button';
-            b.className = pop.choice;
-            b.textContent = f.name;
+            b.className = pop.menuItem;
+            b.setAttribute('role', 'menuitem');
+            const name = document.createElement('span');
+            name.textContent = f.name;
+            b.append(createGlyph('addField'), name);
             b.addEventListener('click', () => { close(); this.showField(f.id); });
-            row.append(b);
+            list.append(b);
           }
-          box.append(heading, row);
+          list.addEventListener('keydown', (e) => {
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+            e.preventDefault();
+            e.stopPropagation();
+            const items = Array.from(list.querySelectorAll<HTMLButtonElement>('button'));
+            const i = items.indexOf(document.activeElement as HTMLButtonElement);
+            const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+            items[next]?.focus();
+          });
+          box.append(heading, list);
+          requestAnimationFrame(() => list.querySelector<HTMLButtonElement>('button')?.focus());
           return box;
         });
-      }, W.addField);
+      });
+      add.append(createGlyph('addField'));
       add.setAttribute('data-card-tool', 'add');
       parts.push(add);
     }

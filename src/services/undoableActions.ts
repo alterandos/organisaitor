@@ -1,3 +1,4 @@
+import { signal } from '@/animations/signals';
 import { useTaskStore } from '@/store/taskStore';
 import { deleteTaskWithCleanup } from '@/services/crossAppLinkCleanup';
 import { trashedBy, restoreAllFromTrash } from '@/services/trash';
@@ -15,7 +16,7 @@ export function archiveTaskWithUndo(taskId: TaskId): void {
   useTaskStore.getState().archiveTask(taskId);
   showToast({
     message: LABELS.swipeActions.archivedToast(task.title),
-    actions: [{ label: LABELS.swipeActions.undo, onClick: () => useTaskStore.getState().restoreTask(taskId) }],
+    actions: [{ label: LABELS.swipeActions.undo, onClick: () => { useTaskStore.getState().restoreTask(taskId); signal('arrive', taskId); } }],
   });
 }
 
@@ -24,6 +25,8 @@ export function archiveTaskWithUndo(taskId: TaskId): void {
 export function deleteTaskWithUndo(taskId: TaskId): void {
   const task = useTaskStore.getState().tasks[taskId];
   if (!task) return;
+  // The row folds away rather than vanishing (animations/settle.ts, TaskList).
+  signal('remove', taskId, task);
   const trashed = trashedBy(() => deleteTaskWithCleanup(taskId));
   showToast({
     message: LABELS.swipeActions.deletedToast(task.title),

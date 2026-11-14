@@ -137,6 +137,7 @@ import { altDigitSection } from '@/config/hotkeys';
 import type { CollectionId } from '@/types';
 import styles from './App.module.css';
 import { isTypingTarget } from '@/utils/typingTarget';
+import { installTickPop } from '@/animations/tickPop';
 
 if (import.meta.env.DEV) void import('@/agent/devHandle');
 
@@ -311,6 +312,7 @@ export default function App() {
   useEffect(() => { initNoteSecretsSync(); initListSecretsSync(); initPictures(); initAutoBackup(); migrateTaskDeadlineShadows(); adoptLegacyNotePins(); }, []);
   // `//name` → a character (Greek, arrows, maths, super/subscripts) in every text field (src/specialChars/).
   useEffect(() => installSpecialCharInput(), []);
+  useEffect(() => installTickPop(), []);
   useEffect(() => initEventTaskFollow(), []);
   useEffect(() => initRepeatFollow(), []);
   useEffect(() => initEventTaskRules(), []);

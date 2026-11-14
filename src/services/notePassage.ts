@@ -61,10 +61,24 @@ export const definitionPassage = (entryId: string): PassageFind[] => [
 export function openGlossaryEntry(entryId: string): boolean {
   const raw = useNoteStore.getState().structuredTagEntries[entryId as never] as { noteId: string | null } | undefined;
   if (!raw) return false;
-  const inNote = raw.noteId && definitionPassage(entryId).slice(0, 4).some((f) => noteHasPassage(raw.noteId!, f));
-  if (inNote && openNotePassage(raw.noteId!, definitionPassage(entryId))) return true;
+  if (noteShowsEntry(entryId) && openNotePassage(raw.noteId!, definitionPassage(entryId))) return true;
   useUIStore.getState().openGlossaryRecord(entryId);
   return true;
+}
+
+// Whether the note a record came from still shows it (its card, chip or marked text: a link to it
+// doesn't count). Asked before going there, so a record whose card was taken out of its note opens
+// on its own instead of in a note where it can't be found (2026-11-13).
+export function noteShowsEntry(entryId: string): boolean {
+  const raw = useNoteStore.getState().structuredTagEntries[entryId as never] as { noteId: string | null } | undefined;
+  return !!raw?.noteId && definitionPassage(entryId).slice(0, 4).some((f) => noteHasPassage(raw.noteId!, f));
+}
+
+// Opens a record on its own, over whatever is showing (GlossaryRecordModal), where it can be read and
+// edited, and its note reached from where it came from: what clicking a link to a record does (a
+// card's Related, a term linked in a card's field), so reading a link never leaves the note you're in.
+export function peekGlossaryEntry(entryId: string): void {
+  useUIStore.getState().openGlossaryRecord(entryId);
 }
 
 // Whether a document holds the passage (a node, or text with the mark).

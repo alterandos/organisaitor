@@ -10,6 +10,8 @@ import { StrictMode } from 'react';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Selection } from '@tiptap/pm/state';
+import { undo } from '@tiptap/pm/history';
+import { liveNote } from '@/services/liveNoteEditor';
 import { NoteEditor } from './NoteEditor';
 import { useNoteStore } from '@/store/noteStore';
 import { useUIStore } from '@/store/uiStore';
@@ -67,6 +69,24 @@ describe('NoteEditor tab restore on note switch', () => {
     expect(stored('note-a').tabs[0].content).toContain('TAB2-A');
     expect(stored('note-a').tabs[0].content).not.toContain('MAIN-A');
     expect(stored('note-a').content).toContain('MAIN-A');
+  });
+
+  // 2026-11-13: loading a tab or a note was an undoable step, so Ctrl+Z with nothing newer to undo
+  // put the tab (or note) left into this one, and the autosave wrote it over this one's text.
+  it('undo never takes back loading a tab or a note', async () => {
+    useUIStore.setState({ activeView: 'notes', editingNoteId: 'note-a', notesTabMemory: { 'note-a': 't2' } });
+    render(<StrictMode><NoteEditor /></StrictMode>);
+    const undoNow = () => { const v = liveNote()!.view; return undo(v.state, v.dispatch); };
+    await userEvent.click(screen.getByText('Main'));
+    expect(editorText()).toContain('MAIN-A');
+    expect(undoNow()).toBe(false);
+    expect(editorText()).toContain('MAIN-A');
+
+    act(() => { useUIStore.getState().openNote('note-b', undefined, { mode: 'silent' }); });
+    expect(undoNow()).toBe(false);
+    expect(editorText()).toContain('MAIN-B');
+    expect(stored('note-b').content).toContain('MAIN-B');
+    expect(stored('note-a').tabs[0].content).toContain('TAB2-A');
   });
 
   it('Alt+Left back to a note returns to the tab you were working on (memory written by the app itself)', async () => {

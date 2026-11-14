@@ -22,6 +22,7 @@ import { deleteOption } from './Options';
 import { deleteLayer } from './Pyramid';
 import { deleteStep } from './Steps';
 import { deleteType } from './Types';
+import { glideFrom } from '@/animations/glide';
 
 // The part handle (CLAUDE.md "Block designs"): every part of every note block can be moved,
 // duplicated and deleted in the same ways, whatever the block.
@@ -168,11 +169,16 @@ export function movePartToSlot(view: EditorView, at: PartAt, containerPos: numbe
   const unitTo = childPos(at, u.to);
   const sel = view.state.selection.from;
   const inside = sel > unitFrom && sel < unitTo ? sel - unitFrom : null;
+  // Where every part of the container was, so each can slide to its new place (2026-11-14).
+  const before = kids.map((_, i) => rectOf(view, childPos(at, i)));
+  let order: number[] | null = null;
   let tr;
   let newFrom: number;
   if (containerPos === at.parentPos) {
     if (index >= u.from && index <= u.to) return false;    // where it already is
     const insertAt = index > u.from ? index - (u.to - u.from) : index;
+    order = kids.map((_, i) => i).filter((i) => i < u.from || i >= u.to);
+    order.splice(insertAt, 0, ...Array.from({ length: u.to - u.from }, (_, k) => u.from + k));
     rest.splice(insertAt, 0, ...moving);
     const content = Fragment.from(rest);
     if (!at.parent.type.validContent(content)) return false;
@@ -194,7 +200,34 @@ export function movePartToSlot(view: EditorView, at: PartAt, containerPos: numbe
   tr.setSelection(Selection.near(tr.doc.resolve(Math.min(target, tr.doc.content.size))));
   view.dispatch(tr.scrollIntoView());
   view.focus();
+  slideParts(view, at.parentPos, before, order, u.from, newFrom, moving.length);
   return true;
+}
+
+// The parts slide from where they were to where they are (FLIP, animations/glide.ts): in their own
+// container every one that moved; into another group, the part moved. Not while a key repeats.
+let lastSlide = 0;
+const rectOf = (view: EditorView, pos: number): DOMRect | null => { const d = view.nodeDOM(pos); return d instanceof HTMLElement ? d.getBoundingClientRect() : null; };
+function slideParts(view: EditorView, parentPos: number, before: (DOMRect | null)[], order: number[] | null, movedFrom: number, newFrom: number, count: number): void {
+  const now = Date.now();
+  const rapid = now - lastSlide < 150;
+  lastSlide = now;
+  if (rapid) return;
+  const go = (pos: number, was: DOMRect | null) => {
+    const el = view.nodeDOM(pos);
+    if (!(el instanceof HTMLElement) || !was) return;
+    const box = el.getBoundingClientRect();
+    if (Math.abs(was.left - box.left) > 1 || Math.abs(was.top - box.top) > 1) glideFrom(el, was.left - box.left, was.top - box.top);
+  };
+  if (!order) {
+    let p = newFrom;
+    for (let k = 0; k < count; k++) { const n = view.state.doc.nodeAt(p); go(p, before[movedFrom + k]); p += n?.nodeSize ?? 0; }
+    return;
+  }
+  const parent = view.state.doc.nodeAt(parentPos);
+  if (!parent) return;
+  let p = parentPos + 1;
+  parent.forEach((child, _o, j) => { go(p, before[order[j]] ?? null); p += child.nodeSize; });
 }
 
 // Moves the part to where unit `to` (of its own container) is.
